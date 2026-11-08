@@ -635,9 +635,9 @@ contains
          do k = 1, NZ
             do j = 1, ny
                do i = 1, nx
-                  ms%tracers(ms%idx_salinity)%hTr(i, j, k) = DZ*35.0_wp
-                  ms%tracers(ms%idx_temperature)%hTr(i, j, k) = DZ*(15.0_wp + &
-                                                                    0.5_wp*real(i, wp))
+                  ms%tracers(ms%idx_salinity)%c(i, j, k) = DZ*35.0_wp
+                  ms%tracers(ms%idx_temperature)%c(i, j, k) = DZ*(15.0_wp + &
+                                                                  0.5_wp*real(i, wp))
                end do
             end do
          end do
@@ -651,7 +651,7 @@ contains
          h0_total = sum(ms%h_layer)*DX*DY
          allocate (hTr0(nx, ny, NZ, size(ms%tracers)))
          do it = 1, size(ms%tracers)
-            hTr0(:, :, :, it) = ms%tracers(it)%hTr
+            hTr0(:, :, :, it) = ms%tracers(it)%c
          end do
 
          ! Attach all state to device.
@@ -696,7 +696,7 @@ contains
 
          ! (ii) Tracer mass conserved per tracer.
          do it = 1, size(ms%tracers)
-            reldiff = abs(sum(ms%tracers(it)%hTr) - sum(hTr0(:, :, :, it))) &
+            reldiff = abs(sum(ms%tracers(it)%c) - sum(hTr0(:, :, :, it))) &
                       /(abs(sum(hTr0(:, :, :, it))) + 1.0e-30_wp)
             call check(error, reldiff < 1.0e-10_wp, &
                        "T7: tracer mass not conserved through FK fold + continuity")
@@ -793,8 +793,8 @@ contains
                   ms_a%u_face_x_layer(i, j, k) = 0.0_wp
                   ms_a%v_face_y_layer(i, j, k) = 0.0_wp
                   ms_a%rho_layer(i, j, k) = 1027.0_wp - 0.1_wp*real(i, wp)
-                  ms_a%tracers(ms_a%idx_salinity)%hTr(i, j, k) = DZ*35.0_wp
-                  ms_a%tracers(ms_a%idx_temperature)%hTr(i, j, k) = DZ*(15.0_wp + 0.5_wp*real(i, wp))
+                  ms_a%tracers(ms_a%idx_salinity)%c(i, j, k) = DZ*35.0_wp
+                  ms_a%tracers(ms_a%idx_temperature)%c(i, j, k) = DZ*(15.0_wp + 0.5_wp*real(i, wp))
                end do
             end do
          end do
@@ -804,16 +804,16 @@ contains
          ms_b%v_face_y_layer = ms_a%v_face_y_layer
          ms_b%rho_layer = ms_a%rho_layer
          do k = 1, NZ
-            ms_b%tracers(ms_b%idx_salinity)%hTr = ms_a%tracers(ms_a%idx_salinity)%hTr
-            ms_b%tracers(ms_b%idx_temperature)%hTr = ms_a%tracers(ms_a%idx_temperature)%hTr
+            ms_b%tracers(ms_b%idx_salinity)%c = ms_a%tracers(ms_a%idx_salinity)%c
+            ms_b%tracers(ms_b%idx_temperature)%c = ms_a%tracers(ms_a%idx_temperature)%c
          end do
          ms_c%h_layer = ms_a%h_layer
          ms_c%u_face_x_layer = ms_a%u_face_x_layer
          ms_c%v_face_y_layer = ms_a%v_face_y_layer
          ms_c%rho_layer = ms_a%rho_layer
          do k = 1, NZ
-            ms_c%tracers(ms_c%idx_salinity)%hTr = ms_a%tracers(ms_a%idx_salinity)%hTr
-            ms_c%tracers(ms_c%idx_temperature)%hTr = ms_a%tracers(ms_a%idx_temperature)%hTr
+            ms_c%tracers(ms_c%idx_salinity)%c = ms_a%tracers(ms_a%idx_salinity)%c
+            ms_c%tracers(ms_c%idx_temperature)%c = ms_a%tracers(ms_a%idx_temperature)%c
          end do
 
          epbl%rho0 = RHO0
@@ -871,8 +871,8 @@ contains
          ! --- Assert (B) == (A) (fold suppressed => no FK contribution) ---
          max_diff_ba = maxval(abs(ms_b%h_layer - ms_a%h_layer))
          max_hTr_diff_ba = max( &
-                           maxval(abs(ms_b%tracers(ms_b%idx_salinity)%hTr - ms_a%tracers(ms_a%idx_salinity)%hTr)), &
-                           maxval(abs(ms_b%tracers(ms_b%idx_temperature)%hTr - ms_a%tracers(ms_a%idx_temperature)%hTr)))
+                           maxval(abs(ms_b%tracers(ms_b%idx_salinity)%c - ms_a%tracers(ms_a%idx_salinity)%c)), &
+                           maxval(abs(ms_b%tracers(ms_b%idx_temperature)%c - ms_a%tracers(ms_a%idx_temperature)%c)))
 
          call check(error, max_diff_ba == 0.0_wp, &
                     "T8: mle_fold_active=.false. h_layer differs from no-mle baseline (fold not suppressed)")
@@ -884,8 +884,8 @@ contains
          ! --- Assert (C) != (A) (fold fired => FK flux changed state) ---
          max_diff_ca = maxval(abs(ms_c%h_layer - ms_a%h_layer))
          max_hTr_diff_ca = max( &
-                           maxval(abs(ms_c%tracers(ms_c%idx_salinity)%hTr - ms_a%tracers(ms_a%idx_salinity)%hTr)), &
-                           maxval(abs(ms_c%tracers(ms_c%idx_temperature)%hTr - ms_a%tracers(ms_a%idx_temperature)%hTr)))
+                           maxval(abs(ms_c%tracers(ms_c%idx_salinity)%c - ms_a%tracers(ms_a%idx_salinity)%c)), &
+                           maxval(abs(ms_c%tracers(ms_c%idx_temperature)%c - ms_a%tracers(ms_a%idx_temperature)%c)))
 
          call check(error, max_diff_ca > 0.0_wp .or. max_hTr_diff_ca > 0.0_wp, &
                     "T8: mle_fold_active=.true. produced no change vs no-mle baseline (fold did not fire)")
@@ -987,8 +987,8 @@ contains
                   ! Density: stable strat + a strong x-front (period = nx_phys).
                   ms%rho_layer(i, j, k) = 1027.0_wp - 0.4_wp*real(k, wp) &
                                           - 0.6_wp*sin(2.0_wp*PI*real(i - NG, wp)/real(NX_PHYS, wp))
-                  ms%tracers(ms%idx_salinity)%hTr(i, j, k) = S_REF(k)*HCOL(k)
-                  ms%tracers(ms%idx_temperature)%hTr(i, j, k) = 12.0_wp*HCOL(k)
+                  ms%tracers(ms%idx_salinity)%c(i, j, k) = S_REF(k)*HCOL(k)
+                  ms%tracers(ms%idx_temperature)%c(i, j, k) = 12.0_wp*HCOL(k)
                end do
             end do
          end do
@@ -1003,7 +1003,7 @@ contains
          ! IC concentration bounds (with a slim PPM-overshoot tolerance).
          s_lo = minval(S_REF) - 0.05_wp*(maxval(S_REF) - minval(S_REF))
          s_hi = maxval(S_REF) + 0.05_wp*(maxval(S_REF) - minval(S_REF))
-         mass0 = area*sum(ms%tracers(ms%idx_salinity)%hTr(i0:i1, j0:j1, :))
+         mass0 = area*sum(ms%tracers(ms%idx_salinity)%c(i0:i1, j0:j1, :))
 
          !$acc enter data copyin(ms, ct, epbl, ss, mle, bc)
          call ms%enter_data()
@@ -1055,7 +1055,7 @@ contains
          !$acc exit data delete(ms, ct, epbl, ss, mle, bc)
 
          ! (i) conservation of interior salinity mass.
-         mass1 = area*sum(ms%tracers(ms%idx_salinity)%hTr(i0:i1, j0:j1, :))
+         mass1 = area*sum(ms%tracers(ms%idx_salinity)%c(i0:i1, j0:j1, :))
          rel = abs(mass1 - mass0)/abs(mass0)
          call check(error, rel < 1.0e-10_wp, &
                     "T9: FK windowed drain broke interior tracer conservation")
@@ -1067,7 +1067,7 @@ contains
          do k = 1, NZ
             do j = j0, j1
                do i = i0, i1
-                  conc = ms%tracers(ms%idx_salinity)%hTr(i, j, k)/ms%h_layer(i, j, k)
+                  conc = ms%tracers(ms%idx_salinity)%c(i, j, k)/ms%h_layer(i, j, k)
                   smin = min(smin, conc)
                   smax = max(smax, conc)
                end do
@@ -1314,8 +1314,8 @@ contains
                   ms%v_face_y_layer(i, j, k) = 0.0_wp
                   ms%rho_layer(i, j, k) = 1027.0_wp - 0.4_wp*real(k, wp) &
                                           - 0.6_wp*sin(2.0_wp*PI*real(i - NG, wp)/real(NX_PHYS, wp))
-                  ms%tracers(ms%idx_salinity)%hTr(i, j, k) = S_REF(k)*HCOL(k)
-                  ms%tracers(ms%idx_temperature)%hTr(i, j, k) = 12.0_wp*HCOL(k)
+                  ms%tracers(ms%idx_salinity)%c(i, j, k) = S_REF(k)*HCOL(k)
+                  ms%tracers(ms%idx_temperature)%c(i, j, k) = 12.0_wp*HCOL(k)
                end do
             end do
          end do
@@ -1328,7 +1328,7 @@ contains
          j0 = NG + 1
          j1 = NG + grid%ny_phys
          ! Full-domain (interior) salt mass before the run.
-         mass0 = area*sum(ms%tracers(ms%idx_salinity)%hTr(i0:i1, j0:j1, :))
+         mass0 = area*sum(ms%tracers(ms%idx_salinity)%c(i0:i1, j0:j1, :))
 
          !$acc enter data copyin(ms, ct, epbl, ss, mle, bc)
          call ms%enter_data()
@@ -1365,7 +1365,7 @@ contains
          call ms%exit_data()
          !$acc exit data delete(ms, ct, epbl, ss, mle, bc)
 
-         mass1 = area*sum(ms%tracers(ms%idx_salinity)%hTr(i0:i1, j0:j1, :))
+         mass1 = area*sum(ms%tracers(ms%idx_salinity)%c(i0:i1, j0:j1, :))
          salt_rel_drift = abs(mass1 - mass0)/abs(mass0)
          call check(error, salt_rel_drift < 1.0e-10_wp, &
                     "dynamic multi-window FK x windowed-advect leaks salt mass")
@@ -1399,8 +1399,8 @@ contains
       !$acc update self(ms%h_layer)
       if (allocated(ms%tracers)) then
          do it = 1, size(ms%tracers)
-            if (allocated(ms%tracers(it)%hTr)) then
-               !$acc update self(ms%tracers(it)%hTr)
+            if (allocated(ms%tracers(it)%c)) then
+               !$acc update self(ms%tracers(it)%c)
             end if
          end do
       end if
@@ -1425,14 +1425,14 @@ contains
             end do
             if (allocated(ms%tracers)) then
                do it = 1, size(ms%tracers)
-                  if (.not. allocated(ms%tracers(it)%hTr)) cycle
+                  if (.not. allocated(ms%tracers(it)%c)) cycle
                   do k = 1, nz
-                     col_tr(k) = ms%tracers(it)%hTr(i, j, k)
+                     col_tr(k) = ms%tracers(it)%c(i, j, k)
                      conc_old(k) = col_tr(k)/max(col_h_old(k), 1.0e-12_wp)
                   end do
                   call pcm_column_remap(nz, z_old, conc_old, z_new, conc_new)
                   do k = 1, nz
-                     ms%tracers(it)%hTr(i, j, k) = conc_new(k)*(z_new(k) - z_new(k - 1))
+                     ms%tracers(it)%c(i, j, k) = conc_new(k)*(z_new(k) - z_new(k - 1))
                   end do
                end do
             end if
@@ -1445,8 +1445,8 @@ contains
       !$acc update device(ms%h_layer)
       if (allocated(ms%tracers)) then
          do it = 1, size(ms%tracers)
-            if (allocated(ms%tracers(it)%hTr)) then
-               !$acc update device(ms%tracers(it)%hTr)
+            if (allocated(ms%tracers(it)%c)) then
+               !$acc update device(ms%tracers(it)%c)
             end if
          end do
       end if

@@ -883,8 +883,8 @@ contains
       sw_ctke_active = this%epbl_sw_ctke .and. sf%has_sw
       if (sw_ctke_active .and. sf%sw_from_qsw) then
          call epbl_column_kernel(grid, this, ms, &
-                                 ms%tracers(ms%idx_temperature)%hTr, &
-                                 ms%tracers(ms%idx_salinity)%hTr, &
+                                 ms%tracers(ms%idx_temperature)%c, &
+                                 ms%tracers(ms%idx_salinity)%c, &
                                  ss, dt, &
                                  sf%Q_heat, 1.0_wp/(this%rho0*sf%cp), &
                                  sf%Q_salt, 1.0_wp/this%rho0, &
@@ -894,8 +894,8 @@ contains
                                  ms%wet_mask, this%in_eos, nx, ny)
       else
          call epbl_column_kernel(grid, this, ms, &
-                                 ms%tracers(ms%idx_temperature)%hTr, &
-                                 ms%tracers(ms%idx_salinity)%hTr, &
+                                 ms%tracers(ms%idx_temperature)%c, &
+                                 ms%tracers(ms%idx_salinity)%c, &
                                  ss, dt, &
                                  sf%Q_heat, 1.0_wp/(this%rho0*sf%cp), &
                                  sf%Q_salt, 1.0_wp/this%rho0, &
@@ -941,7 +941,7 @@ contains
       type(ocean_epbl_t), intent(inout) :: this
       type(multilayer_state_t), intent(in) :: ms
       ! assumed-shape-ok: tracer registry outer-shim — caller host-dereferences
-      ! ms%tracers(idx)%hTr before passing; size varies per tracer slot
+      ! ms%tracers(idx)%c before passing; size varies per tracer slot
       ! (see CLAUDE.md "outer-shim + flat-impl" pattern); thermo cadence.
       real(wp), intent(in) :: hT(:, :, :)
          !! Temperature tracer hTr (degC*m), host-dereferenced.

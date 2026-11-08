@@ -192,7 +192,7 @@ contains
             do j = 1, ny
                do i = 1, nx
                   ms%h_layer(i, j, k) = 500.0_wp + 50.0_wp*real(k, wp)
-                  ms%tracers(it_S)%hTr(i, j, k) = &
+                  ms%tracers(it_S)%c(i, j, k) = &
                      (35.0_wp + 2.0_wp*sin(0.4_wp*real(i, wp)) + &
                       1.5_wp*cos(0.3_wp*real(j, wp)))*ms%h_layer(i, j, k)
                end do
@@ -288,8 +288,8 @@ contains
          ms%u_face_x_layer = 0.0_wp
          ms%v_face_y_layer = 0.0_wp
          do k = 1, NZ
-            ms%tracers(ms%idx_salinity)%hTr(:, :, k) = S_k(k)*H0
-            ms%tracers(ms%idx_temperature)%hTr(:, :, k) = T_k(k)*H0
+            ms%tracers(ms%idx_salinity)%c(:, :, k) = S_k(k)*H0
+            ms%tracers(ms%idx_temperature)%c(:, :, k) = T_k(k)*H0
          end do
          ! Split driver needs the total column reference depth.
          dyn%bt_work%bt_H_ref = real(NZ, wp)*H0
@@ -510,8 +510,8 @@ contains
                        0.02_wp*real(i, wp) + 0.01_wp*real(j, wp)
                t_ijk = eos%T_ref - real(nz - k, wp)*1.0_wp - &
                        0.03_wp*real(i, wp) - 0.02_wp*real(j, wp)
-               ms%tracers(ms%idx_salinity)%hTr(i, j, k) = s_ijk*ms%h_layer(i, j, k)
-               ms%tracers(ms%idx_temperature)%hTr(i, j, k) = t_ijk*ms%h_layer(i, j, k)
+               ms%tracers(ms%idx_salinity)%c(i, j, k) = s_ijk
+               ms%tracers(ms%idx_temperature)%c(i, j, k) = t_ijk
             end do
          end do
       end do
@@ -646,7 +646,7 @@ contains
       do k = 1, nz
          do j = 1, size(metrics%areaT, 2)
             do i = 1, size(metrics%areaT, 1)
-               m = m + ms%tracers(it)%hTr(i, j, k)*metrics%areaT(i, j)
+               m = m + ms%tracers(it)%c(i, j, k)*metrics%areaT(i, j)
             end do
          end do
       end do

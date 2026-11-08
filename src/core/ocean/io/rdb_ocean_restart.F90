@@ -72,6 +72,11 @@ module rdb_ocean_restart
          !! .true. => write path pulls host-ward via `!$acc update self`
          !! first.  Host-only state sets .false. so `update self` is never
          !! issued on an unmapped array (crashes on GPU).
+      logical :: legacy_content = .false.
+         !! Set by the read path when a `tracer_c_<n>` entry was satisfied from
+         !! the legacy `tracer_hTr_<n>` variable (a pre-concentration restart
+         !! holding CONTENT `h*c`).  The caller converts it to `c` once, after
+         !! `h_layer` is read.  Never set on a write.
       logical :: found = .false.
          !! PR-2 (bt-rem-from-av-rem review): set by `ocean_restart_read_local`
          !! when THIS entry's variable was actually present in the file

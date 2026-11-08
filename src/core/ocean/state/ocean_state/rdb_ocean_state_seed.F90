@@ -71,10 +71,6 @@ contains
       logical :: geographic
          !! Grid positions are in degrees (spherical/supergrid/tripolar):
          !! the input to `topo_length_to_grid_units` (#203).
-      logical :: seeded_on_eta0_target
-         !! The FOURTH or FIFTH `h_layer` seed branch (`zstar_full` under
-         !! `zfixed_closed_faces`; MOM6 `zstar` under the knob or zinit) was
-         !! taken ⇒ establish I1′ after the tracer IC.
       real(wp), allocatable :: water(:, :)
          !! Reference water-column thickness the IC seeds work on:
          !! `b − z_draft` under an ice shelf, a byte copy of `b`
@@ -356,7 +352,7 @@ contains
       ! seeds a negative layer / negative barotropic depth D = Σ h_layer,
       ! and each seeded layer clears the strict `h_old > H_VANISHED`
       ! remap-drain gate (so the seeded S/T survives the first regrid).
-      ! Tracers are seeded from THIS floored h_layer just below, so hTr
+      ! Tracers are seeded from THIS floored h_layer just below, so c
       ! stays consistent (const·2·H_VANISHED, finite T/S, no negative mass).
       ! `thickness_config = "uniform_z"` swaps the local-depth even split for
       ! MOM6's uniform-z-interface seed (flat resting isopycnals under a
@@ -422,7 +418,6 @@ contains
       ! per-layer-index `&tracer_nml` IC without the knob keeps the
       ! sigma-style seed and is moved onto z* by the first regrid, as on
       ! `z_fixed`.  z* is refused under a cavity, so `eta_trim ≡ 0` here.
-      seeded_on_eta0_target = .false.
       if (trim(cfg%thickness_config) == "uniform_z") then
          call seed_h_layer_uniform_z_impl(state%multilayer%h_layer, &
                                           water, nz_ml, &
@@ -475,7 +470,6 @@ contains
          call state%vcoord%build_zref_full(state%barotropic%b)
          call ocean_vcoord_eta0_target(state%vcoord, state%multilayer%h_layer, &
                                        water, nx, ny, nz_ml)
-         seeded_on_eta0_target = .true.
       else if ((cfg%zfixed_closed_faces .or. cfg%ocean%zinit%enable) .and. &
                state%vcoord%is_init .and. &
                state%vcoord%coord_type == VCOORD_ZSTAR .and. &
@@ -483,7 +477,6 @@ contains
                state%vcoord%z_fixed_h_ref > 0.0_wp) then
          call ocean_vcoord_eta0_target(state%vcoord, state%multilayer%h_layer, &
                                        water, nx, ny, nz_ml)
-         seeded_on_eta0_target = .true.
       else
          call seed_h_layer_uniform_impl(state%multilayer%h_layer, &
                                         h_col, nz_ml, &
@@ -565,12 +558,11 @@ contains
                   s_layer(k) = cfg%S_init_bottom + dS_dlayer*real(k - 1, wp)
                end do
                call seed_tracer_stratified_impl( &
-                  state%multilayer%tracers(idx_S)%hTr, &
-                  state%multilayer%h_layer, s_layer, nz_ml)
+                  state%multilayer%tracers(idx_S)%c, &
+                  s_layer, nz_ml)
             else
                call seed_tracer_uniform_impl( &
-                  state%multilayer%tracers(idx_S)%hTr, &
-                  state%multilayer%h_layer, &
+                  state%multilayer%tracers(idx_S)%c, &
                   cfg%initial_salinity, nz_ml)
             end if
          end block
@@ -597,8 +589,8 @@ contains
                t_layer = cfg%initial_temperature
             end if
             call seed_tracer_stratified_impl( &
-               state%multilayer%tracers(idx_T)%hTr, &
-               state%multilayer%h_layer, t_layer, nz_ml)
+               state%multilayer%tracers(idx_T)%c, &
+               t_layer, nz_ml)
          end block
       end if
 
@@ -681,23 +673,6 @@ contains
                    "rdb_ocean_z_init reader is needed to load the z-level T/S file).", ierr, OCEAN_STATUS_ERR_IO)
          return
 #endif
-      end if
-
-      ! The on-target `zstar_full` / `zstar` seed (FOURTH / FIFTH BRANCH
-      ! above) laid inert `zstar_h_min` fillers, and every IC writer
-      ! since (`&tracer_nml` per layer index, the zinit overlay at the
-      ! filler's own depth) gave them a concentration that is not their
-      ! donor's.  Establish invariant I1′ NOW, with the one definition (host
-      ! twin — before `enter_data`), so the sponge snapshot and the budget
-      ! latch see the state every later step holds.  Left to the first
-      ! in-step enforcement, the pooling moves that foreign content into the
-      ! live partial cell above at step 1: a real horizontal density
-      ! difference at a face the mask keeps open (measured 4.6e-6 m/s after
-      ! two hours on `test_ocean_zstar_full_closed_faces`' resting
-      ! staircase).  Column-conservative.  Before the pseudo-salt seed, so
-      ! that copies the settled S.
-      if (seeded_on_eta0_target) then
-         call state%multilayer%enforce_vanished_content_host(nx, ny)
       end if
 
       ! Pseudo-salt seed — MUST run after every write to salinity's initial
@@ -979,7 +954,7 @@ contains
       integer :: i, j, k, nx_total, ny_total, nz_ml, ng
       integer :: ny_phys, j_phys, joff
       real(wp) :: H, dz, y_phys, y_mid, z_k, z_mid
-      real(wp) :: dUdz, T_local, hk
+      real(wp) :: dUdz, T_local
       real(wp), allocatable :: noise(:, :, :)
       integer :: idx_T, n_seed, seed_val
       integer, allocatable :: seed_buf(:)
@@ -1053,9 +1028,8 @@ contains
                T_local = cfg%ocean%ic%eady_T_ref + cfg%ocean%ic%eady_dT_dz*z_k &
                          + cfg%ocean%ic%eady_dT_dy*(y_phys - y_mid)
                do i = 1, nx_total
-                  hk = state%multilayer%h_layer(i, j, k)
-                  state%multilayer%tracers(idx_T)%hTr(i, j, k) = &
-                     (T_local + noise(i, j, k))*hk
+                  state%multilayer%tracers(idx_T)%c(i, j, k) = &
+                     T_local + noise(i, j, k)
                end do
             end do
          end do
@@ -1254,16 +1228,16 @@ contains
       do k = 1, nz
          do j = 1, ny
             do i = 1, nx
-               state%multilayer%tracers(idx_T)%hTr(i, j, k) = &
+               state%multilayer%tracers(idx_T)%c(i, j, k) = &
                   (cfg%ocean%ic%vortex_T_surf - cfg%ocean%ic%vortex_dT_dz*d_k(k) &
-                   + dT*gcell(i, j)*e_k(k))*state%multilayer%h_layer(i, j, k)
+                   + dT*gcell(i, j)*e_k(k))
             end do
          end do
       end do
       if (idx_S > 0) then
          call seed_tracer_uniform_impl( &
-            state%multilayer%tracers(idx_S)%hTr, &
-            state%multilayer%h_layer, cfg%initial_salinity, nz)
+            state%multilayer%tracers(idx_S)%c, &
+            cfg%initial_salinity, nz)
       end if
 
       ! ---- face velocities ----
@@ -1572,13 +1546,13 @@ contains
       idx_T = state%multilayer%idx_temperature
       if (idx_S > 0) then
          call seed_tracer_uniform_impl( &
-            state%multilayer%tracers(idx_S)%hTr, &
-            state%multilayer%h_layer, cfg%initial_salinity, nz_ml)
+            state%multilayer%tracers(idx_S)%c, &
+            cfg%initial_salinity, nz_ml)
       end if
       if (idx_T > 0) then
          call seed_tracer_uniform_impl( &
-            state%multilayer%tracers(idx_T)%hTr, &
-            state%multilayer%h_layer, cfg%initial_temperature, nz_ml)
+            state%multilayer%tracers(idx_T)%c, &
+            cfg%initial_temperature, nz_ml)
       end if
 
       if (comm_env_rank() == 0) then
@@ -1689,28 +1663,27 @@ contains
       ! values regardless of the η bump.
       if (state%multilayer%idx_salinity > 0) then
          call seed_tracer_uniform_impl( &
-            state%multilayer%tracers(state%multilayer%idx_salinity)%hTr, &
-            state%multilayer%h_layer, cfg%initial_salinity, nz_ml)
+            state%multilayer%tracers(state%multilayer%idx_salinity)%c, &
+            cfg%initial_salinity, nz_ml)
       end if
       if (state%multilayer%idx_temperature > 0) then
          call seed_tracer_uniform_impl( &
-            state%multilayer%tracers(state%multilayer%idx_temperature)%hTr, &
-            state%multilayer%h_layer, cfg%initial_temperature, nz_ml)
+            state%multilayer%tracers(state%multilayer%idx_temperature)%c, &
+            cfg%initial_temperature, nz_ml)
       end if
       if (present(ierr)) ierr = OCEAN_STATUS_OK
    end subroutine seed_geostrophic_adjustment_ic
 
-   pure subroutine seed_tracer_uniform_impl(hTr, h_layer, tracer_const, nz_ml)
-      !! Seed `hTr = const * h_layer` for a uniform-IC tracer (salinity).
-      ! assumed-shape-ok: init routine called once at startup; size(hTr,1/2)
+   pure subroutine seed_tracer_uniform_impl(c, tracer_const, nz_ml)
+      !! Seed the concentration `c = const` for a uniform-IC tracer (salinity).
+      ! assumed-shape-ok: init routine called once at startup; size(c,1/2)
       ! used to derive loop bounds (flat-impl over registry-dereferenced allocatables).
-      real(wp), intent(inout) :: hTr(:, :, :)
-      real(wp), intent(in)    :: h_layer(:, :, :)  ! assumed-shape-ok: init routine; size() derives loop bounds
+      real(wp), intent(inout) :: c(:, :, :)
       real(wp), intent(in)    :: tracer_const
       integer, intent(in)    :: nz_ml
       integer :: i, j, k, nx, ny
-      nx = size(hTr, 1)
-      ny = size(hTr, 2)
+      nx = size(c, 1)
+      ny = size(c, 2)
       ! Plain host loop ON PURPOSE: this runs BEFORE enter_data, so a
       ! do concurrent here makes -stdpar=gpu implicitly round-trip the
       ! (unmapped) arrays through the device per loop — measured 36.9 s
@@ -1719,25 +1692,24 @@ contains
       do k = 1, nz_ml
          do j = 1, ny
             do i = 1, nx
-               hTr(i, j, k) = tracer_const*h_layer(i, j, k)
+               c(i, j, k) = tracer_const
             end do
          end do
       end do
    end subroutine seed_tracer_uniform_impl
 
-   pure subroutine seed_tracer_stratified_impl(hTr, h_layer, t_layer, nz_ml)
-      !! Seed `hTr(i,j,k) = t_layer(k) * h_layer(i,j,k)` for the
+   pure subroutine seed_tracer_stratified_impl(c, t_layer, nz_ml)
+      !! Seed `c(i,j,k) = t_layer(k)` for the
       !! per-layer stratified-IC tracer (temperature).  `t_layer(:)` is
       !! a small 1D array pre-computed on host.
-      ! assumed-shape-ok: init routine called once at startup; size(hTr,1/2)
+      ! assumed-shape-ok: init routine called once at startup; size(c,1/2)
       ! used to derive loop bounds (flat-impl over registry-dereferenced allocatables).
-      real(wp), intent(inout) :: hTr(:, :, :)
-      real(wp), intent(in)    :: h_layer(:, :, :)  ! assumed-shape-ok: init routine; size() derives loop bounds
+      real(wp), intent(inout) :: c(:, :, :)
       real(wp), intent(in)    :: t_layer(:)
       integer, intent(in)    :: nz_ml
       integer :: i, j, k, nx, ny
-      nx = size(hTr, 1)
-      ny = size(hTr, 2)
+      nx = size(c, 1)
+      ny = size(c, 2)
       ! Plain host loop ON PURPOSE: this runs BEFORE enter_data, so a
       ! do concurrent here makes -stdpar=gpu implicitly round-trip the
       ! (unmapped) arrays through the device per loop — measured 36.9 s
@@ -1746,7 +1718,7 @@ contains
       do k = 1, nz_ml
          do j = 1, ny
             do i = 1, nx
-               hTr(i, j, k) = t_layer(k)*h_layer(i, j, k)
+               c(i, j, k) = t_layer(k)
             end do
          end do
       end do
@@ -1797,10 +1769,10 @@ contains
       !! times a NaN land contribution is still NaN).  Spec §13.3 /
       !! `land_mask_final_resolution.md` R-land-state:
       !!   * `h_layer` floored to `H_VANISHED` (never 0 — avoids 1/0);
-      !!   * tracer content zeroed (`hTr = 0`, so `T = S = 0` — finite);
+      !!   * tracer concentration zeroed (`c = 0`, so `T = S = 0` — finite);
       !!   * layer + barotropic face velocities zeroed at land faces.
       !!
-      !! The `(h, hTr) = (H_VANISHED, 0)` pair is the LAND-STATE CONTRACT:
+      !! The `(h, c) = (H_VANISHED, 0)` pair is the LAND-STATE CONTRACT:
       !! it is what every vanished-gated operator already holds a land
       !! column at, so a land column looks the same to the budget at the
       !! latch and at every later step.  `seed_land_tracer_hold_impl`
@@ -1824,31 +1796,13 @@ contains
          ! `seed_land_tracer_hold_impl`'s land-state contract.
          if (allocated(ms%tracers)) then
             do t = 1, size(ms%tracers)
-               call seed_land_tracer_hold_impl(ms%tracers(t)%hTr, &
+               call seed_land_tracer_hold_impl(ms%tracers(t)%c, &
                                                ms%wet_mask, nz_ml)
             end do
          end if
 
          ! h_layer floor on land.
          call seed_land_h_floor_impl(ms%h_layer, ms%wet_mask, nz_ml)
-
-         ! On a WET column, the inert fillers a rigid-top coordinate leaves
-         ! inside the ice (and below the bed) are seeded with the IC's own
-         ! `c(z)*h_min` — the concentration at the filler's depth, not its
-         ! donor's.  Establish invariant I1′ (`hTr = h*c_live`) HERE, with
-         ! the one definition (`rdb_vl_merge_content`, host twin because
-         ! this runs before `enter_data`), so the budget latch sees the
-         ! state every later step holds.  Column-conservative, so the
-         ! latch's content is unchanged either way; this is about the
-         ! seeded state satisfying the invariant, not about the budget.
-         ! (Under the previous rule, I1, the first regrid ZEROED these
-         ! fillers un-budgeted — `-1.604E-06` relative at step 1 on
-         ! `cavity_sloping_lid_rest_zfixed.nml` — which is why this fence
-         ! was a zeroing hold.)  Fenced to `z_fixed` x cavity so every
-         ! other namelist's step-0 state is bit-identical.
-         if (state%metrics%use_cavity .and. state%vcoord%coord_type == VCOORD_Z_FIXED) then
-            call ms%enforce_vanished_content_host(size(ms%h_layer, 1), size(ms%h_layer, 2))
-         end if
 
          ! Zero layer face velocities at land faces.
          call seed_land_face_vel_impl(ms%u_face_x_layer, state%metrics%wet_u, nz_ml)
@@ -1873,57 +1827,26 @@ contains
       end associate
    end subroutine ocean_state_seed_land_cells
 
-   pure subroutine seed_land_tracer_hold_impl(hTr, wet_mask, nz)
-      !! Zero the extensive tracer content `hTr` on land T-cells
-      !! (`wet_mask == 0`).  Wet cells untouched (bit-identical when
-      !! `wet_mask ≡ 1`).
+   pure subroutine seed_land_tracer_hold_impl(c, wet_mask, nz)
+      !! Hold the tracer concentration `c` at ZERO on land T-cells
+      !! (`wet_mask == 0`) so the masked dyn-core never evaluates `0*NaN`.
+      !! Wet cells untouched (bit-identical when `wet_mask ≡ 1`).
       !!
-      !! ### The land-state contract: `h = H_VANISHED`, `hTr = 0`
-      !!
-      !! `seed_land_h_floor_impl` pins a land layer's thickness EXACTLY at
-      !! `H_VANISHED`, which is the D4 *vanished* marker.  Every
-      !! vanished-gated operator in the tree tests `h > H_VANISHED`
-      !! (strictly), so a land layer is on the VANISHED side of every one
-      !! of those gates — in particular the ALE remap's concentration
-      !! step (`rdb_ocean_remap::ocean_remap_tracer_field`, `c = hTr/h` if
-      !! `h > H_FLOOR` else `c = 0`), which therefore writes `hTr = 0` on
-      !! every land column at the first regrid.
-      !!
-      !! So `hTr = 0` is not a choice made here — it is the land content
-      !! the running solver holds.  The seed's job is to hand the budget
-      !! latch the SAME land state that every later step will have, and
-      !! any other seeded value is content the first regrid discards
-      !! silently and un-budgeted, which shows up as a step change in the
-      !! console `Error` residual between step 0 and step 1.
-      !!
-      !! This replaced a "recover `val = hTr/max(h_old, H_VANISHED)` and
-      !! re-scale onto the floor" hold, which was wrong twice:
-      !!
-      !!   * the `max(...)` divisor makes the re-scale an exact IDENTITY
-      !!     whenever `h_old <= H_VANISHED` — including `h_old < 0`, which
-      !!     is what an ice-shelf column GROUNDED by `&ocean_cavity_dyn_nml
-      !!     h_min_cavity` has (its water column `b - z_draft` is negative
-      !!     by hundreds of metres).  Those columns kept a FULL-COLUMN,
-      !!     negative `hTr` next to a floored `h`, i.e. an implied
-      !!     concentration of order `-1e7` PSU, and contributed it to the
-      !!     budget latch: 61 % of the initial salt content on
-      !!     `validation_examples/ocean/isomip_plus/ocean0_idealised_draft.nml`;
-      !!   * even where the re-scale DID work (ordinary land, `0 < h_old`),
-      !!     the `val*H_VANISHED` it left is discarded by the first regrid,
-      !!     a ~1e-8 relative step change in every land-bearing case.
-      !!
-      !! The `0*NaN` hazard the old hold existed to avoid is avoided the
-      !! same way: `T = S = hTr/h = 0` is finite.
+      !! Land-state contract: `h = H_VANISHED`, `c = 0`.  A land column
+      !! contributes `h*c = 0` to every budget and every console total, at
+      !! the latch and at every later step.  In concentration form no
+      !! operator rewrites a retained `c` on a layer it does not fill, so the
+      !! value is held, not re-derived each step as the content form did.
       integer, intent(in) :: nz
-      real(wp), intent(inout) :: hTr(:, :, :)
+      real(wp), intent(inout) :: c(:, :, :)
       real(wp), intent(in) :: wet_mask(:, :)
       integer :: i, j, k, nx, ny
-      nx = size(hTr, 1)
-      ny = size(hTr, 2)
+      nx = size(c, 1)
+      ny = size(c, 2)
       do k = 1, nz
          do j = 1, ny
             do i = 1, nx
-               if (wet_mask(i, j) == 0.0_wp) hTr(i, j, k) = 0.0_wp
+               if (wet_mask(i, j) == 0.0_wp) c(i, j, k) = 0.0_wp
             end do
          end do
       end do

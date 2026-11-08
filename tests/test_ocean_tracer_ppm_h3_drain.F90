@@ -249,9 +249,9 @@ contains
          do j = 1, ny
             do i = 1, nx
                ph = 2.0_wp*PI*real(modulo(i - i0 + shift, NXP), wp)/real(NXP, wp)
-               ms%tracers(ms%idx_salinity)%hTr(i, j, k) = H0*(2.0_wp + sin(ph) + 0.4_wp*cos(3.0_wp*ph) &
-                                                              + 0.05_wp*real(j - j0, wp))
-               ms%tracers(ms%idx_temperature)%hTr(i, j, k) = 10.0_wp*H0
+               ms%tracers(ms%idx_salinity)%c(i, j, k) = H0*(2.0_wp + sin(ph) + 0.4_wp*cos(3.0_wp*ph) &
+                                                            + 0.05_wp*real(j - j0, wp))
+               ms%tracers(ms%idx_temperature)%c(i, j, k) = 10.0_wp*H0
             end do
          end do
       end do
@@ -264,7 +264,7 @@ contains
             ct%vhtr(i, j, :) = 0.8_wp*(1.0_wp + 0.5_wp*sin(ph))
          end do
       end do
-      mass0 = sum(ms%tracers(ms%idx_salinity)%hTr(i0:NG + NXP, j0:j1, :))
+      mass0 = sum(ms%tracers(ms%idx_salinity)%c(i0:NG + NXP, j0:j1, :))
       !$acc enter data copyin(ms)
       call ms%enter_data()
       !$acc enter data copyin(ct)
@@ -280,9 +280,9 @@ contains
       !$acc exit data delete(ct)
       call ms%exit_data()
       !$acc exit data delete(ms)
-      mass1 = sum(ms%tracers(ms%idx_salinity)%hTr(i0:NG + NXP, j0:j1, :))
+      mass1 = sum(ms%tracers(ms%idx_salinity)%c(i0:NG + NXP, j0:j1, :))
       allocate (hTr_out(NXP, NYP))
-      hTr_out = ms%tracers(ms%idx_salinity)%hTr(i0:NG + NXP, j0:j1, 1)
+      hTr_out = ms%tracers(ms%idx_salinity)%c(i0:NG + NXP, j0:j1, 1)
       call ct%destroy()
       call ms%destroy()
       call destroy_cartesian_metrics(metrics)

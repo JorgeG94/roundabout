@@ -175,9 +175,9 @@ contains
                ! Passive S/T at reference (adiabatic: EOS won't update them)
                if (allocated(ms%tracers)) then
                   if (ms%idx_salinity > 0) &
-                     ms%tracers(ms%idx_salinity)%hTr(i, j, k) = eos%S_ref*h_per_layer
+                     ms%tracers(ms%idx_salinity)%c(i, j, k) = eos%S_ref*h_per_layer
                   if (ms%idx_temperature > 0) &
-                     ms%tracers(ms%idx_temperature)%hTr(i, j, k) = eos%T_ref*h_per_layer
+                     ms%tracers(ms%idx_temperature)%c(i, j, k) = eos%T_ref*h_per_layer
                end if
             end do
             ms%u_face_x_layer(i, j, :) = 0.0_wp

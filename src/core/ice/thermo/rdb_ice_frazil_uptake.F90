@@ -65,7 +65,7 @@ module rdb_ice_frazil_uptake
    !! Mirrors the outer-shim + flat-impl + `!$acc routine seq`
    !! column-worker structure of `rdb_ice_frazil` /
    !! `rdb_ice_column%ice_thermo_columns`.
-   use rdb_constants, only: wp, H_VANISHED
+   use rdb_constants, only: H_DIV_EPS, wp, H_VANISHED
    use rdb_grid, only: hgrid_t
    use rdb_multilayer_state, only: multilayer_state_t
    use rdb_eos, only: eos_t, eos_freezing_point, TS_CONS_ABS
@@ -90,7 +90,7 @@ contains
 
    pure subroutine ice_frazil_uptake(grid, eos, ms, ice, dt_therm)
       !! Outer shim (outer-shim + flat-impl pattern): dereference the
-      !! tracer registry (`ms%tracers(idx)%hTr`) on the HOST and forward
+      !! tracer registry (`ms%tracers(idx)%c`) on the HOST and forward
       !! bare arrays to the device kernel — NVHPC stdpar cannot follow
       !! the array-of-derived-types indirection inside a do-concurrent
       !! body (same rule as `ice_frazil_accumulate`). No-op when either
@@ -119,7 +119,7 @@ contains
       if (idx_T <= 0 .or. idx_S <= 0) return
 
       if (ice%ncat == 1) then
-         call ice_frazil_uptake_impl(ms%tracers(idx_T)%hTr, ms%tracers(idx_S)%hTr, &
+         call ice_frazil_uptake_impl(ms%tracers(idx_T)%c, ms%tracers(idx_S)%c, &
                                      ms%h_layer, ms%wet_mask, eos, &
                                      ice%frazil_heat, ice%m_ice, ice%m_snow, &
                                      ice%enth_ice, ice%sal_ice, &
@@ -127,7 +127,7 @@ contains
                                      dt_therm, grid%nghost, ice%ncat, ice%nk_ice, &
                                      ms%nz_ml, grid%nx_total, grid%ny_total)
       else
-         call ice_frazil_uptake_multicat_impl(ms%tracers(idx_T)%hTr, ms%tracers(idx_S)%hTr, &
+         call ice_frazil_uptake_multicat_impl(ms%tracers(idx_T)%c, ms%tracers(idx_S)%c, &
                                               ms%h_layer, ms%wet_mask, eos, &
                                               ice%frazil_heat, ice%part_size, ice%m_ice, &
                                               ice%m_snow, ice%enth_ice, ice%sal_ice, &
@@ -195,8 +195,8 @@ contains
          salt_flux_diag(i, j) = 0.0_wp
          h = h_layer(i, j, nz)
          if (wet_mask(i, j) > 0.5_wp .and. h > H_VANISHED .and. frazil_heat(i, j) > 0.0_wp) then
-            sst = rdb_conc_of_raw(hTr_T(i, j, nz), h)
-            s_surf = rdb_conc_of_raw(hTr_S(i, j, nz), h)
+            sst = hTr_T(i, j, nz)
+            s_surf = hTr_S(i, j, nz)
             tfw = eos_freezing_point(eos, s_surf, 0.0_wp)
             if (cons) then
                ! Ice-boundary conversion (IOC/SCOR/IAPSO 2010; McDougall &
@@ -304,8 +304,8 @@ contains
          salt_flux_diag(i, j) = 0.0_wp
          h = h_layer(i, j, nz)
          if (wet_mask(i, j) > 0.5_wp .and. h > H_VANISHED .and. frazil_heat(i, j) > 0.0_wp) then
-            sst = rdb_conc_of_raw(hTr_T(i, j, nz), h)
-            s_surf = rdb_conc_of_raw(hTr_S(i, j, nz), h)
+            sst = hTr_T(i, j, nz)
+            s_surf = hTr_S(i, j, nz)
             tfw = eos_freezing_point(eos, s_surf, 0.0_wp)
             if (cons) then
                ! Ice-boundary conversion (IOC/SCOR/IAPSO 2010; McDougall &

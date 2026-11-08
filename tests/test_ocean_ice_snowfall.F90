@@ -142,9 +142,9 @@ contains
       call sf%set_surface_flux_const(0.0_wp, 0.0_wp)
 
       ms%h_layer = H_LAYER
-      ms%tracers(ms%idx_salinity)%hTr = S_INIT*H_LAYER
-      ms%tracers(ms%idx_temperature)%hTr = T_DEEP*H_LAYER
-      ms%tracers(ms%idx_temperature)%hTr(:, :, NZ) = t_surface*H_LAYER
+      ms%tracers(ms%idx_salinity)%c = S_INIT*H_LAYER
+      ms%tracers(ms%idx_temperature)%c = T_DEEP*H_LAYER
+      ms%tracers(ms%idx_temperature)%c(:, :, NZ) = t_surface*H_LAYER
    end subroutine setup_state_snow
 
    subroutine teardown(ms, eos, ice, sf)
@@ -189,8 +189,8 @@ contains
       call ice_ocean_heat_flux(sf, ice)
       call ocean_surface_flux_apply_tracers(grid, sf, ms, DT_THERM)
 
-      associate (hT => ms%tracers(ms%idx_temperature)%hTr, &
-                 hS => ms%tracers(ms%idx_salinity)%hTr, &
+      associate (hT => ms%tracers(ms%idx_temperature)%c, &
+                 hS => ms%tracers(ms%idx_salinity)%c, &
                  mi => ice%m_ice, msn => ice%m_snow, ei => ice%enth_ice, si => ice%sal_ice, &
                  mf => ice%m_frozen_diag, sd => ice%salt_flux_diag, &
                  hf => ice%heat_flux_diag, md => ice%m_melt_diag, &
@@ -237,8 +237,8 @@ contains
       call ice_ocean_heat_flux(sf, ice)
       call ocean_surface_flux_apply_tracers(grid, sf, ms, DT_THERM)
 
-      associate (hT => ms%tracers(ms%idx_temperature)%hTr, &
-                 hS => ms%tracers(ms%idx_salinity)%hTr, &
+      associate (hT => ms%tracers(ms%idx_temperature)%c, &
+                 hS => ms%tracers(ms%idx_salinity)%c, &
                  mi => ice%m_ice, msn => ice%m_snow, &
                  qs => sf%Q_salt, qh => sf%Q_heat)
          !$acc update self(hT, hS, mi, msn, qs, qh)
@@ -579,7 +579,7 @@ contains
       checks: block
          call setup_state_snow(grid, ms, eos, ice, sf, 1, .true., 0.0_wp)
          t_f = eos_freezing_point(eos, S_INIT, 0.0_wp)
-         ms%tracers(ms%idx_temperature)%hTr(:, :, NZ) = t_f*H_LAYER
+         ms%tracers(ms%idx_temperature)%c(:, :, NZ) = t_f*H_LAYER
 
          ip_ice = NGHOST + 2; jp_ice = NGHOST + 2
          ip_free = NGHOST + 3; jp_free = NGHOST + 2
@@ -649,7 +649,7 @@ contains
       checks: block
          call setup_state_snow(grid, ms, eos, ice, sf, NCAT5, .true., 0.0_wp)
          t_f = eos_freezing_point(eos, S_INIT, 0.0_wp)
-         ms%tracers(ms%idx_temperature)%hTr(:, :, NZ) = t_f*H_LAYER
+         ms%tracers(ms%idx_temperature)%c(:, :, NZ) = t_f*H_LAYER
 
          ip = NGHOST + 2; jp = NGHOST + 2
 
@@ -717,7 +717,7 @@ contains
       checks: block
          call setup_state_snow(grid, ms, eos, ice, sf, NCAT5, .true., 0.0_wp)
          t_f = eos_freezing_point(eos, S_INIT, 0.0_wp)
-         ms%tracers(ms%idx_temperature)%hTr(:, :, NZ) = t_f*H_LAYER
+         ms%tracers(ms%idx_temperature)%c(:, :, NZ) = t_f*H_LAYER
 
          ip = NGHOST + 2; jp = NGHOST + 2
 
@@ -765,14 +765,14 @@ contains
          call setup_state_snow(grid, ms, eos, ice, sf, 1, .true., SST)
          ip = NGHOST + 2; jp = NGHOST + 2
 
-         hT_before = sum(ms%tracers(ms%idx_temperature)%hTr(ip, jp, :))
-         hS_before = sum(ms%tracers(ms%idx_salinity)%hTr(ip, jp, :))
+         hT_before = sum(ms%tracers(ms%idx_temperature)%c(ip, jp, :))
+         hS_before = sum(ms%tracers(ms%idx_salinity)%c(ip, jp, :))
 
          call run_chain_snow(grid, eos, ms, ice, sf, air_temp=0.0_wp, restore_lambda=0.0_wp, &
                              sw_down=0.0_wp, snowfall=FPREC)
 
-         hT_after = sum(ms%tracers(ms%idx_temperature)%hTr(ip, jp, :))
-         hS_after = sum(ms%tracers(ms%idx_salinity)%hTr(ip, jp, :))
+         hT_after = sum(ms%tracers(ms%idx_temperature)%c(ip, jp, :))
+         hS_after = sum(ms%tracers(ms%idx_salinity)%c(ip, jp, :))
 
          m_ocn = ice%fprec_ocn_diag(ip, jp)*DT_THERM
          call check(error, m_ocn > 0.0_wp, "sanity: the ice-free cell must receive ocean-bound snow")
@@ -863,12 +863,12 @@ contains
          call check(error, all(sf_a%Q_salt == sf_b%Q_salt), &
                     "Q_salt must be bit-identical to the PR-26-free reference chain")
          if (allocated(error)) exit checks
-         call check(error, all(ms_a%tracers(ms_a%idx_temperature)%hTr == &
-                               ms_b%tracers(ms_b%idx_temperature)%hTr), &
+         call check(error, all(ms_a%tracers(ms_a%idx_temperature)%c == &
+                               ms_b%tracers(ms_b%idx_temperature)%c), &
                     "hT must be bit-identical to the PR-26-free reference chain")
          if (allocated(error)) exit checks
-         call check(error, all(ms_a%tracers(ms_a%idx_salinity)%hTr == &
-                               ms_b%tracers(ms_b%idx_salinity)%hTr), &
+         call check(error, all(ms_a%tracers(ms_a%idx_salinity)%c == &
+                               ms_b%tracers(ms_b%idx_salinity)%c), &
                     "hS must be bit-identical to the PR-26-free reference chain")
       end block checks
       call teardown(ms_a, eos_a, ice_a, sf_a)

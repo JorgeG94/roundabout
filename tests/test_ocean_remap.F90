@@ -67,7 +67,7 @@ contains
          do j = 1, grid%ny_total
             do i = 1, grid%nx_total
                ms%h_layer(i, j, k) = h_per_layer
-               ms%tracers(ms%idx_salinity)%hTr(i, j, k) = salinity_ref*h_per_layer
+               ms%tracers(ms%idx_salinity)%c(i, j, k) = salinity_ref*h_per_layer
             end do
          end do
       end do
@@ -94,14 +94,14 @@ contains
          nx_tot = grid%nx_total
          ny_tot = grid%ny_total
          allocate (h_before, source=ms%h_layer)
-         allocate (hS_before, source=ms%tracers(ms%idx_salinity)%hTr)
+         allocate (hS_before, source=ms%tracers(ms%idx_salinity)%c)
          allocate (bt_eta(nx_tot, ny_tot), source=2.5_wp)        ! non-zero
          allocate (bt_H_ref(nx_tot, ny_tot), source=real(NZ, wp)*H0)
 
          call ocean_apply_ale_remap_centres(grid, vc, ms, bt_eta, bt_H_ref)
 
          max_dh = maxval(abs(ms%h_layer - h_before))
-         max_dS = maxval(abs(ms%tracers(ms%idx_salinity)%hTr - hS_before))
+         max_dS = maxval(abs(ms%tracers(ms%idx_salinity)%c - hS_before))
          call check(error, max_dh == 0.0_wp, "EULERIAN_Z: h_layer should be untouched")
          if (allocated(error)) exit checks
          call check(error, max_dS == 0.0_wp, "EULERIAN_Z: tracer hTr should be untouched")
@@ -142,7 +142,7 @@ contains
          do j = 1, ny_tot
             do i = 1, nx_tot
                ms%h_layer(i, j, k) = layer_pattern(k)
-               ms%tracers(ms%idx_salinity)%hTr(i, j, k) = S0*layer_pattern(k)
+               ms%tracers(ms%idx_salinity)%c(i, j, k) = S0*layer_pattern(k)
             end do
          end do
       end do
@@ -195,7 +195,7 @@ contains
       do k = 1, NZ
          do j = 1, ny_tot
             do i = 1, nx_tot
-               ms%tracers(ms%idx_salinity)%hTr(i, j, k) = &
+               ms%tracers(ms%idx_salinity)%c(i, j, k) = &
                   (S0 + 0.5_wp*real(k - 1, wp))*ms%h_layer(i, j, k)
             end do
          end do
@@ -206,10 +206,10 @@ contains
          do i = 1, nx_tot
             col_total_before = 0.0_wp
             do k = 1, NZ
-               col_total_before = col_total_before + ms%tracers(ms%idx_salinity)%hTr(i, j, k)
+               col_total_before = col_total_before + ms%tracers(ms%idx_salinity)%c(i, j, k)
             end do
             ! Single-column conservation will be checked AFTER remap; stash for now.
-            ms%tracers(ms%idx_temperature)%hTr(i, j, 1) = col_total_before   ! abuse temp(1) as cache
+            ms%tracers(ms%idx_temperature)%c(i, j, 1) = col_total_before   ! abuse temp(1) as cache
          end do
       end do
 
@@ -219,9 +219,9 @@ contains
          do i = 1, nx_tot
             col_total_after = 0.0_wp
             do k = 1, NZ
-               col_total_after = col_total_after + ms%tracers(ms%idx_salinity)%hTr(i, j, k)
+               col_total_after = col_total_after + ms%tracers(ms%idx_salinity)%c(i, j, k)
             end do
-            col_total_before = ms%tracers(ms%idx_temperature)%hTr(i, j, 1)
+            col_total_before = ms%tracers(ms%idx_temperature)%c(i, j, 1)
             max_drift = max(max_drift, abs(col_total_after - col_total_before))
          end do
       end do
@@ -309,9 +309,9 @@ contains
          do i = 1, nx_tot
             col_before = 0.0_wp
             do k = 1, NZ
-               col_before = col_before + ms%tracers(ms%idx_salinity)%hTr(i, j, k)
+               col_before = col_before + ms%tracers(ms%idx_salinity)%c(i, j, k)
             end do
-            ms%tracers(ms%idx_temperature)%hTr(i, j, 1) = col_before
+            ms%tracers(ms%idx_temperature)%c(i, j, 1) = col_before
          end do
       end do
 
@@ -322,9 +322,9 @@ contains
          do i = 1, nx_tot
             col_after = 0.0_wp
             do k = 1, NZ
-               col_after = col_after + ms%tracers(ms%idx_salinity)%hTr(i, j, k)
+               col_after = col_after + ms%tracers(ms%idx_salinity)%c(i, j, k)
             end do
-            col_before = ms%tracers(ms%idx_temperature)%hTr(i, j, 1)
+            col_before = ms%tracers(ms%idx_temperature)%c(i, j, 1)
             max_drift = max(max_drift, abs(col_after - col_before))
          end do
       end do
@@ -365,7 +365,7 @@ contains
       do k = 1, NZ
          do j = 1, ny_tot
             do i = 1, nx_tot
-               c = ms%tracers(ms%idx_salinity)%hTr(i, j, k)/ms%h_layer(i, j, k)
+               c = ms%tracers(ms%idx_salinity)%c(i, j, k)/ms%h_layer(i, j, k)
                max_dev_from_S0 = max(max_dev_from_S0, abs(c - S0))
             end do
          end do
@@ -590,13 +590,13 @@ contains
             do j = 1, ny_tot
                do i = 1, nx_tot
                   ms%h_layer(i, j, k) = layer_pattern(k)
-                  ms%tracers(ms%idx_salinity)%hTr(i, j, k) = S0*layer_pattern(k)
+                  ms%tracers(ms%idx_salinity)%c(i, j, k) = S0*layer_pattern(k)
                   ms%u_face_x_layer(:, j, k) = 0.1_wp + 0.02_wp*real(k, wp)
                   ms%v_face_y_layer(i, :, k) = -0.05_wp + 0.01_wp*real(k, wp)
                end do
             end do
          end do
-         allocate (hS_before, source=ms%tracers(ms%idx_salinity)%hTr)
+         allocate (hS_before, source=ms%tracers(ms%idx_salinity)%c)
          allocate (bt_eta(nx_tot, ny_tot), source=0.0_wp)
          allocate (bt_H_ref(nx_tot, ny_tot), source=H_TOTAL)
 
@@ -617,7 +617,7 @@ contains
                col_after = 0.0_wp
                do k = 1, NZ
                   col_before = col_before + hS_before(i, j, k)
-                  col_after = col_after + ms%tracers(ms%idx_salinity)%hTr(i, j, k)
+                  col_after = col_after + ms%tracers(ms%idx_salinity)%c(i, j, k)
                end do
                max_drift = max(max_drift, abs(col_after - col_before))
             end do
@@ -707,9 +707,9 @@ contains
             do j = 1, ny_tot
                do i = 1, nx_tot
                   ms%h_layer(i, j, k) = layer_pattern(k)
-                  ms%tracers(ms%idx_salinity)%hTr(i, j, k) = &
+                  ms%tracers(ms%idx_salinity)%c(i, j, k) = &
                      (S0 + 0.5_wp*real(k - 1, wp))*layer_pattern(k)
-                  ms%tracers(ms%idx_temperature)%hTr(i, j, k) = &
+                  ms%tracers(ms%idx_temperature)%c(i, j, k) = &
                      (T0 + 0.3_wp*real(k - 1, wp))*layer_pattern(k)
                end do
             end do
@@ -718,8 +718,8 @@ contains
          allocate (bt_H_ref(nx_tot, ny_tot), source=H_TOTAL)
 
          total_h_before = sum(ms%h_layer)*grid%dx*grid%dy
-         total_T_before = sum(ms%tracers(ms%idx_temperature)%hTr)*grid%dx*grid%dy
-         total_S_before = sum(ms%tracers(ms%idx_salinity)%hTr)*grid%dx*grid%dy
+         total_T_before = sum(ms%tracers(ms%idx_temperature)%c)*grid%dx*grid%dy
+         total_S_before = sum(ms%tracers(ms%idx_salinity)%c)*grid%dx*grid%dy
 
          call ocean_apply_ale_remap_step(grid, vc, ms, bt_eta, bt_H_ref)
          call budgets%drain_contributors()
@@ -746,13 +746,13 @@ contains
                     < 1.0e-10_wp*abs(total_h_before), &
                     "mass LHS = RHS for ALE remap")
          if (allocated(error)) exit checks
-         call check(error, abs((sum(ms%tracers(ms%idx_temperature)%hTr)*grid%dx*grid%dy &
+         call check(error, abs((sum(ms%tracers(ms%idx_temperature)%c)*grid%dx*grid%dy &
                                 - total_T_before) - &
                                budgets%contributors(idx_heat)%total_integrated) &
                     < 1.0e-10_wp*abs(total_T_before), &
                     "heat LHS = RHS for ALE remap")
          if (allocated(error)) exit checks
-         call check(error, abs((sum(ms%tracers(ms%idx_salinity)%hTr)*grid%dx*grid%dy &
+         call check(error, abs((sum(ms%tracers(ms%idx_salinity)%c)*grid%dx*grid%dy &
                                 - total_S_before) - &
                                budgets%contributors(idx_salt)%total_integrated) &
                     < 1.0e-10_wp*abs(total_S_before), &

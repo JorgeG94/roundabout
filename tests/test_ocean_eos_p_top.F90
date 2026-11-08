@@ -164,8 +164,8 @@ contains
       call eos%init(grid)
       eos%variant = EOS_VARIANT_WRIGHT_97
       ms%h_layer = DZ_LAYER
-      ms%tracers(ms%idx_salinity)%hTr = S_UNI*DZ_LAYER
-      ms%tracers(ms%idx_temperature)%hTr = T_UNI*DZ_LAYER
+      ms%tracers(ms%idx_salinity)%c = S_UNI*DZ_LAYER
+      ms%tracers(ms%idx_temperature)%c = T_UNI*DZ_LAYER
    end subroutine build_uniform_column
 
    subroutine compute_density(ms, eos)
@@ -550,8 +550,8 @@ contains
 
       ! Uniform (T, S) so the potential density has an exact closed form.
       ms%h_layer = H_TOTAL/real(NZ, wp)
-      ms%tracers(ms%idx_salinity)%hTr = S_UNI*ms%h_layer
-      ms%tracers(ms%idx_temperature)%hTr = T_UNI*ms%h_layer
+      ms%tracers(ms%idx_salinity)%c = S_UNI
+      ms%tracers(ms%idx_temperature)%c = T_UNI
 
       ! A real load on the assembled total, and the seam switched on so the
       ! OFF case is "the seam runs, the EOS does not see it" rather than

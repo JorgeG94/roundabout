@@ -132,8 +132,8 @@ contains
          pgf%variant = OPGF_VARIANT_FV_WRIGHT
 
          ms%h_layer = H_LAYER
-         ms%tracers(ms%idx_salinity)%hTr = S_UNI*H_LAYER
-         ms%tracers(ms%idx_temperature)%hTr = T_UNI*H_LAYER
+         ms%tracers(ms%idx_salinity)%c = S_UNI*H_LAYER
+         ms%tracers(ms%idx_temperature)%c = T_UNI*H_LAYER
          ! Seed rho_layer with the surface Wright value so the Picard
          ! seed is sane.
          ms%rho_layer = wright_rho_at(T_UNI, S_UNI, 0.0_wp)
@@ -279,8 +279,8 @@ contains
             do j = 1, ny
                do i = 1, nx
                   T_at_i = T_REF + T_GRAD*real(i - nx/2, wp)
-                  ms%tracers(ms%idx_salinity)%hTr(i, j, k) = S_UNI*H_LAYER
-                  ms%tracers(ms%idx_temperature)%hTr(i, j, k) = T_at_i*H_LAYER
+                  ms%tracers(ms%idx_salinity)%c(i, j, k) = S_UNI*H_LAYER
+                  ms%tracers(ms%idx_temperature)%c(i, j, k) = T_at_i*H_LAYER
                   ms%rho_layer(i, j, k) = wright_rho_at(T_at_i, S_UNI, 0.0_wp)
                end do
             end do

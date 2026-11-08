@@ -545,10 +545,10 @@ contains
             do k = 1, NZ
                if (k <= 2) then
                   ms%h_layer(i, j, k) = 1.0e-4_wp
-                  ms%tracers(ms%idx_salinity)%hTr(i, j, k) = S0*1.0e-4_wp
+                  ms%tracers(ms%idx_salinity)%c(i, j, k) = S0*1.0e-4_wp
                else
                   ms%h_layer(i, j, k) = (H_BED - 2.0e-4_wp)/4.0_wp
-                  ms%tracers(ms%idx_salinity)%hTr(i, j, k) = S0*ms%h_layer(i, j, k)
+                  ms%tracers(ms%idx_salinity)%c(i, j, k) = S0
                end if
             end do
          end do
@@ -567,7 +567,7 @@ contains
       do j = 1, ny_tot
          do i = 1, nx_tot
             do k = 1, NZ
-               col_before(i, j) = col_before(i, j) + ms%tracers(ms%idx_salinity)%hTr(i, j, k)
+               col_before(i, j) = col_before(i, j) + ms%tracers(ms%idx_salinity)%c(i, j, k)
             end do
          end do
       end do
@@ -582,11 +582,11 @@ contains
             s = 0.0_wp
             b = 0.0_wp
             do k = 1, NZ
-               s = s + ms%tracers(ms%idx_salinity)%hTr(i, j, k)
+               s = s + ms%tracers(ms%idx_salinity)%c(i, j, k)
                b = b + ms%salt_budget_remap(i, j, k)
             end do
             do k = 1, NZ
-               if (abs(ms%tracers(ms%idx_salinity)%hTr(i, j, k) - S0*ms%h_layer(i, j, k)) > &
+               if (abs(ms%tracers(ms%idx_salinity)%c(i, j, k) - S0*ms%h_layer(i, j, k)) > &
                    1.0e-12_wp*S0*ms%h_layer(i, j, k)) i1_ok = .false.
             end do
             worst_content = max(worst_content, abs(s - col_before(i, j)))
@@ -642,7 +642,7 @@ contains
                ms%h_layer(i, j, k) = 20.0_wp
                if (j > 1 .and. (k == 1 .or. k == NZ)) ms%h_layer(i, j, k) = 1.0e-4_wp
                do t = 1, size(ms%tracers)
-                  ms%tracers(t)%hTr(i, j, k) = S0*20.0_wp + real(t, wp)
+                  ms%tracers(t)%c(i, j, k) = S0*20.0_wp + real(t, wp)
                end do
             end do
          end do
@@ -653,8 +653,8 @@ contains
       do j = 1, ny_tot
          do i = 1, nx_tot
             do k = 1, NZ
-               before_s(i, j) = before_s(i, j) + ms%tracers(ms%idx_salinity)%hTr(i, j, k)
-               live_ref(i, j, k) = ms%tracers(ms%idx_salinity)%hTr(i, j, k)
+               before_s(i, j) = before_s(i, j) + ms%tracers(ms%idx_salinity)%c(i, j, k)
+               live_ref(i, j, k) = ms%tracers(ms%idx_salinity)%c(i, j, k)
             end do
          end do
       end do
@@ -668,14 +668,14 @@ contains
          do i = 1, nx_tot
             s = 0.0_wp
             do k = 1, NZ
-               s = s + ms%tracers(ms%idx_salinity)%hTr(i, j, k)
+               s = s + ms%tracers(ms%idx_salinity)%c(i, j, k)
                if (j == 1) then
-                  if (ms%tracers(ms%idx_salinity)%hTr(i, j, k) /= live_ref(i, j, k)) &
+                  if (ms%tracers(ms%idx_salinity)%c(i, j, k) /= live_ref(i, j, k)) &
                      live_identical = .false.
                end if
             end do
             do t = 1, size(ms%tracers)
-               if (.not. i1p_holds(NZ, ms%h_layer(i, j, :), ms%tracers(t)%hTr(i, j, :))) &
+               if (.not. i1p_holds(NZ, ms%h_layer(i, j, :), ms%tracers(t)%c(i, j, :))) &
                   i1_ok = .false.
             end do
             worst_content = max(worst_content, abs(s - before_s(i, j)))
@@ -720,13 +720,13 @@ contains
          do i = 1, nx_tot
             do k = 1, NZ
                ms%h_layer(i, j, k) = 10.0_wp
-               ms%tracers(ms%idx_salinity)%hTr(i, j, k) = 345.0_wp
-               ms%tracers(ms%idx_temperature)%hTr(i, j, k) = 10.0_wp
+               ms%tracers(ms%idx_salinity)%c(i, j, k) = 345.0_wp
+               ms%tracers(ms%idx_temperature)%c(i, j, k) = 10.0_wp
             end do
             ! One bed filler, EMPTY — the I1 state, which I1′ forbids.
             ms%h_layer(i, j, 1) = 1.0e-4_wp
-            ms%tracers(ms%idx_salinity)%hTr(i, j, 1) = 0.0_wp
-            ms%tracers(ms%idx_temperature)%hTr(i, j, 1) = 0.0_wp
+            ms%tracers(ms%idx_salinity)%c(i, j, 1) = 0.0_wp
+            ms%tracers(ms%idx_temperature)%c(i, j, 1) = 0.0_wp
          end do
       end do
 
@@ -743,8 +743,8 @@ contains
          ! A filler holding exactly its donor's concentration is clean.
          do j = 1, ny_tot
             do i = 1, nx_tot
-               ms%tracers(ms%idx_salinity)%hTr(i, j, 1) = 1.0e-4_wp*34.5_wp
-               ms%tracers(ms%idx_temperature)%hTr(i, j, 1) = 1.0e-4_wp*1.0_wp
+               ms%tracers(ms%idx_salinity)%c(i, j, 1) = 1.0e-4_wp*34.5_wp
+               ms%tracers(ms%idx_temperature)%c(i, j, 1) = 1.0e-4_wp*1.0_wp
             end do
          end do
          call ms%scan_vanished_content(nx_tot, ny_tot, n_bad, worst)
@@ -754,7 +754,7 @@ contains
          ! Break it again, sweep, and require clean.
          do j = 1, ny_tot
             do i = 1, nx_tot
-               ms%tracers(ms%idx_salinity)%hTr(i, j, 1) = 3.0e-3_wp
+               ms%tracers(ms%idx_salinity)%c(i, j, 1) = 3.0e-3_wp
             end do
          end do
          call ms%scan_vanished_content(nx_tot, ny_tot, n_bad, worst)
@@ -793,14 +793,14 @@ contains
          do i = 1, nx_tot
             do k = 1, NZ
                ms%h_layer(i, j, k) = 10.0_wp
-               ms%tracers(ms%idx_salinity)%hTr(i, j, k) = 345.0_wp
-               ms%tracers(ms%idx_temperature)%hTr(i, j, k) = 10.0_wp
+               ms%tracers(ms%idx_salinity)%c(i, j, k) = 345.0_wp
+               ms%tracers(ms%idx_temperature)%c(i, j, k) = 10.0_wp
             end do
             ms%h_layer(i, j, 1) = 1.0e-4_wp
-            ms%tracers(ms%idx_salinity)%hTr(i, j, 1) = 1.0e-4_wp*34.5_wp
+            ms%tracers(ms%idx_salinity)%c(i, j, 1) = 1.0e-4_wp*34.5_wp
             ! Pool {k=1 filler, k=2 live} sums to one ulp of 1 (~1.1e-16).
-            ms%tracers(ms%idx_temperature)%hTr(i, j, 2) = 1.0_wp
-            ms%tracers(ms%idx_temperature)%hTr(i, j, 1) = &
+            ms%tracers(ms%idx_temperature)%c(i, j, 2) = 1.0_wp
+            ms%tracers(ms%idx_temperature)%c(i, j, 1) = &
                -(1.0_wp - epsilon(1.0_wp)/2.0_wp)
          end do
       end do
@@ -815,8 +815,8 @@ contains
          ! A real violation under the same column scale is still caught.
          do j = 1, ny_tot
             do i = 1, nx_tot
-               ms%tracers(ms%idx_temperature)%hTr(i, j, 1) = 0.0_wp
-               ms%tracers(ms%idx_temperature)%hTr(i, j, 2) = 1.0e1_wp
+               ms%tracers(ms%idx_temperature)%c(i, j, 1) = 0.0_wp
+               ms%tracers(ms%idx_temperature)%c(i, j, 2) = 1.0e1_wp
             end do
          end do
          call ms%scan_vanished_content(nx_tot, ny_tot, n_bad, worst)
@@ -883,9 +883,9 @@ contains
          do i = 1, nx_tot
             ms%h_layer(i, j, :) = [HF, 3.0_wp, 40.0_wp, 40.0_wp, 17.0_wp, HF, HF]
             ! Salinity: 34.6 deep, 34.2 at k_top; fillers empty (the I1 state).
-            ms%tracers(ms%idx_salinity)%hTr(i, j, :) = [0.0_wp, 3.0_wp*34.6_wp, &
-                                                        40.0_wp*34.5_wp, 40.0_wp*34.4_wp, &
-                                                        17.0_wp*34.2_wp, 0.0_wp, 0.0_wp]
+            ms%tracers(ms%idx_salinity)%c(i, j, :) = [0.0_wp, 3.0_wp*34.6_wp, &
+                                                      40.0_wp*34.5_wp, 40.0_wp*34.4_wp, &
+                                                      17.0_wp*34.2_wp, 0.0_wp, 0.0_wp]
          end do
       end do
 
@@ -894,7 +894,7 @@ contains
       ok = .true.
       do j = 1, ny_tot
          do i = 1, nx_tot
-            qs = ms%tracers(ms%idx_salinity)%hTr(i, j, :)
+            qs = ms%tracers(ms%idx_salinity)%c(i, j, :)
             c_top = qs(5)/17.0_wp
             c_bot = qs(2)/3.0_wp
             if (abs(qs(6)/HF - c_top) > 1.0e-12_wp*c_top) ok = .false.
@@ -947,14 +947,14 @@ contains
                end if
                do t = 1, size(ms_a%tracers)
                   call lcg_next(seed, r)
-                  ms_a%tracers(t)%hTr(i, j, k) = (10.0_wp + 25.0_wp*r)*ms_a%h_layer(i, j, k)
+                  ms_a%tracers(t)%c(i, j, k) = 10.0_wp + 25.0_wp*r
                end do
             end do
          end do
       end do
       ms_b%h_layer = ms_a%h_layer
       do t = 1, size(ms_a%tracers)
-         ms_b%tracers(t)%hTr = ms_a%tracers(t)%hTr
+         ms_b%tracers(t)%c = ms_a%tracers(t)%c
       end do
 
       call ms_a%enforce_vanished_content(nx_tot, ny_tot)
@@ -966,10 +966,10 @@ contains
          do j = 1, ny_tot
             do i = 1, nx_tot
                do k = 1, NZ
-                  if (abs(ms_a%tracers(t)%hTr(i, j, k) - ms_b%tracers(t)%hTr(i, j, k)) > &
-                      1.0e-13_wp*abs(ms_a%tracers(t)%hTr(i, j, k))) same = .false.
+                  if (abs(ms_a%tracers(t)%c(i, j, k) - ms_b%tracers(t)%c(i, j, k)) > &
+                      1.0e-13_wp*abs(ms_a%tracers(t)%c(i, j, k))) same = .false.
                end do
-               if (.not. i1p_holds(NZ, ms_b%h_layer(i, j, :), ms_b%tracers(t)%hTr(i, j, :))) &
+               if (.not. i1p_holds(NZ, ms_b%h_layer(i, j, :), ms_b%tracers(t)%c(i, j, :))) &
                   i1_ok = .false.
             end do
          end do

@@ -224,7 +224,7 @@ contains
                   do i = ng + 1, ng + nx_p
                      if (wet(i, j) <= 0.5_wp) cycle
                      if (h(i, j, k) <= 0.0_wp) cycle
-                     c = q(i, j, k)/h(i, j, k)
+                     c = q(i, j, k)
                      if (h(i, j, k) > H_VANISHED) then
                         worst_live = max(worst_live, abs(c/refs(t) - 1.0_wp))
                      else

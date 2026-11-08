@@ -111,8 +111,8 @@ contains
          ! bottom-up: k=nz is surface, k=1 is bed
          z_below = real(nz - k, wp)*dz + 0.5_wp*dz
          t_k = t_surf - dt_dz*z_below
-         ms%tracers(ms%idx_temperature)%hTr(:, :, k) = t_k*dz
-         ms%tracers(ms%idx_salinity)%hTr(:, :, k) = 35.0_wp*dz
+         ms%tracers(ms%idx_temperature)%c(:, :, k) = t_k*dz
+         ms%tracers(ms%idx_salinity)%c(:, :, k) = 35.0_wp*dz
       end do
    end subroutine setup_stable_column
 
@@ -141,8 +141,8 @@ contains
          t_k = 20.0_wp - dt_per_m*z_sd
          u_k = du*tanh((shear_depth_m - z_sd)/shear_width_m)
 
-         ms%tracers(ms%idx_temperature)%hTr(:, :, k) = t_k*dz
-         ms%tracers(ms%idx_salinity)%hTr(:, :, k) = 35.0_wp*dz
+         ms%tracers(ms%idx_temperature)%c(:, :, k) = t_k*dz
+         ms%tracers(ms%idx_salinity)%c(:, :, k) = 35.0_wp*dz
          ! Both faces equal u_k -> face-average = u_k
          ms%u_face_x_layer(:, :, k) = u_k
       end do
@@ -447,8 +447,8 @@ contains
          end do
          ! Also relax hTr for T
          do k = 1, NZ
-            ms%tracers(ms%idx_temperature)%hTr(:, :, k) = &
-               ms%tracers(ms%idx_temperature)%hTr(:, :, k)
+            ms%tracers(ms%idx_temperature)%c(:, :, k) = &
+               ms%tracers(ms%idx_temperature)%c(:, :, k)
          end do
 
          call kappa_shear_compute(grid, ks, ms, DT)
@@ -1002,8 +1002,8 @@ contains
          call poison_3d(ms%h_layer)
          call poison_3d(ms%u_face_x_layer)
          call poison_3d(ms%v_face_y_layer)
-         call poison_3d(ms%tracers(ms%idx_temperature)%hTr)
-         call poison_3d(ms%tracers(ms%idx_salinity)%hTr)
+         call poison_3d(ms%tracers(ms%idx_temperature)%c)
+         call poison_3d(ms%tracers(ms%idx_salinity)%c)
          call poison_2d(ks%f_corner)
          call poison_3d(ks%kd_corner)   ! the kernel-1 -> kernel-2 carrier
 #endif

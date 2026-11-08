@@ -184,8 +184,8 @@ contains
                z_mid = e_lo + 0.5_wp*dz
                Tk = T_REF + DTDZ*z_mid
                Sk = S_REF + DSDZ*z_mid
-               ms%tracers(ms%idx_temperature)%hTr(i, j, k) = Tk*dz
-               ms%tracers(ms%idx_salinity)%hTr(i, j, k) = Sk*dz
+               ms%tracers(ms%idx_temperature)%c(i, j, k) = Tk*dz
+               ms%tracers(ms%idx_salinity)%c(i, j, k) = Sk*dz
                ms%rho_layer(i, j, k) = rho_lin(Tk, Sk)
                e_lo = e_lo + dz
             end do

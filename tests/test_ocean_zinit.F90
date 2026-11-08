@@ -155,8 +155,8 @@ contains
       call ms%init(grid)
       ms%h_layer = depth/real(nz_ml, wp)
       ms%wet_mask = 1.0_wp
-      ms%tracers(ms%idx_salinity)%hTr = 0.0_wp
-      ms%tracers(ms%idx_temperature)%hTr = 0.0_wp
+      ms%tracers(ms%idx_salinity)%c = 0.0_wp
+      ms%tracers(ms%idx_temperature)%c = 0.0_wp
    end subroutine make_state
 
    function make_grid(nx_phys, ny_phys) result(g)
@@ -235,8 +235,8 @@ contains
       call seed_ts_from_zfile(msf, grid, cfg, to_cons_abs=.false.)
       call seed_ts_from_zfile(ms, grid, cfg, to_cons_abs=.true.)
 
-      call check(error, all(msf%tracers(msf%idx_temperature)%hTr == ms0%tracers(ms0%idx_temperature)%hTr) .and. &
-                 all(msf%tracers(msf%idx_salinity)%hTr == ms0%tracers(ms0%idx_salinity)%hTr), &
+      call check(error, all(msf%tracers(msf%idx_temperature)%c == ms0%tracers(ms0%idx_temperature)%c) .and. &
+                 all(msf%tracers(msf%idx_salinity)%c == ms0%tracers(ms0%idx_salinity)%c), &
                  "to_cons_abs=.false. must be bit-identical to the default reader")
       if (allocated(error)) return
 
@@ -246,12 +246,12 @@ contains
          do i = 1, NX
             do k = 1, NZ_ML
                h = ms0%h_layer(ng + i, ng + j, k)
-               th = ms0%tracers(ms0%idx_temperature)%hTr(ng + i, ng + j, k)/h
-               sp = ms0%tracers(ms0%idx_salinity)%hTr(ng + i, ng + j, k)/h
+               th = ms0%tracers(ms0%idx_temperature)%c(ng + i, ng + j, k)/h
+               sp = ms0%tracers(ms0%idx_salinity)%c(ng + i, ng + j, k)/h
                sa = sr_from_sp(sp)
                ct = ct_from_pt(sa, th)
-               worst = max(worst, abs(ms%tracers(ms%idx_temperature)%hTr(ng + i, ng + j, k)/h - ct), &
-                           abs(ms%tracers(ms%idx_salinity)%hTr(ng + i, ng + j, k)/h - sa))
+               worst = max(worst, abs(ms%tracers(ms%idx_temperature)%c(ng + i, ng + j, k)/h - ct), &
+                           abs(ms%tracers(ms%idx_salinity)%c(ng + i, ng + j, k)/h - sa))
             end do
          end do
       end do
@@ -298,13 +298,13 @@ contains
          do i = 1, NX
             do k = 1, NZ_ML
                ! hTr / h_layer must equal the source value at z_ctr(k).
-               val = ms%tracers(ms%idx_temperature)%hTr(ng + i, ng + j, k)/ &
+               val = ms%tracers(ms%idx_temperature)%c(ng + i, ng + j, k)/ &
                      ms%h_layer(ng + i, ng + j, k)
                expect = ZC(k)   ! T = depth
                call check(error, abs(val - expect) < 1.0e-10_wp, &
                           "T1 temperature recovery wrong at layer")
                if (allocated(error)) return
-               val = ms%tracers(ms%idx_salinity)%hTr(ng + i, ng + j, k)/ &
+               val = ms%tracers(ms%idx_salinity)%c(ng + i, ng + j, k)/ &
                      ms%h_layer(ng + i, ng + j, k)
                expect = 30.0_wp + ZC(k)
                call check(error, abs(val - expect) < 1.0e-10_wp, &
@@ -357,12 +357,12 @@ contains
       do j = 1, NY
          do i = 1, NX
             do k = 1, NZ_ML
-               val = ms%tracers(ms%idx_temperature)%hTr(ng + i, ng + j, k)/ &
+               val = ms%tracers(ms%idx_temperature)%c(ng + i, ng + j, k)/ &
                      ms%h_layer(ng + i, ng + j, k)
                call check(error, abs(val - T_EXPECT(k)) < 1.0e-10_wp, &
                           "T2 linear temperature mismatch vs oracle")
                if (allocated(error)) return
-               val = ms%tracers(ms%idx_salinity)%hTr(ng + i, ng + j, k)/ &
+               val = ms%tracers(ms%idx_salinity)%c(ng + i, ng + j, k)/ &
                      ms%h_layer(ng + i, ng + j, k)
                call check(error, abs(val - S_EXPECT(k)) < 1.0e-10_wp, &
                           "T2 linear salinity mismatch vs oracle")
@@ -412,7 +412,7 @@ contains
       do j = 1, NY
          do i = 1, NX
             do k = 1, NZ_ML
-               val = ms%tracers(ms%idx_temperature)%hTr(ng + i, ng + j, k)/ &
+               val = ms%tracers(ms%idx_temperature)%c(ng + i, ng + j, k)/ &
                      ms%h_layer(ng + i, ng + j, k)
                call check(error, abs(val - T_EXPECT(k)) < 1.0e-10_wp, &
                           "T3 constant-extrapolation mismatch vs oracle")
@@ -466,18 +466,18 @@ contains
 
       ! Dry column must hold the land-fill constants.
       do k = 1, NZ_ML
-         val = ms%tracers(ms%idx_temperature)%hTr(di, dj, k)/ms%h_layer(di, dj, k)
+         val = ms%tracers(ms%idx_temperature)%c(di, dj, k)/ms%h_layer(di, dj, k)
          call check(error, abs(val - FILL_T) < 1.0e-10_wp, &
                     "T4 dry column did not get land_fill_t")
          if (allocated(error)) return
-         val = ms%tracers(ms%idx_salinity)%hTr(di, dj, k)/ms%h_layer(di, dj, k)
+         val = ms%tracers(ms%idx_salinity)%c(di, dj, k)/ms%h_layer(di, dj, k)
          call check(error, abs(val - FILL_S) < 1.0e-10_wp, &
                     "T4 dry column did not get land_fill_s")
          if (allocated(error)) return
       end do
 
       ! A neighbouring WET column must still get the interp result (20.0).
-      val = ms%tracers(ms%idx_temperature)%hTr(ng + 2, dj, 1)/ms%h_layer(ng + 2, dj, 1)
+      val = ms%tracers(ms%idx_temperature)%c(ng + 2, dj, 1)/ms%h_layer(ng + 2, dj, 1)
       call check(error, abs(val - 20.0_wp) < 1.0e-10_wp, &
                  "T4 wet neighbour did not get the interp value")
       if (allocated(error)) return
@@ -562,8 +562,8 @@ contains
          end do
       end do
       ms%wet_mask = 1.0_wp
-      ms%tracers(ms%idx_salinity)%hTr = 0.0_wp
-      ms%tracers(ms%idx_temperature)%hTr = 0.0_wp
+      ms%tracers(ms%idx_salinity)%c = 0.0_wp
+      ms%tracers(ms%idx_temperature)%c = 0.0_wp
    end subroutine make_sloping_cavity
 
    pure function tracer_value(ms, idx, i, j, k) result(v)
@@ -571,7 +571,7 @@ contains
       type(multilayer_state_t), intent(in) :: ms
       integer, intent(in) :: idx, i, j, k
       real(wp) :: v
-      v = ms%tracers(idx)%hTr(i, j, k)/ms%h_layer(i, j, k)
+      v = ms%tracers(idx)%c(i, j, k)/ms%h_layer(i, j, k)
    end function tracer_value
 
    pure function interp_at_depth(z_ctr, t_col, nz_ml, z_target) result(v)
@@ -750,10 +750,10 @@ contains
                 source=0.0_wp)
       call seed_ts_linear_z(ms_a, cfg)
       call seed_ts_linear_z(ms_b, cfg, z_draft=zero_draft)
-      same = all(ms_a%tracers(ms_a%idx_temperature)%hTr == &
-                 ms_b%tracers(ms_b%idx_temperature)%hTr) .and. &
-         all(ms_a%tracers(ms_a%idx_salinity)%hTr == &
-             ms_b%tracers(ms_b%idx_salinity)%hTr)
+      same = all(ms_a%tracers(ms_a%idx_temperature)%c == &
+                 ms_b%tracers(ms_b%idx_temperature)%c) .and. &
+         all(ms_a%tracers(ms_a%idx_salinity)%c == &
+             ms_b%tracers(ms_b%idx_salinity)%c)
       call check(error, same, &
                  "P5.3b: a zero draft must be BIT-identical to no draft (analytic)")
       if (allocated(error)) then
@@ -784,10 +784,10 @@ contains
       do k = 1, NZ_ML
          do j = 1, NY
             do i = 1, NX
-               if (ms_a%tracers(ms_a%idx_temperature)%hTr(ng + i, ng + j, k) /= &
-                   ms_b%tracers(ms_b%idx_temperature)%hTr(ng + i, ng + j, k)) same = .false.
-               if (ms_a%tracers(ms_a%idx_salinity)%hTr(ng + i, ng + j, k) /= &
-                   ms_b%tracers(ms_b%idx_salinity)%hTr(ng + i, ng + j, k)) same = .false.
+               if (ms_a%tracers(ms_a%idx_temperature)%c(ng + i, ng + j, k) /= &
+                   ms_b%tracers(ms_b%idx_temperature)%c(ng + i, ng + j, k)) same = .false.
+               if (ms_a%tracers(ms_a%idx_salinity)%c(ng + i, ng + j, k) /= &
+                   ms_b%tracers(ms_b%idx_salinity)%c(ng + i, ng + j, k)) same = .false.
             end do
          end do
       end do
@@ -867,7 +867,7 @@ contains
       ! A zero gradient is a uniform column, exactly.
       cfg%lin_dt_dz = 0.0_wp
       call seed_ts_linear_z(ms, cfg)
-      call check(error, all(abs(ms%tracers(ms%idx_temperature)%hTr - &
+      call check(error, all(abs(ms%tracers(ms%idx_temperature)%c - &
                                 T_REF*ms%h_layer) < TOL_EXACT), &
                  "P5.3c: lin_dt_dz = 0 must give a uniform column at lin_t_ref")
 
@@ -955,10 +955,10 @@ contains
       do k = 1, NZM
          do j = 1, grid%ny_total
             do i = 1, grid%nx_total
-               seeded = ms%tracers(ms%idx_temperature)%hTr(i, j, k)/ms%h_layer(i, j, k)
+               seeded = ms%tracers(ms%idx_temperature)%c(i, j, k)/ms%h_layer(i, j, k)
                targeted = sp%ref_tracer(i, j, k, ms%idx_temperature)
                worst = max(worst, abs(seeded - targeted))
-               seeded = ms%tracers(ms%idx_salinity)%hTr(i, j, k)/ms%h_layer(i, j, k)
+               seeded = ms%tracers(ms%idx_salinity)%c(i, j, k)/ms%h_layer(i, j, k)
                targeted = sp%ref_tracer(i, j, k, ms%idx_salinity)
                worst = max(worst, abs(seeded - targeted))
             end do

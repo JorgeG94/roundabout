@@ -106,8 +106,8 @@ contains
       ny = grid%ny_total
 
       ms%h_layer = H0
-      ms%tracers(ms%idx_temperature)%hTr = T0*H0
-      ms%tracers(ms%idx_salinity)%hTr = 35.0_wp*H0
+      ms%tracers(ms%idx_temperature)%c = T0*H0
+      ms%tracers(ms%idx_salinity)%c = 35.0_wp*H0
 
       ! Prescribe a non-trivial w (interior + bed/surface zero)
       ms%w_interface = 0.0_wp
@@ -133,7 +133,7 @@ contains
          do j = 1, ny
             do i = 1, nx
                if (ms%h_layer(i, j, k) > 0.0_wp) then
-                  T_obs = ms%tracers(ms%idx_temperature)%hTr(i, j, k)/ &
+                  T_obs = ms%tracers(ms%idx_temperature)%c(i, j, k)/ &
                           ms%h_layer(i, j, k)
                   max_T_dev = max(max_T_dev, abs(T_obs - T0))
                end if
@@ -167,11 +167,11 @@ contains
 
       ms%h_layer = H0
       do k = 1, NZ
-         ms%tracers(ms%idx_temperature)%hTr(:, :, k) = &
+         ms%tracers(ms%idx_temperature)%c(:, :, k) = &
             real(k, wp)*H0
-         ms%tracers(ms%idx_salinity)%hTr(:, :, k) = 35.0_wp*H0
+         ms%tracers(ms%idx_salinity)%c(:, :, k) = 35.0_wp*H0
       end do
-      allocate (hT_ic, source=ms%tracers(ms%idx_temperature)%hTr)
+      allocate (hT_ic, source=ms%tracers(ms%idx_temperature)%c)
 
       ms%w_interface = 0.0_wp
 
@@ -179,7 +179,7 @@ contains
       call tracer_advect_vertical(grid, vadv, ms, DT)
       call map_out(ms, vadv)
 
-      max_diff = maxval(abs(ms%tracers(ms%idx_temperature)%hTr - hT_ic))
+      max_diff = maxval(abs(ms%tracers(ms%idx_temperature)%c - hT_ic))
       call check(error, max_diff < 1.0e-12_wp, &
                  "vert advect: w=0 not a no-op")
 
@@ -214,10 +214,10 @@ contains
       do k = 1, NZ
          do j = 1, ny
             do i = 1, nx
-               ms%tracers(ms%idx_temperature)%hTr(i, j, k) = &
+               ms%tracers(ms%idx_temperature)%c(i, j, k) = &
                   (10.0_wp + 2.0_wp*real(k, wp) + &
                    0.5_wp*sin(2.0_wp*PI*real(i, wp)/real(nx, wp)))*H0
-               ms%tracers(ms%idx_salinity)%hTr(i, j, k) = 35.0_wp*H0
+               ms%tracers(ms%idx_salinity)%c(i, j, k) = 35.0_wp*H0
             end do
          end do
       end do
@@ -233,11 +233,11 @@ contains
          end do
       end do
 
-      total_before = sum(ms%tracers(ms%idx_temperature)%hTr)
+      total_before = sum(ms%tracers(ms%idx_temperature)%c)
       call map_in(ms, vadv)
       call tracer_advect_vertical(grid, vadv, ms, DT)
       call map_out(ms, vadv)
-      total_after = sum(ms%tracers(ms%idx_temperature)%hTr)
+      total_after = sum(ms%tracers(ms%idx_temperature)%c)
 
       drift = abs(total_after - total_before)/abs(total_before)
       call check(error, drift < 1.0e-12_wp, &
@@ -271,25 +271,25 @@ contains
          ny = grid%ny_total
 
          ms%h_layer = H0
-         ms%tracers(ms%idx_temperature)%hTr = 0.0_wp
-         ms%tracers(ms%idx_salinity)%hTr = 35.0_wp*H0
+         ms%tracers(ms%idx_temperature)%c = 0.0_wp
+         ms%tracers(ms%idx_salinity)%c = 35.0_wp*H0
          ! Step: surface layer hot, others cold
-         ms%tracers(ms%idx_temperature)%hTr(:, :, NZ) = 20.0_wp*H0
+         ms%tracers(ms%idx_temperature)%c(:, :, NZ) = 20.0_wp*H0
 
          ms%w_interface = 0.0_wp
          do k = 2, NZ
             ms%w_interface(:, :, k) = W_DOWN
          end do
 
-         hT_surf_before = ms%tracers(ms%idx_temperature)%hTr(nx/2, ny/2, NZ)
-         hT_below_before = ms%tracers(ms%idx_temperature)%hTr(nx/2, ny/2, NZ - 1)
+         hT_surf_before = ms%tracers(ms%idx_temperature)%c(nx/2, ny/2, NZ)
+         hT_below_before = ms%tracers(ms%idx_temperature)%c(nx/2, ny/2, NZ - 1)
 
          call map_in(ms, vadv)
          call tracer_advect_vertical(grid, vadv, ms, DT)
          call map_out(ms, vadv)
 
-         hT_surf_after = ms%tracers(ms%idx_temperature)%hTr(nx/2, ny/2, NZ)
-         hT_below_after = ms%tracers(ms%idx_temperature)%hTr(nx/2, ny/2, NZ - 1)
+         hT_surf_after = ms%tracers(ms%idx_temperature)%c(nx/2, ny/2, NZ)
+         hT_below_after = ms%tracers(ms%idx_temperature)%c(nx/2, ny/2, NZ - 1)
 
          call check(error, hT_surf_after < hT_surf_before, &
                     "downward w: surface tracer did not decrease")
@@ -404,10 +404,10 @@ contains
          do k = 1, NZ
             do j = 1, ny
                do i = 1, nx
-                  ms%tracers(ms%idx_temperature)%hTr(i, j, k) = &
+                  ms%tracers(ms%idx_temperature)%c(i, j, k) = &
                      (10.0_wp + 2.0_wp*real(k, wp) + &
                       0.5_wp*sin(2.0_wp*PI*real(i, wp)/real(nx, wp)))*H0
-                  ms%tracers(ms%idx_salinity)%hTr(i, j, k) = &
+                  ms%tracers(ms%idx_salinity)%c(i, j, k) = &
                      (35.0_wp + 0.3_wp*cos(2.0_wp*PI*real(j, wp)/real(ny, wp)))*H0
                end do
             end do
@@ -423,8 +423,8 @@ contains
             end do
          end do
 
-         total_T_before = sum(ms%tracers(ms%idx_temperature)%hTr)*grid%dx*grid%dy
-         total_S_before = sum(ms%tracers(ms%idx_salinity)%hTr)*grid%dx*grid%dy
+         total_T_before = sum(ms%tracers(ms%idx_temperature)%c)*grid%dx*grid%dy
+         total_S_before = sum(ms%tracers(ms%idx_salinity)%c)*grid%dx*grid%dy
 
          call map_in(ms, vadv)
          call tracer_advect_vertical(grid, vadv, ms, DT)
@@ -433,8 +433,8 @@ contains
          call budgets%drain_contributors()
          call map_out(ms, vadv)
 
-         total_T_after = sum(ms%tracers(ms%idx_temperature)%hTr)*grid%dx*grid%dy
-         total_S_after = sum(ms%tracers(ms%idx_salinity)%hTr)*grid%dx*grid%dy
+         total_T_after = sum(ms%tracers(ms%idx_temperature)%c)*grid%dx*grid%dy
+         total_S_after = sum(ms%tracers(ms%idx_salinity)%c)*grid%dx*grid%dy
 
          ! Per-column telescope: bed + surface flux = 0 ⇒ contributor
          ! sums to zero.  Compare to the absolute mass for tolerance.

@@ -295,10 +295,10 @@ contains
       if (allocated(error)) return
       call check(error, maxval(abs(ms%w_interface)) < 1.0e-15_wp, "w_interface zero")
       if (allocated(error)) return
-      call check(error, maxval(abs(ms%tracers(ms%idx_salinity)%hTr)) < 1.0e-15_wp, &
+      call check(error, maxval(abs(ms%tracers(ms%idx_salinity)%c)) < 1.0e-15_wp, &
                  "salinity hTr zero")
       if (allocated(error)) return
-      call check(error, maxval(abs(ms%tracers(ms%idx_temperature)%hTr)) < 1.0e-15_wp, &
+      call check(error, maxval(abs(ms%tracers(ms%idx_temperature)%c)) < 1.0e-15_wp, &
                  "temperature hTr zero")
 
       call ms%destroy()
@@ -427,7 +427,7 @@ contains
       do k = 1, NZ
          do j = 1, ny
             do i = 1, nx
-               ms%tracers(idx_s)%hTr(i, j, k) = real(50000*k + 100*i + j, wp)
+               ms%tracers(idx_s)%c(i, j, k) = real(50000*k + 100*i + j, wp)
             end do
          end do
       end do
@@ -494,7 +494,7 @@ contains
             do i = 1, nx
                expected = real(50000*k + 100*i + j, wp)
                call check(error, &
-                          abs(ms%tracers(idx_s)%hTr(i, j, k) - expected) < 1.0e-12_wp, &
+                          abs(ms%tracers(idx_s)%c(i, j, k) - expected) < 1.0e-12_wp, &
                           "salinity hTr round-trip mismatch")
                if (allocated(error)) then
                   call ms%destroy(); return

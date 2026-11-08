@@ -61,7 +61,7 @@ contains
       !$acc enter data copyin(ms, geo)
       call ms%enter_data()
       call ocean_geothermal_apply_tracers(grid, geo, ms, dt)
-      associate (hT => ms%tracers(ms%idx_temperature)%hTr, &
+      associate (hT => ms%tracers(ms%idx_temperature)%c, &
                  bgeo => ms%heat_budget_geothermal)
          !$acc update self(hT, bgeo)
       end associate
@@ -97,14 +97,14 @@ contains
          call geo%init(grid)
 
          ms%h_layer = H_LAYER
-         ms%tracers(ms%idx_temperature)%hTr = eos%T_ref*H_LAYER
-         ms%tracers(ms%idx_salinity)%hTr = eos%S_ref*H_LAYER
+         ms%tracers(ms%idx_temperature)%c = eos%T_ref*H_LAYER
+         ms%tracers(ms%idx_salinity)%c = eos%S_ref*H_LAYER
 
          ip = grid%nx_total/2
          jp = grid%ny_total/2
          e_before = 0.0_wp
          do k = 1, NZ
-            e_before = e_before + geo%rho0*geo%cp*ms%tracers(ms%idx_temperature)%hTr(ip, jp, k)
+            e_before = e_before + geo%rho0*geo%cp*ms%tracers(ms%idx_temperature)%c(ip, jp, k)
          end do
 
          geo%enable = .true.
@@ -113,7 +113,7 @@ contains
 
          e_after = 0.0_wp
          do k = 1, NZ
-            e_after = e_after + geo%rho0*geo%cp*ms%tracers(ms%idx_temperature)%hTr(ip, jp, k)
+            e_after = e_after + geo%rho0*geo%cp*ms%tracers(ms%idx_temperature)%c(ip, jp, k)
          end do
          ! Heat (J/m²) gained = Q_geo · dt.  Probe cell is interior (wet).
          expected_gain = Q_GEO*DT
@@ -150,8 +150,8 @@ contains
          call geo%init(grid)
 
          ms%h_layer = H_LAYER
-         ms%tracers(ms%idx_temperature)%hTr = eos%T_ref*H_LAYER
-         ms%tracers(ms%idx_salinity)%hTr = eos%S_ref*H_LAYER
+         ms%tracers(ms%idx_temperature)%c = eos%T_ref*H_LAYER
+         ms%tracers(ms%idx_salinity)%c = eos%S_ref*H_LAYER
 
          geo%enable = .true.
          geo%q_geo_const = Q_GEO
@@ -161,12 +161,12 @@ contains
          jp = grid%ny_total/2
          expected_dhT = DT*Q_GEO/(geo%rho0*geo%cp)
          ! Bed = k=1 (bottom-up convention).
-         max_bed_err = abs(ms%tracers(ms%idx_temperature)%hTr(ip, jp, 1) &
+         max_bed_err = abs(ms%tracers(ms%idx_temperature)%c(ip, jp, 1) &
                            - (eos%T_ref*H_LAYER + expected_dhT))
          max_other_drift = 0.0_wp
          do k = 2, NZ
             max_other_drift = max(max_other_drift, &
-                                  abs(ms%tracers(ms%idx_temperature)%hTr(ip, jp, k) - eos%T_ref*H_LAYER))
+                                  abs(ms%tracers(ms%idx_temperature)%c(ip, jp, k) - eos%T_ref*H_LAYER))
          end do
 
          call check(error, max_bed_err < 1.0e-10_wp, &
@@ -202,16 +202,16 @@ contains
          call geo%init(grid)
 
          ms%h_layer = H_LAYER
-         ms%tracers(ms%idx_temperature)%hTr = eos%T_ref*H_LAYER
-         ms%tracers(ms%idx_salinity)%hTr = eos%S_ref*H_LAYER
-         allocate (hT_ic, source=ms%tracers(ms%idx_temperature)%hTr)
+         ms%tracers(ms%idx_temperature)%c = eos%T_ref*H_LAYER
+         ms%tracers(ms%idx_salinity)%c = eos%S_ref*H_LAYER
+         allocate (hT_ic, source=ms%tracers(ms%idx_temperature)%c)
          allocate (budget_ic, source=ms%heat_budget_geothermal)
 
          geo%enable = .false.
          geo%q_geo_const = 0.0_wp
          call run_apply(grid, geo, ms, DT)
 
-         call check(error, maxval(abs(ms%tracers(ms%idx_temperature)%hTr - hT_ic)) < 1.0e-14_wp, &
+         call check(error, maxval(abs(ms%tracers(ms%idx_temperature)%c - hT_ic)) < 1.0e-14_wp, &
                     "default-off geothermal modified hT")
          if (allocated(error)) exit checks
          call check(error, maxval(abs(ms%heat_budget_geothermal - budget_ic)) < 1.0e-14_wp, &
@@ -254,14 +254,14 @@ contains
          ms%h_layer = H_THICK
          ms%h_layer(:, :, 1) = H_THIN
          ! hTr = T·h so the thin layer carries a tiny hTr (consistent IC).
-         ms%tracers(ms%idx_temperature)%hTr = eos%T_ref*ms%h_layer
-         ms%tracers(ms%idx_salinity)%hTr = eos%S_ref*ms%h_layer
+         ms%tracers(ms%idx_temperature)%c = eos%T_ref
+         ms%tracers(ms%idx_salinity)%c = eos%S_ref
 
          ip = grid%nx_total/2
          jp = grid%ny_total/2
          e_before = 0.0_wp
          do k = 1, NZ
-            e_before = e_before + geo%rho0*geo%cp*ms%tracers(ms%idx_temperature)%hTr(ip, jp, k)
+            e_before = e_before + geo%rho0*geo%cp*ms%tracers(ms%idx_temperature)%c(ip, jp, k)
          end do
 
          geo%enable = .true.
@@ -270,13 +270,13 @@ contains
 
          expected_dhT = DT*Q_GEO/(geo%rho0*geo%cp)
          ! k=1 (thin) must be untouched.
-         k1_drift = abs(ms%tracers(ms%idx_temperature)%hTr(ip, jp, 1) - eos%T_ref*H_THIN)
+         k1_drift = abs(ms%tracers(ms%idx_temperature)%c(ip, jp, 1) - eos%T_ref*H_THIN)
          ! k=2 (lowest massive) absorbs the increment.
-         k2_err = abs(ms%tracers(ms%idx_temperature)%hTr(ip, jp, 2) &
+         k2_err = abs(ms%tracers(ms%idx_temperature)%c(ip, jp, 2) &
                       - (eos%T_ref*H_THICK + expected_dhT))
          e_after = 0.0_wp
          do k = 1, NZ
-            e_after = e_after + geo%rho0*geo%cp*ms%tracers(ms%idx_temperature)%hTr(ip, jp, k)
+            e_after = e_after + geo%rho0*geo%cp*ms%tracers(ms%idx_temperature)%c(ip, jp, k)
          end do
 
          call check(error, k1_drift < 1.0e-14_wp, &

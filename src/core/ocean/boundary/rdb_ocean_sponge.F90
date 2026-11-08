@@ -347,12 +347,12 @@ contains
 
       if (allocated(ms%tracers)) then
          do it = 1, min(size(ms%tracers), sp%n_tracers)
-            if (.not. allocated(ms%tracers(it)%hTr)) cycle
+            if (.not. allocated(ms%tracers(it)%c)) cycle
             do j = 1, ny
                do i = 1, nx
                   call snapshot_column_concentration( &
                      sp%ref_tracer(i, j, :, it), &
-                     ms%tracers(it)%hTr(i, j, :), ms%h_layer(i, j, :), nz)
+                     ms%tracers(it)%c(i, j, :), ms%h_layer(i, j, :), nz)
                end do
             end do
          end do
@@ -386,7 +386,7 @@ contains
       last_valid = 0.0_wp
       do k = 1, nz
          if (h_col(k) > H_VANISHED) then
-            conc(k) = rdb_conc_of_floor(hTr_col(k), h_col(k), H_DIV_EPS)
+            conc(k) = hTr_col(k)
             last_valid = conc(k)
             have_valid = .true.
          else if (have_valid) then
@@ -584,22 +584,22 @@ contains
 
       if (sp%relax_tracers .and. allocated(ms%tracers)) then
          ! Outer-shim: the per-tracer `it` loop stays outside the `do
-         ! concurrent` kernels (§6.4 of the plan) — `ms%tracers(it)%hTr` is
+         ! concurrent` kernels (§6.4 of the plan) — `ms%tracers(it)%c` is
          ! dereferenced here on the host, never inside the device loop.
          do it = 1, min(size(ms%tracers), sp%n_tracers)
-            if (.not. allocated(ms%tracers(it)%hTr)) cycle
+            if (.not. allocated(ms%tracers(it)%c)) cycle
             if (it == ms%idx_salinity) then
-               call relax_map_tracer_budget_impl(ms%tracers(it)%hTr, ms%h_layer, &
+               call relax_map_tracer_budget_impl(ms%tracers(it)%c, ms%h_layer, &
                                                  sp%ref_tracer, it, sp%n_tracers, &
                                                  sp%idamp_h, ms%salt_budget_sponge, &
                                                  nx, ny, nz, dt)
             else if (it == ms%idx_temperature) then
-               call relax_map_tracer_budget_impl(ms%tracers(it)%hTr, ms%h_layer, &
+               call relax_map_tracer_budget_impl(ms%tracers(it)%c, ms%h_layer, &
                                                  sp%ref_tracer, it, sp%n_tracers, &
                                                  sp%idamp_h, ms%heat_budget_sponge, &
                                                  nx, ny, nz, dt)
             else
-               call relax_map_tracer_impl(ms%tracers(it)%hTr, ms%h_layer, &
+               call relax_map_tracer_impl(ms%tracers(it)%c, ms%h_layer, &
                                           sp%ref_tracer, it, sp%n_tracers, &
                                           sp%idamp_h, nx, ny, nz, dt)
             end if
@@ -667,7 +667,7 @@ contains
       do concurrent(k=1:nz, j=1:ny, i=1:nx) local(decay, tgt)
          if (idamp_h(i, j) > 0.0_wp) then
             decay = exp(-idamp_h(i, j)*dt)
-            tgt = ref_tracer(i, j, k, it)*h_layer(i, j, k)
+            tgt = ref_tracer(i, j, k, it)
             hTr(i, j, k) = relax_toward(hTr(i, j, k), tgt, decay)
          end if
       end do
@@ -690,14 +690,16 @@ contains
       real(wp), intent(inout) :: budget(nx, ny, nz)
       real(wp), intent(in)    :: dt
       integer :: i, j, k
-      real(wp) :: decay, tgt, delta
-      do concurrent(k=1:nz, j=1:ny, i=1:nx) local(decay, tgt, delta)
+      real(wp) :: decay, tgt, delta, p_new, p_old
+      do concurrent(k=1:nz, j=1:ny, i=1:nx) local(decay, tgt, delta, p_new, p_old)
          if (idamp_h(i, j) > 0.0_wp) then
             decay = exp(-idamp_h(i, j)*dt)
-            tgt = ref_tracer(i, j, k, it)*h_layer(i, j, k)
+            tgt = ref_tracer(i, j, k, it)
             delta = (1.0_wp - decay)*(tgt - hTr(i, j, k))
+            p_old = h_layer(i, j, k)*hTr(i, j, k)
             hTr(i, j, k) = hTr(i, j, k) + delta
-            budget(i, j, k) = budget(i, j, k) + delta
+            p_new = h_layer(i, j, k)*hTr(i, j, k)
+            budget(i, j, k) = budget(i, j, k) + (p_new - p_old)
          end if
       end do
    end subroutine relax_map_tracer_budget_impl
@@ -881,7 +883,7 @@ contains
       ! Per-tracer `it` loop stays OUTSIDE the `do concurrent` kernels
       ! (outer-shim): the hTr slice + h_layer reach the device as top-level
       ! explicit-shape allocatables in the `_impl` routines, never
-      ! dereferenced as `ms%tracers(it)%hTr(...)` inside a device loop.
+      ! dereferenced as `ms%tracers(it)%c(...)` inside a device loop.
 
       ! ---- West edge ----
       ! has_* gate: a subdomain seam never carries a sponge band (O0).
@@ -894,7 +896,7 @@ contains
          strength = bc%west%sponge_strength
          wall_face = grid%nghost + 1
          do it = 1, size(ms%tracers)
-            if (.not. allocated(ms%tracers(it)%hTr)) cycle
+            if (.not. allocated(ms%tracers(it)%c)) cycle
             if (it > size(bc%west%clamped_tracer)) cycle
             C_bc = bc%west%clamped_tracer(it)
             call sponge_relax_band_x_tracer(ms, it, nxt, nyt, nz, &
@@ -912,7 +914,7 @@ contains
          strength = bc%east%sponge_strength
          wall_face = grid%nghost + grid%nx_phys + 1
          do it = 1, size(ms%tracers)
-            if (.not. allocated(ms%tracers(it)%hTr)) cycle
+            if (.not. allocated(ms%tracers(it)%c)) cycle
             if (it > size(bc%east%clamped_tracer)) cycle
             C_bc = bc%east%clamped_tracer(it)
             call sponge_relax_band_x_tracer(ms, it, nxt, nyt, nz, &
@@ -930,7 +932,7 @@ contains
          strength = bc%south%sponge_strength
          wall_face = grid%nghost + 1
          do it = 1, size(ms%tracers)
-            if (.not. allocated(ms%tracers(it)%hTr)) cycle
+            if (.not. allocated(ms%tracers(it)%c)) cycle
             if (it > size(bc%south%clamped_tracer)) cycle
             C_bc = bc%south%clamped_tracer(it)
             call sponge_relax_band_y_tracer(ms, it, nxt, nyt, nz, &
@@ -948,7 +950,7 @@ contains
          strength = bc%north%sponge_strength
          wall_face = grid%nghost + grid%ny_phys + 1
          do it = 1, size(ms%tracers)
-            if (.not. allocated(ms%tracers(it)%hTr)) cycle
+            if (.not. allocated(ms%tracers(it)%c)) cycle
             if (it > size(bc%north%clamped_tracer)) cycle
             C_bc = bc%north%clamped_tracer(it)
             call sponge_relax_band_y_tracer(ms, it, nxt, nyt, nz, &
@@ -969,15 +971,15 @@ contains
       real(wp), intent(in) :: strength, C_bc, dt
 
       if (it == ms%idx_salinity) then
-         call relax_band_x_impl(ms%tracers(it)%hTr, ms%h_layer, nx_total, ny_total, nz, &
+         call relax_band_x_impl(ms%tracers(it)%c, ms%h_layer, nx_total, ny_total, nz, &
                                 j0, j1, wall_face, band, side, strength, C_bc, dt, &
                                 budget=ms%salt_budget_sponge)
       else if (it == ms%idx_temperature) then
-         call relax_band_x_impl(ms%tracers(it)%hTr, ms%h_layer, nx_total, ny_total, nz, &
+         call relax_band_x_impl(ms%tracers(it)%c, ms%h_layer, nx_total, ny_total, nz, &
                                 j0, j1, wall_face, band, side, strength, C_bc, dt, &
                                 budget=ms%heat_budget_sponge)
       else
-         call relax_band_x_impl(ms%tracers(it)%hTr, ms%h_layer, nx_total, ny_total, nz, &
+         call relax_band_x_impl(ms%tracers(it)%c, ms%h_layer, nx_total, ny_total, nz, &
                                 j0, j1, wall_face, band, side, strength, C_bc, dt)
       end if
    end subroutine sponge_relax_band_x_tracer
@@ -990,15 +992,15 @@ contains
       real(wp), intent(in) :: strength, C_bc, dt
 
       if (it == ms%idx_salinity) then
-         call relax_band_y_impl(ms%tracers(it)%hTr, ms%h_layer, nx_total, ny_total, nz, &
+         call relax_band_y_impl(ms%tracers(it)%c, ms%h_layer, nx_total, ny_total, nz, &
                                 i0, i1, wall_face, band, side, strength, C_bc, dt, &
                                 budget=ms%salt_budget_sponge)
       else if (it == ms%idx_temperature) then
-         call relax_band_y_impl(ms%tracers(it)%hTr, ms%h_layer, nx_total, ny_total, nz, &
+         call relax_band_y_impl(ms%tracers(it)%c, ms%h_layer, nx_total, ny_total, nz, &
                                 i0, i1, wall_face, band, side, strength, C_bc, dt, &
                                 budget=ms%heat_budget_sponge)
       else
-         call relax_band_y_impl(ms%tracers(it)%hTr, ms%h_layer, nx_total, ny_total, nz, &
+         call relax_band_y_impl(ms%tracers(it)%c, ms%h_layer, nx_total, ny_total, nz, &
                                 i0, i1, wall_face, band, side, strength, C_bc, dt)
       end if
    end subroutine sponge_relax_band_y_tracer
@@ -1028,19 +1030,22 @@ contains
       real(wp), intent(inout), optional :: budget(nx_total, ny_total, nz)
 
       integer :: k, j, d, ii
-      real(wp) :: new_val
+      real(wp) :: new_val, p_new, p_old
       logical :: has_budget
 
       has_budget = present(budget)
-      do concurrent(k=1:nz, j=j0:j1, d=0:band - 1) local(ii, new_val)
+      do concurrent(k=1:nz, j=j0:j1, d=0:band - 1) local(ii, new_val, p_new, p_old)
          if (side > 0) then
             ii = wall_face + d
          else
             ii = wall_face - d - 1
          end if
-         new_val = relax_one(hTr(ii, j, k), C_bc*h_layer(ii, j, k), &
-                             strength, d, band, dt)
-         if (has_budget) budget(ii, j, k) = budget(ii, j, k) + (new_val - hTr(ii, j, k))
+         new_val = relax_one(hTr(ii, j, k), C_bc, strength, d, band, dt)
+         if (has_budget) then
+            p_new = h_layer(ii, j, k)*new_val
+            p_old = h_layer(ii, j, k)*hTr(ii, j, k)
+            budget(ii, j, k) = budget(ii, j, k) + (p_new - p_old)
+         end if
          hTr(ii, j, k) = new_val
       end do
    end subroutine relax_band_x_impl
@@ -1057,19 +1062,22 @@ contains
       real(wp), intent(inout), optional :: budget(nx_total, ny_total, nz)
 
       integer :: k, i, d, jj
-      real(wp) :: new_val
+      real(wp) :: new_val, p_new, p_old
       logical :: has_budget
 
       has_budget = present(budget)
-      do concurrent(k=1:nz, i=i0:i1, d=0:band - 1) local(jj, new_val)
+      do concurrent(k=1:nz, i=i0:i1, d=0:band - 1) local(jj, new_val, p_new, p_old)
          if (side > 0) then
             jj = wall_face + d
          else
             jj = wall_face - d - 1
          end if
-         new_val = relax_one(hTr(i, jj, k), C_bc*h_layer(i, jj, k), &
-                             strength, d, band, dt)
-         if (has_budget) budget(i, jj, k) = budget(i, jj, k) + (new_val - hTr(i, jj, k))
+         new_val = relax_one(hTr(i, jj, k), C_bc, strength, d, band, dt)
+         if (has_budget) then
+            p_new = h_layer(i, jj, k)*new_val
+            p_old = h_layer(i, jj, k)*hTr(i, jj, k)
+            budget(i, jj, k) = budget(i, jj, k) + (p_new - p_old)
+         end if
          hTr(i, jj, k) = new_val
       end do
    end subroutine relax_band_y_impl

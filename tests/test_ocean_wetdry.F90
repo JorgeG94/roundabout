@@ -817,7 +817,7 @@ contains
                do k = 1, NZ_ML
                   minh = min(minh, state%multilayer%h_layer(i, j, k))
                   min_htr = min(min_htr, &
-                                state%multilayer%tracers(idxS)%hTr(i, j, k))
+                                state%multilayer%tracers(idxS)%c(i, j, k))
                   ! Gate 4: floor is exactly max(b/nz, 2·H_VANISHED).
                   expect_h = max(b_ij/real(NZ_ML, wp), 2.0_wp*H_VANISHED)
                   max_scope_err = max(max_scope_err, &
@@ -863,14 +863,14 @@ contains
                     "emerged_seed: negative tracer mass hTr seeded")
          if (allocated(error)) exit checks
          call check(error, &
-                    abs(state%multilayer%tracers(idxS)%hTr(i_emrg, j_emrg, 1)/ &
+                    abs(state%multilayer%tracers(idxS)%c(i_emrg, j_emrg, 1)/ &
                         state%multilayer%h_layer(i_emrg, j_emrg, 1) - S0) < 1.0e-10_wp .and. &
-                    abs(state%multilayer%tracers(idxT)%hTr(i_emrg, j_emrg, 1)/ &
+                    abs(state%multilayer%tracers(idxT)%c(i_emrg, j_emrg, 1)/ &
                         state%multilayer%h_layer(i_emrg, j_emrg, 1) - T0) < 1.0e-10_wp, &
                     "emerged_seed: emerged-crest T/S not recovered from hTr/h (EOS would read garbage)")
          if (allocated(error)) exit checks
          call check(error, &
-                    abs(state%multilayer%tracers(idxS)%hTr(i_deep, j_deep, 1)/ &
+                    abs(state%multilayer%tracers(idxS)%c(i_deep, j_deep, 1)/ &
                         state%multilayer%h_layer(i_deep, j_deep, 1) - S0) < 1.0e-10_wp, &
                     "emerged_seed: deep-column S not recovered from hTr/h")
       end block checks
@@ -994,9 +994,9 @@ contains
          do k = 1, NZ2
             do j = 1, ny
                do i = 1, nx
-                  ms%tracers(ms%idx_salinity)%hTr(i, j, k) = &
+                  ms%tracers(ms%idx_salinity)%c(i, j, k) = &
                      ms%h_layer(i, j, k)*eos%S_ref
-                  ms%tracers(ms%idx_temperature)%hTr(i, j, k) = &
+                  ms%tracers(ms%idx_temperature)%c(i, j, k) = &
                      ms%h_layer(i, j, k)*eos%T_ref
                end do
             end do
@@ -1223,8 +1223,8 @@ contains
                do i = 1, nx
                   frac = (real(i - NGHOST, wp) - 0.5_wp)/real(NXP, wp)
                   s_col_val = S_LO + (S_HI - S_LO)*max(0.0_wp, min(1.0_wp, frac))
-                  ms%tracers(idxS)%hTr(i, j, k) = ms%h_layer(i, j, k)*s_col_val
-                  ms%tracers(idxT)%hTr(i, j, k) = ms%h_layer(i, j, k)*T0
+                  ms%tracers(idxS)%c(i, j, k) = s_col_val
+                  ms%tracers(idxT)%c(i, j, k) = T0
                end do
             end do
          end do
@@ -1245,8 +1245,8 @@ contains
          do j = NGHOST + 1, NGHOST + NYP
             do i = NGHOST + 1, NGHOST + NXP
                do k = 1, NZ2
-                  hs0 = hs0 + ms%tracers(idxS)%hTr(i, j, k)
-                  ht0 = ht0 + ms%tracers(idxT)%hTr(i, j, k)
+                  hs0 = hs0 + ms%tracers(idxS)%c(i, j, k)
+                  ht0 = ht0 + ms%tracers(idxT)%c(i, j, k)
                end do
             end do
          end do
@@ -1270,7 +1270,7 @@ contains
          end do
 
          !$acc update self(ms%h_layer)
-         !$acc update self(ms%tracers(idxS)%hTr, ms%tracers(idxT)%hTr)
+         !$acc update self(ms%tracers(idxS)%c, ms%tracers(idxT)%c)
          call destroy_cartesian_metrics(metrics)
          call vc%exit_data()
          call dyn%exit_data(); call vmix%exit_data(); call vd%exit_data()
@@ -1283,13 +1283,13 @@ contains
          do j = NGHOST + 1, NGHOST + NYP
             do i = NGHOST + 1, NGHOST + NXP
                do k = 1, NZ2
-                  hs1 = hs1 + ms%tracers(idxS)%hTr(i, j, k)
-                  ht1 = ht1 + ms%tracers(idxT)%hTr(i, j, k)
-                  min_tr = min(min_tr, ms%tracers(idxS)%hTr(i, j, k))
-                  min_tr = min(min_tr, ms%tracers(idxT)%hTr(i, j, k))
-                  if (.not. ieee_is_finite(ms%tracers(idxS)%hTr(i, j, k))) &
+                  hs1 = hs1 + ms%tracers(idxS)%c(i, j, k)
+                  ht1 = ht1 + ms%tracers(idxT)%c(i, j, k)
+                  min_tr = min(min_tr, ms%tracers(idxS)%c(i, j, k))
+                  min_tr = min(min_tr, ms%tracers(idxT)%c(i, j, k))
+                  if (.not. ieee_is_finite(ms%tracers(idxS)%c(i, j, k))) &
                      min_tr = -huge(1.0_wp)
-                  if (.not. ieee_is_finite(ms%tracers(idxT)%hTr(i, j, k))) &
+                  if (.not. ieee_is_finite(ms%tracers(idxT)%c(i, j, k))) &
                      min_tr = -huge(1.0_wp)
                end do
             end do
@@ -1417,8 +1417,8 @@ contains
                do i = 1, nx
                   frac = (real(i - NGHOST, wp) - 0.5_wp)/real(NXP, wp)
                   s_col_val = S_LO + (S_HI - S_LO)*max(0.0_wp, min(1.0_wp, frac))
-                  ms%tracers(idxS)%hTr(i, j, k) = ms%h_layer(i, j, k)*s_col_val
-                  ms%tracers(idxT)%hTr(i, j, k) = ms%h_layer(i, j, k)*T0
+                  ms%tracers(idxS)%c(i, j, k) = s_col_val
+                  ms%tracers(idxT)%c(i, j, k) = T0
                end do
             end do
          end do
@@ -1438,8 +1438,8 @@ contains
          do j = NGHOST + 1, NGHOST + NYP
             do i = NGHOST + 1, NGHOST + NXP
                do k = 1, NZ2
-                  hs0 = hs0 + ms%tracers(idxS)%hTr(i, j, k)
-                  ht0 = ht0 + ms%tracers(idxT)%hTr(i, j, k)
+                  hs0 = hs0 + ms%tracers(idxS)%c(i, j, k)
+                  ht0 = ht0 + ms%tracers(idxT)%c(i, j, k)
                end do
             end do
          end do
@@ -1474,7 +1474,7 @@ contains
          end do
 
          !$acc update self(ms%h_layer)
-         !$acc update self(ms%tracers(idxS)%hTr, ms%tracers(idxT)%hTr)
+         !$acc update self(ms%tracers(idxS)%c, ms%tracers(idxT)%c)
          call destroy_cartesian_metrics(metrics)
          call vc%exit_data()
          call dyn%exit_data(); call vmix%exit_data(); call vd%exit_data()
@@ -1487,10 +1487,10 @@ contains
          do j = NGHOST + 1, NGHOST + NYP
             do i = NGHOST + 1, NGHOST + NXP
                do k = 1, NZ2
-                  hs1 = hs1 + ms%tracers(idxS)%hTr(i, j, k)
-                  ht1 = ht1 + ms%tracers(idxT)%hTr(i, j, k)
-                  min_tr = min(min_tr, ms%tracers(idxS)%hTr(i, j, k))
-                  min_tr = min(min_tr, ms%tracers(idxT)%hTr(i, j, k))
+                  hs1 = hs1 + ms%tracers(idxS)%c(i, j, k)
+                  ht1 = ht1 + ms%tracers(idxT)%c(i, j, k)
+                  min_tr = min(min_tr, ms%tracers(idxS)%c(i, j, k))
+                  min_tr = min(min_tr, ms%tracers(idxT)%c(i, j, k))
                end do
             end do
          end do

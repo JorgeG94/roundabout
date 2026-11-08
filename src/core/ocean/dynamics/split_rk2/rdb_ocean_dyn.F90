@@ -4,7 +4,7 @@ module rdb_ocean_dyn
    !! inner (barotropic) split-explicit RK2 integrator of the ocean
    !! dynamical core.  Carries the substep ratio `n_inner`, the fast-mode
    !! time-averaging accumulators, and energy/CFL diagnostic slots.
-   use rdb_constants, only: wp, RHO_WATER, H_VANISHED
+   use rdb_constants, only: wp, RHO_WATER, H_VANISHED, H_DIV_EPS
    use rdb_grid, only: hgrid_t
    use rdb_barotropic_state, only: barotropic_state_t
    use rdb_barotropic_workstate, only: barotropic_workstate_t, &
@@ -1067,10 +1067,10 @@ contains
       call save_state(ms)
       if (allocated(ms%tracers)) then
          do it = 1, size(ms%tracers)
-            call copy_field_3d(ms%tracers(it)%hTr, ms%tracers(it)%hTr0, &
-                               size(ms%tracers(it)%hTr, 1), &
-                               size(ms%tracers(it)%hTr, 2), &
-                               size(ms%tracers(it)%hTr, 3))
+            call copy_field_3d(ms%tracers(it)%c, ms%tracers(it)%c0, &
+                               size(ms%tracers(it)%c, 1), &
+                               size(ms%tracers(it)%c, 2), &
+                               size(ms%tracers(it)%c, 3))
          end do
       end if
 
@@ -1104,10 +1104,11 @@ contains
       ! order is bit-identical.
       if (allocated(ms%tracers)) then
          do it = 1, size(ms%tracers)
-            call rk2_average_field_3d(ms%tracers(it)%hTr0, ms%tracers(it)%hTr, &
-                                      size(ms%tracers(it)%hTr, 1), &
-                                      size(ms%tracers(it)%hTr, 2), &
-                                      size(ms%tracers(it)%hTr, 3))
+            call rk2_average_conc_3d(ms%h_layer0, ms%tracers(it)%c0, ms%h_layer, &
+                                     ms%tracers(it)%c, &
+                                     size(ms%tracers(it)%c, 1), &
+                                     size(ms%tracers(it)%c, 2), &
+                                     size(ms%tracers(it)%c, 3))
          end do
       end if
       call rk2_average(ms)
@@ -2929,6 +2930,31 @@ contains
       end do
    end subroutine copy_field_3d
 
+   pure subroutine rk2_average_conc_3d(h_saved, c_saved, h_cur, c_cur, nx, ny, nz)
+      !! SSP-RK2 average of a tracer CONCENTRATION, mass-weighted:
+      !! `c <- (h0·c0 + h1·c1)/(h0 + h1)`, with `(h0, c0)` the step-entry
+      !! save and `(h1, c1)` the stage-2 result.  It must run BEFORE
+      !! `rk2_average` averages `h_layer` (it reads the un-averaged pair).
+      !! This is exactly the ratio of the averaged content to the averaged
+      !! thickness the content form took, and a convex combination of `c0` and
+      !! `c1`, so a uniform field stays uniform.  A column pair with no water
+      !! (`h0 + h1 <= H_DIV_EPS`) keeps `c1`.
+      integer, intent(in) :: nx, ny, nz
+      real(wp), intent(in) :: h_saved(nx, ny, nz), c_saved(nx, ny, nz)
+      real(wp), intent(in) :: h_cur(nx, ny, nz)
+      real(wp), intent(inout) :: c_cur(nx, ny, nz)
+      integer :: i, j, k
+      real(wp) :: hs, p0, p1
+      do concurrent(k=1:nz, j=1:ny, i=1:nx) local(hs, p0, p1)
+         hs = h_saved(i, j, k) + h_cur(i, j, k)
+         if (hs > H_DIV_EPS) then
+            p0 = h_saved(i, j, k)*c_saved(i, j, k)
+            p1 = h_cur(i, j, k)*c_cur(i, j, k)
+            c_cur(i, j, k) = (p0 + p1)/hs
+         end if
+      end do
+   end subroutine rk2_average_conc_3d
+
    pure subroutine rk2_average_field_3d(saved, current, nx, ny, nz)
       !! current <- 0.5 * (saved + current) on the device.  Same
       !! bare-array shim rationale as copy_field_3d.
@@ -3438,10 +3464,10 @@ contains
       call save_state(ms)
       if (allocated(ms%tracers)) then
          do it = 1, size(ms%tracers)
-            call copy_field_3d(ms%tracers(it)%hTr, ms%tracers(it)%hTr0, &
-                               size(ms%tracers(it)%hTr, 1), &
-                               size(ms%tracers(it)%hTr, 2), &
-                               size(ms%tracers(it)%hTr, 3))
+            call copy_field_3d(ms%tracers(it)%c, ms%tracers(it)%c0, &
+                               size(ms%tracers(it)%c, 1), &
+                               size(ms%tracers(it)%c, 2), &
+                               size(ms%tracers(it)%c, 3))
          end do
       end if
 
@@ -3520,10 +3546,11 @@ contains
          ! Tracers first, then h (see the unsplit twin above).
          if (allocated(ms%tracers)) then
             do it = 1, size(ms%tracers)
-               call rk2_average_field_3d(ms%tracers(it)%hTr0, ms%tracers(it)%hTr, &
-                                         size(ms%tracers(it)%hTr, 1), &
-                                         size(ms%tracers(it)%hTr, 2), &
-                                         size(ms%tracers(it)%hTr, 3))
+               call rk2_average_conc_3d(ms%h_layer0, ms%tracers(it)%c0, ms%h_layer, &
+                                        ms%tracers(it)%c, &
+                                        size(ms%tracers(it)%c, 1), &
+                                        size(ms%tracers(it)%c, 2), &
+                                        size(ms%tracers(it)%c, 3))
             end do
          end if
          call rk2_average(ms)
@@ -3675,17 +3702,6 @@ contains
       ! layer grid, and restart checkpoints carry `outer_step_count` so a
       ! mid-Lagrangian resume re-aligns the cadence bit-exactly.
       if (present(vcoord) .and. dyn%is_remap_step()) then
-         ! Concentration-form remap input.  The remap reads each layer's
-         ! concentration (a filler's is its donor's) and never a filler's
-         ! content, so any content this step's writers parked in a filler
-         ! since the last sweep must be pooled into its donor FIRST or the
-         ! remap would drop it (cavity z_fixed: Salt/Heat Error 1e-8..1e-6
-         ! without this).  Cadence-bounded (remap steps only); a textual no-op
-         ! on columns without sub-threshold layers.  Goes away with the
-         ! content storage.
-         call profiler_start("ocean_vanished_i1")
-         call ms%enforce_vanished_content(grid%nx_total, grid%ny_total)
-         call profiler_stop("ocean_vanished_i1")
          call profiler_start("ocean_ale_remap")
          ! The grid time-filter relaxes once per thermo interval, so it
          ! must see the aggregate thermo dt (= dt at dt_therm_ratio=1, the
@@ -3748,29 +3764,6 @@ contains
       ! `ocean_obc_fill_ghosts` re-fills these ghosts before any kernel
       ! reads them.  No-op for WALL/PERIODIC edges (bit-identical).
       if (present(bc)) call ocean_obc_refill_ghost_ssh(grid, bc, ms, dyn%bt_work%bt_H_ref)
-
-      ! ---- Invariant I1′: `h <= H_VANISHED ⇒ hTr = h·c_live` ---------------
-      ! THE enforcement point.  Every tracer writer above (surface flux, melt,
-      ! sponge, hdiff, vdiff, vertical advection, the OBC ghost fills, the
-      ! windowed drain) deposits content into whatever layer it was handed;
-      ! only the ALE remap checked `h` on the way in.  Rather than ask forty
-      ! kernel authors to remember the rule, establish it ONCE here, at the end
-      ! of the outer step, over the whole tracer registry: every filler is
-      ! pooled with its donor live layer and the pool mixed to one
-      ! concentration, so the filler carries its donor's `c_live`.
-      !
-      ! Content is moved WITHIN the column (filler ↔ donor), so the column
-      ! integral is unchanged and NOTHING is recorded in any budget — a
-      ! contributor that always sums to zero is noise in the one instrument
-      ! that detects real leaks.
-      !
-      ! A column with no sub-threshold layer is a textual no-op, so every
-      ! sigma / z*-lite / eulerian_z configuration in the tree is bit-identical
-      ! and pays only the sweep.
-      call profiler_start("ocean_vanished_i1")
-      call ms%enforce_vanished_content(grid%nx_total, grid%ny_total)
-      call profiler_stop("ocean_vanished_i1")
-      call check_vanished_invariant_or_die(grid, vcoord, ms, dyn%outer_step_count + 1)
 
       dyn%outer_step_count = dyn%outer_step_count + 1
    end subroutine ocean_dyn_step_split
@@ -3869,49 +3862,6 @@ contains
          call vdiff_apply_tracers(grid, vd, ms, therm_dt)
       end if
    end subroutine apply_deferred_thermo
-
-   subroutine check_vanished_invariant_or_die(grid, vcoord, ms, outer_step)
-      !! Fail-loud TRIPWIRE for invariant I1′ — `h_layer <= H_VANISHED ⇒
-      !! hTr = h_layer·c_live` (the donor live layer's concentration; `hTr = 0`
-      !! in a column with no live layer) for every registered tracer.  Gated on
-      !! `&vcoord_nml check_vanished_content` (default `.false.`), which is
-      !! the knob the stability suite turns on for the cases that actually
-      !! have vanishing layers.
-      !!
-      !! Pure scan + impure die, the `check_h_positive_or_die` pattern: the
-      !! scan (`ms%scan_vanished_content`) is a `pure` device reduction
-      !! returning two scalars, so the HEALTHY path costs two reductions per
-      !! tracer and no H←D copy; only a violation reaches the logger.
-      !!
-      !! Runs immediately AFTER `enforce_vanished_content`, so a hit means the
-      !! enforcement point itself failed to establish the invariant — a bug in
-      !! the rule or an unmapped array on the device, not a stray kernel.  That
-      !! is precisely what the tripwire is for: it guards the structural
-      !! guarantee rather than re-stating it.
-      type(hgrid_t), intent(in) :: grid
-      type(ocean_vcoord_t), intent(in), optional :: vcoord
-      type(multilayer_state_t), intent(in) :: ms
-      integer, intent(in) :: outer_step
-      integer :: n_bad
-      real(wp) :: worst
-      character(len=320) :: msg
-
-      if (.not. present(vcoord)) return
-      if (.not. vcoord%check_vanished_content) return
-      call ms%scan_vanished_content(grid%nx_total, grid%ny_total, n_bad, worst)
-      if (n_bad <= 0) return
-      write (msg, "(a,i0,a,i0,a,es12.5)") &
-         "[I1'] vanished-layer invariant violated at outer step ", outer_step, &
-         ": ", n_bad, " filler cell(s) do not hold their donor's concentration; "// &
-         "worst |hTr - h*c_live| = ", worst
-      call logger%error(trim(msg))
-      call logger%error( &
-         "[I1'] `h <= H_VANISHED ⇒ hTr = h*c_live`. The enforcement point "// &
-         "(multilayer_state_t%enforce_vanished_content) runs immediately before this "// &
-         "check, so a hit is a bug in the rule or an off-device array, not a stray "// &
-         "kernel write. See the header of rdb_vanished_layer.inc.")
-      error stop "I1' violated (&vcoord_nml check_vanished_content)"
-   end subroutine check_vanished_invariant_or_die
 
    subroutine run_continuity_chain(grid, metrics, dyn, ct, hd, va, redi, varmix, ms, &
                                    dt, therm_dt, therm_active, is_lagrangian, &
@@ -4602,7 +4552,7 @@ contains
       if (.not. allocated(ms%tracers)) return
 
       iS = ms%idx_salinity
-      !$acc update self(ms%h_layer, ms%tracers(iS)%hTr)
+      !$acc update self(ms%h_layer, ms%tracers(iS)%c)
 
       ig = grid%nghost
       i0 = ig + 1
@@ -4615,7 +4565,7 @@ contains
          do j = j0, j1
             do i = i0, i1
                if (ms%h_layer(i, j, k) > 0.0_wp) then
-                  dS = abs(ms%tracers(iS)%hTr(i, j, k)/ms%h_layer(i, j, k) - bcdiag_S_ref)
+                  dS = abs(ms%tracers(iS)%c(i, j, k) - bcdiag_S_ref)
                   if (dS > max_dS) max_dS = dS
                end if
             end do
@@ -5773,8 +5723,8 @@ contains
       if (.not. allocated(ms%tracers)) return
       call profiler_start("ocean_comms_ml")
       do it = 1, size(ms%tracers)
-         if (.not. allocated(ms%tracers(it)%hTr)) cycle
-         call ocean_halo_centre(ms%tracers(it)%hTr, ms%nz_ml)
+         if (.not. allocated(ms%tracers(it)%c)) cycle
+         call ocean_halo_centre(ms%tracers(it)%c, ms%nz_ml)
       end do
       call profiler_stop("ocean_comms_ml")
       if (present(bc)) then

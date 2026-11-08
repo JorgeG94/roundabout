@@ -168,7 +168,7 @@ contains
          do k = 1, NZ
             do j = 1, ny
                do i = 1, nx
-                  ms%tracers(ms%idx_salinity)%hTr(i, j, k) = &
+                  ms%tracers(ms%idx_salinity)%c(i, j, k) = &
                      (30.0_wp + 0.1_wp*real(i, wp) + 0.01_wp*real(j, wp) + real(k, wp))*10.0_wp
                end do
             end do
@@ -203,8 +203,8 @@ contains
          if (allocated(error)) exit checks
 
          call ocean_pseudo_salt_seed(ms)
-         call check(error, maxval(abs(ms%tracers(ms%idx_pseudo_salt)%hTr - &
-                                      ms%tracers(ms%idx_salinity)%hTr)) < tiny(1.0_wp), &
+         call check(error, maxval(abs(ms%tracers(ms%idx_pseudo_salt)%c - &
+                                      ms%tracers(ms%idx_salinity)%c)) < tiny(1.0_wp), &
                     "seed must set hTr_ps == hTr_S EXACTLY, including ghosts")
       end block checks
       call ms%destroy()
@@ -318,8 +318,8 @@ contains
             do j = 1, ny
                do i = 1, nx
                   ms%h_layer(i, j, k) = H_BASE
-                  ms%tracers(ms%idx_salinity)%hTr(i, j, k) = H_BASE*( &
-                                                             35.0_wp + 0.5_wp*sin(2.0_wp*PI*real(i, wp)/real(nx, wp) + layer_phase))
+                  ms%tracers(ms%idx_salinity)%c(i, j, k) = H_BASE*( &
+                                                           35.0_wp + 0.5_wp*sin(2.0_wp*PI*real(i, wp)/real(nx, wp) + layer_phase))
                end do
             end do
             do j = 1, ny
@@ -350,8 +350,8 @@ contains
          end do
          call map_out(ms, ct)
 
-         max_dev = maxval(abs(ms%tracers(idx_ps)%hTr - ms%tracers(ms%idx_salinity)%hTr))
-         max_s = maxval(abs(ms%tracers(ms%idx_salinity)%hTr))
+         max_dev = maxval(abs(ms%tracers(idx_ps)%c - ms%tracers(ms%idx_salinity)%c))
+         max_s = maxval(abs(ms%tracers(ms%idx_salinity)%c))
          call check(error, max_dev < 1.0e-12_wp*max_s, &
                     "pseudo-salt must track salinity to round-off under advection")
 
@@ -391,7 +391,7 @@ contains
          ms_a%nz_ml = NZ
          call ms_a%init(grid)
          ms_a%h_layer = H_LAYER
-         ms_a%tracers(ms_a%idx_salinity)%hTr = 35.0_wp*H_LAYER
+         ms_a%tracers(ms_a%idx_salinity)%c = 35.0_wp*H_LAYER
          call ocean_pseudo_salt_register(ms_a, grid)
          idx_ps = ms_a%idx_pseudo_salt
          call ocean_pseudo_salt_seed(ms_a)
@@ -409,8 +409,8 @@ contains
          call ms_a%enter_data()
          call sf_a%enter_data()
          call ocean_surface_flux_apply_tracers(grid, sf_a, ms_a, DT)
-         associate (hS => ms_a%tracers(ms_a%idx_salinity)%hTr, &
-                    hPs => ms_a%tracers(idx_ps)%hTr, &
+         associate (hS => ms_a%tracers(ms_a%idx_salinity)%c, &
+                    hPs => ms_a%tracers(idx_ps)%c, &
                     budget => ms_a%salt_budget_surface)
             !$acc update self(hS, hPs, budget)
          end associate
@@ -422,7 +422,7 @@ contains
          ms_b%nz_ml = NZ
          call ms_b%init(grid)
          ms_b%h_layer = H_LAYER
-         ms_b%tracers(ms_b%idx_salinity)%hTr = 35.0_wp*H_LAYER
+         ms_b%tracers(ms_b%idx_salinity)%c = 35.0_wp*H_LAYER
          call sf_b%init(grid)
          call sf_b%set_surface_flux_const(0.0_wp, Q_SALT_CONST)
          do j = 1, ny
@@ -442,8 +442,8 @@ contains
          !$acc exit data delete(ms_b, sf_b)
 
          ! (1) Exact match: pseudo-salt's increment == salinity's increment.
-         delta_s = ms_a%tracers(ms_a%idx_salinity)%hTr(3, 2, NZ) - 35.0_wp*H_LAYER
-         delta_ps = ms_a%tracers(idx_ps)%hTr(3, 2, NZ) - 35.0_wp*H_LAYER
+         delta_s = ms_a%tracers(ms_a%idx_salinity)%c(3, 2, NZ) - 35.0_wp*H_LAYER
+         delta_ps = ms_a%tracers(idx_ps)%c(3, 2, NZ) - 35.0_wp*H_LAYER
          call check(error, delta_s == delta_ps, &
                     "pseudo-salt surface flux increment must EXACTLY equal salinity's")
          if (allocated(error)) exit checks
@@ -490,8 +490,8 @@ contains
             do j = 1, ny
                do i = 1, nx
                   ms_a%h_layer(i, j, k) = H_BASE
-                  ms_a%tracers(ms_a%idx_salinity)%hTr(i, j, k) = H_BASE*(35.0_wp + 0.1_wp*real(i, wp))
-                  ms_a%tracers(ms_a%idx_temperature)%hTr(i, j, k) = H_BASE*(15.0_wp + 0.1_wp*real(j, wp))
+                  ms_a%tracers(ms_a%idx_salinity)%c(i, j, k) = H_BASE*(35.0_wp + 0.1_wp*real(i, wp))
+                  ms_a%tracers(ms_a%idx_temperature)%c(i, j, k) = H_BASE*(15.0_wp + 0.1_wp*real(j, wp))
                end do
                do i = 1, nx + 1
                   ms_a%u_face_x_layer(i, j, k) = 0.1_wp*sin(real(i, wp))
@@ -524,8 +524,8 @@ contains
             do j = 1, ny
                do i = 1, nx
                   ms_b%h_layer(i, j, k) = H_BASE
-                  ms_b%tracers(ms_b%idx_salinity)%hTr(i, j, k) = H_BASE*(35.0_wp + 0.1_wp*real(i, wp))
-                  ms_b%tracers(ms_b%idx_temperature)%hTr(i, j, k) = H_BASE*(15.0_wp + 0.1_wp*real(j, wp))
+                  ms_b%tracers(ms_b%idx_salinity)%c(i, j, k) = H_BASE*(35.0_wp + 0.1_wp*real(i, wp))
+                  ms_b%tracers(ms_b%idx_temperature)%c(i, j, k) = H_BASE*(15.0_wp + 0.1_wp*real(j, wp))
                end do
                do i = 1, nx + 1
                   ms_b%u_face_x_layer(i, j, k) = 0.1_wp*sin(real(i, wp))

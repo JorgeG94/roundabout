@@ -36,7 +36,7 @@
 !! may switch to PPM-in-z once vertical resolution warrants the
 !! higher-order treatment.
 module rdb_ocean_vertical_advection
-   use rdb_constants, only: wp
+   use rdb_constants, only: wp, H_DIV_EPS
    use rdb_grid, only: hgrid_t
    use rdb_multilayer_state, only: multilayer_state_t
    use rdb_tracer, only: TRACER_BUDGET_HEAT, TRACER_BUDGET_SALT
@@ -222,17 +222,17 @@ contains
             case (TRACER_BUDGET_HEAT)
                call tracer_advect_vertical_one_impl( &
                   grid%nx_total, grid%ny_total, ms%nz_ml, dt, &
-                  this%h_pair_prev%data, ms%h_layer, ms%w_interface, ms%tracers(it)%hTr, &
+                  this%h_pair_prev%data, ms%h_layer, ms%w_interface, ms%tracers(it)%c, &
                   this%F_face%data, budget=ms%heat_budget_vert_adv)
             case (TRACER_BUDGET_SALT)
                call tracer_advect_vertical_one_impl( &
                   grid%nx_total, grid%ny_total, ms%nz_ml, dt, &
-                  this%h_pair_prev%data, ms%h_layer, ms%w_interface, ms%tracers(it)%hTr, &
+                  this%h_pair_prev%data, ms%h_layer, ms%w_interface, ms%tracers(it)%c, &
                   this%F_face%data, budget=ms%salt_budget_vert_adv)
             case default
                call tracer_advect_vertical_one_impl( &
                   grid%nx_total, grid%ny_total, ms%nz_ml, dt, &
-                  this%h_pair_prev%data, ms%h_layer, ms%w_interface, ms%tracers(it)%hTr, &
+                  this%h_pair_prev%data, ms%h_layer, ms%w_interface, ms%tracers(it)%c, &
                   this%F_face%data)
             end select
          end do
@@ -272,29 +272,29 @@ contains
    end subroutine apply_w_to_h_layer
 
    pure subroutine tracer_advect_vertical_one_impl(nx, ny, nz, dt, &
-                                                   h_before, h_after, w_interface, hTr, F_face, budget)
+                                                   h_before, h_after, w_interface, c, F_face, budget)
       !! Flat-impl first-order upwind-in-z vertical advection for
       !! one tracer.  Two passes:
       !!
       !!   Pass 1: fill `F_face(:, :, k)` for k = 1..nz+1 with the
       !!     upwind tracer flux at interface k.  Bed (k=1) and
-      !!     surface (k=nz+1) faces get zero.  Reads `hTr` only.
+      !!     surface (k=nz+1) faces get zero.  Reads `c` only.
       !!
-      !!   Pass 2: `hTr(k) += dt * (F_face(k) - F_face(k+1))`.
+      !!   Pass 2: `c(k) += dt * (F_face(k) - F_face(k+1))`.
       !!     Reads `F_face` only.
       !!
       !! Two-pass avoids the do-concurrent race a single-pass
-      !! version would have (each layer reads its neighbour's hTr
+      !! version would have (each layer reads its neighbour's c
       !! while another iteration writes it).  The shared `F_face`
       !! scratch lives on `ocean_vertical_advection_t` and is
       !! reused across all tracers in one call.
       !!
-      !! Vanishing-layer donor side: if the donor's `h_before <= 0`,
-      !! `T_donor` falls back to zero (no flux) -- see `rdb_conc_of`.
+      !! The donor concentration is read straight from `c`; a vanished donor
+      !! carries its last water's value and its flux is weighted by `w`.
       !!
       !! `budget` (optional): Phase D v2 contributor slot.  When
       !! present, the per-cell `dt · (F(k) - F(k+1))` increment is
-      !! also accumulated into the slot (alongside the hTr update)
+      !! also accumulated into the slot (alongside the c update)
       !! for budget closure.
       integer, intent(in) :: nx, ny, nz
       real(wp), intent(in) :: dt
@@ -302,24 +302,24 @@ contains
          !! Thickness before the vertical update (`h⁻`); the upwind donor
          !! concentration is read against it.
       real(wp), intent(in) :: h_after(nx, ny, nz)
-         !! Thickness after the vertical update (`h⁺`).  Unused while the
-         !! tracer is stored as content; the concentration form divides by it.
+         !! Thickness after the vertical update (`h⁺`); retained for the
+         !! pair's contract, the divide recomputes `h⁺` from `w_interface`.
       real(wp), intent(in) :: w_interface(nx, ny, nz + 1)
-      real(wp), intent(inout) :: hTr(nx, ny, nz)
+      real(wp), intent(inout) :: c(nx, ny, nz)
       real(wp), intent(inout) :: F_face(nx, ny, nz + 1)
       real(wp), intent(inout), optional :: budget(nx, ny, nz)
 
       integer :: i, j, k
-      real(wp) :: w_at_k, T_donor
+      real(wp) :: w_at_k, T_donor, div_w, div_f, h_new
 
       ! ---- Pass 1: per-interface upwind tracer flux ----
       do concurrent(k=2:nz, j=1:ny, i=1:nx) &
          local(w_at_k, T_donor)
          w_at_k = w_interface(i, j, k)
          if (w_at_k >= 0.0_wp) then
-            T_donor = rdb_conc_of(hTr(i, j, k - 1), h_before(i, j, k - 1))
+            T_donor = c(i, j, k - 1)
          else
-            T_donor = rdb_conc_of(hTr(i, j, k), h_before(i, j, k))
+            T_donor = c(i, j, k)
          end if
          F_face(i, j, k) = w_at_k*T_donor
       end do
@@ -329,18 +329,25 @@ contains
          F_face(i, j, nz + 1) = 0.0_wp
       end do
 
-      ! ---- Pass 2: apply flux divergence ----
+      ! ---- Pass 2: concentration update ----
+      ! c+ = (c h- + dt (F_k - F_k+1))/h+ with h+ = h- + dt (w_k - w_k+1), the
+      ! thickness `apply_w_to_h_layer` writes, written as
+      ! c + dt ((w_k - w_k+1) c + F_k - F_k+1)/h+: a uniform c is reproduced to
+      ! round-off whatever h does (Griffies et al. 2020).  A layer the pass
+      ! empties (h+ <= H_DIV_EPS) keeps its c.  The budget increment stays the
+      ! exact flux divergence, independent of the divide.
+      do concurrent(k=1:nz, j=1:ny, i=1:nx) local(div_w, div_f, h_new)
+         div_w = w_interface(i, j, k) - w_interface(i, j, k + 1)
+         div_f = F_face(i, j, k) - F_face(i, j, k + 1)
+         h_new = h_before(i, j, k) + dt*div_w
+         if (h_new > H_DIV_EPS) then
+            c(i, j, k) = c(i, j, k) + dt*(div_w*c(i, j, k) + div_f)/h_new
+         end if
+      end do
       if (present(budget)) then
          do concurrent(k=1:nz, j=1:ny, i=1:nx)
-            hTr(i, j, k) = hTr(i, j, k) + &
-                           dt*(F_face(i, j, k) - F_face(i, j, k + 1))
             budget(i, j, k) = budget(i, j, k) + &
                               dt*(F_face(i, j, k) - F_face(i, j, k + 1))
-         end do
-      else
-         do concurrent(k=1:nz, j=1:ny, i=1:nx)
-            hTr(i, j, k) = hTr(i, j, k) + &
-                           dt*(F_face(i, j, k) - F_face(i, j, k + 1))
          end do
       end if
    end subroutine tracer_advect_vertical_one_impl

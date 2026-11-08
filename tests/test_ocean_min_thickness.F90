@@ -114,8 +114,8 @@ contains
       do k = 1, NZ
          do j = 1, ny
             do i = 1, nx
-               ms%tracers(ms%idx_salinity)%hTr(i, j, k) = (35.0_wp + real(k, wp))*ms%h_layer(i, j, k)
-               ms%tracers(ms%idx_temperature)%hTr(i, j, k) = (10.0_wp + 2.0_wp*real(k, wp))*ms%h_layer(i, j, k)
+               ms%tracers(ms%idx_salinity)%c(i, j, k) = (35.0_wp + real(k, wp))
+               ms%tracers(ms%idx_temperature)%c(i, j, k) = (10.0_wp + 2.0_wp*real(k, wp))
             end do
          end do
       end do
@@ -143,20 +143,20 @@ contains
       ms%h_layer(ic, jc, 3) = 29.99_wp
       ms%h_layer(ic, jc, 4) = 19.99_wp
       do k = 1, NZ
-         ms%tracers(ms%idx_salinity)%hTr(ic, jc, k) = (35.0_wp + real(k, wp))*ms%h_layer(ic, jc, k)
-         ms%tracers(ms%idx_temperature)%hTr(ic, jc, k) = (10.0_wp + 2.0_wp*real(k, wp))*ms%h_layer(ic, jc, k)
+         ms%tracers(ms%idx_salinity)%c(ic, jc, k) = (35.0_wp + real(k, wp))
+         ms%tracers(ms%idx_temperature)%c(ic, jc, k) = (10.0_wp + 2.0_wp*real(k, wp))
       end do
 
       ! Snapshots (host, before the device map).
       h0 = ms%h_layer
       u0 = ms%u_face_x_layer
       v0 = ms%v_face_y_layer
-      hTrS0 = ms%tracers(ms%idx_salinity)%hTr
-      hTrT0 = ms%tracers(ms%idx_temperature)%hTr
+      hTrS0 = ms%tracers(ms%idx_salinity)%c
+      hTrT0 = ms%tracers(ms%idx_temperature)%c
 
-      ! Make ms device-resident (copyin of h_layer/faces/tracers%hTr) + map the
+      ! Make ms device-resident (copyin of h_layer/faces/tracers%c) + map the
       ! caller-owned scratch h_new; the kernel runs on-device. exit_data copies
-      ! h_layer/faces/tracers%hTr back to the host for the checks below.
+      ! h_layer/faces/tracers%c back to the host for the checks below.
       call ms%enter_data()
       !$acc enter data create(h_new, gmask)
 
@@ -181,12 +181,12 @@ contains
 
       ! (c) Tracer mass conserved (both prognostic tracers).
       s_old = sum(hTrS0(ic, jc, :))
-      s_new = sum(ms%tracers(ms%idx_salinity)%hTr(ic, jc, :))
+      s_new = sum(ms%tracers(ms%idx_salinity)%c(ic, jc, :))
       call check(error, abs(s_new - s_old) <= 1.0e-12_wp*abs(s_old), &
                  "salinity mass must be conserved in the grounded column")
       if (allocated(error)) return
       s_old = sum(hTrT0(ic, jc, :))
-      s_new = sum(ms%tracers(ms%idx_temperature)%hTr(ic, jc, :))
+      s_new = sum(ms%tracers(ms%idx_temperature)%c(ic, jc, :))
       call check(error, abs(s_new - s_old) <= 1.0e-12_wp*abs(s_old), &
                  "temperature mass must be conserved in the grounded column")
       if (allocated(error)) return
@@ -235,7 +235,7 @@ contains
          call check(error, ms%h_layer(ifar, jfar, k) == h0(ifar, jfar, k), &
                     "ungrounded cell h_layer must be byte-unchanged")
          if (allocated(error)) return
-         call check(error, ms%tracers(ms%idx_salinity)%hTr(ifar, jfar, k) == hTrS0(ifar, jfar, k), &
+         call check(error, ms%tracers(ms%idx_salinity)%c(ifar, jfar, k) == hTrS0(ifar, jfar, k), &
                     "ungrounded cell salinity must be byte-unchanged")
          if (allocated(error)) return
       end do
@@ -273,8 +273,8 @@ contains
       do k = 1, NZ
          do j = 1, ny
             do i = 1, nx
-               ms%tracers(ms%idx_salinity)%hTr(i, j, k) = 34.0_wp*ms%h_layer(i, j, k)
-               ms%tracers(ms%idx_temperature)%hTr(i, j, k) = 12.0_wp*ms%h_layer(i, j, k)
+               ms%tracers(ms%idx_salinity)%c(i, j, k) = 34.0_wp
+               ms%tracers(ms%idx_temperature)%c(i, j, k) = 12.0_wp
             end do
          end do
       end do
@@ -296,8 +296,8 @@ contains
       h0 = ms%h_layer
       u0 = ms%u_face_x_layer
       v0 = ms%v_face_y_layer
-      hTrS0 = ms%tracers(ms%idx_salinity)%hTr
-      hTrT0 = ms%tracers(ms%idx_temperature)%hTr
+      hTrS0 = ms%tracers(ms%idx_salinity)%c
+      hTrT0 = ms%tracers(ms%idx_temperature)%c
 
       call ms%enter_data()
       !$acc enter data create(h_new, gmask)
@@ -313,10 +313,10 @@ contains
       if (allocated(error)) return
       call check(error, all(ms%v_face_y_layer == v0), "v faces must be byte-identical (no-op)")
       if (allocated(error)) return
-      call check(error, all(ms%tracers(ms%idx_salinity)%hTr == hTrS0), &
+      call check(error, all(ms%tracers(ms%idx_salinity)%c == hTrS0), &
                  "salinity must be byte-identical (no-op)")
       if (allocated(error)) return
-      call check(error, all(ms%tracers(ms%idx_temperature)%hTr == hTrT0), &
+      call check(error, all(ms%tracers(ms%idx_temperature)%c == hTrT0), &
                  "temperature must be byte-identical (no-op)")
       if (allocated(error)) return
 

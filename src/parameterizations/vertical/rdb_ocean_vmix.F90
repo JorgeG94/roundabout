@@ -81,7 +81,7 @@ module rdb_ocean_vmix
    !! the convective 1 m^2/s passes through untouched; a caller who sets
    !! `kd_max < kd_conv` will silently cap the convective value -- that
    !! is the gate doing its job, not a convection bug.
-   use rdb_constants, only: wp, GRAVITY, PI, H_VANISHED, DEG2RAD
+   use rdb_constants, only: H_DIV_EPS, wp, GRAVITY, PI, H_VANISHED, DEG2RAD
    use rdb_grid, only: hgrid_t
    use rdb_multilayer_state, only: multilayer_state_t
    use rdb_ocean_surface_stress, only: ocean_surface_stress_t
@@ -1064,7 +1064,7 @@ contains
       !!
       !! E4: this shim is also the OUTER SHIM for the surface (T, S) the
       !! `buoyancy_coeffs = "eos"` path needs — the tracer registry is an
-      !! array of derived types, so `ms%tracers(t)%hTr` is dereferenced
+      !! array of derived types, so `ms%tracers(t)%c` is dereferenced
       !! HERE, on the host, and the flat top-level arrays are handed down
       !! as explicit-shape dummies (array-of-derived-type device
       !! indirection rule).  They are passed UNCONDITIONALLY, on both
@@ -1079,16 +1079,16 @@ contains
       if (sf%sw_from_qsw) then
          call vmix_kpp_overlay_impl(grid, this, ms, ss, sf, &
                                     grid%nx_total, grid%ny_total, ms%nz_ml, sf%q_sw, &
-                                    ms%tracers(ms%idx_temperature)%hTr, &
-                                    ms%tracers(ms%idx_salinity)%hTr, &
+                                    ms%tracers(ms%idx_temperature)%c, &
+                                    ms%tracers(ms%idx_salinity)%c, &
                                     sf%has_sw, sf%sw_pen_frac, sf%sw_band_ratio, &
                                     sf%sw_zeta1, sf%sw_zeta2, this%kpp_sw_method, &
                                     sf%sw_chl, sf%sw_nb, sf%sw_frac, sf%sw_kappa)
       else
          call vmix_kpp_overlay_impl(grid, this, ms, ss, sf, &
                                     grid%nx_total, grid%ny_total, ms%nz_ml, sf%Q_heat, &
-                                    ms%tracers(ms%idx_temperature)%hTr, &
-                                    ms%tracers(ms%idx_salinity)%hTr, &
+                                    ms%tracers(ms%idx_temperature)%c, &
+                                    ms%tracers(ms%idx_salinity)%c, &
                                     sf%has_sw, sf%sw_pen_frac, sf%sw_band_ratio, &
                                     sf%sw_zeta1, sf%sw_zeta2, this%kpp_sw_method, &
                                     sf%sw_chl, sf%sw_nb, sf%sw_frac, sf%sw_kappa)
@@ -1601,14 +1601,14 @@ contains
 
       if (it_T > 0) then
          do concurrent(k=1:nz, j=1:ny, i=1:nx)
-            ms%tracers(it_T)%hTr(i, j, k) = rdb_conc_add_source(ms%tracers(it_T)%hTr(i, j, k), ms%h_layer(i, j, k), &
-                                                                dt*(this%gamma_t(i, j, k + 1) - this%gamma_t(i, j, k)))
+            ms%tracers(it_T)%c(i, j, k) = rdb_conc_add_source(ms%tracers(it_T)%c(i, j, k), ms%h_layer(i, j, k), &
+                                                              dt*(this%gamma_t(i, j, k + 1) - this%gamma_t(i, j, k)))
          end do
       end if
       if (it_S > 0) then
          do concurrent(k=1:nz, j=1:ny, i=1:nx)
-            ms%tracers(it_S)%hTr(i, j, k) = rdb_conc_add_source(ms%tracers(it_S)%hTr(i, j, k), ms%h_layer(i, j, k), &
-                                                                dt*(this%gamma_s(i, j, k + 1) - this%gamma_s(i, j, k)))
+            ms%tracers(it_S)%c(i, j, k) = rdb_conc_add_source(ms%tracers(it_S)%c(i, j, k), ms%h_layer(i, j, k), &
+                                                              dt*(this%gamma_s(i, j, k + 1) - this%gamma_s(i, j, k)))
          end do
       end if
       ! Pseudo-salt mirror: identical gamma_s expression, identical dt
@@ -1616,8 +1616,8 @@ contains
       ! `it_T`/`it_S`, so this is legal inside `do concurrent`.
       if (it_ps > 0) then
          do concurrent(k=1:nz, j=1:ny, i=1:nx)
-            ms%tracers(it_ps)%hTr(i, j, k) = rdb_conc_add_source(ms%tracers(it_ps)%hTr(i, j, k), ms%h_layer(i, j, k), &
-                                                                 dt*(this%gamma_s(i, j, k + 1) - this%gamma_s(i, j, k)))
+            ms%tracers(it_ps)%c(i, j, k) = rdb_conc_add_source(ms%tracers(it_ps)%c(i, j, k), ms%h_layer(i, j, k), &
+                                                               dt*(this%gamma_s(i, j, k + 1) - this%gamma_s(i, j, k)))
          end do
       end if
    end subroutine vmix_apply_nonlocal_tendencies
@@ -1800,8 +1800,8 @@ contains
          ! both for its GPU parallelism and so its byte-identity is
          ! structural rather than argued.
          call vmix_split_ddiff_eos_impl(nx, ny, nz + 1, this%kt, this%ks, &
-                                        ms%tracers(ms%idx_temperature)%hTr, &
-                                        ms%tracers(ms%idx_salinity)%hTr, ms%h_layer, &
+                                        ms%tracers(ms%idx_temperature)%c, &
+                                        ms%tracers(ms%idx_salinity)%c, ms%h_layer, &
                                         ms%p_top, this%eos, this%rho0, &
                                         this%p_top_in_eos, &
                                         this%ddiff_strat_param_max, this%ddiff_kappa_s, &
@@ -1814,8 +1814,8 @@ contains
          ! host and hand the flat top-level arrays to the do-concurrent
          ! impl (array-of-derived-type device indirection rule).
          call vmix_split_ddiff_impl(nx, ny, nz + 1, this%kt, this%ks, &
-                                    ms%tracers(ms%idx_temperature)%hTr, &
-                                    ms%tracers(ms%idx_salinity)%hTr, ms%h_layer, &
+                                    ms%tracers(ms%idx_temperature)%c, &
+                                    ms%tracers(ms%idx_salinity)%c, ms%h_layer, &
                                     this%eos%alpha_T, this%eos%beta_S, &
                                     this%ddiff_strat_param_max, this%ddiff_kappa_s, &
                                     this%ddiff_exp1, this%ddiff_exp2, &

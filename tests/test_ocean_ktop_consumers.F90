@@ -90,12 +90,12 @@ contains
       do k = 1, nz
          if (k > nz - nfill) then
             ms%h_layer(:, :, k) = H_FILL
-            ms%tracers(idx_t)%hTr(:, :, k) = 0.0_wp
-            ms%tracers(idx_s)%hTr(:, :, k) = 0.0_wp
+            ms%tracers(idx_t)%c(:, :, k) = 0.0_wp
+            ms%tracers(idx_s)%c(:, :, k) = 0.0_wp
          else
             ms%h_layer(:, :, k) = H_LIVE
-            ms%tracers(idx_t)%hTr(:, :, k) = H_LIVE*T0
-            ms%tracers(idx_s)%hTr(:, :, k) = H_LIVE*S0
+            ms%tracers(idx_t)%c(:, :, k) = H_LIVE*T0
+            ms%tracers(idx_s)%c(:, :, k) = H_LIVE*S0
          end if
       end do
       ms%k_top = nz - nfill
@@ -119,8 +119,8 @@ contains
       call ms%enter_data()
       call sf%enter_data()
       call ocean_surface_flux_apply_tracers(grid, sf, ms, DT_STEP)
-      associate (hT => ms%tracers(ms%idx_temperature)%hTr, &
-                 hS => ms%tracers(ms%idx_salinity)%hTr, &
+      associate (hT => ms%tracers(ms%idx_temperature)%c, &
+                 hS => ms%tracers(ms%idx_salinity)%c, &
                  bT => ms%heat_budget_surface, bS => ms%salt_budget_surface)
          !$acc update self(hT, hS, bT, bS)
       end associate
@@ -216,7 +216,7 @@ contains
 
       ok = .true.
       do k = kt + 1, NZ_Z
-         if (ms%tracers(idx_t)%hTr(2, 2, k) /= 0.0_wp) ok = .false.
+         if (ms%tracers(idx_t)%c(2, 2, k) /= 0.0_wp) ok = .false.
          if (ms%heat_budget_surface(2, 2, k) /= 0.0_wp) ok = .false.
       end do
       call check(error, ok, "no filler layer was written")
@@ -226,7 +226,7 @@ contains
                  "the budget mirror is on the live row")
       if (allocated(error)) return
 
-      t_top = ms%tracers(idx_t)%hTr(2, 2, kt)/ms%h_layer(2, 2, kt)
+      t_top = ms%tracers(idx_t)%c(2, 2, kt)/ms%h_layer(2, 2, kt)
       call check(error, abs(t_top - T0) < 1.0e-3_wp, &
                  "and the live layer's temperature moved by a sane amount")
       if (allocated(error)) return
@@ -254,10 +254,10 @@ contains
       call build_state(m2, g2, NZ_Z, NFILL)
       call apply_flux(g2, m2, QH, QS)
 
-      d_heat_1 = m1%tracers(m1%idx_temperature)%hTr(2, 2, NLIVE) - H_LIVE*T0
-      d_heat_2 = m2%tracers(m2%idx_temperature)%hTr(2, 2, NLIVE) - H_LIVE*T0
-      d_salt_1 = m1%tracers(m1%idx_salinity)%hTr(2, 2, NLIVE) - H_LIVE*S0
-      d_salt_2 = m2%tracers(m2%idx_salinity)%hTr(2, 2, NLIVE) - H_LIVE*S0
+      d_heat_1 = m1%tracers(m1%idx_temperature)%c(2, 2, NLIVE) - H_LIVE*T0
+      d_heat_2 = m2%tracers(m2%idx_temperature)%c(2, 2, NLIVE) - H_LIVE*T0
+      d_salt_1 = m1%tracers(m1%idx_salinity)%c(2, 2, NLIVE) - H_LIVE*S0
+      d_salt_2 = m2%tracers(m2%idx_salinity)%c(2, 2, NLIVE) - H_LIVE*S0
 
       call check(error, d_heat_1 /= 0.0_wp, "the reference deposit is non-zero")
       if (allocated(error)) return
@@ -284,11 +284,11 @@ contains
       real(wp) :: src_h, src_s, scale
 
       call build_state(ms, grid, NZ_Z, NFILL)
-      total_h0 = sum(ms%tracers(ms%idx_temperature)%hTr)
-      total_s0 = sum(ms%tracers(ms%idx_salinity)%hTr)
+      total_h0 = sum(ms%tracers(ms%idx_temperature)%c)
+      total_s0 = sum(ms%tracers(ms%idx_salinity)%c)
       call apply_flux(grid, ms, QH, QS)
-      total_h1 = sum(ms%tracers(ms%idx_temperature)%hTr)
-      total_s1 = sum(ms%tracers(ms%idx_salinity)%hTr)
+      total_h1 = sum(ms%tracers(ms%idx_temperature)%c)
+      total_s1 = sum(ms%tracers(ms%idx_salinity)%c)
       src_h = sum(ms%heat_budget_surface)
       src_s = sum(ms%salt_budget_surface)
 

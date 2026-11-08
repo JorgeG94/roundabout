@@ -155,9 +155,9 @@ contains
       call sf%set_surface_flux_const(0.0_wp, 0.0_wp)
 
       ms%h_layer = H_LAYER
-      ms%tracers(ms%idx_salinity)%hTr = S_INIT*H_LAYER
-      ms%tracers(ms%idx_temperature)%hTr = T_DEEP*H_LAYER
-      ms%tracers(ms%idx_temperature)%hTr(:, :, NZ) = t_surface*H_LAYER
+      ms%tracers(ms%idx_salinity)%c = S_INIT*H_LAYER
+      ms%tracers(ms%idx_temperature)%c = T_DEEP*H_LAYER
+      ms%tracers(ms%idx_temperature)%c(:, :, NZ) = t_surface*H_LAYER
    end subroutine setup_state
 
    subroutine seed_ice_cap(ice, ip, jp, h_ice, t_ice)
@@ -230,8 +230,8 @@ contains
       if (comps) call ocean_surface_flux_assemble(grid, sf, ms)
       call ocean_surface_flux_apply_tracers(grid, sf, ms, DT_THERM)
 
-      associate (hT => ms%tracers(ms%idx_temperature)%hTr, &
-                 hS => ms%tracers(ms%idx_salinity)%hTr, &
+      associate (hT => ms%tracers(ms%idx_temperature)%c, &
+                 hS => ms%tracers(ms%idx_salinity)%c, &
                  mi => ice%m_ice, ei => ice%enth_ice, si => ice%sal_ice, &
                  mf => ice%m_frozen_diag, sd => ice%salt_flux_diag, &
                  hf => ice%heat_flux_diag, md => ice%m_melt_diag, &
@@ -323,12 +323,12 @@ contains
          ip = grid%nx_total/2
          jp = grid%ny_total/2
          call seed_ice_cap(ice, ip, jp, H_ICE0, T_ICE_COLD)
-         s_before = ms%tracers(ms%idx_salinity)%hTr(ip, jp, NZ)/H_LAYER
+         s_before = ms%tracers(ms%idx_salinity)%c(ip, jp, NZ)/H_LAYER
 
          call run_chain(grid, eos, ms, ice, sf, air_temp=10.0_wp, restore_lambda=30.0_wp, &
                         sw_down=0.0_wp)
 
-         s_after = ms%tracers(ms%idx_salinity)%hTr(ip, jp, NZ)/H_LAYER
+         s_after = ms%tracers(ms%idx_salinity)%c(ip, jp, NZ)/H_LAYER
 
          call check(error, ice%salt_flux_diag(ip, jp) < 0.0_wp, &
                     "salt_flux_diag must be strictly negative (net melt freshens)")
@@ -343,7 +343,7 @@ contains
          m_net = ice%h2o_ocn_to_ice(ip, jp, 1) - ice%h2o_ice_to_ocn(ip, jp, 1)
          expected_dhS = m_net*(S_INIT - ICE_BULK_SALINITY)
          tol = 1.0e-12_wp*abs(expected_dhS)
-         call check(error, abs(sf%rho0*(ms%tracers(ms%idx_salinity)%hTr(ip, jp, NZ) &
+         call check(error, abs(sf%rho0*(ms%tracers(ms%idx_salinity)%c(ip, jp, NZ) &
                                         - s_before*H_LAYER) - expected_dhS) <= tol, &
                     "salt removed from the ocean must equal m_net*(s_surf-bulk) to 1e-12 rel")
 
@@ -376,12 +376,12 @@ contains
          call setup_state(grid, ms, eos, ice, sf, t_f)
          ip = grid%nx_total/2
          jp = grid%ny_total/2
-         hT_before = ms%tracers(ms%idx_temperature)%hTr(ip, jp, NZ)
+         hT_before = ms%tracers(ms%idx_temperature)%c(ip, jp, NZ)
 
          call run_chain(grid, eos, ms, ice, sf, air_temp=-20.0_wp, restore_lambda=20.0_wp, &
                         sw_down=0.0_wp)
 
-         hT_after = ms%tracers(ms%idx_temperature)%hTr(ip, jp, NZ)
+         hT_after = ms%tracers(ms%idx_temperature)%c(ip, jp, NZ)
          call check(error, abs(ice%fb(ip, jp)) < 1.0e-12_wp, &
                     "fb must be ~0 when SST == T_f exactly")
          if (allocated(error)) exit checks
@@ -400,12 +400,12 @@ contains
          ip = grid%nx_total/2
          jp = grid%ny_total/2
          call seed_ice_cap(ice, ip, jp, H_ICE0, T_ICE_COLD)
-         hT_before = ms%tracers(ms%idx_temperature)%hTr(ip, jp, NZ)
+         hT_before = ms%tracers(ms%idx_temperature)%c(ip, jp, NZ)
 
          call run_chain(grid, eos, ms, ice, sf, air_temp=15.0_wp, restore_lambda=25.0_wp, &
                         sw_down=0.0_wp)
 
-         hT_after = ms%tracers(ms%idx_temperature)%hTr(ip, jp, NZ)
+         hT_after = ms%tracers(ms%idx_temperature)%c(ip, jp, NZ)
          d_ocean_heat = sf%rho0*SEAWATER_CP*(hT_after - hT_before)
          rhs = ice%heat_to_ocn(ip, jp, 1) - ice%fb(ip, jp)*DT_THERM
          scale = sf%rho0*SEAWATER_CP*abs(hT_before)
@@ -472,10 +472,10 @@ contains
          call sf%set_surface_flux_const(0.0_wp, 0.0_wp)
 
          ms%h_layer = H_LAYER
-         ms%tracers(ms%idx_salinity)%hTr = S_INIT*H_LAYER
-         ms%tracers(ms%idx_temperature)%hTr = T_DEEP*H_LAYER
+         ms%tracers(ms%idx_salinity)%c = S_INIT*H_LAYER
+         ms%tracers(ms%idx_temperature)%c = T_DEEP*H_LAYER
          t_f = eos_freezing_point(eos, S_INIT, 0.0_wp)
-         ms%tracers(ms%idx_temperature)%hTr(:, :, NZ) = 5.0_wp*H_LAYER
+         ms%tracers(ms%idx_temperature)%c(:, :, NZ) = 5.0_wp*H_LAYER
 
          ip = grid%nx_total/2
          jp = grid%ny_total/2
@@ -581,10 +581,10 @@ contains
          call sf%set_surface_flux_const(0.0_wp, 0.0_wp)
 
          ms%h_layer = H_LAYER
-         ms%tracers(ms%idx_salinity)%hTr = S_INIT*H_LAYER
-         ms%tracers(ms%idx_temperature)%hTr = T_DEEP*H_LAYER
+         ms%tracers(ms%idx_salinity)%c = S_INIT*H_LAYER
+         ms%tracers(ms%idx_temperature)%c = T_DEEP*H_LAYER
          t_f = eos_freezing_point(eos, S_INIT, 0.0_wp)
-         ms%tracers(ms%idx_temperature)%hTr(:, :, NZ) = t_sst*H_LAYER
+         ms%tracers(ms%idx_temperature)%c(:, :, NZ) = t_sst*H_LAYER
 
          ip = grid%nx_total/2
          jp = grid%ny_total/2
@@ -683,8 +683,8 @@ contains
          call setup_state(grid, ms, eos, ice, sf, 5.0_wp)
          ip = grid%nx_total/2
          jp = grid%ny_total/2
-         allocate (hT_ic, source=ms%tracers(ms%idx_temperature)%hTr)
-         allocate (hS_ic, source=ms%tracers(ms%idx_salinity)%hTr)
+         allocate (hT_ic, source=ms%tracers(ms%idx_temperature)%c)
+         allocate (hS_ic, source=ms%tracers(ms%idx_salinity)%c)
 
          ! No ice seeded, no frazil bank. Restoring params are inert on an
          ! ice-free column (the column never steps without ice). PR 31:
@@ -716,10 +716,10 @@ contains
          call check(error, maxval(abs(sf%Q_salt)) == 0.0_wp, &
                     "Q_salt must be all-zero (no ice exchange)")
          if (allocated(error)) exit checks
-         call check(error, maxval(abs(ms%tracers(ms%idx_temperature)%hTr - hT_ic)) == 0.0_wp, &
+         call check(error, maxval(abs(ms%tracers(ms%idx_temperature)%c - hT_ic)) == 0.0_wp, &
                     "hT must be bit-identical (open ocean untouched by the ice path)")
          if (allocated(error)) exit checks
-         call check(error, maxval(abs(ms%tracers(ms%idx_salinity)%hTr - hS_ic)) == 0.0_wp, &
+         call check(error, maxval(abs(ms%tracers(ms%idx_salinity)%c - hS_ic)) == 0.0_wp, &
                     "hS must be bit-identical (open ocean untouched by the ice path)")
 
       end block checks
@@ -766,8 +766,8 @@ contains
          ! ---- 5b: ice ON, benign restoring, no ice, no bank => exact
          ! no-op window. ----
          call setup_state(grid, ms, eos, ice, sf, t_f)
-         allocate (hT_ic, source=ms%tracers(ms%idx_temperature)%hTr)
-         allocate (hS_ic, source=ms%tracers(ms%idx_salinity)%hTr)
+         allocate (hT_ic, source=ms%tracers(ms%idx_temperature)%c)
+         allocate (hS_ic, source=ms%tracers(ms%idx_salinity)%c)
 
          call run_chain(grid, eos, ms, ice, sf, air_temp=t_f, restore_lambda=20.0_wp, &
                         sw_down=0.0_wp)
@@ -778,10 +778,10 @@ contains
          call check(error, maxval(abs(sf%Q_salt)) == 0.0_wp, &
                     "Q_salt must be exactly zero (no ice, no frazil bank)")
          if (allocated(error)) exit checks
-         call check(error, maxval(abs(ms%tracers(ms%idx_temperature)%hTr - hT_ic)) == 0.0_wp, &
+         call check(error, maxval(abs(ms%tracers(ms%idx_temperature)%c - hT_ic)) == 0.0_wp, &
                     "hT must be bit-identical on the benign no-op window")
          if (allocated(error)) exit checks
-         call check(error, maxval(abs(ms%tracers(ms%idx_salinity)%hTr - hS_ic)) == 0.0_wp, &
+         call check(error, maxval(abs(ms%tracers(ms%idx_salinity)%c - hS_ic)) == 0.0_wp, &
                     "hS must be bit-identical on the benign no-op window")
 
       end block checks
@@ -942,7 +942,7 @@ contains
          jp = grid%ny_total/2
          call seed_ice_cap(ice, ip, jp, H_ICE0, T_ICE_COLD)
          ice%frazil_heat(ip, jp) = E_BANK_COMPOSE
-         hT_before = ms%tracers(ms%idx_temperature)%hTr(ip, jp, NZ)
+         hT_before = ms%tracers(ms%idx_temperature)%c(ip, jp, NZ)
 
          call run_chain(grid, eos, ms, ice, sf, air_temp=10.0_wp, restore_lambda=30.0_wp, &
                         sw_down=0.0_wp)
@@ -960,7 +960,7 @@ contains
                     "heat_flux_diag*dt must equal heat_to_ocn - fb*dt (frazil contributes 0)")
          if (allocated(error)) exit checks
 
-         hT_after = ms%tracers(ms%idx_temperature)%hTr(ip, jp, NZ)
+         hT_after = ms%tracers(ms%idx_temperature)%c(ip, jp, NZ)
          d_ocean_heat = sf%rho0*SEAWATER_CP*(hT_after - hT_before)
          scale = sf%rho0*SEAWATER_CP*abs(hT_before)
          tol = 1.0e-9_wp*max(scale, 1.0_wp)
@@ -1054,12 +1054,12 @@ contains
          ip = grid%nx_total/2
          jp = grid%ny_total/2
          call seed_ice_cap(ice, ip, jp, 0.2_wp, t_f)
-         hT_before = ms%tracers(ms%idx_temperature)%hTr(ip, jp, NZ)
+         hT_before = ms%tracers(ms%idx_temperature)%c(ip, jp, NZ)
 
          call run_chain(grid, eos, ms, ice, sf, air_temp=0.0_wp, restore_lambda=0.0_wp, &
                         sw_down=400.0_wp)
 
-         hT_after = ms%tracers(ms%idx_temperature)%hTr(ip, jp, NZ)
+         hT_after = ms%tracers(ms%idx_temperature)%c(ip, jp, NZ)
 
          call check(error, ice%sw_thru(ip, jp, 1) > 0.0_wp, &
                     "sw_thru must be strictly positive (thin snow-free ice transmits SW)")
@@ -1230,12 +1230,12 @@ contains
          ip = grid%nx_total/2
          jp = grid%ny_total/2
          call seed_ice_cap(ice, ip, jp, 0.2_wp, t_f)
-         hT_before = ms%tracers(ms%idx_temperature)%hTr(ip, jp, NZ)
+         hT_before = ms%tracers(ms%idx_temperature)%c(ip, jp, NZ)
 
          call run_chain(grid, eos, ms, ice, sf, air_temp=0.0_wp, restore_lambda=0.0_wp, &
                         sw_down=400.0_wp, use_components=.true.)
 
-         hT_after = ms%tracers(ms%idx_temperature)%hTr(ip, jp, NZ)
+         hT_after = ms%tracers(ms%idx_temperature)%c(ip, jp, NZ)
 
          call check(error, ice%sw_thru_diag(ip, jp) > 0.0_wp, &
                     "sw_thru_diag must be strictly positive (else the test is vacuous)")

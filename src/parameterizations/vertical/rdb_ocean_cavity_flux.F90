@@ -322,7 +322,6 @@ module rdb_ocean_cavity_flux
    public :: cavity_mass_salt_mirror_impl
    public :: cavity_mass_totals_impl
    public :: cavity_comp_apply_impl
-   public :: cavity_comp_scale_tracer_impl
    public :: cavity_mass_thin_is_fatal
    public :: cavity_comp_withdrawal
    public :: H_CAVITY_FLOOR
@@ -708,10 +707,10 @@ contains
       real(wp), intent(out) :: v_far(nx, ny)
          !! Sampled centred y velocity (m/s); 0 where inactive.
       integer :: i, j, k
-      real(wp) :: acc_h, acc_t, acc_s, acc_u, acc_v, remain, h, w, inv_h
+      real(wp) :: acc_h, acc_t, acc_s, acc_u, acc_v, remain, h, w
 
       do concurrent(j=1:ny, i=1:nx) &
-         local(k, acc_h, acc_t, acc_s, acc_u, acc_v, remain, h, w, inv_h)
+         local(k, acc_h, acc_t, acc_s, acc_u, acc_v, remain, h, w)
          acc_h = 0.0_wp
          acc_t = 0.0_wp
          acc_s = 0.0_wp
@@ -727,10 +726,9 @@ contains
                ! concentration into the average.
                if (h <= H_VANISHED) cycle
                w = min(h, remain)
-               inv_h = 1.0_wp/h
                acc_h = acc_h + w
-               acc_t = acc_t + w*hTr_T(i, j, k)*inv_h
-               acc_s = acc_s + w*hTr_S(i, j, k)*inv_h
+               acc_t = acc_t + w*hTr_T(i, j, k)
+               acc_s = acc_s + w*hTr_S(i, j, k)
                acc_u = acc_u + w*0.5_wp*(u_face_x(i, j, k) + u_face_x(i + 1, j, k))
                acc_v = acc_v + w*0.5_wp*(v_face_y(i, j, k) + v_face_y(i, j + 1, k))
                remain = remain - w
@@ -1229,10 +1227,10 @@ contains
          !! Ice-cover fraction (v1 binary).
       real(wp), intent(inout) :: h_layer(nx, ny, nz)
          !! Layer thickness (m).
-      real(wp), intent(inout) :: hTr_S(nx, ny, nz)
-         !! `h*S`.
-      real(wp), intent(inout) :: hTr_T(nx, ny, nz)
-         !! `h*T`.
+      real(wp), intent(in) :: hTr_S(nx, ny, nz)
+         !! Salinity concentration (read only: the sink removes water at its own S).
+      real(wp), intent(in) :: hTr_T(nx, ny, nz)
+         !! Temperature concentration (read only).
       real(wp), intent(inout) :: salt_budget(nx, ny, nz)
          !! `ms%salt_budget_surface`.
       real(wp), intent(inout) :: heat_budget(nx, ny, nz)
@@ -1242,10 +1240,10 @@ contains
       integer, intent(out) :: n_thin
          !! Columns whose withdrawal had to be clamped.
       integer :: i, j, c_thin
-      real(wp) :: h0, hn, d, f, cell_s, cell_t
+      real(wp) :: h0, hn, d, f, cell_s, cell_t, p_new, p_old
 
       c_thin = 0
-      do concurrent(j=1:ny, i=1:nx) local(h0, hn, d, f, cell_s, cell_t) reduce(+:c_thin)
+      do concurrent(j=1:ny, i=1:nx) local(h0, hn, d, f, cell_s, cell_t, p_new, p_old) reduce(+:c_thin)
          if (wet_mask(i, j) > 0.5_wp .and. cover_frac(i, j) < 0.5_wp) then
             h0 = h_layer(i, j, nz)
             d = dw
@@ -1265,12 +1263,17 @@ contains
             else
                f = 1.0_wp
             end if
-            cell_s = hTr_S(i, j, nz)*(f - 1.0_wp)
-            cell_t = hTr_T(i, j, nz)*(f - 1.0_wp)
+            ! The sink removes water AT the layer's own concentration, so `c`
+            ! is untouched; the budget books the content it carries out
+            ! (two standalone products so it telescopes with the console total).
+            p_new = hTr_S(i, j, nz)*hn
+            p_old = hTr_S(i, j, nz)*h0
+            cell_s = p_new - p_old
+            p_new = hTr_T(i, j, nz)*hn
+            p_old = hTr_T(i, j, nz)*h0
+            cell_t = p_new - p_old
             h_layer(i, j, nz) = hn
-            hTr_S(i, j, nz) = hTr_S(i, j, nz) + cell_s
             salt_budget(i, j, nz) = salt_budget(i, j, nz) + cell_s
-            hTr_T(i, j, nz) = hTr_T(i, j, nz) + cell_t
             heat_budget(i, j, nz) = heat_budget(i, j, nz) + cell_t
             scale(i, j) = f
          else
@@ -1279,26 +1282,6 @@ contains
       end do
       n_thin = c_thin
    end subroutine cavity_comp_apply_impl
-
-   pure subroutine cavity_comp_scale_tracer_impl(nx, ny, nz, scale, hTr)
-      !! Apply the compensation sink's top-layer ratio to one PASSIVE
-      !! tracer's load.  Unconditional (`scale = 1` off the sink), so
-      !! there is no mask branch inside the kernel.
-      integer, intent(in) :: nx
-         !! First dimension.
-      integer, intent(in) :: ny
-         !! Second dimension.
-      integer, intent(in) :: nz
-         !! Layer count.
-      real(wp), intent(in) :: scale(nx, ny)
-         !! `h_new/h_old` from `cavity_comp_apply_impl`.
-      real(wp), intent(inout) :: hTr(nx, ny, nz)
-         !! The tracer's `h*C`.
-      integer :: i, j
-      do concurrent(j=1:ny, i=1:nx)
-         hTr(i, j, nz) = hTr(i, j, nz)*scale(i, j)
-      end do
-   end subroutine cavity_comp_scale_tracer_impl
 
    pure function cavity_mass_thin_is_fatal(n_thin) result(is_fatal)
       !! Is this step's clamped-withdrawal tally a FAIL-LOUD condition?
@@ -1427,11 +1410,11 @@ contains
       if (idx_ps > 0) then
          call cavity_mass_salt_mirror_impl(nx, ny, nz, dt_over_rho0, dt_over_rho0, &
                                            cav%s_ice, cav%active, cav%melt, &
-                                           cav%s_far, ms%h_layer, ms%tracers(idx_ps)%hTr, ms%k_top)
+                                           cav%s_far, ms%h_layer, ms%tracers(idx_ps)%c, ms%k_top)
       end if
       call cavity_mass_apply_impl(nx, ny, nz, dt_over_rho0, dt_over_rho0, cav%s_ice, &
                                   cav%active, cav%melt, cav%s_far, cav%t_b, &
-                                  ms%h_layer, ms%tracers(idx_s)%hTr, ms%tracers(idx_t)%hTr, &
+                                  ms%h_layer, ms%tracers(idx_s)%c, ms%tracers(idx_t)%c, &
                                   ms%salt_budget_surface, ms%heat_budget_surface, &
                                   ms%k_top, n_thin_src)
       ms%mass_src = ms%mass_src + weight*RHO_WATER*vol_melt
@@ -1443,8 +1426,8 @@ contains
          dw = cavity_comp_withdrawal(vol_melt, area_open)
          cav%comp_withdrawal_step = dw
          call cavity_comp_apply_impl(nx, ny, nz, dw, ms%wet_mask, metrics%cover_frac, &
-                                     ms%h_layer, ms%tracers(idx_s)%hTr, &
-                                     ms%tracers(idx_t)%hTr, ms%salt_budget_surface, &
+                                     ms%h_layer, ms%tracers(idx_s)%c, &
+                                     ms%tracers(idx_t)%c, ms%salt_budget_surface, &
                                      ms%heat_budget_surface, cav%comp_scale, n_thin_comp)
          ! NOTE the sink stays on `k = nz` and is NOT routed through
          ! `k_top`, deliberately: its own gate is `cover_frac < 0.5`, so
@@ -1452,14 +1435,8 @@ contains
          ! column has `z_top = 0` ⇒ no top-side filler ⇒ `k_top ≡ nz`.
          ! Routing it would be a provable no-op; leaving it spells out
          ! that "the top layer" and "the first live layer" are the same
-         ! row wherever this kernel runs.  `cavity_comp_scale_tracer_impl`
-         ! below rides the same argument (it is unconditional, but
-         ! `comp_scale` is exactly 1 off the sink).
-         do it = 1, size(ms%tracers)
-            if (it == idx_s .or. it == idx_t) cycle
-            call cavity_comp_scale_tracer_impl(nx, ny, nz, cav%comp_scale, &
-                                               ms%tracers(it)%hTr)
-         end do
+         ! row wherever this kernel runs.  Passive tracers need no rescale: the
+         ! sink removes water at its own concentration, which they store.
          ! The removed interior volume is exactly `dw*area_open` — the
          ! same product the withdrawal was derived from — so with no
          ! clamping this cancels the source term to the last bit and the
@@ -1512,7 +1489,7 @@ contains
       !! a non-finite column.  Its three kernels are all `pure`.
       !!
       !! `mem:separate`: every array read or written here is mapped by
-      !! its owning slot's `enter_data`.  `ms%tracers(idx)%hTr` is
+      !! its owning slot's `enter_data`.  `ms%tracers(idx)%c` is
       !! dereferenced on the HOST before the kernels (the outer-shim
       !! rule for the array-of-derived-types registry).
       use pic_logger, only: global_logger
@@ -1554,7 +1531,7 @@ contains
 
       call cavity_far_field_impl(nx, ny, nz, cav%far_field_depth, &
                                  metrics%cover_frac, ms%wet_mask, ms%h_layer, &
-                                 ms%tracers(idx_t)%hTr, ms%tracers(idx_s)%hTr, &
+                                 ms%tracers(idx_t)%c, ms%tracers(idx_s)%c, &
                                  ms%u_face_x_layer, ms%v_face_y_layer, &
                                  cav%active, cav%t_far, cav%s_far, cav%u_far, cav%v_far)
 

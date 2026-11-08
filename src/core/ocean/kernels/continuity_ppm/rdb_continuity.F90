@@ -2346,7 +2346,7 @@ contains
                 it <= size(bc%west%clamped_tracer)) then
                clamped_tr = bc%west%clamped_tracer(it)
                do concurrent(k=1:ms%nz_ml, j=1:grid%ny_total, i=1:grid%nghost)
-                  ms%tracers(it)%hTr(i, j, k) = clamped_tr*h_before(i, j, k)
+                  ms%tracers(it)%c(i, j, k) = clamped_tr
                end do
             end if
             if (bc%east%bc_type == OBC_CLAMPED .and. bc%has_east .and. &
@@ -2355,7 +2355,7 @@ contains
                clamped_tr = bc%east%clamped_tracer(it)
                do concurrent(k=1:ms%nz_ml, j=1:grid%ny_total, &
                              i=grid%nghost + grid%nx_phys + 1:grid%nx_total)
-                  ms%tracers(it)%hTr(i, j, k) = clamped_tr*h_before(i, j, k)
+                  ms%tracers(it)%c(i, j, k) = clamped_tr
                end do
             end if
          end if
@@ -2368,7 +2368,7 @@ contains
                grid%nx_total, grid%ny_total, ms%nz_ml, &
                dt, metrics%iareaT, metrics%wet_T, &
                h_before, h_after, &
-               ms%tracers(it)%hTr, &
+               ms%tracers(it)%c, &
                ms%mass_flux_x_layer, &
                this%h_face_left_x%data, &
                this%h_face_right_x%data, &
@@ -2378,7 +2378,7 @@ contains
                grid%nx_total, grid%ny_total, ms%nz_ml, &
                dt, metrics%iareaT, metrics%wet_T, &
                h_before, h_after, &
-               ms%tracers(it)%hTr, &
+               ms%tracers(it)%c, &
                ms%mass_flux_x_layer, &
                this%h_face_left_x%data, &
                this%h_face_right_x%data, &
@@ -2388,7 +2388,7 @@ contains
                grid%nx_total, grid%ny_total, ms%nz_ml, &
                dt, metrics%iareaT, metrics%wet_T, &
                h_before, h_after, &
-               ms%tracers(it)%hTr, &
+               ms%tracers(it)%c, &
                ms%mass_flux_x_layer, &
                this%h_face_left_x%data, &
                this%h_face_right_x%data, h3=this%tracer_h3)
@@ -2433,7 +2433,7 @@ contains
                 it <= size(bc%south%clamped_tracer)) then
                clamped_tr = bc%south%clamped_tracer(it)
                do concurrent(k=1:ms%nz_ml, i=1:grid%nx_total, j=1:grid%nghost)
-                  ms%tracers(it)%hTr(i, j, k) = clamped_tr*h_before(i, j, k)
+                  ms%tracers(it)%c(i, j, k) = clamped_tr
                end do
             end if
             if (bc%north%bc_type == OBC_CLAMPED .and. bc%has_north .and. &
@@ -2442,7 +2442,7 @@ contains
                clamped_tr = bc%north%clamped_tracer(it)
                do concurrent(k=1:ms%nz_ml, i=1:grid%nx_total, &
                              j=grid%nghost + grid%ny_phys + 1:grid%ny_total)
-                  ms%tracers(it)%hTr(i, j, k) = clamped_tr*h_before(i, j, k)
+                  ms%tracers(it)%c(i, j, k) = clamped_tr
                end do
             end if
          end if
@@ -2455,7 +2455,7 @@ contains
                grid%nx_total, grid%ny_total, ms%nz_ml, &
                dt, metrics%iareaT, metrics%wet_T, &
                h_before, h_after, &
-               ms%tracers(it)%hTr, &
+               ms%tracers(it)%c, &
                ms%mass_flux_y_layer, &
                this%h_face_left_y%data, &
                this%h_face_right_y%data, &
@@ -2465,7 +2465,7 @@ contains
                grid%nx_total, grid%ny_total, ms%nz_ml, &
                dt, metrics%iareaT, metrics%wet_T, &
                h_before, h_after, &
-               ms%tracers(it)%hTr, &
+               ms%tracers(it)%c, &
                ms%mass_flux_y_layer, &
                this%h_face_left_y%data, &
                this%h_face_right_y%data, &
@@ -2475,7 +2475,7 @@ contains
                grid%nx_total, grid%ny_total, ms%nz_ml, &
                dt, metrics%iareaT, metrics%wet_T, &
                h_before, h_after, &
-               ms%tracers(it)%hTr, &
+               ms%tracers(it)%c, &
                ms%mass_flux_y_layer, &
                this%h_face_left_y%data, &
                this%h_face_right_y%data, h3=this%tracer_h3)
@@ -2744,8 +2744,8 @@ contains
       call ocean_halo_centre(ms%h_layer, nz)
       if (allocated(ms%tracers)) then
          do it = 1, size(ms%tracers)
-            if (.not. allocated(ms%tracers(it)%hTr)) cycle
-            call ocean_halo_centre(ms%tracers(it)%hTr, nz)
+            if (.not. allocated(ms%tracers(it)%c)) cycle
+            call ocean_halo_centre(ms%tracers(it)%c, nz)
          end do
       end if
       call profiler_stop("ocean_comms_ml")
@@ -2765,8 +2765,8 @@ contains
                                             nx_phys, ny_phys, nghost, per_x, per_y, no_wait=.true.)
          if (allocated(ms%tracers)) then
             do it = 1, size(ms%tracers)
-               if (.not. allocated(ms%tracers(it)%hTr)) cycle
-               call ocean_periodic_wrap_centre_3d(ms%tracers(it)%hTr, nx, ny, nz, &
+               if (.not. allocated(ms%tracers(it)%c)) cycle
+               call ocean_periodic_wrap_centre_3d(ms%tracers(it)%c, nx, ny, nz, &
                                                   nx_phys, ny_phys, nghost, per_x, per_y, no_wait=.true.)
             end do
          end if
@@ -3049,8 +3049,8 @@ contains
       call ocean_halo_centre(ms%h_layer, nz)
       if (allocated(ms%tracers)) then
          do it = 1, size(ms%tracers)
-            if (.not. allocated(ms%tracers(it)%hTr)) cycle
-            call ocean_halo_centre(ms%tracers(it)%hTr, nz)
+            if (.not. allocated(ms%tracers(it)%c)) cycle
+            call ocean_halo_centre(ms%tracers(it)%c, nz)
          end do
       end if
       call profiler_stop("ocean_comms_ml")
@@ -3059,8 +3059,8 @@ contains
                                             nx_phys, ny_phys, nghost, per_x, per_y, no_wait=.true.)
          if (allocated(ms%tracers)) then
             do it = 1, size(ms%tracers)
-               if (.not. allocated(ms%tracers(it)%hTr)) cycle
-               call ocean_periodic_wrap_centre_3d(ms%tracers(it)%hTr, nx, ny, nz, &
+               if (.not. allocated(ms%tracers(it)%c)) cycle
+               call ocean_periodic_wrap_centre_3d(ms%tracers(it)%c, nx, ny, nz, &
                                                   nx_phys, ny_phys, nghost, per_x, per_y, no_wait=.true.)
             end do
          end if
@@ -3124,19 +3124,19 @@ contains
          case (TRACER_BUDGET_HEAT)
             call tracer_advect_zonal_one_impl(grid%nx_total, grid%ny_total, ms%nz_ml, &
                                               dt, metrics%iareaT, metrics%wet_T, h_before, h_after, &
-                                              ms%tracers(it)%hTr, uflux, &
+                                              ms%tracers(it)%c, uflux, &
                                               this%h_face_left_x%data, this%h_face_right_x%data, &
                                               budget_adv=ms%heat_budget_horiz_adv, budget_w=budget_w, h3=this%tracer_h3)
          case (TRACER_BUDGET_SALT)
             call tracer_advect_zonal_one_impl(grid%nx_total, grid%ny_total, ms%nz_ml, &
                                               dt, metrics%iareaT, metrics%wet_T, h_before, h_after, &
-                                              ms%tracers(it)%hTr, uflux, &
+                                              ms%tracers(it)%c, uflux, &
                                               this%h_face_left_x%data, this%h_face_right_x%data, &
                                               budget_adv=ms%salt_budget_horiz_adv, budget_w=budget_w, h3=this%tracer_h3)
          case default
             call tracer_advect_zonal_one_impl(grid%nx_total, grid%ny_total, ms%nz_ml, &
                                               dt, metrics%iareaT, metrics%wet_T, h_before, h_after, &
-                                              ms%tracers(it)%hTr, uflux, &
+                                              ms%tracers(it)%c, uflux, &
                                               this%h_face_left_x%data, this%h_face_right_x%data, h3=this%tracer_h3)
          end select
       end do
@@ -3163,19 +3163,19 @@ contains
          case (TRACER_BUDGET_HEAT)
             call tracer_advect_meridional_one_impl(grid%nx_total, grid%ny_total, ms%nz_ml, &
                                                    dt, metrics%iareaT, metrics%wet_T, h_before, h_after, &
-                                                   ms%tracers(it)%hTr, vflux, &
+                                                   ms%tracers(it)%c, vflux, &
                                                    this%h_face_left_y%data, this%h_face_right_y%data, &
                                                    budget_adv=ms%heat_budget_horiz_adv, budget_w=budget_w, h3=this%tracer_h3)
          case (TRACER_BUDGET_SALT)
             call tracer_advect_meridional_one_impl(grid%nx_total, grid%ny_total, ms%nz_ml, &
                                                    dt, metrics%iareaT, metrics%wet_T, h_before, h_after, &
-                                                   ms%tracers(it)%hTr, vflux, &
+                                                   ms%tracers(it)%c, vflux, &
                                                    this%h_face_left_y%data, this%h_face_right_y%data, &
                                                    budget_adv=ms%salt_budget_horiz_adv, budget_w=budget_w, h3=this%tracer_h3)
          case default
             call tracer_advect_meridional_one_impl(grid%nx_total, grid%ny_total, ms%nz_ml, &
                                                    dt, metrics%iareaT, metrics%wet_T, h_before, h_after, &
-                                                   ms%tracers(it)%hTr, vflux, &
+                                                   ms%tracers(it)%c, vflux, &
                                                    this%h_face_left_y%data, this%h_face_right_y%data, h3=this%tracer_h3)
          end select
       end do
@@ -3381,14 +3381,14 @@ contains
       end do
    end subroutine accumulate_flux_y
 
-   pure subroutine tracer_advect_zonal_one_impl(nx, ny, nz, dt, iareaT, wet_T, h_before, h_after, hTr, &
+   pure subroutine tracer_advect_zonal_one_impl(nx, ny, nz, dt, iareaT, wet_T, h_before, h_after, c, &
                                                 mass_flux_x, &
                                                 Tr_face_left_x, Tr_face_right_x, &
                                                 budget_adv, budget_w, h3)
       !! Zonal half of `tracer_advect_one_impl`.  Same three-pass
       !! pattern (PPM reconstruction → upwind pick into tracer mass
       !! flux → forward-Euler update) but only the x-direction half.
-      !! Reads the input `h` for the Tr = hTr/h reconstruction.  The
+      !! Reads the input `h` for the Tr = c/h reconstruction.  The
       !! tracer transport `mass_flux_x·Tr_face` inherits `dy_cu`, and
       !! the divergence closes with `iareaT` (= `inv_dx` on uniform).
       !! Mirror-T at land neighbours (C2): a held land column's tracer
@@ -3397,8 +3397,8 @@ contains
       !!
       !! Optional `budget_adv`: when present, a separate `do concurrent`
       !! loop accumulates `−dt·(Tr_face_left_x(i+1)−Tr_face_left_x(i))·iareaT`
-      !! into `budget_adv` (same divergence written to `hTr`).  The
-      !! prognostic hTr update loop is UNCHANGED — byte-identical when
+      !! into `budget_adv` (same divergence written to `c`).  The
+      !! prognostic c update loop is UNCHANGED — byte-identical when
       !! `budget_adv` is absent.  Used by the console salt/heat closure.
       integer, intent(in) :: nx, ny, nz
       real(wp), intent(in) :: dt
@@ -3407,15 +3407,16 @@ contains
       real(wp), intent(in) :: h_before(nx, ny, nz)
       real(wp), intent(in) :: h_after(nx, ny, nz)
          !! The thickness continuity wrote for THIS direction (the `h⁺` of the
-         !! `h⁻ → h⁺` pair; `h_before` is the `h⁻`).  Unused while the tracer
-         !! is stored as content; the concentration form divides by it.
-      real(wp), intent(inout) :: hTr(nx, ny, nz)
+         !! `h⁻ → h⁺` pair; `h_before` is the `h⁻`).  Retained for the pair's
+         !! contract; the update divides by the UNFLOORED `h⁺` recomputed from
+         !! the fluxes (see the update loop).
+      real(wp), intent(inout) :: c(nx, ny, nz)
       real(wp), intent(in) :: mass_flux_x(nx + 1, ny, nz)
       real(wp), intent(inout) :: Tr_face_left_x(nx + 1, ny, nz)
       real(wp), intent(inout) :: Tr_face_right_x(nx + 1, ny, nz)
       real(wp), intent(inout), optional :: budget_adv(nx, ny, nz)
          !! Per-cell accumulator for the horizontal-advection budget
-         !! (same sign/units as hTr).  When present, the zonal-flux
+         !! (same sign/units as c).  When present, the zonal-flux
          !! divergence is added (+=) here after the prognostic update.
          !! Absent ⇒ inert (byte-identical to the pre-feature build).
       real(wp), intent(in), optional :: budget_w
@@ -3428,6 +3429,7 @@ contains
          !! Absent or `.false.` ⇒ the PPM path below, textually unchanged.
 
       integer :: i, j, k
+      real(wp) :: div_m, div_f, h_new
       logical :: use_h3
       real(wp) :: Tr_m2, Tr_m1, Tr_0, Tr_p1, Tr_p2
       real(wp) :: dh_m1, dh_0, dh_p1, Tr_left, Tr_right
@@ -3450,9 +3452,9 @@ contains
                ic = i
             end if
             hc = h_before(ic, j, k)
-            Tr_0 = rdb_conc_of_raw(hTr(ic, j, k), hc)
-            Tr_m1 = ppm_mirror_h(rdb_conc_of_raw(hTr(ic - 1, j, k), h_before(ic - 1, j, k)), Tr_0, wet_T(ic - 1, j))
-            Tr_p1 = ppm_mirror_h(rdb_conc_of_raw(hTr(ic + 1, j, k), h_before(ic + 1, j, k)), Tr_0, wet_T(ic + 1, j))
+            Tr_0 = c(ic, j, k)
+            Tr_m1 = ppm_mirror_h(c(ic - 1, j, k), Tr_0, wet_T(ic - 1, j))
+            Tr_p1 = ppm_mirror_h(c(ic + 1, j, k), Tr_0, wet_T(ic + 1, j))
             wm = wet_T(ic - 1, j)*wet_T(ic, j)*wet_T(ic + 1, j)
             Tr_face_left_x(i, j, k) = ppm_h3_face_flux(Tr_m1, Tr_0, Tr_p1, wm, &
                                                        mass_x, abs(mass_x)*dt*iareaT(ic, j)/hc)
@@ -3467,7 +3469,7 @@ contains
                ic = i
             end if
             ic = max(1, min(nx, ic))
-            Tr_face_left_x(i, j, k) = mass_x*(rdb_conc_of_raw(hTr(ic, j, k), h_before(ic, j, k)))
+            Tr_face_left_x(i, j, k) = mass_x*(c(ic, j, k))
          end do
          do concurrent(k=1:nz, j=1:ny, i=max(3, nx):nx + 1) local(mass_x, ic)
             mass_x = mass_flux_x(i, j, k)
@@ -3477,17 +3479,17 @@ contains
                ic = i
             end if
             ic = max(1, min(nx, ic))
-            Tr_face_left_x(i, j, k) = mass_x*(rdb_conc_of_raw(hTr(ic, j, k), h_before(ic, j, k)))
+            Tr_face_left_x(i, j, k) = mass_x*(c(ic, j, k))
          end do
       else
          do concurrent(k=1:nz, j=1:ny, i=3:nx - 2) &
             local(Tr_m2, Tr_m1, Tr_0, Tr_p1, Tr_p2, &
                   dh_m1, dh_0, dh_p1, Tr_left, Tr_right)
-            Tr_0 = rdb_conc_of_raw(hTr(i, j, k), h_before(i, j, k))
-            Tr_m1 = ppm_mirror_h(rdb_conc_of_raw(hTr(i - 1, j, k), h_before(i - 1, j, k)), Tr_0, wet_T(i - 1, j))
-            Tr_p1 = ppm_mirror_h(rdb_conc_of_raw(hTr(i + 1, j, k), h_before(i + 1, j, k)), Tr_0, wet_T(i + 1, j))
-            Tr_m2 = ppm_mirror_h(rdb_conc_of_raw(hTr(i - 2, j, k), h_before(i - 2, j, k)), Tr_m1, wet_T(i - 2, j))
-            Tr_p2 = ppm_mirror_h(rdb_conc_of_raw(hTr(i + 2, j, k), h_before(i + 2, j, k)), Tr_p1, wet_T(i + 2, j))
+            Tr_0 = c(i, j, k)
+            Tr_m1 = ppm_mirror_h(c(i - 1, j, k), Tr_0, wet_T(i - 1, j))
+            Tr_p1 = ppm_mirror_h(c(i + 1, j, k), Tr_0, wet_T(i + 1, j))
+            Tr_m2 = ppm_mirror_h(c(i - 2, j, k), Tr_m1, wet_T(i - 2, j))
+            Tr_p2 = ppm_mirror_h(c(i + 2, j, k), Tr_p1, wet_T(i + 2, j))
             call ppm_limited_slope(Tr_m2, Tr_m1, Tr_0, dh_m1)
             call ppm_limited_slope(Tr_m1, Tr_0, Tr_p1, dh_0)
             call ppm_limited_slope(Tr_0, Tr_p1, Tr_p2, dh_p1)
@@ -3499,17 +3501,17 @@ contains
             Tr_face_left_x(i + 1, j, k) = Tr_right
          end do
          do concurrent(k=1:nz, j=1:ny)
-            Tr_face_left_x(1, j, k) = rdb_conc_of_raw(hTr(1, j, k), h_before(1, j, k))
-            Tr_face_right_x(1, j, k) = rdb_conc_of_raw(hTr(1, j, k), h_before(1, j, k))
-            Tr_face_left_x(2, j, k) = rdb_conc_of_raw(hTr(1, j, k), h_before(1, j, k))
-            Tr_face_right_x(2, j, k) = rdb_conc_of_raw(hTr(2, j, k), h_before(2, j, k))
-            Tr_face_left_x(3, j, k) = rdb_conc_of_raw(hTr(2, j, k), h_before(2, j, k))
-            Tr_face_right_x(3, j, k) = rdb_conc_of_raw(hTr(2, j, k), h_before(2, j, k))
-            Tr_face_right_x(nx - 1, j, k) = rdb_conc_of_raw(hTr(nx - 1, j, k), h_before(nx - 1, j, k))
-            Tr_face_left_x(nx, j, k) = rdb_conc_of_raw(hTr(nx - 1, j, k), h_before(nx - 1, j, k))
-            Tr_face_right_x(nx, j, k) = rdb_conc_of_raw(hTr(nx, j, k), h_before(nx, j, k))
-            Tr_face_left_x(nx + 1, j, k) = rdb_conc_of_raw(hTr(nx, j, k), h_before(nx, j, k))
-            Tr_face_right_x(nx + 1, j, k) = rdb_conc_of_raw(hTr(nx, j, k), h_before(nx, j, k))
+            Tr_face_left_x(1, j, k) = c(1, j, k)
+            Tr_face_right_x(1, j, k) = c(1, j, k)
+            Tr_face_left_x(2, j, k) = c(1, j, k)
+            Tr_face_right_x(2, j, k) = c(2, j, k)
+            Tr_face_left_x(3, j, k) = c(2, j, k)
+            Tr_face_right_x(3, j, k) = c(2, j, k)
+            Tr_face_right_x(nx - 1, j, k) = c(nx - 1, j, k)
+            Tr_face_left_x(nx, j, k) = c(nx - 1, j, k)
+            Tr_face_right_x(nx, j, k) = c(nx, j, k)
+            Tr_face_left_x(nx + 1, j, k) = c(nx, j, k)
+            Tr_face_right_x(nx + 1, j, k) = c(nx, j, k)
          end do
 
          do concurrent(k=1:nz, j=1:ny, i=1:nx + 1) local(mass_x, Tr_face)
@@ -3523,14 +3525,23 @@ contains
          end do
       end if
 
-      do concurrent(k=1:nz, j=1:ny, i=1:nx)
-         hTr(i, j, k) = hTr(i, j, k) - dt* &
-                        (Tr_face_left_x(i + 1, j, k) - Tr_face_left_x(i, j, k))*iareaT(i, j)
+      ! Concentration update, c+ = c + dt*(c*div(Phi) - div(F))/h+, algebraically
+      ! (c h- - dt div F)/h+ with h+ = h- - dt div(Phi) (Griffies et al. 2020;
+      ! Adcroft & Hallberg 2006).  h+ is the UNFLOORED thickness continuity
+      ! computes from the same fluxes, so a uniform c is reproduced to round-off
+      ! whatever h does; a layer left empty (h+ <= H_DIV_EPS) keeps its c.
+      do concurrent(k=1:nz, j=1:ny, i=1:nx) local(div_m, div_f, h_new)
+         div_m = (mass_flux_x(i + 1, j, k) - mass_flux_x(i, j, k))*iareaT(i, j)
+         h_new = h_before(i, j, k) - dt*div_m
+         if (h_new > H_DIV_EPS) then
+            div_f = (Tr_face_left_x(i + 1, j, k) - Tr_face_left_x(i, j, k))*iareaT(i, j)
+            c(i, j, k) = c(i, j, k) + dt*(c(i, j, k)*div_m - div_f)/h_new
+         end if
       end do
 
       ! Budget accumulator: separate guarded loop so the prognostic update above
       ! is UNCHANGED (byte-identical when budget_adv is absent).  Mirrors the
-      ! same divergence that was just applied to hTr — the console uses it to
+      ! same divergence that was just applied to c — the console uses it to
       ! close the salt/heat conservation residual.
       if (present(budget_adv)) then
          dt_b = dt
@@ -3542,13 +3553,13 @@ contains
       end if
    end subroutine tracer_advect_zonal_one_impl
 
-   pure subroutine tracer_advect_meridional_one_impl(nx, ny, nz, dt, iareaT, wet_T, h_before, h_after, hTr, &
+   pure subroutine tracer_advect_meridional_one_impl(nx, ny, nz, dt, iareaT, wet_T, h_before, h_after, c, &
                                                      mass_flux_y, &
                                                      Tr_face_left_y, Tr_face_right_y, &
                                                      budget_adv, budget_w, h3)
       !! Meridional half of `tracer_advect_one_impl`.  Same shape
       !! as the zonal impl, applied to y.  In the split flow, `h`
-      !! here is the post-zonal-apply thickness so the Tr = hTr/h
+      !! here is the post-zonal-apply thickness so the Tr = c/h
       !! reconstruction stays consistent with what continuity used
       !! in `continuity_meridional_flux`.  `iareaT` = `inv_dy` on
       !! uniform metrics; `mass_flux_y` carries `dx_cv`.  Mirror-T at
@@ -3565,9 +3576,10 @@ contains
       real(wp), intent(in) :: h_before(nx, ny, nz)
       real(wp), intent(in) :: h_after(nx, ny, nz)
          !! The thickness continuity wrote for THIS direction (the `h⁺` of the
-         !! `h⁻ → h⁺` pair; `h_before` is the `h⁻`).  Unused while the tracer
-         !! is stored as content; the concentration form divides by it.
-      real(wp), intent(inout) :: hTr(nx, ny, nz)
+         !! `h⁻ → h⁺` pair; `h_before` is the `h⁻`).  Retained for the pair's
+         !! contract; the update divides by the UNFLOORED `h⁺` recomputed from
+         !! the fluxes (see the update loop).
+      real(wp), intent(inout) :: c(nx, ny, nz)
       real(wp), intent(in) :: mass_flux_y(nx, ny + 1, nz)
       real(wp), intent(inout) :: Tr_face_left_y(nx, ny + 1, nz)
       real(wp), intent(inout) :: Tr_face_right_y(nx, ny + 1, nz)
@@ -3583,6 +3595,7 @@ contains
          !! Absent or `.false.` ⇒ the PPM path below, textually unchanged.
 
       integer :: i, j, k
+      real(wp) :: div_m, div_f, h_new
       logical :: use_h3
       real(wp) :: Tr_m2, Tr_m1, Tr_0, Tr_p1, Tr_p2
       real(wp) :: dh_m1, dh_0, dh_p1, Tr_left, Tr_right
@@ -3603,9 +3616,9 @@ contains
                jc = j
             end if
             hc = h_before(i, jc, k)
-            Tr_0 = rdb_conc_of_raw(hTr(i, jc, k), hc)
-            Tr_m1 = ppm_mirror_h(rdb_conc_of_raw(hTr(i, jc - 1, k), h_before(i, jc - 1, k)), Tr_0, wet_T(i, jc - 1))
-            Tr_p1 = ppm_mirror_h(rdb_conc_of_raw(hTr(i, jc + 1, k), h_before(i, jc + 1, k)), Tr_0, wet_T(i, jc + 1))
+            Tr_0 = c(i, jc, k)
+            Tr_m1 = ppm_mirror_h(c(i, jc - 1, k), Tr_0, wet_T(i, jc - 1))
+            Tr_p1 = ppm_mirror_h(c(i, jc + 1, k), Tr_0, wet_T(i, jc + 1))
             wm = wet_T(i, jc - 1)*wet_T(i, jc)*wet_T(i, jc + 1)
             Tr_face_left_y(i, j, k) = ppm_h3_face_flux(Tr_m1, Tr_0, Tr_p1, wm, &
                                                        mass_y, abs(mass_y)*dt*iareaT(i, jc)/hc)
@@ -3619,7 +3632,7 @@ contains
                jc = j
             end if
             jc = max(1, min(ny, jc))
-            Tr_face_left_y(i, j, k) = mass_y*(rdb_conc_of_raw(hTr(i, jc, k), h_before(i, jc, k)))
+            Tr_face_left_y(i, j, k) = mass_y*(c(i, jc, k))
          end do
          do concurrent(k=1:nz, j=max(3, ny):ny + 1, i=1:nx) local(mass_y, jc)
             mass_y = mass_flux_y(i, j, k)
@@ -3629,17 +3642,17 @@ contains
                jc = j
             end if
             jc = max(1, min(ny, jc))
-            Tr_face_left_y(i, j, k) = mass_y*(rdb_conc_of_raw(hTr(i, jc, k), h_before(i, jc, k)))
+            Tr_face_left_y(i, j, k) = mass_y*(c(i, jc, k))
          end do
       else
          do concurrent(k=1:nz, j=3:ny - 2, i=1:nx) &
             local(Tr_m2, Tr_m1, Tr_0, Tr_p1, Tr_p2, &
                   dh_m1, dh_0, dh_p1, Tr_left, Tr_right)
-            Tr_0 = rdb_conc_of_raw(hTr(i, j, k), h_before(i, j, k))
-            Tr_m1 = ppm_mirror_h(rdb_conc_of_raw(hTr(i, j - 1, k), h_before(i, j - 1, k)), Tr_0, wet_T(i, j - 1))
-            Tr_p1 = ppm_mirror_h(rdb_conc_of_raw(hTr(i, j + 1, k), h_before(i, j + 1, k)), Tr_0, wet_T(i, j + 1))
-            Tr_m2 = ppm_mirror_h(rdb_conc_of_raw(hTr(i, j - 2, k), h_before(i, j - 2, k)), Tr_m1, wet_T(i, j - 2))
-            Tr_p2 = ppm_mirror_h(rdb_conc_of_raw(hTr(i, j + 2, k), h_before(i, j + 2, k)), Tr_p1, wet_T(i, j + 2))
+            Tr_0 = c(i, j, k)
+            Tr_m1 = ppm_mirror_h(c(i, j - 1, k), Tr_0, wet_T(i, j - 1))
+            Tr_p1 = ppm_mirror_h(c(i, j + 1, k), Tr_0, wet_T(i, j + 1))
+            Tr_m2 = ppm_mirror_h(c(i, j - 2, k), Tr_m1, wet_T(i, j - 2))
+            Tr_p2 = ppm_mirror_h(c(i, j + 2, k), Tr_p1, wet_T(i, j + 2))
             call ppm_limited_slope(Tr_m2, Tr_m1, Tr_0, dh_m1)
             call ppm_limited_slope(Tr_m1, Tr_0, Tr_p1, dh_0)
             call ppm_limited_slope(Tr_0, Tr_p1, Tr_p2, dh_p1)
@@ -3651,17 +3664,17 @@ contains
             Tr_face_left_y(i, j + 1, k) = Tr_right
          end do
          do concurrent(k=1:nz, i=1:nx)
-            Tr_face_left_y(i, 1, k) = rdb_conc_of_raw(hTr(i, 1, k), h_before(i, 1, k))
-            Tr_face_right_y(i, 1, k) = rdb_conc_of_raw(hTr(i, 1, k), h_before(i, 1, k))
-            Tr_face_left_y(i, 2, k) = rdb_conc_of_raw(hTr(i, 1, k), h_before(i, 1, k))
-            Tr_face_right_y(i, 2, k) = rdb_conc_of_raw(hTr(i, 2, k), h_before(i, 2, k))
-            Tr_face_left_y(i, 3, k) = rdb_conc_of_raw(hTr(i, 2, k), h_before(i, 2, k))
-            Tr_face_right_y(i, 3, k) = rdb_conc_of_raw(hTr(i, 2, k), h_before(i, 2, k))
-            Tr_face_right_y(i, ny - 1, k) = rdb_conc_of_raw(hTr(i, ny - 1, k), h_before(i, ny - 1, k))
-            Tr_face_left_y(i, ny, k) = rdb_conc_of_raw(hTr(i, ny - 1, k), h_before(i, ny - 1, k))
-            Tr_face_right_y(i, ny, k) = rdb_conc_of_raw(hTr(i, ny, k), h_before(i, ny, k))
-            Tr_face_left_y(i, ny + 1, k) = rdb_conc_of_raw(hTr(i, ny, k), h_before(i, ny, k))
-            Tr_face_right_y(i, ny + 1, k) = rdb_conc_of_raw(hTr(i, ny, k), h_before(i, ny, k))
+            Tr_face_left_y(i, 1, k) = c(i, 1, k)
+            Tr_face_right_y(i, 1, k) = c(i, 1, k)
+            Tr_face_left_y(i, 2, k) = c(i, 1, k)
+            Tr_face_right_y(i, 2, k) = c(i, 2, k)
+            Tr_face_left_y(i, 3, k) = c(i, 2, k)
+            Tr_face_right_y(i, 3, k) = c(i, 2, k)
+            Tr_face_right_y(i, ny - 1, k) = c(i, ny - 1, k)
+            Tr_face_left_y(i, ny, k) = c(i, ny - 1, k)
+            Tr_face_right_y(i, ny, k) = c(i, ny, k)
+            Tr_face_left_y(i, ny + 1, k) = c(i, ny, k)
+            Tr_face_right_y(i, ny + 1, k) = c(i, ny, k)
          end do
 
          do concurrent(k=1:nz, j=1:ny + 1, i=1:nx) local(mass_y, Tr_face)
@@ -3675,9 +3688,14 @@ contains
          end do
       end if
 
-      do concurrent(k=1:nz, j=1:ny, i=1:nx)
-         hTr(i, j, k) = hTr(i, j, k) - dt* &
-                        (Tr_face_left_y(i, j + 1, k) - Tr_face_left_y(i, j, k))*iareaT(i, j)
+      ! Concentration update; see the zonal half.
+      do concurrent(k=1:nz, j=1:ny, i=1:nx) local(div_m, div_f, h_new)
+         div_m = (mass_flux_y(i, j + 1, k) - mass_flux_y(i, j, k))*iareaT(i, j)
+         h_new = h_before(i, j, k) - dt*div_m
+         if (h_new > H_DIV_EPS) then
+            div_f = (Tr_face_left_y(i, j + 1, k) - Tr_face_left_y(i, j, k))*iareaT(i, j)
+            c(i, j, k) = c(i, j, k) + dt*(c(i, j, k)*div_m - div_f)/h_new
+         end if
       end do
 
       ! Budget accumulator: same guarded pattern as the zonal half.
@@ -3751,7 +3769,7 @@ contains
             grid%nx_total, grid%ny_total, ms%nz_ml, &
             dt, metrics%iareaT, metrics%wet_T, &
             h_before, h_after, &
-            ms%tracers(it)%hTr, &
+            ms%tracers(it)%c, &
             ms%mass_flux_x_layer, &
             ms%mass_flux_y_layer, &
             this%h_face_left_x%data, &
@@ -3761,7 +3779,7 @@ contains
       end do
    end subroutine tracer_advect
 
-   pure subroutine tracer_advect_one_impl(nx, ny, nz, dt, iareaT, wet_T, h_before, h_after, hTr, &
+   pure subroutine tracer_advect_one_impl(nx, ny, nz, dt, iareaT, wet_T, h_before, h_after, c, &
                                           mass_flux_x, mass_flux_y, &
                                           Tr_face_left_x, Tr_face_right_x, &
                                           Tr_face_left_y, Tr_face_right_y)
@@ -3771,13 +3789,13 @@ contains
       !! array-of-derived-types registry.
       !!
       !! Three passes per direction:
-      !!   1. PPM reconstruction on Tr = hTr/h (Colella-Woodward
+      !!   1. PPM reconstruction on Tr = c/h (Colella-Woodward
       !!      monotonic limiter) — same helpers as continuity-PPM.
       !!      Stores left/right face states in the scratch buffers.
       !!   2. Upwind pick using mass_flux sign — overwrites the same
       !!      scratch buffer with mass_flux * Tr_face (the tracer
       !!      mass flux at each face).
-      !!   3. Flux divergence + forward-Euler update of hTr.
+      !!   3. Flux divergence + forward-Euler update of c.
       !!
       !! Wall faces are gated by mass_flux (= 0 at walls from
       !! continuity), so tracer flux through walls is identically
@@ -3791,7 +3809,7 @@ contains
       real(wp), intent(in) :: h_after(nx, ny, nz)
          !! Thickness the continuity update wrote (`h⁺`); unused while the
          !! tracer is stored as content.
-      real(wp), intent(inout) :: hTr(nx, ny, nz)
+      real(wp), intent(inout) :: c(nx, ny, nz)
       real(wp), intent(in) :: mass_flux_x(nx + 1, ny, nz)
       real(wp), intent(in) :: mass_flux_y(nx, ny + 1, nz)
       real(wp), intent(inout) :: Tr_face_left_x(nx + 1, ny, nz)
@@ -3800,6 +3818,7 @@ contains
       real(wp), intent(inout) :: Tr_face_right_y(nx, ny + 1, nz)
 
       integer :: i, j, k
+      real(wp) :: div_m, div_f, h_new
       real(wp) :: Tr_m2, Tr_m1, Tr_0, Tr_p1, Tr_p2
       real(wp) :: dh_m1, dh_0, dh_p1, Tr_left, Tr_right
       real(wp) :: mass_x, mass_y, Tr_face
@@ -3810,11 +3829,11 @@ contains
       do concurrent(k=1:nz, j=1:ny, i=3:nx - 2) &
          local(Tr_m2, Tr_m1, Tr_0, Tr_p1, Tr_p2, &
                dh_m1, dh_0, dh_p1, Tr_left, Tr_right)
-         Tr_0 = rdb_conc_of_raw(hTr(i, j, k), h_before(i, j, k))
-         Tr_m1 = ppm_mirror_h(rdb_conc_of_raw(hTr(i - 1, j, k), h_before(i - 1, j, k)), Tr_0, wet_T(i - 1, j))
-         Tr_p1 = ppm_mirror_h(rdb_conc_of_raw(hTr(i + 1, j, k), h_before(i + 1, j, k)), Tr_0, wet_T(i + 1, j))
-         Tr_m2 = ppm_mirror_h(rdb_conc_of_raw(hTr(i - 2, j, k), h_before(i - 2, j, k)), Tr_m1, wet_T(i - 2, j))
-         Tr_p2 = ppm_mirror_h(rdb_conc_of_raw(hTr(i + 2, j, k), h_before(i + 2, j, k)), Tr_p1, wet_T(i + 2, j))
+         Tr_0 = c(i, j, k)
+         Tr_m1 = ppm_mirror_h(c(i - 1, j, k), Tr_0, wet_T(i - 1, j))
+         Tr_p1 = ppm_mirror_h(c(i + 1, j, k), Tr_0, wet_T(i + 1, j))
+         Tr_m2 = ppm_mirror_h(c(i - 2, j, k), Tr_m1, wet_T(i - 2, j))
+         Tr_p2 = ppm_mirror_h(c(i + 2, j, k), Tr_p1, wet_T(i + 2, j))
          call ppm_limited_slope(Tr_m2, Tr_m1, Tr_0, dh_m1)
          call ppm_limited_slope(Tr_m1, Tr_0, Tr_p1, dh_0)
          call ppm_limited_slope(Tr_0, Tr_p1, Tr_p2, dh_p1)
@@ -3830,20 +3849,20 @@ contains
       ! at i=1 and i=nx+1 walls anyway, so the wall faces' Tr value
       ! doesn't enter the divergence.
       do concurrent(k=1:nz, j=1:ny)
-         Tr_face_left_x(1, j, k) = rdb_conc_of_raw(hTr(1, j, k), h_before(1, j, k))
-         Tr_face_right_x(1, j, k) = rdb_conc_of_raw(hTr(1, j, k), h_before(1, j, k))
-         Tr_face_left_x(2, j, k) = rdb_conc_of_raw(hTr(1, j, k), h_before(1, j, k))
-         Tr_face_right_x(2, j, k) = rdb_conc_of_raw(hTr(2, j, k), h_before(2, j, k))
+         Tr_face_left_x(1, j, k) = c(1, j, k)
+         Tr_face_right_x(1, j, k) = c(1, j, k)
+         Tr_face_left_x(2, j, k) = c(1, j, k)
+         Tr_face_right_x(2, j, k) = c(2, j, k)
          ! Face 3: cell 2's 5-point stencil is short, so its right
          ! edge falls back to 1st order — match continuity's fix.
-         Tr_face_left_x(3, j, k) = rdb_conc_of_raw(hTr(2, j, k), h_before(2, j, k))
-         Tr_face_right_x(3, j, k) = rdb_conc_of_raw(hTr(2, j, k), h_before(2, j, k))
+         Tr_face_left_x(3, j, k) = c(2, j, k)
+         Tr_face_right_x(3, j, k) = c(2, j, k)
          ! Face nx-1: mirror of face 3.
-         Tr_face_right_x(nx - 1, j, k) = rdb_conc_of_raw(hTr(nx - 1, j, k), h_before(nx - 1, j, k))
-         Tr_face_left_x(nx, j, k) = rdb_conc_of_raw(hTr(nx - 1, j, k), h_before(nx - 1, j, k))
-         Tr_face_right_x(nx, j, k) = rdb_conc_of_raw(hTr(nx, j, k), h_before(nx, j, k))
-         Tr_face_left_x(nx + 1, j, k) = rdb_conc_of_raw(hTr(nx, j, k), h_before(nx, j, k))
-         Tr_face_right_x(nx + 1, j, k) = rdb_conc_of_raw(hTr(nx, j, k), h_before(nx, j, k))
+         Tr_face_right_x(nx - 1, j, k) = c(nx - 1, j, k)
+         Tr_face_left_x(nx, j, k) = c(nx - 1, j, k)
+         Tr_face_right_x(nx, j, k) = c(nx, j, k)
+         Tr_face_left_x(nx + 1, j, k) = c(nx, j, k)
+         Tr_face_right_x(nx + 1, j, k) = c(nx, j, k)
       end do
 
       ! Upwind pick at east faces -> overwrite Tr_face_left_x with
@@ -3862,11 +3881,11 @@ contains
       do concurrent(k=1:nz, j=3:ny - 2, i=1:nx) &
          local(Tr_m2, Tr_m1, Tr_0, Tr_p1, Tr_p2, &
                dh_m1, dh_0, dh_p1, Tr_left, Tr_right)
-         Tr_0 = rdb_conc_of_raw(hTr(i, j, k), h_before(i, j, k))
-         Tr_m1 = ppm_mirror_h(rdb_conc_of_raw(hTr(i, j - 1, k), h_before(i, j - 1, k)), Tr_0, wet_T(i, j - 1))
-         Tr_p1 = ppm_mirror_h(rdb_conc_of_raw(hTr(i, j + 1, k), h_before(i, j + 1, k)), Tr_0, wet_T(i, j + 1))
-         Tr_m2 = ppm_mirror_h(rdb_conc_of_raw(hTr(i, j - 2, k), h_before(i, j - 2, k)), Tr_m1, wet_T(i, j - 2))
-         Tr_p2 = ppm_mirror_h(rdb_conc_of_raw(hTr(i, j + 2, k), h_before(i, j + 2, k)), Tr_p1, wet_T(i, j + 2))
+         Tr_0 = c(i, j, k)
+         Tr_m1 = ppm_mirror_h(c(i, j - 1, k), Tr_0, wet_T(i, j - 1))
+         Tr_p1 = ppm_mirror_h(c(i, j + 1, k), Tr_0, wet_T(i, j + 1))
+         Tr_m2 = ppm_mirror_h(c(i, j - 2, k), Tr_m1, wet_T(i, j - 2))
+         Tr_p2 = ppm_mirror_h(c(i, j + 2, k), Tr_p1, wet_T(i, j + 2))
          call ppm_limited_slope(Tr_m2, Tr_m1, Tr_0, dh_m1)
          call ppm_limited_slope(Tr_m1, Tr_0, Tr_p1, dh_0)
          call ppm_limited_slope(Tr_0, Tr_p1, Tr_p2, dh_p1)
@@ -3878,17 +3897,17 @@ contains
          Tr_face_left_y(i, j + 1, k) = Tr_right
       end do
       do concurrent(k=1:nz, i=1:nx)
-         Tr_face_left_y(i, 1, k) = rdb_conc_of_raw(hTr(i, 1, k), h_before(i, 1, k))
-         Tr_face_right_y(i, 1, k) = rdb_conc_of_raw(hTr(i, 1, k), h_before(i, 1, k))
-         Tr_face_left_y(i, 2, k) = rdb_conc_of_raw(hTr(i, 1, k), h_before(i, 1, k))
-         Tr_face_right_y(i, 2, k) = rdb_conc_of_raw(hTr(i, 2, k), h_before(i, 2, k))
-         Tr_face_left_y(i, 3, k) = rdb_conc_of_raw(hTr(i, 2, k), h_before(i, 2, k))
-         Tr_face_right_y(i, 3, k) = rdb_conc_of_raw(hTr(i, 2, k), h_before(i, 2, k))
-         Tr_face_right_y(i, ny - 1, k) = rdb_conc_of_raw(hTr(i, ny - 1, k), h_before(i, ny - 1, k))
-         Tr_face_left_y(i, ny, k) = rdb_conc_of_raw(hTr(i, ny - 1, k), h_before(i, ny - 1, k))
-         Tr_face_right_y(i, ny, k) = rdb_conc_of_raw(hTr(i, ny, k), h_before(i, ny, k))
-         Tr_face_left_y(i, ny + 1, k) = rdb_conc_of_raw(hTr(i, ny, k), h_before(i, ny, k))
-         Tr_face_right_y(i, ny + 1, k) = rdb_conc_of_raw(hTr(i, ny, k), h_before(i, ny, k))
+         Tr_face_left_y(i, 1, k) = c(i, 1, k)
+         Tr_face_right_y(i, 1, k) = c(i, 1, k)
+         Tr_face_left_y(i, 2, k) = c(i, 1, k)
+         Tr_face_right_y(i, 2, k) = c(i, 2, k)
+         Tr_face_left_y(i, 3, k) = c(i, 2, k)
+         Tr_face_right_y(i, 3, k) = c(i, 2, k)
+         Tr_face_right_y(i, ny - 1, k) = c(i, ny - 1, k)
+         Tr_face_left_y(i, ny, k) = c(i, ny - 1, k)
+         Tr_face_right_y(i, ny, k) = c(i, ny, k)
+         Tr_face_left_y(i, ny + 1, k) = c(i, ny, k)
+         Tr_face_right_y(i, ny + 1, k) = c(i, ny, k)
       end do
 
       ! Upwind pick at north faces
@@ -3902,11 +3921,16 @@ contains
          Tr_face_left_y(i, j, k) = mass_y*Tr_face
       end do
 
-      ! ===== Apply: forward-Euler hTr update (transport div · iareaT) =====
-      do concurrent(k=1:nz, j=1:ny, i=1:nx)
-         hTr(i, j, k) = hTr(i, j, k) - dt*( &
-                        (Tr_face_left_x(i + 1, j, k) - Tr_face_left_x(i, j, k)) + &
-                        (Tr_face_left_y(i, j + 1, k) - Tr_face_left_y(i, j, k)))*iareaT(i, j)
+      ! ===== Apply: forward-Euler c update (transport div · iareaT) =====
+      do concurrent(k=1:nz, j=1:ny, i=1:nx) local(div_m, div_f, h_new)
+         div_m = ((mass_flux_x(i + 1, j, k) - mass_flux_x(i, j, k)) + &
+                  (mass_flux_y(i, j + 1, k) - mass_flux_y(i, j, k)))*iareaT(i, j)
+         h_new = h_before(i, j, k) - dt*div_m
+         if (h_new > H_DIV_EPS) then
+            div_f = ((Tr_face_left_x(i + 1, j, k) - Tr_face_left_x(i, j, k)) + &
+                     (Tr_face_left_y(i, j + 1, k) - Tr_face_left_y(i, j, k)))*iareaT(i, j)
+            c(i, j, k) = c(i, j, k) + dt*(c(i, j, k)*div_m - div_f)/h_new
+         end if
       end do
    end subroutine tracer_advect_one_impl
 
@@ -4134,7 +4158,7 @@ contains
       !!
       !! Spends the accumulated face transports `this%uhtr/vhtr` (built
       !! over `ratio` outer steps in `TR_MODE_ACCUMULATE`) onto the
-      !! frozen tracer mass `ms%tracers(:)%hTr` using a fixed-budget
+      !! frozen tracer mass `ms%tracers(:)%c` using a fixed-budget
       !! Colella-Woodward swept-average PPM sub-cycle (Adcroft &
       !! Hallberg 2006; MOM6 ADVECT_PPM).  Conservation is structural:
       !!
@@ -4284,9 +4308,9 @@ contains
       ! tracer's hTr once here so pass 1 sees the same periodic/fold ghosts
       ! the later passes do.  No-op on non-periodic walls (bit-identical).
       do it = 1, size(ms%tracers)
-         if (.not. allocated(ms%tracers(it)%hTr)) cycle
+         if (.not. allocated(ms%tracers(it)%c)) cycle
          if (.not. ms%tracers(it)%do_horizontal_advection) cycle
-         call drain_wrap_centre(ms%tracers(it)%hTr, nx, ny, nz, nx_phys, ny_phys, &
+         call drain_wrap_centre(ms%tracers(it)%c, nx, ny, nz, nx_phys, ny_phys, &
                                 nghost, per_x, per_y, fold_n)
       end do
 
@@ -4343,19 +4367,19 @@ contains
          call drain_wrap_face_x(this%uhh_x, nx, ny, nz, nx_phys, ny_phys, nghost, &
                                 per_x, per_y, fold_n, skip_halo=.true.)
          do it = 1, size(ms%tracers)
-            if (.not. allocated(ms%tracers(it)%hTr)) cycle
+            if (.not. allocated(ms%tracers(it)%c)) cycle
             if (.not. ms%tracers(it)%do_horizontal_advection) cycle
             if (this%tracer_h3) then
                ! ppm_h3: Huynh edges + CW84 limiter on Tr = hTr/hprev; uhh is
                ! a volume so the flux below is a tracer volume.
-               call drain_fill_conc(nx, ny, nz, ms%tracers(it)%hTr, this%hprev_work, this%tr_work)
+               call drain_fill_conc(nx, ny, nz, ms%tracers(it)%c, this%hprev_work, this%tr_work)
                call drain_wrap_centre(this%tr_work, nx, ny, nz, nx_phys, ny_phys, nghost, &
                                       per_x, per_y, fold_n, skip_halo=.true.)
                call drain_swept_flux_x_h3(nx, ny, nz, metrics%areaT, this%uhh_x, &
                                           this%hprev_work, this%tr_work, metrics%wet_T, &
                                           this%tr_flux_x)
             else if (this%tracer_recon == TRACER_RECON_PPM) then
-               call drain_parabola_x(nx, ny, nz, metrics%wet_T, ms%tracers(it)%hTr, this%hprev_work, &
+               call drain_parabola_x(nx, ny, nz, metrics%wet_T, ms%tracers(it)%c, this%hprev_work, &
                                      this%tr_work, this%pal, this%par, this%pa6)
                ! Wrap the parabola coefficients so a seam-face donor that lands
                ! in a ghost column carries the SAME (full-PPM) reconstruction as
@@ -4380,7 +4404,7 @@ contains
                ! stencils read consistent ghosts (the WENO reach is wider
                ! than PPM's — the wrap must cover the widest rung), then
                ! evaluate the swept face flux directly from Tr.
-               call drain_fill_conc(nx, ny, nz, ms%tracers(it)%hTr, this%hprev_work, this%tr_work)
+               call drain_fill_conc(nx, ny, nz, ms%tracers(it)%c, this%hprev_work, this%tr_work)
                call drain_wrap_centre(this%tr_work, nx, ny, nz, nx_phys, ny_phys, nghost, &
                                       per_x, per_y, fold_n, skip_halo=.true.)
                call drain_swept_flux_x_weno(nx, ny, nz, nghost, open_w, open_e, metrics%areaT, &
@@ -4390,17 +4414,17 @@ contains
             select case (ms%tracers(it)%budget_id)
             case (TRACER_BUDGET_HEAT)
                call drain_update_tracer_x_budget(nx, ny, nz, metrics%iareaT, this%tr_flux_x, &
-                                                 post_w, &
-                                                 ms%tracers(it)%hTr, ms%heat_budget_horiz_adv)
+                                                 this%uhh_x, this%hprev_work, post_w, &
+                                                 ms%tracers(it)%c, ms%heat_budget_horiz_adv)
             case (TRACER_BUDGET_SALT)
                call drain_update_tracer_x_budget(nx, ny, nz, metrics%iareaT, this%tr_flux_x, &
-                                                 post_w, &
-                                                 ms%tracers(it)%hTr, ms%salt_budget_horiz_adv)
+                                                 this%uhh_x, this%hprev_work, post_w, &
+                                                 ms%tracers(it)%c, ms%salt_budget_horiz_adv)
             case default
                call drain_update_tracer_x(nx, ny, nz, metrics%iareaT, this%tr_flux_x, &
-                                          ms%tracers(it)%hTr)
+                                          this%uhh_x, this%hprev_work, ms%tracers(it)%c)
             end select
-            call drain_wrap_centre(ms%tracers(it)%hTr, nx, ny, nz, nx_phys, ny_phys, &
+            call drain_wrap_centre(ms%tracers(it)%c, nx, ny, nz, nx_phys, ny_phys, &
                                    nghost, per_x, per_y, fold_n)
          end do
          ! Advance the (shared) thickness + remaining transport once.
@@ -4418,19 +4442,19 @@ contains
          call drain_wrap_face_y(this%uhh_y, nx, ny, nz, nx_phys, ny_phys, nghost, &
                                 per_x, per_y, fold_n, skip_halo=.true.)
          do it = 1, size(ms%tracers)
-            if (.not. allocated(ms%tracers(it)%hTr)) cycle
+            if (.not. allocated(ms%tracers(it)%c)) cycle
             if (.not. ms%tracers(it)%do_horizontal_advection) cycle
             if (this%tracer_h3) then
                ! ppm_h3: Huynh edges + CW84 limiter on Tr = hTr/hprev; uhh is
                ! a volume so the flux below is a tracer volume.
-               call drain_fill_conc(nx, ny, nz, ms%tracers(it)%hTr, this%hprev_work, this%tr_work)
+               call drain_fill_conc(nx, ny, nz, ms%tracers(it)%c, this%hprev_work, this%tr_work)
                call drain_wrap_centre(this%tr_work, nx, ny, nz, nx_phys, ny_phys, nghost, &
                                       per_x, per_y, fold_n, skip_halo=.true.)
                call drain_swept_flux_y_h3(nx, ny, nz, metrics%areaT, this%uhh_y, &
                                           this%hprev_work, this%tr_work, metrics%wet_T, &
                                           this%tr_flux_y)
             else if (this%tracer_recon == TRACER_RECON_PPM) then
-               call drain_parabola_y(nx, ny, nz, metrics%wet_T, ms%tracers(it)%hTr, this%hprev_work, &
+               call drain_parabola_y(nx, ny, nz, metrics%wet_T, ms%tracers(it)%c, this%hprev_work, &
                                      this%tr_work, this%pal, this%par, this%pa6)
                ! Wrap the meridional parabola coefficients (see the zonal note).
                ! Batch the 3 independent parabola-coeff wraps async on queue 1,
@@ -4447,7 +4471,7 @@ contains
                                        this%tr_flux_y)
             else
                ! Q6 WENO drain (meridional; see the zonal branch note).
-               call drain_fill_conc(nx, ny, nz, ms%tracers(it)%hTr, this%hprev_work, this%tr_work)
+               call drain_fill_conc(nx, ny, nz, ms%tracers(it)%c, this%hprev_work, this%tr_work)
                call drain_wrap_centre(this%tr_work, nx, ny, nz, nx_phys, ny_phys, nghost, &
                                       per_x, per_y, fold_n, skip_halo=.true.)
                call drain_swept_flux_y_weno(nx, ny, nz, nghost, open_s, open_n, metrics%areaT, &
@@ -4457,17 +4481,17 @@ contains
             select case (ms%tracers(it)%budget_id)
             case (TRACER_BUDGET_HEAT)
                call drain_update_tracer_y_budget(nx, ny, nz, metrics%iareaT, this%tr_flux_y, &
-                                                 post_w, &
-                                                 ms%tracers(it)%hTr, ms%heat_budget_horiz_adv)
+                                                 this%uhh_y, this%hprev_work, post_w, &
+                                                 ms%tracers(it)%c, ms%heat_budget_horiz_adv)
             case (TRACER_BUDGET_SALT)
                call drain_update_tracer_y_budget(nx, ny, nz, metrics%iareaT, this%tr_flux_y, &
-                                                 post_w, &
-                                                 ms%tracers(it)%hTr, ms%salt_budget_horiz_adv)
+                                                 this%uhh_y, this%hprev_work, post_w, &
+                                                 ms%tracers(it)%c, ms%salt_budget_horiz_adv)
             case default
                call drain_update_tracer_y(nx, ny, nz, metrics%iareaT, this%tr_flux_y, &
-                                          ms%tracers(it)%hTr)
+                                          this%uhh_y, this%hprev_work, ms%tracers(it)%c)
             end select
-            call drain_wrap_centre(ms%tracers(it)%hTr, nx, ny, nz, nx_phys, ny_phys, &
+            call drain_wrap_centre(ms%tracers(it)%c, nx, ny, nz, nx_phys, ny_phys, &
                                    nghost, per_x, per_y, fold_n)
          end do
          call drain_update_h_y(nx, ny, nz, metrics%iareaT, this%uhh_y, this%hprev_work)
@@ -4722,17 +4746,13 @@ contains
    end subroutine tracer_window_latch
 
    pure subroutine tracer_window_hold(this, ms, nx, ny, nz, w)
-      !! THE windowed-advection HOLD (step 2 of 2 of a stage; the latch that
-      !! fills `hprev_work` with the pre-stage thickness is step 1).  The
-      !! horizontal tracer advect is deferred to the end-of-window drain, so
-      !! `hTr` must not move while `h_layer` does: re-weight every
-      !! horizontally-advected tracer's content from the pre-stage thickness
-      !! `this%hprev_work` onto the current `ms%h_layer`, holding the
-      !! CONCENTRATION fixed.  Heat/salt record the content change in their
-      !! horizontal-advection budget with weight `w` so the console closes at
-      !! every report.  The only place the hold is applied; with
-      !! `tracer_window_release` it is the whole of the drain's hold/rescale
-      !! machinery, which a concentration-valued prognostic does not need.
+      !! THE windowed-advection HOLD (step 2 of a stage; the latch that fills
+      !! `hprev_work` with the pre-stage thickness is step 1).  The horizontal
+      !! tracer advect is deferred to the end-of-window drain, so `c` does not
+      !! move while `h_layer` does.  Heat/salt record the console-total change
+      !! `Σ c·δh` in their horizontal-advection budget with weight `w`, so the
+      !! console closes at every report (`drain_hold_budget`).  Tracers with no
+      !! budget slot need nothing: there is no content to rescale.
       type(continuity_t), intent(inout) :: this
       type(multilayer_state_t), intent(inout) :: ms
       integer, intent(in) :: nx, ny, nz
@@ -4742,29 +4762,26 @@ contains
 
       if (.not. allocated(ms%tracers)) return
       do it = 1, size(ms%tracers)
-         if (.not. allocated(ms%tracers(it)%hTr)) cycle
+         if (.not. allocated(ms%tracers(it)%c)) cycle
          if (.not. ms%tracers(it)%do_horizontal_advection) cycle
          select case (ms%tracers(it)%budget_id)
          case (TRACER_BUDGET_HEAT)
-            call drain_rescale_hTr_budget(nx, ny, nz, ms%h_layer, this%hprev_work, &
-                                          w, ms%tracers(it)%hTr, ms%heat_budget_horiz_adv)
+            call drain_hold_budget(nx, ny, nz, ms%h_layer, this%hprev_work, &
+                                   w, ms%tracers(it)%c, ms%heat_budget_horiz_adv)
          case (TRACER_BUDGET_SALT)
-            call drain_rescale_hTr_budget(nx, ny, nz, ms%h_layer, this%hprev_work, &
-                                          w, ms%tracers(it)%hTr, ms%salt_budget_horiz_adv)
+            call drain_hold_budget(nx, ny, nz, ms%h_layer, this%hprev_work, &
+                                   w, ms%tracers(it)%c, ms%salt_budget_horiz_adv)
          case default
-            call drain_rescale_hTr(nx, ny, nz, ms%h_layer, this%hprev_work, &
-                                   ms%tracers(it)%hTr)
          end select
       end do
    end subroutine tracer_window_hold
 
    pure subroutine tracer_window_release(this, ms, nx, ny, nz, w)
-      !! THE windowed-advection RELEASE: the arithmetic inverse of the
-      !! accumulated `tracer_window_hold` calls.  `hTr` carries the frozen
-      !! window-start concentration weighted by the CURRENT (window-end)
-      !! thickness; the drain needs it weighted by the window-START thickness
-      !! `this%h_win_start`.  Budget weight `w` is the post-`rk2_average` one,
-      !! so hold and release cancel exactly in the accumulator.
+      !! THE windowed-advection RELEASE: the budget inverse of the accumulated
+      !! `tracer_window_hold` calls.  The drain consumes the frozen
+      !! concentration against the window-START thickness `this%h_win_start`,
+      !! so the accumulated `Σ c·δh` records are cancelled here.  Budget weight
+      !! `w` is the post-`rk2_average` one, so hold and release cancel exactly.
       type(continuity_t), intent(inout) :: this
       type(multilayer_state_t), intent(inout) :: ms
       integer, intent(in) :: nx, ny, nz
@@ -4774,73 +4791,51 @@ contains
 
       if (.not. allocated(ms%tracers)) return
       do it = 1, size(ms%tracers)
-         if (.not. allocated(ms%tracers(it)%hTr)) cycle
+         if (.not. allocated(ms%tracers(it)%c)) cycle
          if (.not. ms%tracers(it)%do_horizontal_advection) cycle
          select case (ms%tracers(it)%budget_id)
          case (TRACER_BUDGET_HEAT)
-            call drain_rescale_hTr_budget(nx, ny, nz, this%h_win_start, ms%h_layer, &
-                                          w, ms%tracers(it)%hTr, ms%heat_budget_horiz_adv)
+            call drain_hold_budget(nx, ny, nz, this%h_win_start, ms%h_layer, &
+                                   w, ms%tracers(it)%c, ms%heat_budget_horiz_adv)
          case (TRACER_BUDGET_SALT)
-            call drain_rescale_hTr_budget(nx, ny, nz, this%h_win_start, ms%h_layer, &
-                                          w, ms%tracers(it)%hTr, ms%salt_budget_horiz_adv)
+            call drain_hold_budget(nx, ny, nz, this%h_win_start, ms%h_layer, &
+                                   w, ms%tracers(it)%c, ms%salt_budget_horiz_adv)
          case default
-            call drain_rescale_hTr(nx, ny, nz, this%h_win_start, ms%h_layer, &
-                                   ms%tracers(it)%hTr)
          end select
       end do
    end subroutine tracer_window_release
 
-   pure subroutine drain_rescale_hTr(nx, ny, nz, h_new, h_old, hTr)
-      !! Re-weight a tracer's thickness-weighted content onto a new layer
-      !! thickness, holding the CONCENTRATION fixed:
+   pure subroutine drain_hold_budget(nx, ny, nz, h_new, h_old, w, c, budget_adv)
+      !! Closed-budget record of a concentration HOLD.  The windowed
+      !! (`dt_tracer_advect_ratio > 1`) path defers the horizontal tracer advect
+      !! to the end-of-window drain, so `c` is simply NOT touched while `h`
+      !! keeps moving (Griffies et al. 2020: the concentration is frozen, as
+      !! in the MOM6 predictor-corrector).  The console total `Σ h·c` does move
+      !! by `Σ c·δh` over a stage though, and that has to be recorded or the
+      !! closed budget is only valid on window boundaries and wobbles at every
+      !! mid-window report:
       !!
-      !!   hTr := hTr · h_new / h_old      (⇒ hTr/h_new ≡ hTr/h_old)
+      !!   budget_adv += w·(c·h_new - c·h_old)
       !!
-      !! Used by the windowed (`dt_tracer_advect_ratio > 1`) path, whose
-      !! prognostic is the CONTENT `hTr` while MOM6's is the CONCENTRATION
-      !! `Tr`.  Freezing a content across a window over which continuity
-      !! keeps advancing `h` silently corrupts every consumer that derives
-      !! `T = hTr/h_layer` — the EOS above all — by `δT/T = −δh/h`.  Freezing
-      !! a concentration (what MOM6 does) does not.  See
-      !! `continuity_tracer_step_split` / `continuity_tracer_drain`.
-      integer, intent(in) :: nx, ny, nz
-      real(wp), intent(in) :: h_new(nx, ny, nz), h_old(nx, ny, nz)
-      real(wp), intent(inout) :: hTr(nx, ny, nz)
-      integer :: i, j, k
-      do concurrent(k=1:nz, j=1:ny, i=1:nx)
-         hTr(i, j, k) = hTr(i, j, k)*h_new(i, j, k)/max(h_old(i, j, k), DRAIN_MIN_H)
-      end do
-   end subroutine drain_rescale_hTr
-
-   pure subroutine drain_rescale_hTr_budget(nx, ny, nz, h_new, h_old, w, hTr, budget_adv)
-      !! `drain_rescale_hTr` + the closed-budget fill.  The concentration
-      !! hold / un-hold pair is NOT content-conserving cell by cell --
-      !! `hTr := Tr·h` moves `Σ areaT·hTr` by `Σ areaT·Tr·δh`, which is only
-      !! zero when `Tr` is uniform -- so both halves have to be recorded or
-      !! the closed budget is only valid on window boundaries and wobbles at
-      !! every mid-window report.  Recording both makes them cancel exactly,
-      !! since the un-hold is the arithmetic inverse of the accumulated hold.
-      !!
-      !! `w` is `DRAIN_BUDGET_IN_STAGE_WEIGHT` for the per-stage hold inside
-      !! `continuity_tracer_step_split` and
-      !! `DRAIN_BUDGET_POST_AVERAGE_WEIGHT` for the un-hold in
-      !! `continuity_tracer_drain` (which runs after `rk2_average`).
-      !!
-      !! The `hTr` expression is character-for-character the budget-free
-      !! twin's, so the prognostic path stays bit-identical.
+      !! The un-hold at the drain calls this with the thicknesses swapped, so
+      !! hold and release cancel exactly in the accumulator.  `w` is
+      !! `DRAIN_BUDGET_IN_STAGE_WEIGHT` for the per-stage hold inside
+      !! `continuity_tracer_step_split` and `DRAIN_BUDGET_POST_AVERAGE_WEIGHT`
+      !! for the release in `continuity_tracer_drain` (after `rk2_average`).
+      !! Each product is its own statement so the two halves round alike.
       integer, intent(in) :: nx, ny, nz
       real(wp), intent(in) :: h_new(nx, ny, nz), h_old(nx, ny, nz)
       real(wp), intent(in) :: w
-      real(wp), intent(inout) :: hTr(nx, ny, nz)
+      real(wp), intent(in) :: c(nx, ny, nz)
       real(wp), intent(inout) :: budget_adv(nx, ny, nz)
       integer :: i, j, k
-      real(wp) :: hnew_tr
-      do concurrent(k=1:nz, j=1:ny, i=1:nx) local(hnew_tr)
-         hnew_tr = hTr(i, j, k)*h_new(i, j, k)/max(h_old(i, j, k), DRAIN_MIN_H)
-         budget_adv(i, j, k) = budget_adv(i, j, k) + w*(hnew_tr - hTr(i, j, k))
-         hTr(i, j, k) = hnew_tr
+      real(wp) :: p_new, p_old
+      do concurrent(k=1:nz, j=1:ny, i=1:nx) local(p_new, p_old)
+         p_new = c(i, j, k)*h_new(i, j, k)
+         p_old = c(i, j, k)*h_old(i, j, k)
+         budget_adv(i, j, k) = budget_adv(i, j, k) + w*(p_new - p_old)
       end do
-   end subroutine drain_rescale_hTr_budget
+   end subroutine drain_hold_budget
 
    pure subroutine drain_copy_3d(n1, n2, n3, src, dst)
       !! dst = src (explicit-shape device copy).
@@ -4985,7 +4980,7 @@ contains
 
       ! Concentration field (guard zero thickness).
       do concurrent(k=1:nz, j=1:ny, i=1:nx)
-         tr(i, j, k) = rdb_conc_of_floor(hTr(i, j, k), hprev(i, j, k), DRAIN_MIN_H)
+         tr(i, j, k) = hTr(i, j, k)
       end do
       ! Interior PPM parabola.
       do concurrent(k=1:nz, j=1:ny, i=3:nx - 2) &
@@ -5030,7 +5025,7 @@ contains
       real(wp) :: dh_m1, dh_0, dh_p1, Tr_left, Tr_right
 
       do concurrent(k=1:nz, j=1:ny, i=1:nx)
-         tr(i, j, k) = rdb_conc_of_floor(hTr(i, j, k), hprev(i, j, k), DRAIN_MIN_H)
+         tr(i, j, k) = hTr(i, j, k)
       end do
       do concurrent(k=1:nz, j=3:ny - 2, i=1:nx) &
          local(Tr_m2, Tr_m1, Tr_0, Tr_p1, Tr_p2, dh_m1, dh_0, dh_p1, Tr_left, Tr_right)
@@ -5188,7 +5183,7 @@ contains
       real(wp), intent(inout) :: tr(nx, ny, nz)
       integer :: i, j, k
       do concurrent(k=1:nz, j=1:ny, i=1:nx)
-         tr(i, j, k) = rdb_conc_of_floor(hTr(i, j, k), hprev(i, j, k), DRAIN_MIN_H)
+         tr(i, j, k) = hTr(i, j, k)
       end do
    end subroutine drain_fill_conc
 
@@ -5473,71 +5468,105 @@ contains
       end do
    end subroutine drain_swept_flux_y_h3
 
-   pure subroutine drain_update_tracer_x(nx, ny, nz, iareaT, F, hTr)
-      !! hTr(i) -= (F(i+1) - F(i))·iareaT  (zonal flux divergence; dt is
-      !! already baked into uhh⊂uhtr, so no dt here).
+   pure subroutine drain_update_tracer_x(nx, ny, nz, iareaT, F, uhh, hprev, c)
+      !! Concentration update of one drain sub-pass:
+      !! `c+ = (c·hprev - div F)/hprev+`, `hprev+ = hprev - div uhh`, written
+      !! as `c + (c·div uhh - div F)/hprev+` (dt is baked into `uhh`/`F`).  A
+      !! cell the pass empties (`hprev+ <= H_DIV_EPS`) keeps its `c`.
       integer, intent(in) :: nx, ny, nz
       real(wp), intent(in) :: iareaT(nx, ny)
       real(wp), intent(in) :: F(nx + 1, ny, nz)
-      real(wp), intent(inout) :: hTr(nx, ny, nz)
+      real(wp), intent(in) :: uhh(nx + 1, ny, nz)
+      real(wp), intent(in) :: hprev(nx, ny, nz)
+         !! Thickness BEFORE this pass (the `h-` of the pair).
+      real(wp), intent(inout) :: c(nx, ny, nz)
       integer :: i, j, k
-      do concurrent(k=1:nz, j=1:ny, i=1:nx)
-         hTr(i, j, k) = hTr(i, j, k) - (F(i + 1, j, k) - F(i, j, k))*iareaT(i, j)
+      real(wp) :: div_u, div_f, h_new
+      do concurrent(k=1:nz, j=1:ny, i=1:nx) local(div_u, div_f, h_new)
+         div_u = (uhh(i + 1, j, k) - uhh(i, j, k))*iareaT(i, j)
+         h_new = hprev(i, j, k) - div_u
+         if (h_new > H_DIV_EPS) then
+            div_f = (F(i + 1, j, k) - F(i, j, k))*iareaT(i, j)
+            c(i, j, k) = c(i, j, k) + (c(i, j, k)*div_u - div_f)/h_new
+         end if
       end do
    end subroutine drain_update_tracer_x
 
-   pure subroutine drain_update_tracer_y(nx, ny, nz, iareaT, F, hTr)
-      !! Meridional analogue of drain_update_tracer_x.
+   pure subroutine drain_update_tracer_y(nx, ny, nz, iareaT, F, uhh, hprev, c)
+      !! Concentration update of one drain sub-pass:
+      !! `c+ = (c·hprev - div F)/hprev+`, `hprev+ = hprev - div uhh`, written
+      !! as `c + (c·div uhh - div F)/hprev+` (dt is baked into `uhh`/`F`).  A
+      !! cell the pass empties (`hprev+ <= H_DIV_EPS`) keeps its `c`.
       integer, intent(in) :: nx, ny, nz
       real(wp), intent(in) :: iareaT(nx, ny)
       real(wp), intent(in) :: F(nx, ny + 1, nz)
-      real(wp), intent(inout) :: hTr(nx, ny, nz)
+      real(wp), intent(in) :: uhh(nx, ny + 1, nz)
+      real(wp), intent(in) :: hprev(nx, ny, nz)
+         !! Thickness BEFORE this pass (the `h-` of the pair).
+      real(wp), intent(inout) :: c(nx, ny, nz)
       integer :: i, j, k
-      do concurrent(k=1:nz, j=1:ny, i=1:nx)
-         hTr(i, j, k) = hTr(i, j, k) - (F(i, j + 1, k) - F(i, j, k))*iareaT(i, j)
+      real(wp) :: div_u, div_f, h_new
+      do concurrent(k=1:nz, j=1:ny, i=1:nx) local(div_u, div_f, h_new)
+         div_u = (uhh(i, j + 1, k) - uhh(i, j, k))*iareaT(i, j)
+         h_new = hprev(i, j, k) - div_u
+         if (h_new > H_DIV_EPS) then
+            div_f = (F(i, j + 1, k) - F(i, j, k))*iareaT(i, j)
+            c(i, j, k) = c(i, j, k) + (c(i, j, k)*div_u - div_f)/h_new
+         end if
       end do
    end subroutine drain_update_tracer_y
 
-   pure subroutine drain_update_tracer_x_budget(nx, ny, nz, iareaT, F, w, hTr, budget_adv)
-      !! `drain_update_tracer_x` + the closed-budget fill: the SAME increment
-      !! written to `hTr` is accumulated (times `w`) into `budget_adv`, so the
-      !! console `out` term sees the horizontal tracer transport the windowed
-      !! drain performs.  Without this the drain moves tracer that
-      !! `ms%*_budget_horiz_adv` never records, and the Heat/Salt `Error`
-      !! column has to fall back to raw drift (which then reports a live
-      !! surface flux as a "leak").  `w` is
+   pure subroutine drain_update_tracer_x_budget(nx, ny, nz, iareaT, F, uhh, hprev, w, c, budget_adv)
+      !! `drain_update_tracer_x` + the closed-budget fill: the flux
+      !! divergence `-w·div F` (the transport the drain performs) is
+      !! accumulated into `budget_adv`, so the console `out` term sees the
+      !! horizontal tracer transport.  `w` is
       !! `DRAIN_BUDGET_POST_AVERAGE_WEIGHT` for every drain call site.
-      !!
-      !! The `hTr` arithmetic is written EXACTLY as in the budget-free twin,
-      !! so a tracer with a budget slot and one without still integrate
-      !! bit-identically.
       integer, intent(in) :: nx, ny, nz
       real(wp), intent(in) :: iareaT(nx, ny)
       real(wp), intent(in) :: F(nx + 1, ny, nz)
+      real(wp), intent(in) :: uhh(nx + 1, ny, nz)
+      real(wp), intent(in) :: hprev(nx, ny, nz)
       real(wp), intent(in) :: w
-      real(wp), intent(inout) :: hTr(nx, ny, nz)
+      real(wp), intent(inout) :: c(nx, ny, nz)
       real(wp), intent(inout) :: budget_adv(nx, ny, nz)
       integer :: i, j, k
-      do concurrent(k=1:nz, j=1:ny, i=1:nx)
-         hTr(i, j, k) = hTr(i, j, k) - (F(i + 1, j, k) - F(i, j, k))*iareaT(i, j)
-         budget_adv(i, j, k) = budget_adv(i, j, k) &
-                               - w*(F(i + 1, j, k) - F(i, j, k))*iareaT(i, j)
+      real(wp) :: div_u, div_f, h_new
+      do concurrent(k=1:nz, j=1:ny, i=1:nx) local(div_u, div_f, h_new)
+         div_u = (uhh(i + 1, j, k) - uhh(i, j, k))*iareaT(i, j)
+         div_f = (F(i + 1, j, k) - F(i, j, k))*iareaT(i, j)
+         h_new = hprev(i, j, k) - div_u
+         if (h_new > H_DIV_EPS) then
+            c(i, j, k) = c(i, j, k) + (c(i, j, k)*div_u - div_f)/h_new
+         end if
+         budget_adv(i, j, k) = budget_adv(i, j, k) - w*div_f
       end do
    end subroutine drain_update_tracer_x_budget
 
-   pure subroutine drain_update_tracer_y_budget(nx, ny, nz, iareaT, F, w, hTr, budget_adv)
-      !! Meridional analogue of `drain_update_tracer_x_budget`.
+   pure subroutine drain_update_tracer_y_budget(nx, ny, nz, iareaT, F, uhh, hprev, w, c, budget_adv)
+      !! `drain_update_tracer_y` + the closed-budget fill: the flux
+      !! divergence `-w·div F` (the transport the drain performs) is
+      !! accumulated into `budget_adv`, so the console `out` term sees the
+      !! horizontal tracer transport.  `w` is
+      !! `DRAIN_BUDGET_POST_AVERAGE_WEIGHT` for every drain call site.
       integer, intent(in) :: nx, ny, nz
       real(wp), intent(in) :: iareaT(nx, ny)
       real(wp), intent(in) :: F(nx, ny + 1, nz)
+      real(wp), intent(in) :: uhh(nx, ny + 1, nz)
+      real(wp), intent(in) :: hprev(nx, ny, nz)
       real(wp), intent(in) :: w
-      real(wp), intent(inout) :: hTr(nx, ny, nz)
+      real(wp), intent(inout) :: c(nx, ny, nz)
       real(wp), intent(inout) :: budget_adv(nx, ny, nz)
       integer :: i, j, k
-      do concurrent(k=1:nz, j=1:ny, i=1:nx)
-         hTr(i, j, k) = hTr(i, j, k) - (F(i, j + 1, k) - F(i, j, k))*iareaT(i, j)
-         budget_adv(i, j, k) = budget_adv(i, j, k) &
-                               - w*(F(i, j + 1, k) - F(i, j, k))*iareaT(i, j)
+      real(wp) :: div_u, div_f, h_new
+      do concurrent(k=1:nz, j=1:ny, i=1:nx) local(div_u, div_f, h_new)
+         div_u = (uhh(i, j + 1, k) - uhh(i, j, k))*iareaT(i, j)
+         div_f = (F(i, j + 1, k) - F(i, j, k))*iareaT(i, j)
+         h_new = hprev(i, j, k) - div_u
+         if (h_new > H_DIV_EPS) then
+            c(i, j, k) = c(i, j, k) + (c(i, j, k)*div_u - div_f)/h_new
+         end if
+         budget_adv(i, j, k) = budget_adv(i, j, k) - w*div_f
       end do
    end subroutine drain_update_tracer_y_budget
 

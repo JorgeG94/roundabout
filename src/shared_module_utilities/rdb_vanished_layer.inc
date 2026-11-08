@@ -116,7 +116,7 @@
       !! making a DIFFERENT, documented substitution and must not be routed
       !! here — see the consumer table in the header of this file.
       real(wp), intent(in) :: hTr
-         !! Layer content (`h·c`), e.g. `tracers(t)%hTr(i,j,k)`.
+         !! Layer content (`h·c`), e.g. `tracers(t)%c(i,j,k)`.
       real(wp), intent(in) :: h
          !! Layer thickness (m).
       if (h > 0.0_wp) then
@@ -160,25 +160,28 @@
                                max(1.0e-12_wp, 8.0_wp*epsilon(1.0_wp))*h*max(abs(c_live), c_scale)
    end function rdb_vl_holds_live_conc
 
-   pure subroutine rdb_vl_column_conc(nz, h_col, q_col, c_col)
+   pure subroutine rdb_vl_column_conc(nz, h_col, c_in, c_col)
       !$acc routine seq
-      !! THE concentration of every layer of a column: `q/h` on a live
-      !! layer; on a vanished layer, the concentration of its DONOR (the
-      !! nearest live layer above it; the topmost live layer for a run of
-      !! fillers that reaches the top of the column) — `c_live` itself, read
-      !! off the donor, never recovered from a near-zero divisor.  A column
+      !! DONOR-SUBSTITUTED concentration of every layer of a column: the
+      !! stored `c` on a live layer; on a vanished layer, the concentration of
+      !! its DONOR (the nearest live layer above it; the topmost live layer
+      !! for a run of fillers that reaches the top of the column).  A column
       !! with no live layer reads `0` throughout.
       !!
-      !! **Bit-identity:** on a live layer this is `q/h`, textually the
-      !! expression `rdb_vl_conc` evaluates.
+      !! The tracer is stored as concentration, so a filler holds a finite
+      !! value of its own (the last water it held).  That value is right for
+      !! transport (it is weighted by the filler's own thickness) and WRONG
+      !! for a consumer that integrates it over a depth the filler does not
+      !! occupy (the FV-MOM6 cross-face Boole integral, the BBL stratification):
+      !! those read through this substitution.
       integer, intent(in) :: nz
          !! Number of layers in the column; `k = 1` is the bed.
       real(wp), intent(in) :: h_col(NZ_STACK_MAX)
          !! Layer thicknesses (m).
-      real(wp), intent(in) :: q_col(NZ_STACK_MAX)
-         !! Layer content.
+      real(wp), intent(in) :: c_in(NZ_STACK_MAX)
+         !! Stored layer concentration.
       real(wp), intent(out) :: c_col(NZ_STACK_MAX)
-         !! Layer concentration.
+         !! Layer concentration with fillers replaced by their donor's.
       integer :: k_vl, k_top_vl, k_don_vl
 
       k_top_vl = 0
@@ -199,10 +202,10 @@
       k_don_vl = k_top_vl
       do k_vl = nz, 1, -1
          if (h_col(k_vl) > H_VANISHED) then
-            c_col(k_vl) = q_col(k_vl)/h_col(k_vl)
+            c_col(k_vl) = c_in(k_vl)
             k_don_vl = k_vl
          else
-            c_col(k_vl) = q_col(k_don_vl)/h_col(k_don_vl)
+            c_col(k_vl) = c_in(k_don_vl)
          end if
       end do
    end subroutine rdb_vl_column_conc

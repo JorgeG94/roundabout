@@ -152,9 +152,9 @@ contains
                x_i = (real(i - NGHOST, wp) - 0.5_wp)*DX
                ms%h_layer(i, j, k) = dz - (ETA_STEP/real(NZ, wp))* &
                                      tanh((x_i - x_centre)/(3.0_wp*DX))
-               ms%tracers(ms%idx_temperature)%hTr(i, j, k) = &
+               ms%tracers(ms%idx_temperature)%c(i, j, k) = &
                   eos%T_ref*ms%h_layer(i, j, k)
-               ms%tracers(ms%idx_salinity)%hTr(i, j, k) = &
+               ms%tracers(ms%idx_salinity)%c(i, j, k) = &
                   eos%S_ref*ms%h_layer(i, j, k)
                ms%rho_layer(i, j, k) = eos%rho0
             end do
@@ -193,8 +193,8 @@ contains
                ! and tracers are also pulled so the NaN sweep covers
                ! every prognostic field.
                !$acc update self(ms%h_layer, ms%u_face_x_layer, ms%v_face_y_layer, &
-               !$acc&             ms%tracers(ms%idx_salinity)%hTr, &
-               !$acc&             ms%tracers(ms%idx_temperature)%hTr)
+               !$acc&             ms%tracers(ms%idx_salinity)%c, &
+               !$acc&             ms%tracers(ms%idx_temperature)%c)
 
                h_min = minval(ms%h_layer)
 
@@ -248,10 +248,10 @@ contains
       end if
       if (allocated(ms%tracers)) then
          do t = 1, size(ms%tracers)
-            if (.not. allocated(ms%tracers(t)%hTr)) cycle
-            if (any(ieee_is_nan(ms%tracers(t)%hTr))) then
+            if (.not. allocated(ms%tracers(t)%c)) cycle
+            if (any(ieee_is_nan(ms%tracers(t)%c))) then
                has_nan = .true.
-               write (field_msg, '("tracers(", i0, ")%hTr")') t
+               write (field_msg, '("tracers(", i0, ")%c")') t
                return
             end if
          end do
@@ -372,8 +372,8 @@ contains
             ms%u_face_x_layer(:, :, k) = 0.0_wp
             ms%v_face_y_layer(:, :, k) = 0.0_wp
             ms%rho_layer(:, :, k) = eos%rho0
-            ms%tracers(idx_T)%hTr(:, :, k) = eos%T_ref*dz
-            ms%tracers(idx_S)%hTr(:, :, k) = eos%S_ref*dz
+            ms%tracers(idx_T)%c(:, :, k) = eos%T_ref*dz
+            ms%tracers(idx_S)%c(:, :, k) = eos%S_ref*dz
          end do
          dyn%bt_work%bt_H_ref = H0
 
@@ -386,7 +386,7 @@ contains
 
             if (mod(step, PROBE_INTERVAL) == 0 .or. step == N_STEPS) then
                !$acc update self(ms%h_layer, ms%u_face_x_layer, ms%v_face_y_layer, &
-               !$acc&            ms%tracers(idx_S)%hTr, ms%tracers(idx_T)%hTr)
+               !$acc&            ms%tracers(idx_S)%c, ms%tracers(idx_T)%c)
 
                call locate_nan(ms, field_msg, hit_nan)
                if (hit_nan) then
@@ -535,8 +535,8 @@ contains
                   ms%h_layer(i, j, k) = dz - (ETA_STEP/real(NZ, wp))* &
                                         tanh((x_i - x_centre)/(3.0_wp*DX))
                   ms%rho_layer(i, j, k) = eos%rho0
-                  ms%tracers(idx_T)%hTr(i, j, k) = eos%T_ref*ms%h_layer(i, j, k)
-                  ms%tracers(idx_S)%hTr(i, j, k) = S_layer(k)*ms%h_layer(i, j, k)
+                  ms%tracers(idx_T)%c(i, j, k) = eos%T_ref
+                  ms%tracers(idx_S)%c(i, j, k) = S_layer(k)
                end do
             end do
          end do
@@ -609,7 +609,7 @@ contains
          do j = j0, j1
             do i = i0, i1
                if (ms%h_layer(i, j, k) > 0.0_wp) then
-                  dS = abs(ms%tracers(iS)%hTr(i, j, k)/ms%h_layer(i, j, k) - S_ref)
+                  dS = abs(ms%tracers(iS)%c(i, j, k)/ms%h_layer(i, j, k) - S_ref)
                   if (dS > max_dS) max_dS = dS
                end if
             end do

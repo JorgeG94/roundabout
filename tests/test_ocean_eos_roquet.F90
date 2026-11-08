@@ -302,8 +302,8 @@ contains
          T_k = [12.0_wp, 8.0_wp, 4.0_wp]
          do k = 1, NZ
             ms%h_layer(:, :, k) = h_k(k)
-            ms%tracers(ms%idx_salinity)%hTr(:, :, k) = S_k(k)*h_k(k)
-            ms%tracers(ms%idx_temperature)%hTr(:, :, k) = T_k(k)*h_k(k)
+            ms%tracers(ms%idx_salinity)%c(:, :, k) = S_k(k)*h_k(k)
+            ms%tracers(ms%idx_temperature)%c(:, :, k) = T_k(k)*h_k(k)
             ! same model (PT,SP) -> the 3D fill evaluates at eos%p_ref.
             expected(k) = eos_density_point(eos, T_k(k), S_k(k), eos%p_ref)
          end do

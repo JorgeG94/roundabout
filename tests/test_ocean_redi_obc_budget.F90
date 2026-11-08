@@ -183,8 +183,8 @@ contains
 
       is = engine%state%multilayer%idx_salinity
       it = engine%state%multilayer%idx_temperature
-      !$acc update self(engine%state%multilayer%tracers(is)%hTr)
-      !$acc update self(engine%state%multilayer%tracers(it)%hTr)
+      !$acc update self(engine%state%multilayer%tracers(is)%c)
+      !$acc update self(engine%state%multilayer%tracers(it)%c)
       ng = engine%grid%nghost
       nx = engine%grid%nx_total
       ny = engine%grid%ny_total
@@ -194,9 +194,9 @@ contains
       do k = 1, nz
          do j = ng + 1, ny - ng
             do i = ng + 1, nx - ng
-               salt = salt + engine%state%multilayer%tracers(is)%hTr(i, j, k)* &
+               salt = salt + engine%state%multilayer%tracers(is)%c(i, j, k)* &
                       engine%state%metrics%areaT(i, j)
-               heat = heat + engine%state%multilayer%tracers(it)%hTr(i, j, k)* &
+               heat = heat + engine%state%multilayer%tracers(it)%c(i, j, k)* &
                       engine%state%metrics%areaT(i, j)
             end do
          end do

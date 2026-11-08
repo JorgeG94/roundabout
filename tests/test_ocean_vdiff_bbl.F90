@@ -547,8 +547,8 @@ contains
       eos%S_ref = 35.0_wp
       do k = 1, nz
          ms%h_layer(:, :, k) = h_prof(k)
-         ms%tracers(ms%idx_temperature)%hTr(:, :, k) = h_prof(k)*t_prof(k)
-         ms%tracers(ms%idx_salinity)%hTr(:, :, k) = h_prof(k)*35.0_wp
+         ms%tracers(ms%idx_temperature)%c(:, :, k) = h_prof(k)*t_prof(k)
+         ms%tracers(ms%idx_salinity)%c(:, :, k) = h_prof(k)*35.0_wp
       end do
       ms%u_face_x_layer = u0
       ms%v_face_y_layer = 0.0_wp

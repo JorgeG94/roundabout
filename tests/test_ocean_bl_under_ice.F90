@@ -271,8 +271,8 @@ contains
       real(wp), intent(in) :: h_layer, t_val, s_val
       integer :: k
       do k = 1, NZ
-         ms%tracers(ms%idx_temperature)%hTr(:, :, k) = t_val*h_layer
-         ms%tracers(ms%idx_salinity)%hTr(:, :, k) = s_val*h_layer
+         ms%tracers(ms%idx_temperature)%c(:, :, k) = t_val
+         ms%tracers(ms%idx_salinity)%c(:, :, k) = s_val
          ms%rho_layer(:, :, k) = RHO0
       end do
    end subroutine seed_uniform_TS
@@ -879,8 +879,8 @@ contains
       ! lightest water), k = 1 the bed.
       do k = 1, NZ
          ms%rho_layer(:, :, k) = RHO0 + 0.04_wp*real(NZ - k, wp)
-         ms%tracers(ms%idx_temperature)%hTr(:, :, k) = 1.0_wp*HK
-         ms%tracers(ms%idx_salinity)%hTr(:, :, k) = 34.5_wp*HK
+         ms%tracers(ms%idx_temperature)%c(:, :, k) = 1.0_wp*HK
+         ms%tracers(ms%idx_salinity)%c(:, :, k) = 34.5_wp*HK
       end do
       ! Two KPP passes so `bl_depth` is no longer at its zero seed when
       ! the V_t^2 term reads the lagged depth.
@@ -961,8 +961,8 @@ contains
          call sf_stab%set_components(grid, .true.)
          do k = 1, NZ
             ms%rho_layer(:, :, k) = RHO0 + 0.04_wp*real(NZ - k, wp)
-            ms%tracers(ms%idx_temperature)%hTr(:, :, k) = 1.0_wp*HK
-            ms%tracers(ms%idx_salinity)%hTr(:, :, k) = 34.5_wp*HK
+            ms%tracers(ms%idx_temperature)%c(:, :, k) = 1.0_wp*HK
+            ms%tracers(ms%idx_salinity)%c(:, :, k) = 34.5_wp*HK
          end do
 
          ! A strongly STABILISING melt-like flux: cold and very fresh.
@@ -1021,8 +1021,8 @@ contains
       ! Stable T stratification: warmest at the ice base (k = NZ).
       do k = 1, NZ
          t_k = 1.0_wp - 0.02_wp*real(NZ - k, wp)*HK
-         ms%tracers(ms%idx_temperature)%hTr(:, :, k) = t_k*HK
-         ms%tracers(ms%idx_salinity)%hTr(:, :, k) = 34.5_wp*HK
+         ms%tracers(ms%idx_temperature)%c(:, :, k) = t_k*HK
+         ms%tracers(ms%idx_salinity)%c(:, :, k) = 34.5_wp*HK
          ms%rho_layer(:, :, k) = RHO0
       end do
 
@@ -1402,8 +1402,8 @@ contains
       ms%p_top = p_top_val
       do k = 1, NZ
          t_k = 2.0_wp - 0.01_wp*real(NZ - k, wp)*PTOP_HK
-         ms%tracers(ms%idx_temperature)%hTr(:, :, k) = t_k*PTOP_HK
-         ms%tracers(ms%idx_salinity)%hTr(:, :, k) = 34.5_wp*PTOP_HK
+         ms%tracers(ms%idx_temperature)%c(:, :, k) = t_k*PTOP_HK
+         ms%tracers(ms%idx_salinity)%c(:, :, k) = 34.5_wp*PTOP_HK
          ms%rho_layer(:, :, k) = RHO0
       end do
       call ss%set_wind_stress_const(TAU, 0.0_wp)

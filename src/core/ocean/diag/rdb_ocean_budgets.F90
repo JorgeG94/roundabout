@@ -355,14 +355,14 @@ contains
       real(wp), intent(in) :: areaT(:, :)
       real(wp) :: total
       integer :: i, j, k, nx, ny, nz
-      real(wp) :: w_dA, col_sum
+      real(wp) :: w_dA, col_sum, p
       total = 0.0_wp
       if (it <= 0) return
       if (.not. allocated(ms%tracers)) return
       if (it > size(ms%tracers)) return
-      if (.not. allocated(ms%tracers(it)%hTr)) return
-      nx = min(mask%nx, size(ms%tracers(it)%hTr, 1))
-      ny = min(mask%ny, size(ms%tracers(it)%hTr, 2))
+      if (.not. allocated(ms%tracers(it)%c)) return
+      nx = min(mask%nx, size(ms%tracers(it)%c, 1))
+      ny = min(mask%ny, size(ms%tracers(it)%c, 2))
       nz = ms%nz_ml
       do j = 1, ny
          do i = 1, nx
@@ -370,7 +370,8 @@ contains
             if (w_dA <= 0.0_wp) cycle
             col_sum = 0.0_wp
             do k = 1, nz
-               col_sum = col_sum + ms%tracers(it)%hTr(i, j, k)
+               p = ms%h_layer(i, j, k)*ms%tracers(it)%c(i, j, k)
+               col_sum = col_sum + p
             end do
             total = total + w_dA*col_sum
          end do

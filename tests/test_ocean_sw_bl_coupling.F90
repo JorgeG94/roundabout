@@ -99,8 +99,8 @@ contains
       ms%u_face_x_layer = 0.0_wp
       ms%v_face_y_layer = 0.0_wp
       do k = 1, nz
-         ms%tracers(ms%idx_temperature)%hTr(:, :, k) = t_val*dz
-         ms%tracers(ms%idx_salinity)%hTr(:, :, k) = s_val*dz
+         ms%tracers(ms%idx_temperature)%c(:, :, k) = t_val*dz
+         ms%tracers(ms%idx_salinity)%c(:, :, k) = s_val*dz
       end do
    end subroutine set_uniform_column
 
@@ -586,8 +586,8 @@ contains
          ms%rho_layer(:, :, k) = 1030.0_wp - 0.15_wp*real(k - 1, wp)
          z_below = (real(nz - k, wp) + 0.5_wp)*5.0_wp
          t_k = 18.0_wp - 0.05_wp*z_below
-         ms%tracers(ms%idx_temperature)%hTr(:, :, k) = t_k*5.0_wp
-         ms%tracers(ms%idx_salinity)%hTr(:, :, k) = 35.0_wp*5.0_wp
+         ms%tracers(ms%idx_temperature)%c(:, :, k) = t_k*5.0_wp
+         ms%tracers(ms%idx_salinity)%c(:, :, k) = 35.0_wp*5.0_wp
       end do
    end subroutine setup_strat_ms
 
@@ -604,8 +604,8 @@ contains
       ms%v_face_y_layer = 0.0_wp
       do k = 1, nz
          ms%rho_layer(:, :, k) = 1030.0_wp
-         ms%tracers(ms%idx_temperature)%hTr(:, :, k) = 15.0_wp*5.0_wp
-         ms%tracers(ms%idx_salinity)%hTr(:, :, k) = 35.0_wp*5.0_wp
+         ms%tracers(ms%idx_temperature)%c(:, :, k) = 15.0_wp*5.0_wp
+         ms%tracers(ms%idx_salinity)%c(:, :, k) = 35.0_wp*5.0_wp
       end do
    end subroutine setup_unstrat_ms
 

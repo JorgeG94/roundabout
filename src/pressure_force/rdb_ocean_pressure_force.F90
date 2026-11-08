@@ -912,8 +912,8 @@ contains
             ! `dpa`/`intz_dpa` from a monotone sub-layer T/S profile, then
             ! reuse the unchanged FV_MOM6 face assembly.
             call compute_fv_mom6_reconstruct_impl(ms%h_layer, &
-                                                  ms%tracers(ms%idx_salinity)%hTr, &
-                                                  ms%tracers(ms%idx_temperature)%hTr, &
+                                                  ms%tracers(ms%idx_salinity)%c, &
+                                                  ms%tracers(ms%idx_temperature)%c, &
                                                   pgf%b, eos, &
                                                   pgf%recon_S_t%data, pgf%recon_S_b%data, &
                                                   pgf%recon_T_t%data, pgf%recon_T_b%data, &
@@ -931,8 +931,8 @@ contains
             ! Constant-by-layer T/S, density at the in-situ pressure
             ! (MOM6 `int_density_dz_generic_pcm`).  See `insitu_density`.
             call compute_fv_mom6_insitu_pcm_impl(ms%h_layer, &
-                                                 ms%tracers(ms%idx_salinity)%hTr, &
-                                                 ms%tracers(ms%idx_temperature)%hTr, &
+                                                 ms%tracers(ms%idx_salinity)%c, &
+                                                 ms%tracers(ms%idx_temperature)%c, &
                                                  pgf%b, pgf%conc_T%data, pgf%conc_S%data, &
                                                  pgf%e_face%data, pgf%pa%data, &
                                                  pgf%intz_dpa%data, &
@@ -969,8 +969,8 @@ contains
             if (ms%idx_salinity > 0 .and. ms%idx_temperature > 0) then
                call eos_wright_pgf_column_sweep_impl( &
                   ms%h_layer, &
-                  ms%tracers(ms%idx_salinity)%hTr, &
-                  ms%tracers(ms%idx_temperature)%hTr, &
+                  ms%tracers(ms%idx_salinity)%c, &
+                  ms%tracers(ms%idx_temperature)%c, &
                   ms%rho_layer, &
                   ms%p_top, &
                   pgf%p_edge%data, &
@@ -1709,8 +1709,8 @@ contains
             k_don_c = k_top_c
             do k = nz, 1, -1
                if (rdb_vl_is_live(h_layer(i, j, k))) k_don_c = k
-               conc_T(i, j, k) = rdb_vl_conc(hT(i, j, k_don_c), h_layer(i, j, k_don_c))
-               conc_S(i, j, k) = rdb_vl_conc(hS(i, j, k_don_c), h_layer(i, j, k_don_c))
+               conc_T(i, j, k) = hT(i, j, k_don_c)
+               conc_S(i, j, k) = hS(i, j, k_don_c)
             end do
          end if
       end do
@@ -2331,8 +2331,8 @@ contains
             k_don_c = k_top_c
             do k = nz, 1, -1
                if (rdb_vl_is_live(h_layer(i, j, k))) k_don_c = k
-               conc_T(i, j, k) = rdb_vl_conc(hT(i, j, k_don_c), h_layer(i, j, k_don_c))
-               conc_S(i, j, k) = rdb_vl_conc(hS(i, j, k_don_c), h_layer(i, j, k_don_c))
+               conc_T(i, j, k) = hT(i, j, k_don_c)
+               conc_S(i, j, k) = hS(i, j, k_don_c)
             end do
          end if
       end do

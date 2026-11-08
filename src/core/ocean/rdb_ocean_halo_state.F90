@@ -49,7 +49,7 @@ contains
       !!   * `h_layer`          — cell-centred layer thickness (centre_3d)
       !!   * `u_face_x_layer`   — east-face layer velocity (face_x_3d)
       !!   * `v_face_y_layer`   — north-face layer velocity (face_y_3d)
-      !!   * `tracers(it)%hTr`  — per-tracer thickness-weighted scalar
+      !!   * `tracers(it)%c`  — per-tracer thickness-weighted scalar
       !!                          (centre_3d, outer-shim loop)
       !!
       !! Unconditional (D0): single-rank + non-periodic ⇒ no-op;
@@ -75,8 +75,8 @@ contains
       ! cannot be dereferenced inside a do concurrent on-device.
       if (allocated(ms%tracers)) then
          do it = 1, size(ms%tracers)
-            if (.not. allocated(ms%tracers(it)%hTr)) cycle
-            call ocean_halo_centre(ms%tracers(it)%hTr, ms%nz_ml, device_resident)
+            if (.not. allocated(ms%tracers(it)%c)) cycle
+            call ocean_halo_centre(ms%tracers(it)%c, ms%nz_ml, device_resident)
          end do
       end if
       call oh_count_suppress_off()

@@ -240,11 +240,11 @@ contains
          S_k = [eos%S_ref + 1.0_wp, eos%S_ref, eos%S_ref - 1.0_wp]
          T_k = [eos%T_ref - 2.0_wp, eos%T_ref, eos%T_ref + 2.0_wp]
          do k = 1, NZ
-            ms%tracers(ms%idx_salinity)%hTr(:, :, k) = S_k(k)*H0
-            ms%tracers(ms%idx_temperature)%hTr(:, :, k) = T_k(k)*H0
+            ms%tracers(ms%idx_salinity)%c(:, :, k) = S_k(k)*H0
+            ms%tracers(ms%idx_temperature)%c(:, :, k) = T_k(k)*H0
          end do
-         allocate (hS_ic, source=ms%tracers(ms%idx_salinity)%hTr)
-         allocate (hT_ic, source=ms%tracers(ms%idx_temperature)%hTr)
+         allocate (hS_ic, source=ms%tracers(ms%idx_salinity)%c)
+         allocate (hT_ic, source=ms%tracers(ms%idx_temperature)%c)
          ! For the split driver, H_ref is the total column depth.
          dyn%bt_work%bt_H_ref = real(NZ, wp)*H0
 
@@ -257,8 +257,8 @@ contains
          max_dh = maxval(abs(ms%h_layer - H0))
          max_du = maxval(abs(ms%u_face_x_layer))
          max_dv = maxval(abs(ms%v_face_y_layer))
-         max_dS = maxval(abs(ms%tracers(ms%idx_salinity)%hTr - hS_ic))
-         max_dT = maxval(abs(ms%tracers(ms%idx_temperature)%hTr - hT_ic))
+         max_dS = maxval(abs(ms%tracers(ms%idx_salinity)%c - hS_ic))
+         max_dT = maxval(abs(ms%tracers(ms%idx_temperature)%c - hT_ic))
 
          call check(error, max_dh < 1.0e-10_wp, &
                     "split stratified rest: h drifted")
@@ -339,10 +339,10 @@ contains
                do i = 1, nx
                   ms%h_layer(i, j, k) = H_BASE + 0.01_wp*sin( &
                                         2.0_wp*PI*real(i, wp)/real(nx, wp))
-                  ms%tracers(ms%idx_salinity)%hTr(i, j, k) = ms%h_layer(i, j, k)*( &
-                                                             eos%S_ref + 0.5_wp*cos(2.0_wp*PI*real(j, wp)/real(ny, wp)))
-                  ms%tracers(ms%idx_temperature)%hTr(i, j, k) = ms%h_layer(i, j, k)*( &
-                                                                eos%T_ref + 0.3_wp*sin(2.0_wp*PI*real(i, wp)/real(nx, wp)))
+                  ms%tracers(ms%idx_salinity)%c(i, j, k) = ( &
+                                                           eos%S_ref + 0.5_wp*cos(2.0_wp*PI*real(j, wp)/real(ny, wp)))
+                  ms%tracers(ms%idx_temperature)%c(i, j, k) = ( &
+                                                              eos%T_ref + 0.3_wp*sin(2.0_wp*PI*real(i, wp)/real(nx, wp)))
                end do
             end do
             do j = 1, ny
@@ -363,8 +363,8 @@ contains
          dyn%bt_work%bt_H_ref = real(NZ, wp)*H_BASE
 
          total_h0 = sum(ms%h_layer)*grid%dx*grid%dy
-         total_S0 = sum(ms%tracers(ms%idx_salinity)%hTr)*grid%dx*grid%dy
-         total_T0 = sum(ms%tracers(ms%idx_temperature)%hTr)*grid%dx*grid%dy
+         total_S0 = sum(ms%tracers(ms%idx_salinity)%c)*grid%dx*grid%dy
+         total_T0 = sum(ms%tracers(ms%idx_temperature)%c)*grid%dx*grid%dy
 
          call map_in(grid, metrics, ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
          do step = 1, N_STEPS
@@ -375,8 +375,8 @@ contains
          call map_out(metrics, ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
 
          total_h = sum(ms%h_layer)*grid%dx*grid%dy
-         total_S = sum(ms%tracers(ms%idx_salinity)%hTr)*grid%dx*grid%dy
-         total_T = sum(ms%tracers(ms%idx_temperature)%hTr)*grid%dx*grid%dy
+         total_S = sum(ms%tracers(ms%idx_salinity)%c)*grid%dx*grid%dy
+         total_T = sum(ms%tracers(ms%idx_temperature)%c)*grid%dx*grid%dy
          drift_h = abs(total_h - total_h0)/abs(total_h0)
          drift_S = abs(total_S - total_S0)/abs(total_S0)
          drift_T = abs(total_T - total_T0)/abs(total_T0)
@@ -469,13 +469,13 @@ contains
                   ms_split%h_layer(i, j, 1) = H0
                end if
                ms_unsplit%h_layer(i, j, 1) = ms_split%h_layer(i, j, 1)
-               ms_split%tracers(ms_split%idx_salinity)%hTr(i, j, 1) = &
+               ms_split%tracers(ms_split%idx_salinity)%c(i, j, 1) = &
                   eos_s%S_ref*ms_split%h_layer(i, j, 1)
-               ms_split%tracers(ms_split%idx_temperature)%hTr(i, j, 1) = &
+               ms_split%tracers(ms_split%idx_temperature)%c(i, j, 1) = &
                   eos_s%T_ref*ms_split%h_layer(i, j, 1)
-               ms_unsplit%tracers(ms_unsplit%idx_salinity)%hTr(i, j, 1) = &
+               ms_unsplit%tracers(ms_unsplit%idx_salinity)%c(i, j, 1) = &
                   eos_u%S_ref*ms_unsplit%h_layer(i, j, 1)
-               ms_unsplit%tracers(ms_unsplit%idx_temperature)%hTr(i, j, 1) = &
+               ms_unsplit%tracers(ms_unsplit%idx_temperature)%c(i, j, 1) = &
                   eos_u%T_ref*ms_unsplit%h_layer(i, j, 1)
             end do
          end do
@@ -615,13 +615,13 @@ contains
                   ms_ref%h_layer(i, j, 1) = H0
                end if
                ms_obc%h_layer(i, j, 1) = ms_ref%h_layer(i, j, 1)
-               ms_ref%tracers(ms_ref%idx_salinity)%hTr(i, j, 1) = &
+               ms_ref%tracers(ms_ref%idx_salinity)%c(i, j, 1) = &
                   eos_r%S_ref*ms_ref%h_layer(i, j, 1)
-               ms_ref%tracers(ms_ref%idx_temperature)%hTr(i, j, 1) = &
+               ms_ref%tracers(ms_ref%idx_temperature)%c(i, j, 1) = &
                   eos_r%T_ref*ms_ref%h_layer(i, j, 1)
-               ms_obc%tracers(ms_obc%idx_salinity)%hTr(i, j, 1) = &
+               ms_obc%tracers(ms_obc%idx_salinity)%c(i, j, 1) = &
                   eos_o%S_ref*ms_obc%h_layer(i, j, 1)
-               ms_obc%tracers(ms_obc%idx_temperature)%hTr(i, j, 1) = &
+               ms_obc%tracers(ms_obc%idx_temperature)%c(i, j, 1) = &
                   eos_o%T_ref*ms_obc%h_layer(i, j, 1)
             end do
          end do
@@ -751,10 +751,10 @@ contains
                end do
                ms_w%h_layer(i, j, NZ) = ms_w%h_layer(i, j, NZ) + A_ETA*exp(-(yy/2.0_wp)**2)
                do k = 1, NZ
-                  ms_w%tracers(ms_w%idx_salinity)%hTr(i, j, k) = ms_w%h_layer(i, j, k)* &
-                                                                 (eos_w%S_ref + 0.1_wp*real(j, wp))
-                  ms_w%tracers(ms_w%idx_temperature)%hTr(i, j, k) = ms_w%h_layer(i, j, k)* &
-                                                                    (eos_w%T_ref + real(k, wp))
+                  ms_w%tracers(ms_w%idx_salinity)%c(i, j, k) = &
+                     (eos_w%S_ref + 0.1_wp*real(j, wp))
+                  ms_w%tracers(ms_w%idx_temperature)%c(i, j, k) = &
+                     (eos_w%T_ref + real(k, wp))
                end do
             end do
          end do
@@ -768,8 +768,8 @@ contains
             ms_w%v_face_y_layer(:, j_n_face - 1, k) = V0*real(k, wp)
          end do
          ms_s%h_layer = ms_w%h_layer
-         ms_s%tracers(ms_s%idx_salinity)%hTr = ms_w%tracers(ms_w%idx_salinity)%hTr
-         ms_s%tracers(ms_s%idx_temperature)%hTr = ms_w%tracers(ms_w%idx_temperature)%hTr
+         ms_s%tracers(ms_s%idx_salinity)%c = ms_w%tracers(ms_w%idx_salinity)%c
+         ms_s%tracers(ms_s%idx_temperature)%c = ms_w%tracers(ms_w%idx_temperature)%c
          ms_s%u_face_x_layer = ms_w%u_face_x_layer
          ms_s%v_face_y_layer = ms_w%v_face_y_layer
          dyn_w%bt_work%bt_H_ref = H0; dyn_s%bt_work%bt_H_ref = H0
@@ -810,8 +810,8 @@ contains
                          ms_w%u_face_x_layer(i0:i1 + 1, j0:j1, :)))
          dv = maxval(abs(ms_s%v_face_y_layer(i0:i1, j0:j1, :) - &
                          ms_w%v_face_y_layer(i0:i1, j0:j1, :)))
-         dS = maxval(abs(ms_s%tracers(ms_s%idx_salinity)%hTr(i0:i1, j0:j1, :) - &
-                         ms_w%tracers(ms_w%idx_salinity)%hTr(i0:i1, j0:j1, :)))
+         dS = maxval(abs(ms_s%tracers(ms_s%idx_salinity)%c(i0:i1, j0:j1, :) - &
+                         ms_w%tracers(ms_w%idx_salinity)%c(i0:i1, j0:j1, :)))
          call check(error, dh == 0.0_wp .and. du == 0.0_wp .and. dv == 0.0_wp .and. dS == 0.0_wp, &
                     "zero-width sponge edge must be bit-identical to a wall edge "// &
                     "(h/u/v/hS differ in the physical domain)")
@@ -1000,11 +1000,11 @@ contains
                do i = 1, grid_a%nx_total
                   ms_a%h_layer(i, j, k) = H0 + 0.02_wp*sin(2.0_wp*acos(-1.0_wp)* &
                                                            real(i, wp)/real(grid_a%nx_total, wp))
-                  ms_a%tracers(ms_a%idx_salinity)%hTr(i, j, k) = ms_a%h_layer(i, j, k)*eos_a%S_ref
-                  ms_a%tracers(ms_a%idx_temperature)%hTr(i, j, k) = ms_a%h_layer(i, j, k)*eos_a%T_ref
+                  ms_a%tracers(ms_a%idx_salinity)%c(i, j, k) = eos_a%S_ref
+                  ms_a%tracers(ms_a%idx_temperature)%c(i, j, k) = eos_a%T_ref
                   ms_b%h_layer(i, j, k) = ms_a%h_layer(i, j, k)
-                  ms_b%tracers(ms_b%idx_salinity)%hTr(i, j, k) = ms_a%tracers(ms_a%idx_salinity)%hTr(i, j, k)
-                  ms_b%tracers(ms_b%idx_temperature)%hTr(i, j, k) = ms_a%tracers(ms_a%idx_temperature)%hTr(i, j, k)
+                  ms_b%tracers(ms_b%idx_salinity)%c(i, j, k) = ms_a%tracers(ms_a%idx_salinity)%c(i, j, k)
+                  ms_b%tracers(ms_b%idx_temperature)%c(i, j, k) = ms_a%tracers(ms_a%idx_temperature)%c(i, j, k)
                end do
             end do
             do j = 1, grid_a%ny_total
@@ -1058,8 +1058,8 @@ contains
                     "h_layer must be bit-for-bit identical")
          if (allocated(error)) exit checks
          do it = 1, size(ms_a%tracers)
-            if (.not. allocated(ms_a%tracers(it)%hTr)) cycle
-            if (.not. all(ms_a%tracers(it)%hTr == ms_b%tracers(it)%hTr)) then
+            if (.not. allocated(ms_a%tracers(it)%c)) cycle
+            if (.not. all(ms_a%tracers(it)%c == ms_b%tracers(it)%c)) then
                call check(error, .false., "every tracer hTr must be bit-for-bit identical")
                exit checks
             end if
@@ -1138,10 +1138,10 @@ contains
             do i = 1, grid_ref%nx_total
                ms_ref%h_layer(i, j, 1) = H0
                ms_td%h_layer(i, j, 1) = H0
-               ms_ref%tracers(ms_ref%idx_salinity)%hTr(i, j, 1) = eos_r%S_ref*H0
-               ms_ref%tracers(ms_ref%idx_temperature)%hTr(i, j, 1) = eos_r%T_ref*H0
-               ms_td%tracers(ms_td%idx_salinity)%hTr(i, j, 1) = eos_td%S_ref*H0
-               ms_td%tracers(ms_td%idx_temperature)%hTr(i, j, 1) = eos_td%T_ref*H0
+               ms_ref%tracers(ms_ref%idx_salinity)%c(i, j, 1) = eos_r%S_ref*H0
+               ms_ref%tracers(ms_ref%idx_temperature)%c(i, j, 1) = eos_r%T_ref*H0
+               ms_td%tracers(ms_td%idx_salinity)%c(i, j, 1) = eos_td%S_ref*H0
+               ms_td%tracers(ms_td%idx_temperature)%c(i, j, 1) = eos_td%T_ref*H0
             end do
          end do
          ms_ref%u_face_x_layer = 0.0_wp; ms_ref%v_face_y_layer = 0.0_wp
@@ -1248,10 +1248,10 @@ contains
             do i = 1, grid_ref%nx_total
                ms_ref%h_layer(i, j, 1) = H0
                ms_cl%h_layer(i, j, 1) = H0
-               ms_ref%tracers(ms_ref%idx_salinity)%hTr(i, j, 1) = eos_r%S_ref*H0
-               ms_ref%tracers(ms_ref%idx_temperature)%hTr(i, j, 1) = eos_r%T_ref*H0
-               ms_cl%tracers(ms_cl%idx_salinity)%hTr(i, j, 1) = eos_c%S_ref*H0
-               ms_cl%tracers(ms_cl%idx_temperature)%hTr(i, j, 1) = eos_c%T_ref*H0
+               ms_ref%tracers(ms_ref%idx_salinity)%c(i, j, 1) = eos_r%S_ref*H0
+               ms_ref%tracers(ms_ref%idx_temperature)%c(i, j, 1) = eos_r%T_ref*H0
+               ms_cl%tracers(ms_cl%idx_salinity)%c(i, j, 1) = eos_c%S_ref*H0
+               ms_cl%tracers(ms_cl%idx_temperature)%c(i, j, 1) = eos_c%T_ref*H0
             end do
          end do
          ms_ref%u_face_x_layer = 0.0_wp; ms_ref%v_face_y_layer = 0.0_wp
@@ -1296,13 +1296,13 @@ contains
          ! reference (no bc) stays at S_ref everywhere.
          block
             real(wp) :: s_mean_ref, s_mean_cl
-            s_mean_ref = sum(ms_ref%tracers(ms_ref%idx_salinity)%hTr( &
+            s_mean_ref = sum(ms_ref%tracers(ms_ref%idx_salinity)%c( &
                              grid_ref%nghost + 1:grid_ref%nghost + NX_PHYS, &
                              grid_ref%nghost + 1:grid_ref%nghost + NY_PHYS, 1)/ &
                              ms_ref%h_layer(grid_ref%nghost + 1:grid_ref%nghost + NX_PHYS, &
                                             grid_ref%nghost + 1:grid_ref%nghost + NY_PHYS, 1))/ &
                          real(NX_PHYS*NY_PHYS, wp)
-            s_mean_cl = sum(ms_cl%tracers(ms_cl%idx_salinity)%hTr( &
+            s_mean_cl = sum(ms_cl%tracers(ms_cl%idx_salinity)%c( &
                             grid_cl%nghost + 1:grid_cl%nghost + NX_PHYS, &
                             grid_cl%nghost + 1:grid_cl%nghost + NY_PHYS, 1)/ &
                             ms_cl%h_layer(grid_cl%nghost + 1:grid_cl%nghost + NX_PHYS, &
@@ -1391,10 +1391,10 @@ contains
                   ms_ref%h_layer(i, j, 1) = H0
                end if
                ms_ch%h_layer(i, j, 1) = ms_ref%h_layer(i, j, 1)
-               ms_ref%tracers(ms_ref%idx_salinity)%hTr(i, j, 1) = eos_r%S_ref*ms_ref%h_layer(i, j, 1)
-               ms_ref%tracers(ms_ref%idx_temperature)%hTr(i, j, 1) = eos_r%T_ref*ms_ref%h_layer(i, j, 1)
-               ms_ch%tracers(ms_ch%idx_salinity)%hTr(i, j, 1) = eos_h%S_ref*ms_ch%h_layer(i, j, 1)
-               ms_ch%tracers(ms_ch%idx_temperature)%hTr(i, j, 1) = eos_h%T_ref*ms_ch%h_layer(i, j, 1)
+               ms_ref%tracers(ms_ref%idx_salinity)%c(i, j, 1) = eos_r%S_ref
+               ms_ref%tracers(ms_ref%idx_temperature)%c(i, j, 1) = eos_r%T_ref
+               ms_ch%tracers(ms_ch%idx_salinity)%c(i, j, 1) = eos_h%S_ref
+               ms_ch%tracers(ms_ch%idx_temperature)%c(i, j, 1) = eos_h%T_ref
             end do
          end do
          ms_ref%u_face_x_layer = 0.0_wp; ms_ref%v_face_y_layer = 0.0_wp
@@ -1508,8 +1508,8 @@ contains
                do i = 1, nx
                   ms%h_layer(i, j, k) = H_BASE + 0.01_wp*sin( &
                                         2.0_wp*PI*real(i, wp)/real(nx, wp))
-                  ms%tracers(ms%idx_salinity)%hTr(i, j, k) = ms%h_layer(i, j, k)*eos%S_ref
-                  ms%tracers(ms%idx_temperature)%hTr(i, j, k) = ms%h_layer(i, j, k)*eos%T_ref
+                  ms%tracers(ms%idx_salinity)%c(i, j, k) = eos%S_ref
+                  ms%tracers(ms%idx_temperature)%c(i, j, k) = eos%T_ref
                end do
             end do
             do j = 1, ny
@@ -1634,10 +1634,10 @@ contains
          ms%u_face_x_layer = 0.0_wp
          ms%v_face_y_layer = 0.0_wp
          do k = 1, NZ
-            ms%tracers(ms%idx_salinity)%hTr(:, :, k) = eos%S_ref*H0
-            ms%tracers(ms%idx_temperature)%hTr(:, :, k) = eos%T_ref*H0
+            ms%tracers(ms%idx_salinity)%c(:, :, k) = eos%S_ref*H0
+            ms%tracers(ms%idx_temperature)%c(:, :, k) = eos%T_ref*H0
          end do
-         ms%tracers(ms%idx_age)%hTr = 0.0_wp
+         ms%tracers(ms%idx_age)%c = 0.0_wp
          dyn%bt_work%bt_H_ref = real(NZ, wp)*H0
 
          call map_in(grid, metrics, ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
@@ -1654,12 +1654,12 @@ contains
          jc = NGHOST + ny_phys/2
 
          expected = real(N_STEPS, wp)*DT
-         sub_age = ms%tracers(ms%idx_age)%hTr(ic, jc, 1)/H0
+         sub_age = ms%tracers(ms%idx_age)%c(ic, jc, 1)/H0
          call check(error, abs(sub_age - expected) < 1.0e-10_wp, &
                     "ideal_age via driver: subsurface age must be N*DT")
          if (allocated(error)) exit checks
 
-         surface_age = maxval(abs(ms%tracers(ms%idx_age)%hTr(:, :, NZ)))
+         surface_age = maxval(abs(ms%tracers(ms%idx_age)%c(:, :, NZ)))
          call check(error, surface_age < 1.0e-12_wp, &
                     "ideal_age via driver: surface age must remain 0")
 
@@ -1724,11 +1724,11 @@ contains
          ms%u_face_x_layer = 0.0_wp
          ms%v_face_y_layer = 0.0_wp
          do k = 1, NZ
-            ms%tracers(ms%idx_salinity)%hTr(:, :, k) = eos%S_ref*H0
-            ms%tracers(ms%idx_temperature)%hTr(:, :, k) = eos%T_ref*H0
+            ms%tracers(ms%idx_salinity)%c(:, :, k) = eos%S_ref*H0
+            ms%tracers(ms%idx_temperature)%c(:, :, k) = eos%T_ref*H0
          end do
-         ms%tracers(ms%idx_age)%hTr = 0.0_wp
-         ms%tracers(ms%idx_age)%hTr(:, :, NZ) = A0*H0
+         ms%tracers(ms%idx_age)%c = 0.0_wp
+         ms%tracers(ms%idx_age)%c(:, :, NZ) = A0*H0
          dyn%bt_work%bt_H_ref = real(NZ, wp)*H0
 
          ! ---- Step 1: nonzero-IC reset must land at exactly 0 ----
@@ -1738,7 +1738,7 @@ contains
             va, hd, vd, vmix, ms, DT, N_INNER)
          call map_out(metrics, ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
 
-         surface_age = maxval(abs(ms%tracers(ms%idx_age)%hTr(:, :, NZ)))
+         surface_age = maxval(abs(ms%tracers(ms%idx_age)%c(:, :, NZ)))
          call check(error, surface_age < 1.0e-12_wp, &
                     "ideal_age surface reset: nonzero IC must reset to 0, not 0.5*A0*H0")
          if (allocated(error)) exit checks
@@ -1750,7 +1750,7 @@ contains
             va, hd, vd, vmix, ms, DT, N_INNER)
          call map_out(metrics, ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
 
-         surface_age = maxval(abs(ms%tracers(ms%idx_age)%hTr(:, :, NZ)))
+         surface_age = maxval(abs(ms%tracers(ms%idx_age)%c(:, :, NZ)))
          call check(error, surface_age < 1.0e-12_wp, &
                     "ideal_age surface reset: second step from reset state stays at 0 (idempotent)")
 
@@ -1819,10 +1819,10 @@ contains
          ms%u_face_x_layer = 0.0_wp
          ms%v_face_y_layer = 0.0_wp
          do k = 1, NZ
-            ms%tracers(ms%idx_salinity)%hTr(:, :, k) = eos%S_ref*H0
-            ms%tracers(ms%idx_temperature)%hTr(:, :, k) = eos%T_ref*H0
+            ms%tracers(ms%idx_salinity)%c(:, :, k) = eos%S_ref*H0
+            ms%tracers(ms%idx_temperature)%c(:, :, k) = eos%T_ref*H0
          end do
-         ms%tracers(ms%idx_age)%hTr = 0.0_wp
+         ms%tracers(ms%idx_age)%c = 0.0_wp
          dyn%bt_work%bt_H_ref = real(NZ, wp)*H0
 
          call map_in(grid, metrics, ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
@@ -1839,13 +1839,13 @@ contains
          jc = NGHOST + ny_phys/2
 
          expected = real(N_STEPS, wp)*DT
-         sub_age = ms%tracers(ms%idx_age)%hTr(ic, jc, 1)/H0
+         sub_age = ms%tracers(ms%idx_age)%c(ic, jc, 1)/H0
          call check(error, abs(sub_age - expected) < 1.0e-10_wp, &
                     "ideal_age thermo cadence: subsurface age must equal N*DT "// &
                     "independent of dt_therm_ratio")
          if (allocated(error)) exit checks
 
-         surface_age = maxval(abs(ms%tracers(ms%idx_age)%hTr(:, :, NZ)))
+         surface_age = maxval(abs(ms%tracers(ms%idx_age)%c(:, :, NZ)))
          call check(error, surface_age < 1.0e-12_wp, &
                     "ideal_age thermo cadence: surface age must remain 0")
 
@@ -1916,8 +1916,8 @@ contains
       ms%v_face_y_layer = 0.0_wp
       do k = 1, NZ
          do i = 1, grid%nx_total
-            ms%tracers(ms%idx_salinity)%hTr(i, :, k) = (eos%S_ref + 0.5_wp*real(i, wp))*H0
-            ms%tracers(ms%idx_temperature)%hTr(i, :, k) = eos%T_ref*H0
+            ms%tracers(ms%idx_salinity)%c(i, :, k) = (eos%S_ref + 0.5_wp*real(i, wp))*H0
+            ms%tracers(ms%idx_temperature)%c(i, :, k) = eos%T_ref*H0
             ms%rho_layer(i, :, k) = eos_density_point(eos, eos%T_ref, eos%S_ref + 0.5_wp*real(i, wp), 0.0_wp)
          end do
       end do

@@ -129,9 +129,9 @@ contains
             do i = 1, nx
                tilt = 0.05_wp*real(i - nx/2, wp)/real(nx, wp)
                ms%h_layer(i, j, k) = (H_TOTAL + tilt)/real(NZ, wp)
-               ms%tracers(ms%idx_salinity)%hTr(i, j, k) = &
+               ms%tracers(ms%idx_salinity)%c(i, j, k) = &
                   eos%S_ref*ms%h_layer(i, j, k)
-               ms%tracers(ms%idx_temperature)%hTr(i, j, k) = &
+               ms%tracers(ms%idx_temperature)%c(i, j, k) = &
                   eos%T_ref*ms%h_layer(i, j, k)
                ms%u_face_x_layer(i, j, k) = &
                   0.02_wp*sin(2.0_wp*acos(-1.0_wp)*real(j, wp)/real(ny, wp))

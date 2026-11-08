@@ -76,7 +76,7 @@ contains
       call sf%enter_data()
       call ocean_surface_flux_apply_tracers(grid, sf, ms, DT)
       call ocean_surface_flux_apply_sw_penetration(grid, sf, ms, DT)
-      associate (hT => ms%tracers(ms%idx_temperature)%hTr)
+      associate (hT => ms%tracers(ms%idx_temperature)%c)
          !$acc update self(hT)
       end associate
       call sf%exit_data()
@@ -94,7 +94,7 @@ contains
       call ms%enter_data()
       call sf%enter_data()
       call ocean_surface_flux_apply_sw_penetration(grid, sf, ms, DT)
-      associate (hT => ms%tracers(ms%idx_temperature)%hTr)
+      associate (hT => ms%tracers(ms%idx_temperature)%c)
          !$acc update self(hT)
       end associate
       call sf%exit_data()
@@ -113,8 +113,8 @@ contains
       call eos%init(grid)
       call sf%init(grid)
       ms%h_layer = H_LAYER
-      ms%tracers(ms%idx_temperature)%hTr = eos%T_ref*H_LAYER
-      ms%tracers(ms%idx_salinity)%hTr = eos%S_ref*H_LAYER
+      ms%tracers(ms%idx_temperature)%c = eos%T_ref*H_LAYER
+      ms%tracers(ms%idx_salinity)%c = eos%S_ref*H_LAYER
       call sf%set_surface_flux_const(Q_HEAT, 0.0_wp)
       call sf%set_sw_penetration(frac, R, ZETA1, ZETA2)
    end subroutine setup
@@ -168,7 +168,7 @@ contains
          col_sum = 0.0_wp
          absorbed_sum = 0.0_wp
          do k = 1, NZ
-            col_sum = col_sum + (ms%tracers(ms%idx_temperature)%hTr(i, j, k) - base)
+            col_sum = col_sum + (ms%tracers(ms%idx_temperature)%c(i, j, k) - base)
          end do
          ! Absorbed = correction + the removed lump at nz (so we recover
          ! the physical column-absorbed energy).
@@ -206,7 +206,7 @@ contains
          base = eos%T_ref*H_LAYER
          maxerr = 0.0_wp
          do k = 1, NZ
-            got = ms%tracers(ms%idx_temperature)%hTr(i, j, k) - base
+            got = ms%tracers(ms%idx_temperature)%c(i, j, k) - base
             maxerr = max(maxerr, abs(got - corr(k)))
          end do
          call check(error, maxerr < 1.0e-12_wp, &
@@ -277,10 +277,10 @@ contains
       checks: block
          call make_grid(grid)
          call setup(grid, ms, eos, sf, 0.0_wp)   ! frac = 0 ⇒ off
-         allocate (hT_ic, source=ms%tracers(ms%idx_temperature)%hTr)
+         allocate (hT_ic, source=ms%tracers(ms%idx_temperature)%c)
          call run_sw_only(grid, sf, ms)
          call check(error, &
-                    maxval(abs(ms%tracers(ms%idx_temperature)%hTr - hT_ic)) == 0.0_wp, &
+                    maxval(abs(ms%tracers(ms%idx_temperature)%c - hT_ic)) == 0.0_wp, &
                     "sw_pen_frac=0 must leave hTr byte-for-byte unchanged")
       end block checks
       if (allocated(hT_ic)) deallocate (hT_ic)
@@ -313,15 +313,15 @@ contains
          call sf%init(grid)
          call sf%set_components(grid, .true.)     ! allocate q_sw
          ms%h_layer = H_LAYER
-         ms%tracers(ms%idx_temperature)%hTr = eos%T_ref*H_LAYER
-         ms%tracers(ms%idx_salinity)%hTr = eos%S_ref*H_LAYER
+         ms%tracers(ms%idx_temperature)%c = eos%T_ref*H_LAYER
+         ms%tracers(ms%idx_salinity)%c = eos%S_ref*H_LAYER
          call sf%set_surface_flux_const(-100.0_wp, 0.0_wp)   ! net cooling
          call sf%set_sw_penetration(FRAC, R, ZETA1, ZETA2, sw_source="q_sw")
          sf%q_sw = 0.0_wp                          ! night: no sunlight
-         allocate (hT_ic, source=ms%tracers(ms%idx_temperature)%hTr)
+         allocate (hT_ic, source=ms%tracers(ms%idx_temperature)%c)
          call run_sw_only(grid, sf, ms)
          call check(error, &
-                    maxval(abs(ms%tracers(ms%idx_temperature)%hTr - hT_ic)) == 0.0_wp, &
+                    maxval(abs(ms%tracers(ms%idx_temperature)%c - hT_ic)) == 0.0_wp, &
                     "q_sw=0 with Q_heat<0 must move exactly zero heat (I0=0)")
          if (allocated(error)) exit checks
          call sf%destroy(); call eos%destroy(); call ms%destroy()
@@ -333,15 +333,15 @@ contains
          call eos%init(grid)
          call sf%init(grid)
          ms%h_layer = H_LAYER
-         ms%tracers(ms%idx_temperature)%hTr = eos%T_ref*H_LAYER
-         ms%tracers(ms%idx_salinity)%hTr = eos%S_ref*H_LAYER
+         ms%tracers(ms%idx_temperature)%c = eos%T_ref*H_LAYER
+         ms%tracers(ms%idx_salinity)%c = eos%S_ref*H_LAYER
          call sf%set_surface_flux_const(-100.0_wp, 0.0_wp)
          call sf%set_sw_penetration(FRAC, R, ZETA1, ZETA2, sw_source="net_heat")
          call run_sw_only(grid, sf, ms)
          i = grid%nx_total/2
          j = grid%ny_total/2
          base = eos%T_ref*H_LAYER
-         add_nz = ms%tracers(ms%idx_temperature)%hTr(i, j, NZ) - base
+         add_nz = ms%tracers(ms%idx_temperature)%c(i, j, NZ) - base
          ! Documented hazard: with I0 < 0 the surface layer is WARMED
          ! (the correction "un-penetrates" cooling upward) — a non-zero,
          ! positive nz increment.  This is what sw_source='q_sw' avoids.

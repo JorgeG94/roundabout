@@ -210,8 +210,8 @@ contains
             do j = 1, ny
                do i = 1, nx
                   ms%h_layer(i, j, k) = HLAY
-                  ms%tracers(ms%idx_temperature)%hTr(i, j, k) = tcol(i)*HLAY
-                  ms%tracers(ms%idx_salinity)%hTr(i, j, k) = scol(i)*HLAY
+                  ms%tracers(ms%idx_temperature)%c(i, j, k) = tcol(i)*HLAY
+                  ms%tracers(ms%idx_salinity)%c(i, j, k) = scol(i)*HLAY
                   ! Legacy consumer: potential density at p_ref = 0.
                   ms%rho_layer(i, j, k) = eos_density_point(eos, tcol(i), scol(i), 0.0_wp)
                end do
@@ -298,8 +298,8 @@ contains
             do j = 1, ny
                do i = 1, nx
                   ms%h_layer(i, j, k) = HLAY
-                  ms%tracers(ms%idx_temperature)%hTr(i, j, k) = tcol(i)*HLAY
-                  ms%tracers(ms%idx_salinity)%hTr(i, j, k) = scol(i)*HLAY
+                  ms%tracers(ms%idx_temperature)%c(i, j, k) = tcol(i)*HLAY
+                  ms%tracers(ms%idx_salinity)%c(i, j, k) = scol(i)*HLAY
                   ! Legacy consumer: potential density at p_ref = 0.
                   ms%rho_layer(i, j, k) = eos_density_point(eos, tcol(i), scol(i), 0.0_wp)
                end do
@@ -378,8 +378,8 @@ contains
                tk = 2.0_wp + 16.0_wp*exp(-(z_top + 0.5_wp*hlay)/700.0_wp)
                sk = 34.6_wp + 0.5_wp*exp(-(z_top + 0.5_wp*hlay)/900.0_wp)
                ms%h_layer(i, j, k) = hk
-               ms%tracers(ms%idx_temperature)%hTr(i, j, k) = tk*hk
-               ms%tracers(ms%idx_salinity)%hTr(i, j, k) = sk*hk
+               ms%tracers(ms%idx_temperature)%c(i, j, k) = tk*hk
+               ms%tracers(ms%idx_salinity)%c(i, j, k) = sk*hk
                ms%rho_layer(i, j, k) = eos_density_point(eos, tk, sk, 0.0_wp)
                b(i, j) = b(i, j) + hk
             end do
@@ -538,8 +538,8 @@ contains
          call seed_zlevel_steps(ms, eos, NZ, HLAY, depth, b)
          ! Break the horizontal uniformity so the PGF is not zero.
          do i = 1, nx
-            ms%tracers(ms%idx_temperature)%hTr(i, :, :) = &
-               ms%tracers(ms%idx_temperature)%hTr(i, :, :) + 0.1_wp*real(i, wp)*ms%h_layer(i, :, :)
+            ms%tracers(ms%idx_temperature)%c(i, :, :) = &
+               ms%tracers(ms%idx_temperature)%c(i, :, :) + 0.1_wp*real(i, wp)*ms%h_layer(i, :, :)
             ms%rho_layer(i, :, :) = ms%rho_layer(i, :, :) - 0.02_wp*real(i, wp)
          end do
          call make_pgf(pgf_on, grid, NZ, b, .true., .false.)
@@ -594,8 +594,8 @@ contains
                   sk = s_live
                end if
                ms%h_layer(i, j, k) = hk
-               ms%tracers(ms%idx_temperature)%hTr(i, j, k) = tk*hk
-               ms%tracers(ms%idx_salinity)%hTr(i, j, k) = sk*hk
+               ms%tracers(ms%idx_temperature)%c(i, j, k) = tk*hk
+               ms%tracers(ms%idx_salinity)%c(i, j, k) = sk*hk
                ms%rho_layer(i, j, k) = eos_density_point(eos, tk, sk, 0.0_wp)
                b(i, j) = b(i, j) + hk
             end do

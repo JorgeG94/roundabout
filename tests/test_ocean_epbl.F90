@@ -106,8 +106,8 @@ contains
          ! depth of layer-k centre below the surface
          z_below_surf = (real(nz - k, wp) + 0.5_wp)*dz
          t_k = t_surf - dT_dz*z_below_surf
-         ms%tracers(ms%idx_temperature)%hTr(:, :, k) = t_k*dz
-         ms%tracers(ms%idx_salinity)%hTr(:, :, k) = 35.0_wp*dz
+         ms%tracers(ms%idx_temperature)%c(:, :, k) = t_k*dz
+         ms%tracers(ms%idx_salinity)%c(:, :, k) = 35.0_wp*dz
       end do
    end subroutine setup_stratified_T
 

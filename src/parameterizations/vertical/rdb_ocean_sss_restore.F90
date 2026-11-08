@@ -51,7 +51,7 @@ module rdb_ocean_sss_restore
    !! mapped by `ms` / `sf` / `metrics`.
    use, intrinsic :: iso_fortran_env, only: int64, real64
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
-   use rdb_constants, only: wp
+   use rdb_constants, only: H_DIV_EPS, wp
    use rdb_grid, only: hgrid_t
    use rdb_ocean_metrics, only: ocean_metrics_t
    use rdb_multilayer_state, only: multilayer_state_t
@@ -119,7 +119,7 @@ contains
       if (convert_sp) tgt = sr_from_sp(tgt_in)
       ! vanished-ok: surface concentration against a caller-supplied
       ! restoring floor, as the scalar restoring path does.
-      ds = tgt - rdb_conc_of_floor(hTr, h, h_min)
+      ds = tgt - hTr
       ds = sign(min(abs(ds), max_delta), ds)
       f = coef*ds*w_open
       pw = w_open
@@ -351,12 +351,12 @@ contains
          ! Sparse progress line: rank-0 local max, no collective (a log
          ! line must never be the only reason for one).
          if (use_cover) then
-            fmax_loc = sss_flux_maxabs(nx, ny, nz, ng, ms%tracers(idx_S)%hTr, ms%h_layer, &
+            fmax_loc = sss_flux_maxabs(nx, ny, nz, ng, ms%tracers(idx_S)%c, ms%h_layer, &
                                        sf%sss_target, ms%wet_mask, metrics%cover_frac, &
                                        .true., ms%k_top, coef, sf%sss_max_delta, sf%h_min, &
                                        sf%sss_convert_sp)
          else
-            fmax_loc = sss_flux_maxabs(nx, ny, nz, ng, ms%tracers(idx_S)%hTr, ms%h_layer, &
+            fmax_loc = sss_flux_maxabs(nx, ny, nz, ng, ms%tracers(idx_S)%c, ms%h_layer, &
                                        sf%sss_target, ms%wet_mask, ms%wet_mask, &
                                        .false., ms%k_top, coef, sf%sss_max_delta, sf%h_min, &
                                        sf%sss_convert_sp)
@@ -383,12 +383,12 @@ contains
       integer :: m
       do m = 1, 3
          if (use_cover) then
-            loc(m) = sss_flux_sums(m, nx, ny, nz, ng, ms%tracers(idx_S)%hTr, ms%h_layer, &
+            loc(m) = sss_flux_sums(m, nx, ny, nz, ng, ms%tracers(idx_S)%c, ms%h_layer, &
                                    sf%sss_target, ms%wet_mask, metrics%cover_frac, .true., &
                                    metrics%areaT, ms%k_top, coef, sf%sss_max_delta, &
                                    sf%h_min, sf%sss_convert_sp)
          else
-            loc(m) = sss_flux_sums(m, nx, ny, nz, ng, ms%tracers(idx_S)%hTr, ms%h_layer, &
+            loc(m) = sss_flux_sums(m, nx, ny, nz, ng, ms%tracers(idx_S)%c, ms%h_layer, &
                                    sf%sss_target, ms%wet_mask, ms%wet_mask, .false., &
                                    metrics%areaT, ms%k_top, coef, sf%sss_max_delta, &
                                    sf%h_min, sf%sss_convert_sp)
@@ -406,13 +406,13 @@ contains
       logical, intent(in) :: use_cover
       real(wp), intent(in) :: coef, fpos, fneg, shift, inv_scale
       if (use_cover) then
-         call sss_deposit_impl(nx, ny, nz, ms%tracers(idx_S)%hTr, ms%salt_budget_surface, &
+         call sss_deposit_impl(nx, ny, nz, ms%tracers(idx_S)%c, ms%salt_budget_surface, &
                                ms%h_layer, sf%sss_target, ms%wet_mask, metrics%cover_frac, &
                                .true., ms%k_top, coef, sf%sss_max_delta, sf%h_min, &
                                sf%sss_convert_sp, sf%sss_net_mode, fpos, fneg, shift, &
                                inv_scale)
       else
-         call sss_deposit_impl(nx, ny, nz, ms%tracers(idx_S)%hTr, ms%salt_budget_surface, &
+         call sss_deposit_impl(nx, ny, nz, ms%tracers(idx_S)%c, ms%salt_budget_surface, &
                                ms%h_layer, sf%sss_target, ms%wet_mask, ms%wet_mask, &
                                .false., ms%k_top, coef, sf%sss_max_delta, sf%h_min, &
                                sf%sss_convert_sp, sf%sss_net_mode, fpos, fneg, shift, &

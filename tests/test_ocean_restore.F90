@@ -80,8 +80,8 @@ contains
       call eos%init(grid)
       call sf%init(grid)
       ms%h_layer = H_LAYER
-      ms%tracers(ms%idx_temperature)%hTr = T0*H_LAYER
-      ms%tracers(ms%idx_salinity)%hTr = S0*H_LAYER
+      ms%tracers(ms%idx_temperature)%c = T0*H_LAYER
+      ms%tracers(ms%idx_salinity)%c = S0*H_LAYER
    end subroutine setup
 
    !> Run the restore kernel NSTEPS times on device.  Returns the device
@@ -98,8 +98,8 @@ contains
       do s = 1, n
          call ocean_surface_restore_apply_tracers(grid, sf, ms, DT)
       end do
-      associate (hT => ms%tracers(ms%idx_temperature)%hTr, &
-                 hS => ms%tracers(ms%idx_salinity)%hTr, &
+      associate (hT => ms%tracers(ms%idx_temperature)%c, &
+                 hS => ms%tracers(ms%idx_salinity)%c, &
                  hbud => ms%heat_budget_surface, &
                  sbud => ms%salt_budget_surface)
          !$acc update self(hT, hS, hbud, sbud)
@@ -138,7 +138,7 @@ contains
 
          i = grid%nx_total/2
          j = grid%ny_total/2
-         sst = ms%tracers(ms%idx_temperature)%hTr(i, j, NZ)/H_LAYER
+         sst = ms%tracers(ms%idx_temperature)%c(i, j, NZ)/H_LAYER
          oracle = euler_oracle(T0, TSTAR, PISTON_T_DAY, NSTEPS)
 
          ! Same arithmetic as the kernel ⇒ tight tol (pins rate + sign).
@@ -174,14 +174,14 @@ contains
          call sf%set_restore(.true., .false., PISTON_T_DAY, 0.0_wp, 15.0_wp, 0.0_wp)
          call run_restore(grid, sf, ms, nsmall)
          i = grid%nx_total/2; j = grid%ny_total/2
-         sst_warm = ms%tracers(ms%idx_temperature)%hTr(i, j, NZ)/H_LAYER
+         sst_warm = ms%tracers(ms%idx_temperature)%c(i, j, NZ)/H_LAYER
          call sf%destroy(); call eos%destroy(); call ms%destroy()
 
          ! Cooling case: T0 = 25 > T* = 15.
          call setup(grid, ms, eos, sf, 25.0_wp, 35.0_wp)
          call sf%set_restore(.true., .false., PISTON_T_DAY, 0.0_wp, 15.0_wp, 0.0_wp)
          call run_restore(grid, sf, ms, nsmall)
-         sst_cool = ms%tracers(ms%idx_temperature)%hTr(i, j, NZ)/H_LAYER
+         sst_cool = ms%tracers(ms%idx_temperature)%c(i, j, NZ)/H_LAYER
 
          call check(error, sst_warm > 5.0_wp, "T0 < T_target must warm the surface")
          if (allocated(error)) exit checks
@@ -207,7 +207,7 @@ contains
          call run_restore(grid, sf, ms, NSTEPS)
 
          i = grid%nx_total/2; j = grid%ny_total/2
-         sss = ms%tracers(ms%idx_salinity)%hTr(i, j, NZ)/H_LAYER
+         sss = ms%tracers(ms%idx_salinity)%c(i, j, NZ)/H_LAYER
          oracle = euler_oracle(S0, SSTAR, PISTON_S_DAY, NSTEPS)
 
          call check(error, abs(sss - oracle) < 1.0e-10_wp*abs(SSTAR) + 1.0e-12_wp, &
@@ -215,7 +215,7 @@ contains
          if (allocated(error)) exit checks
          ! Temperature untouched (salt-only restoring).
          call check(error, &
-                    abs(ms%tracers(ms%idx_temperature)%hTr(i, j, NZ)/H_LAYER - 15.0_wp) &
+                    abs(ms%tracers(ms%idx_temperature)%c(i, j, NZ)/H_LAYER - 15.0_wp) &
                     == 0.0_wp, &
                     "salt-only restoring must leave SST unchanged")
       end block checks
@@ -243,7 +243,7 @@ contains
          i = grid%nx_total/2; j = grid%ny_total/2
          bud = ms%heat_budget_surface(i, j, NZ)
          ! Total applied increment to hTr = final − initial.
-         applied = ms%tracers(ms%idx_temperature)%hTr(i, j, NZ) - T0*H_LAYER
+         applied = ms%tracers(ms%idx_temperature)%c(i, j, NZ) - T0*H_LAYER
          call check(error, abs(bud - applied) < 1.0e-12_wp*abs(applied) + 1.0e-14_wp, &
                     "heat_budget_surface must record the restoring source")
       end block checks
@@ -265,13 +265,13 @@ contains
          ! Switches OFF but pistons + targets non-zero — must still no-op.
          call sf%set_restore(.false., .false., PISTON_T_DAY, PISTON_S_DAY, &
                              20.0_wp, 36.0_wp)
-         allocate (hT_ic, source=ms%tracers(ms%idx_temperature)%hTr)
-         allocate (hS_ic, source=ms%tracers(ms%idx_salinity)%hTr)
+         allocate (hT_ic, source=ms%tracers(ms%idx_temperature)%c)
+         allocate (hS_ic, source=ms%tracers(ms%idx_salinity)%c)
          call run_restore(grid, sf, ms, NSTEPS)
          call check(error, &
-                    maxval(abs(ms%tracers(ms%idx_temperature)%hTr - hT_ic)) == 0.0_wp &
+                    maxval(abs(ms%tracers(ms%idx_temperature)%c - hT_ic)) == 0.0_wp &
                     .and. &
-                    maxval(abs(ms%tracers(ms%idx_salinity)%hTr - hS_ic)) == 0.0_wp, &
+                    maxval(abs(ms%tracers(ms%idx_salinity)%c - hS_ic)) == 0.0_wp, &
                     "restore OFF must leave T/S byte-for-byte unchanged")
       end block checks
       if (allocated(hT_ic)) deallocate (hT_ic)
@@ -298,8 +298,8 @@ contains
          ms%wet_mask(i, j) = 0.0_wp   ! make the probe column land
          call run_restore(grid, sf, ms, NSTEPS)
 
-         sst_land = ms%tracers(ms%idx_temperature)%hTr(i, j, NZ)/H_LAYER
-         sst_wet = ms%tracers(ms%idx_temperature)%hTr(i + 1, j, NZ)/H_LAYER
+         sst_land = ms%tracers(ms%idx_temperature)%c(i, j, NZ)/H_LAYER
+         sst_wet = ms%tracers(ms%idx_temperature)%c(i + 1, j, NZ)/H_LAYER
 
          call check(error, sst_land == 10.0_wp, &
                     "land (wet_mask=0) column must not be restored")

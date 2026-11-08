@@ -60,7 +60,6 @@ module test_ocean_cavity_freshwater
    use rdb_comm_env, only: comm_env_init, comm_env_setup_roles
    use rdb_ocean_cavity_flux, only: cavity_mass_apply_impl, cavity_mass_salt_mirror_impl, &
                                     cavity_mass_totals_impl, cavity_comp_apply_impl, &
-                                    cavity_comp_scale_tracer_impl, &
                                     cavity_comp_withdrawal, cavity_mass_thin_is_fatal, &
                                     H_CAVITY_FLOOR
    use rdb_ocean_remap, only: ocean_remap_tracer_column
@@ -798,23 +797,22 @@ contains
       do j = 1, NY
          do i = 1, NX
             hl(i, j, 1) = 50.0_wp + real(i, wp)
-            hs(i, j, 1) = hl(i, j, 1)*S0
-            ht(i, j, 1) = hl(i, j, 1)*T0
-            hc(i, j, 1) = hl(i, j, 1)*7.0_wp
+            hs(i, j, 1) = S0
+            ht(i, j, 1) = T0
+            hc(i, j, 1) = 7.0_wp
          end do
       end do
       sb = 0.0_wp
       hb = 0.0_wp
       dw = 0.25_wp
-      s_before = hs(2, 2, 1)/hl(2, 2, 1)
-      t_before = ht(2, 2, 1)/hl(2, 2, 1)
-      c_before = hc(2, 2, 1)/hl(2, 2, 1)
+      s_before = hs(2, 2, 1)
+      t_before = ht(2, 2, 1)
+      c_before = hc(2, 2, 1)
 
       !$acc enter data copyin(wet, cover, scale, hl, hs, ht, hc, sb, hb)
       !$acc update device(wet, cover, hl, hs, ht, hc, sb, hb)
       call cavity_comp_apply_impl(NX, NY, 1, dw, wet, cover, hl, hs, ht, sb, hb, &
                                   scale, n_thin)
-      call cavity_comp_scale_tracer_impl(NX, NY, 1, scale, hc)
       !$acc update self(hl, hs, ht, hc, sb, hb, scale)
       !$acc exit data delete(wet, cover, scale, hl, hs, ht, hc, sb, hb)
 
@@ -823,13 +821,13 @@ contains
       call check(error, abs(hl(2, 2, 1) - (52.0_wp - dw)) <= 1.0e-12_wp, &
                  "an open-ocean column loses exactly dw")
       if (allocated(error)) return
-      call check(error, abs(hs(2, 2, 1)/hl(2, 2, 1) - s_before) <= 1.0e-12_wp*S0, &
+      call check(error, abs(hs(2, 2, 1) - s_before) <= 1.0e-12_wp*S0, &
                  "its salinity is unchanged")
       if (allocated(error)) return
-      call check(error, abs(ht(2, 2, 1)/hl(2, 2, 1) - t_before) <= 1.0e-12_wp*abs(T0), &
+      call check(error, abs(ht(2, 2, 1) - t_before) <= 1.0e-12_wp*abs(T0), &
                  "its temperature is unchanged")
       if (allocated(error)) return
-      call check(error, abs(hc(2, 2, 1)/hl(2, 2, 1) - c_before) <= 1.0e-12_wp*c_before, &
+      call check(error, abs(hc(2, 2, 1) - c_before) <= 1.0e-12_wp*c_before, &
                  "and so is every passive tracer's concentration")
       if (allocated(error)) return
       call check(error, abs(sb(2, 2, 1) + dw*S0) <= 1.0e-9_wp, &
@@ -1006,9 +1004,9 @@ contains
                                            SPLIT_SCHEME_PRED_CORR)
          total_h = compute_total_h(ms%h_layer, mt%areaT, ng)
          total_mass = total_h*RHO_WATER
-         total_salt = compute_total_tracer(ms%tracers(ms%idx_salinity)%hTr, &
+         total_salt = compute_total_tracer(ms%tracers(ms%idx_salinity)%c, ms%h_layer, &
                                            mt%areaT, ng)*RHO_WATER
-         total_heat = compute_total_tracer(ms%tracers(ms%idx_temperature)%hTr, &
+         total_heat = compute_total_tracer(ms%tracers(ms%idx_temperature)%c, ms%h_layer, &
                                            mt%areaT, ng)*RHO_WATER
          src_salt = ocean_budget_src( &
                     ocean_salt_src_sum( &
@@ -1263,7 +1261,7 @@ contains
       type(ocean_engine_t), intent(inout) :: engine
       real(wp), allocatable, intent(out) :: h(:, :, :), hs(:, :, :)
       associate (ms => engine%state%multilayer)
-         associate (hl => ms%h_layer, hsal => ms%tracers(ms%idx_salinity)%hTr)
+         associate (hl => ms%h_layer, hsal => ms%tracers(ms%idx_salinity)%c)
             !$acc update self(hl, hsal) if_present
             allocate (h, source=hl)
             allocate (hs, source=hsal)

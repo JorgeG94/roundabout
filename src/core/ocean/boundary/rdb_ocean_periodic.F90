@@ -343,8 +343,8 @@ contains
       ! Per-tracer loop outside DCs — outer-shim pattern for array-of-DTs.
       if (allocated(ms%tracers)) then
          do it = 1, size(ms%tracers)
-            if (.not. allocated(ms%tracers(it)%hTr)) cycle
-            call ocean_periodic_wrap_centre_3d(ms%tracers(it)%hTr, nx, ny, nz, &
+            if (.not. allocated(ms%tracers(it)%c)) cycle
+            call ocean_periodic_wrap_centre_3d(ms%tracers(it)%c, nx, ny, nz, &
                                                nx_phys, ny_phys, nghost, per_x, per_y, no_wait=.true.)
          end do
       end if

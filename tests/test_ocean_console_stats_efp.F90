@@ -171,15 +171,15 @@ contains
       h_efp = compute_total_h_efp(state%multilayer%h_layer, state%metrics%areaT, grid%nghost)
       h_e = real(efp_to_real(h_efp), wp)
 
-      s_fp = compute_total_tracer(state%multilayer%tracers(state%multilayer%idx_salinity)%hTr, &
+      s_fp = compute_total_tracer(state%multilayer%tracers(state%multilayer%idx_salinity)%c, state%multilayer%h_layer, &
                                   state%metrics%areaT, grid%nghost)
-      s_efp = compute_total_tracer_efp(state%multilayer%tracers(state%multilayer%idx_salinity)%hTr, &
+      s_efp = compute_total_tracer_efp(state%multilayer%tracers(state%multilayer%idx_salinity)%c, state%multilayer%h_layer, &
                                        state%metrics%areaT, grid%nghost)
       s_e = real(efp_to_real(s_efp), wp)
 
-      t_fp = compute_total_tracer(state%multilayer%tracers(state%multilayer%idx_temperature)%hTr, &
+      t_fp = compute_total_tracer(state%multilayer%tracers(state%multilayer%idx_temperature)%c, state%multilayer%h_layer, &
                                   state%metrics%areaT, grid%nghost)
-      t_efp = compute_total_tracer_efp(state%multilayer%tracers(state%multilayer%idx_temperature)%hTr, &
+      t_efp = compute_total_tracer_efp(state%multilayer%tracers(state%multilayer%idx_temperature)%c, state%multilayer%h_layer, &
                                        state%metrics%areaT, grid%nghost)
       t_e = real(efp_to_real(t_efp), wp)
 
@@ -239,9 +239,9 @@ contains
          do j = 1, grid%ny_total
             do i = 1, grid%nx_total
                state%multilayer%h_layer(i, j, k) = 10.0_wp + 0.1_wp*real(i + j + k, wp)
-               state%multilayer%tracers(state%multilayer%idx_salinity)%hTr(i, j, k) = &
+               state%multilayer%tracers(state%multilayer%idx_salinity)%c(i, j, k) = &
                   state%multilayer%h_layer(i, j, k)*(34.5_wp + 0.01_wp*real(i, wp))
-               state%multilayer%tracers(state%multilayer%idx_temperature)%hTr(i, j, k) = &
+               state%multilayer%tracers(state%multilayer%idx_temperature)%c(i, j, k) = &
                   state%multilayer%h_layer(i, j, k)*(12.0_wp - 0.02_wp*real(j, wp))
             end do
          end do

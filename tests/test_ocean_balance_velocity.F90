@@ -167,8 +167,8 @@ contains
                s = engine%state%barotropic%b(i, j)/sum(engine%state%multilayer%h_layer(i, j, :))
                engine%state%multilayer%h_layer(i, j, :) = s*engine%state%multilayer%h_layer(i, j, :)
                do it = 1, size(engine%state%multilayer%tracers)
-                  engine%state%multilayer%tracers(it)%hTr(i, j, :) = &
-                     s*engine%state%multilayer%tracers(it)%hTr(i, j, :)
+                  engine%state%multilayer%tracers(it)%c(i, j, :) = &
+                     s*engine%state%multilayer%tracers(it)%c(i, j, :)
                end do
             end do
          end do

@@ -344,9 +344,9 @@ contains
 
          total_h = compute_total_h(ms%h_layer, mt%areaT, ng)
          total_mass = total_h*RHO_WATER
-         total_salt = compute_total_tracer(ms%tracers(ms%idx_salinity)%hTr, &
+         total_salt = compute_total_tracer(ms%tracers(ms%idx_salinity)%c, ms%h_layer, &
                                            mt%areaT, ng)*RHO_WATER
-         total_heat = compute_total_tracer(ms%tracers(ms%idx_temperature)%hTr, &
+         total_heat = compute_total_tracer(ms%tracers(ms%idx_temperature)%c, ms%h_layer, &
                                            mt%areaT, ng)*RHO_WATER
 
          src_salt = ocean_budget_src( &
@@ -448,8 +448,8 @@ contains
 
       associate (ms => engine%state%multilayer)
          associate (hl => ms%h_layer, wm => ms%wet_mask, &
-                    hsal => ms%tracers(ms%idx_salinity)%hTr, &
-                    htmp => ms%tracers(ms%idx_temperature)%hTr)
+                    hsal => ms%tracers(ms%idx_salinity)%c, &
+                    htmp => ms%tracers(ms%idx_temperature)%c)
             !$acc update self(hl, wm, hsal, htmp) if_present
             allocate (h, source=hl)
             allocate (hs, source=hsal)

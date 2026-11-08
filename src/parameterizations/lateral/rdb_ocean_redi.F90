@@ -708,14 +708,14 @@ contains
       end if
       call redi_calc_coeffs_x(nx, ny, nz, this%nsurf, eos, &
                               ms%h_layer, &
-                              ms%tracers(ms%idx_temperature)%hTr, &
-                              ms%tracers(ms%idx_salinity)%hTr, &
+                              ms%tracers(ms%idx_temperature)%c, &
+                              ms%tracers(ms%idx_salinity)%c, &
                               metrics%wet_u, this%uKb, this%uKt, &
                               this%uPoL, this%uPoR, this%uKoL, this%uKoR, this%uhEff)
       call redi_calc_coeffs_y(nx, ny, nz, this%nsurf, eos, &
                               ms%h_layer, &
-                              ms%tracers(ms%idx_temperature)%hTr, &
-                              ms%tracers(ms%idx_salinity)%hTr, &
+                              ms%tracers(ms%idx_temperature)%c, &
+                              ms%tracers(ms%idx_salinity)%c, &
                               metrics%wet_v, this%vKb, this%vKt, &
                               this%vPoL, this%vPoR, this%vKoL, this%vKoR, this%vhEff)
    end subroutine redi_calc_coeffs
@@ -1306,13 +1306,13 @@ contains
             ! Snapshot this tracer's hTr so the double-visit gather reads the
             ! pre-step field (order-independent — see `tr_snap`).  Re-taken
             ! every pass: pass p+1 diffuses the pass-p result.
-            call redi_snapshot(nx, ny, nz, ms%tracers(it)%hTr, this%tr_snap)
+            call redi_snapshot(nx, ny, nz, ms%tracers(it)%c, this%tr_snap)
             call redi_apply_flux_impl(nx, ny, nz, this%nsurf, dt, &
                                       nghost, nxp, nyp, wall_w, wall_e, wall_s, wall_n, &
                                       this%khtr_u, this%khtr_v, &
                                       metrics%dy_cu, metrics%dx_cv, &
                                       metrics%idxCu, metrics%idyCv, metrics%areaT, &
-                                      ms%h_layer, this%tr_snap, ms%tracers(it)%hTr, &
+                                      ms%h_layer, this%tr_snap, ms%tracers(it)%c, &
                                       this%uPoL, this%uPoR, this%uKoL, this%uKoR, this%uhEff, &
                                       this%vPoL, this%vPoR, this%vKoL, this%vKoR, this%vhEff, &
                                       this%uKb, this%uKt, this%vKb, this%vKt, &
@@ -1326,10 +1326,10 @@ contains
             ! Per pass the increments simply add.
             select case (ms%tracers(it)%budget_id)
             case (TRACER_BUDGET_SALT)
-               call redi_budget_accumulate(nx, ny, nz, ms%tracers(it)%hTr, this%tr_snap, &
+               call redi_budget_accumulate(nx, ny, nz, ms%h_layer, ms%tracers(it)%c, this%tr_snap, &
                                            ms%salt_budget_hdiff)
             case (TRACER_BUDGET_HEAT)
-               call redi_budget_accumulate(nx, ny, nz, ms%tracers(it)%hTr, this%tr_snap, &
+               call redi_budget_accumulate(nx, ny, nz, ms%h_layer, ms%tracers(it)%c, this%tr_snap, &
                                            ms%heat_budget_hdiff)
             case default
                ! Passive tracers carry no closed budget.
@@ -1436,8 +1436,8 @@ contains
 
       if (ocean_halo_is_init()) then
          do it = 1, size(ms%tracers)
-            if (.not. allocated(ms%tracers(it)%hTr)) cycle
-            call ocean_halo_centre(ms%tracers(it)%hTr, ms%nz_ml)
+            if (.not. allocated(ms%tracers(it)%c)) cycle
+            call ocean_halo_centre(ms%tracers(it)%c, ms%nz_ml)
          end do
       end if
       if (present(bc)) then
@@ -1449,8 +1449,8 @@ contains
          end if
          if (per_x .or. per_y) then
             do it = 1, size(ms%tracers)
-               if (.not. allocated(ms%tracers(it)%hTr)) cycle
-               call ocean_periodic_wrap_centre_3d(ms%tracers(it)%hTr, grid%nx_total, &
+               if (.not. allocated(ms%tracers(it)%c)) cycle
+               call ocean_periodic_wrap_centre_3d(ms%tracers(it)%c, grid%nx_total, &
                                                   grid%ny_total, ms%nz_ml, grid%nx_phys, &
                                                   grid%ny_phys, grid%nghost, per_x, per_y)
             end do
@@ -1459,17 +1459,21 @@ contains
       end if
    end subroutine redi_refresh_tracer_halos
 
-   pure subroutine redi_budget_accumulate(nx, ny, nz, hTr, snap, budget)
-      !! `budget += hTr - snap` (device-side): book the realised Redi
+   pure subroutine redi_budget_accumulate(nx, ny, nz, h, hTr, snap, budget)
+      !! `budget += h·c - h·snap` (device-side): book the realised Redi
       !! increment of one budgeted tracer into its lateral-diffusion
       !! budget accumulator (`ms%salt_budget_hdiff` / `heat_budget_hdiff`).
       integer, intent(in) :: nx, ny, nz
+      real(wp), intent(in) :: h(nx, ny, nz)
       real(wp), intent(in) :: hTr(nx, ny, nz)
       real(wp), intent(in) :: snap(nx, ny, nz)
       real(wp), intent(inout) :: budget(nx, ny, nz)
       integer :: i, j, k
-      do concurrent(k=1:nz, j=1:ny, i=1:nx)
-         budget(i, j, k) = budget(i, j, k) + (hTr(i, j, k) - snap(i, j, k))
+      real(wp) :: p_new, p_old
+      do concurrent(k=1:nz, j=1:ny, i=1:nx) local(p_new, p_old)
+         p_new = h(i, j, k)*hTr(i, j, k)
+         p_old = h(i, j, k)*snap(i, j, k)
+         budget(i, j, k) = budget(i, j, k) + (p_new - p_old)
       end do
    end subroutine redi_budget_accumulate
 
@@ -1687,7 +1691,7 @@ contains
          end if
          iaij = 1.0_wp/areaT(i, j)
          do k = 1, nz
-            hTr(i, j, k) = hTr(i, j, k) + dTr(k)*iaij
+            hTr(i, j, k) = hTr(i, j, k) + dTr(k)*iaij/(h_layer(i, j, k) + H_DIV_EPS)
          end do
       end do
    end subroutine redi_apply_flux_impl

@@ -218,8 +218,8 @@ contains
             do i = 1, grid%nx_total
                t_val = T0 + GZ*(real(k, wp) - 0.5_wp)*dz + gx*real(i, wp)*grid%dx &
                        + gy*real(j, wp)*grid%dy
-               ms%tracers(ms%idx_temperature)%hTr(i, j, k) = t_val*dz
-               ms%tracers(ms%idx_salinity)%hTr(i, j, k) = S0*dz
+               ms%tracers(ms%idx_temperature)%c(i, j, k) = t_val*dz
+               ms%tracers(ms%idx_salinity)%c(i, j, k) = S0*dz
             end do
          end do
       end do
@@ -376,7 +376,7 @@ contains
          do i = NGHOST + 1, NGHOST + grid%nx_phys
             zb = 0.0_wp
             do k = 1, nz
-               tt = ms%tracers(ms%idx_temperature)%hTr(i, j, k)/ms%h_layer(i, j, k)
+               tt = ms%tracers(ms%idx_temperature)%c(i, j, k)/ms%h_layer(i, j, k)
                rho = RHO0 - ALPHA_T*(tt - T0)
                pe = pe + GRAVITY*rho*ms%h_layer(i, j, k)*(zb + 0.5_wp*ms%h_layer(i, j, k))
                zb = zb + ms%h_layer(i, j, k)
@@ -421,10 +421,10 @@ contains
                h1w = min(max(h1w, 10.0_wp), HTOT - 10.0_wp)
                ms%h_layer(i, j, 1) = h1w
                ms%h_layer(i, j, 2) = HTOT - h1w
-               ms%tracers(ms%idx_temperature)%hTr(i, j, 1) = 8.0_wp*h1w
-               ms%tracers(ms%idx_temperature)%hTr(i, j, 2) = 16.0_wp*(HTOT - h1w)
-               ms%tracers(ms%idx_salinity)%hTr(i, j, 1) = S0*h1w
-               ms%tracers(ms%idx_salinity)%hTr(i, j, 2) = S0*(HTOT - h1w)
+               ms%tracers(ms%idx_temperature)%c(i, j, 1) = 8.0_wp*h1w
+               ms%tracers(ms%idx_temperature)%c(i, j, 2) = 16.0_wp*(HTOT - h1w)
+               ms%tracers(ms%idx_salinity)%c(i, j, 1) = S0*h1w
+               ms%tracers(ms%idx_salinity)%c(i, j, 2) = S0*(HTOT - h1w)
             end do
          end do
 
@@ -448,7 +448,7 @@ contains
             call gm_compute_transports(grid, metrics, gm, sl, ms, DTL, cg1=cg1)
             call continuity_gm_apply(grid, metrics, ct, ms, gm, DTL, 1.0_wp, TR_MODE_ADVECT)
             !$acc update self(ms%h_layer)
-            !$acc update self(ms%tracers(ms%idx_temperature)%hTr)
+            !$acc update self(ms%tracers(ms%idx_temperature)%c)
             pe = column_pe(ms, grid, NZ)
             if (pe > prev + 1.0e-12_wp*abs(pe0)) monotone = .false.
             prev = pe

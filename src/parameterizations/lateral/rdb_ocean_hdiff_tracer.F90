@@ -26,7 +26,7 @@ module rdb_ocean_hdiff_tracer
    !! tracer-side counterpart.  Same compute-then-apply pattern,
    !! same scratch-buffer two-pass design for race-free
    !! `do concurrent` parallelism.
-   use rdb_constants, only: wp
+   use rdb_constants, only: H_DIV_EPS, H_VANISHED, wp
    use rdb_grid, only: hgrid_t
    use rdb_ocean_metrics, only: ocean_metrics_t
    use rdb_multilayer_state, only: multilayer_state_t
@@ -198,7 +198,7 @@ contains
                   dt, this%kappa_h, &
                   metrics%dy_cu, metrics%dx_cv, metrics%idxCu, metrics%idyCv, &
                   metrics%iareaT, &
-                  ms%h_layer, ms%tracers(it)%hTr, &
+                  ms%h_layer, ms%tracers(it)%c, &
                   this%T_centre%data, &
                   this%F_x_face%data, this%F_y_face%data, &
                   wall_w, wall_e, wall_s, wall_n, &
@@ -211,7 +211,7 @@ contains
                   dt, this%kappa_h, &
                   metrics%dy_cu, metrics%dx_cv, metrics%idxCu, metrics%idyCv, &
                   metrics%iareaT, &
-                  ms%h_layer, ms%tracers(it)%hTr, &
+                  ms%h_layer, ms%tracers(it)%c, &
                   this%T_centre%data, &
                   this%F_x_face%data, this%F_y_face%data, &
                   wall_w, wall_e, wall_s, wall_n, &
@@ -224,7 +224,7 @@ contains
                   dt, this%kappa_h, &
                   metrics%dy_cu, metrics%dx_cv, metrics%idxCu, metrics%idyCv, &
                   metrics%iareaT, &
-                  ms%h_layer, ms%tracers(it)%hTr, &
+                  ms%h_layer, ms%tracers(it)%c, &
                   this%T_centre%data, &
                   this%F_x_face%data, this%F_y_face%data, &
                   wall_w, wall_e, wall_s, wall_n, &
@@ -242,7 +242,7 @@ contains
                   dt, this%kappa_h, &
                   metrics%dy_cu, metrics%dx_cv, metrics%idxCu, metrics%idyCv, &
                   metrics%iareaT, &
-                  ms%h_layer, ms%tracers(it)%hTr, &
+                  ms%h_layer, ms%tracers(it)%c, &
                   this%T_centre%data, &
                   this%F_x_face%data, this%F_y_face%data, &
                   wall_w, wall_e, wall_s, wall_n, &
@@ -254,7 +254,7 @@ contains
                   dt, this%kappa_h, &
                   metrics%dy_cu, metrics%dx_cv, metrics%idxCu, metrics%idyCv, &
                   metrics%iareaT, &
-                  ms%h_layer, ms%tracers(it)%hTr, &
+                  ms%h_layer, ms%tracers(it)%c, &
                   this%T_centre%data, &
                   this%F_x_face%data, this%F_y_face%data, &
                   wall_w, wall_e, wall_s, wall_n, &
@@ -266,7 +266,7 @@ contains
                   dt, this%kappa_h, &
                   metrics%dy_cu, metrics%dx_cv, metrics%idxCu, metrics%idyCv, &
                   metrics%iareaT, &
-                  ms%h_layer, ms%tracers(it)%hTr, &
+                  ms%h_layer, ms%tracers(it)%c, &
                   this%T_centre%data, &
                   this%F_x_face%data, this%F_y_face%data, &
                   wall_w, wall_e, wall_s, wall_n)
@@ -346,18 +346,17 @@ contains
       integer :: i, j, k
       real(wp) :: h_face, delta
 
-      ! ---- Pass 1: T = hTr/h at centres ----
+      ! ---- Pass 1: T = c at centres (the stored concentration) ----
       do concurrent(k=1:nz, j=1:ny, i=1:nx)
-         if (h(i, j, k) > 0.0_wp) then
-            T_centre(i, j, k) = rdb_conc_of_raw(hTr(i, j, k), h(i, j, k))
-         else
-            T_centre(i, j, k) = 0.0_wp
-         end if
+         T_centre(i, j, k) = hTr(i, j, k)
       end do
 
       ! ---- Pass 2: east-face transport flux ----
       do concurrent(k=1:nz, j=1:ny, i=2:nx) local(h_face)
          h_face = 0.5_wp*(h(i - 1, j, k) + h(i, j, k))
+         ! A face touching a vanished layer carries no water: it is closed, so
+         ! a filler's retained c never exchanges content with a live neighbour.
+         if (min(h(i - 1, j, k), h(i, j, k)) <= H_VANISHED) h_face = 0.0_wp  ! vanished-ok: geometry (live-layer test), not a tracer update
          F_x_face(i, j, k) = kappa*h_face* &
                              (T_centre(i, j, k) - T_centre(i - 1, j, k))* &
                              idxCu(i, j)*dy_cu(i, j)
@@ -388,6 +387,7 @@ contains
       ! ---- Pass 3: north-face transport flux ----
       do concurrent(k=1:nz, j=2:ny, i=1:nx) local(h_face)
          h_face = 0.5_wp*(h(i, j - 1, k) + h(i, j, k))
+         if (min(h(i, j - 1, k), h(i, j, k)) <= H_VANISHED) h_face = 0.0_wp  ! vanished-ok: geometry (live-layer test), not a tracer update
          F_y_face(i, j, k) = kappa*h_face* &
                              (T_centre(i, j, k) - T_centre(i, j - 1, k))* &
                              idyCv(i, j)*dx_cv(i, j)
@@ -413,14 +413,15 @@ contains
             delta = dt*( &
                     (F_x_face(i + 1, j, k) - F_x_face(i, j, k)) + &
                     (F_y_face(i, j + 1, k) - F_y_face(i, j, k)))*iareaT(i, j)
-            hTr(i, j, k) = hTr(i, j, k) + delta
+            hTr(i, j, k) = hTr(i, j, k) + delta/(h(i, j, k) + H_DIV_EPS)
             budget(i, j, k) = budget(i, j, k) + delta
          end do
       else
          do concurrent(k=1:nz, j=1:ny, i=1:nx)
             hTr(i, j, k) = hTr(i, j, k) + dt*( &
                            (F_x_face(i + 1, j, k) - F_x_face(i, j, k)) + &
-                           (F_y_face(i, j + 1, k) - F_y_face(i, j, k)))*iareaT(i, j)
+                           (F_y_face(i, j + 1, k) - F_y_face(i, j, k)))*iareaT(i, j)/ &
+                           (h(i, j, k) + H_DIV_EPS)
          end do
       end if
    end subroutine tracer_hdiff_one_impl

@@ -32,7 +32,7 @@ module rdb_ocean_ideal_age
    !!
    !! Both entry points self-gate on `ms%idx_age <= 0` (no-op when the
    !! ideal-age tracer isn't registered) and keep the outer-shim +
-   !! flat-impl split: the `ms%tracers(idx)%hTr` registry dereference
+   !! flat-impl split: the `ms%tracers(idx)%c` registry dereference
    !! happens on the host, only flat arrays cross into `do concurrent`
    !! (two-level derived-type indirection segfaults on the GPU).
    !!
@@ -48,7 +48,7 @@ module rdb_ocean_ideal_age
    !!     call, which is strictly stronger (idempotent, exact) and
    !!     matches the tracer's definition as a hard Dirichlet condition
    !!     rather than a relaxation.
-   use rdb_constants, only: wp
+   use rdb_constants, only: H_DIV_EPS, wp
    use rdb_grid, only: hgrid_t
    use rdb_multilayer_state, only: multilayer_state_t
    implicit none
@@ -80,7 +80,7 @@ contains
          if (.not. active) return
       end if
       if (ms%idx_age <= 0) return
-      call ocean_ideal_age_age_step(ms%tracers(ms%idx_age)%hTr, ms%h_layer, &
+      call ocean_ideal_age_age_step(ms%tracers(ms%idx_age)%c, ms%h_layer, &
                                     dt, grid%nx_total, grid%ny_total, ms%nz_ml)
    end subroutine ocean_ideal_age_apply
 
@@ -100,7 +100,7 @@ contains
       integer :: i, j, k
 
       do concurrent(k=1:nz - 1, j=1:ny, i=1:nx)
-         hTr_age(i, j, k) = rdb_conc_add_source(hTr_age(i, j, k), h_layer(i, j, k), dt*h_layer(i, j, k))
+         hTr_age(i, j, k) = hTr_age(i, j, k) + dt
       end do
    end subroutine ocean_ideal_age_age_step
 
@@ -124,7 +124,7 @@ contains
          if (.not. active) return
       end if
       if (ms%idx_age <= 0) return
-      call ocean_ideal_age_reset_step(ms%tracers(ms%idx_age)%hTr, ms%h_layer, &
+      call ocean_ideal_age_reset_step(ms%tracers(ms%idx_age)%c, ms%h_layer, &
                                       young_eff, grid%nx_total, grid%ny_total, ms%nz_ml)
    end subroutine ocean_ideal_age_reset_surface
 
@@ -146,7 +146,7 @@ contains
       integer :: i, j
 
       do concurrent(j=1:ny, i=1:nx)
-         hTr_age(i, j, nz) = rdb_content_of(young_eff, h_layer(i, j, nz))
+         hTr_age(i, j, nz) = young_eff
       end do
    end subroutine ocean_ideal_age_reset_step
 

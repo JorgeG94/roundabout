@@ -469,8 +469,8 @@ contains
       if (ms%idx_temperature <= 0 .or. ms%idx_salinity <= 0) return
 
       call tidal_mixing_column_kernel(grid, this, ms, &
-                                      ms%tracers(ms%idx_temperature)%hTr, &
-                                      ms%tracers(ms%idx_salinity)%hTr)
+                                      ms%tracers(ms%idx_temperature)%c, &
+                                      ms%tracers(ms%idx_salinity)%c)
    end subroutine tidal_mixing_compute
 
    pure subroutine column_layer_n2(eos, rho0, nz, h_col, t_col, s_col, n2_col)
@@ -543,7 +543,7 @@ contains
       type(ocean_tidal_mixing_t), intent(inout) :: this
       type(multilayer_state_t), intent(in) :: ms
       ! assumed-shape-ok: tracer registry outer-shim — caller host-dereferences
-      ! ms%tracers(idx)%hTr before passing; size varies per tracer slot
+      ! ms%tracers(idx)%c before passing; size varies per tracer slot
       ! (see CLAUDE.md "outer-shim + flat-impl" pattern); thermo cadence.
       real(wp), intent(in) :: hT(:, :, :)
          !! Temperature tracer hTr (degC*m), host-dereferenced.

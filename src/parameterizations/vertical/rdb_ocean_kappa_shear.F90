@@ -461,8 +461,8 @@ contains
                                         ms%nz_ml, dt, &
                                         ms%h_layer, ms%u_face_x_layer, &
                                         ms%v_face_y_layer, &
-                                        ms%tracers(ms%idx_temperature)%hTr, &
-                                        ms%tracers(ms%idx_salinity)%hTr, &
+                                        ms%tracers(ms%idx_temperature)%c, &
+                                        ms%tracers(ms%idx_salinity)%c, &
                                         wet_t, wet_u, wet_v)
          call kappa_shear_vertex_scatter(grid%nx_total, grid%ny_total, &
                                          ms%nz_ml + 1, &
@@ -472,8 +472,8 @@ contains
                                          this%kd_int, this%tke_int)
       else
          call kappa_shear_column_kernel(grid, this, ms, &
-                                        ms%tracers(ms%idx_temperature)%hTr, &
-                                        ms%tracers(ms%idx_salinity)%hTr, dt)
+                                        ms%tracers(ms%idx_temperature)%c, &
+                                        ms%tracers(ms%idx_salinity)%c, dt)
       end if
    end subroutine kappa_shear_compute
 
@@ -501,7 +501,7 @@ contains
       type(ocean_kappa_shear_t), intent(inout) :: this
       type(multilayer_state_t), intent(in) :: ms
       ! assumed-shape-ok: tracer registry outer-shim — caller host-dereferences
-      ! ms%tracers(idx)%hTr before passing; size varies per tracer slot
+      ! ms%tracers(idx)%c before passing; size varies per tracer slot
       ! (see CLAUDE.md "outer-shim + flat-impl" pattern); thermo cadence.
       real(wp), intent(in) :: hT(:, :, :)
          !! Temperature tracer hTr (degC*m), host-dereferenced.

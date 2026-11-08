@@ -811,7 +811,7 @@ contains
             do j = 1, NY
                do i = 1, NX
                   state%multilayer%h_layer(i, j, k) = H_COL
-                  state%multilayer%tracers(state%multilayer%idx_age)%hTr(i, j, k) = H_COL*AGE_S
+                  state%multilayer%tracers(state%multilayer%idx_age)%c(i, j, k) = H_COL*AGE_S
                end do
             end do
          end do
@@ -858,12 +858,12 @@ contains
          if (allocated(error)) exit checks
 
          state%multilayer%h_layer = H_COL
-         state%multilayer%tracers(it)%hTr = H_COL*T_REF
+         state%multilayer%tracers(it)%c = H_COL*T_REF
          ! Vanish one bed-layer cell (k=1): both h and hTr go to zero,
          ! matching what a real dynamic-vanish (e.g. ZSTAR_FULL) leaves
          ! behind -- an exact-zero thickness, not merely "small".
          state%multilayer%h_layer(3, 2, 1) = 0.0_wp
-         state%multilayer%tracers(it)%hTr(3, 2, 1) = 0.0_wp
+         state%multilayer%tracers(it)%c(3, 2, 1) = 0.0_wp
 
          call fill_temperature(state, buf)
 
@@ -1114,7 +1114,7 @@ contains
          ! as hTr = h * T, so hTr = H_LAYER * T per layer.
          it = state%multilayer%idx_temperature
          do k = 1, NZ
-            state%multilayer%tracers(it)%hTr(:, :, k) = H_LAYER*real(k*5, wp)
+            state%multilayer%tracers(it)%c(:, :, k) = H_LAYER*real(k*5, wp)
          end do
 
          call state%diag%set_output_z_levels(Z_OUT)
@@ -1424,8 +1424,8 @@ contains
             do i = 1, size(state%multilayer%h_layer, 1)
                h = 10.0_wp + real(k, wp)
                state%multilayer%h_layer(i, j, k) = h
-               state%multilayer%tracers(it)%hTr(i, j, k) = h*(2.0_wp + 3.0_wp*real(k, wp) + 0.1_wp*real(i, wp))
-               state%multilayer%tracers(is)%hTr(i, j, k) = h*(34.0_wp + 0.2_wp*real(j, wp) + 0.1_wp*real(k, wp))
+               state%multilayer%tracers(it)%c(i, j, k) = (2.0_wp + 3.0_wp*real(k, wp) + 0.1_wp*real(i, wp))
+               state%multilayer%tracers(is)%c(i, j, k) = (34.0_wp + 0.2_wp*real(j, wp) + 0.1_wp*real(k, wp))
             end do
          end do
       end do
@@ -1457,8 +1457,8 @@ contains
          do k = 1, NZ
             do j = 1, grid%ny_total
                do i = 1, grid%nx_total
-                  ct = state%multilayer%tracers(it)%hTr(i, j, k)/state%multilayer%h_layer(i, j, k)
-                  sa = state%multilayer%tracers(is)%hTr(i, j, k)/state%multilayer%h_layer(i, j, k)
+                  ct = state%multilayer%tracers(it)%c(i, j, k)/state%multilayer%h_layer(i, j, k)
+                  sa = state%multilayer%tracers(is)%c(i, j, k)/state%multilayer%h_layer(i, j, k)
                   worst_t = max(worst_t, abs(state%diag%vars(1)%output_buffer(i, j, k) - pt_from_ct(sa, ct)))
                   worst_s = max(worst_s, abs(state%diag%vars(2)%output_buffer(i, j, k) - sp_from_sr(sa)))
                   gap = max(gap, abs(state%diag%vars(1)%output_buffer(i, j, k) - ct))
@@ -1497,9 +1497,9 @@ contains
                do i = 1, grid%nx_total
                   worst = max(worst, &
                               abs(state%diag%vars(1)%output_buffer(i, j, k) - &
-                                  state%multilayer%tracers(it)%hTr(i, j, k)/state%multilayer%h_layer(i, j, k)), &
+                                  state%multilayer%tracers(it)%c(i, j, k)/state%multilayer%h_layer(i, j, k)), &
                               abs(state%diag%vars(2)%output_buffer(i, j, k) - &
-                                  state%multilayer%tracers(is)%hTr(i, j, k)/state%multilayer%h_layer(i, j, k)))
+                                  state%multilayer%tracers(is)%c(i, j, k)/state%multilayer%h_layer(i, j, k)))
                end do
             end do
          end do
@@ -1932,8 +1932,8 @@ contains
          it = state%multilayer%idx_temperature
          is_ = state%multilayer%idx_salinity
          do k = 1, NZ
-            state%multilayer%tracers(it)%hTr(:, :, k) = 10.0_wp*(10.0_wp - real(k, wp))
-            state%multilayer%tracers(is_)%hTr(:, :, k) = 10.0_wp*35.0_wp
+            state%multilayer%tracers(it)%c(:, :, k) = 10.0_wp*(10.0_wp - real(k, wp))
+            state%multilayer%tracers(is_)%c(:, :, k) = 10.0_wp*35.0_wp
          end do
 
          call state%diag%set_output_density_levels(RHO_OUT)
@@ -2285,7 +2285,7 @@ contains
          call check(error, it_S > 0, "salinity tracer must be registered")
          if (allocated(error)) exit checks
          state%multilayer%h_layer = H_LAYER
-         state%multilayer%tracers(it_S)%hTr = S_REF*H_LAYER
+         state%multilayer%tracers(it_S)%c = S_REF*H_LAYER
          m = diag_mask_global(grid)
          allocate (areaT(grid%nx_total, grid%ny_total), source=grid%dx*grid%dy)
          total = budget_total_tracer(state%multilayer, it_S, m, areaT)
@@ -2371,8 +2371,8 @@ contains
          it_S = state%multilayer%idx_salinity
          it_T = state%multilayer%idx_temperature
          state%multilayer%h_layer = H_LAYER
-         if (it_S > 0) state%multilayer%tracers(it_S)%hTr = S_REF*H_LAYER
-         if (it_T > 0) state%multilayer%tracers(it_T)%hTr = T_REF*H_LAYER
+         if (it_S > 0) state%multilayer%tracers(it_S)%c = S_REF*H_LAYER
+         if (it_T > 0) state%multilayer%tracers(it_T)%c = T_REF*H_LAYER
 
          call budgets%init_snapshot(state%multilayer)
          call budgets%evaluate(state%multilayer)

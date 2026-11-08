@@ -675,12 +675,12 @@ contains
          end if
          if (state%eos%ts_convention == TS_CONS_ABS .and. is > 0) then
             call fill_temperature_pt_impl(.true., state%multilayer%h_layer, &
-                                          state%multilayer%tracers(it)%hTr, &
-                                          state%multilayer%tracers(is)%hTr, buf)
+                                          state%multilayer%tracers(it)%c, &
+                                          state%multilayer%tracers(is)%c, buf)
          else
             call fill_temperature_pt_impl(.false., state%multilayer%h_layer, &
-                                          state%multilayer%tracers(it)%hTr, &
-                                          state%multilayer%tracers(it)%hTr, buf)
+                                          state%multilayer%tracers(it)%c, &
+                                          state%multilayer%tracers(it)%c, buf)
          end if
       end select
    end subroutine fill_temperature_pt
@@ -701,7 +701,7 @@ contains
          end if
          call fill_salinity_sp_impl(state%eos%ts_convention == TS_CONS_ABS, &
                                     state%multilayer%h_layer, &
-                                    state%multilayer%tracers(is)%hTr, buf)
+                                    state%multilayer%tracers(is)%c, buf)
       end select
    end subroutine fill_salinity_sp
 
@@ -725,10 +725,10 @@ contains
          ! vanished-ok: NaN missing-data sentinel, as `fill_tracer_impl`.
          if (rdb_vl_is_live(h)) then
             if (cons) then
-               buf(i, j, k) = pt_from_ct(rdb_vl_conc(hTr_S(i, j, k), h), &
-                                         rdb_vl_conc(hTr_T(i, j, k), h))
+               buf(i, j, k) = pt_from_ct(hTr_S(i, j, k), &
+                                         hTr_T(i, j, k))
             else
-               buf(i, j, k) = rdb_vl_conc(hTr_T(i, j, k), h)
+               buf(i, j, k) = hTr_T(i, j, k)
             end if
          else
             buf(i, j, k) = qnan
@@ -755,9 +755,9 @@ contains
          ! vanished-ok: NaN missing-data sentinel, as `fill_tracer_impl`.
          if (rdb_vl_is_live(h)) then
             if (cons) then
-               buf(i, j, k) = sp_from_sr(rdb_vl_conc(hTr_S(i, j, k), h))
+               buf(i, j, k) = sp_from_sr(hTr_S(i, j, k))
             else
-               buf(i, j, k) = rdb_vl_conc(hTr_S(i, j, k), h)
+               buf(i, j, k) = hTr_S(i, j, k)
             end if
          else
             buf(i, j, k) = qnan

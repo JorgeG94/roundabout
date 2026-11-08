@@ -423,8 +423,8 @@ contains
       if (.not. this%enable) return
       if (ms%idx_temperature <= 0 .or. ms%idx_salinity <= 0) return
       call bbl_mixing_compute_impl(grid%nx_total, grid%ny_total, ms%nz_ml, ms%h_layer, &
-                                   ms%tracers(ms%idx_temperature)%hTr, &
-                                   ms%tracers(ms%idx_salinity)%hTr, ms%wet_mask, &
+                                   ms%tracers(ms%idx_temperature)%c, &
+                                   ms%tracers(ms%idx_salinity)%c, ms%wet_mask, &
                                    ms%k_bot, this%eos, this%rho0, this%ustar_bbl, &
                                    this%ke_loss_bbl, this%f_abs_h, this%effic, &
                                    this%max_decay, this%use_omega, this%omega2, &

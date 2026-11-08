@@ -89,9 +89,9 @@ contains
       call ice%init(grid)
 
       ms%h_layer = H_LAYER
-      ms%tracers(ms%idx_salinity)%hTr = S_INIT*H_LAYER
-      ms%tracers(ms%idx_temperature)%hTr = T_DEEP*H_LAYER
-      ms%tracers(ms%idx_temperature)%hTr(:, :, NZ) = t_surface*H_LAYER
+      ms%tracers(ms%idx_salinity)%c = S_INIT*H_LAYER
+      ms%tracers(ms%idx_temperature)%c = T_DEEP*H_LAYER
+      ms%tracers(ms%idx_temperature)%c(:, :, NZ) = t_surface*H_LAYER
    end subroutine setup_state
 
    subroutine run_frazil(grid, eos, ms, ice)
@@ -108,7 +108,7 @@ contains
       call ice%enter_data()
       call ice_frazil_accumulate(grid, eos, ms, ice%frazil_heat, &
                                  ice%heat_budget_frazil)
-      associate (hT => ms%tracers(ms%idx_temperature)%hTr, &
+      associate (hT => ms%tracers(ms%idx_temperature)%c, &
                  fz => ice%frazil_heat, fb => ice%heat_budget_frazil)
          !$acc update self(hT, fz, fb)
       end associate
@@ -148,20 +148,20 @@ contains
 
          ip = grid%nx_total/2
          jp = grid%ny_total/2
-         t_after = ms%tracers(ms%idx_temperature)%hTr(ip, jp, NZ)/H_LAYER
+         t_after = ms%tracers(ms%idx_temperature)%c(ip, jp, NZ)/H_LAYER
          call check(error, abs(t_after - t_f) < 1.0e-12_wp, &
                     "surface T must be clamped exactly to T_f")
          if (allocated(error)) exit checks
 
          drift = 0.0_wp
          do k = 1, NZ - 1
-            drift = max(drift, abs(ms%tracers(ms%idx_temperature)%hTr(ip, jp, k) &
+            drift = max(drift, abs(ms%tracers(ms%idx_temperature)%c(ip, jp, k) &
                                    - T_DEEP*H_LAYER))
          end do
          call check(error, drift < 1.0e-14_wp, &
                     "sub-surface layers must be untouched")
          if (allocated(error)) exit checks
-         call check(error, abs(ms%tracers(ms%idx_salinity)%hTr(ip, jp, NZ) &
+         call check(error, abs(ms%tracers(ms%idx_salinity)%c(ip, jp, NZ) &
                                - S_INIT*H_LAYER) < 1.0e-14_wp, &
                     "salinity must be untouched")
 
@@ -215,7 +215,7 @@ contains
 
          ip = grid%nx_total/2
          jp = grid%ny_total/2
-         call check(error, abs(ms%tracers(ms%idx_temperature)%hTr(ip, jp, NZ) &
+         call check(error, abs(ms%tracers(ms%idx_temperature)%c(ip, jp, NZ) &
                                - T_WARM*H_LAYER) < 1.0e-14_wp, &
                     "above-freezing surface T must be untouched")
          if (allocated(error)) exit checks
@@ -249,10 +249,10 @@ contains
          ! East half warm — those columns must not participate.
          do j = 1, grid%ny_total
             do i = grid%nx_total/2 + 1, grid%nx_total
-               ms%tracers(ms%idx_temperature)%hTr(i, j, NZ) = T_WARM*H_LAYER
+               ms%tracers(ms%idx_temperature)%c(i, j, NZ) = T_WARM*H_LAYER
             end do
          end do
-         allocate (hT_ic, source=ms%tracers(ms%idx_temperature)%hTr)
+         allocate (hT_ic, source=ms%tracers(ms%idx_temperature)%c)
 
          call run_frazil(grid, eos, ms, ice)
 
@@ -263,7 +263,7 @@ contains
             do j = 1, grid%ny_total
                do i = 1, grid%nx_total
                   ocean_gain = ocean_gain + RHO_WATER*SEAWATER_CP* &
-                               (ms%tracers(ms%idx_temperature)%hTr(i, j, k) - hT_ic(i, j, k))
+                               (ms%tracers(ms%idx_temperature)%c(i, j, k) - hT_ic(i, j, k))
                end do
             end do
          end do
@@ -300,14 +300,14 @@ contains
 
          call run_frazil(grid, eos, ms, ice)
 
-         call check(error, abs(ms%tracers(ms%idx_temperature)%hTr(1, 1, NZ) &
+         call check(error, abs(ms%tracers(ms%idx_temperature)%c(1, 1, NZ) &
                                - T_COLD*H_LAYER) < 1.0e-14_wp, &
                     "ghost-corner surface T must be untouched")
          if (allocated(error)) exit checks
          call check(error, abs(ice%frazil_heat(1, 1)) < 1.0e-14_wp, &
                     "ghost cells must bank nothing")
          if (allocated(error)) exit checks
-         call check(error, abs(ms%tracers(ms%idx_temperature)%hTr(i_dry, j_dry, NZ) &
+         call check(error, abs(ms%tracers(ms%idx_temperature)%c(i_dry, j_dry, NZ) &
                                - T_COLD*H_LAYER) < 1.0e-14_wp, &
                     "land column surface T must be untouched")
          if (allocated(error)) exit checks
@@ -333,14 +333,14 @@ contains
          call setup_state(grid, ms, eos, ice, T_COLD)
          call run_frazil(grid, eos, ms, ice)
          allocate (bank_1, source=ice%frazil_heat)
-         allocate (hT_1, source=ms%tracers(ms%idx_temperature)%hTr)
+         allocate (hT_1, source=ms%tracers(ms%idx_temperature)%c)
 
          call run_frazil(grid, eos, ms, ice)
 
          call check(error, maxval(abs(ice%frazil_heat - bank_1)) < 1.0e-14_wp, &
                     "second call must not grow the bank")
          if (allocated(error)) exit checks
-         call check(error, maxval(abs(ms%tracers(ms%idx_temperature)%hTr - hT_1)) &
+         call check(error, maxval(abs(ms%tracers(ms%idx_temperature)%c - hT_1)) &
                     < 1.0e-14_wp, "second call must not move the tracer")
 
       end block checks
@@ -394,7 +394,7 @@ contains
          t_lin = eos_freezing_point(eos, SA, 0.0_wp)
          call eos_apply_ts_convention(eos, TS_CONS_ABS, TFREEZE_FORM_TEOS_POLY, 0.0_wp)
          eos%c_p = CP_TEST
-         ms%tracers(ms%idx_salinity)%hTr = SA*H_LAYER
+         ms%tracers(ms%idx_salinity)%c = SA*H_LAYER
          ct_f = eos_freezing_point(eos, SA, 0.0_wp)
          call check(error, abs(ct_f - ct_freezing_poly(SA, 0.0_wp, 0.0_wp)) < 1.0e-14_wp, &
                     "cons_abs onset must be ct_freezing_poly(SA, 0, 0)")
@@ -414,13 +414,13 @@ contains
          call setup_state(grid, ms, eos, ice, T_COLD)
          call eos_apply_ts_convention(eos, TS_CONS_ABS, TFREEZE_FORM_TEOS_POLY, 0.0_wp)
          eos%c_p = CP_TEST
-         ms%tracers(ms%idx_salinity)%hTr = SA*H_LAYER
+         ms%tracers(ms%idx_salinity)%c = SA*H_LAYER
          call run_frazil(grid, eos, ms, ice)
          expected = RHO_WATER*CP_TEST*H_LAYER*(ct_f - T_COLD)
          call check(error, abs(ice%frazil_heat(ip, jp) - expected) < 1.0e-9_wp*expected, &
                     "cons_abs bank must be rho*c_p(knob)*h*(CT_f - CT)")
          if (allocated(error)) exit checks
-         call check(error, abs(ms%tracers(ms%idx_temperature)%hTr(ip, jp, NZ)/H_LAYER - ct_f) &
+         call check(error, abs(ms%tracers(ms%idx_temperature)%c(ip, jp, NZ)/H_LAYER - ct_f) &
                     < 1.0e-12_wp, "surface CT clamped to CT_f")
       end block checks
       call teardown(ms, eos, ice)
@@ -441,7 +441,7 @@ contains
       call ice%enter_data()
       call ice_frazil_accumulate_column(grid, eos, ms, ice%frazil_heat, &
                                         ice%heat_budget_frazil, pdep, reclaim)
-      associate (hT => ms%tracers(ms%idx_temperature)%hTr, &
+      associate (hT => ms%tracers(ms%idx_temperature)%c, &
                  fz => ice%frazil_heat, fb => ice%heat_budget_frazil)
          !$acc update self(hT, fz, fb)
       end associate
@@ -471,16 +471,16 @@ contains
          tf2 = eos_freezing_point(eos, S_INIT, 0.5_wp*gr*HL + 0.5_wp*gr*(HL + HL))
          t0 = 0.5_wp*(tf3 + tf2)
          ms%h_layer = HL
-         ms%tracers(ms%idx_salinity)%hTr = S_INIT*HL
-         ms%tracers(ms%idx_temperature)%hTr = t0*HL
+         ms%tracers(ms%idx_salinity)%c = S_INIT*HL
+         ms%tracers(ms%idx_temperature)%c = t0*HL
          ip = grid%nx_total/2
          jp = grid%ny_total/2
          call run_column(grid, eos, ms, ice, .true., .true.)
-         call check(error, abs(ms%tracers(ms%idx_temperature)%hTr(ip, jp, NZ)/HL - tf3) &
+         call check(error, abs(ms%tracers(ms%idx_temperature)%c(ip, jp, NZ)/HL - tf3) &
                     < 1.0e-12_wp, "pressure-dependent: surface layer must reach T_f(p_3)")
          if (allocated(error)) exit checks
-         call check(error, ms%tracers(ms%idx_temperature)%hTr(ip, jp, 2) == t0*HL .and. &
-                    ms%tracers(ms%idx_temperature)%hTr(ip, jp, 1) == t0*HL, &
+         call check(error, ms%tracers(ms%idx_temperature)%c(ip, jp, 2) == t0*HL .and. &
+                    ms%tracers(ms%idx_temperature)%c(ip, jp, 1) == t0*HL, &
                     "pressure-dependent: deeper layers (T_f lower than T) must NOT freeze")
          if (allocated(error)) exit checks
          expected = RHO_WATER*eos%c_p*HL*(tf3 - t0)
@@ -492,8 +492,8 @@ contains
          ! Control: pressure dependence OFF => p = 0, all three layers freeze.
          call setup_state(grid, ms, eos, ice, T_DEEP)
          ms%h_layer = HL
-         ms%tracers(ms%idx_salinity)%hTr = S_INIT*HL
-         ms%tracers(ms%idx_temperature)%hTr = t0*HL
+         ms%tracers(ms%idx_salinity)%c = S_INIT*HL
+         ms%tracers(ms%idx_temperature)%c = t0*HL
          call run_column(grid, eos, ms, ice, .false., .true.)
          expected = 3.0_wp*RHO_WATER*eos%c_p*HL*(eos_freezing_point(eos, S_INIT, 0.0_wp) - t0)
          call check(error, abs(ice%frazil_heat(ip, jp) - expected) <= 1.0e-12_wp*expected, &
@@ -517,29 +517,29 @@ contains
       integer :: ip, jp, k
       checks: block
          call setup_state(grid, ms, eos, ice, 2.0_wp)
-         ms%tracers(ms%idx_temperature)%hTr(:, :, 1) = -4.0_wp*H_LAYER
-         ms%tracers(ms%idx_temperature)%hTr(:, :, 2) = 1.0_wp*H_LAYER
+         ms%tracers(ms%idx_temperature)%c(:, :, 1) = -4.0_wp*H_LAYER
+         ms%tracers(ms%idx_temperature)%c(:, :, 2) = 1.0_wp*H_LAYER
          tf = eos_freezing_point(eos, S_INIT, 0.0_wp)
          c_over_hc = tf + 4.0_wp
          ip = grid%nx_total/2
          jp = grid%ny_total/2
          tot0 = 0.0_wp
          do k = 1, NZ
-            tot0 = tot0 + ms%tracers(ms%idx_temperature)%hTr(ip, jp, k)
+            tot0 = tot0 + ms%tracers(ms%idx_temperature)%c(ip, jp, k)
          end do
          call run_column(grid, eos, ms, ice, .false., .true.)
          tot1 = 0.0_wp
          do k = 1, NZ
-            tot1 = tot1 + ms%tracers(ms%idx_temperature)%hTr(ip, jp, k)
+            tot1 = tot1 + ms%tracers(ms%idx_temperature)%c(ip, jp, k)
          end do
-         call check(error, abs(ms%tracers(ms%idx_temperature)%hTr(ip, jp, 1)/H_LAYER - tf) &
+         call check(error, abs(ms%tracers(ms%idx_temperature)%c(ip, jp, 1)/H_LAYER - tf) &
                     < 1.0e-14_wp, "bed layer clamped to T_f")
          if (allocated(error)) exit checks
-         call check(error, abs(ms%tracers(ms%idx_temperature)%hTr(ip, jp, 2)/H_LAYER &
+         call check(error, abs(ms%tracers(ms%idx_temperature)%c(ip, jp, 2)/H_LAYER &
                                - (1.0_wp - c_over_hc)) < 1.0e-14_wp, &
                     "warm layer cooled by exactly c/hc")
          if (allocated(error)) exit checks
-         call check(error, ms%tracers(ms%idx_temperature)%hTr(ip, jp, NZ) == 2.0_wp*H_LAYER, &
+         call check(error, ms%tracers(ms%idx_temperature)%c(ip, jp, NZ) == 2.0_wp*H_LAYER, &
                     "surface layer above the absorber is untouched")
          if (allocated(error)) exit checks
          call check(error, ice%frazil_heat(ip, jp) == 0.0_wp, "nothing reaches the ice: F = 0")
@@ -567,9 +567,9 @@ contains
       checks: block
          call setup_state(grid, ms, eos, ice, T_DEEP)
          tf = eos_freezing_point(eos, S_INIT, 0.0_wp)
-         ms%tracers(ms%idx_temperature)%hTr(:, :, 1) = -4.0_wp*H_LAYER
-         ms%tracers(ms%idx_temperature)%hTr(:, :, 2) = tf*H_LAYER
-         ms%tracers(ms%idx_temperature)%hTr(:, :, NZ) = tf*H_LAYER
+         ms%tracers(ms%idx_temperature)%c(:, :, 1) = -4.0_wp*H_LAYER
+         ms%tracers(ms%idx_temperature)%c(:, :, 2) = tf*H_LAYER
+         ms%tracers(ms%idx_temperature)%c(:, :, NZ) = tf*H_LAYER
          ip = grid%nx_total/2
          jp = grid%ny_total/2
          call run_column(grid, eos, ms, ice, .false., .true.)
@@ -606,7 +606,7 @@ contains
          call run_column(grid, eos, ms, ice, .false., .true.)
          call check(error, ice%frazil_heat(ip, jp) == 0.0_wp, "(a) bank fully reclaimed")
          if (allocated(error)) exit checks
-         call check(error, abs(ms%tracers(ms%idx_temperature)%hTr(ip, jp, NZ)/H_LAYER &
+         call check(error, abs(ms%tracers(ms%idx_temperature)%c(ip, jp, NZ)/H_LAYER &
                                - (2.0_wp - 0.25_wp*room/hc)) < 1.0e-14_wp, &
                     "(a) surface cooled by exactly F/hc")
          if (allocated(error)) exit checks
@@ -622,7 +622,7 @@ contains
          call check(error, abs(ice%frazil_heat(ip, jp) - 2.0_wp*room) <= 1.0e-12_wp*room, &
                     "(b) bank left with F - hc (T - T_f)")
          if (allocated(error)) exit checks
-         call check(error, abs(ms%tracers(ms%idx_temperature)%hTr(ip, jp, NZ)/H_LAYER - tf) &
+         call check(error, abs(ms%tracers(ms%idx_temperature)%c(ip, jp, NZ)/H_LAYER - tf) &
                     < 1.0e-14_wp, "(b) surface clamped to T_f")
          if (allocated(error)) exit checks
          call teardown(ms, eos, ice)
@@ -631,7 +631,7 @@ contains
          ice%frazil_heat = 3.0_wp*room
          call run_column(grid, eos, ms, ice, .false., .false.)
          call check(error, ice%frazil_heat(ip, jp) == 3.0_wp*room .and. &
-                    ms%tracers(ms%idx_temperature)%hTr(ip, jp, NZ) == 2.0_wp*H_LAYER, &
+                    ms%tracers(ms%idx_temperature)%c(ip, jp, NZ) == 2.0_wp*H_LAYER, &
                     "(c) reclaim off: bank and surface untouched")
       end block checks
       call teardown(ms, eos, ice)

@@ -39,7 +39,7 @@ module rdb_ocean_min_thickness
    !! only grounded columns / active faces do work — and reads fall back to
    !! `h_old` on non-grounded neighbours, where `h_new ≡ h_old` by
    !! construction.  Byte-identical results in all cases.
-   use rdb_constants, only: wp, NZ_STACK_MAX, REMAP_PPM
+   use rdb_constants, only: H_DIV_EPS, wp, NZ_STACK_MAX, REMAP_PPM
    use rdb_grid, only: hgrid_t
    use rdb_multilayer_state, only: multilayer_state_t
    use rdb_remap_column, only: remap_column
@@ -178,9 +178,9 @@ contains
 
       if (allocated(ms%tracers)) then
          do t = 1, size(ms%tracers)
-            if (.not. allocated(ms%tracers(t)%hTr)) cycle
+            if (.not. allocated(ms%tracers(t)%c)) cycle
             call remap_tracer_grounded(nx, ny, nz, ms%h_layer, h_new, grounded_mask, &
-                                       ms%tracers(t)%hTr)
+                                       ms%tracers(t)%c)
          end do
       end if
 
@@ -270,12 +270,12 @@ contains
             do k = 1, nz
                h_old_col(k) = h_old(i, j, k)
                h_new_col(k) = h_new(i, j, k)
-               c_old(k) = rdb_conc_of(hTr(i, j, k), h_old_col(k))
+               c_old(k) = hTr(i, j, k)
             end do
             call remap_column(REMAP_PPM, nz, h_old_col(1:nz), h_new_col(1:nz), &
                               c_old(1:nz), c_new(1:nz))
             do k = 1, nz
-               hTr(i, j, k) = c_new(k)*h_new_col(k)
+               hTr(i, j, k) = c_new(k)
             end do
          end if
       end do

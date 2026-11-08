@@ -134,8 +134,8 @@ contains
          do j = 1, grid%ny_total
             do i = 1, grid%nx_total
                ms%h_layer(i, j, k) = h_lay(k)
-               ms%tracers(ms%idx_temperature)%hTr(i, j, k) = T_lay(k)*h_lay(k)
-               ms%tracers(ms%idx_salinity)%hTr(i, j, k) = S_lay(k)*h_lay(k)
+               ms%tracers(ms%idx_temperature)%c(i, j, k) = T_lay(k)*h_lay(k)
+               ms%tracers(ms%idx_salinity)%c(i, j, k) = S_lay(k)*h_lay(k)
             end do
          end do
       end do
@@ -391,8 +391,8 @@ contains
             rho_lay(k) = lin_rho(T_lay(k), S_lay(k))
          end do
          call setup_column(grid, ms, NZ, h_lay, T_lay, S_lay)
-         Th0 = sum(ms%tracers(ms%idx_temperature)%hTr(1, 1, :))
-         Sh0 = sum(ms%tracers(ms%idx_salinity)%hTr(1, 1, :))
+         Th0 = sum(ms%tracers(ms%idx_temperature)%c(1, 1, :))
+         Sh0 = sum(ms%tracers(ms%idx_salinity)%c(1, 1, :))
 
          call vc%init(grid, nz_ml=NZ)
          vc%coord_type = VCOORD_HYCOM
@@ -407,8 +407,8 @@ contains
 
          ! single regrid
          call run_remap_host(grid, vc, ms, eos, 0.0_wp)
-         Th1 = sum(ms%tracers(ms%idx_temperature)%hTr(1, 1, :))
-         Sh1 = sum(ms%tracers(ms%idx_salinity)%hTr(1, 1, :))
+         Th1 = sum(ms%tracers(ms%idx_temperature)%c(1, 1, :))
+         Sh1 = sum(ms%tracers(ms%idx_salinity)%c(1, 1, :))
          call check(error, abs(Th1 - Th0) < 1.0e-9_wp, "conserves: T*h (single regrid)")
          if (allocated(error)) exit checks
          call check(error, abs(Sh1 - Sh0) < 1.0e-9_wp, "conserves: S*h (single regrid)")
@@ -419,8 +419,8 @@ contains
 
          ! second regrid (the collapsed/floored column is now h_old)
          call run_remap_host(grid, vc, ms, eos, 0.0_wp)
-         Th2 = sum(ms%tracers(ms%idx_temperature)%hTr(1, 1, :))
-         Sh2 = sum(ms%tracers(ms%idx_salinity)%hTr(1, 1, :))
+         Th2 = sum(ms%tracers(ms%idx_temperature)%c(1, 1, :))
+         Sh2 = sum(ms%tracers(ms%idx_salinity)%c(1, 1, :))
          call check(error, abs(Th2 - Th0) < 1.0e-9_wp, "conserves: T*h (multi regrid)")
          if (allocated(error)) exit checks
          call check(error, abs(Sh2 - Sh0) < 1.0e-9_wp, "conserves: S*h (multi regrid)")
@@ -513,7 +513,7 @@ contains
             rho_lay(k) = lin_rho(T_lay(k), S_REF)
          end do
          call setup_column(grid, ms, NZ, h_lay, T_lay, S_lay)
-         Th0 = sum(ms%tracers(ms%idx_temperature)%hTr(1, 1, :))
+         Th0 = sum(ms%tracers(ms%idx_temperature)%c(1, 1, :))
          nx = grid%nx_total
          ny = grid%ny_total
 
@@ -536,7 +536,7 @@ contains
          call vc%enter_data()
          call ocean_apply_ale_remap_step(grid, vc, ms, bt_eta, bt_H_ref, &
                                          method=REMAP_PPM, eos=eos)
-         !$acc update self(ms%h_layer, ms%tracers(ms%idx_temperature)%hTr)
+         !$acc update self(ms%h_layer, ms%tracers(ms%idx_temperature)%c)
          !$acc update self(bt_eta)
          call vc%exit_data()
          call ms%exit_data()
@@ -555,7 +555,7 @@ contains
          call check(error, floor_invariant(ms%h_layer(1, 1, :), vc%dsig, H, NZ), &
                     "device: floor invariant holds")
          if (allocated(error)) exit checks
-         Th1 = sum(ms%tracers(ms%idx_temperature)%hTr(1, 1, :))
+         Th1 = sum(ms%tracers(ms%idx_temperature)%c(1, 1, :))
          call check(error, abs(Th1 - Th0) < 1.0e-7_wp, "device: T*h conserved")
       end block checks
       if (allocated(bt_eta)) deallocate (bt_eta)

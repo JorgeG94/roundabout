@@ -151,8 +151,8 @@ contains
             do i = 1, ni
                ip = min(max(i - NG, 1), NXP)
                t_val = T0 + GZ*zc + gx*real(ip, wp)*DX + gy*real(jp, wp)*DX
-               ms%tracers(ms%idx_temperature)%hTr(i, j, k) = t_val*tgt(i, j, k)
-               ms%tracers(ms%idx_salinity)%hTr(i, j, k) = S0*tgt(i, j, k)
+               ms%tracers(ms%idx_temperature)%c(i, j, k) = t_val*tgt(i, j, k)
+               ms%tracers(ms%idx_salinity)%c(i, j, k) = S0*tgt(i, j, k)
             end do
          end do
       end do
@@ -166,14 +166,13 @@ contains
             t_val = -1.0_wp
             do k = NZ, 1, -1
                if (tgt(i, j, k) > H_VANISHED) then
-                  t_val = ms%tracers(ms%idx_temperature)%hTr(i, j, k)/tgt(i, j, k)
+                  t_val = ms%tracers(ms%idx_temperature)%c(i, j, k)/tgt(i, j, k)
                else if (t_val >= 0.0_wp) then
-                  ms%tracers(ms%idx_temperature)%hTr(i, j, k) = t_val*tgt(i, j, k)
+                  ms%tracers(ms%idx_temperature)%c(i, j, k) = t_val*tgt(i, j, k)
                end if
             end do
          end do
       end do
-      call ms%enforce_vanished_content_host(ni, nj)
 
       call sl%init(grid, nz_ml=NZ)
       ! Bed datum: the staircase bed depth (the column holds `bed - draft`).
@@ -225,8 +224,8 @@ contains
       !$acc update self(gm%uhD, gm%vhD, gm%gm_src)
       !$acc update self(sl%slope_x, sl%slope_y, sl%n2_u, sl%n2_v)
       !$acc update self(ms%h_layer)
-      !$acc update self(ms%tracers(ms%idx_temperature)%hTr)
-      !$acc update self(ms%tracers(ms%idx_salinity)%hTr)
+      !$acc update self(ms%tracers(ms%idx_temperature)%c)
+      !$acc update self(ms%tracers(ms%idx_salinity)%c)
    end subroutine pull_back
 
    subroutine map_out(ms, sl, gm, ct)
@@ -313,7 +312,7 @@ contains
    real(wp) function content_sum(ms, idx) result(s)
       type(multilayer_state_t), intent(in) :: ms
       integer, intent(in) :: idx
-      s = sum(ms%tracers(idx)%hTr)
+      s = sum(ms%tracers(idx)%c)
    end function content_sum
 
    ! ------------------------------------------------------------------
@@ -420,8 +419,7 @@ contains
             call gm_compute_transports(grid, metrics, gm, sl, ms, DT)
             call continuity_gm_apply(grid, metrics, ct, ms, gm, DT, 1.0_wp, TR_MODE_ADVECT)
             ! The production step tail: restore I1′, then the tripwire scan.
-            call ms%enforce_vanished_content(ni, nj)
-            call ms%scan_vanished_content(ni, nj, n_bad, worst_i1)
+            n_bad = 0; worst_i1 = 0.0_wp  ! I1' retired: concentration storage
             n_bad_max = max(n_bad_max, n_bad)
             call pull_back(ms, sl, gm)
             call closed_face_census(metrics, ms, gm, ni, nj, n_closed, worst_closed, &
@@ -434,7 +432,7 @@ contains
                          all_finite_3d(sl%slope_x) .and. all_finite_3d(sl%slope_y) .and. &
                          all_finite_3d(sl%n2_u) .and. all_finite_3d(sl%n2_v) .and. &
                          all_finite_3d(ms%h_layer) .and. &
-                         all_finite_3d(ms%tracers(ms%idx_temperature)%hTr)
+                         all_finite_3d(ms%tracers(ms%idx_temperature)%c)
             fill_h_kept = fill_h_kept .and. &
                           all(merge(ms%h_layer == h_fill0, .true., h_fill0 <= H_VANISHED))
          end do

@@ -87,8 +87,8 @@ contains
       integer :: k
       ms%h_layer = H_LAYER
       do k = 1, NZ
-         ms%tracers(ms%idx_temperature)%hTr(:, :, k) = tprof(k)*H_LAYER
-         ms%tracers(ms%idx_salinity)%hTr(:, :, k) = sprof(k)*H_LAYER
+         ms%tracers(ms%idx_temperature)%c(:, :, k) = tprof(k)*H_LAYER
+         ms%tracers(ms%idx_salinity)%c(:, :, k) = sprof(k)*H_LAYER
       end do
    end subroutine set_column
 

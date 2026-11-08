@@ -134,7 +134,7 @@ contains
       character(len=16) :: ref
       real(wp) :: fmin
       logical :: rest, rho_from_eos
-      integer :: nx, ny, nz, it, nt
+      integer :: nx, ny, nz
       real(wp), allocatable :: scale_col(:, :), ax(:, :, :), ay(:, :, :)
       real(wp), allocatable :: u_new(:, :, :), v_new(:, :, :)
 
@@ -176,8 +176,6 @@ contains
       nz = state%multilayer%nz_ml
       rho_from_eos = cfg%ocean%thermo%enable_thermodynamics .and. &
                      state%multilayer%idx_salinity > 0 .and. state%multilayer%idx_temperature > 0
-      nt = 0
-      if (allocated(state%multilayer%tracers)) nt = size(state%multilayer%tracers)
 
       ! ---- inputs host -> device (leaf arrays only) ----
       call push_thickness_tracers(state)
@@ -189,9 +187,6 @@ contains
          call bottom_rest_scale(grid, state, scale_col, ierr)
          if (ierr /= OCEAN_STATUS_OK) return
          call apply_column_scale(nx, ny, nz, scale_col, state%multilayer%h_layer)
-         do it = 1, nt
-            call apply_column_scale(nx, ny, nz, scale_col, state%multilayer%tracers(it)%hTr)
-         end do
          call push_thickness_tracers(state)
          call refresh_density(state, rho_from_eos)
          deallocate (scale_col)
@@ -326,7 +321,7 @@ contains
       end associate
       if (allocated(state%multilayer%tracers)) then
          do it = 1, size(state%multilayer%tracers)
-            associate (htr => state%multilayer%tracers(it)%hTr)
+            associate (htr => state%multilayer%tracers(it)%c)
                !$acc update device(htr)
             end associate
          end do

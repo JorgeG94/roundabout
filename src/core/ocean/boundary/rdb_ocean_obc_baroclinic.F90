@@ -29,7 +29,7 @@ module rdb_ocean_obc_baroclinic
    !! depth-mean via sequential k-loop in the DC body (nz small); no per-step
    !! allocation; per-tracer loops OUTSIDE the DC kernels (outer-shim); never
    !! deref bc%... inside a DC body (pass rx/u_prev/tres arrays as dummies).
-   use rdb_constants, only: wp, H_VANISHED
+   use rdb_constants, only: H_DIV_EPS, wp, H_VANISHED
    use rdb_grid, only: hgrid_t
    use rdb_multilayer_state, only: multilayer_state_t
    use rdb_barotropic_workstate, only: barotropic_workstate_t
@@ -1023,14 +1023,14 @@ contains
       ! bit-identical to prior behaviour.  Dispatch is per-edge-per-direction.
       if (allocated(ms%tracers)) then
          do it = 1, size(ms%tracers)
-            if (.not. allocated(ms%tracers(it)%hTr)) cycle
+            if (.not. allocated(ms%tracers(it)%c)) cycle
 
             ! Zero-gradient CONCENTRATION pre-fill over the FULL open-edge ghost
             ! region (corners included): the per-edge upwind fills below only
             ! touch the physical cross-extent, so unfilled ghost×ghost corners
             ! would accumulate garbage under inflow and blow up T/S.  Upwind
             ! fills then overwrite the physical edges, leaving corners zero-grad.
-            call fill_tracer_ghosts_zerograd(ms%tracers(it)%hTr, ms%h_layer, &
+            call fill_tracer_ghosts_zerograd(ms%tracers(it)%c, ms%h_layer, &
                                              nxt, nyt, nz, i_w, i_e, j_s, j_n, &
                                              grid%nghost, bc_w, bc_e, bc_s, bc_n)
 
@@ -1038,10 +1038,10 @@ contains
             if (is_open_ish(bc_w)) then
                if (allocated(bc%tres_west)) then
                   call fill_ghost_west_res( &
-                     ms%tracers(it)%hTr, ms%h_layer, bc%tres_west, &
+                     ms%tracers(it)%c, ms%h_layer, bc%tres_west, &
                      nxt, nyt, nz, i_w, j_s, j_n, grid%nghost, it, size(bc%tres_west, 3))
                else
-                  call fill_ghost_west_sign(ms%tracers(it)%hTr, ms%h_layer, &
+                  call fill_ghost_west_sign(ms%tracers(it)%c, ms%h_layer, &
                                             ms%u_face_x_layer, &
                                             nxt, nyt, nz, i_w, j_s, j_n, grid%nghost, &
                                             get_clamped_tracer(bc%west%clamped_tracer, it))
@@ -1052,10 +1052,10 @@ contains
             if (is_open_ish(bc_e)) then
                if (allocated(bc%tres_east)) then
                   call fill_ghost_east_res( &
-                     ms%tracers(it)%hTr, ms%h_layer, bc%tres_east, &
+                     ms%tracers(it)%c, ms%h_layer, bc%tres_east, &
                      nxt, nyt, nz, i_e, j_s, j_n, grid%nghost, it, size(bc%tres_east, 3))
                else
-                  call fill_ghost_east_sign(ms%tracers(it)%hTr, ms%h_layer, &
+                  call fill_ghost_east_sign(ms%tracers(it)%c, ms%h_layer, &
                                             ms%u_face_x_layer, &
                                             nxt, nyt, nz, i_e, j_s, j_n, grid%nghost, &
                                             get_clamped_tracer(bc%east%clamped_tracer, it))
@@ -1066,10 +1066,10 @@ contains
             if (is_open_ish(bc_s)) then
                if (allocated(bc%tres_south)) then
                   call fill_ghost_south_res( &
-                     ms%tracers(it)%hTr, ms%h_layer, bc%tres_south, &
+                     ms%tracers(it)%c, ms%h_layer, bc%tres_south, &
                      nxt, nyt, nz, j_s, i_w, i_e, grid%nghost, it, size(bc%tres_south, 3))
                else
-                  call fill_ghost_south_sign(ms%tracers(it)%hTr, ms%h_layer, &
+                  call fill_ghost_south_sign(ms%tracers(it)%c, ms%h_layer, &
                                              ms%v_face_y_layer, &
                                              nxt, nyt, nz, j_s, i_w, i_e, grid%nghost, &
                                              get_clamped_tracer(bc%south%clamped_tracer, it))
@@ -1080,10 +1080,10 @@ contains
             if (is_open_ish(bc_n)) then
                if (allocated(bc%tres_north)) then
                   call fill_ghost_north_res( &
-                     ms%tracers(it)%hTr, ms%h_layer, bc%tres_north, &
+                     ms%tracers(it)%c, ms%h_layer, bc%tres_north, &
                      nxt, nyt, nz, j_n, i_w, i_e, grid%nghost, it, size(bc%tres_north, 3))
                else
-                  call fill_ghost_north_sign(ms%tracers(it)%hTr, ms%h_layer, &
+                  call fill_ghost_north_sign(ms%tracers(it)%c, ms%h_layer, &
                                              ms%v_face_y_layer, &
                                              nxt, nyt, nz, j_n, i_w, i_e, grid%nghost, &
                                              get_clamped_tracer(bc%north%clamped_tracer, it))
@@ -1172,8 +1172,8 @@ contains
       ! ---- Tracer hTr ghosts: zero-gradient concentration onto the new h ----
       if (allocated(ms%tracers)) then
          do it = 1, size(ms%tracers)
-            if (.not. allocated(ms%tracers(it)%hTr)) cycle
-            call fill_tracer_ghosts_zerograd(ms%tracers(it)%hTr, ms%h_layer, &
+            if (.not. allocated(ms%tracers(it)%c)) cycle
+            call fill_tracer_ghosts_zerograd(ms%tracers(it)%c, ms%h_layer, &
                                              nxt, nyt, nz, i_w, i_e, j_s, j_n, &
                                              grid%nghost, bc_w, bc_e, bc_s, bc_n)
          end do
@@ -1285,25 +1285,25 @@ contains
       ! West / East over the full j extent (covers corner rows).
       if (is_open_ish(bc_w)) then
          do concurrent(k=1:nz, j=1:ny_total, g=1:nghost)
-            hTr(g, j, k) = rdb_content_of(rdb_conc_of_floor(hTr(i_w, j, k), h_layer(i_w, j, k), H_VANISHED), h_layer(g, j, k))
+            hTr(g, j, k) = hTr(i_w, j, k)
          end do
       end if
       if (is_open_ish(bc_e)) then
          do concurrent(k=1:nz, j=1:ny_total, g=1:nghost)
             hTr(nx_total - g + 1, j, k) = &
-               rdb_content_of(rdb_conc_of_floor(hTr(i_e, j, k), h_layer(i_e, j, k), H_VANISHED), h_layer(nx_total - g + 1, j, k))
+               hTr(i_e, j, k)
          end do
       end if
       ! South / North over the full i extent (reads the x-filled corner cols).
       if (is_open_ish(bc_s)) then
          do concurrent(k=1:nz, j=1:nghost, i=1:nx_total)
-            hTr(i, j, k) = rdb_content_of(rdb_conc_of_floor(hTr(i, j_s, k), h_layer(i, j_s, k), H_VANISHED), h_layer(i, j, k))
+            hTr(i, j, k) = hTr(i, j_s, k)
          end do
       end if
       if (is_open_ish(bc_n)) then
          do concurrent(k=1:nz, g=1:nghost, i=1:nx_total)
             hTr(i, ny_total - g + 1, k) = &
-               rdb_content_of(rdb_conc_of_floor(hTr(i, j_n, k), h_layer(i, j_n, k), H_VANISHED), h_layer(i, ny_total - g + 1, k))
+               hTr(i, j_n, k)
          end do
       end if
    end subroutine fill_tracer_ghosts_zerograd
@@ -1373,7 +1373,7 @@ contains
             ! West inflow = u > 0 (eastward into domain).
             if (u_layer(i_w, j, k) > 0.0_wp) then
                ! Inflow: set ghost hTr = boundary concentration * ghost h
-               hTr_bc = rdb_content_of(clamped_tr_w, h_layer(g, j, k))
+               hTr_bc = clamped_tr_w
                hTr(g, j, k) = hTr_bc
             else
                ! Outflow: zero-gradient — copy interior
@@ -1388,7 +1388,7 @@ contains
          do concurrent(k=1:nz, j=j_s:j_n, g=1:nghost) local(hTr_bc, hTr_int)
             ! East inflow = u < 0 (westward into domain from east).
             if (u_layer(i_e + 1, j, k) < 0.0_wp) then
-               hTr_bc = rdb_content_of(clamped_tr_e, h_layer(nx_total - g + 1, j, k))
+               hTr_bc = clamped_tr_e
                hTr(nx_total - g + 1, j, k) = hTr_bc
             else
                hTr_int = hTr(i_e, j, k)
@@ -1420,7 +1420,7 @@ contains
          do concurrent(k=1:nz, i=i_w:i_e, g=1:nghost) local(hTr_bc, hTr_int)
             ! South inflow = v > 0 (northward into domain).
             if (v_layer(i, j_s, k) > 0.0_wp) then
-               hTr_bc = rdb_content_of(clamped_tr_s, h_layer(i, g, k))
+               hTr_bc = clamped_tr_s
                hTr(i, g, k) = hTr_bc
             else
                hTr_int = hTr(i, j_s, k)
@@ -1434,7 +1434,7 @@ contains
          do concurrent(k=1:nz, i=i_w:i_e, g=1:nghost) local(hTr_bc, hTr_int)
             ! North inflow = v < 0 (southward into domain from north).
             if (v_layer(i, j_n + 1, k) < 0.0_wp) then
-               hTr_bc = rdb_content_of(clamped_tr_n, h_layer(i, ny_total - g + 1, k))
+               hTr_bc = clamped_tr_n
                hTr(i, ny_total - g + 1, k) = hTr_bc
             else
                hTr_int = hTr(i, j_n, k)
@@ -1461,7 +1461,7 @@ contains
       integer :: j, k, g
       real(wp) :: hTr_bc
       do concurrent(k=1:nz, j=j0:j1, g=1:nghost) local(hTr_bc)
-         hTr_bc = rdb_content_of(tres_w(j, k, it), h_layer(g, j, k))
+         hTr_bc = tres_w(j, k, it)
          hTr(g, j, k) = hTr_bc
       end do
    end subroutine fill_ghost_west_res
@@ -1478,7 +1478,7 @@ contains
       integer :: j, k, g
       real(wp) :: hTr_bc
       do concurrent(k=1:nz, j=j0:j1, g=1:nghost) local(hTr_bc)
-         hTr_bc = rdb_content_of(tres_e(j, k, it), h_layer(nx_total - g + 1, j, k))
+         hTr_bc = tres_e(j, k, it)
          hTr(nx_total - g + 1, j, k) = hTr_bc
       end do
    end subroutine fill_ghost_east_res
@@ -1495,7 +1495,7 @@ contains
       integer :: i, k, g
       real(wp) :: hTr_bc
       do concurrent(k=1:nz, i=i0:i1, g=1:nghost) local(hTr_bc)
-         hTr_bc = rdb_content_of(tres_s(i, k, it), h_layer(i, g, k))
+         hTr_bc = tres_s(i, k, it)
          hTr(i, g, k) = hTr_bc
       end do
    end subroutine fill_ghost_south_res
@@ -1512,7 +1512,7 @@ contains
       integer :: i, k, g
       real(wp) :: hTr_bc
       do concurrent(k=1:nz, i=i0:i1, g=1:nghost) local(hTr_bc)
-         hTr_bc = rdb_content_of(tres_n(i, k, it), h_layer(i, ny_total - g + 1, k))
+         hTr_bc = tres_n(i, k, it)
          hTr(i, ny_total - g + 1, k) = hTr_bc
       end do
    end subroutine fill_ghost_north_res
@@ -1533,7 +1533,7 @@ contains
       real(wp) :: hTr_bc, hTr_int
       do concurrent(k=1:nz, j=j0:j1, g=1:nghost) local(hTr_bc, hTr_int)
          if (u_layer(i_w, j, k) > 0.0_wp) then
-            hTr_bc = rdb_content_of(clamped_tr_w, h_layer(g, j, k))
+            hTr_bc = clamped_tr_w
             hTr(g, j, k) = hTr_bc
          else
             hTr_int = hTr(i_w, j, k)
@@ -1556,7 +1556,7 @@ contains
       real(wp) :: hTr_bc, hTr_int
       do concurrent(k=1:nz, j=j0:j1, g=1:nghost) local(hTr_bc, hTr_int)
          if (u_layer(i_e + 1, j, k) < 0.0_wp) then
-            hTr_bc = rdb_content_of(clamped_tr_e, h_layer(nx_total - g + 1, j, k))
+            hTr_bc = clamped_tr_e
             hTr(nx_total - g + 1, j, k) = hTr_bc
          else
             hTr_int = hTr(i_e, j, k)
@@ -1579,7 +1579,7 @@ contains
       real(wp) :: hTr_bc, hTr_int
       do concurrent(k=1:nz, i=i0:i1, g=1:nghost) local(hTr_bc, hTr_int)
          if (v_layer(i, j_s, k) > 0.0_wp) then
-            hTr_bc = rdb_content_of(clamped_tr_s, h_layer(i, g, k))
+            hTr_bc = clamped_tr_s
             hTr(i, g, k) = hTr_bc
          else
             hTr_int = hTr(i, j_s, k)
@@ -1602,7 +1602,7 @@ contains
       real(wp) :: hTr_bc, hTr_int
       do concurrent(k=1:nz, i=i0:i1, g=1:nghost) local(hTr_bc, hTr_int)
          if (v_layer(i, j_n + 1, k) < 0.0_wp) then
-            hTr_bc = rdb_content_of(clamped_tr_n, h_layer(i, ny_total - g + 1, k))
+            hTr_bc = clamped_tr_n
             hTr(i, ny_total - g + 1, k) = hTr_bc
          else
             hTr_int = hTr(i, j_n, k)
@@ -1654,14 +1654,14 @@ contains
 
       ! Per-tracer outer shim: pass full explicit-shape arrays to kernels.
       do it = 1, n_tr
-         if (.not. allocated(ms%tracers(it)%hTr)) cycle
+         if (.not. allocated(ms%tracers(it)%c)) cycle
 
          ! ---- West ----
          ! MPI-seam neutralisation (O0): dispatch here is on allocated(tres_*),
          ! not bc_type, so the remap trick cannot be used — explicit has_* guard.
          if (allocated(bc%tres_west) .and. bc%has_west) then
             call update_reservoir_zonal_west( &
-               ms%tracers(it)%hTr, ms%h_layer, ms%mass_flux_x_layer, &
+               ms%tracers(it)%c, ms%h_layer, ms%mass_flux_x_layer, &
                bc%tres_west, &
                get_clamped_tracer(bc%west%clamped_tracer, it), &
                nxt, nyt, nz, i_w, j_s, j_n, &
@@ -1671,7 +1671,7 @@ contains
          ! ---- East ----
          if (allocated(bc%tres_east) .and. bc%has_east) then
             call update_reservoir_zonal_east( &
-               ms%tracers(it)%hTr, ms%h_layer, ms%mass_flux_x_layer, &
+               ms%tracers(it)%c, ms%h_layer, ms%mass_flux_x_layer, &
                bc%tres_east, &
                get_clamped_tracer(bc%east%clamped_tracer, it), &
                nxt, nyt, nz, i_e, j_s, j_n, &
@@ -1681,7 +1681,7 @@ contains
          ! ---- South ----
          if (allocated(bc%tres_south) .and. bc%has_south) then
             call update_reservoir_meridional_south( &
-               ms%tracers(it)%hTr, ms%h_layer, ms%mass_flux_y_layer, &
+               ms%tracers(it)%c, ms%h_layer, ms%mass_flux_y_layer, &
                bc%tres_south, &
                get_clamped_tracer(bc%south%clamped_tracer, it), &
                nxt, nyt, nz, j_s, i_w, i_e, &
@@ -1691,7 +1691,7 @@ contains
          ! ---- North ----
          if (allocated(bc%tres_north) .and. bc%has_north) then
             call update_reservoir_meridional_north( &
-               ms%tracers(it)%hTr, ms%h_layer, ms%mass_flux_y_layer, &
+               ms%tracers(it)%c, ms%h_layer, ms%mass_flux_y_layer, &
                bc%tres_north, &
                get_clamped_tracer(bc%north%clamped_tracer, it), &
                nxt, nyt, nz, j_n, i_w, i_e, &
@@ -1722,7 +1722,7 @@ contains
 
       do concurrent(j=j0:j1, k=1:nz) local(h_int, T_int, u_n, c_out, c_in, tres_old, denom)
          h_int = max(h_layer(i_w, j, k), RES_H_MIN)
-         T_int = rdb_conc_of_raw(hTr(i_w, j, k), h_int)
+         T_int = hTr(i_w, j, k)
          ! mass_flux_x(i_w,...) > 0 = eastward into domain (inflow at west).
          u_n = -mass_flux_x(i_w, j, k)/h_int
          tres_old = tres_w(j, k, it)
@@ -1764,7 +1764,7 @@ contains
 
       do concurrent(j=j0:j1, k=1:nz) local(h_int, T_int, u_n, c_out, c_in, tres_old, denom)
          h_int = max(h_layer(i_e, j, k), RES_H_MIN)
-         T_int = rdb_conc_of_raw(hTr(i_e, j, k), h_int)
+         T_int = hTr(i_e, j, k)
          ! Outward normal at east = +x.
          u_n = mass_flux_x(i_e + 1, j, k)/h_int
          tres_old = tres_e(j, k, it)
@@ -1803,7 +1803,7 @@ contains
 
       do concurrent(i=i0:i1, k=1:nz) local(h_int, T_int, u_n, c_out, c_in, tres_old, denom)
          h_int = max(h_layer(i, j_s, k), RES_H_MIN)
-         T_int = rdb_conc_of_raw(hTr(i, j_s, k), h_int)
+         T_int = hTr(i, j_s, k)
          u_n = -mass_flux_y(i, j_s, k)/h_int
          tres_old = tres_s(i, k, it)
          if (L_out == 0.0_wp .and. u_n > 0.0_wp) then
@@ -1841,7 +1841,7 @@ contains
 
       do concurrent(i=i0:i1, k=1:nz) local(h_int, T_int, u_n, c_out, c_in, tres_old, denom)
          h_int = max(h_layer(i, j_n, k), RES_H_MIN)
-         T_int = rdb_conc_of_raw(hTr(i, j_n, k), h_int)
+         T_int = hTr(i, j_n, k)
          u_n = mass_flux_y(i, j_n + 1, k)/h_int
          tres_old = tres_n(i, k, it)
          if (L_out == 0.0_wp .and. u_n > 0.0_wp) then

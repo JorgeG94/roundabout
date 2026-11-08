@@ -257,7 +257,7 @@ contains
       do k = 1, NZ
          T_bg = cfg%ocean%ic%vortex_T_surf - cfg%ocean%ic%vortex_dT_dz*(real(NZ - k, wp) + 0.5_wp)*dz
          hk = state%multilayer%h_layer(i, j, k)
-         rhop = -ALPHA*(state%multilayer%tracers(idx_T)%hTr(i, j, k)/hk - T_bg)
+         rhop = -ALPHA*(state%multilayer%tracers(idx_T)%c(i, j, k)/hk - T_bg)
          pbot = pbot + GRAVITY*rhop*hk/RHO0
       end do
       write (msg, '(a,es10.3,a,es10.3)') "bottom pressure anomaly ", pbot, " vs g*eta ", GRAVITY*eta

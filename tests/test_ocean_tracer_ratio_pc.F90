@@ -201,13 +201,13 @@ contains
       is = engine%state%multilayer%idx_salinity
       it = engine%state%multilayer%idx_temperature
       !$acc update self(engine%state%multilayer%h_layer)
-      associate (hs => engine%state%multilayer%tracers(is)%hTr, &
-                 ht => engine%state%multilayer%tracers(it)%hTr)
+      associate (hs => engine%state%multilayer%tracers(is)%c, &
+                 ht => engine%state%multilayer%tracers(it)%c)
          !$acc update self(hs, ht)
       end associate
       h = engine%state%multilayer%h_layer
-      st = engine%state%multilayer%tracers(is)%hTr
-      tt = engine%state%multilayer%tracers(it)%hTr
+      st = engine%state%multilayer%tracers(is)%c
+      tt = engine%state%multilayer%tracers(it)%c
    end subroutine pull
 
    subroutine test_uniform(error)
@@ -825,10 +825,10 @@ contains
       real(wp), allocatable :: a(:, :, :)
       integer :: ng, nz, ia
       ia = engine%state%multilayer%idx_age
-      associate (ha => engine%state%multilayer%tracers(ia)%hTr)
+      associate (ha => engine%state%multilayer%tracers(ia)%c)
          !$acc update self(ha)
       end associate
-      a = engine%state%multilayer%tracers(ia)%hTr
+      a = engine%state%multilayer%tracers(ia)%c
       ng = engine%grid%nghost
       nz = size(a, 3)
       smax = maxval(abs(a(ng + 1:size(a, 1) - ng, ng + 1:size(a, 2) - ng, nz)))
@@ -884,10 +884,10 @@ contains
       integer :: ia, i
       ia = engine%state%multilayer%idx_age
       do i = 1, size(engine%state%multilayer%h_layer, 1)
-         engine%state%multilayer%tracers(ia)%hTr(i, :, :) = &
+         engine%state%multilayer%tracers(ia)%c(i, :, :) = &
             merge(a_left, a_right, i <= i_step)*engine%state%multilayer%h_layer(i, :, :)
       end do
-      associate (ha => engine%state%multilayer%tracers(ia)%hTr)
+      associate (ha => engine%state%multilayer%tracers(ia)%c)
          !$acc update device(ha)
       end associate
    end subroutine set_age_step
@@ -911,10 +911,10 @@ contains
       t = 0.0_wp
       call advance(e, c, t, nsteps, ok)
       ia = e%state%multilayer%idx_age
-      associate (ha => e%state%multilayer%tracers(ia)%hTr)
+      associate (ha => e%state%multilayer%tracers(ia)%c)
          !$acc update self(ha)
       end associate
-      hage = e%state%multilayer%tracers(ia)%hTr
+      hage = e%state%multilayer%tracers(ia)%c
       if (present(hlay)) then
          !$acc update self(e%state%multilayer%h_layer)
          hlay = e%state%multilayer%h_layer

@@ -17,8 +17,8 @@ module rdb_ocean_ic_inject
    !! ## Order (load-bearing)
    !! 1. `h` first — validated (finite, `h > 0` on wet cells; column sum
    !!    within `IC_H_COLUMN_RTOL` of the water column).  Tracers NOT staged
-   !!    keep their CONCENTRATION: `hTr` is rescaled by `h_new/h_old`.
-   !! 2. Staged tracers: `hTr = conc * h` (the product `rdb_ocean_set_tracer`
+   !!    keep their CONCENTRATION (stored directly; untouched).
+   !! 2. Staged tracers: `c = conc` (the value `rdb_ocean_set_tracer`
    !!    forms), against the NEW `h`, so staging order is irrelevant.
    !! 3. `u` / `v` on the interior faces.
    !! 4. Ghosts: periodic wrap on a periodic axis, zero-gradient at every
@@ -202,12 +202,12 @@ contains
          end if
       end if
 
-      ! ---- 2. tracers: hTr = conc * h ----
+      ! ---- 2. tracers: c = conc ----
       if (any_tr) then
          do is = 1, size(staged_tracers)
-            call set_hTr(state%multilayer%tracers(tr_idx(is))%hTr, state%multilayer%h_layer, &
-                         state%multilayer%wet_mask, staged_tracers(is)%conc, nx, ny, nz, ng, &
-                         nxt, nyt)
+            call set_conc(state%multilayer%tracers(tr_idx(is))%c, &
+                          state%multilayer%wet_mask, staged_tracers(is)%conc, nx, ny, nz, ng, &
+                          nxt, nyt)
          end do
       end if
 
@@ -275,12 +275,12 @@ contains
                                         per_x, per_y)
       if (allocated(state%multilayer%tracers)) then
          do it = 1, size(state%multilayer%tracers)
-            if (.not. allocated(state%multilayer%tracers(it)%hTr)) cycle
+            if (.not. allocated(state%multilayer%tracers(it)%c)) cycle
             if (.not. do_all) then
                if (it > size(tracer_mask)) cycle
                if (.not. tracer_mask(it)) cycle
             end if
-            call fill_ghosts_centre(state%multilayer%tracers(it)%hTr, nxt, nyt, nz, &
+            call fill_ghosts_centre(state%multilayer%tracers(it)%c, nxt, nyt, nz, &
                                     nx, ny, ng, per_x, per_y)
          end do
       end if
@@ -354,26 +354,8 @@ contains
          end do
       end do
 
-      ! Unstaged tracers keep their concentration (c = hTr/h_old -> c*h_new).
-      do it = 1, size(is_staged)
-         if (is_staged(it)) cycle
-         if (.not. allocated(state%multilayer%tracers)) exit
-         if (it > size(state%multilayer%tracers)) exit
-         if (.not. allocated(state%multilayer%tracers(it)%hTr)) cycle
-         do k = 1, nz
-            do j = 1, ny
-               do i = 1, nx
-                  if (state%multilayer%wet_mask(ng + i, ng + j) <= 0.5_wp) cycle
-                  hold = state%multilayer%h_layer(ng + i, ng + j, k)
-                  if (hold > tiny(1.0_wp)) then
-                     state%multilayer%tracers(it)%hTr(ng + i, ng + j, k) = &
-                        state%multilayer%tracers(it)%hTr(ng + i, ng + j, k)/hold*staged_h(i, j, k)
-                  end if
-               end do
-            end do
-         end do
-      end do
-
+      ! Unstaged tracers keep their concentration: `c` is stored directly, so
+      ! restating `h` leaves it untouched.
       do k = 1, nz
          do j = 1, ny
             do i = 1, nx
@@ -384,11 +366,10 @@ contains
       end do
    end subroutine apply_h
 
-   pure subroutine set_hTr(hTr, h_layer, wet_mask, conc, nx, ny, nz, ng, nxt, nyt)
-      !! `hTr = conc * h` on wet interior cells (land cells keep the seed).
+   pure subroutine set_conc(c, wet_mask, conc, nx, ny, nz, ng, nxt, nyt)
+      !! `c = conc` on wet interior cells (land cells keep the seed).
       integer, intent(in) :: nx, ny, nz, ng, nxt, nyt
-      real(wp), intent(inout) :: hTr(nxt, nyt, nz)
-      real(wp), intent(in) :: h_layer(nxt, nyt, nz)
+      real(wp), intent(inout) :: c(nxt, nyt, nz)
       real(wp), intent(in) :: wet_mask(nxt, nyt)
       real(wp), intent(in) :: conc(nx, ny, nz)
       integer :: i, j, k
@@ -396,11 +377,11 @@ contains
          do j = 1, ny
             do i = 1, nx
                if (wet_mask(ng + i, ng + j) <= 0.5_wp) cycle
-               hTr(ng + i, ng + j, k) = h_layer(ng + i, ng + j, k)*conc(i, j, k)
+               c(ng + i, ng + j, k) = conc(i, j, k)
             end do
          end do
       end do
-   end subroutine set_hTr
+   end subroutine set_conc
 
    pure subroutine fill_ghosts_centre(f, nxt, nyt, nz, nx, ny, ng, per_x, per_y)
       !! Ghosts of a cell-centred field: periodic image on a periodic axis,

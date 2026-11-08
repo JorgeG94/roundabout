@@ -1,7 +1,7 @@
 !! ALE remap orchestrator for the ocean dynamical core (centre-cell pass).
 module rdb_ocean_remap
    !! Drives the conservative vertical remap of `multilayer.h_layer` + every
-   !! registered `multilayer.tracers(t)%hTr` from the current (Lagrangian) grid
+   !! registered `multilayer.tracers(t)%c` from the current (Lagrangian) grid
    !! to `vcoord%target_h`. The kernel is the per-column `remap_column` from
    !! `rdb_remap_column` (shared with coastal); this module wires it across the
    !! registered tracer slot list plus the face-velocity pass.
@@ -152,8 +152,8 @@ contains
           .and. present(eos) .and. allocated(ms%tracers) &
           .and. ms%idx_temperature > 0 .and. ms%idx_salinity > 0) then
          call build_ts_concentration(nx, ny, nz, vcoord%remap_h_old, &
-                                     ms%tracers(ms%idx_temperature)%hTr, &
-                                     ms%tracers(ms%idx_salinity)%hTr, &
+                                     ms%tracers(ms%idx_temperature)%c, &
+                                     ms%tracers(ms%idx_salinity)%c, &
                                      vcoord%remap_conc_t, vcoord%remap_conc_s)
          ! HYCOM = RHO inversion + z*-floor/monotonize deltas (hybrid=.true.);
          ! pure RHO passes hybrid=.false. (bit-identical to RHO-only kernel).
@@ -181,43 +181,43 @@ contains
                                     vcoord%remap_nonuniform_weights)
       if (allocated(ms%tracers)) then
          do t = 1, size(ms%tracers)
-            if (.not. allocated(ms%tracers(t)%hTr)) cycle
+            if (.not. allocated(ms%tracers(t)%c)) cycle
             select case (ms%tracers(t)%budget_id)
             case (TRACER_BUDGET_HEAT)
                if (use_stream) then
                   call ocean_remap_tracer_field_stream( &
-                     nx, ny, nz, vcoord%remap_h_old, vcoord%target_h, ms%tracers(t)%hTr, &
+                     nx, ny, nz, vcoord%remap_h_old, vcoord%target_h, ms%tracers(t)%c, &
                      vcoord%remap_c_old, vcoord%remap_z_old, vcoord%remap_z_new, &
                      vcoord%remap_q_l, vcoord%remap_q_r, vcoord%remap_q_6, &
                      budget=ms%heat_budget_remap)
                else
                   call ocean_remap_tracer_field( &
-                     nx, ny, nz, vcoord%remap_h_old, vcoord%target_h, ms%tracers(t)%hTr, m, &
+                     nx, ny, nz, vcoord%remap_h_old, vcoord%target_h, ms%tracers(t)%c, m, &
                      vcoord%remap_boundary_extrap, vcoord%remap_nonuniform_weights, &
                      budget=ms%heat_budget_remap)
                end if
             case (TRACER_BUDGET_SALT)
                if (use_stream) then
                   call ocean_remap_tracer_field_stream( &
-                     nx, ny, nz, vcoord%remap_h_old, vcoord%target_h, ms%tracers(t)%hTr, &
+                     nx, ny, nz, vcoord%remap_h_old, vcoord%target_h, ms%tracers(t)%c, &
                      vcoord%remap_c_old, vcoord%remap_z_old, vcoord%remap_z_new, &
                      vcoord%remap_q_l, vcoord%remap_q_r, vcoord%remap_q_6, &
                      budget=ms%salt_budget_remap)
                else
                   call ocean_remap_tracer_field( &
-                     nx, ny, nz, vcoord%remap_h_old, vcoord%target_h, ms%tracers(t)%hTr, m, &
+                     nx, ny, nz, vcoord%remap_h_old, vcoord%target_h, ms%tracers(t)%c, m, &
                      vcoord%remap_boundary_extrap, vcoord%remap_nonuniform_weights, &
                      budget=ms%salt_budget_remap)
                end if
             case default
                if (use_stream) then
                   call ocean_remap_tracer_field_stream( &
-                     nx, ny, nz, vcoord%remap_h_old, vcoord%target_h, ms%tracers(t)%hTr, &
+                     nx, ny, nz, vcoord%remap_h_old, vcoord%target_h, ms%tracers(t)%c, &
                      vcoord%remap_c_old, vcoord%remap_z_old, vcoord%remap_z_new, &
                      vcoord%remap_q_l, vcoord%remap_q_r, vcoord%remap_q_6)
                else
                   call ocean_remap_tracer_field( &
-                     nx, ny, nz, vcoord%remap_h_old, vcoord%target_h, ms%tracers(t)%hTr, m, &
+                     nx, ny, nz, vcoord%remap_h_old, vcoord%target_h, ms%tracers(t)%c, m, &
                      vcoord%remap_boundary_extrap, vcoord%remap_nonuniform_weights)
                end if
             end select
@@ -240,14 +240,14 @@ contains
       end do
    end subroutine ocean_apply_ale_remap_centres
 
-   pure subroutine ocean_remap_tracer_field(nx, ny, nz, h_old, h_new, hTr, method, &
+   pure subroutine ocean_remap_tracer_field(nx, ny, nz, h_old, h_new, c, method, &
                                             bnd_extrap, nonunif, budget, c_new_out, clamp_out)
-      !! Flat-impl REFERENCE tracer remap, in concentration form. Per (i,j)
-      !! column: `c_old` (the I1′-aware column concentration, a filler reads
-      !! its donor's) → per-column remap kernel → bounding + empty-target
-      !! fallback (`remap_bound_column`) → `hTr_new = c_new·h_new`.
-      !! `budget` (optional): the per-cell `hTr_new − hTr_old` increment is
-      !! accumulated into the slot (heat/salt remap deltas) before overwriting.
+      !! Flat-impl REFERENCE tracer remap on the stored concentration. Per
+      !! (i,j) column: `c_old = c` → per-column remap kernel → bounding +
+      !! empty-target fallback (`remap_bound_column`) → `c = c_new`.
+      !! `budget` (optional): the per-cell `h_new·c_new − h_old·c_old`
+      !! increment (two standalone products) is accumulated into the slot
+      !! (heat/salt remap deltas) before overwriting.
       !! Flat-arg so GPU codegen doesn't chase the array-of-derived-types pointer.
       !!
       !! **Concentration form** (White & Adcroft 2008; Griffies et al. 2020).
@@ -259,10 +259,8 @@ contains
       !! of the source cells that contributed to it, and a target with
       !! `h_new <= 0` takes the mean of the source cell containing its bottom
       !! interface; both are in `remap_bound_column`.  The content the bounding
-      !! moves, `h_new·(c_bounded − c_raw)`, is part of `hTr_new − hTr_old`
-      !! and so of `budget`: conservation is MEASURED by the slot, not assumed.
-      !! The tail `enforce_vanished_content` (I1′) still re-pools the fillers
-      !! after the remap until the tracer is stored as concentration.
+      !! moves, `h_new·(c_bounded − c_raw)`, is part of `budget`:
+      !! conservation is MEASURED by the slot, not assumed.
       !!
       !! **The `(h_old, h_new)` pair is the call boundary**: every caller
       !! passes `vcoord%remap_h_old` and `vcoord%target_h` (the thickness the
@@ -270,7 +268,8 @@ contains
       integer, intent(in) :: nx, ny, nz, method
       real(wp), intent(in) :: h_old(nx, ny, nz)
       real(wp), intent(in) :: h_new(nx, ny, nz)
-      real(wp), intent(inout) :: hTr(nx, ny, nz)
+      real(wp), intent(inout) :: c(nx, ny, nz)
+         !! Tracer concentration: read as `c_old`, overwritten with `c_new`.
       logical, intent(in) :: bnd_extrap
          !! Linear-exact boundary-cell reconstruction in the column kernel
          !! (`&vcoord_nml remap_boundary_extrap`); `.false.` ⇒ the PCM
@@ -288,31 +287,33 @@ contains
       integer :: i, j, k
       real(wp) :: h_old_col(NZ_STACK_MAX), h_new_col(NZ_STACK_MAX)
       real(wp) :: c_old_col(NZ_STACK_MAX), c_new_col(NZ_STACK_MAX)
-      real(wp) :: hTr_col(NZ_STACK_MAX), clamp_col(NZ_STACK_MAX)
-      real(wp) :: hTr_new
+      real(wp) :: clamp_col(NZ_STACK_MAX)
+      real(wp) :: p_new, p_old
 
       ! Gate the budget write INSIDE the one loop (as vdiff does); splitting
       ! present(budget) into two loops makes NVHPC compile the no-budget branch
       ! ~25x slower.
       do concurrent(j=1:ny, i=1:nx) &
-         local(k, h_old_col, h_new_col, c_old_col, c_new_col, hTr_col, clamp_col, hTr_new)
+         local(k, h_old_col, h_new_col, c_old_col, c_new_col, clamp_col, p_new, p_old)
          do k = 1, nz
             h_old_col(k) = h_old(i, j, k)
             h_new_col(k) = h_new(i, j, k)
-            hTr_col(k) = hTr(i, j, k)
+            c_old_col(k) = c(i, j, k)
          end do
-         call rdb_vl_column_conc(nz, h_old_col, hTr_col, c_old_col)
          call remap_column(method, nz, &
                            h_old_col(1:nz), h_new_col(1:nz), &
                            c_old_col(1:nz), c_new_col(1:nz), bnd_extrap, nonunif)
          call remap_bound_column(nz, h_old_col, h_new_col, c_old_col, c_new_col, clamp_col, &
                                  bnd_extrap)
          do k = 1, nz
-            hTr_new = c_new_col(k)*h_new_col(k)
-            if (present(budget)) budget(i, j, k) = budget(i, j, k) + (hTr_new - hTr(i, j, k))
+            if (present(budget)) then
+               p_new = h_new_col(k)*c_new_col(k)
+               p_old = h_old_col(k)*c_old_col(k)
+               budget(i, j, k) = budget(i, j, k) + (p_new - p_old)
+            end if
             if (present(c_new_out)) c_new_out(i, j, k) = c_new_col(k)
             if (present(clamp_out)) clamp_out(i, j, k) = clamp_col(k)
-            hTr(i, j, k) = hTr_new
+            c(i, j, k) = c_new_col(k)
          end do
       end do
    end subroutine ocean_remap_tracer_field
@@ -547,7 +548,7 @@ contains
       q_6 = 6.0_wp*c_0 - 3.0_wp*(q_l + q_r)
    end subroutine remap_ppm_cell
 
-   pure subroutine ocean_remap_tracer_field_stream(nx, ny, nz, h_old, h_new, hTr, &
+   pure subroutine ocean_remap_tracer_field_stream(nx, ny, nz, h_old, h_new, c, &
                                                    c_old, z_old, z_new, &
                                                    q_lft, q_rgt, q_six, budget, &
                                                    c_new_out, clamp_out)
@@ -602,7 +603,8 @@ contains
       integer, intent(in) :: nx, ny, nz
       real(wp), intent(in) :: h_old(nx, ny, nz)
       real(wp), intent(in) :: h_new(nx, ny, nz)
-      real(wp), intent(inout) :: hTr(nx, ny, nz)
+      real(wp), intent(inout) :: c(nx, ny, nz)
+         !! Tracer concentration: read as the source `c_old`, overwritten with `c_new`.
       real(wp), intent(inout) :: c_old(nx, ny, nz)
          !! Scratch: source concentration of every layer (a filler reads its donor's).
       real(wp), intent(inout) :: z_old(nx, ny, nz)
@@ -621,16 +623,16 @@ contains
       real(wp), intent(inout), optional :: clamp_out(nx, ny, nz)
          !! Diagnostic / test hook: the content the bounding moved,
          !! `h_new·(c_bounded − c_raw)`.
-      integer :: i, j, k, ko, lo, hi, mid, stp, k_top_old, k_fb, n_hit
-      real(wp) :: c_don, c_m2, c_m1, c_0, c_p1, c_p2, e_lo, e_hi, q_l, q_r, q_6
+      integer :: i, j, k, ko, lo, hi, mid, stp, k_fb, n_hit
+      real(wp) :: c_m2, c_m1, c_0, c_p1, c_p2, e_lo, e_hi, q_l, q_r, q_6
       real(wp) :: zo_lo, zo_hi, dzo, zn_lo, zn_hi, dzn
-      real(wp) :: z_lo, z_hi, overlap, xi_lo, xi_hi, integral, c_raw, c_new, hTr_new
+      real(wp) :: z_lo, z_hi, overlap, xi_lo, xi_hi, integral, c_raw, c_new, p_new, p_old
       real(wp) :: c_lo, c_hi, cs_lo, cs_hi, zacc_o, zacc_n
 
-      ! ---- kernel 1: interfaces + source concentration (cheap serial k) ----
-      do concurrent(j=1:ny, i=1:nx) &
-         local(k, k_top_old, c_don, zacc_o, zacc_n)
-         k_top_old = 0
+      ! ---- kernel 1: interfaces + a snapshot of the source concentration ----
+      ! (`c` is overwritten in kernel 3 while neighbouring targets still read
+      ! the source stencil, so the source is copied to the scratch `c_old`.)
+      do concurrent(j=1:ny, i=1:nx) local(k, zacc_o, zacc_n)
          zacc_o = 0.0_wp
          zacc_n = 0.0_wp
          do k = 1, nz
@@ -638,19 +640,8 @@ contains
             zacc_n = zacc_n + h_new(i, j, k)
             z_old(i, j, k) = zacc_o
             z_new(i, j, k) = zacc_n
-            if (h_old(i, j, k) > H_VANISHED) k_top_old = k
+            c_old(i, j, k) = c(i, j, k)
          end do
-         if (k_top_old == 0) then
-            do k = 1, nz
-               c_old(i, j, k) = 0.0_wp
-            end do
-         else
-            c_don = hTr(i, j, k_top_old)/h_old(i, j, k_top_old)
-            do k = nz, 1, -1
-               if (h_old(i, j, k) > H_VANISHED) c_don = hTr(i, j, k)/h_old(i, j, k)
-               c_old(i, j, k) = c_don
-            end do
-         end if
       end do
 
       ! ---- kernel 2: limited parabola of every source cell ----
@@ -674,7 +665,7 @@ contains
       ! compile the no-budget branch ~25x slower).
       do concurrent(j=1:ny, k=1:nz, i=1:nx) &
          local(ko, lo, hi, mid, stp, k_fb, n_hit, q_l, q_r, q_6, zo_lo, zo_hi, dzo, zn_lo, zn_hi, dzn, &
-               z_lo, z_hi, overlap, xi_lo, xi_hi, integral, c_raw, c_new, hTr_new, c_lo, c_hi, cs_lo, cs_hi)
+               z_lo, z_hi, overlap, xi_lo, xi_hi, integral, c_raw, c_new, p_new, p_old, c_lo, c_hi, cs_lo, cs_hi)
          dzn = h_new(i, j, k)
          zn_hi = z_new(i, j, k)
          zn_lo = 0.0_wp
@@ -775,11 +766,14 @@ contains
          else
             c_new = c_old(i, j, k_fb)
          end if
-         hTr_new = c_new*dzn
-         if (present(budget)) budget(i, j, k) = budget(i, j, k) + (hTr_new - hTr(i, j, k))
+         if (present(budget)) then
+            p_new = h_new(i, j, k)*c_new
+            p_old = h_old(i, j, k)*c_old(i, j, k)
+            budget(i, j, k) = budget(i, j, k) + (p_new - p_old)
+         end if
          if (present(c_new_out)) c_new_out(i, j, k) = c_new
          if (present(clamp_out)) clamp_out(i, j, k) = dzn*(c_new - c_raw)
-         hTr(i, j, k) = hTr_new
+         c(i, j, k) = c_new
       end do
    end subroutine ocean_remap_tracer_field_stream
 
@@ -1113,8 +1107,8 @@ contains
           .and. present(eos) .and. allocated(ms%tracers) &
           .and. ms%idx_temperature > 0 .and. ms%idx_salinity > 0) then
          call build_ts_concentration(nx, ny, nz, vcoord%remap_h_old, &
-                                     ms%tracers(ms%idx_temperature)%hTr, &
-                                     ms%tracers(ms%idx_salinity)%hTr, &
+                                     ms%tracers(ms%idx_temperature)%c, &
+                                     ms%tracers(ms%idx_salinity)%c, &
                                      vcoord%remap_conc_t, vcoord%remap_conc_s)
          ! HYCOM = RHO inversion + z*-floor/monotonize deltas (hybrid=.true.);
          ! pure RHO passes hybrid=.false. (bit-identical to RHO-only kernel).
@@ -1147,41 +1141,41 @@ contains
       use_stream = remap_use_stream(vcoord, nz, m, bnd_extrap, nonunif)
       if (allocated(ms%tracers)) then
          do t = 1, size(ms%tracers)
-            if (.not. allocated(ms%tracers(t)%hTr)) cycle
+            if (.not. allocated(ms%tracers(t)%c)) cycle
             select case (ms%tracers(t)%budget_id)
             case (TRACER_BUDGET_HEAT)
                if (use_stream) then
                   call ocean_remap_tracer_field_stream( &
-                     nx, ny, nz, vcoord%remap_h_old, vcoord%target_h, ms%tracers(t)%hTr, &
+                     nx, ny, nz, vcoord%remap_h_old, vcoord%target_h, ms%tracers(t)%c, &
                      vcoord%remap_c_old, vcoord%remap_z_old, vcoord%remap_z_new, &
                      vcoord%remap_q_l, vcoord%remap_q_r, vcoord%remap_q_6, &
                      budget=ms%heat_budget_remap)
                else
                   call ocean_remap_tracer_field( &
-                     nx, ny, nz, vcoord%remap_h_old, vcoord%target_h, ms%tracers(t)%hTr, m, &
+                     nx, ny, nz, vcoord%remap_h_old, vcoord%target_h, ms%tracers(t)%c, m, &
                      bnd_extrap, nonunif, budget=ms%heat_budget_remap)
                end if
             case (TRACER_BUDGET_SALT)
                if (use_stream) then
                   call ocean_remap_tracer_field_stream( &
-                     nx, ny, nz, vcoord%remap_h_old, vcoord%target_h, ms%tracers(t)%hTr, &
+                     nx, ny, nz, vcoord%remap_h_old, vcoord%target_h, ms%tracers(t)%c, &
                      vcoord%remap_c_old, vcoord%remap_z_old, vcoord%remap_z_new, &
                      vcoord%remap_q_l, vcoord%remap_q_r, vcoord%remap_q_6, &
                      budget=ms%salt_budget_remap)
                else
                   call ocean_remap_tracer_field( &
-                     nx, ny, nz, vcoord%remap_h_old, vcoord%target_h, ms%tracers(t)%hTr, m, &
+                     nx, ny, nz, vcoord%remap_h_old, vcoord%target_h, ms%tracers(t)%c, m, &
                      bnd_extrap, nonunif, budget=ms%salt_budget_remap)
                end if
             case default
                if (use_stream) then
                   call ocean_remap_tracer_field_stream( &
-                     nx, ny, nz, vcoord%remap_h_old, vcoord%target_h, ms%tracers(t)%hTr, &
+                     nx, ny, nz, vcoord%remap_h_old, vcoord%target_h, ms%tracers(t)%c, &
                      vcoord%remap_c_old, vcoord%remap_z_old, vcoord%remap_z_new, &
                      vcoord%remap_q_l, vcoord%remap_q_r, vcoord%remap_q_6)
                else
                   call ocean_remap_tracer_field( &
-                     nx, ny, nz, vcoord%remap_h_old, vcoord%target_h, ms%tracers(t)%hTr, m, &
+                     nx, ny, nz, vcoord%remap_h_old, vcoord%target_h, ms%tracers(t)%c, m, &
                      bnd_extrap, nonunif)
                end if
             end select
@@ -1289,38 +1283,36 @@ contains
       real(wp), intent(out) :: conc_s(nx, ny, nz)
       integer :: i, j, k
       do concurrent(k=1:nz, j=1:ny, i=1:nx)
-         conc_t(i, j, k) = rdb_vl_conc(hTr_T(i, j, k), h_old(i, j, k))
-         conc_s(i, j, k) = rdb_vl_conc(hTr_S(i, j, k), h_old(i, j, k))
+         conc_t(i, j, k) = hTr_T(i, j, k)
+         conc_s(i, j, k) = hTr_S(i, j, k)
       end do
    end subroutine build_ts_concentration
 
-   subroutine ocean_remap_tracer_column(nz, h_old, h_new, hTr_inout, method, c_new_out, clamp_out)
+   subroutine ocean_remap_tracer_column(nz, h_old, h_new, c_inout, method, c_new_out, clamp_out)
       !! Single-column unit-test entry: wraps `remap_column` with the SAME
-      !! concentration-form pipeline the production reference kernel runs
-      !! (`rdb_vl_column_conc` → `remap_column` → `remap_bound_column` →
-      !! `hTr_new = c_new·h_new`), so this entry cannot drift from
+      !! pipeline the production reference kernel runs (`remap_column` ->
+      !! `remap_bound_column` -> `c = c_new`), so this entry cannot drift from
       !! `ocean_remap_tracer_field`. Production callers go through that one.
       integer, intent(in) :: nz, method
       real(wp), intent(in) :: h_old(nz), h_new(nz)
-      real(wp), intent(inout) :: hTr_inout(nz)
+      real(wp), intent(inout) :: c_inout(nz)
+         !! Column concentration: read as `c_old`, overwritten with `c_new`.
       real(wp), intent(out), optional :: c_new_out(nz)
          !! The bounded target concentration.
       real(wp), intent(out), optional :: clamp_out(nz)
          !! The content the bounding moved, `h_new·(c_bounded − c_raw)`.
       real(wp) :: c_old(NZ_STACK_MAX), c_new(NZ_STACK_MAX), clamp_col(NZ_STACK_MAX)
       real(wp) :: h_old_col(NZ_STACK_MAX), h_new_col(NZ_STACK_MAX)
-      real(wp) :: hTr_col(NZ_STACK_MAX)
       integer :: k
       do k = 1, nz
          h_old_col(k) = h_old(k)
          h_new_col(k) = h_new(k)
-         hTr_col(k) = hTr_inout(k)
+         c_old(k) = c_inout(k)
       end do
-      call rdb_vl_column_conc(nz, h_old_col, hTr_col, c_old)
       call remap_column(method, nz, h_old, h_new, c_old(1:nz), c_new(1:nz))
       call remap_bound_column(nz, h_old_col, h_new_col, c_old, c_new, clamp_col, .false.)
       do k = 1, nz
-         hTr_inout(k) = c_new(k)*h_new(k)
+         c_inout(k) = c_new(k)
       end do
       if (present(c_new_out)) c_new_out(1:nz) = c_new(1:nz)
       if (present(clamp_out)) clamp_out(1:nz) = clamp_col(1:nz)

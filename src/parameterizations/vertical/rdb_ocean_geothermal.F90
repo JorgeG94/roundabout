@@ -14,7 +14,7 @@
 !! start index changes no answer — it states the bed-side contract in one
 !! place (`k_bot ≡ 1` off `z_fixed`).
 module rdb_ocean_geothermal
-   use rdb_constants, only: wp
+   use rdb_constants, only: H_DIV_EPS, wp
    use rdb_grid, only: hgrid_t
    use rdb_multilayer_state, only: multilayer_state_t
    use rdb_ocean_surface_flux, only: SEAWATER_CP
@@ -108,9 +108,9 @@ contains
       nz = ms%nz_ml
       src_T = dt*geo%q_geo_const/(geo%rho0*geo%cp)
 
-      ! Shim+_impl split keeps `tracers(idx)%hTr` deref on the host
+      ! Shim+_impl split keeps `tracers(idx)%c` deref on the host
       ! (array-of-DT registry indirection blocks NVHPC device codegen).
-      call apply_geothermal_src_impl(ms%tracers(idx_T)%hTr, &
+      call apply_geothermal_src_impl(ms%tracers(idx_T)%c, &
                                      ms%heat_budget_geothermal, &
                                      ms%wet_mask, ms%h_layer, ms%k_bot, src_T, nz, &
                                      geo%h_min)
@@ -121,10 +121,10 @@ contains
       !! a tracer's hTr array (first `k` with `h_layer > h_min`,
       !! scanning `k = k_bot(i,j)..nz` from the first live layer up), mirror into the matching
       !! budget contributor.  Flat-impl over plain allocatables — the
-      !! outer subroutine reaches `ms%tracers(idx)%hTr` on the host
+      !! outer subroutine reaches `ms%tracers(idx)%c` on the host
       !! before calling this.
       ! assumed-shape-ok: tracer registry outer-shim — caller host-dereferences
-      ! ms%tracers(idx)%hTr before passing; size varies per tracer slot;
+      ! ms%tracers(idx)%c before passing; size varies per tracer slot;
       ! called once per tracer per thermo step (per CLAUDE.md outer-shim pattern).
       real(wp), intent(inout) :: hTr(:, :, :)
       real(wp), intent(inout) :: budget(:, :, :)  ! assumed-shape-ok: tracer registry outer-shim; thermo cadence

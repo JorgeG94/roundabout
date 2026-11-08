@@ -294,7 +294,7 @@ contains
                                   atm%uas, atm%vas, atm%tas, atm%huss, atm%psl, &
                                   atm%rlds, atm%rsds, atm%prra, atm%prsn, &
                                   ms%u_face_x_layer, ms%v_face_y_layer, &
-                                  ms%tracers(idx_T)%hTr, ms%tracers(idx_Sarg)%hTr, ms%h_layer, &
+                                  ms%tracers(idx_T)%c, ms%tracers(idx_Sarg)%c, ms%h_layer, &
                                   cons_abs, this%open_water, &
                                   this%taux_c, this%tauy_c, &
                                   sf%q_sens, sf%q_lat, sf%evap, sf%q_sw, sf%q_lw, &
@@ -393,14 +393,14 @@ contains
                u_c = 0.0_wp
                v_c = 0.0_wp
             end if
-            sst = rdb_conc_of_eps(hTr_T(ii, jj, nz), h_layer(ii, jj, nz), H_DIV_EPS)
+            sst = hTr_T(ii, jj, nz)
             ! Bulk formulae and longwave emission take a POTENTIAL
             ! temperature; the model T is CT under cons_abs.  The heat
             ! content of the precipitation below keeps the model T
             ! (ocean-frame enthalpy with c_p).
             sst_f = sst
             if (cons_abs) then
-               sst_f = pt_from_ct(rdb_conc_of_eps(hTr_S(ii, jj, nz), h_layer(ii, jj, nz), H_DIV_EPS), sst)
+               sst_f = pt_from_ct(hTr_S(ii, jj, nz), sst)
             end if
             call bulk_flux_column(u_g, v_g, u_c, v_c, tas(ii, jj), huss(ii, jj), psl(ii, jj), sst_f, &
                                   z_wind, z_ta, n_iter, &

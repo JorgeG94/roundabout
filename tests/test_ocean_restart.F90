@@ -9,7 +9,7 @@
 !!      read the restart into B (overwriting the seed).
 !!   4. Advance BOTH A and B one more step.
 !!   5. Assert every prognostic field (h_layer, u/v_face_x/y_layer,
-!!      every tracers(:)%hTr, barotropic h/u_face_x/v_face_y) is
+!!      every tracers(:)%c, barotropic h/u_face_x/v_face_y) is
 !!      byte-identical between A and B.
 !!
 !! Variants:
@@ -214,8 +214,8 @@ contains
                   do k = 1, NZ
                      h_ratio = H_PATCH_LAYER/state%multilayer%h_layer(i, j, k)
                      do it_t = 1, size(state%multilayer%tracers)
-                        state%multilayer%tracers(it_t)%hTr(i, j, k) = &
-                           state%multilayer%tracers(it_t)%hTr(i, j, k)*h_ratio
+                        state%multilayer%tracers(it_t)%c(i, j, k) = &
+                           state%multilayer%tracers(it_t)%c(i, j, k)*h_ratio
                      end do
                      state%multilayer%h_layer(i, j, k) = H_PATCH_LAYER
                   end do
@@ -240,8 +240,8 @@ contains
                h_new = WD_HELD_DEPTH/real(NZ, wp)
                h_ratio = h_new/state%multilayer%h_layer(WD_WET_I, WD_WET_J, k)
                do it_t = 1, size(state%multilayer%tracers)
-                  state%multilayer%tracers(it_t)%hTr(WD_WET_I, WD_WET_J, k) = &
-                     state%multilayer%tracers(it_t)%hTr(WD_WET_I, WD_WET_J, k)*h_ratio
+                  state%multilayer%tracers(it_t)%c(WD_WET_I, WD_WET_J, k) = &
+                     state%multilayer%tracers(it_t)%c(WD_WET_I, WD_WET_J, k)*h_ratio
                end do
                state%multilayer%h_layer(WD_WET_I, WD_WET_J, k) = h_new
             end do
@@ -253,8 +253,8 @@ contains
                h_new = 2.0_wp*H_VANISHED
                h_ratio = h_new/state%multilayer%h_layer(WD_EMRG_I, WD_EMRG_J, k)
                do it_t = 1, size(state%multilayer%tracers)
-                  state%multilayer%tracers(it_t)%hTr(WD_EMRG_I, WD_EMRG_J, k) = &
-                     state%multilayer%tracers(it_t)%hTr(WD_EMRG_I, WD_EMRG_J, k)*h_ratio
+                  state%multilayer%tracers(it_t)%c(WD_EMRG_I, WD_EMRG_J, k) = &
+                     state%multilayer%tracers(it_t)%c(WD_EMRG_I, WD_EMRG_J, k)*h_ratio
                end do
                state%multilayer%h_layer(WD_EMRG_I, WD_EMRG_J, k) = h_new
             end do
@@ -566,9 +566,9 @@ contains
       if (allocated(error)) return
 
       do it = 1, size(A%multilayer%tracers)
-         !$acc update self(A%multilayer%tracers(it)%hTr, B%multilayer%tracers(it)%hTr)
-         ok = arrays_identical_3d(A%multilayer%tracers(it)%hTr, &
-                                  B%multilayer%tracers(it)%hTr)
+         !$acc update self(A%multilayer%tracers(it)%c, B%multilayer%tracers(it)%c)
+         ok = arrays_identical_3d(A%multilayer%tracers(it)%c, &
+                                  B%multilayer%tracers(it)%c)
          call check(error, ok, "tracer hTr not bit-identical after restart")
          if (allocated(error)) exit
       end do

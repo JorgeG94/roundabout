@@ -141,8 +141,8 @@ contains
       is_ = state%multilayer%idx_salinity
       state%multilayer%h_layer = 10.0_wp
       do k = 1, NZ
-         state%multilayer%tracers(it)%hTr(:, :, k) = 10.0_wp*temp_by_layer(k)
-         state%multilayer%tracers(is_)%hTr(:, :, k) = 0.0_wp
+         state%multilayer%tracers(it)%c(:, :, k) = 10.0_wp*temp_by_layer(k)
+         state%multilayer%tracers(is_)%c(:, :, k) = 0.0_wp
       end do
    end subroutine set_uniform_TS
 
@@ -412,7 +412,7 @@ contains
          ! -array assign was non-conformant: silently OOB without runtime checks).
          do k = 1, NZ
             layer_buf(:, :, k) = &
-               state%multilayer%tracers(it)%hTr(ng + 1:ng + NX, ng + 1:ng + NY, k)/ &
+               state%multilayer%tracers(it)%c(ng + 1:ng + NX, ng + 1:ng + NY, k)/ &
                state%multilayer%h_layer(ng + 1:ng + NX, ng + 1:ng + NY, k)
          end do
          call remap_layer_to_density(state, RHO_TGT, layer_buf, out_buf, .false.)
@@ -643,8 +643,8 @@ contains
       integer :: t
       state%multilayer%h_layer(:, :, 1) = H_VANISHED
       do t = 1, size(state%multilayer%tracers)
-         if (allocated(state%multilayer%tracers(t)%hTr)) then
-            state%multilayer%tracers(t)%hTr(:, :, 1) = 0.0_wp
+         if (allocated(state%multilayer%tracers(t)%c)) then
+            state%multilayer%tracers(t)%c(:, :, 1) = 0.0_wp
          end if
       end do
    end subroutine vanish_bed_layer

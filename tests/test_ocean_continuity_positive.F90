@@ -93,8 +93,8 @@ contains
          ms%h_layer = H0
          ms%u_face_x_layer = 0.0_wp
          ms%v_face_y_layer = 0.0_wp
-         ms%tracers(ms%idx_salinity)%hTr = T0*H0
-         ms%tracers(ms%idx_temperature)%hTr = T0*H0
+         ms%tracers(ms%idx_salinity)%c = T0*H0
+         ms%tracers(ms%idx_temperature)%c = T0*H0
 
          ! uhbt: a huge zonal transport demand at every east face — the renorm
          ! saturates each layer at the CFL cap; the limiter then caps realised
@@ -111,7 +111,7 @@ contains
 
          call continuity_tracer_step_split(grid, metrics, ct, ms, DT, uhbt=uhbt)
 
-         !$acc update self(ms%h_layer, ms%tracers(ms%idx_temperature)%hTr)
+         !$acc update self(ms%h_layer, ms%tracers(ms%idx_temperature)%c)
          !$acc exit data delete(uhbt)
          call ct%exit_data()
          call ms%exit_data()
@@ -141,7 +141,7 @@ contains
          do kt = 1, NZ
             do jt = NGHOST + 1, ny - NGHOST
                do it = NGHOST + 1, nx - NGHOST
-                  tr = ms%tracers(ms%idx_temperature)%hTr(it, jt, kt)/ms%h_layer(it, jt, kt)
+                  tr = ms%tracers(ms%idx_temperature)%c(it, jt, kt)/ms%h_layer(it, jt, kt)
                   tr_dev = max(tr_dev, abs(tr - T0))
                end do
             end do
@@ -193,13 +193,13 @@ contains
          ms_a%h_layer = H0
          ms_a%u_face_x_layer = UGENTLE
          ms_a%v_face_y_layer = UGENTLE
-         ms_a%tracers(ms_a%idx_salinity)%hTr = T0*H0
-         ms_a%tracers(ms_a%idx_temperature)%hTr = T0*H0
+         ms_a%tracers(ms_a%idx_salinity)%c = T0*H0
+         ms_a%tracers(ms_a%idx_temperature)%c = T0*H0
          ms_b%h_layer = H0
          ms_b%u_face_x_layer = UGENTLE
          ms_b%v_face_y_layer = UGENTLE
-         ms_b%tracers(ms_b%idx_salinity)%hTr = T0*H0
-         ms_b%tracers(ms_b%idx_temperature)%hTr = T0*H0
+         ms_b%tracers(ms_b%idx_salinity)%c = T0*H0
+         ms_b%tracers(ms_b%idx_temperature)%c = T0*H0
 
          !$acc enter data copyin(ms_a, ms_b, ct_a, ct_b)
          call ms_a%enter_data()
@@ -210,8 +210,8 @@ contains
          call continuity_tracer_step_split(grid, metrics, ct_a, ms_a, DT)
          call continuity_tracer_step_split(grid, metrics, ct_b, ms_b, DT)
 
-         !$acc update self(ms_a%h_layer, ms_a%tracers(ms_a%idx_temperature)%hTr)
-         !$acc update self(ms_b%h_layer, ms_b%tracers(ms_b%idx_temperature)%hTr)
+         !$acc update self(ms_a%h_layer, ms_a%tracers(ms_a%idx_temperature)%c)
+         !$acc update self(ms_b%h_layer, ms_b%tracers(ms_b%idx_temperature)%c)
          call ct_a%exit_data()
          call ct_b%exit_data()
          call ms_a%exit_data()
@@ -221,8 +221,8 @@ contains
          ! Bit-identity (==, not tolerance): the knob-ON untriggered path must
          ! not perturb a single bit relative to knob-OFF.
          h_ident = all(ms_a%h_layer == ms_b%h_layer)
-         tr_ident = all(ms_a%tracers(ms_a%idx_temperature)%hTr == &
-                        ms_b%tracers(ms_b%idx_temperature)%hTr)
+         tr_ident = all(ms_a%tracers(ms_a%idx_temperature)%c == &
+                        ms_b%tracers(ms_b%idx_temperature)%c)
 
          call check(error, ct_b%n_limited_step == 0, &
                     "theta==1: n_limited_step must be 0 on the benign ON run")
@@ -279,8 +279,8 @@ contains
          ms%h_layer(i0, j0, :) = HLIM
          ms%u_face_x_layer = UEAST
          ms%v_face_y_layer = 0.0_wp
-         ms%tracers(ms%idx_salinity)%hTr = T0*ms%h_layer
-         ms%tracers(ms%idx_temperature)%hTr = T0*ms%h_layer
+         ms%tracers(ms%idx_salinity)%c = T0
+         ms%tracers(ms%idx_temperature)%c = T0
 
          !$acc enter data copyin(ms, ct)
          call ms%enter_data()
@@ -352,8 +352,8 @@ contains
          ms%h_layer = H0
          ms%u_face_x_layer = 0.0_wp
          ms%v_face_y_layer = 0.0_wp
-         ms%tracers(ms%idx_salinity)%hTr = 10.0_wp*H0
-         ms%tracers(ms%idx_temperature)%hTr = 10.0_wp*H0
+         ms%tracers(ms%idx_salinity)%c = 10.0_wp*H0
+         ms%tracers(ms%idx_temperature)%c = 10.0_wp*H0
 
          allocate (uhbt(nx + 1, ny), source=1.0e9_wp)
          allocate (u_cor(nx + 1, ny, NZ), source=0.0_wp)
