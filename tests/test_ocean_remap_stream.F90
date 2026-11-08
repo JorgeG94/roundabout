@@ -739,9 +739,10 @@ contains
             h_new(ic, 1, k) = (1000.0_wp - real(ic, wp) - 15.0_wp*real(ic, wp))/real(NZ - 4, wp)
          end do
          ! S linear in z (z up from the bed): fresher toward the surface.
+         ! The field is stored as concentration; content is h*c.
          z = 0.0_wp
          do k = 1, NZ
-            tr0(ic, 1, k) = h_old(ic, 1, k)*(34.55_wp - 7.5e-4_wp*(z + 0.5_wp*h_old(ic, 1, k)))
+            tr0(ic, 1, k) = 34.55_wp - 7.5e-4_wp*(z + 0.5_wp*h_old(ic, 1, k))
             z = z + h_old(ic, 1, k)
          end do
       end do
@@ -761,8 +762,8 @@ contains
             !$acc update self(hTr, bud, cn, cl)
             !$acc exit data delete(h_old, h_new, hTr, bud, cn, cl)
             do ic = 1, NCOL
-               s0 = sum(tr0(ic, 1, :))
-               s1 = sum(hTr(ic, 1, :))
+               s0 = sum(h_old(ic, 1, :)*tr0(ic, 1, :))
+               s1 = sum(h_new(ic, 1, :)*hTr(ic, 1, :))
                worst_cons = max(worst_cons, abs(s1 - s0)/s0)
                worst_clamp = max(worst_clamp, maxval(abs(cl(ic, 1, :)))/s0)
             end do
