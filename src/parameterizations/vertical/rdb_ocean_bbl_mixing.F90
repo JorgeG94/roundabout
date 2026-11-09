@@ -414,7 +414,7 @@ contains
 
    pure subroutine bbl_mixing_compute(grid, this, ms)
       !! Fill `this%kd_int`.  Call at thermo cadence.  Outer shim:
-      !! dereferences the tracer-registry hTr arrays on the host (the
+      !! dereferences the tracer-registry concentration arrays on the host (the
       !! array-of-DT indirection blocks NVHPC device codegen).
       type(hgrid_t), intent(in) :: grid
       type(ocean_bbl_mixing_t), intent(inout) :: this
@@ -431,7 +431,7 @@ contains
                                    this%von_karman, this%kd_max, this%kd_int)
    end subroutine bbl_mixing_compute
 
-   pure subroutine bbl_mixing_compute_impl(nx, ny, nz, h, htr_t, htr_s, wet, k_bot, &
+   pure subroutine bbl_mixing_compute_impl(nx, ny, nz, h, c_t, c_s, wet, k_bot, &
                                            eos, rho0, ustar_h, ke_loss, f_abs, &
                                            effic, max_decay, use_omega, omega2, &
                                            von_karman, kd_max, kd_int)
@@ -440,7 +440,11 @@ contains
       !! per-column scratch lives in `local()` stack arrays
       !! (`NZ_STACK_MAX >= nz`).
       integer, intent(in) :: nx, ny, nz
-      real(wp), intent(in) :: h(nx, ny, nz), htr_t(nx, ny, nz), htr_s(nx, ny, nz)
+      real(wp), intent(in) :: h(nx, ny, nz)
+      real(wp), intent(in) :: c_t(nx, ny, nz), c_s(nx, ny, nz)
+         !! Temperature and salinity CONCENTRATION.  A filler's stored value
+         !! is read through its donor (`rdb_vl_column_conc`): the N^2 of an
+         !! interface next to a filler must not see the filler's stale water.
       real(wp), intent(in) :: wet(nx, ny)
       integer, intent(in) :: k_bot(nx, ny)
       type(eos_t), intent(in) :: eos
@@ -452,11 +456,10 @@ contains
 
       integer :: i, j, k
       real(wp) :: h_col(NZL), hl_col(NZL), t_col(NZL), s_col(NZL), n2_col(NZL)
-      real(wp) :: kd_col(NZL + 1)
-      real(wp) :: denom
+      real(wp) :: kd_col(NZL + 1), hr_col(NZL), tr_col(NZL), sr_col(NZL)
 
       do concurrent(j=1:ny, i=1:nx) &
-         local(k, h_col, hl_col, t_col, s_col, n2_col, kd_col, denom)
+         local(k, h_col, hl_col, t_col, s_col, n2_col, kd_col, hr_col, tr_col, sr_col)
          do k = 1, nz + 1
             kd_int(i, j, k) = 0.0_wp
          end do
@@ -464,10 +467,12 @@ contains
             do k = 1, nz
                h_col(k) = max(h(i, j, k), H_VANISHED)
                hl_col(k) = max(h(i, j, k), 0.0_wp)
-               denom = 1.0_wp/max(h(i, j, k), H_DIV_EPS)
-               t_col(k) = htr_t(i, j, k)*denom
-               s_col(k) = htr_s(i, j, k)*denom
+               hr_col(k) = h(i, j, k)
+               tr_col(k) = c_t(i, j, k)
+               sr_col(k) = c_s(i, j, k)
             end do
+            call rdb_vl_column_conc(nz, hr_col, tr_col, t_col)
+            call rdb_vl_column_conc(nz, hr_col, sr_col, s_col)
             call column_layer_n2(eos, rho0, nz, h_col, t_col, s_col, n2_col)
             call bbl_column_sweep(nz, k_bot(i, j), hl_col, n2_col, ustar_h(i, j), &
                                   f_abs(i, j), effic*ke_loss(i, j), max_decay, &
@@ -501,5 +506,7 @@ contains
          kt(i, j, k) = kt(i, j, k) + this%kd_int(i, j, k)
       end do
    end subroutine bbl_mixing_merge_into_kt
+
+#include "rdb_vanished_layer.inc"
 
 end module rdb_ocean_bbl_mixing
