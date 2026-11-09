@@ -386,7 +386,7 @@ contains
       last_valid = 0.0_wp
       do k = 1, nz
          if (h_col(k) > H_VANISHED) then
-            conc(k) = hTr_col(k)/max(h_col(k), H_DIV_EPS)
+            conc(k) = rdb_conc_of_floor(hTr_col(k), h_col(k), H_DIV_EPS)
             last_valid = conc(k)
             have_valid = .true.
          else if (have_valid) then
@@ -1091,5 +1091,7 @@ contains
       decay = exp(-strength*alpha*dt)
       res = relax_toward(hTr_cur, tgt, decay)
    end function relax_one
+
+#include "rdb_tracer_conc.inc"
 
 end module rdb_ocean_sponge

@@ -223,6 +223,14 @@ contains
       !! filler (the previous I1), a uniform tracer stops being uniform — the
       !! thickness the continuity step later moves out of the filler arrives
       !! in the live layers carrying no content.
+      !!
+      !! **The `(h_old, h_new)` pair is the call boundary**: every caller
+      !! passes `vcoord%remap_h_old` and `vcoord%target_h` (the thickness the
+      !! regrid wrote into `ms%h_layer` right after), so the entry already
+      !! holds the one explicit h-pair this operator moves between.  The
+      !! concentration read here is `rdb_vl_column_conc` (I1′-aware, pooled
+      !! over filler runs), not the plain accessor; both go away together with
+      !! the merges when the prognostic becomes `c`.
       !! Post-condition (I1′): `h_new <= H_VANISHED ⇒ hTr = h_new·c_live`,
       !! column sum conserved to round-off, so `budget` still telescopes per
       !! column.

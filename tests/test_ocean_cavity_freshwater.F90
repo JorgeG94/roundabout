@@ -260,11 +260,13 @@ contains
       !$acc&                  a_hps, a_sb, a_hb, a_ktop)
       !$acc update device(a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, &
       !$acc&              a_hps, a_sb, a_hb, a_ktop)
+      ! The mirror runs FIRST: it forms its own h_before -> h_after pair from the
+      ! pre-source thickness, which the apply overwrites.
+      call cavity_mass_salt_mirror_impl(1, 1, 1, DTC/RHO0, DTC/RHO0, 0.0_wp, &
+                                        a_h, a_melt, a_sfar, a_hl, a_hps, a_ktop)
       call cavity_mass_apply_impl(1, 1, 1, DTC/RHO0, DTC/RHO0, 0.0_wp, &
                                   a_h, a_melt, a_sfar, a_tb, &
                                   a_hl, a_hs, a_ht, a_sb, a_hb, a_ktop, n_thin)
-      call cavity_mass_salt_mirror_impl(1, 1, 1, DTC/RHO0, DTC/RHO0, 0.0_wp, &
-                                        a_h, a_melt, a_sfar, a_hps, a_ktop)
       !$acc update self(a_hl, a_hs, a_ht, a_hps, a_sb, a_hb)
       !$acc exit data delete(a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, &
       !$acc&                 a_hps, a_sb, a_hb, a_ktop)

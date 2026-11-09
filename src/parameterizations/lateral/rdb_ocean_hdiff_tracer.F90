@@ -349,7 +349,7 @@ contains
       ! ---- Pass 1: T = hTr/h at centres ----
       do concurrent(k=1:nz, j=1:ny, i=1:nx)
          if (h(i, j, k) > 0.0_wp) then
-            T_centre(i, j, k) = hTr(i, j, k)/h(i, j, k)
+            T_centre(i, j, k) = rdb_conc_of_raw(hTr(i, j, k), h(i, j, k))
          else
             T_centre(i, j, k) = 0.0_wp
          end if
@@ -434,5 +434,7 @@ contains
                + this%F_x_face%bytes() &
                + this%F_y_face%bytes()
    end function ocean_hdiff_tracer_bytes
+
+#include "rdb_tracer_conc.inc"
 
 end module rdb_ocean_hdiff_tracer

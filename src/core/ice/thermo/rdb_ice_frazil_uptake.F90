@@ -195,8 +195,8 @@ contains
          salt_flux_diag(i, j) = 0.0_wp
          h = h_layer(i, j, nz)
          if (wet_mask(i, j) > 0.5_wp .and. h > H_VANISHED .and. frazil_heat(i, j) > 0.0_wp) then
-            sst = hTr_T(i, j, nz)/h
-            s_surf = hTr_S(i, j, nz)/h
+            sst = rdb_conc_of_raw(hTr_T(i, j, nz), h)
+            s_surf = rdb_conc_of_raw(hTr_S(i, j, nz), h)
             tfw = eos_freezing_point(eos, s_surf, 0.0_wp)
             if (cons) then
                ! Ice-boundary conversion (IOC/SCOR/IAPSO 2010; McDougall &
@@ -304,8 +304,8 @@ contains
          salt_flux_diag(i, j) = 0.0_wp
          h = h_layer(i, j, nz)
          if (wet_mask(i, j) > 0.5_wp .and. h > H_VANISHED .and. frazil_heat(i, j) > 0.0_wp) then
-            sst = hTr_T(i, j, nz)/h
-            s_surf = hTr_S(i, j, nz)/h
+            sst = rdb_conc_of_raw(hTr_T(i, j, nz), h)
+            s_surf = rdb_conc_of_raw(hTr_S(i, j, nz), h)
             tfw = eos_freezing_point(eos, s_surf, 0.0_wp)
             if (cons) then
                ! Ice-boundary conversion (IOC/SCOR/IAPSO 2010; McDougall &
@@ -458,5 +458,7 @@ contains
          sal_ice_bu(nk + 1 - k) = salin(k)
       end do
    end subroutine ice_frazil_uptake_column
+
+#include "rdb_tracer_conc.inc"
 
 end module rdb_ice_frazil_uptake

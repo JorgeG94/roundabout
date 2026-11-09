@@ -924,13 +924,13 @@ contains
       ! the inv_scale multiplier inside the kernel.
       if (present(wet_dyn)) then
          if (idx_T > 0 .and. sf%has_heat) then
-            call apply_surface_src_2d_dyn_impl(ms%tracers(idx_T)%hTr, &
+            call apply_surface_src_2d_dyn_impl(ms%tracers(idx_T)%hTr, ms%h_layer, &
                                                ms%heat_budget_surface, &
                                                ms%wet_mask, wet_dyn, sf%Q_heat, &
                                                dt/(sf%rho0*sf%cp), ms%k_top, nz, nx, ny)
          end if
          if (idx_S > 0 .and. sf%has_salt) then
-            call apply_surface_src_2d_dyn_impl(ms%tracers(idx_S)%hTr, &
+            call apply_surface_src_2d_dyn_impl(ms%tracers(idx_S)%hTr, ms%h_layer, &
                                                ms%salt_budget_surface, &
                                                ms%wet_mask, wet_dyn, sf%Q_salt, &
                                                dt/sf%rho0, ms%k_top, nz, nx, ny)
@@ -940,7 +940,7 @@ contains
          ! not add into salt_budget_surface (§5.6 / test
          ! pseudo_salt_no_budget_contribution).
          if (idx_ps > 0 .and. sf%has_salt) then
-            call apply_surface_src_2d_dyn_nobudget_impl(ms%tracers(idx_ps)%hTr, &
+            call apply_surface_src_2d_dyn_nobudget_impl(ms%tracers(idx_ps)%hTr, ms%h_layer, &
                                                         ms%wet_mask, wet_dyn, sf%Q_salt, &
                                                         dt/sf%rho0, ms%k_top, nz, nx, ny)
          end if
@@ -951,20 +951,20 @@ contains
          return
       end if
       if (idx_T > 0 .and. sf%has_heat) then
-         call apply_surface_src_2d_impl(ms%tracers(idx_T)%hTr, &
+         call apply_surface_src_2d_impl(ms%tracers(idx_T)%hTr, ms%h_layer, &
                                         ms%heat_budget_surface, &
                                         ms%wet_mask, sf%Q_heat, &
                                         dt/(sf%rho0*sf%cp), ms%k_top, nz, nx, ny)
       end if
       if (idx_S > 0 .and. sf%has_salt) then
-         call apply_surface_src_2d_impl(ms%tracers(idx_S)%hTr, &
+         call apply_surface_src_2d_impl(ms%tracers(idx_S)%hTr, ms%h_layer, &
                                         ms%salt_budget_surface, &
                                         ms%wet_mask, sf%Q_salt, &
                                         dt/sf%rho0, ms%k_top, nz, nx, ny)
       end if
       ! Pseudo-salt mirror (plain, static-mask path) — see note above.
       if (idx_ps > 0 .and. sf%has_salt) then
-         call apply_surface_src_2d_nobudget_impl(ms%tracers(idx_ps)%hTr, &
+         call apply_surface_src_2d_nobudget_impl(ms%tracers(idx_ps)%hTr, ms%h_layer, &
                                                  ms%wet_mask, sf%Q_salt, &
                                                  dt/sf%rho0, ms%k_top, nz, nx, ny)
       end if
@@ -996,7 +996,7 @@ contains
       end do
    end subroutine bound_salinity_top_impl
 
-   pure subroutine apply_surface_src_2d_impl(hTr, budget, wet_mask, Q_field, &
+   pure subroutine apply_surface_src_2d_impl(hTr, h_layer, budget, wet_mask, Q_field, &
                                              inv_scale, k_top, nz, nx, ny)
       !! Stamp `inv_scale · Q_field(i,j) · wet_mask(i,j)` onto the first
       !! LIVE layer (`k_top(i,j)`) of a tracer's hTr array, mirror into
@@ -1024,6 +1024,7 @@ contains
       !!
       integer, intent(in)    :: nz, nx, ny
       real(wp), intent(inout) :: hTr(nx, ny, nz)
+      real(wp), intent(in)    :: h_layer(nx, ny, nz)
       real(wp), intent(inout) :: budget(nx, ny, nz)
       real(wp), intent(in)    :: wet_mask(nx, ny)
       real(wp), intent(in)    :: Q_field(nx, ny)
@@ -1038,12 +1039,12 @@ contains
       real(wp) :: cell
       do concurrent(j=1:ny, i=1:nx) local(cell)
          cell = inv_scale*Q_field(i, j)*wet_mask(i, j)
-         hTr(i, j, k_top(i, j)) = hTr(i, j, k_top(i, j)) + cell
+         hTr(i, j, k_top(i, j)) = rdb_conc_add_source(hTr(i, j, k_top(i, j)), h_layer(i, j, k_top(i, j)), cell)
          budget(i, j, k_top(i, j)) = budget(i, j, k_top(i, j)) + cell
       end do
    end subroutine apply_surface_src_2d_impl
 
-   pure subroutine apply_surface_src_2d_dyn_impl(hTr, budget, wet_mask, wet_dyn, &
+   pure subroutine apply_surface_src_2d_dyn_impl(hTr, h_layer, budget, wet_mask, wet_dyn, &
                                                  Q_field, inv_scale, k_top, nz, nx, ny)
       !! Wet/dry variant of `apply_surface_src_2d_impl`: the DYNAMIC cell
       !! wet mask composes multiplicatively with the static one, so a
@@ -1055,6 +1056,7 @@ contains
       !! kernel untouched, byte-identical.
       integer, intent(in)    :: nz, nx, ny
       real(wp), intent(inout) :: hTr(nx, ny, nz)
+      real(wp), intent(in)    :: h_layer(nx, ny, nz)
       real(wp), intent(inout) :: budget(nx, ny, nz)
       real(wp), intent(in)    :: wet_mask(nx, ny)
       real(wp), intent(in)    :: wet_dyn(nx, ny)
@@ -1066,12 +1068,12 @@ contains
       real(wp) :: cell
       do concurrent(j=1:ny, i=1:nx) local(cell)
          cell = inv_scale*Q_field(i, j)*wet_mask(i, j)*wet_dyn(i, j)
-         hTr(i, j, k_top(i, j)) = hTr(i, j, k_top(i, j)) + cell
+         hTr(i, j, k_top(i, j)) = rdb_conc_add_source(hTr(i, j, k_top(i, j)), h_layer(i, j, k_top(i, j)), cell)
          budget(i, j, k_top(i, j)) = budget(i, j, k_top(i, j)) + cell
       end do
    end subroutine apply_surface_src_2d_dyn_impl
 
-   pure subroutine apply_surface_src_2d_nobudget_impl(hTr, wet_mask, Q_field, &
+   pure subroutine apply_surface_src_2d_nobudget_impl(hTr, h_layer, wet_mask, Q_field, &
                                                       inv_scale, k_top, nz, nx, ny)
       !! Byte-for-byte copy of `apply_surface_src_2d_impl` with the
       !! `budget` dummy and its accumulation line removed — the
@@ -1084,6 +1086,7 @@ contains
       !! bit-identical to salinity's.
       integer, intent(in)    :: nz, nx, ny
       real(wp), intent(inout) :: hTr(nx, ny, nz)
+      real(wp), intent(in)    :: h_layer(nx, ny, nz)
       real(wp), intent(in)    :: wet_mask(nx, ny)
       real(wp), intent(in)    :: Q_field(nx, ny)
       real(wp), intent(in)    :: inv_scale
@@ -1095,16 +1098,17 @@ contains
       real(wp) :: cell
       do concurrent(j=1:ny, i=1:nx) local(cell)
          cell = inv_scale*Q_field(i, j)*wet_mask(i, j)
-         hTr(i, j, k_top(i, j)) = hTr(i, j, k_top(i, j)) + cell
+         hTr(i, j, k_top(i, j)) = rdb_conc_add_source(hTr(i, j, k_top(i, j)), h_layer(i, j, k_top(i, j)), cell)
       end do
    end subroutine apply_surface_src_2d_nobudget_impl
 
-   pure subroutine apply_surface_src_2d_dyn_nobudget_impl(hTr, wet_mask, wet_dyn, &
+   pure subroutine apply_surface_src_2d_dyn_nobudget_impl(hTr, h_layer, wet_mask, wet_dyn, &
                                                           Q_field, inv_scale, k_top, nz, nx, ny)
       !! Wet/dry NOBUDGET twin — see `apply_surface_src_2d_nobudget_impl`
       !! and `apply_surface_src_2d_dyn_impl`.
       integer, intent(in)    :: nz, nx, ny
       real(wp), intent(inout) :: hTr(nx, ny, nz)
+      real(wp), intent(in)    :: h_layer(nx, ny, nz)
       real(wp), intent(in)    :: wet_mask(nx, ny)
       real(wp), intent(in)    :: wet_dyn(nx, ny)
       real(wp), intent(in)    :: Q_field(nx, ny)
@@ -1115,7 +1119,7 @@ contains
       real(wp) :: cell
       do concurrent(j=1:ny, i=1:nx) local(cell)
          cell = inv_scale*Q_field(i, j)*wet_mask(i, j)*wet_dyn(i, j)
-         hTr(i, j, k_top(i, j)) = hTr(i, j, k_top(i, j)) + cell
+         hTr(i, j, k_top(i, j)) = rdb_conc_add_source(hTr(i, j, k_top(i, j)), h_layer(i, j, k_top(i, j)), cell)
       end do
    end subroutine apply_surface_src_2d_dyn_nobudget_impl
 
@@ -1363,7 +1367,7 @@ contains
             absorbed = i0col*(trans_top - trans_bot)
             add = inv_scale*absorbed
             if (k == nz) add = add - inv_scale*i0col   ! remove the surface lump
-            hTr(i, j, k) = hTr(i, j, k) + add
+            hTr(i, j, k) = rdb_conc_add_source(hTr(i, j, k), h_layer(i, j, k), add)
             budget(i, j, k) = budget(i, j, k) + add
             d_top = d_bot
          end do
@@ -1416,7 +1420,7 @@ contains
             absorbed = i0col*(trans_top - trans_bot)
             add = inv_scale*absorbed
             if (k == nz) add = add - inv_scale*i0col   ! remove the surface lump
-            hTr(i, j, k) = hTr(i, j, k) + add
+            hTr(i, j, k) = rdb_conc_add_source(hTr(i, j, k), h_layer(i, j, k), add)
             budget(i, j, k) = budget(i, j, k) + add
             d_top = d_bot
          end do
@@ -1459,7 +1463,7 @@ contains
             absorbed = i0col*(trans_top - trans_bot)
             add = inv_scale*absorbed
             if (k == nz) add = add - inv_scale*i0col   ! remove the surface lump
-            hTr(i, j, k) = hTr(i, j, k) + add
+            hTr(i, j, k) = rdb_conc_add_source(hTr(i, j, k), h_layer(i, j, k), add)
             budget(i, j, k) = budget(i, j, k) + add
             d_top = d_bot
          end do
@@ -1500,7 +1504,7 @@ contains
             absorbed = i0col*(trans_top - trans_bot)
             add = inv_scale*absorbed
             if (k == nz) add = add - inv_scale*i0col
-            hTr(i, j, k) = hTr(i, j, k) + add
+            hTr(i, j, k) = rdb_conc_add_source(hTr(i, j, k), h_layer(i, j, k), add)
             budget(i, j, k) = budget(i, j, k) + add
             d_top = d_bot
          end do
@@ -1656,9 +1660,9 @@ contains
       integer :: i, j
       real(wp) :: surf, inc
       do concurrent(j=1:ny, i=1:nx) local(surf, inc)
-         surf = hTr(i, j, nz)/max(h_layer(i, j, nz), h_min)
+         surf = rdb_conc_of_floor(hTr(i, j, nz), h_layer(i, j, nz), h_min)
          inc = dt_piston*(tgt - surf)*wet_mask(i, j)
-         hTr(i, j, nz) = hTr(i, j, nz) + inc
+         hTr(i, j, nz) = rdb_conc_add_source(hTr(i, j, nz), h_layer(i, j, nz), inc)
          budget(i, j, nz) = budget(i, j, nz) + inc
       end do
    end subroutine apply_surface_restore_2d_impl
@@ -1686,9 +1690,9 @@ contains
          ! vanished-ok: surface restoring measures the surface concentration against a
          ! CALLER-supplied floor `h_min` (a restoring depth), not the
          ! vanish marker; zero would restore toward a fictitious fresh sea.
-         surf = hTr(i, j, nz)/max(h_layer(i, j, nz), h_min)
+         surf = rdb_conc_of_floor(hTr(i, j, nz), h_layer(i, j, nz), h_min)
          inc = dt_piston*(tgt - surf)*wet_mask(i, j)*(1.0_wp - cover_frac(i, j))
-         hTr(i, j, nz) = hTr(i, j, nz) + inc
+         hTr(i, j, nz) = rdb_conc_add_source(hTr(i, j, nz), h_layer(i, j, nz), inc)
          budget(i, j, nz) = budget(i, j, nz) + inc
       end do
    end subroutine apply_surface_restore_2d_cover_impl
@@ -1910,7 +1914,7 @@ contains
          massin = heat_content_lprec(i, j) + heat_content_fprec(i, j) &
                   + heat_content_vprec(i, j) + heat_content_lrunoff(i, j) &
                   + heat_content_frunoff(i, j) + heat_content_seaice_melt(i, j)
-         sst = hTr_T(i, j, nz)/max(h_layer(i, j, nz), h_min)
+         sst = rdb_conc_of_floor(hTr_T(i, j, nz), h_layer(i, j, nz), h_min)
          massout = cp*sst*evap(i, j)
          heat_content_massin(i, j) = wet_mask(i, j)*massin
          heat_content_massout(i, j) = wet_mask(i, j)*massout
@@ -1976,7 +1980,7 @@ contains
                           + heat_content_frunoff(i, j) + heat_content_seaice_melt(i, j))
          ! vanished-ok: same caller-supplied `h_min` floor — the SST carrying the
          ! evaporative heat content must stay a temperature.
-         sst = hTr_T(i, j, nz)/max(h_layer(i, j, nz), h_min)
+         sst = rdb_conc_of_floor(hTr_T(i, j, nz), h_layer(i, j, nz), h_min)
          massout = open_f*cp*sst*evap(i, j)
          heat_content_massin(i, j) = wet_mask(i, j)*massin
          heat_content_massout(i, j) = wet_mask(i, j)*massout
@@ -1988,5 +1992,7 @@ contains
                                         salt_cavity(i, j))
       end do
    end subroutine ocean_surfflux_assemble_cover_impl
+
+#include "rdb_tracer_conc.inc"
 
 end module rdb_ocean_surface_flux

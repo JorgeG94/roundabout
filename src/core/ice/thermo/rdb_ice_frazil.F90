@@ -117,8 +117,8 @@ contains
       do concurrent(j=j_lo:j_hi, i=i_lo:i_hi) local(h, t_sfc, s_sfc, t_f, d_htr)
          h = h_layer(i, j, nz)
          if (wet_mask(i, j) > 0.5_wp .and. h > H_VANISHED) then
-            t_sfc = hTr_T(i, j, nz)/h
-            s_sfc = hTr_S(i, j, nz)/h
+            t_sfc = rdb_conc_of_raw(hTr_T(i, j, nz), h)
+            s_sfc = rdb_conc_of_raw(hTr_S(i, j, nz), h)
             t_f = eos_freezing_point(eos, s_sfc, 0.0_wp)
             if (t_sfc < t_f) then
                d_htr = h*(t_f - t_sfc)
@@ -299,5 +299,7 @@ contains
    end subroutine ice_frazil_accumulate_column_impl
 
 #include "rdb_vanished_layer.inc"
+
+#include "rdb_tracer_conc.inc"
 
 end module rdb_ice_frazil

@@ -1601,16 +1601,14 @@ contains
 
       if (it_T > 0) then
          do concurrent(k=1:nz, j=1:ny, i=1:nx)
-            ms%tracers(it_T)%hTr(i, j, k) = ms%tracers(it_T)%hTr(i, j, k) + &
-                                            dt*(this%gamma_t(i, j, k + 1) - &
-                                                this%gamma_t(i, j, k))
+            ms%tracers(it_T)%hTr(i, j, k) = rdb_conc_add_source(ms%tracers(it_T)%hTr(i, j, k), ms%h_layer(i, j, k), &
+                                                                dt*(this%gamma_t(i, j, k + 1) - this%gamma_t(i, j, k)))
          end do
       end if
       if (it_S > 0) then
          do concurrent(k=1:nz, j=1:ny, i=1:nx)
-            ms%tracers(it_S)%hTr(i, j, k) = ms%tracers(it_S)%hTr(i, j, k) + &
-                                            dt*(this%gamma_s(i, j, k + 1) - &
-                                                this%gamma_s(i, j, k))
+            ms%tracers(it_S)%hTr(i, j, k) = rdb_conc_add_source(ms%tracers(it_S)%hTr(i, j, k), ms%h_layer(i, j, k), &
+                                                                dt*(this%gamma_s(i, j, k + 1) - this%gamma_s(i, j, k)))
          end do
       end if
       ! Pseudo-salt mirror: identical gamma_s expression, identical dt
@@ -1618,9 +1616,8 @@ contains
       ! `it_T`/`it_S`, so this is legal inside `do concurrent`.
       if (it_ps > 0) then
          do concurrent(k=1:nz, j=1:ny, i=1:nx)
-            ms%tracers(it_ps)%hTr(i, j, k) = ms%tracers(it_ps)%hTr(i, j, k) + &
-                                             dt*(this%gamma_s(i, j, k + 1) - &
-                                                 this%gamma_s(i, j, k))
+            ms%tracers(it_ps)%hTr(i, j, k) = rdb_conc_add_source(ms%tracers(it_ps)%hTr(i, j, k), ms%h_layer(i, j, k), &
+                                                                 dt*(this%gamma_s(i, j, k + 1) - this%gamma_s(i, j, k)))
          end do
       end if
    end subroutine vmix_apply_nonlocal_tendencies
@@ -2659,5 +2656,7 @@ contains
                + arr_bytes(this%smooth_scratch) &
                + arr_bytes(this%kd_bg)
    end function ocean_vmix_bytes
+
+#include "rdb_tracer_conc.inc"
 
 end module rdb_ocean_vmix
