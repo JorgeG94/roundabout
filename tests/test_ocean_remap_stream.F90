@@ -73,7 +73,8 @@ contains
                   new_unittest("stream_matches_reference_nz128", test_nz128), &
                   new_unittest("stream_nz200_conserves_bounded_fallback", test_nz200), &
                   new_unittest("dispatch_falls_back_to_reference", test_dispatch), &
-                  new_unittest("bnd_extrap_linear_unclamped_conserved", test_bnd_extrap_linear) &
+                  new_unittest("bnd_extrap_linear_unclamped_conserved", test_bnd_extrap_linear), &
+                  new_unittest("stale_filler_donor_stencil", test_stale_filler) &
                   ]
    end subroutine collect_ocean_remap_stream_tests
 
@@ -775,5 +776,141 @@ contains
       write (msg, '(a,es9.2)') "bnd_extrap linear column: bounding moved (relative) ", worst_clamp
       call check(error, worst_clamp <= 1.0e-14_wp, trim(msg))
    end subroutine test_bnd_extrap_linear
+
+   subroutine test_stale_filler(error)
+      !! Fillers (`h <= H_VANISHED`) keep the STALE concentration they last
+      !! held.  Both kernels read a filler through its donor in every
+      !! reconstruction stencil, and carry the filler's own excess
+      !! `c_fill − c_donor` as a uniform offset over its interval.  Checked, on
+      !! a bed run, an interior filler, a top filler and an identity remap:
+      !!  (a) the column content `sum(h_old·c_old)` is conserved (with the
+      !!      recorded bounding amount, itself round-off);
+      !!  (b) stream and reference agree to `STREAM_REF_ULPS`;
+      !!  (c) every target fed by live sources only is BIT-IDENTICAL to the
+      !!      same column with the fillers holding their donor's value -- a
+      !!      stale filler never tilts a live neighbour's parabola;
+      !!  (d) under the identity remap every layer, filler included, keeps its
+      !!      value to round-off.
+      type(error_type), allocatable, intent(out) :: error
+      integer, parameter :: NZ = 8, NCOL = 3
+      real(wp) :: h_old(NCOL, 1, NZ), h_new(NCOL, 1, NZ), c0(NCOL, 1, NZ), cd(NCOL, 1, NZ)
+      real(wp) :: c(NCOL, 1, NZ), cn(NCOL, 1, NZ), cl(NCOL, 1, NZ)
+      real(wp) :: c_old(NCOL, 1, NZ), z_old(NCOL, 1, NZ), z_new(NCOL, 1, NZ)
+      real(wp) :: q_lft(NCOL, 1, NZ), q_rgt(NCOL, 1, NZ), q_six(NCOL, 1, NZ)
+      real(wp) :: res(NCOL, 1, NZ, 2, 2)
+         !! Final `c`: (..., kernel 1=stream 2=reference, case 1=stale 2=donor).
+      real(wp) :: clamp(NCOL, 1, NZ, 2)
+      real(wp) :: s0, s1, scale, zo_lo, zo_hi, zn_lo, zn_hi
+      integer :: ic, k, m, ik, icase, n_cons, n_ref, n_live, n_id, n_clamp
+      logical :: fed_by_filler
+      character(len=160) :: msg
+
+      h_old = 12.5_wp
+      h_new = 12.5_wp
+      ! col 1: bed run k = 1, 2; live interfaces move.
+      h_old(1, 1, 1:2) = 1.0e-5_wp
+      h_new(1, 1, 1:2) = 1.0e-5_wp
+      h_new(1, 1, 3:NZ) = [10.0_wp, 15.0_wp, 9.0_wp, 16.0_wp, 11.0_wp, 14.0_wp]
+      ! col 2: interior filler k = 4, top filler k = 8; live interfaces move.
+      h_old(2, 1, 4) = 1.0e-5_wp
+      h_old(2, 1, 8) = 0.0_wp
+      h_new(2, 1, 4) = 1.0e-5_wp
+      h_new(2, 1, 8) = 0.0_wp
+      h_new(2, 1, [1, 2, 3, 5, 6, 7]) = [14.0_wp, 11.0_wp, 13.0_wp, 12.0_wp, 15.0_wp, 10.0_wp]
+      ! col 3: identity remap with fillers at 1, 5, 8.
+      h_old(3, 1, [1, 5, 8]) = 2.0e-5_wp
+      h_new(3, 1, :) = h_old(3, 1, :)
+      do ic = 1, 2
+         call rescale_live(NZ, h_new(ic, 1, :), sum(h_old(ic, 1, :), mask=h_old(ic, 1, :) > H_VANISHED))
+      end do
+      do ic = 1, NCOL
+         do k = 1, NZ
+            c0(ic, 1, k) = 10.0_wp + 0.3_wp*real(k, wp) + 0.11_wp*real(k*k, wp)
+            if (h_old(ic, 1, k) <= H_VANISHED) c0(ic, 1, k) = merge(-20.0_wp, 60.0_wp, mod(k, 2) == 0)
+         end do
+         call donor_conc(NZ, h_old(ic, 1, :), c0(ic, 1, :), cd(ic, 1, :))
+      end do
+
+      do icase = 1, 2
+         do ik = 1, 2
+            c = merge(c0, cd, icase == 1)
+            cn = 0.0_wp
+            cl = 0.0_wp
+            c_old = 0.0_wp
+            z_old = 0.0_wp
+            z_new = 0.0_wp
+            q_lft = 0.0_wp
+            q_rgt = 0.0_wp
+            q_six = 0.0_wp
+            !$acc enter data copyin(h_old, h_new, c, cn, cl, c_old, z_old, z_new, q_lft, q_rgt, q_six)
+            if (ik == 1) then
+               call ocean_remap_tracer_field_stream(NCOL, 1, NZ, h_old, h_new, c, &
+                                                    c_old, z_old, z_new, q_lft, q_rgt, q_six, &
+                                                    c_new_out=cn, clamp_out=cl)
+            else
+               call ocean_remap_tracer_field(NCOL, 1, NZ, h_old, h_new, c, REMAP_PPM, &
+                                             .false., .false., c_new_out=cn, clamp_out=cl)
+            end if
+            !$acc update self(c, cn, cl)
+            !$acc exit data delete(h_old, h_new, c, cn, cl, c_old, z_old, z_new, q_lft, q_rgt, q_six)
+            res(:, :, :, ik, icase) = c
+            if (icase == 1) clamp(:, :, :, ik) = cl
+         end do
+      end do
+
+      n_cons = 0
+      n_ref = 0
+      n_live = 0
+      n_id = 0
+      n_clamp = 0
+      do ic = 1, NCOL
+         s0 = sum(h_old(ic, 1, :)*c0(ic, 1, :))
+         scale = sum(abs(h_old(ic, 1, :)*c0(ic, 1, :)))
+         do ik = 1, 2
+            s1 = sum(h_new(ic, 1, :)*res(ic, 1, :, ik, 1))
+            if (abs(s1 - sum(clamp(ic, 1, :, ik)) - s0) > 1.0e-14_wp*scale) n_cons = n_cons + 1
+            if (maxval(abs(clamp(ic, 1, :, ik))) > 1.0e-14_wp*scale) n_clamp = n_clamp + 1
+         end do
+         do k = 1, NZ
+            if (abs(h_new(ic, 1, k)*(res(ic, 1, k, 1, 1) - res(ic, 1, k, 2, 1))) > &
+                STREAM_REF_ULPS*epsilon(1.0_wp)*scale) n_ref = n_ref + 1
+            ! Is target k fed by any source filler?
+            fed_by_filler = .false.
+            zn_lo = sum(h_new(ic, 1, 1:k - 1))
+            zn_hi = zn_lo + h_new(ic, 1, k)
+            zo_lo = 0.0_wp
+            do m = 1, NZ
+               zo_hi = zo_lo + h_old(ic, 1, m)
+               if (h_old(ic, 1, m) <= H_VANISHED .and. min(zn_hi, zo_hi) - max(zn_lo, zo_lo) > 0.0_wp) &
+                  fed_by_filler = .true.
+               zo_lo = zo_hi
+            end do
+            if (.not. fed_by_filler .and. h_new(ic, 1, k) > H_VANISHED) then
+               do ik = 1, 2
+                  if (res(ic, 1, k, ik, 1) /= res(ic, 1, k, ik, 2)) n_live = n_live + 1
+               end do
+            end if
+            if (ic == 3 .and. h_old(ic, 1, k) > 0.0_wp) then
+               do ik = 1, 2
+                  ! A 2e-5 m filler 50 m up the column: its overlap is formed
+                  ! from interface positions good to an ulp of 50 m, ~4e-10
+                  ! relative.  The test separates "keeps its own value" from
+                  ! "takes the donor's" (tens of percent), not round-off.
+                  if (abs(res(ic, 1, k, ik, 1) - c0(ic, 1, k)) > 1.0e-8_wp*abs(c0(ic, 1, k))) n_id = n_id + 1
+               end do
+            end if
+         end do
+      end do
+      write (msg, '(a,i0)') "stale fillers: columns not conserving content: ", n_cons
+      call check(error, n_cons, 0, trim(msg))
+      if (allocated(error)) return
+      call check(error, n_clamp, 0, "stale fillers: bounding moved more than round-off")
+      if (allocated(error)) return
+      call check(error, n_ref, 0, "stale fillers: stream and reference disagree")
+      if (allocated(error)) return
+      call check(error, n_live, 0, "stale fillers: a live-fed target depends on a filler's stale value")
+      if (allocated(error)) return
+      call check(error, n_id, 0, "stale fillers: identity remap does not preserve every layer")
+   end subroutine test_stale_filler
 
 end module test_ocean_remap_stream

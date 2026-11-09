@@ -4332,7 +4332,7 @@ module rdb_config
          !! global scratch, no `NZ_STACK_MAX` column stacks) or
          !! `"reference"` (`ocean_remap_tracer_field`, the stack-based
          !! oracle).  Both compute the remap in concentration form and agree
-         !! BITWISE on columns without vanished layers (`test_ocean_remap_stream`),
+         !! to a few ulp (FMA contraction; `test_ocean_remap_stream` allows 16),
          !! so the default is a performance choice and `"reference"` is the
          !! bisect escape hatch.  Other remap
          !! methods, `nz <= 2`, `remap_boundary_extrap` and
