@@ -1636,7 +1636,7 @@ contains
 
    function rdb_ocean_get_tracer_ptr(c_handle, name, name_len, ptr, nx, ny, nz, gen) &
       result(status) bind(c, name="rdb_ocean_get_tracer_ptr")
-      !! Raw `h*Tr` store (NOT concentration — D3.2) for the tracer named
+      !! Stored CONCENTRATION (not `h*Tr` content) for the tracer named
       !! `name`, by NAME (never index — the recovered code had no tracer
       !! accessors, and index comparison is already the wrong idiom in the
       !! Fortran itself). `OCEAN_STATUS_ERR_NOT_FOUND` if no registered

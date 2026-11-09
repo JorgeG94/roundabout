@@ -1627,9 +1627,9 @@ contains
       integer, intent(in) :: nx, ny, nz
       real(wp), intent(in)    :: h_layer(nx, ny, nz)
       real(wp), intent(in)    :: hS(nx, ny, nz)
-         !! Salinity * thickness (PSU*m) — layer-mean S = hS / h.
+         !! Salinity concentration (psu); a filler reads its donor's.
       real(wp), intent(in)    :: hT(nx, ny, nz)
-         !! Temperature * thickness (degC*m) — layer-mean T = hT / h.
+         !! Temperature concentration (degC); a filler reads its donor's.
       real(wp), intent(in)    :: b(nx, ny)
       type(eos_t), intent(in) :: eos
       real(wp), intent(inout) :: S_t(nx, ny, nz), S_b(nx, ny, nz)
@@ -2231,9 +2231,9 @@ contains
       integer, intent(in) :: nx, ny, nz
       real(wp), intent(in)    :: h_layer(nx, ny, nz)
       real(wp), intent(in)    :: hS(nx, ny, nz)
-         !! Salinity * thickness (PSU*m) — layer-mean S = hS / h.
+         !! Salinity concentration (psu); a filler reads its donor's.
       real(wp), intent(in)    :: hT(nx, ny, nz)
-         !! Temperature * thickness (degC*m) — layer-mean T = hT / h.
+         !! Temperature concentration (degC); a filler reads its donor's.
       real(wp), intent(in)    :: b(nx, ny)
       real(wp), intent(inout) :: conc_T(nx, ny, nz), conc_S(nx, ny, nz)
          !! Layer-mean T / S as every pass below reads them (Pass C).
