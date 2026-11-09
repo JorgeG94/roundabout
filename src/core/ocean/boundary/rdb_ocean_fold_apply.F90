@@ -9,7 +9,7 @@ module rdb_ocean_fold_apply
    !! the already cyclically-wrapped corner columns.
    !!
    !! Stagger map:
-   !!   * h_layer, η, tracer hTr  → centre fold (copy, no sign flip)
+   !!   * h_layer, η, tracer c  → centre fold (copy, no sign flip)
    !!   * u_face_x_layer, bt_ubt  → u-face fold (negate — true vector)
    !!   * v_face_y_layer, bt_vbt  → v-face fold (negate + on-row
    !!     antisymmetric projection of the fold line, storage row
@@ -58,7 +58,7 @@ module rdb_ocean_fold_apply
 contains
 
    pure integer function n_tracers(ms) result(n)
-      !! Registered tracers carrying an allocated `hTr`.
+      !! Registered tracers carrying an allocated `c`.
       type(multilayer_state_t), intent(in) :: ms
       integer :: it
       n = 0
@@ -91,7 +91,7 @@ contains
       nghost = grid%nghost
 
       if (ocean_fold_is_distributed()) then
-         ! One group: h (T), u (u, −), v (v, −, + fold row), every hTr (T).
+         ! One group: h (T), u (u, −), v (v, −, + fold row), every c (T).
          call ocean_fold_begin((nghost + 1)*nz*(3 + n_tracers(ms)))
          call ocean_fold_pack(ms%h_layer, nx, ny, nz, FOLD_STAG_T, device_resident)
          call ocean_fold_pack(ms%u_face_x_layer, nx + 1, ny, nz, FOLD_STAG_U, device_resident)
@@ -162,7 +162,7 @@ contains
       nghost = grid%nghost
 
       if (ocean_fold_is_distributed()) then
-         ! One group: h + every hTr (all T, copy).
+         ! One group: h + every c (all T, copy).
          call ocean_fold_begin(nghost*nz*(1 + n_tracers(ms)))
          call ocean_fold_pack(ms%h_layer, nx, ny, nz, FOLD_STAG_T, device_resident)
          if (allocated(ms%tracers)) then

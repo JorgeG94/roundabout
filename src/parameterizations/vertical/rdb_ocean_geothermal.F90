@@ -3,8 +3,9 @@
 !! `Q_geo` (W/m^2, positive into the ocean from below) into the bottom
 !! layer (`k=1`, ROMS-style k=1 bed / k=nz surface).  Heat only.
 !!
-!! In `hTr` space (`hTr = T*h`, units K*m) the increment is
-!! thickness-independent: `d(hT_{k=1}) = Q_geo * dt / (rho0 * cp)`.
+!! In content space (`h*T`, units K*m) the increment is
+!! thickness-independent: `d(h*T_{k=1}) = Q_geo * dt / (rho0 * cp)`;
+!! the concentration changes by that over the layer thickness.
 !! Under `VCOORD_ZSTAR_FULL` the bed layer can pinch to near-zero, so
 !! the increment lands in the lowest massive layer (first `k` with
 !! `h_layer > h_min`), `k=1` in the common case.  The scan starts at
@@ -71,10 +72,10 @@ contains
 
    subroutine ocean_geothermal_apply_tracers(grid, geo, ms, dt, active)
       !! Add the geothermal bottom heat flux to the lowest massive
-      !! tracer layer.  Operates in `hTr` space (concentration*
-      !! thickness):
-      !!   d(hT_{k=1})/dt = Q_geo / (rho0 * cp)
-      !! (units (W/m^2)/(kg/m^3 * J/kg/K) = K*m/s, matching `hTr`).
+      !! tracer layer.  Operates in content space
+      !! (concentration*thickness):
+      !!   d(h*T_{k=1})/dt = Q_geo / (rho0 * cp)
+      !! (units (W/m^2)/(kg/m^3 * J/kg/K) = K*m/s).
       !!
       !! No-op when `geo` is absent, `.not. enable`, `q_geo_const == 0`,
       !! no temperature tracer is registered, or `ms%tracers` is
@@ -116,9 +117,9 @@ contains
                                      geo%h_min)
    end subroutine ocean_geothermal_apply_tracers
 
-   pure subroutine apply_geothermal_src_impl(hTr, budget, wet_mask, h_layer, k_bot, src, nz, h_min)
+   pure subroutine apply_geothermal_src_impl(c, budget, wet_mask, h_layer, k_bot, src, nz, h_min)
       !! Stamp `src * wet_mask(i,j)` onto the lowest *massive* layer of
-      !! a tracer's hTr array (first `k` with `h_layer > h_min`,
+      !! a tracer's c array (first `k` with `h_layer > h_min`,
       !! scanning `k = k_bot(i,j)..nz` from the first live layer up), mirror into the matching
       !! budget contributor.  Flat-impl over plain allocatables — the
       !! outer subroutine reaches `ms%tracers(idx)%c` on the host
@@ -126,7 +127,7 @@ contains
       ! assumed-shape-ok: tracer registry outer-shim — caller host-dereferences
       ! ms%tracers(idx)%c before passing; size varies per tracer slot;
       ! called once per tracer per thermo step (per CLAUDE.md outer-shim pattern).
-      real(wp), intent(inout) :: hTr(:, :, :)
+      real(wp), intent(inout) :: c(:, :, :)
       real(wp), intent(inout) :: budget(:, :, :)  ! assumed-shape-ok: tracer registry outer-shim; thermo cadence
       real(wp), intent(in)    :: wet_mask(:, :)  ! assumed-shape-ok: tracer registry outer-shim; thermo cadence
       real(wp), intent(in)    :: h_layer(:, :, :)  ! assumed-shape-ok: tracer registry outer-shim; thermo cadence
@@ -136,8 +137,8 @@ contains
       real(wp), intent(in)    :: h_min
       integer :: i, j, nx, ny, k, k_dep
       real(wp) :: cell
-      nx = size(hTr, 1)
-      ny = size(hTr, 2)
+      nx = size(c, 1)
+      ny = size(c, 2)
       do concurrent(j=1:ny, i=1:nx) local(cell, k, k_dep)
          ! Lowest massive layer: scan from the first LIVE layer `k_bot`
          ! (the bed, k=1, off z_fixed) up.  In the common case
@@ -152,7 +153,7 @@ contains
             end if
          end do
          cell = src*wet_mask(i, j)
-         hTr(i, j, k_dep) = rdb_conc_add_source(hTr(i, j, k_dep), h_layer(i, j, k_dep), cell)
+         c(i, j, k_dep) = rdb_conc_add_source(c(i, j, k_dep), h_layer(i, j, k_dep), cell)
          budget(i, j, k_dep) = budget(i, j, k_dep) + rdb_conc_accepted_source(h_layer(i, j, k_dep), cell)
       end do
    end subroutine apply_geothermal_src_impl

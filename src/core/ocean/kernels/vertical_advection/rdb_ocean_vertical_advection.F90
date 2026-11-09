@@ -23,9 +23,9 @@
 !!                                  free-surface displacement rate
 !!
 !! Tracer flux at interface k = `w_interface(k) * Tr_face_upwind(k)`.
-!! Layer k's hTr update:
-!!   ∂(hTr)/∂t = w_interface(k)   * Tr_face(k)
-!!             - w_interface(k+1) * Tr_face(k+1)
+!! Layer k's content update (`c` then divides by the new `h`):
+!!   ∂(h·c)/∂t = w_interface(k)   * Tr_face(k)
+!!               - w_interface(k+1) * Tr_face(k+1)
 !! (flux in at bottom minus flux out at top, positive w = upward).
 !!
 !! Per-tracer gating: respects `tracer_t%do_vertical_exchange`
@@ -63,10 +63,10 @@ module rdb_ocean_vertical_advection
       type(scratch_3d_buffer_t) :: F_face
          !! Per-step vertical tracer-flux at interfaces.  Shape
          !! (nx, ny, nz_ml+1).  Two-pass design: tracer impl first
-         !! fills `F_face` from `hTr` + `w_interface` (read-only),
-         !! then applies the divergence onto `hTr`.  This avoids
+         !! fills `F_face` from `c` + `w_interface` (read-only),
+         !! then applies the divergence onto `c`.  This avoids
          !! the do-concurrent race that a single-pass version would
-         !! have (each layer reads its neighbour's hTr while
+         !! have (each layer reads its neighbour's c while
          !! another iteration writes it).  Reused across all
          !! tracers in one call.
       type(scratch_3d_buffer_t) :: h_pair_prev
@@ -180,7 +180,7 @@ contains
       !! Apply first-order upwind-in-z vertical advection to every
       !! registered tracer, then update `h_layer` by the same
       !! vertical mass-flux divergence.  Updating h is what makes
-      !! the kernel CWC-consistent — uniform `T = hTr/h` stays
+      !! the kernel CWC-consistent — a uniform `c` stays
       !! uniform regardless of how divergent the w field is.
       !!
       !! One shared `h⁻ → h⁺` pair: `h_layer` is snapshotted into

@@ -21,7 +21,7 @@ module rdb_ice_frazil
    !! equals the latent heat the (future, PR 3) ice model will spend
    !! forming new ice from the same bank — banked, never discarded.
    !!
-   !! The matching hTr increment `h·(T_f − T)` (K·m) is mirrored into
+   !! The matching content increment `h·(T_f − T)` (K·m) is mirrored into
    !! the slot's `heat_budget_frazil` contributor so the global heat
    !! budget (`rdb_ocean_budgets`) still closes with ice on.
    !!
@@ -73,7 +73,7 @@ contains
                                       ms%nz_ml, grid%nx_total, grid%ny_total)
    end subroutine ice_frazil_accumulate
 
-   pure subroutine ice_frazil_accumulate_impl(hTr_T, hTr_S, h_layer, wet_mask, &
+   pure subroutine ice_frazil_accumulate_impl(c_T, c_S, h_layer, wet_mask, &
                                               frazil_heat, heat_budget_frazil, &
                                               eos, nghost, nz, nx, ny)
       !! Device kernel over PHYSICAL surface cells (ghosts excluded —
@@ -81,12 +81,12 @@ contains
       !! exchange, so clamping them would double-count the bank in any
       !! area integral).  Per wet cell at k = nz:
       !!
-      !!   T = hTr_T/h,  S = hTr_S/h,  T_f = eos_freezing_point(S, 0)
+      !!   T = c_T,  S = c_S,  T_f = eos_freezing_point(S, 0)
       !!   (OCEAN side: under `ts_convention = "cons_abs"` T, S, T_f are
       !!   CT, SA and the CT liquidus -- no conversion here; `Cp` is
       !!   `eos%c_p`, `&ocean_eos_nml c_p`, default 3992.)
       !!   if T < T_f:  frazil_heat += ρ·Cp·h·(T_f − T)  and
-      !!                hTr_T = h·T_f   (exact clamp)
+      !!                c_T = T_f   (exact clamp)
       !!
       !! Surface pressure p = 0 (surface-relative hydrostatic zero —
       !! same convention as the surface-flux kernels; the in-situ
@@ -98,8 +98,8 @@ contains
       !! write uses an inner `if`, NOT a `do concurrent` mask header
       !! (masked DC headers fail tools/dc_audit.py --strict).
       integer, intent(in) :: nghost, nz, nx, ny
-      real(wp), intent(inout) :: hTr_T(nx, ny, nz)
-      real(wp), intent(in) :: hTr_S(nx, ny, nz)
+      real(wp), intent(inout) :: c_T(nx, ny, nz)
+      real(wp), intent(in) :: c_S(nx, ny, nz)
       real(wp), intent(in) :: h_layer(nx, ny, nz)
       real(wp), intent(in) :: wet_mask(nx, ny)
       real(wp), intent(inout) :: frazil_heat(nx, ny)
@@ -117,8 +117,8 @@ contains
       do concurrent(j=j_lo:j_hi, i=i_lo:i_hi) local(h, t_sfc, s_sfc, t_f, d_htr)
          h = h_layer(i, j, nz)
          if (wet_mask(i, j) > 0.5_wp .and. h > H_VANISHED) then
-            t_sfc = hTr_T(i, j, nz)
-            s_sfc = hTr_S(i, j, nz)
+            t_sfc = c_T(i, j, nz)
+            s_sfc = c_S(i, j, nz)
             t_f = eos_freezing_point(eos, s_sfc, 0.0_wp)
             if (t_sfc < t_f) then
                d_htr = h*(t_f - t_sfc)
@@ -126,7 +126,7 @@ contains
                                    + RHO_WATER*eos%c_p*d_htr
                heat_budget_frazil(i, j, 1) = heat_budget_frazil(i, j, 1) + d_htr
                ! Exact clamp: T_after == T_f.
-               hTr_T(i, j, nz) = t_f
+               c_T(i, j, nz) = t_f
             end if
          end if
       end do
@@ -169,7 +169,7 @@ contains
                                              grid%nx_total, grid%ny_total)
    end subroutine ice_frazil_accumulate_column
 
-   pure subroutine ice_frazil_accumulate_column_impl(hTr_T, hTr_S, h_layer, wet_mask, &
+   pure subroutine ice_frazil_accumulate_column_impl(c_T, c_S, h_layer, wet_mask, &
                                                      frazil_heat, heat_budget_frazil, &
                                                      eos, pressure_dependent, reclaim, &
                                                      nghost, nz, nx, ny)
@@ -205,11 +205,11 @@ contains
       !!
       !! Conservation.  The OCEAN heat change of the column is exactly
       !! `c_final - F_reclaimed` (J/m2); the kernel accumulates the true
-      !! `sum(Delta hTr_T)` (K.m) into `heat_budget_frazil`, so the
+      !! `sum(h·Delta c_T)` (K.m) into `heat_budget_frazil`, so the
       !! console `src` term (`rho * budget`) matches the bank change.
       integer, intent(in) :: nghost, nz, nx, ny
-      real(wp), intent(inout) :: hTr_T(nx, ny, nz)
-      real(wp), intent(in) :: hTr_S(nx, ny, nz)
+      real(wp), intent(inout) :: c_T(nx, ny, nz)
+      real(wp), intent(in) :: c_S(nx, ny, nz)
       real(wp), intent(in) :: h_layer(nx, ny, nz)
       real(wp), intent(in) :: wet_mask(nx, ny)
       real(wp), intent(inout) :: frazil_heat(nx, ny)
@@ -236,8 +236,8 @@ contains
             ! ---- 1. reclaim on the surface layer ----
             if (reclaim .and. f_bank > 0.0_wp) then
                h = h_layer(i, j, nz)
-               t_k = hTr_T(i, j, nz)
-               s_k = hTr_S(i, j, nz)
+               t_k = c_T(i, j, nz)
+               s_k = c_S(i, j, nz)
                p_k = 0.0_wp
                if (pressure_dependent) p_k = 0.5_wp*gr*h
                t_f = eos_freezing_point(eos, s_k, p_k)
@@ -251,7 +251,7 @@ contains
                      new_t = t_f
                   end if
                   dsum = dsum + h*(new_t - t_k)
-                  hTr_T(i, j, nz) = new_t
+                  c_T(i, j, nz) = new_t
                end if
             end if
 
@@ -259,9 +259,9 @@ contains
             do k = 1, nz
                h = h_layer(i, j, k)
                if (h <= H_DIV_EPS) cycle
-               t_k = hTr_T(i, j, k)
+               t_k = c_T(i, j, k)
                if (t_k < 1.0_wp .or. c > 0.0_wp) then
-                  s_k = hTr_S(i, j, k)
+                  s_k = c_S(i, j, k)
                   p_k = 0.0_wp
                   if (pressure_dependent) then
                      p_k = 0.5_wp*gr*h_layer(i, j, nz)
@@ -275,7 +275,7 @@ contains
                      if (t_k < t_f) then
                         c = c + hc*(t_f - t_k)
                         dsum = dsum + h*(t_f - t_k)
-                        hTr_T(i, j, k) = t_f
+                        c_T(i, j, k) = t_f
                      end if
                   else if (c > 0.0_wp .or. t_k < t_f) then
                      if (c + hc*(t_f - t_k) < 0.0_wp) then
@@ -286,7 +286,7 @@ contains
                         new_t = t_f
                      end if
                      dsum = dsum + h*(new_t - t_k)
-                     hTr_T(i, j, k) = new_t
+                     c_T(i, j, k) = new_t
                   end if
                end if
             end do

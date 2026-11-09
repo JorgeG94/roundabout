@@ -537,7 +537,7 @@ contains
             ! the bed = S_init_bottom, k=nz_ml the surface =
             ! S_init_surface), the single-layer fall-through, and the
             ! seed helper (so ghosts and land columns are filled the
-            ! same way: hTr = S(k)·h_layer everywhere, land included,
+            ! same way: c = S(k) everywhere, land included,
             ! since h_layer is already 0/floored there).  The profile is
             ! linear in LAYER INDEX, which under the sigma-style
             ! `h_layer = b/nz_ml` seed is linear in layer-centre depth
@@ -1540,8 +1540,8 @@ contains
       end do
 
       ! ---- re-seed S/T uniform against the new h_layer ----
-      ! The default seed set hTr = const·h_layer against the OLD uniform
-      ! split; refresh so hTr/h_layer stays at the configured scalars.
+      ! The default seed set c = const; refresh it for the new h_layer so c
+      ! stays at the configured scalars.
       idx_S = state%multilayer%idx_salinity
       idx_T = state%multilayer%idx_temperature
       if (idx_S > 0) then
@@ -1659,7 +1659,7 @@ contains
 
       call seed_h_layer_uniform_impl(state%multilayer%h_layer, &
                                      state%barotropic%h, nz_ml)
-      ! Re-seed S, T so hTr/h_layer stays at the configured uniform
+      ! Re-seed S, T so c stays at the configured uniform
       ! values regardless of the η bump.
       if (state%multilayer%idx_salinity > 0) then
          call seed_tracer_uniform_impl( &

@@ -414,7 +414,7 @@ module rdb_ice_state
          !! (accumulates across steps, restart-carried) — distinct from
          !! the drain-and-zero budget accumulator below.
       real(wp), allocatable :: heat_budget_frazil(:, :, :)
-         !! hTr (K·m) change per cell per outer step attributed to the
+         !! Content `h*c` (K·m) change per cell per outer step attributed to the
          !! frazil clamp — the `budgets` HEAT contributor mirroring the
          !! `heat_budget_surface` convention (positive = heat added to
          !! the ocean; the clamp WARMS the surface layer up to T_f).

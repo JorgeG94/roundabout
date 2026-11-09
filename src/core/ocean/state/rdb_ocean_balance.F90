@@ -53,15 +53,15 @@ module rdb_ocean_balance
    !! uniform offset equal to the anomaly's area-mean, which leaves the
    !! velocities unchanged but shifts the absolute sea level).  Each column is
    !! then stretched uniformly, `h_k <- h_k (b + eta)/sum h`, with every tracer's
-   !! `hTr` scaled by the same factor so concentrations are kept (a sigma-like
+   !! `c` divided by the same factor so the content is kept (a sigma-like
    !! choice, not an isopycnal one).
    !!
    !! **Residency (GPU `-gpu=mem:separate`).**  Must be called AFTER
    !! `ocean_state_enter_data` (`engine_enter_data`): the PGF and EOS kernels are
    !! `do concurrent` over device-mapped state and scratch.  The HOST arrays
-   !! `h_layer` and every tracer `hTr` are the inputs and are pushed to the device
+   !! `h_layer` and every tracer `c` are the inputs and are pushed to the device
    !! first (`update device` on leaf arrays only); the host `u/v/hu/hv/h_layer/
-   !! hTr/rho_layer` are the outputs and are pushed/pulled symmetrically, so on
+   !! c/rho_layer` are the outputs and are pushed/pulled symmetrically, so on
    !! return host and device agree.  Never an aggregate derived-type update.
    !!
    !! **Scope.**  Geostrophic only (`BALANCE_GRADIENT` is reserved and fails
@@ -313,7 +313,7 @@ contains
    ! ------------------------------------------------------------------
 
    subroutine push_thickness_tracers(state)
-      !! Host `h_layer` and every tracer `hTr` -> device.
+      !! Host `h_layer` and every tracer `c` -> device.
       type(ocean_state_t), intent(inout) :: state
       integer :: it
       associate (hl => state%multilayer%h_layer)

@@ -843,7 +843,7 @@ contains
       !! Run EPBL over the domain: fill `this%kd_int` (interface
       !! diffusivity) and `this%mld`.  Call at thermo cadence with
       !! the thermo dt.  Outer shim: dereferences the tracer-registry
-      !! hTr arrays + the 2D Q_heat/Q_salt forcing fields on the host
+      !! c arrays + the 2D Q_heat/Q_salt forcing fields on the host
       !! (array-of-DT and allocatable indirection blocks NVHPC device
       !! codegen), then forwards to the column kernel which reads
       !! q_T_kin(i,j) / q_S_kin(i,j) per column inside the DC.
@@ -944,9 +944,9 @@ contains
       ! ms%tracers(idx)%c before passing; size varies per tracer slot
       ! (see CLAUDE.md "outer-shim + flat-impl" pattern); thermo cadence.
       real(wp), intent(in) :: hT(:, :, :)
-         !! Temperature tracer hTr (degC*m), host-dereferenced.
+         !! Temperature concentration (degC), host-dereferenced.
       real(wp), intent(in) :: hS(:, :, :)  ! assumed-shape-ok: tracer registry outer-shim; thermo cadence
-         !! Salinity tracer hTr (PSU*m), host-dereferenced.
+         !! Salinity concentration (PSU), host-dereferenced.
       type(ocean_surface_stress_t), intent(in) :: ss
       real(wp), intent(in) :: dt
       real(wp), intent(in) :: Q_heat_field(:, :)   ! assumed-shape-ok: outer-shim pass; thermo cadence

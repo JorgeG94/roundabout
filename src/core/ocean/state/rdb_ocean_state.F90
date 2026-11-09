@@ -1488,14 +1488,11 @@ contains
       !! emerged column sits at a vanished ≈0 depth ready to flood (its
       !! `wd_wet_dyn` gate seeds DRY since Σ h_layer < dry_depth).
       !!
-      !! Why `2·H_VANISHED` and not `H_VANISHED`: the ALE tracer remap drain
-      !! (`ocean_remap_tracer_field`) gates the concentration recovery on
-      !! `h_old > H_FLOOR` with H_FLOOR == H_VANISHED and a STRICT `>`, so a
-      !! layer sitting at exactly `H_VANISHED` fails the gate ⇒ its
-      !! concentration is zeroed ⇒ the seeded S/T content (`hTr = const·h`)
-      !! is DESTROYED on the first regrid (every outer step on sigma at the
-      !! default `dt_therm_ratio=1`).  Flooring at `2·H_VANISHED` clears the
-      !! strict drain gate so the seeded tracer survives — the same
+      !! Why `2·H_VANISHED` and not `H_VANISHED`: every
+      !! live-layer test in the tree is a STRICT `>` on `H_VANISHED`, so a
+      !! layer sitting at exactly `H_VANISHED` reads as VANISHED ⇒ it takes
+      !! no deposits and its diffusion faces are closed, from the first step
+      !! on.  Flooring at `2·H_VANISHED` keeps the seeded layer live — the same
       !! inflation floor `rdb_ocean_vcoord` uses for its z*/z-blend layers.
       !! Deep columns (`b/nz_ml > 2·H_VANISHED`) are untouched — only the
       !! near-zero/emerged band is floored.  Flag absent/false ⇒ literal

@@ -800,7 +800,7 @@ contains
    subroutine convert_legacy_tracer_content(state, reg)
       !! One-time conversion of a pre-concentration restart: every tracer
       !! entry satisfied from the legacy `tracer_hTr_<n>` variable holds
-      !! CONTENT `h*c` and becomes `c = hTr/h` on live layers
+      !! CONTENT `h*c` and becomes `c = (h*c)/h` on live layers
       !! (`h > H_VANISHED`).  A filler (`h <= H_VANISHED`) took its content
       !! from the old pooling invariant, so it takes its donor's
       !! concentration: the nearest live layer above it, else the topmost

@@ -119,7 +119,7 @@ module rdb_ocean_boundary_types
       integer  :: sponge_width = 0
       real(wp) :: sponge_strength = 0.0_wp
       logical  :: sponge_relax_tracers = .false.
-         !! When .true. the legacy band sponge relaxes tracer `hTr`
+         !! When .true. the legacy band sponge relaxes tracer `c`
          !! (concentration held toward `clamped_tracer(:)`, mass `h_layer`
          !! left untouched) in the edge band. Default .false. is
          !! bit-identical. `h_layer` relaxation is a separate, map-driven

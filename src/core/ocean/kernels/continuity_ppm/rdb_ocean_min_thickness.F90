@@ -249,7 +249,7 @@ contains
       end do
    end subroutine build_target_field
 
-   pure subroutine remap_tracer_grounded(nx, ny, nz, h_old, h_new, mask, hTr)
+   pure subroutine remap_tracer_grounded(nx, ny, nz, h_old, h_new, mask, c)
       !! Conservative tracer remap gated on the grounded mask.  Non-grounded
       !! columns are skipped -> c byte-unchanged; the source concentration
       !! is the stored `c` itself (no divide), remapped only on grounded
@@ -258,7 +258,7 @@ contains
       real(wp), intent(in) :: h_old(nx, ny, nz)
       real(wp), intent(in) :: h_new(nx, ny, nz)
       real(wp), intent(in) :: mask(nx, ny, 1)
-      real(wp), intent(inout) :: hTr(nx, ny, nz)
+      real(wp), intent(inout) :: c(nx, ny, nz)
       integer :: i, j, k
       real(wp) :: h_old_col(NZ_STACK_MAX), h_new_col(NZ_STACK_MAX)
       real(wp) :: c_old(NZ_STACK_MAX), c_new(NZ_STACK_MAX)
@@ -269,12 +269,12 @@ contains
             do k = 1, nz
                h_old_col(k) = h_old(i, j, k)
                h_new_col(k) = h_new(i, j, k)
-               c_old(k) = hTr(i, j, k)
+               c_old(k) = c(i, j, k)
             end do
             call remap_column(REMAP_PPM, nz, h_old_col(1:nz), h_new_col(1:nz), &
                               c_old(1:nz), c_new(1:nz))
             do k = 1, nz
-               hTr(i, j, k) = c_new(k)
+               c(i, j, k) = c_new(k)
             end do
          end if
       end do

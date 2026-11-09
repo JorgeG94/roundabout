@@ -98,7 +98,7 @@ module rdb_ocean_diag
          !! thickness-weighted average of the overlapping source layers.
          !! `.true.` — EXTENSIVE: the column integral is conservatively
          !! REDISTRIBUTED (Σ output == Σ layer_buf), for thickness-
-         !! integrated quantities (hTr, h·KE, transports).
+         !! integrated quantities (tracer content h·c, h·KE, transports).
          import :: wp
          implicit none
          class(*), intent(in) :: state_handle
@@ -268,7 +268,7 @@ module rdb_ocean_diag
          !! weight-averaged across overlapping source layers.
          !!
          !! `.true.`: field is EXTENSIVE — already thickness-integrated,
-         !! e.g. `hTr` (tracer · m), KE per layer (h · 0.5 · |u|²),
+         !! e.g. tracer content `h·c` (tracer · m), KE per layer (h · 0.5 · |u|²),
          !! transport per layer (h · u).  When remapped, the column
          !! values must be conservatively REDISTRIBUTED across the
          !! target layers (sum preserved), not averaged.

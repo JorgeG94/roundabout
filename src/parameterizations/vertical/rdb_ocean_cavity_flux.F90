@@ -179,7 +179,7 @@
 !! `q_ocean` and gains the meltwater's enthalpy.  The model's heat
 !! content is `rho_0*c_p*integral(T dz)` with an implicit 0 degC
 !! reference (`total_heat = sum(h*T*areaT)*RHO_WATER` carries no
-!! offset), so in `hTr = h*T` space the enthalpy of the added water is
+!! offset), so in content (`h*T`) space the enthalpy of the added water is
 !! simply `dh*T_b`: NO heat capacity enters, and the model's `c_p` and
 !! the melt law's own `c_w` never have to agree.
 !!
@@ -337,10 +337,10 @@ module rdb_ocean_cavity_flux
       !! marker reads as VANISHED.  So clamping a melt or compensation
       !! withdrawal to `H_VANISHED` exactly — which is what these kernels
       !! used to do, with an in-line comment arguing for landing on the
-      !! marker — hands the next ALE remap a layer it treats as empty:
-      !! `ocean_remap_tracer_column`'s `c = hTr/h` guard returns 0 there,
-      !! so the layer's heat and salt content is DELETED, silently and at
-      !! the next thermo step.  One ulp above the marker it is preserved.
+      !! marker — hands every downstream operator a layer it treats as
+      !! empty: deposits into it are refused and its diffusion faces are
+      !! closed, so it silently drops out of tracer transport.  One ulp
+      !! above the marker it stays live.
       !! A clamped withdrawal is already a fail-loud condition
       !! (`cavity_mass_thin_is_fatal`), but the abort happens AFTER the
       !! state is written, so the value written has to survive being read.
@@ -457,10 +457,10 @@ module rdb_ocean_cavity_flux
       real(wp), allocatable :: comp_scale(:, :)
          !! Per-cell top-layer thickness RATIO `h_new/h_old` left behind
          !! by the `volume_compensation` sink, exactly `1` everywhere the
-         !! sink did not act.  Every PASSIVE tracer's top-layer load is
-         !! multiplied by it (`cavity_comp_scale_tracer_impl`) so the
-         !! removed parcel carries that cell's own concentration and
-         !! changes none of them.  Allocated with the rest of the slot
+         !! sink did not act.  The
+         !! removed parcel carries that cell's own concentration, so no
+         !! tracer's `c` changes and nothing consumes the ratio; it is kept
+         !! as a diagnostic of how much water the sink took.  Allocated with the rest of the slot
          !! (full size iff `enable`); left at `1` when
          !! `volume_comp = CAVITY_VC_NONE`.
 
@@ -650,7 +650,7 @@ contains
    ! ======================================================================
 
    pure subroutine cavity_far_field_impl(nx, ny, nz, far_depth, cover, wet_mask, &
-                                         h_layer, hTr_T, hTr_S, u_face_x, v_face_y, &
+                                         h_layer, c_T, c_S, u_face_x, v_face_y, &
                                          active, t_far, s_far, u_far, v_far)
       !! Thickness-weighted mean of `(T, S, u, v)` over `far_depth`
       !! METRES below the ice base, with a PARTIAL last layer.
@@ -690,9 +690,9 @@ contains
          !! Static wet (1) / land (0) mask.
       real(wp), intent(in) :: h_layer(nx, ny, nz)
          !! Layer thickness (m).
-      real(wp), intent(in) :: hTr_T(nx, ny, nz)
+      real(wp), intent(in) :: c_T(nx, ny, nz)
          !! `h*T` (degC m).
-      real(wp), intent(in) :: hTr_S(nx, ny, nz)
+      real(wp), intent(in) :: c_S(nx, ny, nz)
          !! `h*S` ((g/kg) m).
       real(wp), intent(in) :: u_face_x(nx + 1, ny, nz)
          !! Zonal face velocity (m/s).
@@ -729,8 +729,8 @@ contains
                if (h <= H_VANISHED) cycle
                w = min(h, remain)
                acc_h = acc_h + w
-               acc_t = acc_t + w*hTr_T(i, j, k)
-               acc_s = acc_s + w*hTr_S(i, j, k)
+               acc_t = acc_t + w*c_T(i, j, k)
+               acc_s = acc_s + w*c_S(i, j, k)
                acc_u = acc_u + w*0.5_wp*(u_face_x(i, j, k) + u_face_x(i + 1, j, k))
                acc_v = acc_v + w*0.5_wp*(v_face_y(i, j, k) + v_face_y(i, j + 1, k))
                remain = remain - w
@@ -933,7 +933,7 @@ contains
 
    pure subroutine cavity_mass_apply_impl(nx, ny, nz, dt_over_rho0, inv_rho0_dt, s_ice, &
                                           active, melt, s_far, t_b, &
-                                          h_layer, hTr_S, hTr_T, &
+                                          h_layer, c_S, c_T, &
                                           salt_budget, heat_budget, k_top, n_thin)
       !! The real-mass top-layer source: add the meltwater VOLUME to
       !! `h_layer` at the first LIVE layer `k_top(i,j)`, replace the
@@ -968,9 +968,8 @@ contains
       !! load-bearing: the abort fires AFTER this kernel has written the
       !! state, so whatever it leaves behind gets read at least once more.
       !! A layer left exactly ON the marker reads as VANISHED to every
-      !! strict-`>` gate downstream, and `ocean_remap_tracer_column` then
-      !! returns `hTr = 0` for it — the heat and salt the clamp was
-      !! protecting are deleted by the very next remap.  See
+      !! strict-`>` gate downstream (deposits refused, diffusion faces
+      !! closed), so it drops out of tracer transport.  See
       !! `H_CAVITY_FLOOR`.
       integer, intent(in) :: nx
          !! First dimension (ghosts included).
@@ -1001,9 +1000,9 @@ contains
          !! joins the column at.
       real(wp), intent(inout) :: h_layer(nx, ny, nz)
          !! Layer thickness (m); only `k = k_top(i,j)` is touched.
-      real(wp), intent(inout) :: hTr_S(nx, ny, nz)
+      real(wp), intent(inout) :: c_S(nx, ny, nz)
          !! `h*S` ((g/kg) m).
-      real(wp), intent(inout) :: hTr_T(nx, ny, nz)
+      real(wp), intent(inout) :: c_T(nx, ny, nz)
          !! `h*T` (degC m).
       real(wp), intent(inout) :: salt_budget(nx, ny, nz)
          !! `ms%salt_budget_surface`.
@@ -1035,9 +1034,9 @@ contains
             cell_s = -inv_rho0_dt*virt + dh*s_ice
             cell_t = dh*t_b(i, j)
             h_layer(i, j, kt) = hn
-            hTr_S(i, j, kt) = rdb_conc_add_source_mass(hTr_S(i, j, kt), h0, hn, cell_s)
+            c_S(i, j, kt) = rdb_conc_add_source_mass(c_S(i, j, kt), h0, hn, cell_s)
             salt_budget(i, j, kt) = salt_budget(i, j, kt) + cell_s
-            hTr_T(i, j, kt) = rdb_conc_add_source_mass(hTr_T(i, j, kt), h0, hn, cell_t)
+            c_T(i, j, kt) = rdb_conc_add_source_mass(c_T(i, j, kt), h0, hn, cell_t)
             heat_budget(i, j, kt) = heat_budget(i, j, kt) + cell_t
          end if
       end do
@@ -1077,7 +1076,7 @@ contains
    end subroutine cavity_mass_dilute_impl
 
    pure subroutine cavity_mass_salt_mirror_impl(nx, ny, nz, dt_over_rho0, inv_rho0_dt, &
-                                                s_ice, active, melt, s_far, h_layer, hTr, k_top)
+                                                s_ice, active, melt, s_far, h_layer, c, k_top)
       !! The pseudo-salt mirror of `cavity_mass_apply_impl`'s SALT
       !! increment, with no budget accumulation — `budget_id = NONE`, so
       !! it must not touch `salt_budget_surface`.
@@ -1118,7 +1117,7 @@ contains
          !! post-source thickness).  The `h_before -> h_after` pair is
          !! re-derived here by `cavity_melt_thickness_pair`, the SAME
          !! clamp the sibling applies.
-      real(wp), intent(inout) :: hTr(nx, ny, nz)
+      real(wp), intent(inout) :: c(nx, ny, nz)
          !! Pseudo-salt `h*C`.
       integer, intent(in) :: k_top(nx, ny)
          !! The SAME first-live-layer index the salt branch used — the
@@ -1135,7 +1134,7 @@ contains
             call cavity_melt_thickness_pair(h0, dh, hn, thin)
             virt = -melt(i, j)*(s_far(i, j) - s_ice)
             cell_s = -inv_rho0_dt*virt + melt(i, j)*dt_over_rho0*s_ice
-            hTr(i, j, k_top(i, j)) = rdb_conc_add_source_mass(hTr(i, j, k_top(i, j)), h0, hn, cell_s)
+            c(i, j, k_top(i, j)) = rdb_conc_add_source_mass(c(i, j, k_top(i, j)), h0, hn, cell_s)
          end if
       end do
    end subroutine cavity_mass_salt_mirror_impl
@@ -1226,20 +1225,17 @@ contains
    end function cavity_comp_withdrawal
 
    pure subroutine cavity_comp_apply_impl(nx, ny, nz, dw, wet_mask, cover_frac, &
-                                          h_layer, hTr_S, hTr_T, &
+                                          h_layer, c_S, c_T, &
                                           salt_budget, heat_budget, scale, n_thin)
       !! The `volume_compensation = "uniform_open_ocean"` sink: remove
       !! `dw` metres of the top layer from every wet cell the ice does
       !! NOT cover, the removed parcel carrying that cell's own `T` and
       !! `S` so no concentration there changes.
       !!
-      !! "Carries its own concentration" is implemented as a RATIO:
-      !! `hTr *= h_new/h_old`, which leaves `Tr = hTr/h` algebraically
-      !! identical.  The ratio is published in `scale` so every PASSIVE
-      !! tracer can be given exactly the same treatment
-      !! (`cavity_comp_scale_tracer_impl`) — a tracer left alone here
-      !! would be CONCENTRATED by the sink, which is a different physical
-      !! statement from the one the knob makes.
+      !! "Carries its own concentration" is implemented by leaving `c`
+      !! untouched in every tracer (passive ones included): the content
+      !! `h*c` falls with the thickness and the budget books exactly that.
+      !! The ratio `h_new/h_old` is published in `scale` as a diagnostic.
       !!
       !! The salt and heat increments ARE mirrored into the surface
       !! budget contributors: a parcel that carries `S` out of the domain
@@ -1261,9 +1257,9 @@ contains
          !! Ice-cover fraction (v1 binary).
       real(wp), intent(inout) :: h_layer(nx, ny, nz)
          !! Layer thickness (m).
-      real(wp), intent(in) :: hTr_S(nx, ny, nz)
+      real(wp), intent(in) :: c_S(nx, ny, nz)
          !! Salinity concentration (read only: the sink removes water at its own S).
-      real(wp), intent(in) :: hTr_T(nx, ny, nz)
+      real(wp), intent(in) :: c_T(nx, ny, nz)
          !! Temperature concentration (read only).
       real(wp), intent(inout) :: salt_budget(nx, ny, nz)
          !! `ms%salt_budget_surface`.
@@ -1300,11 +1296,11 @@ contains
             ! The sink removes water AT the layer's own concentration, so `c`
             ! is untouched; the budget books the content it carries out
             ! (two standalone products so it telescopes with the console total).
-            p_new = hTr_S(i, j, nz)*hn
-            p_old = hTr_S(i, j, nz)*h0
+            p_new = c_S(i, j, nz)*hn
+            p_old = c_S(i, j, nz)*h0
             cell_s = p_new - p_old
-            p_new = hTr_T(i, j, nz)*hn
-            p_old = hTr_T(i, j, nz)*h0
+            p_new = c_T(i, j, nz)*hn
+            p_old = c_T(i, j, nz)*h0
             cell_t = p_new - p_old
             h_layer(i, j, nz) = hn
             salt_budget(i, j, nz) = salt_budget(i, j, nz) + cell_s

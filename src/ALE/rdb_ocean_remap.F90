@@ -1404,21 +1404,21 @@ contains
       end do
    end subroutine ocean_remap_scan_preconditions
 
-   pure subroutine build_ts_concentration(nx, ny, nz, h_old, hTr_T, hTr_S, conc_t, conc_s)
+   pure subroutine build_ts_concentration(nx, ny, nz, h_old, c_T, c_S, conc_t, conc_s)
       !! Copy the stored layer-mean T/S concentrations into the VCOORD_RHO /
       !! HYCOM density-inversion scratch (the tracers ARE concentrations, so
       !! this is a plain copy; `h_old` is kept for the call signature).
       !! Flat-impl, explicit-shape; one cadence-bounded launch per remap.
       integer, intent(in) :: nx, ny, nz
       real(wp), intent(in) :: h_old(nx, ny, nz)
-      real(wp), intent(in) :: hTr_T(nx, ny, nz)
-      real(wp), intent(in) :: hTr_S(nx, ny, nz)
+      real(wp), intent(in) :: c_T(nx, ny, nz)
+      real(wp), intent(in) :: c_S(nx, ny, nz)
       real(wp), intent(out) :: conc_t(nx, ny, nz)
       real(wp), intent(out) :: conc_s(nx, ny, nz)
       integer :: i, j, k
       do concurrent(k=1:nz, j=1:ny, i=1:nx)
-         conc_t(i, j, k) = hTr_T(i, j, k)
-         conc_s(i, j, k) = hTr_S(i, j, k)
+         conc_t(i, j, k) = c_T(i, j, k)
+         conc_s(i, j, k) = c_S(i, j, k)
       end do
    end subroutine build_ts_concentration
 

@@ -195,9 +195,9 @@ module rdb_ocean_redi
       real(wp), allocatable :: khtr_v(:, :)
 
       ! ---- Read-only tracer snapshot for the flux gather ----
-      ! The double-visit flux reads NEIGHBOUR hTr AND writes its OWN — a
+      ! The double-visit flux reads NEIGHBOUR c AND writes its OWN — a
       ! do-concurrent read-write race against the live array.  `tr_snap` holds
-      ! the pre-step hTr so the gather is order-independent on every backend.
+      ! the pre-step c so the gather is order-independent on every backend.
       real(wp), allocatable :: tr_snap(:, :, :)
    contains
       procedure, non_overridable :: init => ocean_redi_init
@@ -672,7 +672,7 @@ contains
       !! Public entry: fill the Phase-A coefficient arrays.  No-op if
       !! absent / uninitialised / disabled.  Run once per outer step at
       !! THERMO cadence (a slow, tracer-independent geometry).  Outer-shim:
-      !! dereference the tracer-registry hTr arrays on the host, pass the
+      !! dereference the tracer-registry c arrays on the host, pass the
       !! flat top-level allocatables to the flat-impl kernels.
       type(hgrid_t), intent(in) :: grid
       type(ocean_metrics_t), intent(in) :: metrics
@@ -1102,7 +1102,7 @@ contains
       !$acc routine seq
       !! Build one column's TOP-DOWN layer-average tracer `Tlay`, PPM
       !! interface edges `Tint`, and per-layer limited PPM left/right edges
-      !! `aLe/aRe` from the bottom-up native (h, hTr) column (fixed-size
+      !! `aLe/aRe` from the bottom-up native (h, c) column (fixed-size
       !! NZ_STACK_MAX copies), restricted to the face's open window
       !! `kb..kt` (`1..nz` off the z-level closed-face path) — indexed in
       !! the WINDOW top-down frame, `1..nk`, `nk = kt-kb+1`.  Tlay = the
@@ -1300,7 +1300,7 @@ contains
 
       do pass = 1, n_itt
          do it = 1, size(ms%tracers)
-            ! Snapshot this tracer's hTr so the double-visit gather reads the
+            ! Snapshot this tracer's c so the double-visit gather reads the
             ! pre-step field (order-independent — see `tr_snap`).  Re-taken
             ! every pass: pass p+1 diffuses the pass-p result.
             call redi_snapshot(nx, ny, nz, ms%tracers(it)%c, this%tr_snap)
@@ -1318,7 +1318,7 @@ contains
             ! change into the same lateral-diffusion accumulator `tracer_hdiff`
             ! uses.  Interior faces cancel in the interior sum, so what survives
             ! is exactly the flux through the OPEN physical faces — the term the
-            ! console `out` column must carry.  `hTr - tr_snap` is the realised
+            ! console `out` column must carry.  `c - tr_snap` is the realised
             ! increment and is exact (Sterbenz: the two are within a factor 2).
             ! Per pass the increments simply add.
             select case (ms%tracers(it)%budget_id)
@@ -1456,19 +1456,19 @@ contains
       end if
    end subroutine redi_refresh_tracer_halos
 
-   pure subroutine redi_budget_accumulate(nx, ny, nz, h, hTr, snap, budget)
+   pure subroutine redi_budget_accumulate(nx, ny, nz, h, c, snap, budget)
       !! `budget += h·c - h·snap` (device-side): book the realised Redi
       !! increment of one budgeted tracer into its lateral-diffusion
       !! budget accumulator (`ms%salt_budget_hdiff` / `heat_budget_hdiff`).
       integer, intent(in) :: nx, ny, nz
       real(wp), intent(in) :: h(nx, ny, nz)
-      real(wp), intent(in) :: hTr(nx, ny, nz)
+      real(wp), intent(in) :: c(nx, ny, nz)
       real(wp), intent(in) :: snap(nx, ny, nz)
       real(wp), intent(inout) :: budget(nx, ny, nz)
       integer :: i, j, k
       real(wp) :: p_new, p_old
       do concurrent(k=1:nz, j=1:ny, i=1:nx) local(p_new, p_old)
-         p_new = h(i, j, k)*hTr(i, j, k)
+         p_new = h(i, j, k)*c(i, j, k)
          p_old = h(i, j, k)*snap(i, j, k)
          budget(i, j, k) = budget(i, j, k) + (p_new - p_old)
       end do
@@ -1507,14 +1507,14 @@ contains
       end do
    end subroutine redi_face_const
 
-   pure subroutine redi_face_flux(nz, ns, nxc, nyc, nfa, nfb, h_layer, hTr_in, &
+   pure subroutine redi_face_flux(nz, ns, nxc, nyc, nfa, nfb, h_layer, c_in, &
                                   iL, jL, iR, jR, fa, fb, &
                                   PoL, PoR, KoL, KoR, hEff, kb, kt, use_open, &
                                   coef, is_left, dTr)
       !$acc routine seq
       !! Accumulate ONE C-grid face's neutral-surface tracer flux into the
       !! owning cell's `dTr`.  Builds the left/right tracer columns from the
-      !! READ-ONLY snapshot `hTr_in` (the live `hTr` is also written by the
+      !! READ-ONLY snapshot `c_in` (the live `c` is also written by the
       !! loop — reading it would be a do-concurrent read-write race) and loops
       !! the `ns-1` neutral sublayers.  The per-face column locals live in this
       !! frame to keep the caller's loop-body footprint small.
@@ -1529,7 +1529,7 @@ contains
       !! the face take the same decision from the same `h`.
       integer, intent(in) :: nz, ns, nxc, nyc, nfa, nfb
       integer, intent(in) :: iL, jL, iR, jR, fa, fb
-      real(wp), intent(in) :: h_layer(nxc, nyc, nz), hTr_in(nxc, nyc, nz)
+      real(wp), intent(in) :: h_layer(nxc, nyc, nz), c_in(nxc, nyc, nz)
       real(wp), intent(in) :: PoL(nfa, nfb, ns), PoR(nfa, nfb, ns)
       integer, intent(in) :: KoL(nfa, nfb, ns), KoR(nfa, nfb, ns)
       real(wp), intent(in) :: hEff(nfa, nfb, ns - 1)
@@ -1557,9 +1557,9 @@ contains
       koff = nz - kt
       do k = 1, nz
          hcL(k) = h_layer(iL, jL, k)
-         trcL(k) = hTr_in(iL, jL, k)
+         trcL(k) = c_in(iL, jL, k)
          hcR(k) = h_layer(iR, jR, k)
-         trcR(k) = hTr_in(iR, jR, k)
+         trcR(k) = c_in(iR, jR, k)
       end do
       call redi_tracer_column(kb, kt, hcL, trcL, TlL, TiL, aLL, aRL)
       call redi_tracer_column(kb, kt, hcR, trcR, TlR, TiR, aLR, aRR)
@@ -1585,7 +1585,7 @@ contains
    subroutine redi_apply_flux_impl(nx, ny, nz, ns, dt, &
                                    nghost, nxp, nyp, wall_w, wall_e, wall_s, wall_n, &
                                    khtr_u, khtr_v, dy_cu, dx_cv, &
-                                   idxCu, idyCv, areaT, h_layer, hTr_in, hTr, &
+                                   idxCu, idyCv, areaT, h_layer, c_in, c, &
                                    uPoL, uPoR, uKoL, uKoR, uhEff, &
                                    vPoL, vPoR, vKoL, vKoR, vhEff, &
                                    uKb, uKt, vKb, vKt, use_open, use_cap, cap, n_itt)
@@ -1599,7 +1599,7 @@ contains
       !!   nz+1-KoR.  The top-down→native flip k=nz+1-Ko is the only k-flip.
       !!   Flux = dT_layer * hEff * Coef, Coef_u = dt*khtr_u*dy_cu*idxCu
       !!   (capped / split over `n_itt` passes by `redi_limit_coef`);
-      !!   divergence hTr(k) += dTr(k)/areaT (conservative).
+      !!   divergence c(k) += dTr(k)/(areaT*h(k)) (conservative in h*c).
       integer, intent(in) :: nx, ny, nz, ns
       real(wp), intent(in) :: dt
       integer, intent(in) :: nghost, nxp, nyp
@@ -1612,8 +1612,8 @@ contains
       real(wp), intent(in) :: idyCv(nx, ny + 1)
       real(wp), intent(in) :: areaT(nx, ny)
       real(wp), intent(in) :: h_layer(nx, ny, nz)
-      real(wp), intent(in) :: hTr_in(nx, ny, nz)
-      real(wp), intent(inout) :: hTr(nx, ny, nz)
+      real(wp), intent(in) :: c_in(nx, ny, nz)
+      real(wp), intent(inout) :: c(nx, ny, nz)
       real(wp), intent(in) :: uPoL(nx + 1, ny, ns), uPoR(nx + 1, ny, ns)
       integer, intent(in) :: uKoL(nx + 1, ny, ns), uKoR(nx + 1, ny, ns)
       real(wp), intent(in) :: uhEff(nx + 1, ny, ns - 1)
@@ -1656,7 +1656,7 @@ contains
          end do
          ! WEST u-face (face i): this cell is the RIGHT column.
          if (i >= 2 .and. .not. ((wall_w .and. i == wuf_w) .or. (wall_e .and. i == wuf_e))) then
-            call redi_face_flux(nz, ns, nx, ny, nx + 1, ny, h_layer, hTr_in, &
+            call redi_face_flux(nz, ns, nx, ny, nx + 1, ny, h_layer, c_in, &
                                 i - 1, j, i, j, i, j, uPoL, uPoR, uKoL, uKoR, uhEff, &
                                 uKb(i, j), uKt(i, j), use_open, &
                                 redi_limit_coef(dt*khtr_u(i, j)*dy_cu(i, j)*idxCu(i, j), use_cap, cap, &
@@ -1664,7 +1664,7 @@ contains
          end if
          ! EAST u-face (face i+1): this cell is the LEFT column.
          if (i <= nx - 1 .and. .not. ((wall_w .and. i + 1 == wuf_w) .or. (wall_e .and. i + 1 == wuf_e))) then
-            call redi_face_flux(nz, ns, nx, ny, nx + 1, ny, h_layer, hTr_in, &
+            call redi_face_flux(nz, ns, nx, ny, nx + 1, ny, h_layer, c_in, &
                                 i, j, i + 1, j, i + 1, j, uPoL, uPoR, uKoL, uKoR, uhEff, &
                                 uKb(i + 1, j), uKt(i + 1, j), use_open, &
                                 redi_limit_coef(dt*khtr_u(i + 1, j)*dy_cu(i + 1, j)*idxCu(i + 1, j), use_cap, cap, &
@@ -1672,7 +1672,7 @@ contains
          end if
          ! SOUTH v-face (face j): this cell is the RIGHT (north) column.
          if (j >= 2 .and. .not. ((wall_s .and. j == wvf_s) .or. (wall_n .and. j == wvf_n))) then
-            call redi_face_flux(nz, ns, nx, ny, nx, ny + 1, h_layer, hTr_in, &
+            call redi_face_flux(nz, ns, nx, ny, nx, ny + 1, h_layer, c_in, &
                                 i, j - 1, i, j, i, j, vPoL, vPoR, vKoL, vKoR, vhEff, &
                                 vKb(i, j), vKt(i, j), use_open, &
                                 redi_limit_coef(dt*khtr_v(i, j)*dx_cv(i, j)*idyCv(i, j), use_cap, cap, &
@@ -1680,7 +1680,7 @@ contains
          end if
          ! NORTH v-face (face j+1): this cell is the LEFT (south) column.
          if (j <= ny - 1 .and. .not. ((wall_s .and. j + 1 == wvf_s) .or. (wall_n .and. j + 1 == wvf_n))) then
-            call redi_face_flux(nz, ns, nx, ny, nx, ny + 1, h_layer, hTr_in, &
+            call redi_face_flux(nz, ns, nx, ny, nx, ny + 1, h_layer, c_in, &
                                 i, j, i, j + 1, i, j + 1, vPoL, vPoR, vKoL, vKoR, vhEff, &
                                 vKb(i, j + 1), vKt(i, j + 1), use_open, &
                                 redi_limit_coef(dt*khtr_v(i, j + 1)*dx_cv(i, j + 1)*idyCv(i, j + 1), use_cap, cap, &
@@ -1691,7 +1691,7 @@ contains
             ! An empty layer (h <= H_VANISHED) carries no content: it keeps its
             ! last c rather than dividing a flux residue by ~0.
             if (h_layer(i, j, k) > H_VANISHED) then
-               hTr(i, j, k) = hTr(i, j, k) + dTr(k)*iaij/h_layer(i, j, k)
+               c(i, j, k) = c(i, j, k) + dTr(k)*iaij/h_layer(i, j, k)
             end if
          end do
       end do

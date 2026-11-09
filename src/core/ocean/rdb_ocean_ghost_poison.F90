@@ -112,7 +112,7 @@ contains
                             poison_w, poison_e, poison_s, poison_n)
 
       ! ------------------------------------------------------------------
-      ! Tracers: per-tracer hTr — centre (nx_total, ny_total, nz_ml).
+      ! Tracers: per-tracer c — centre (nx_total, ny_total, nz_ml).
       ! Outer-shim rule: array-of-DT cannot be dereferenced on-device;
       ! the loop is on the HOST, each element passed by explicit-shape helper.
       ! ------------------------------------------------------------------

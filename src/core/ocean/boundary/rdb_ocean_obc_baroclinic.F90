@@ -14,8 +14,8 @@ module rdb_ocean_obc_baroclinic
    !!     of scheme.  RESTART CAVEAT: `rx`/`u_prev` are NOT restart-registered;
    !!     a restart cold-starts the Orlanski scheme with rx = 0 / u_prev = 0.
    !!
-   !!   * `ocean_obc_fill_ghosts` — fills h_layer and tracer hTr open-edge
-   !!     ghosts (zero-gradient h, upwind-aware hTr), called before
+   !!   * `ocean_obc_fill_ghosts` — fills h_layer and tracer c open-edge
+   !!     ghosts (zero-gradient h, upwind-aware c), called before
    !!     `continuity_tracer_step_split`.
    !!
    !!   * `ocean_obc_update_reservoirs` — evolves per-edge reservoir
@@ -966,13 +966,13 @@ contains
       end if
    end subroutine apply_meridional_baroclinic
 
-   ! Ghost fills at open edges (h_layer + tracer hTr)
+   ! Ghost fills at open edges (h_layer + tracer c)
 
    subroutine ocean_obc_fill_ghosts(grid, bc, ms)
-      !! Fill h_layer and tracer hTr ghosts at open-ish edges.
+      !! Fill h_layer and tracer c ghosts at open-ish edges.
       !! h_layer: zero-gradient (copy adjacent interior column).
-      !! Tracer hTr per (j,k): outflow ⇒ ghost := interior (zero-gradient);
-      !! inflow ⇒ ghost hTr := clamped_tracer(it) * h_ghost.  Inflow criterion
+      !! Tracer c per (j,k): outflow ⇒ ghost := interior (zero-gradient);
+      !! inflow ⇒ ghost c := clamped_tracer(it).  Inflow criterion
       !! uses the per-layer wall-face velocity sign (outward-normal convention):
       !! west inflow u_wall>0, east u_wall<0, south v_wall>0, north v_wall<0.
       !! No-op when no edge is open-ish.  Per-tracer loop outside the DCs.
@@ -1017,8 +1017,8 @@ contains
                                i_w, i_e, j_s, j_n, grid%nghost, &
                                bc_w, bc_e, bc_s, bc_n)
 
-      ! ---- Tracer hTr ghosts: upwind-aware or reservoir-based ----
-      ! Reservoir active (tres_* allocated): unconditional hTr_ghost = tres*h_ghost
+      ! ---- Tracer c ghosts: upwind-aware or reservoir-based ----
+      ! Reservoir active (tres_* allocated): unconditional c_ghost = tres
       ! (Marchesiello et al. 2001).  Absent (default): sign-switch path,
       ! bit-identical to prior behaviour.  Dispatch is per-edge-per-direction.
       if (allocated(ms%tracers)) then
@@ -1169,7 +1169,7 @@ contains
                                  i_w, i_e, j_s, j_n, grid%nghost, &
                                  bc_w, bc_e, bc_s, bc_n)
 
-      ! ---- Tracer hTr ghosts: zero-gradient concentration onto the new h ----
+      ! ---- Tracer c ghosts: zero-gradient concentration onto the new h ----
       if (allocated(ms%tracers)) then
          do it = 1, size(ms%tracers)
             if (.not. allocated(ms%tracers(it)%c)) cycle
@@ -1267,16 +1267,16 @@ contains
       end if
    end function get_clamped_tracer
 
-   pure subroutine fill_tracer_ghosts_zerograd(hTr, h_layer, nx_total, ny_total, nz, &
+   pure subroutine fill_tracer_ghosts_zerograd(c, h_layer, nx_total, ny_total, nz, &
                                                i_w, i_e, j_s, j_n, nghost, &
                                                bc_w, bc_e, bc_s, bc_n)
-      !! Zero-gradient CONCENTRATION fill of a tracer's hTr ghosts at open-ish
+      !! Zero-gradient CONCENTRATION fill of a tracer's c ghosts at open-ish
       !! edges over the FULL cross-extent (ghost×ghost corners included):
-      !! hTr_ghost = (hTr_int / h_int) * h_ghost.  Runs BEFORE the upwind-aware
+      !! c_ghost = c_int.  Runs BEFORE the upwind-aware
       !! per-edge fill, so corners keep this zero-gradient value (no corner T/S
       !! blow-up under inflow).  Same gating/corner coverage as fill_h_layer_ghosts.
       integer, intent(in) :: nx_total, ny_total, nz, nghost
-      real(wp), intent(inout) :: hTr(nx_total, ny_total, nz)
+      real(wp), intent(inout) :: c(nx_total, ny_total, nz)
       real(wp), intent(in)    :: h_layer(nx_total, ny_total, nz)
       integer, intent(in) :: i_w, i_e, j_s, j_n
       integer, intent(in) :: bc_w, bc_e, bc_s, bc_n
@@ -1285,25 +1285,25 @@ contains
       ! West / East over the full j extent (covers corner rows).
       if (is_open_ish(bc_w)) then
          do concurrent(k=1:nz, j=1:ny_total, g=1:nghost)
-            hTr(g, j, k) = hTr(i_w, j, k)
+            c(g, j, k) = c(i_w, j, k)
          end do
       end if
       if (is_open_ish(bc_e)) then
          do concurrent(k=1:nz, j=1:ny_total, g=1:nghost)
-            hTr(nx_total - g + 1, j, k) = &
-               hTr(i_e, j, k)
+            c(nx_total - g + 1, j, k) = &
+               c(i_e, j, k)
          end do
       end if
       ! South / North over the full i extent (reads the x-filled corner cols).
       if (is_open_ish(bc_s)) then
          do concurrent(k=1:nz, j=1:nghost, i=1:nx_total)
-            hTr(i, j, k) = hTr(i, j_s, k)
+            c(i, j, k) = c(i, j_s, k)
          end do
       end if
       if (is_open_ish(bc_n)) then
          do concurrent(k=1:nz, g=1:nghost, i=1:nx_total)
-            hTr(i, ny_total - g + 1, k) = &
-               hTr(i, j_n, k)
+            c(i, ny_total - g + 1, k) = &
+               c(i, j_n, k)
          end do
       end if
    end subroutine fill_tracer_ghosts_zerograd
@@ -1345,7 +1345,7 @@ contains
       end if
    end subroutine fill_h_layer_ghosts
 
-   pure subroutine fill_tracer_ghosts_zonal(hTr, h_layer, u_layer, &
+   pure subroutine fill_tracer_ghosts_zonal(c, h_layer, u_layer, &
                                             nx_total, ny_total, nz, &
                                             i_w, i_e, j_s, j_n, nghost, &
                                             bc_w, bc_e, &
@@ -1356,7 +1356,7 @@ contains
       !! East inflow  : u(i_e,j,k) < 0
       !! East outflow : u(i_e,j,k) >= 0
       integer, intent(in) :: nx_total, ny_total, nz, nghost
-      real(wp), intent(inout) :: hTr(nx_total, ny_total, nz)
+      real(wp), intent(inout) :: c(nx_total, ny_total, nz)
       real(wp), intent(in)    :: h_layer(nx_total, ny_total, nz)
       real(wp), intent(in)    :: u_layer(nx_total + 1, ny_total, nz)
       integer, intent(in) :: i_w, i_e, j_s, j_n
@@ -1364,48 +1364,48 @@ contains
       real(wp), intent(in) :: clamped_tr_w, clamped_tr_e
 
       integer :: j, k, g
-      real(wp) :: hTr_bc, hTr_int
+      real(wp) :: c_bc, c_int
 
       ! West ghosts
       if (is_open_ish(bc_w)) then
-         do concurrent(k=1:nz, j=j_s:j_n, g=1:nghost) local(hTr_bc, hTr_int)
+         do concurrent(k=1:nz, j=j_s:j_n, g=1:nghost) local(c_bc, c_int)
             ! Use wall-face velocity at u_layer(i_w, j, k).
             ! West inflow = u > 0 (eastward into domain).
             if (u_layer(i_w, j, k) > 0.0_wp) then
-               ! Inflow: set ghost hTr = boundary concentration * ghost h
-               hTr_bc = clamped_tr_w
-               hTr(g, j, k) = hTr_bc
+               ! Inflow: set ghost c = boundary concentration
+               c_bc = clamped_tr_w
+               c(g, j, k) = c_bc
             else
                ! Outflow: zero-gradient — copy interior
-               hTr_int = hTr(i_w, j, k)
-               hTr(g, j, k) = hTr_int
+               c_int = c(i_w, j, k)
+               c(g, j, k) = c_int
             end if
          end do
       end if
 
       ! East ghosts
       if (is_open_ish(bc_e)) then
-         do concurrent(k=1:nz, j=j_s:j_n, g=1:nghost) local(hTr_bc, hTr_int)
+         do concurrent(k=1:nz, j=j_s:j_n, g=1:nghost) local(c_bc, c_int)
             ! East inflow = u < 0 (westward into domain from east).
             if (u_layer(i_e + 1, j, k) < 0.0_wp) then
-               hTr_bc = clamped_tr_e
-               hTr(nx_total - g + 1, j, k) = hTr_bc
+               c_bc = clamped_tr_e
+               c(nx_total - g + 1, j, k) = c_bc
             else
-               hTr_int = hTr(i_e, j, k)
-               hTr(nx_total - g + 1, j, k) = hTr_int
+               c_int = c(i_e, j, k)
+               c(nx_total - g + 1, j, k) = c_int
             end if
          end do
       end if
    end subroutine fill_tracer_ghosts_zonal
 
-   pure subroutine fill_tracer_ghosts_meridional(hTr, h_layer, v_layer, &
+   pure subroutine fill_tracer_ghosts_meridional(c, h_layer, v_layer, &
                                                  nx_total, ny_total, nz, &
                                                  i_w, i_e, j_s, j_n, nghost, &
                                                  bc_s, bc_n, &
                                                  clamped_tr_s, clamped_tr_n)
       !! Upwind-aware tracer ghost fill for south and north open edges.
       integer, intent(in) :: nx_total, ny_total, nz, nghost
-      real(wp), intent(inout) :: hTr(nx_total, ny_total, nz)
+      real(wp), intent(inout) :: c(nx_total, ny_total, nz)
       real(wp), intent(in)    :: h_layer(nx_total, ny_total, nz)
       real(wp), intent(in)    :: v_layer(nx_total, ny_total + 1, nz)
       integer, intent(in) :: i_w, i_e, j_s, j_n
@@ -1413,32 +1413,32 @@ contains
       real(wp), intent(in) :: clamped_tr_s, clamped_tr_n
 
       integer :: i, k, g
-      real(wp) :: hTr_bc, hTr_int
+      real(wp) :: c_bc, c_int
 
       ! South ghosts
       if (is_open_ish(bc_s)) then
-         do concurrent(k=1:nz, i=i_w:i_e, g=1:nghost) local(hTr_bc, hTr_int)
+         do concurrent(k=1:nz, i=i_w:i_e, g=1:nghost) local(c_bc, c_int)
             ! South inflow = v > 0 (northward into domain).
             if (v_layer(i, j_s, k) > 0.0_wp) then
-               hTr_bc = clamped_tr_s
-               hTr(i, g, k) = hTr_bc
+               c_bc = clamped_tr_s
+               c(i, g, k) = c_bc
             else
-               hTr_int = hTr(i, j_s, k)
-               hTr(i, g, k) = hTr_int
+               c_int = c(i, j_s, k)
+               c(i, g, k) = c_int
             end if
          end do
       end if
 
       ! North ghosts
       if (is_open_ish(bc_n)) then
-         do concurrent(k=1:nz, i=i_w:i_e, g=1:nghost) local(hTr_bc, hTr_int)
+         do concurrent(k=1:nz, i=i_w:i_e, g=1:nghost) local(c_bc, c_int)
             ! North inflow = v < 0 (southward into domain from north).
             if (v_layer(i, j_n + 1, k) < 0.0_wp) then
-               hTr_bc = clamped_tr_n
-               hTr(i, ny_total - g + 1, k) = hTr_bc
+               c_bc = clamped_tr_n
+               c(i, ny_total - g + 1, k) = c_bc
             else
-               hTr_int = hTr(i, j_n, k)
-               hTr(i, ny_total - g + 1, k) = hTr_int
+               c_int = c(i, j_n, k)
+               c(i, ny_total - g + 1, k) = c_int
             end if
          end do
       end if
@@ -1448,165 +1448,165 @@ contains
    ! Per-edge helpers: reservoir path (unconditional concentration)
    ! -----------------------------------------------------------------
 
-   pure subroutine fill_ghost_west_res(hTr, h_layer, tres_w, &
+   pure subroutine fill_ghost_west_res(c, h_layer, tres_w, &
                                        nx_total, ny_total, nz, &
                                        i_w, j0, j1, nghost, it, n_tr)
       !! Reservoir-based ghost fill, west edge.
-      !! hTr_ghost = tres_w(j, k, it) * h_ghost — unconditional.
+      !! c_ghost = tres_w(j, k, it) — unconditional.
       integer, intent(in) :: nx_total, ny_total, nz, nghost, it, n_tr
-      real(wp), intent(inout) :: hTr(nx_total, ny_total, nz)
+      real(wp), intent(inout) :: c(nx_total, ny_total, nz)
       real(wp), intent(in)    :: h_layer(nx_total, ny_total, nz)
       real(wp), intent(in)    :: tres_w(ny_total, nz, n_tr)
       integer, intent(in) :: i_w, j0, j1
       integer :: j, k, g
-      real(wp) :: hTr_bc
-      do concurrent(k=1:nz, j=j0:j1, g=1:nghost) local(hTr_bc)
-         hTr_bc = tres_w(j, k, it)
-         hTr(g, j, k) = hTr_bc
+      real(wp) :: c_bc
+      do concurrent(k=1:nz, j=j0:j1, g=1:nghost) local(c_bc)
+         c_bc = tres_w(j, k, it)
+         c(g, j, k) = c_bc
       end do
    end subroutine fill_ghost_west_res
 
-   pure subroutine fill_ghost_east_res(hTr, h_layer, tres_e, &
+   pure subroutine fill_ghost_east_res(c, h_layer, tres_e, &
                                        nx_total, ny_total, nz, &
                                        i_e, j0, j1, nghost, it, n_tr)
       !! Reservoir-based ghost fill, east edge.
       integer, intent(in) :: nx_total, ny_total, nz, nghost, it, n_tr
-      real(wp), intent(inout) :: hTr(nx_total, ny_total, nz)
+      real(wp), intent(inout) :: c(nx_total, ny_total, nz)
       real(wp), intent(in)    :: h_layer(nx_total, ny_total, nz)
       real(wp), intent(in)    :: tres_e(ny_total, nz, n_tr)
       integer, intent(in) :: i_e, j0, j1
       integer :: j, k, g
-      real(wp) :: hTr_bc
-      do concurrent(k=1:nz, j=j0:j1, g=1:nghost) local(hTr_bc)
-         hTr_bc = tres_e(j, k, it)
-         hTr(nx_total - g + 1, j, k) = hTr_bc
+      real(wp) :: c_bc
+      do concurrent(k=1:nz, j=j0:j1, g=1:nghost) local(c_bc)
+         c_bc = tres_e(j, k, it)
+         c(nx_total - g + 1, j, k) = c_bc
       end do
    end subroutine fill_ghost_east_res
 
-   pure subroutine fill_ghost_south_res(hTr, h_layer, tres_s, &
+   pure subroutine fill_ghost_south_res(c, h_layer, tres_s, &
                                         nx_total, ny_total, nz, &
                                         j_s, i0, i1, nghost, it, n_tr)
       !! Reservoir-based ghost fill, south edge.
       integer, intent(in) :: nx_total, ny_total, nz, nghost, it, n_tr
-      real(wp), intent(inout) :: hTr(nx_total, ny_total, nz)
+      real(wp), intent(inout) :: c(nx_total, ny_total, nz)
       real(wp), intent(in)    :: h_layer(nx_total, ny_total, nz)
       real(wp), intent(in)    :: tres_s(nx_total, nz, n_tr)
       integer, intent(in) :: j_s, i0, i1
       integer :: i, k, g
-      real(wp) :: hTr_bc
-      do concurrent(k=1:nz, i=i0:i1, g=1:nghost) local(hTr_bc)
-         hTr_bc = tres_s(i, k, it)
-         hTr(i, g, k) = hTr_bc
+      real(wp) :: c_bc
+      do concurrent(k=1:nz, i=i0:i1, g=1:nghost) local(c_bc)
+         c_bc = tres_s(i, k, it)
+         c(i, g, k) = c_bc
       end do
    end subroutine fill_ghost_south_res
 
-   pure subroutine fill_ghost_north_res(hTr, h_layer, tres_n, &
+   pure subroutine fill_ghost_north_res(c, h_layer, tres_n, &
                                         nx_total, ny_total, nz, &
                                         j_n, i0, i1, nghost, it, n_tr)
       !! Reservoir-based ghost fill, north edge.
       integer, intent(in) :: nx_total, ny_total, nz, nghost, it, n_tr
-      real(wp), intent(inout) :: hTr(nx_total, ny_total, nz)
+      real(wp), intent(inout) :: c(nx_total, ny_total, nz)
       real(wp), intent(in)    :: h_layer(nx_total, ny_total, nz)
       real(wp), intent(in)    :: tres_n(nx_total, nz, n_tr)
       integer, intent(in) :: j_n, i0, i1
       integer :: i, k, g
-      real(wp) :: hTr_bc
-      do concurrent(k=1:nz, i=i0:i1, g=1:nghost) local(hTr_bc)
-         hTr_bc = tres_n(i, k, it)
-         hTr(i, ny_total - g + 1, k) = hTr_bc
+      real(wp) :: c_bc
+      do concurrent(k=1:nz, i=i0:i1, g=1:nghost) local(c_bc)
+         c_bc = tres_n(i, k, it)
+         c(i, ny_total - g + 1, k) = c_bc
       end do
    end subroutine fill_ghost_north_res
 
    ! Per-edge helpers: sign-switch path (default fallback)
 
-   pure subroutine fill_ghost_west_sign(hTr, h_layer, u_layer, &
+   pure subroutine fill_ghost_west_sign(c, h_layer, u_layer, &
                                         nx_total, ny_total, nz, &
                                         i_w, j0, j1, nghost, clamped_tr_w)
       !! Sign-switch ghost fill for the west edge.
       integer, intent(in) :: nx_total, ny_total, nz, nghost
-      real(wp), intent(inout) :: hTr(nx_total, ny_total, nz)
+      real(wp), intent(inout) :: c(nx_total, ny_total, nz)
       real(wp), intent(in)    :: h_layer(nx_total, ny_total, nz)
       real(wp), intent(in)    :: u_layer(nx_total + 1, ny_total, nz)
       integer, intent(in) :: i_w, j0, j1
       real(wp), intent(in) :: clamped_tr_w
       integer :: j, k, g
-      real(wp) :: hTr_bc, hTr_int
-      do concurrent(k=1:nz, j=j0:j1, g=1:nghost) local(hTr_bc, hTr_int)
+      real(wp) :: c_bc, c_int
+      do concurrent(k=1:nz, j=j0:j1, g=1:nghost) local(c_bc, c_int)
          if (u_layer(i_w, j, k) > 0.0_wp) then
-            hTr_bc = clamped_tr_w
-            hTr(g, j, k) = hTr_bc
+            c_bc = clamped_tr_w
+            c(g, j, k) = c_bc
          else
-            hTr_int = hTr(i_w, j, k)
-            hTr(g, j, k) = hTr_int
+            c_int = c(i_w, j, k)
+            c(g, j, k) = c_int
          end if
       end do
    end subroutine fill_ghost_west_sign
 
-   pure subroutine fill_ghost_east_sign(hTr, h_layer, u_layer, &
+   pure subroutine fill_ghost_east_sign(c, h_layer, u_layer, &
                                         nx_total, ny_total, nz, &
                                         i_e, j0, j1, nghost, clamped_tr_e)
       !! Sign-switch ghost fill for the east edge.
       integer, intent(in) :: nx_total, ny_total, nz, nghost
-      real(wp), intent(inout) :: hTr(nx_total, ny_total, nz)
+      real(wp), intent(inout) :: c(nx_total, ny_total, nz)
       real(wp), intent(in)    :: h_layer(nx_total, ny_total, nz)
       real(wp), intent(in)    :: u_layer(nx_total + 1, ny_total, nz)
       integer, intent(in) :: i_e, j0, j1
       real(wp), intent(in) :: clamped_tr_e
       integer :: j, k, g
-      real(wp) :: hTr_bc, hTr_int
-      do concurrent(k=1:nz, j=j0:j1, g=1:nghost) local(hTr_bc, hTr_int)
+      real(wp) :: c_bc, c_int
+      do concurrent(k=1:nz, j=j0:j1, g=1:nghost) local(c_bc, c_int)
          if (u_layer(i_e + 1, j, k) < 0.0_wp) then
-            hTr_bc = clamped_tr_e
-            hTr(nx_total - g + 1, j, k) = hTr_bc
+            c_bc = clamped_tr_e
+            c(nx_total - g + 1, j, k) = c_bc
          else
-            hTr_int = hTr(i_e, j, k)
-            hTr(nx_total - g + 1, j, k) = hTr_int
+            c_int = c(i_e, j, k)
+            c(nx_total - g + 1, j, k) = c_int
          end if
       end do
    end subroutine fill_ghost_east_sign
 
-   pure subroutine fill_ghost_south_sign(hTr, h_layer, v_layer, &
+   pure subroutine fill_ghost_south_sign(c, h_layer, v_layer, &
                                          nx_total, ny_total, nz, &
                                          j_s, i0, i1, nghost, clamped_tr_s)
       !! Sign-switch ghost fill for the south edge.
       integer, intent(in) :: nx_total, ny_total, nz, nghost
-      real(wp), intent(inout) :: hTr(nx_total, ny_total, nz)
+      real(wp), intent(inout) :: c(nx_total, ny_total, nz)
       real(wp), intent(in)    :: h_layer(nx_total, ny_total, nz)
       real(wp), intent(in)    :: v_layer(nx_total, ny_total + 1, nz)
       integer, intent(in) :: j_s, i0, i1
       real(wp), intent(in) :: clamped_tr_s
       integer :: i, k, g
-      real(wp) :: hTr_bc, hTr_int
-      do concurrent(k=1:nz, i=i0:i1, g=1:nghost) local(hTr_bc, hTr_int)
+      real(wp) :: c_bc, c_int
+      do concurrent(k=1:nz, i=i0:i1, g=1:nghost) local(c_bc, c_int)
          if (v_layer(i, j_s, k) > 0.0_wp) then
-            hTr_bc = clamped_tr_s
-            hTr(i, g, k) = hTr_bc
+            c_bc = clamped_tr_s
+            c(i, g, k) = c_bc
          else
-            hTr_int = hTr(i, j_s, k)
-            hTr(i, g, k) = hTr_int
+            c_int = c(i, j_s, k)
+            c(i, g, k) = c_int
          end if
       end do
    end subroutine fill_ghost_south_sign
 
-   pure subroutine fill_ghost_north_sign(hTr, h_layer, v_layer, &
+   pure subroutine fill_ghost_north_sign(c, h_layer, v_layer, &
                                          nx_total, ny_total, nz, &
                                          j_n, i0, i1, nghost, clamped_tr_n)
       !! Sign-switch ghost fill for the north edge.
       integer, intent(in) :: nx_total, ny_total, nz, nghost
-      real(wp), intent(inout) :: hTr(nx_total, ny_total, nz)
+      real(wp), intent(inout) :: c(nx_total, ny_total, nz)
       real(wp), intent(in)    :: h_layer(nx_total, ny_total, nz)
       real(wp), intent(in)    :: v_layer(nx_total, ny_total + 1, nz)
       integer, intent(in) :: j_n, i0, i1
       real(wp), intent(in) :: clamped_tr_n
       integer :: i, k, g
-      real(wp) :: hTr_bc, hTr_int
-      do concurrent(k=1:nz, i=i0:i1, g=1:nghost) local(hTr_bc, hTr_int)
+      real(wp) :: c_bc, c_int
+      do concurrent(k=1:nz, i=i0:i1, g=1:nghost) local(c_bc, c_int)
          if (v_layer(i, j_n + 1, k) < 0.0_wp) then
-            hTr_bc = clamped_tr_n
-            hTr(i, ny_total - g + 1, k) = hTr_bc
+            c_bc = clamped_tr_n
+            c(i, ny_total - g + 1, k) = c_bc
          else
-            hTr_int = hTr(i, j_n, k)
-            hTr(i, ny_total - g + 1, k) = hTr_int
+            c_int = c(i, j_n, k)
+            c(i, ny_total - g + 1, k) = c_int
          end if
       end do
    end subroutine fill_ghost_north_sign
@@ -1623,7 +1623,7 @@ contains
       !!   c_out = max(0,u_n)*dt/L_out, c_in = max(0,-u_n)*dt/L_in  (0 if L==0)
       !!   tres = (tres + c_out*T_int + c_in*T_data)/(1 + c_out + c_in)
       !! Degenerate L_out==0 & u_n>0 ⇒ tres = T_int (L_in==0 & u_n<0 ⇒ T_data).
-      !! T_int = hTr(int)/max(h(int),h_min); T_data = clamped_tracer(it).
+      !! T_int = c(int); T_data = clamped_tracer(it).
       !! No-op when both length scales are zero (default path).
       type(hgrid_t), intent(in) :: grid
       type(ocean_bc_state_t), intent(inout) :: bc
@@ -1701,7 +1701,7 @@ contains
       end do
    end subroutine ocean_obc_update_reservoirs
 
-   pure subroutine update_reservoir_zonal_west(hTr, h_layer, mass_flux_x, &
+   pure subroutine update_reservoir_zonal_west(c, h_layer, mass_flux_x, &
                                                tres_w, T_data, &
                                                nx_total, ny_total, nz, &
                                                i_w, j0, j1, &
@@ -1710,7 +1710,7 @@ contains
       !! Outward normal = -x: u_n = -mass_flux_x(i_w,j,k)/max(h,hmin).
       integer, intent(in) :: nx_total, ny_total, nz, n_tr, it
       integer, intent(in) :: i_w, j0, j1
-      real(wp), intent(in) :: hTr(nx_total, ny_total, nz)
+      real(wp), intent(in) :: c(nx_total, ny_total, nz)
       real(wp), intent(in) :: h_layer(nx_total, ny_total, nz)
       real(wp), intent(in) :: mass_flux_x(nx_total + 1, ny_total, nz)
       real(wp), intent(inout) :: tres_w(ny_total, nz, n_tr)
@@ -1722,7 +1722,7 @@ contains
 
       do concurrent(j=j0:j1, k=1:nz) local(h_int, T_int, u_n, c_out, c_in, tres_old, denom)
          h_int = max(h_layer(i_w, j, k), RES_H_MIN)
-         T_int = hTr(i_w, j, k)
+         T_int = c(i_w, j, k)
          ! mass_flux_x(i_w,...) > 0 = eastward into domain (inflow at west).
          u_n = -mass_flux_x(i_w, j, k)/h_int
          tres_old = tres_w(j, k, it)
@@ -1741,7 +1741,7 @@ contains
       end do
    end subroutine update_reservoir_zonal_west
 
-   pure subroutine update_reservoir_zonal_east(hTr, h_layer, mass_flux_x, &
+   pure subroutine update_reservoir_zonal_east(c, h_layer, mass_flux_x, &
                                                tres_e, T_data, &
                                                nx_total, ny_total, nz, &
                                                i_e, j0, j1, &
@@ -1752,7 +1752,7 @@ contains
       !! Outward normal at east = +x: u_n = +mass_flux_x(i_e+1,j,k)/max(h,hmin).
       integer, intent(in) :: nx_total, ny_total, nz, n_tr, it
       integer, intent(in) :: i_e, j0, j1
-      real(wp), intent(in) :: hTr(nx_total, ny_total, nz)
+      real(wp), intent(in) :: c(nx_total, ny_total, nz)
       real(wp), intent(in) :: h_layer(nx_total, ny_total, nz)
       real(wp), intent(in) :: mass_flux_x(nx_total + 1, ny_total, nz)
       real(wp), intent(inout) :: tres_e(ny_total, nz, n_tr)
@@ -1764,7 +1764,7 @@ contains
 
       do concurrent(j=j0:j1, k=1:nz) local(h_int, T_int, u_n, c_out, c_in, tres_old, denom)
          h_int = max(h_layer(i_e, j, k), RES_H_MIN)
-         T_int = hTr(i_e, j, k)
+         T_int = c(i_e, j, k)
          ! Outward normal at east = +x.
          u_n = mass_flux_x(i_e + 1, j, k)/h_int
          tres_old = tres_e(j, k, it)
@@ -1781,7 +1781,7 @@ contains
       end do
    end subroutine update_reservoir_zonal_east
 
-   pure subroutine update_reservoir_meridional_south(hTr, h_layer, mass_flux_y, &
+   pure subroutine update_reservoir_meridional_south(c, h_layer, mass_flux_y, &
                                                      tres_s, T_data, &
                                                      nx_total, ny_total, nz, &
                                                      j_s, i0, i1, &
@@ -1791,7 +1791,7 @@ contains
       !! Outward normal = -y: u_n = -mass_flux_y(i,j_s,k)/max(h,hmin).
       integer, intent(in) :: nx_total, ny_total, nz, n_tr, it
       integer, intent(in) :: j_s, i0, i1
-      real(wp), intent(in) :: hTr(nx_total, ny_total, nz)
+      real(wp), intent(in) :: c(nx_total, ny_total, nz)
       real(wp), intent(in) :: h_layer(nx_total, ny_total, nz)
       real(wp), intent(in) :: mass_flux_y(nx_total, ny_total + 1, nz)
       real(wp), intent(inout) :: tres_s(nx_total, nz, n_tr)
@@ -1803,7 +1803,7 @@ contains
 
       do concurrent(i=i0:i1, k=1:nz) local(h_int, T_int, u_n, c_out, c_in, tres_old, denom)
          h_int = max(h_layer(i, j_s, k), RES_H_MIN)
-         T_int = hTr(i, j_s, k)
+         T_int = c(i, j_s, k)
          u_n = -mass_flux_y(i, j_s, k)/h_int
          tres_old = tres_s(i, k, it)
          if (L_out == 0.0_wp .and. u_n > 0.0_wp) then
@@ -1819,7 +1819,7 @@ contains
       end do
    end subroutine update_reservoir_meridional_south
 
-   pure subroutine update_reservoir_meridional_north(hTr, h_layer, mass_flux_y, &
+   pure subroutine update_reservoir_meridional_north(c, h_layer, mass_flux_y, &
                                                      tres_n, T_data, &
                                                      nx_total, ny_total, nz, &
                                                      j_n, i0, i1, &
@@ -1829,7 +1829,7 @@ contains
       !! Outward normal = +y: u_n = +mass_flux_y(i,j_n+1,k)/max(h,hmin).
       integer, intent(in) :: nx_total, ny_total, nz, n_tr, it
       integer, intent(in) :: j_n, i0, i1
-      real(wp), intent(in) :: hTr(nx_total, ny_total, nz)
+      real(wp), intent(in) :: c(nx_total, ny_total, nz)
       real(wp), intent(in) :: h_layer(nx_total, ny_total, nz)
       real(wp), intent(in) :: mass_flux_y(nx_total, ny_total + 1, nz)
       real(wp), intent(inout) :: tres_n(nx_total, nz, n_tr)
@@ -1841,7 +1841,7 @@ contains
 
       do concurrent(i=i0:i1, k=1:nz) local(h_int, T_int, u_n, c_out, c_in, tres_old, denom)
          h_int = max(h_layer(i, j_n, k), RES_H_MIN)
-         T_int = hTr(i, j_n, k)
+         T_int = c(i, j_n, k)
          u_n = mass_flux_y(i, j_n + 1, k)/h_int
          tres_old = tres_n(i, k, it)
          if (L_out == 0.0_wp .and. u_n > 0.0_wp) then

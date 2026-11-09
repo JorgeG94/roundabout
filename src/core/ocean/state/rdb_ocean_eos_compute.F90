@@ -23,7 +23,7 @@ contains
 
    subroutine ocean_eos_compute(eos, ms, active)
       !! Compute `ms%rho_layer` from the registered (T, S) tracers.
-      !! Outer-shim pattern: pulls the tracer hTr arrays off the
+      !! Outer-shim pattern: pulls the tracer c arrays off the
       !! registry on the host and forwards them as bare 3D arrays
       !! to a flat-impl chosen by `eos%variant`.
       !!

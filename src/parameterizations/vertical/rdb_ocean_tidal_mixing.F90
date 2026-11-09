@@ -455,7 +455,7 @@ contains
    pure subroutine tidal_mixing_compute(grid, this, ms, dt)
       !! Run tidal mixing over the domain: fill `this%kd_int` (interface
       !! diffusivity).  Call at thermo cadence with the thermo dt.
-      !! Outer shim: dereferences the tracer-registry hTr arrays on the
+      !! Outer shim: dereferences the tracer-registry c arrays on the
       !! host (the array-of-DT indirection blocks NVHPC device codegen),
       !! then forwards to the column kernel.  `dt` is unused (the steady
       !! diagnostic Kd does not integrate in time) but carried for
@@ -530,7 +530,7 @@ contains
       !! start at `kbed`; layers below it get no `Kd`.
       !!
       !! Pipeline per column:
-      !!   gather: h (floored), per-layer T,S = hTr/h.
+      !!   gather: h (floored), per-layer T,S = c (stored concentration).
       !!   N^2(k): layer-centred buoyancy gradient (St-Laurent #4 —
       !!           N2_lay, not interface N^2), clamped >= 0.
       !!   E:      prescribed `e_in(i,j)` (v1) or state-dependent
@@ -546,9 +546,9 @@ contains
       ! ms%tracers(idx)%c before passing; size varies per tracer slot
       ! (see CLAUDE.md "outer-shim + flat-impl" pattern); thermo cadence.
       real(wp), intent(in) :: hT(:, :, :)
-         !! Temperature tracer hTr (degC*m), host-dereferenced.
+         !! Temperature concentration (degC), host-dereferenced.
       real(wp), intent(in) :: hS(:, :, :)  ! assumed-shape-ok: tracer registry outer-shim; thermo cadence
-         !! Salinity tracer hTr (PSU*m), host-dereferenced.
+         !! Salinity concentration (PSU), host-dereferenced.
 
       integer :: i, j, k, nx, ny, nz, kbed
       real(wp) :: e_col, h_tot, n_bot, tke_coef, h2c, e_cap

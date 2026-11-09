@@ -1549,7 +1549,7 @@ module rdb_config
       real(wp) :: kappa_h = 0.0_wp
          !! Constant horizontal tracer diffusivity (m^2/s).  Zero
          !! (default) is a no-op — the kernel short-circuits without
-         !! touching hTr, so this knob is bit-identical when unset.
+         !! touching c, so this knob is bit-identical when unset.
          !! Stability bound (explicit forward-Euler), checked at
          !! configure using the coarsest `dx`/`dy` (Cartesian metres):
          !!   kappa_h * dt_therm * (1/dx^2 + 1/dy^2) <= 0.5
@@ -3115,8 +3115,8 @@ module rdb_config
          !! (that is the skip/merge marker). Recommended run value 1e-3..1e-2 m.
          !! NOT strictly conservative: injects <= angstrom_h*areaT per floored
          !! layer-cell (zero on non-grounding steps). Thermo-on caveat (R7):
-         !! the floor lifts h but not the companion hTr, so on a floored layer
-         !! the implied Tr=hTr/h shifts — harmless for the adiabatic
+         !! the floor lifts h at fixed c, which injects tracer content on a
+         !! floored layer — harmless for the adiabatic
          !! (enable_thermodynamics=.false.) isopycnal config; thermo-on
          !! isopycnal correctness is OUT OF SCOPE for v1.
       logical :: reset_vanished_u = .false.

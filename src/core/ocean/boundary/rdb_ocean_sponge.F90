@@ -8,12 +8,12 @@ module rdb_ocean_sponge
    !! per-edge `sponge_width` (cells) and `sponge_strength` (1/s) and
    !! applies `du/dt += -τ·u`, with `τ` a cosine ramp from 0 at the interior
    !! to `sponge_strength` at the outer edge, toward **zero** momentum and a
-   !! **scalar** per-edge tracer target. State evolution (`hTr`, momentum)
+   !! **scalar** per-edge tracer target. State evolution (`c`, momentum)
    !! kept byte-identical — this is what `&ocean_sponge_nml enable=.false.`
    !! (the default) still runs. PR-23 additionally mirrors the tracer
    !! relaxation's salinity/temperature increment into `ms%salt_budget_sponge`
    !! / `heat_budget_sponge` (a pure side-channel add, new arrays that were
-   !! always zero before — no change to `hTr` itself) so the console
+   !! always zero before — no change to `c` itself) so the console
    !! salt/heat budget closes with the legacy `sponge_relax_tracers = .true.`
    !! knob too, not just the map-driven path.
    !!
@@ -182,7 +182,7 @@ module rdb_ocean_sponge
          !! Inverse damping time for `v_face_y_layer`, 1/s, shape
          !! `(nx_total, ny_total+1)` (matches the v-face stagger).
       real(wp), allocatable :: ref_tracer(:, :, :, :)
-         !! Reference tracer CONCENTRATION (not `hTr`) — PSU, degC, ... per
+         !! Reference tracer CONCENTRATION (not content) — PSU, degC, ... per
          !! the registered tracer's own units — shape `(nx_total, ny_total,
          !! nz, n_tracers)`, indexed by the multilayer tracer-registry
          !! index (matches `ms%idx_salinity` / `ms%idx_temperature`).
@@ -315,8 +315,8 @@ contains
       !! of the IC — a silent, resume-dependent physics change with a
       !! bit-identical first step and no error.
       !!
-      !! Tracer concentration is `hTr / h_layer`, guarded by `H_DIV_EPS`
-      !! (pure 1/0 armour, D4 taxonomy). Under `VCOORD_ZSTAR_FULL` bed-side
+      !! Tracer concentration is the stored `c` itself, read directly
+      !! with no divide. Under `VCOORD_ZSTAR_FULL` bed-side
       !! layers can vanish (`h_layer <= H_VANISHED`); those columns fall
       !! back to the nearest massive layer's concentration (bed-up then
       !! surface-down fill), mirroring the `k_dep` scan in
@@ -368,8 +368,8 @@ contains
       end if
    end subroutine ocean_sponge_snapshot_reference
 
-   pure subroutine snapshot_column_concentration(conc, hTr_col, h_col, nz)
-      !! Fill one water column's reference concentration from `hTr/h`,
+   pure subroutine snapshot_column_concentration(conc, c_col, h_col, nz)
+      !! Fill one water column's reference concentration from `c`,
       !! falling back to the nearest massive layer (`h > H_VANISHED`) for
       !! any vanished layer — bed-up pass first, then a surface-down pass
       !! to backfill any vanished layers below the first massive one.
@@ -377,7 +377,7 @@ contains
       !! concurrent` — this is configure-time setup, not a per-step kernel).
       integer, intent(in) :: nz
       real(wp), intent(out) :: conc(nz)
-      real(wp), intent(in)  :: hTr_col(nz), h_col(nz)
+      real(wp), intent(in)  :: c_col(nz), h_col(nz)
       integer :: k
       real(wp) :: last_valid
       logical :: have_valid
@@ -386,7 +386,7 @@ contains
       last_valid = 0.0_wp
       do k = 1, nz
          if (h_col(k) > H_VANISHED) then
-            conc(k) = hTr_col(k)
+            conc(k) = c_col(k)
             last_valid = conc(k)
             have_valid = .true.
          else if (have_valid) then
@@ -648,16 +648,16 @@ contains
       end do
    end subroutine relax_map_v_impl
 
-   pure subroutine relax_map_tracer_impl(hTr, h_layer, ref_tracer, it, n_tr, &
+   pure subroutine relax_map_tracer_impl(c, h_layer, ref_tracer, it, n_tr, &
                                          idamp_h, nx, ny, nz, dt)
-      !! Relax one tracer's `hTr` toward `ref_tracer(:,:,:,it)*h_layer` at
+      !! Relax one tracer's `c` toward `ref_tracer(:,:,:,it)` at
       !! rate `idamp_h`, no budget mirror (every tracer except S/T — see
       !! `relax_map_tracer_budget_impl`). `ref_tracer` is passed WHOLE +
       !! indexed by the scalar `it` inside the kernel — never sliced by the
       !! caller (§6.4: a device array section of a mapped array is the
       !! descriptor-walk trap the `dc-assumed-shape` hook exists to catch).
       integer, intent(in)    :: it, n_tr, nx, ny, nz
-      real(wp), intent(inout) :: hTr(nx, ny, nz)
+      real(wp), intent(inout) :: c(nx, ny, nz)
       real(wp), intent(in)    :: h_layer(nx, ny, nz)
       real(wp), intent(in)    :: ref_tracer(nx, ny, nz, n_tr)
       real(wp), intent(in)    :: idamp_h(nx, ny)
@@ -668,22 +668,22 @@ contains
          if (idamp_h(i, j) > 0.0_wp) then
             decay = exp(-idamp_h(i, j)*dt)
             tgt = ref_tracer(i, j, k, it)
-            hTr(i, j, k) = relax_toward(hTr(i, j, k), tgt, decay)
+            c(i, j, k) = relax_toward(c(i, j, k), tgt, decay)
          end if
       end do
    end subroutine relax_map_tracer_impl
 
-   pure subroutine relax_map_tracer_budget_impl(hTr, h_layer, ref_tracer, it, n_tr, &
+   pure subroutine relax_map_tracer_budget_impl(c, h_layer, ref_tracer, it, n_tr, &
                                                 idamp_h, budget, nx, ny, nz, dt)
       !! `relax_map_tracer_impl` + mirror the per-cell increment into
       !! `budget` (salt or heat), the S/T budget-instrumented variant —
       !! mirrors `apply_geothermal_src_impl`'s host-shim + flat-impl +
       !! budget-mirror shape. `delta` is the ALGEBRAIC increment
-      !! `hTr_new - hTr_old = (1-decay)*(tgt-hTr_old)`, written once and
+      !! `c_new - c_old = (1-decay)*(tgt-c_old)` (times `h` for the content), written once and
       !! used for BOTH the state update and the budget mirror so the two
       !! stay exactly consistent (no independent recomputation to drift).
       integer, intent(in)    :: it, n_tr, nx, ny, nz
-      real(wp), intent(inout) :: hTr(nx, ny, nz)
+      real(wp), intent(inout) :: c(nx, ny, nz)
       real(wp), intent(in)    :: h_layer(nx, ny, nz)
       real(wp), intent(in)    :: ref_tracer(nx, ny, nz, n_tr)
       real(wp), intent(in)    :: idamp_h(nx, ny)
@@ -695,10 +695,10 @@ contains
          if (idamp_h(i, j) > 0.0_wp) then
             decay = exp(-idamp_h(i, j)*dt)
             tgt = ref_tracer(i, j, k, it)
-            delta = (1.0_wp - decay)*(tgt - hTr(i, j, k))
-            p_old = h_layer(i, j, k)*hTr(i, j, k)
-            hTr(i, j, k) = hTr(i, j, k) + delta
-            p_new = h_layer(i, j, k)*hTr(i, j, k)
+            delta = (1.0_wp - decay)*(tgt - c(i, j, k))
+            p_old = h_layer(i, j, k)*c(i, j, k)
+            c(i, j, k) = c(i, j, k) + delta
+            p_new = h_layer(i, j, k)*c(i, j, k)
             budget(i, j, k) = budget(i, j, k) + (p_new - p_old)
          end if
       end do
@@ -855,7 +855,7 @@ contains
    end subroutine ocean_sponge_apply
 
    subroutine ocean_sponge_apply_tracers(grid, bc, ms, dt)
-      !! Relax tracer concentrations (hTr/h) toward per-edge targets in any
+      !! Relax tracer concentrations (c) toward per-edge targets in any
       !! sponge band with `sponge_relax_tracers = .true.`. Same cosine ramp
       !! and `sponge_strength` as the momentum kernel. No-op otherwise.
       !! Per-tracer loop outside the inner loops (outer-shim for the
@@ -881,7 +881,7 @@ contains
       if (.not. allocated(ms%tracers)) return
 
       ! Per-tracer `it` loop stays OUTSIDE the `do concurrent` kernels
-      ! (outer-shim): the hTr slice + h_layer reach the device as top-level
+      ! (outer-shim): the c slice + h_layer reach the device as top-level
       ! explicit-shape allocatables in the `_impl` routines, never
       ! dereferenced as `ms%tracers(it)%c(...)` inside a device loop.
 
@@ -1005,7 +1005,7 @@ contains
       end if
    end subroutine sponge_relax_band_y_tracer
 
-   pure subroutine relax_band_x_impl(hTr, h_layer, nx_total, ny_total, nz, &
+   pure subroutine relax_band_x_impl(c, h_layer, nx_total, ny_total, nz, &
                                      j0, j1, wall_face, band, side, strength, C_bc, dt, budget)
       !! Cosine-ramp tracer relaxation in a west/east sponge band.
       !! Explicit-shape dummies (flat-impl + outer-shim — the per-tracer
@@ -1014,7 +1014,7 @@ contains
       !! `side = -1` for the east edge (cells wall_face-1 .. wall_face-band).
       !!
       !! `budget` (PR-23, optional): when present, mirrors the per-cell
-      !! `hTr` increment into it (salt or heat) so the legacy band sponge's
+      !! content increment `h·Δc` into it (salt or heat) so the legacy band sponge's
       !! tracer relaxation closes the console budget exactly like the
       !! map-driven path (`relax_map_tracer_budget_impl`) — the caller
       !! passes it only for the salinity/temperature tracer indices.
@@ -1024,7 +1024,7 @@ contains
       !! `nvhpc_split_optional_dc_codegen` trap (~25x slower); this is the
       !! one-loop fix.
       integer, intent(in) :: nx_total, ny_total, nz, j0, j1, wall_face, band, side
-      real(wp), intent(inout) :: hTr(nx_total, ny_total, nz)
+      real(wp), intent(inout) :: c(nx_total, ny_total, nz)
       real(wp), intent(in)    :: h_layer(nx_total, ny_total, nz)
       real(wp), intent(in)    :: strength, C_bc, dt
       real(wp), intent(inout), optional :: budget(nx_total, ny_total, nz)
@@ -1040,23 +1040,23 @@ contains
          else
             ii = wall_face - d - 1
          end if
-         new_val = relax_one(hTr(ii, j, k), C_bc, strength, d, band, dt)
+         new_val = relax_one(c(ii, j, k), C_bc, strength, d, band, dt)
          if (has_budget) then
             p_new = h_layer(ii, j, k)*new_val
-            p_old = h_layer(ii, j, k)*hTr(ii, j, k)
+            p_old = h_layer(ii, j, k)*c(ii, j, k)
             budget(ii, j, k) = budget(ii, j, k) + (p_new - p_old)
          end if
-         hTr(ii, j, k) = new_val
+         c(ii, j, k) = new_val
       end do
    end subroutine relax_band_x_impl
 
-   pure subroutine relax_band_y_impl(hTr, h_layer, nx_total, ny_total, nz, &
+   pure subroutine relax_band_y_impl(c, h_layer, nx_total, ny_total, nz, &
                                      i0, i1, wall_face, band, side, strength, C_bc, dt, budget)
       !! Cosine-ramp tracer relaxation in a south/north sponge band.
       !! Mirror of `relax_band_x_impl` for the y-direction; see its
       !! docstring for the optional `budget` mirror (PR-23).
       integer, intent(in) :: nx_total, ny_total, nz, i0, i1, wall_face, band, side
-      real(wp), intent(inout) :: hTr(nx_total, ny_total, nz)
+      real(wp), intent(inout) :: c(nx_total, ny_total, nz)
       real(wp), intent(in)    :: h_layer(nx_total, ny_total, nz)
       real(wp), intent(in)    :: strength, C_bc, dt
       real(wp), intent(inout), optional :: budget(nx_total, ny_total, nz)
@@ -1072,32 +1072,32 @@ contains
          else
             jj = wall_face - d - 1
          end if
-         new_val = relax_one(hTr(i, jj, k), C_bc, strength, d, band, dt)
+         new_val = relax_one(c(i, jj, k), C_bc, strength, d, band, dt)
          if (has_budget) then
             p_new = h_layer(i, jj, k)*new_val
-            p_old = h_layer(i, jj, k)*hTr(i, jj, k)
+            p_old = h_layer(i, jj, k)*c(i, jj, k)
             budget(i, jj, k) = budget(i, jj, k) + (p_new - p_old)
          end if
-         hTr(i, jj, k) = new_val
+         c(i, jj, k) = new_val
       end do
    end subroutine relax_band_y_impl
 
-   pure real(wp) function relax_one(hTr_cur, tgt, strength, d, band, dt) result(res)
+   pure real(wp) function relax_one(c_cur, tgt, strength, d, band, dt) result(res)
       !! Cosine-ramp implicit relaxation of one cell toward `tgt`.
       !! `decay = exp(-strength*alpha*dt)`, alpha the cosine ramp at band
-      !! position `d`; result = hTr_cur*decay + tgt*(1-decay). Funnels
+      !! position `d`; result = c_cur*decay + tgt*(1-decay). Funnels
       !! through `relax_toward` for the shared core algebra (§3.1 / step 10
       !! "one home" — the map-driven kernels derive `decay` from a per-cell
       !! `Idamp` instead of this band/strength ramp, but both land on the
       !! same `cur*decay + tgt*(1-decay)` update).
       !$acc routine seq
-      real(wp), intent(in) :: hTr_cur, tgt, strength, dt
+      real(wp), intent(in) :: c_cur, tgt, strength, dt
       integer, intent(in) :: d, band
       real(wp) :: alpha, decay
       real(wp), parameter :: PI = acos(-1.0_wp)
       alpha = 0.5_wp*(1.0_wp + cos(PI*real(d, wp)/real(band, wp)))
       decay = exp(-strength*alpha*dt)
-      res = relax_toward(hTr_cur, tgt, decay)
+      res = relax_toward(c_cur, tgt, decay)
    end function relax_one
 
 #include "rdb_tracer_conc.inc"

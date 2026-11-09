@@ -417,10 +417,10 @@ contains
             ! accumulators are scratch by then).  D->H pulls happen inside.
             if (use_restart_output .and. t_current >= next_restart_time) then
                ! FIX-1 (spec §(c) mandatory flush): a restart checkpoint is the
-               ! prognostic snapshot a run resumes from — hTr and h_layer are
+               ! prognostic snapshot a run resumes from — c and h_layer are
                ! both read back as state.  If this write lands mid-accumulation-
                ! window (run cadence not an exact multiple of
-               ! dt_tracer_advect_ratio), drain first so frozen hTr is never
+               ! dt_tracer_advect_ratio), drain first so frozen c is never
                ! checkpointed against advanced h_layer.  No-op at ratio = 1 and
                ! idempotent (window already empty ⇒ exact no-op).
                call ocean_dyn_flush_tracer_window(grid, ocean_state%metrics, &
@@ -593,7 +593,7 @@ contains
 
          ! FIX-1 (spec §(c) mandatory end-of-run flush): a run whose length is
          ! not an exact multiple of dt_tracer_advect_ratio ends mid-window with
-         ! frozen hTr and advanced h_layer.  Drain before the clean-end
+         ! frozen c and advanced h_layer.  Drain before the clean-end
          ! checkpoint (and before the diag stream closes) so neither the final
          ! restart nor any pending state is emitted with an un-drained window.
          ! No-op at ratio = 1 (bit-identical) and idempotent.

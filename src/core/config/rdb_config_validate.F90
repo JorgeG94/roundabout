@@ -2378,7 +2378,7 @@ contains
                   call logger%error("&ocean_tracers_nml enable_ideal_age=.true. is "// &
                                     "refused with vcoord_type='z_fixed' under a "// &
                                     "cavity: the young-band reset writes "// &
-                                    "hTr_age(:,:,nz) = young*h(:,:,nz), which on a "// &
+                                    "c_age(:,:,nz) = young_eff, which on a "// &
                                     "covered column ventilates a filler (and there "// &
                                     "is no ventilation under a shelf at all).  "// &
                                     "Follow-up P6.3.")
@@ -2410,19 +2410,19 @@ contains
                ! ---- kappa_h: refused ONLY with the face mask off ----
                !
                ! The objection is unchanged where it still applies: the
-               ! along-coordinate tracer diffusion gates its T = hTr/h
-               ! division on `h > 0` (1/0 armour) and not on H_VANISHED,
+               ! along-coordinate tracer diffusion gates its
+               ! flux on `h > 0` (1/0 armour) and not on H_VANISHED,
                ! weights the face flux by the ARITHMETIC mean thickness
                ! — a filler beside a 20 m cell is weighted by 10 m — and
                ! carries no mass-availability limiter, so it can drive a
-               ! vanished cell's hTr strongly negative in one step.
+               ! vanished cell's c strongly negative in one step.
                !
                ! But `&vcoord_nml zfixed_closed_faces` already answers
                ! it, from the other end: `ocean_hdiff_tracer_step`
                ! multiplies every face flux by `metrics%open_u/open_v`,
                ! which is exactly zero wherever the layer is a filler on
                ! EITHER side.  A filler cell then has all four of its
-               ! own-layer faces closed, so its hTr divergence is
+               ! own-layer faces closed, so its c divergence is
                ! identically zero and the garbage concentration the
                ! `h > 0` gate computes for it never leaves the cell.
                ! Flux-zero, not flux-limited, so the scheme stays
@@ -2437,12 +2437,12 @@ contains
                                     "vcoord_type='z_fixed' under a cavity UNLESS "// &
                                     "&vcoord_nml zfixed_closed_faces=.true.: the "// &
                                     "along-coordinate tracer diffusion gates its "// &
-                                    "T = hTr/h division on `h > 0` (1/0 armour), "// &
+                                    "flux on `h > 0` (1/0 armour), "// &
                                     "not on H_VANISHED, weights the face flux by the "// &
                                     "ARITHMETIC mean thickness — so a filler beside "// &
                                     "a 20 m cell is weighted by 10 m — and has no "// &
                                     "mass-availability limiter, so it can drive a "// &
-                                    "vanished cell's hTr strongly negative in one "// &
+                                    "vanished cell's concentration strongly negative in one "// &
                                     "step.  With the partial-step face mask on, "// &
                                     "every face touching a filler is CLOSED and the "// &
                                     "flux is exactly zero, which answers all three.  "// &
@@ -2849,7 +2849,7 @@ contains
          !     water, and its positive-definite outflow limiter is the
          !     other writer of a top-layer thickness source.  Composing
          !     the two needs the limiter to SEE the melt volume;
-         !   * a windowed tracer-advection ratio > 1 freezes `hTr` for
+         !   * a windowed tracer-advection ratio > 1 freezes `c` for
          !     `ratio` steps while `h` keeps moving, so the dilution the
          !     mass form relies on would be applied to a tracer load that
          !     is deliberately stale.
@@ -2886,7 +2886,7 @@ contains
                   call logger%error("&ocean_cavity_melt_nml freshwater='mass' is "// &
                                     "refused with &ocean_vmix_nml "// &
                                     "dt_tracer_advect_ratio > 1.  The windowed drain "// &
-                                    "holds hTr fixed for the window while h keeps "// &
+                                    "holds c fixed for the window while h keeps "// &
                                     "moving, so the dilution the mass form relies on "// &
                                     "would act on a deliberately stale tracer load.  "// &
                                     "Follow-up: 'cavity real freshwater under the "// &
@@ -3888,7 +3888,7 @@ contains
       ! ---- Surface-flux component set (PR-12) ----
       ! The component set only feeds the thermo path (the assembler
       ! derives Q_heat/Q_salt, which apply_tracers stamps onto the
-      ! tracer hTr); with thermo off the whole thing is inert. Fail loud
+      ! tracer c); with thermo off the whole thing is inert. Fail loud
       ! rather than let a user carry the (real, gated-off) device memory
       ! for nothing.
       if (forcing_components_need_thermo(cfg%ocean%forcing%enable_components, &

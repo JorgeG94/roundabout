@@ -2066,7 +2066,7 @@ contains
       !! target and the pseudo-salt ledger.
       !!
       !! Order: flush the windowed tracer accumulator; refresh host from
-      !! device (h, u, v, every hTr); seam ghosts (host fill, device
+      !! device (h, u, v, every c); seam ghosts (host fill, device
       !! exchange + periodic wrap + fold, pulled back); land / closed-face
       !! masking; pseudo-salt re-seeded from salinity UNLESS the caller set
       !! pseudo-salt itself since the last rebaseline (the flag is consumed
@@ -2108,7 +2108,7 @@ contains
       call ocean_dyn_flush_tracer_window(h%grid, h%state%metrics, h%state%dyn, &
                                          h%state%continuity, h%state%multilayer, &
                                          bc=h%state%bc)
-      ! 2. The flush may have moved device h/hTr: force the host refresh.
+      ! 2. The flush may have moved device h/c: force the host refresh.
       h%host_is_current = .false.
       call ocean_handle_refresh_host(h)
 

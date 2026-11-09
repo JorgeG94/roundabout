@@ -1,9 +1,9 @@
 !! Constant-coefficient horizontal tracer diffusion for the ocean
 !! multilayer C-grid.  Conservative curvilinear flux-form Laplacian
-!! on `T = hTr/h` (design §2, mirrors continuity):
+!! on the stored concentration `T` (design §2, mirrors continuity):
 !!
 !!   F_x(i,j,k) = kappa * h_face_x * (T(i,j,k) - T(i-1,j,k)) * idxCu * dy_cu
-!!   hTr(i,j,k) += dt * [(F_x(i+1)-F_x(i)) + (F_y(j+1)-F_y(j))] * iareaT
+!!   c(i,j,k) += dt * [(F_x(i+1)-F_x(i)) + (F_y(j+1)-F_y(j))] * iareaT / h
 !!
 !! The face flux carries the width-weighted transport [tracer·m³/s]
 !! and the divergence is area-normalised by `iareaT`; on uniform
@@ -13,8 +13,8 @@
 !! h-weighted flux integrates to zero over the closed-wall domain.
 !!
 !! Wall faces force `F = 0` (closed-wall, no tracer flux across the
-!! boundary).  Vanishing-layer guards on the `T = hTr/h` division
-!! mirror the horizontal advection kernel.
+!! boundary).  A face touching a vanished layer (`h <= H_VANISHED`)
+!! is closed, so a filler's retained `c` never exchanges content.
 !!
 !! Phase Tier-1 ships the constant-`kappa_h` variant; Phase 5+ may
 !! drop in a Smagorinsky-style isotropic closure or a Redi-style
@@ -49,11 +49,11 @@ module rdb_ocean_hdiff_tracer
       real(wp) :: kappa_h = 0.0_wp
          !! Constant horizontal tracer diffusivity (m^2/s).  Zero
          !! is a no-op — the kernel short-circuits without
-         !! touching hTr.  Stability bound (explicit forward-Euler):
+         !! touching c.  Stability bound (explicit forward-Euler):
          !!   kappa_h * dt * (1/dx^2 + 1/dy^2) <= 0.5
 
       type(scratch_3d_buffer_t) :: T_centre
-         !! `T = hTr/h` at cell centres.  Shape (nx, ny, nz_ml).
+         !! The concentration at cell centres.  Shape (nx, ny, nz_ml).
          !! Filled per tracer at the start of each impl call;
          !! reused across the F_x / F_y face passes so the
          !! divergence step reads a consistent snapshot.
@@ -131,7 +131,7 @@ contains
       !! Iterate the tracer registry and apply constant-`kappa_h`
       !! horizontal Laplacian diffusion to every tracer whose
       !! `do_horizontal_diffusion` flag is set.  Outer-shim:
-      !! forwards each tracer's hTr to the flat-impl below.
+      !! forwards each tracer's c to the flat-impl below.
       !! Reuses the same scratch buffers across all tracers in one
       !! call.
       !!
@@ -277,14 +277,13 @@ contains
 
    pure subroutine tracer_hdiff_one_impl(nx, ny, nz, nghost, nx_phys, ny_phys, dt, kappa, &
                                          dy_cu, dx_cv, idxCu, idyCv, iareaT, &
-                                         h, hTr, T_centre, F_x_face, F_y_face, &
+                                         h, c, T_centre, F_x_face, F_y_face, &
                                          wall_w, wall_e, wall_s, wall_n, &
                                          open_u, open_v, budget)
       !! Four-pass flat-impl horizontal-Laplacian tracer diffusion in
       !! conservative curvilinear form (design §2, mirrors continuity):
       !!
-      !!   1. Compute T = hTr / h at every cell centre (vanishing
-      !!      layer → T = 0).
+      !!   1. T = c at every cell centre (the stored concentration).
       !!   2. East-face TRANSPORT flux [tracer·m³/s]:
       !!        F_x(i) = kappa · 0.5·(h(i-1)+h(i)) · (T(i)-T(i-1))
       !!                 · idxCu(i) · dy_cu(i)
@@ -297,16 +296,16 @@ contains
       !!      when the physical wall sits inside the ghost band, so
       !!      those two faces must stay initialised.
       !!   3. North-face flux, mirror of pass 2 (idyCv · dx_cv).
-      !!   4. Divergence into hTr:
-      !!        hTr(i,j,k) += dt · [(F_x(i+1)-F_x(i))
-      !!                            + (F_y(j+1)-F_y(j))] · iareaT(i,j)
+      !!   4. Divergence into c:
+      !!        c(i,j,k) += dt · [(F_x(i+1)-F_x(i))
+      !!                            + (F_y(j+1)-F_y(j))] · iareaT(i,j) / h(i,j,k)
       !!
       !! On uniform Cartesian `dy_cu=dy`, `idxCu=1/dx`,
       !! `iareaT=1/(dx·dy)`, so the form collapses to the old
       !! `Δ(kappa·h·ΔT/dx)/dx` to round-off.  Each pass writes a
       !! different buffer than it reads, so `do concurrent` is
-      !! race-free.  Constancy: uniform T → zero face fluxes → hTr
-      !! unchanged.  Conservation over the PHYSICAL domain: closed
+      !! race-free.  Constancy: uniform T → zero face fluxes → c
+      !! unchanged (content `h·c` is what is conserved).  Conservation over the PHYSICAL domain: closed
       !! physical-wall + flux-form divergence over the area-weighted
       !! cells integrates to zero exactly (see `tracer_hdiff`'s
       !! host-side wall-flag resolution for the OBC/MPI-seam gate).
@@ -319,7 +318,7 @@ contains
       real(wp), intent(in) :: idxCu(nx + 1, ny), idyCv(nx, ny + 1)
       real(wp), intent(in) :: iareaT(nx, ny)
       real(wp), intent(in) :: h(nx, ny, nz)
-      real(wp), intent(inout) :: hTr(nx, ny, nz)
+      real(wp), intent(inout) :: c(nx, ny, nz)
       real(wp), intent(inout) :: T_centre(nx, ny, nz)
       real(wp), intent(inout) :: F_x_face(nx + 1, ny, nz)
       real(wp), intent(inout) :: F_y_face(nx, ny + 1, nz)
@@ -348,7 +347,7 @@ contains
 
       ! ---- Pass 1: T = c at centres (the stored concentration) ----
       do concurrent(k=1:nz, j=1:ny, i=1:nx)
-         T_centre(i, j, k) = hTr(i, j, k)
+         T_centre(i, j, k) = c(i, j, k)
       end do
 
       ! ---- Pass 2: east-face transport flux ----
@@ -413,15 +412,15 @@ contains
             delta = dt*( &
                     (F_x_face(i + 1, j, k) - F_x_face(i, j, k)) + &
                     (F_y_face(i, j + 1, k) - F_y_face(i, j, k)))*iareaT(i, j)
-            hTr(i, j, k) = hTr(i, j, k) + delta/(h(i, j, k) + H_DIV_EPS)
+            c(i, j, k) = c(i, j, k) + delta/(h(i, j, k) + H_DIV_EPS)
             budget(i, j, k) = budget(i, j, k) + delta
          end do
       else
          do concurrent(k=1:nz, j=1:ny, i=1:nx)
-            hTr(i, j, k) = hTr(i, j, k) + dt*( &
-                           (F_x_face(i + 1, j, k) - F_x_face(i, j, k)) + &
-                           (F_y_face(i, j + 1, k) - F_y_face(i, j, k)))*iareaT(i, j)/ &
-                           (h(i, j, k) + H_DIV_EPS)
+            c(i, j, k) = c(i, j, k) + dt*( &
+                         (F_x_face(i + 1, j, k) - F_x_face(i, j, k)) + &
+                         (F_y_face(i, j + 1, k) - F_y_face(i, j, k)))*iareaT(i, j)/ &
+                         (h(i, j, k) + H_DIV_EPS)
          end do
       end if
    end subroutine tracer_hdiff_one_impl

@@ -863,7 +863,7 @@ contains
 
    pure subroutine bbl_column_conc_impl(nx, ny, nz, h, htr, conc)
       !! Cell concentrations of one tracer through THE vanished-layer column
-      !! rule (`rdb_vl_column_conc`): `hTr/h` on a live layer, the donor's
+      !! rule (`rdb_vl_column_conc`): `c` on a live layer, the donor's
       !! concentration on a filler, never a quotient by a near-zero or
       !! negative thickness.
       integer, intent(in) :: nx, ny, nz
@@ -1106,8 +1106,8 @@ contains
 
    subroutine vdiff_apply_tracers(grid, this, ms, dt, kt_source, ks_source)
       !! Backward-Euler vertical diffusivity on every registered
-      !! tracer.  Each tracer is converted to `T = hTr/h`, the
-      !! tridiagonal solve runs, then `hTr = T*h` is reconstituted.
+      !! tracer.  The tridiagonal solve runs on the stored
+      !! concentration `c` directly (identity rows on vanished layers).
       !! `h_layer` is untouched.  Per-tracer
       !! `do_vertical_diffusion` flag gates participation.
       !!

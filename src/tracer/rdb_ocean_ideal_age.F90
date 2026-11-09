@@ -7,8 +7,8 @@ module rdb_ocean_ideal_age
    !! surface" — a diagnostic of circulation pathways and spurious
    !! diapycnal mixing.
    !!
-   !! Storage: `hTr_age` is `h_layer · age` (m · s), like S/T; the
-   !! diagnostic reports `age = hTr_age / h_layer`. `k = 1` bed,
+   !! Storage: `c_age` is the age concentration (s), like S/T; the
+   !! diagnostic reports it directly. `k = 1` bed,
    !! `k = nz` surface.
    !!
    !! **Two-entry-point call contract** (see `src/core/ocean/dynamics/
@@ -23,7 +23,7 @@ module rdb_ocean_ideal_age
    !!   - `ocean_ideal_age_reset_surface` — the surface Dirichlet BC.
    !!     Called exactly ONCE per outer step, AFTER `rk2_average`,
    !!     AFTER `continuity_tracer_drain`, and AFTER the ALE remap —
-   !!     i.e. it is the last operator to touch `hTr_age(:, :, nz)`
+   !!     i.e. it is the last operator to touch `c_age(:, :, nz)`
    !!     each step. A reset applied inside an RK2 stage is halved by
    !!     the subsequent average (`0.5*(A0 + 0) = 0.5*A0`, not `0`) —
    !!     that was the historical bug this split fixes. A reset applied
@@ -38,7 +38,7 @@ module rdb_ocean_ideal_age
    !!
    !! Two deliberate divergences from the MOM6 reference
    !! (`ideal_age_example.F90`):
-   !!   - **Units are SECONDS, not years** (`hTr_age` units `s`,
+   !!   - **Units are SECONDS, not years** (`c_age` units `s`,
    !!     `rdb_multilayer_state.F90`); MOM6 works in years
    !!     (`Isecs_per_year`). Do not convert — the diagnostic registry
    !!     and the console status line both assume seconds.
@@ -84,23 +84,23 @@ contains
                                     dt, grid%nx_total, grid%ny_total, ms%nz_ml)
    end subroutine ocean_ideal_age_apply
 
-   pure subroutine ocean_ideal_age_age_step(hTr_age, h_layer, dt, nx, ny, nz)
+   pure subroutine ocean_ideal_age_age_step(c_age, h_layer, dt, nx, ny, nz)
       !! Interior aging, `k = 1 .. nz-1` (subsurface layers only —
       !! `k = nz` is the surface and is owned exclusively by
       !! `ocean_ideal_age_reset_step`):
-      !!   `hTr_age(i,j,k) += dt * h_layer(i,j,k)`
+      !!   `c_age(i,j,k) += dt`
       !! `dt` here is the caller's `therm_dt`, so this is a per-RK2-
       !! stage source; two stages + `rk2_average_field_3d` net exactly
       !! one `+dt` per outer step.
       integer, intent(in) :: nx, ny, nz
-      real(wp), intent(inout) :: hTr_age(nx, ny, nz)
+      real(wp), intent(inout) :: c_age(nx, ny, nz)
       real(wp), intent(in) :: h_layer(nx, ny, nz)
       real(wp), intent(in) :: dt
 
       integer :: i, j, k
 
       do concurrent(k=1:nz - 1, j=1:ny, i=1:nx)
-         hTr_age(i, j, k) = hTr_age(i, j, k) + dt
+         c_age(i, j, k) = c_age(i, j, k) + dt
       end do
    end subroutine ocean_ideal_age_age_step
 
@@ -128,9 +128,9 @@ contains
                                       young_eff, grid%nx_total, grid%ny_total, ms%nz_ml)
    end subroutine ocean_ideal_age_reset_surface
 
-   pure subroutine ocean_ideal_age_reset_step(hTr_age, h_layer, young_eff, nx, ny, nz)
+   pure subroutine ocean_ideal_age_reset_step(c_age, h_layer, young_eff, nx, ny, nz)
       !! Surface Dirichlet BC, `k = nz` only:
-      !!   `hTr_age(i,j,nz) = young_eff * h_layer(i,j,nz)`
+      !!   `c_age(i,j,nz) = young_eff`
       !! `young_eff` is `A_young(t)` (s), a host scalar from
       !! `ocean_ideal_age_young_val` — this writes a CONCENTRATION
       !! times thickness, not a raw concentration (today's hard-coded
@@ -139,14 +139,14 @@ contains
       !! as the historical kernel; land `h_layer -> H_VANISHED` makes
       !! the product negligible and no kernel reads land age.
       integer, intent(in) :: nx, ny, nz
-      real(wp), intent(inout) :: hTr_age(nx, ny, nz)
+      real(wp), intent(inout) :: c_age(nx, ny, nz)
       real(wp), intent(in) :: h_layer(nx, ny, nz)
       real(wp), intent(in) :: young_eff
 
       integer :: i, j
 
       do concurrent(j=1:ny, i=1:nx)
-         hTr_age(i, j, nz) = young_eff
+         c_age(i, j, nz) = young_eff
       end do
    end subroutine ocean_ideal_age_reset_step
 
