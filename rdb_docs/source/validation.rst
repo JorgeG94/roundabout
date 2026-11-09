@@ -30,8 +30,9 @@ Every Roundabout test is named with an ``rdb_`` prefix, so
 
    ctest -R rdb --output-on-failure
 
-runs the project's own suite — around 177 tests, roughly 35 seconds —
-without the dependency self-tests that ``pic`` and ``test-drive`` also
+runs the project's own suite — 286 tests at the time of writing (``ctest -N -R rdb``), about
+a minute on the CPU build with ``-j 4`` —
+without the dependency self-tests that ``pic`` and ``test-drive`` can also
 register. Tests carry mandatory regime labels, so ``ctest -L ocean`` and
 ``ctest -L core`` select subsets.
 
