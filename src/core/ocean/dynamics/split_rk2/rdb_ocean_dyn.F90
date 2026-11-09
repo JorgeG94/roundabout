@@ -1098,10 +1098,9 @@ contains
 
       ! ---- RK2 average: u^(n+1) = 0.5 * (u^n + stage2 result) ----
       ! Tracers are averaged BEFORE `h_layer`: the tracer average is
-      ! ordered ahead of the thickness average so a mass-weighted form
+      ! ordered ahead of the thickness average so the mass-weighted form
       ! (`h0·c0 + h1·c1` over `h0 + h1`) can read the un-averaged
-      ! `h_layer0`/`h_layer` pair.  In content form it reads neither, so the
-      ! order is bit-identical.
+      ! `h_layer0`/`h_layer` pair.
       if (allocated(ms%tracers)) then
          do it = 1, size(ms%tracers)
             call rk2_average_conc_3d(ms%h_layer0, ms%tracers(it)%c0, ms%h_layer, &
@@ -2935,9 +2934,9 @@ contains
       !! `c <- (h0·c0 + h1·c1)/(h0 + h1)`, with `(h0, c0)` the step-entry
       !! save and `(h1, c1)` the stage-2 result.  It must run BEFORE
       !! `rk2_average` averages `h_layer` (it reads the un-averaged pair).
-      !! This is exactly the ratio of the averaged content to the averaged
-      !! thickness the content form took, and a convex combination of `c0` and
-      !! `c1`, so a uniform field stays uniform.  A column pair with no water
+      !! This is the ratio of the averaged content to the averaged thickness,
+      !! and a convex combination of `c0` and `c1`, so a uniform field stays
+      !! uniform.  A column pair with no water
       !! (`h0 + h1 <= H_DIV_EPS`) keeps `c1`.
       integer, intent(in) :: nx, ny, nz
       real(wp), intent(in) :: h_saved(nx, ny, nz), c_saved(nx, ny, nz)

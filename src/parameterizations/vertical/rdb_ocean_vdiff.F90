@@ -258,8 +258,8 @@ module rdb_ocean_vdiff
          !! BBL thickness (m) at v-faces, `(nx, ny+1)`.
       real(wp), allocatable :: bbl_conc_t(:, :, :)
          !! Cell temperature CONCENTRATION `(nx, ny, nz)` for the BBL
-         !! stratification measure, read through the I1′ column rule
-         !! (`rdb_vl_column_conc`: a filler reads its donor).  Workspace of
+         !! stratification measure, read through the donor
+         !! substitution (`rdb_vl_column_conc`: a filler reads its donor).  Workspace of
          !! `vdiff_set_viscous_bbl`; `(1,1,1)` unless `bbl_per_face`.
       real(wp), allocatable :: bbl_conc_s(:, :, :)
          !! Cell salinity concentration, as `bbl_conc_t`.
@@ -802,7 +802,7 @@ contains
       !!   1. `h_at_vel`: harmonic mean of the two cells when the flow runs
       !!      thin -> thick (`u·Δh >= 0`), else arithmetic;
       !!      T and S at the face are plain averages of the two cells'
-      !!      CONCENTRATIONS (I1′ column rule).
+      !!      CONCENTRATIONS (donor-substituted through `rdb_vl_column_conc`).
       !!   2. `u_bbl`: the `h_at_vel`-weighted mean, over the bottom `HBBL`,
       !!      of `sqrt(u² + v_at_u² + DRAG_BG_VEL²)` (`v_at_u` the masked
       !!      thickness-weighted average of the four transverse faces,

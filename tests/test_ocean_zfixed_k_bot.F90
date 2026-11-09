@@ -131,7 +131,7 @@ contains
 
    subroutine build_twin(grid, ms, with_fill)
       !! One repeated column: NLIVE live 40 m layers, under which (when
-      !! `with_fill`) NFILL inert fillers sit.  T/S follow I1′: a filler
+      !! `with_fill`) NFILL inert fillers sit.  A filler
       !! carries its donor's (the first live layer's) concentration.
       type(hgrid_t), intent(out) :: grid
       type(multilayer_state_t), intent(out) :: ms

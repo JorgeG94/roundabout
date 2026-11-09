@@ -6,9 +6,9 @@
 !! concentration: the remap reads that `c` as a cell value of the stencil
 !! (limited by its neighbours) and a waking filler takes a concentration from
 !! the water it sits in.  There is no donor map, no pool merge and no
-!! tail sweep any more; the old invariant I1′ (`hTr = h·c_donor` on a filler)
-!! and its enforcement point, scan, merge helper and host twin are gone, and
-!! so are the tests of them.  What the remap itself guarantees, asserted here:
+!! tail sweep: the old content-form filler rule (I1′: `hTr = h·c_donor`) and its
+!! enforcement point, scan, merge helper and host twin are gone, and so are
+!! the tests of them.  What the remap itself guarantees, asserted here:
 !!   - the content `Σ h·c` of a column is conserved to round-off once the
 !!     recorded bounding amount is added back, and every target concentration
 !!     (filler targets included) lies inside the source range;
@@ -172,8 +172,7 @@ contains
       !! concentration-form remap: (a) content `Σ h·c` conserved to round-off,
       !! (b) every target -- filler targets included -- carries a
       !! concentration inside the source range (not `0`, not a made-up value),
-      !! (c) the bounding amount is round-off.  (Replaces the old assertion of
-      !! invariant I1′, `hTr = h·c_donor`, on the output.)
+      !! (c) the bounding amount is round-off.
       type(error_type), allocatable, intent(out) :: error
       integer, parameter :: NZ = 8
       real(wp) :: h_old(NZ), h_new(NZ), c(NZ), c_new(NZ), clamp(NZ)

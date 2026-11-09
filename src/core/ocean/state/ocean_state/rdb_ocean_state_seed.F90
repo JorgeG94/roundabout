@@ -1834,9 +1834,9 @@ contains
       !!
       !! Land-state contract: `h = H_VANISHED`, `c = 0`.  A land column
       !! contributes `h*c = 0` to every budget and every console total, at
-      !! the latch and at every later step.  In concentration form no
-      !! operator rewrites a retained `c` on a layer it does not fill, so the
-      !! value is held, not re-derived each step as the content form did.
+      !! the latch and at every later step.  No operator rewrites a
+      !! retained `c` on a layer it does not fill, so the value is held, not
+      !! re-derived each step.
       integer, intent(in) :: nz
       real(wp), intent(inout) :: c(:, :, :)
       real(wp), intent(in) :: wet_mask(:, :)

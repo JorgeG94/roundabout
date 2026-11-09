@@ -2491,11 +2491,11 @@ contains
                !
                ! Measured on ISOMIP+ Ocean0 idealised (z_fixed + closed
                ! faces, melt off), V100, on the v0.1.0 defaults (bebt =
-               ! 0.1, renorm_consistent_flux, I1'): from rest the knob
+               ! 0.1, renorm_consistent_flux): from rest the knob
                ! spins up En = 3.4E-04 m2/s2 in the first 3 hours
                ! (MaxCFL 0.43) and holds ~1E-03 (MaxCFL up to 0.85) for
                ! 30 days — ~19 000x the layer-mean-density run's 5.6E-08
-               ! and ~5x the melt-ON circulation.  (Before I1' and bebt =
+               ! and ~5x the melt-ON circulation.  (Before the filler rule and bebt =
                ! 0.1 it went non-finite at outer step 118, day 0.41.)  The
                ! PLM/PPM edge build reads the inert top-side FILLERS as
                ! neighbouring water at the partial top cell.  The
@@ -4608,7 +4608,7 @@ contains
       !! `En(30 d) = 1.44E-06`), `nu_h = 2` decelerates (0.092 -> 0.068
       !! /day, d5-10 -> d25-30; `1.12E-07`), the protocol's 6 gives
       !! `5.63E-08` (V100, v0.1.0 defaults: bebt = 0.1,
-      !! renorm_consistent_flux, I1').  The
+      !! renorm_consistent_flux).  The
       !! inviscid mode is arrested somewhere in `0 < nu_h < 2`; the
       !! bracket below 2 was not refined, so 2 is the bound of record.
       !!

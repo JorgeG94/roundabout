@@ -799,9 +799,9 @@ contains
       !! Build one column's TOP-DOWN interface P/T/S + density derivs from the
       !! BOTTOM-UP native column, restricted to the face's open window
       !! `kb..kt` (`nk = kt-kb+1` layers; the whole column `1..nz` off the
-      !! z-level closed-face path).  Layer T/S = the I1′ column read
-      !! (`rdb_vl_column_conc`: `hTr/h` on a live layer, the donor's
-      !! concentration on a vanished one); interface
+      !! z-level closed-face path).  Layer T/S = the stored
+      !! concentration on a live layer, the donor's on a vanished one
+      !! (`rdb_vl_column_conc`); interface
       !! T/S = PPM edge reconstruction on the flipped window; interface P =
       !! surface-relative hydrostatic, seeded with the column ABOVE the
       !! window (fillers under an ice draft; nothing — exactly 0 — when
@@ -821,14 +821,11 @@ contains
       integer :: k, kf, nk
 
       nk = kt - kb + 1
-      ! Layer T/S from the FULL native column by the I1′ rule
-      ! (`rdb_vl_column_conc`): a vanished layer reads its donor's
-      ! concentration, never `hTr/max(h, H_DIV_EPS)`.  The floored divide is
-      ! `hTr/1e-20` on a layer the continuity step has taken to (or below)
-      ! zero, which on an OPEN z-like step (closed faces off, so the window
-      ! is the whole column and fillers are paired) read T ~ 1e17 and put
-      ! 1e12-1e27 of content into the face (1-degree Southern Ocean, zstar,
-      ! step 13).  A live layer reads `hTr/h`, the same divide as before.
+      ! Layer T/S from the FULL native column (`rdb_vl_column_conc`): a
+      ! vanished layer reads its donor's concentration, so a layer the
+      ! continuity step has taken to (or below) zero cannot put a stale or
+      ! extreme T/S into the face on an OPEN z-like step (closed faces off,
+      ! so the window is the whole column and fillers are paired).
       do k = 1, nz
          hs(k) = h_col(k)
          qs(k) = thtr_col(k)
@@ -1108,8 +1105,8 @@ contains
       !! `aLe/aRe` from the bottom-up native (h, hTr) column (fixed-size
       !! NZ_STACK_MAX copies), restricted to the face's open window
       !! `kb..kt` (`1..nz` off the z-level closed-face path) — indexed in
-      !! the WINDOW top-down frame, `1..nk`, `nk = kt-kb+1`.  Tlay = the I1′
-      !! column read (`rdb_vl_column_conc`, see `redi_build_column`).
+      !! the WINDOW top-down frame, `1..nk`, `nk = kt-kb+1`.  Tlay = the
+      !! donor-substituted column (`rdb_vl_column_conc`, see `redi_build_column`).
       !! Mirrors MOM6 interface_scalar + ppm_left_right_edge_values.
       integer, intent(in) :: kb, kt
          !! Native (bottom-up) open window, `1 <= kb <= kt`.

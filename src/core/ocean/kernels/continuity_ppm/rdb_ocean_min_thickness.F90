@@ -251,10 +251,9 @@ contains
 
    pure subroutine remap_tracer_grounded(nx, ny, nz, h_old, h_new, mask, hTr)
       !! Conservative tracer remap gated on the grounded mask.  Non-grounded
-      !! columns are skipped -> hTr byte-unchanged; the source concentration
-      !! is the tracer-concentration accessor `rdb_conc_of` (a zero-thickness
-      !! layer reads `0`; no raw divide, no private floor), evaluated only on
-      !! grounded columns.
+      !! columns are skipped -> c byte-unchanged; the source concentration
+      !! is the stored `c` itself (no divide), remapped only on grounded
+      !! columns.
       integer, intent(in) :: nx, ny, nz
       real(wp), intent(in) :: h_old(nx, ny, nz)
       real(wp), intent(in) :: h_new(nx, ny, nz)

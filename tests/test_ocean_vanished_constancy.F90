@@ -1,26 +1,18 @@
-!! Tracer CONSTANCY through vanished layers — the gate for invariant I1′.
+!! Tracer CONSTANCY through vanished layers.
 !!
 !! A uniform tracer must stay uniform: whatever the dynamics do to the
 !! thicknesses, a column that starts at one concentration everywhere has no
 !! way to make another.  That is a basic property of a conservative,
-!! consistent transport scheme, and it is the one the previous vanished-layer
-!! rule broke.
-!!
-!! The previous rule (I1, `h <= H_VANISHED ⇒ hTr = 0`) kept a filler's MASS but
-!! zeroed its CONTENT.  Between two remaps the continuity step moves thickness
-!! out of a filler (and nudges it a hair above the marker, so it reads live);
-!! that thickness carries the filler's concentration, `hTr/h = 0`, into the
-!! live layers — fresh, 0 °C water appearing in a uniform-S = 35, T = 15 run
-!! (`double_gyre_mom6`, 10 days: 258 thin live cells at S = 0–34.43 and 1273
-!! thick cells off 35 by up to 2e-5).  Salt was conserved; concentration was
-!! not consistent.
-!!
-!! I1′ (`h <= H_VANISHED ⇒ hTr = h·c_live`, the donor live layer's
-!! concentration) keeps it.  Both tests here run the FULL split solver through
-!! the C API — continuity, the ALE remap and the enforcement point, ≥ 50 outer
-!! steps with the flow forced — and assert that every wet cell, filler or
-!! live, still holds the initial concentration to `1e-12` relative, for T, S
-!! and (where the envelope allows one) a passive tracer:
+!! consistent transport scheme.  With tracers stored as concentration it
+!! holds by construction (`c⁺ = (h⁻c⁻ + dt·tendency)/h⁺` with a consistent
+!! thickness pair, and a filler keeps its last `c`), with no invariant, sweep
+!! or tripwire to maintain it.  (Under the earlier content-form store a filler
+!! with zero content dragged fresh 0 °C water into a uniform S = 35, T = 15
+!! run.)  Both tests here run the FULL split solver through the C API —
+!! continuity and the ALE remap, ≥ 50 outer steps with the flow forced — and
+!! assert that every wet cell, filler or live, still holds the initial
+!! concentration to `1e-12` relative, for T, S and (where the envelope allows
+!! one) a passive tracer:
 !!
 !!   * `ZSTAR_FULL`, the reduced `double_gyre_mom6` (spoon bed, two-gyre wind,
 !!     `dt_therm_ratio = 2`): the bed layer vanishes over the shelf;
@@ -142,8 +134,8 @@ contains
    subroutine run_constancy(error, nml, what, seed_u, tracer_names, refs)
       !! Create, (optionally) stir, step `N_STEPS`, then check every WET
       !! physical cell of every named tracer against its uniform initial
-      !! value.  Fillers are checked too — under I1′ their `hTr/h` IS the
-      !! donor's concentration, i.e. the same uniform value.
+      !! value.  Fillers are checked too — a filler keeps its last `c`, which is
+      !! the same uniform value.
       type(error_type), allocatable, intent(out) :: error
       character(len=*), intent(in) :: nml, what
       real(wp), intent(in) :: seed_u

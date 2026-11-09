@@ -340,9 +340,8 @@ contains
       do concurrent(k=1:min(nz, nz_h), j=1:ny, i=1:nx)
          h = h_layer(i, j, k)
          ! a diagnostic substitutes the NaN missing-data
-         ! sentinel on a vanished layer, not `rdb_vl_conc`'s copy of the
-         ! donor's concentration (README
-         ! consumer table); the live branch IS `rdb_vl_conc`.
+         ! sentinel on a vanished layer, not the stored c it kept (see
+         ! the consumer table in rdb_vanished_layer.inc).
          if (rdb_vl_is_live(h)) then
             buf(i, j, k) = hTr(i, j, k)
          else
@@ -1207,9 +1206,8 @@ contains
       !! `layer_buf` value is never read: for a concentration it is the
       !! NaN missing-data sentinel (`fill_tracer_impl`), which the
       !! donor-cell reconstruction would otherwise smear into every target
-      !! cell of the column; for content it is `h·c_live` by I1′, a copy of
-      !! the donor layer the remap already counts.  A column with
-      !! no vanished layer is bit-identical.
+      !! cell of the column.  A column with no vanished layer is
+      !! bit-identical.
       !!
       !! Fixed-size `NZ_STACK_MAX` stack locals via `local(...)` — automatic
       !! arrays sized from a dummy crash NVHPC stdpar device codegen.

@@ -53,10 +53,11 @@ so it has zero density feedback by construction).
    `idx_temperature` / `idx_age` are unchanged.
 2. **`registry_locked`** — set `.true.` by `enter_data`, cleared by
    `exit_data`. A registration attempt while locked refuses (`idx = 0`,
-   logged) instead of leaving an unmapped `hTr` on the `mem:separate` GPU
+   logged) instead of leaving an unmapped `c` on the `mem:separate` GPU
    build.
-3. **Seed `hTr`** — manual: after layer thicknesses / any analytical or z-file
-   IC land, `ms%tracers(idx)%hTr = ms%h_layer * tr_init` (or copy from another
+3. **Seed `c`** — manual: after layer thicknesses / any analytical or z-file
+   IC land, `ms%tracers(idx)%c = tr_init` (the stored value is the
+   concentration, no thickness factor; land cells hold `c = 0`; or copy from another
    tracer, as `ocean_pseudo_salt_seed` does from salinity — see below).
    Must run before `enter_data`.
 4. **Budget attribution is a registry property, not an index coincidence.**
@@ -80,10 +81,10 @@ so it has zero density feedback by construction).
 ## Why the order matters
 
 `register_passive_tracer` grows `tracers(:)` via `move_alloc` + reallocation
-(deep-copying the existing entries, which reallocates their `hTr`/`hTr0`). The
-slot's `enter_data` snapshots the array and maps each `hTr`/`hTr0` to the device
+(deep-copying the existing entries, which reallocates their `c`/`c0`). The
+slot's `enter_data` snapshots the array and maps each `c`/`c0` to the device
 in a two-step map (`copyin` the array descriptor, then a per-element loop
-mapping each `hTr`). Register *after* `enter_data` and the new slot's `hTr`
+mapping each `c`). Register *after* `enter_data` and the new slot's `c`
 would never be mapped — hence `registry_locked` refusing rather than letting you
 hit `CUDA_ERROR_ILLEGAL_ADDRESS` on the first kernel.
 
@@ -119,7 +120,7 @@ canary tests.
 
 The canonical *transport* check is a **tracking** test, not a sum check:
 register a "dye" with zero density coupling, seed it equal to salinity, run a
-short integration, and assert `maxval(|hTr_dye - hTr_S|)` stays at round-off.
+short integration, and assert `maxval(|c_dye - c_S|)` stays at round-off.
 The dye must track salinity bit-for-bit through advection + remap + vertical
 exchange + clamp + RK2. A sum check would falsely pass if a kernel silently
 skipped the tracer; the tracking check won't.
@@ -133,7 +134,7 @@ skipped the tracer; the tracking check won't.
 - **No automatic diagnostic output** — step 5; forgetting the `fill_<name>`
   means the tracer transports correctly but never appears in NetCDF output.
 - **Outer-shim + flat-impl device indirection.** A kernel can't dereference
-  `ms%tracers(it)%hTr(...)` from inside a device loop (the array-of-derived-types
+  `ms%tracers(it)%c(...)` from inside a device loop (the array-of-derived-types
   descriptor isn't reachable on the device). The pattern: an outer shim
   dereferences the registry on the *host* and hands a flat array to a
   `pure *_impl` worker whose dummy is a plain `arr(nx,ny,nz)`. Every registry

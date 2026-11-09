@@ -11,7 +11,7 @@ is the bug.
 |---|---|
 | Vanished-layer predicate, donor read and the consumer-substitution table | header of `src/shared_module_utilities/rdb_vanished_layer.inc` |
 | Thin-layer constants `H_VANISHED` / `H_DIV_EPS` | `src/core/rdb_constants.F90` |
-| Land state (`h = H_VANISHED`, `hTr = 0`) | `seed_land_tracer_hold_impl` and `ocean_state_seed_land_cells`, `src/core/ocean/state/ocean_state/rdb_ocean_state_seed.F90` |
+| Land state (`h = H_VANISHED`, `c = 0`) | `seed_land_tracer_hold_impl` and `ocean_state_seed_land_cells`, `src/core/ocean/state/ocean_state/rdb_ocean_state_seed.F90` |
 | `stress_mag` vs `stress_shelf` (two upper-boundary stresses) | module header of `src/parameterizations/vertical/rdb_ocean_surface_stress.F90` |
 | PGF reference densities `rho0` vs `rho_ref` | the two members in `src/pressure_force/rdb_ocean_pressure_force.F90` |
 | One configured ρ₀ fanned out to forcing + KPP | `configure_ocean_reference_density`, `src/core/ocean/state/setup/rdb_ocean_setup_lateral.F90` |
@@ -71,9 +71,16 @@ constants and the `ICE_RHO_*` constants are deliberately *not* copies of ρ₀.
 
 **Thin layers.** `H_VANISHED` (1.5e-4 m) is a skip/merge marker, never a positivity floor. `H_DIV_EPS`
 (1e-20) is pure 1/0 armour. The runtime `angstrom_h` floor (`&ocean_isopycnal_nml`, Lagrangian only) lifts
-`h` but not `hTr`, so it is non-conservative by a bounded amount per floored cell.
+`h` at fixed `c`, so it injects mass and tracer content, non-conservative by a bounded amount per floored cell.
 
-**Land.** A land T-cell holds `h = H_VANISHED` exactly and `hTr = 0` exactly, at `t = 0` and at every
+**Tracer storage and vanished layers.** Tracers are stored as concentration `c`; the content `h*c` is formed
+only for budgets and console totals. A layer at or below `H_VANISHED` keeps its last `c`: deposits into it are
+refused (budgets book only the accepted amount), horizontal-diffusion faces and KPP non-local interfaces next
+to it are closed, shortwave passes through it to the deepest live layer, and remap bounds the new `c` by the
+source cells that contributed. A reader that integrates its `c` over water it does not occupy goes through
+`rdb_vl_column_conc`. Full list: "Vanished layers" in `src/core/ocean/README.md`.
+
+**Land.** A land T-cell holds `h = H_VANISHED` exactly and `c = 0` exactly, at `t = 0` and at every
 step. The seed hands the budget latch the state every later step will have; any other seeded land content
 is discarded by the first regrid, un-budgeted, and shows up as a step in the console error between
 step 0 and step 1. Land is isolated from wet cells bit-for-bit

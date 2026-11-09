@@ -725,7 +725,7 @@ checks it fails the first and passes the second — who tests the test.
 simulated days each, `pred_corr`, `RDB_ENABLE_MPI=OFF`, measured on **both**
 toolchains with the MOM6-parity defaults of 2026-09-22 (`bebt = 0.1`,
 `renorm_consistent_flux = .true.`) AND the vanished-layer content rule I1′
-(PR #50) together: gfortran 15.1.0 Release on the CPU (8 workers, 26 min)
+(PR #50; removed when tracers became concentrations, the measurements below are history) together: gfortran 15.1.0 Release on the CPU (8 workers, 26 min)
 and nvfortran 26.5 on four V100s, cc70 (one worker per device, 56 min — the
 GPU is launch-bound at 48 × 6 × 15). `ok` = every
 assertion passed (on `flat`/`lid_flat` that means `En = 0.000E+00` at every

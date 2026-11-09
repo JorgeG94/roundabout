@@ -2082,7 +2082,7 @@ contains
                hu = h_layer(i, j, k)      ! upper layer (toward surface)
                hl = h_layer(i, j, k - 1)  ! lower layer
                ! a PAIRWISE gate — the double-diffusive term needs BOTH layers
-               ! live and is skipped otherwise; a per-layer `rdb_vl_conc` would
+               ! live and is skipped otherwise; a per-layer donor read (`rdb_vl_column_conc`) would
                ! silently make the difference finite.
                if (hu > H_VANISHED .and. hl > H_VANISHED) then
                   t_u = temp_h(i, j, k)

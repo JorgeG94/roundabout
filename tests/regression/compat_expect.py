@@ -349,7 +349,7 @@ ROWS = [
          "Wright or Roquet.  The linear EOS gives a vanished layer the reference density "
          "(`eos_linear_impl`: h <= H_VANISHED -> T_ref/S_ref, i.e. rho_0), and the layer-mean "
          "PGF paths (mont, fv_mom6 PCM) read that `rho_layer` across every live|filler face of "
-         "the cliff; the in-situ Wright/Roquet branch reads the filler's I1' donor T/S instead "
+         "the cliff; the in-situ Wright/Roquet branch reads the filler's donor-layer T/S instead "
          "(FV-MOM6 Pass C, 2026-10-04) and the PPM reconstruction halves it.  The BBL glue "
          "absorbs most of it (old defaults: CFL panic).  Fix: the donor concentration in the "
          "linear EOS (or in the layer-mean PGF), an answer change of its own.",
@@ -428,7 +428,7 @@ ROWS = [
          "Sibling mechanism to `zlike_cliff_linear_eos_filler_rho` above, but not confined to "
          "the open-step z-like families: the linear EOS gives ANY near-vanished shelf-side "
          "layer the reference density (`eos_linear_impl`: h <= H_VANISHED -> rho_0) instead of "
-         "reading the filler's I1' donor T/S the way the in-situ Wright/Roquet branches do, and "
+         "reading the filler's donor-layer T/S the way the in-situ Wright/Roquet branches do, and "
          "the layer-mean PGF reads that `rho_layer` across the live|filler face of the cliff's "
          "10 m shelf even on `zstar_sigma` and `lagrangian`, which carry no open-step filler "
          "stack of their own. Geometry-specific (the closed-basin twin of the minimised witness "

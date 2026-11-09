@@ -1,7 +1,7 @@
 !! Fox-Kemper mixed-layer-eddy restratification on `z_fixed` with
 !! partial-step CLOSED faces (`&vcoord_nml zfixed_closed_faces`).  Every
 !! case runs the production device kernels — `mle_compute_transports`
-!! (+ `continuity_tracer_step_split(mle=mle)` and the I1′ enforcement point
+!! (+ `continuity_tracer_step_split(mle=mle)`
 !! for the multi-step case) — over a hand-specified staircase whose layer
 !! thicknesses AND closed-face masks come from the SAME production builders
 !! a configured run uses (`ocean_vcoord_z_fixed_target_uniform` →
@@ -26,8 +26,7 @@
 !!  3. `restrat_front_staircase` — NSTEP MLE + continuity steps from a
 !!     vertically uniform ML front: the ML stratification increases from
 !!     exactly zero, no new T extrema, mass + T content conserved, filler
-!!     thickness unchanged, closed face-layers exactly zero every step, I1′
-!!     after every step.
+!!     thickness unchanged, closed face-layers exactly zero every step.
 !!  4. `flat_bed_knob_on_equals_off` — no closed face anywhere: the open
 !!     path is the full-column form BIT FOR BIT (`uhml`/`vhml` identical
 !!     with `use_closed_faces` on and off).
@@ -93,7 +92,7 @@ contains
       !!
       !! T: in the top MLD of NOMINAL depth a vertically uniform front,
       !! 12 + 3·[ip > 4] + 1.5·[jp > 2]; below it a stable profile colder
-      !! than any ML water.  Fillers take their donor's T (I1′).
+      !! than any ML water.  Fillers take their donor's T.
       type(hgrid_t), intent(out) :: grid
       type(ocean_metrics_t), intent(inout) :: metrics
       type(multilayer_state_t), intent(inout) :: ms

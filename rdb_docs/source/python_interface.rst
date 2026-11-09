@@ -47,9 +47,6 @@ One object does the work, and everything else describes it:
      - A window onto one state array — layer thickness, a velocity
        component, a surface flux. Knows its shape, its units and where it
        sits on the C-grid.
-   * - ``rdb.DerivedField``
-     - A field that is *computed* rather than stored: tracer concentration,
-       which the solver keeps as ``h*Tr``.
    * - ``rdb.DiagnosticField``
      - A read-only view onto the diagnostic manager's own output buffer, for
        a diagnostic that is registered on this run.
@@ -931,76 +928,21 @@ What is on the model
    * - ``temperature``, ``salinity``
      - ``(nx, ny, nz)``
      - yes
-     - Concentrations, degC and PSU. See `Concentration, not the raw store`_.
-   * - ``tracer(name)``
-     - ``(nx, ny, nz)``
-     - yes
-     - Any registered tracer, **by name** — never by index.
-   * - ``ssh``
-     - ``(nx, ny)`` list
-     - —
-     - Sea-surface height as ``sum_k h - b``, the same definition the
-       diagnostic manager uses. This is the one to prefer for "is the free
-       surface where I expect".
+     - Concentrations, degC and PSU. See `Tracers are concentrations
+--------------------------
 
-A field carries its own description:
-
-.. code-block:: python
-
-   >>> model.h
-   Field(h, (Center, Center, Center), shape=(8, 6, 3), unit='m', interior,
-         generation=10)
-   >>> model.u.location
-   (<Loc.FACE: 'Face'>, <Loc.CENTER: 'Center'>, <Loc.CENTER: 'Center'>)
-
-``Loc.FACE`` on the first axis is what makes ``u`` one wider than ``h`` in
-that direction. Staggering is an attribute rather than something the caller
-is expected to remember from the shape.
-
-Interior by default
--------------------
-
-``model.h.shape`` is the physical interior. The ghost-inclusive array is
-reachable under a name:
-
-.. code-block:: python
-
-   >>> model.grid_info
-   {'nx': 8, 'ny': 6, 'nz': 3, 'nghost': 3}
-   >>> model.h.shape
-   (8, 6, 3)
-   >>> model.h.with_halo.shape
-   (14, 12, 3)
-
-There is no vertical halo, so only the horizontal axes grow. Making the
-interior the default is what retires the ``[2:-2, 2:-2]`` idiom that
-ghost-inclusive arrays force on every caller — and, more to the point, the
-off-by-one that idiom produces when ``nghost`` turns out to be 3.
-
-Concentration, not the raw store
---------------------------------
-
-Tracers are stored as ``h*Tr``. ``model.temperature`` is degrees Celsius:
+Tracers are stored as concentration, so ``model.temperature`` is degrees
+Celsius and the view is zero-copy and writable:
 
 .. code-block:: python
 
    >>> T = model.temperature
    >>> T[0, 0, 0]                 # degC
    12.0
-   >>> T.hTr[0, 0, 0]             # m*degC, the raw store
-   799.9999999999999
 
-:class:`~rdb.DerivedField` is computed, not mapped, so it is copy-only: it
-has no contiguous buffer of its own, ``__array_interface__`` raises saying
-so, and ``.hTr`` is the zero-copy view of the underlying store.
-
-The division is guarded. Concentration is computed only where
-``h > 1.5e-4 m`` (the solver's own dynamic-vanish threshold) and is **NaN**
-elsewhere — not ``0.0``, because 0 degC and 0 PSU are both perfectly legal
-ocean values and zero would read a vanished layer as ice-point freshwater
-rather than as missing. On a vanishing-layer vertical coordinate, use
-``math.isnan`` (or ``np.nanmean``) rather than assuming every cell has a
-value.
+A vanished (filler) layer holds the last concentration it carried: it is
+finite, **not** NaN. Where a plot or an average must skip such layers, mask
+on ``model.h`` (the solver's dynamic-vanish threshold is ``1.5e-4 m``).
 
 Lazy synchronisation
 --------------------

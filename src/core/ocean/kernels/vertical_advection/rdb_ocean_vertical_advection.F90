@@ -186,7 +186,7 @@ contains
       !! One shared `h⁻ → h⁺` pair: `h_layer` is snapshotted into
       !! `this%h_pair_prev` (`h⁻`), updated by the vertical mass-flux
       !! divergence (`h⁺`), and then every tracer takes the pair.  The tracer
-      !! kernel reads only `h⁻` (content form), so the order is bit-identical
+      !! kernel reads only `h⁻` (it recomputes `h⁺` from the same fluxes), so the order is bit-identical
       !! to the old "tracers first, then h" one.
       !!
       !! Eulerian-z mode: the h update here exactly cancels the

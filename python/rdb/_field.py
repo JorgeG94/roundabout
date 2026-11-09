@@ -178,9 +178,8 @@ class Field:
         # strides (element units), since the view may be an interior crop
         # of a larger buffer. The base offset (ghost skip) must be added
         # here too -- forgetting it silently reads ghost cells instead of
-        # the interior (caught by test_derived_field_differs_from_raw_htr
-        # after a write: it read stale ghost data instead of the just-
-        # written interior value).
+        # the interior (a read after a write returned stale ghost data
+        # instead of the just-written interior value).
         full_strides = _elem_strides(full)
         out = []
         idx = [0] * len(shape)

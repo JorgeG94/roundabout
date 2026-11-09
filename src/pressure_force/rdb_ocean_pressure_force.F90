@@ -471,10 +471,10 @@ module rdb_ocean_pressure_force
          !! v-face ∫ dpa, shape (nx, ny+1, nz), units Pa·m.
       type(scratch_3d_buffer_t) :: conc_T
          !! Layer-mean temperature the in-situ PCM and reconstruction
-         !! kernels read, shape (nx, ny, nz): `hT/h` on a live layer, the
-         !! I1′ donor's on a vanished one (Pass C of both kernels).  Filled
-         !! once per call by a per-column pass, so no later pass divides by
-         !! a thickness or walks a column.  Unused by the `rho_layer` path.
+         !! kernels read, shape (nx, ny, nz): the stored `T` on a live layer, the
+         !! donor live layer's on a vanished one (Pass C of both kernels).
+         !! Filled once per call by a per-column pass, so no later pass walks
+         !! a column.  Unused by the `rho_layer` path.
       type(scratch_3d_buffer_t) :: conc_S
          !! Layer-mean salinity, as `conc_T`.
 
@@ -1670,17 +1670,13 @@ contains
       cons = eos%ts_convention == TS_CONS_ABS
 
       ! ---- Pass C (per column): the layer-mean T/S every pass reads ----
-      ! `hT/h` on a live layer and, on a vanished one, its I1′ DONOR's:
+      ! The stored `T` on a live layer and, on a vanished one, its DONOR's:
       ! the nearest live layer above it, or for a run of fillers reaching
       ! the top of the column the topmost live layer; 0 in a column with
-      ! no live layer.  The per-column form of `rdb_vl_column_conc`, read
-      ! off the donor so no near-zero thickness is ever a divisor.  MOM6
-      ! carries T/S as concentrations, so its vanished layers hold the
-      ! remapped value its `int_density_dz_*` reads; `c_live` is that value
-      ! here.  NOT the floored `hT/max(h, H_VANISHED)` this replaced: that
-      ! is `h/H_VANISHED` of the truth on a filler (2/3 at the default
-      ! `zstar_h_min = 1e-4 m`), harmless in the vertical `pa` stack where
-      ! it multiplies the filler's own thickness, but the cross-face Boole
+      ! no live layer.  The per-column form of `rdb_vl_column_conc`.  A
+      ! filler keeps its last concentration, which is only safe where it is
+      ! multiplied by the filler's OWN thickness (the vertical `pa` stack);
+      ! the cross-face Boole
       ! integral interpolates T/S over the INTERPOLATED -- live --
       ! thickness and the PLM/PPM stencil reads its neighbours, so at an
       ! OPEN z-like step (`zstar`, closed-faces-off `z_fixed`, a `z_fixed`
@@ -1690,7 +1686,7 @@ contains
       ! (`test_ocean_pgf_insitu :: open_step_filler_faces_*`).  One O(nz)
       ! sweep per column, the shape of Pass 1a: a per-cell donor walk made
       ! `ocean_pgf` 4x slower on the global 1-degree grid (long bed-filler
-      ! runs).  A live layer reads `hT/h` exactly as before (bit-identical
+      ! runs).  A live layer reads its own T exactly (bit-identical
       ! on a column without fillers).
       do concurrent(j=1:ny, i=1:nx) local(k, k_top_c, k_don_c)
          k_top_c = 0
@@ -1720,7 +1716,7 @@ contains
       ! means (k-1..k+1 for PLM, k-2..k+2 for PPM), so this is a 3-D
       ! `do concurrent`; the per-column form built seven NZ_STACK_MAX
       ! stacks per thread in device local memory.  The means are Pass C's
-      ! `conc_T`/`conc_S` (the I1′ donor's on a vanished layer).  Stencil
+      ! `conc_T`/`conc_S` (the donor's on a vanished layer).  Stencil
       ! indices outside the column are clamped into it; the boundary
       ! branches that would read them do not.  Done as its own pass so the
       ! quadrature passes below read clean edge arrays.
@@ -2292,17 +2288,13 @@ contains
       inv_rho0 = 1.0_wp/rho0
 
       ! ---- Pass C (per column): the layer-mean T/S every pass reads ----
-      ! `hT/h` on a live layer and, on a vanished one, its I1′ DONOR's:
+      ! The stored `T` on a live layer and, on a vanished one, its DONOR's:
       ! the nearest live layer above it, or for a run of fillers reaching
       ! the top of the column the topmost live layer; 0 in a column with
-      ! no live layer.  The per-column form of `rdb_vl_column_conc`, read
-      ! off the donor so no near-zero thickness is ever a divisor.  MOM6
-      ! carries T/S as concentrations, so its vanished layers hold the
-      ! remapped value its `int_density_dz_*` reads; `c_live` is that value
-      ! here.  NOT the floored `hT/max(h, H_VANISHED)` this replaced: that
-      ! is `h/H_VANISHED` of the truth on a filler (2/3 at the default
-      ! `zstar_h_min = 1e-4 m`), harmless in the vertical `pa` stack where
-      ! it multiplies the filler's own thickness, but the cross-face Boole
+      ! no live layer.  The per-column form of `rdb_vl_column_conc`.  A
+      ! filler keeps its last concentration, which is only safe where it is
+      ! multiplied by the filler's OWN thickness (the vertical `pa` stack);
+      ! the cross-face Boole
       ! integral interpolates T/S over the INTERPOLATED -- live --
       ! thickness and the PLM/PPM stencil reads its neighbours, so at an
       ! OPEN z-like step (`zstar`, closed-faces-off `z_fixed`, a `z_fixed`
@@ -2312,7 +2304,7 @@ contains
       ! (`test_ocean_pgf_insitu :: open_step_filler_faces_*`).  One O(nz)
       ! sweep per column, the shape of Pass 1a: a per-cell donor walk made
       ! `ocean_pgf` 4x slower on the global 1-degree grid (long bed-filler
-      ! runs).  A live layer reads `hT/h` exactly as before (bit-identical
+      ! runs).  A live layer reads its own T exactly (bit-identical
       ! on a column without fillers).
       do concurrent(j=1:ny, i=1:nx) local(k, k_top_c, k_don_c)
          k_top_c = 0

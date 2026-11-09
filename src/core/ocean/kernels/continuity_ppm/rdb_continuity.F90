@@ -2711,7 +2711,7 @@ contains
       end if
       ! One shared `h⁻ → h⁺` pair per direction: snapshot h⁻, let continuity
       ! write h⁺, THEN advect the tracers with that pair.  The tracer kernels
-      ! read only h⁻ (content form), so the order change is bit-identical.
+      ! read only h⁻ (they recompute h⁺ from the same fluxes), so the order change is bit-identical.
       if (do_adv) call drain_copy_3d(nx, ny, nz, ms%h_layer, this%h_pair_prev%data)
       if (h_min_use > 0.0_wp) then
          call continuity_apply_zonal(grid, metrics, ms, dt, h_min=h_min_use)
