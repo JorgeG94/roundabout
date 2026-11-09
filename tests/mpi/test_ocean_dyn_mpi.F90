@@ -1195,8 +1195,9 @@ contains
    !                                    stage tail, per RK2 stage)
    !   centre_3d = 3 * 2 * N_STEPS     (continuity mid-Lie-split: h + the
    !                                    2 registered tracers, per stage)
-   !   bt_group  = N_INNER * 2 * N_STEPS  (one grouped BT exchange per
-   !                                       fast-loop substep)
+   !   bt_group  = (N_INNER + 1) * 2 * N_STEPS  (one grouped BT exchange per
+   !                                       fast-loop substep, plus the exit
+   !                                       freshen of the time mean)
    !   bt_u_mid  = N_INNER * 2 * N_STEPS on a REAL decomposition (px > 1),
    !               0 single-rank (the mid-substep u exchange is gated on
    !               ocean_halo_is_decomposed())
@@ -1323,7 +1324,7 @@ contains
          end block
       else
          ! v1 path.
-         expect_btg = int(N_INNER*2*N_STEPS, int64)
+         expect_btg = int((N_INNER + 1)*2*N_STEPS, int64)
          expect_btu = 0_int64
          if (decomposed) expect_btu = int(N_INNER*2*N_STEPS, int64)
          expect_c2d = 0_int64
@@ -1334,14 +1335,14 @@ contains
          !   Per outer step per direction:
          !     ml_state:    3 calls/stage × 2 stages × 5 prims (h, ux, vy, S, T) = 30
          !     continuity:  1 call/stage  × 2 stages × 3 prims (h, S, T)         = 6
-         !     bt_group:    N_INNER/stage  × 2 stages × 3 prims (η, ubt, vbt)    = N_INNER*6
+         !     bt_group:    (N_INNER+1)/stage × 2 stages × 3 prims (η, ubt, vbt) = N_INNER*6 + 6
          !     bt_u_mid:    N_INNER/stage  × 2 stages × 1 prim  (ubt face_x)     = N_INNER*2
-         !   = (36 + N_INNER*8) × N_STEPS × n_x_dirs
+         !   = (42 + N_INNER*8) × N_STEPS × n_x_dirs
          block
             integer(int64) :: isends_per_step_per_dir, n_x_dirs
             n_x_dirs = 1_int64
             if (periodic .and. decomposed) n_x_dirs = 2_int64
-            isends_per_step_per_dir = 36_int64 + int(N_INNER, int64)*8_int64 &
+            isends_per_step_per_dir = 42_int64 + int(N_INNER, int64)*8_int64 &
                                       + pc_isends_per_step
             expect_msgs = isends_per_step_per_dir*int(N_STEPS, int64)*n_x_dirs
          end block
