@@ -273,7 +273,7 @@ contains
                h_old_col(k) = h_old(i, j, k)
                h_new_col(k) = h_new(i, j, k)
                if (h_old_col(k) > H_CONC_FLOOR) then
-                  c_old(k) = hTr(i, j, k)/h_old_col(k)
+                  c_old(k) = rdb_conc_of_raw(hTr(i, j, k), h_old_col(k))
                else
                   c_old(k) = 0.0_wp
                end if
@@ -399,5 +399,7 @@ contains
          end if
       end do
    end subroutine assign_h_layer
+
+#include "rdb_tracer_conc.inc"
 
 end module rdb_ocean_min_thickness

@@ -119,7 +119,7 @@ contains
       if (convert_sp) tgt = sr_from_sp(tgt_in)
       ! vanished-ok: surface concentration against a caller-supplied
       ! restoring floor, as the scalar restoring path does.
-      ds = tgt - hTr/max(h, h_min)
+      ds = tgt - rdb_conc_of_floor(hTr, h, h_min)
       ds = sign(min(abs(ds), max_delta), ds)
       f = coef*ds*w_open
       pw = w_open
@@ -287,7 +287,7 @@ contains
             f = f - shift*pw
          end if
          inc = inv_scale*f
-         hTr(i, j, kt) = hTr(i, j, kt) + inc
+         hTr(i, j, kt) = rdb_conc_add_source(hTr(i, j, kt), h_layer(i, j, kt), inc)
          budget(i, j, kt) = budget(i, j, kt) + inc
       end do
    end subroutine sss_deposit_impl
@@ -419,5 +419,7 @@ contains
                                inv_scale)
       end if
    end subroutine deposit_dispatch
+
+#include "rdb_tracer_conc.inc"
 
 end module rdb_ocean_sss_restore

@@ -69,7 +69,7 @@ contains
       do n = 1, nsteps
          call wrap_ghosts(hTr)
          !$acc update device(hTr)
-         call tracer_advect_zonal_one_impl(NX, NY, NZ, DT, iareaT, wet, h, hTr, &
+         call tracer_advect_zonal_one_impl(NX, NY, NZ, DT, iareaT, wet, h, h, hTr, &
                                            mfx, fxl, fxr, h3=h3)
          !$acc update self(hTr)
       end do
@@ -112,7 +112,7 @@ contains
             hTr(i, :, 1) = A + B*real(i, wp)
          end do
          !$acc enter data copyin(iareaT, wet, h, hTr, mfx) create(fxl, fxr)
-         call tracer_advect_zonal_one_impl(NX, NY, NZ, DT, iareaT, wet, h, hTr, &
+         call tracer_advect_zonal_one_impl(NX, NY, NZ, DT, iareaT, wet, h, h, hTr, &
                                            mfx, fxl, fxr, h3=.true.)
          !$acc update self(fxl)
          !$acc exit data delete(iareaT, wet, h, hTr, mfx, fxl, fxr)
@@ -143,7 +143,7 @@ contains
       hTr(IP, :, 1) = 1.0_wp
       mfx = CFL/DT
       !$acc enter data copyin(iareaT, wet, h, hTr, mfx) create(fxl, fxr)
-      call tracer_advect_zonal_one_impl(NX, NY, NZ, DT, iareaT, wet, h, hTr, &
+      call tracer_advect_zonal_one_impl(NX, NY, NZ, DT, iareaT, wet, h, h, hTr, &
                                         mfx, fxl, fxr, h3=.true.)
       !$acc update self(fxl)
       !$acc exit data delete(iareaT, wet, h, hTr, mfx, fxl, fxr)
@@ -156,7 +156,7 @@ contains
       fxl = 0.0_wp
       fxr = 0.0_wp
       !$acc enter data copyin(iareaT, wet, h, hTr, mfx) create(fxl, fxr)
-      call tracer_advect_zonal_one_impl(NX, NY, NZ, DT, iareaT, wet, h, hTr, &
+      call tracer_advect_zonal_one_impl(NX, NY, NZ, DT, iareaT, wet, h, h, hTr, &
                                         mfx, fxl, fxr, h3=.true.)
       !$acc update self(fxl)
       !$acc exit data delete(iareaT, wet, h, hTr, mfx, fxl, fxr)

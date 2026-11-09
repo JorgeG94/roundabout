@@ -30,7 +30,7 @@ module test_ocean_tracer_adv
    use rdb_continuity, only: continuity_t, &
                              continuity_compute_fluxes, &
                              continuity_apply_fluxes, &
-                             tracer_advect, &
+                             tracer_advect, continuity_save_h_pair, &
                              continuity_tracer_step_split
    use rdb_ocean_metrics, only: ocean_metrics_t
    use ocean_test_metrics, only: make_cartesian_metrics, destroy_cartesian_metrics
@@ -88,20 +88,22 @@ contains
 
    subroutine run_step(grid, metrics, ct, ms, dt)
       !! One coupled continuity + tracer step.
-      !!   compute_fluxes -> tracer_advect (uses h_old + mass_flux)
-      !!   -> continuity_apply (updates h)
+      !!   compute_fluxes -> save h- -> continuity_apply (writes h+)
+      !!   -> tracer_advect (h-, h+, mass_flux)
       !! Both updates consume the SAME mass_flux, which is the CWC
-      !! property.  Order between tracer_advect and continuity_apply
-      !! doesn't matter algebraically (tracer_advect reads h_old and
-      !! mass_flux, neither changes between the two applies).
+      !! property.
       type(hgrid_t), intent(in) :: grid
       type(ocean_metrics_t), intent(in) :: metrics
       type(continuity_t), intent(inout) :: ct
       type(multilayer_state_t), intent(inout) :: ms
       real(wp), intent(in) :: dt
       call continuity_compute_fluxes(grid, metrics, ct, ms)
-      call tracer_advect(grid, metrics, ct, ms, dt)
+      ! Explicit (h_before, h_after) pair: snapshot h-, let continuity write h+,
+      ! then advect.  The content kernel reads only h-, so the order is
+      ! bit-identical to advecting first.
+      call continuity_save_h_pair(ct, ms)
       call continuity_apply_fluxes(ms, dt)
+      call tracer_advect(grid, metrics, ct, ms, dt, ct%h_pair_prev%data, ms%h_layer)
    end subroutine run_step
 
    ! -----------------------------------------------------------------

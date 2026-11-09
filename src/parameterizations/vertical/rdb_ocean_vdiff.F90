@@ -323,6 +323,7 @@ module rdb_ocean_vdiff
 contains
 
 #include "rdb_vanished_layer.inc"
+#include "rdb_tracer_conc.inc"
 
    subroutine ocean_vdiff_init(this, grid, nz_ml)
       class(ocean_vdiff_t), intent(inout) :: this
@@ -1382,7 +1383,7 @@ contains
          ! FK × windowed advect).  For h ≫ H_VANISHED (sigma / double_gyre)
          ! h̃ = h exactly ⇒ bit-identical.
          do k = 1, nz
-            rhs(i, j, k) = hTr(i, j, k)/max(h_layer(i, j, k), H_VANISHED)
+            rhs(i, j, k) = rdb_conc_of_floor(hTr(i, j, k), h_layer(i, j, k), H_VANISHED)
          end do
 
          ! ---- Thomas RHS forward sweep against the stored pivots ----
@@ -1402,13 +1403,13 @@ contains
          ! for one branch — see the remap fix).
          if (present(budget)) then
             do k = 1, nz
-               hTr_new = rhs(i, j, k)*max(h_layer(i, j, k), H_VANISHED)
+               hTr_new = rdb_content_of_floor(rhs(i, j, k), h_layer(i, j, k), H_VANISHED)
                budget(i, j, k) = budget(i, j, k) + (hTr_new - hTr(i, j, k))
                hTr(i, j, k) = hTr_new
             end do
          else
             do k = 1, nz
-               hTr(i, j, k) = rhs(i, j, k)*max(h_layer(i, j, k), H_VANISHED)
+               hTr(i, j, k) = rdb_content_of_floor(rhs(i, j, k), h_layer(i, j, k), H_VANISHED)
             end do
          end if
       end do

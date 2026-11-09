@@ -68,6 +68,8 @@ WAIVER_LOOKBACK = 4  # the line itself plus three above it
 SANCTIONED = {
     # the rule itself
     "src/shared_module_utilities/rdb_vanished_layer.inc",
+    # the tracer-concentration accessor: its bodies ARE the divide
+    "src/shared_module_utilities/rdb_tracer_conc.inc",
     # the constant of record
     "src/core/rdb_constants.F90",
     # the coordinate: it MAKES the fillers, and owns the h_min contract

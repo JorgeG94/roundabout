@@ -100,7 +100,7 @@ contains
       integer :: i, j, k
 
       do concurrent(k=1:nz - 1, j=1:ny, i=1:nx)
-         hTr_age(i, j, k) = hTr_age(i, j, k) + dt*h_layer(i, j, k)
+         hTr_age(i, j, k) = rdb_conc_add_source(hTr_age(i, j, k), h_layer(i, j, k), dt*h_layer(i, j, k))
       end do
    end subroutine ocean_ideal_age_age_step
 
@@ -146,7 +146,7 @@ contains
       integer :: i, j
 
       do concurrent(j=1:ny, i=1:nx)
-         hTr_age(i, j, nz) = young_eff*h_layer(i, j, nz)
+         hTr_age(i, j, nz) = rdb_content_of(young_eff, h_layer(i, j, nz))
       end do
    end subroutine ocean_ideal_age_reset_step
 
@@ -173,5 +173,7 @@ contains
          young = young_val*exp(sfc_growth_rate*t)
       end if
    end function ocean_ideal_age_young_val
+
+#include "rdb_tracer_conc.inc"
 
 end module rdb_ocean_ideal_age

@@ -1097,13 +1097,11 @@ contains
                      cav=cav)
 
       ! ---- RK2 average: u^(n+1) = 0.5 * (u^n + stage2 result) ----
-      call rk2_average(ms)
-      if (dyn%check_h_positive) then
-         call check_h_positive_or_die(grid, ms, "after rk2_average", 3, &
-                                      dyn%outer_step_count + 1, check_layers=.true.)
-      end if
-      ! Land-face velocity reset on the averaged state (C4 / R4b.2).
-      call mask_layer_velocities(grid, metrics, ms, bt_work=dyn%bt_work)
+      ! Tracers are averaged BEFORE `h_layer`: the tracer average is
+      ! ordered ahead of the thickness average so a mass-weighted form
+      ! (`h0·c0 + h1·c1` over `h0 + h1`) can read the un-averaged
+      ! `h_layer0`/`h_layer` pair.  In content form it reads neither, so the
+      ! order is bit-identical.
       if (allocated(ms%tracers)) then
          do it = 1, size(ms%tracers)
             call rk2_average_field_3d(ms%tracers(it)%hTr0, ms%tracers(it)%hTr, &
@@ -1112,6 +1110,13 @@ contains
                                       size(ms%tracers(it)%hTr, 3))
          end do
       end if
+      call rk2_average(ms)
+      if (dyn%check_h_positive) then
+         call check_h_positive_or_die(grid, ms, "after rk2_average", 3, &
+                                      dyn%outer_step_count + 1, check_layers=.true.)
+      end if
+      ! Land-face velocity reset on the averaged state (C4 / R4b.2).
+      call mask_layer_velocities(grid, metrics, ms, bt_work=dyn%bt_work)
 
       ! Velocity housekeeping (E7): advective-CFL truncation then the
       ! absolute maxvel cap.  Both no-op when their knob <= 0.
@@ -3512,6 +3517,15 @@ contains
          ! step (SPEC §1 fact 1, §5 trap 4 — averaging FB stages
          ! annihilates the internal wave, |R| = 0.089 at θ = 1.35).
       else
+         ! Tracers first, then h (see the unsplit twin above).
+         if (allocated(ms%tracers)) then
+            do it = 1, size(ms%tracers)
+               call rk2_average_field_3d(ms%tracers(it)%hTr0, ms%tracers(it)%hTr, &
+                                         size(ms%tracers(it)%hTr, 1), &
+                                         size(ms%tracers(it)%hTr, 2), &
+                                         size(ms%tracers(it)%hTr, 3))
+            end do
+         end if
          call rk2_average(ms)
          if (dyn%check_h_positive) then
             call check_h_positive_or_die(grid, ms, "after rk2_average", 3, &
@@ -3526,14 +3540,6 @@ contains
                call reset_vanished_layer_velocities(ms, &
                                                     isopycnal_vanish_tol(dyn%angstrom_h, pd_floor=ct%positive_definite))
             end if
-         end if
-         if (allocated(ms%tracers)) then
-            do it = 1, size(ms%tracers)
-               call rk2_average_field_3d(ms%tracers(it)%hTr0, ms%tracers(it)%hTr, &
-                                         size(ms%tracers(it)%hTr, 1), &
-                                         size(ms%tracers(it)%hTr, 2), &
-                                         size(ms%tracers(it)%hTr, 3))
-            end do
          end if
       end if
       call probe_dS(grid, ms, "after rk2_average", 3, dyn%outer_step_count + 1)

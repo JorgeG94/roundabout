@@ -393,14 +393,14 @@ contains
                u_c = 0.0_wp
                v_c = 0.0_wp
             end if
-            sst = hTr_T(ii, jj, nz)/(h_layer(ii, jj, nz) + H_DIV_EPS)
+            sst = rdb_conc_of_eps(hTr_T(ii, jj, nz), h_layer(ii, jj, nz), H_DIV_EPS)
             ! Bulk formulae and longwave emission take a POTENTIAL
             ! temperature; the model T is CT under cons_abs.  The heat
             ! content of the precipitation below keeps the model T
             ! (ocean-frame enthalpy with c_p).
             sst_f = sst
             if (cons_abs) then
-               sst_f = pt_from_ct(hTr_S(ii, jj, nz)/(h_layer(ii, jj, nz) + H_DIV_EPS), sst)
+               sst_f = pt_from_ct(rdb_conc_of_eps(hTr_S(ii, jj, nz), h_layer(ii, jj, nz), H_DIV_EPS), sst)
             end if
             call bulk_flux_column(u_g, v_g, u_c, v_c, tas(ii, jj), huss(ii, jj), psl(ii, jj), sst_f, &
                                   z_wind, z_ta, n_iter, &
@@ -468,5 +468,7 @@ contains
          tau_y(i, ny + 1) = tauy_c(i, ny)
       end do
    end subroutine bulk_forcing_stress_face_impl
+
+#include "rdb_tracer_conc.inc"
 
 end module rdb_ocean_bulk_forcing
