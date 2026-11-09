@@ -32,6 +32,7 @@ module test_ocean_ktop_consumers
                                      SEAWATER_CP
    use rdb_ocean_cavity_flux, only: cavity_far_field_impl
    use rdb_ocean_top_drag, only: top_drag_tendencies_impl, TDRAG_LINEAR
+   use rdb_ocean_vmix, only: ocean_vmix_t, vmix_apply_nonlocal_tendencies
    implicit none
    private
 
@@ -66,7 +67,10 @@ contains
                   new_unittest("top_drag_fold_rate_is_on_the_live_row", test_fold_row), &
                   new_unittest("vanished_top_layer_refuses_the_deposit", test_refuse_vanished), &
                   new_unittest("fully_dry_column_refuses_and_books_nothing", test_refuse_dry_column), &
-                  new_unittest("sw_lump_and_deposit_hit_the_same_layer", test_sw_same_layer) &
+                  new_unittest("sw_lump_and_deposit_hit_the_same_layer", test_sw_same_layer), &
+                  new_unittest("kpp_nonlocal_conserves_vanished_bed", test_nonlocal_vanished_bed), &
+                  new_unittest("kpp_nonlocal_conserves_vanished_interior", test_nonlocal_vanished_interior), &
+                  new_unittest("kpp_nonlocal_conserves_top_fillers", test_nonlocal_top_fillers) &
                   ]
    end subroutine collect_ocean_ktop_consumers_tests
 
@@ -161,6 +165,87 @@ contains
       !$acc exit data delete(ms, sf)
       call sf%destroy()
    end subroutine apply_flux_sw
+
+   subroutine apply_nonlocal(grid, ms)
+      !! One KPP non-local step through the production kernel with an
+      !! analytical flux profile `F(k) = -A·G(σ)`, `G(σ) = σ(1-σ)²`,
+      !! `σ = (nz+1-k)/nz` the normalised depth of interface `k` (the
+      !! Large et al. 1994 shape: zero at the surface `k = nz+1` and at
+      !! the bed `k = 1`, non-zero at EVERY interior interface, including
+      !! those next to a vanished layer).  `gamma_s` gets the same shape
+      !! scaled for salinity.
+      type(hgrid_t), intent(in) :: grid
+      type(multilayer_state_t), intent(inout) :: ms
+      type(ocean_vmix_t) :: vmix
+      real(wp), parameter :: A_T = 4.0e-5_wp, A_S = 1.0e-6_wp
+      real(wp) :: sigma
+      integer :: k, nz
+
+      nz = ms%nz_ml
+      call vmix%init(grid, nz_ml=nz)
+      vmix%gamma_t = 0.0_wp
+      vmix%gamma_s = 0.0_wp
+      do k = 2, nz
+         sigma = real(nz + 1 - k, wp)/real(nz, wp)
+         vmix%gamma_t(:, :, k) = -A_T*sigma*(1.0_wp - sigma)**2
+         vmix%gamma_s(:, :, k) = A_S*sigma*(1.0_wp - sigma)**2
+      end do
+
+      !$acc enter data copyin(ms, vmix)
+      call ms%enter_data()
+      call vmix%enter_data()
+      call vmix_apply_nonlocal_tendencies(grid, vmix, ms, DT_STEP)
+      associate (hT => ms%tracers(ms%idx_temperature)%c, hS => ms%tracers(ms%idx_salinity)%c)
+         !$acc update self(hT, hS)
+      end associate
+      call vmix%exit_data()
+      call ms%exit_data()
+      !$acc exit data delete(ms, vmix)
+      call vmix%destroy()
+   end subroutine apply_nonlocal
+
+   subroutine check_nonlocal_conserves(error, ms, grid, kvan, label)
+      !! Surface cooling deposit + KPP non-local step on a column whose
+      !! layers `kvan(:)` are vanished (stale sentinel concentrations):
+      !! the column `Σ h·c` changes by EXACTLY the booked surface source
+      !! (the non-local term is an internal redistribution and books
+      !! nothing), and every vanished layer keeps its concentration.
+      type(error_type), allocatable, intent(out) :: error
+      type(multilayer_state_t), intent(inout) :: ms
+      type(hgrid_t), intent(in) :: grid
+      integer, intent(in) :: kvan(:)
+      character(len=*), intent(in) :: label
+      real(wp), parameter :: STALE_T = 7.25_wp, STALE_S = 30.5_wp
+      real(wp) :: t0s, t1s, s0s, s1s, scale_t, scale_s
+      integer :: n
+
+      do n = 1, size(kvan)
+         ms%h_layer(:, :, kvan(n)) = H_FILL
+         ms%tracers(ms%idx_temperature)%c(:, :, kvan(n)) = STALE_T
+         ms%tracers(ms%idx_salinity)%c(:, :, kvan(n)) = STALE_S
+      end do
+      t0s = sum(ms%h_layer*ms%tracers(ms%idx_temperature)%c)
+      s0s = sum(ms%h_layer*ms%tracers(ms%idx_salinity)%c)
+      call apply_flux(grid, ms, -300.0_wp, 2.0e-5_wp)
+      call apply_nonlocal(grid, ms)
+      t1s = sum(ms%h_layer*ms%tracers(ms%idx_temperature)%c)
+      s1s = sum(ms%h_layer*ms%tracers(ms%idx_salinity)%c)
+      scale_t = sum(abs(ms%h_layer*ms%tracers(ms%idx_temperature)%c))
+      scale_s = sum(abs(ms%h_layer*ms%tracers(ms%idx_salinity)%c))
+
+      call check(error, abs((t1s - t0s) - sum(ms%heat_budget_surface)) <= 1.0e-14_wp*scale_t, &
+                 label//": heat delta total = booked surface source")
+      if (allocated(error)) return
+      call check(error, abs((s1s - s0s) - sum(ms%salt_budget_surface)) <= 1.0e-14_wp*scale_s, &
+                 label//": salt delta total = booked surface source")
+      if (allocated(error)) return
+      do n = 1, size(kvan)
+         call check(error, all(ms%tracers(ms%idx_temperature)%c(:, :, kvan(n)) == STALE_T) .and. &
+                    all(ms%tracers(ms%idx_salinity)%c(:, :, kvan(n)) == STALE_S), &
+                    label//": a vanished layer keeps its concentration")
+         if (allocated(error)) return
+      end do
+   end subroutine check_nonlocal_conserves
 
    ! ------------------------------------------------------------------
    ! Cases
@@ -424,6 +509,43 @@ contains
                  "live top layer moves by a sane amount; the fillers stay untouched")
       call ms%destroy()
    end subroutine test_sw_same_layer
+
+   subroutine test_nonlocal_vanished_bed(error)
+      !! KPP non-local transport over a vanished BED layer (a z* bed
+      !! filler): before the interface closure the divergence share of
+      !! the bed layer was refused and the column leaked heat each step.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+
+      call build_state(ms, grid, NZ_S, 0)
+      call check_nonlocal_conserves(error, ms, grid, [1], "vanished bed")
+      call ms%destroy()
+   end subroutine test_nonlocal_vanished_bed
+
+   subroutine test_nonlocal_vanished_interior(error)
+      !! Same, with a vanished INTERIOR layer (both its interfaces close)
+      !! and a vanished surface layer (`k_top = nz`, dynamically emptied).
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+
+      call build_state(ms, grid, NZ_S, 0)
+      call check_nonlocal_conserves(error, ms, grid, [4, NZ_S], "vanished interior + top")
+      call ms%destroy()
+   end subroutine test_nonlocal_vanished_interior
+
+   subroutine test_nonlocal_top_fillers(error)
+      !! Same, under `NFILL` inert top fillers (`z_fixed` beneath a shelf,
+      !! `k_top = NZ_Z - NFILL`) plus a vanished bed layer.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+
+      call build_state(ms, grid, NZ_Z, NFILL)
+      call check_nonlocal_conserves(error, ms, grid, [1, NZ_Z - 2, NZ_Z - 1, NZ_Z], "top fillers")
+      call ms%destroy()
+   end subroutine test_nonlocal_top_fillers
 
    subroutine test_top_drag_spindown(error)
       !! LINEAR top drag, layer-only mode, under full ice cover: the

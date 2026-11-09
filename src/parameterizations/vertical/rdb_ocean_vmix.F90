@@ -1569,28 +1569,44 @@ contains
    end function kpp_sw_method_is_implemented
 
    pure subroutine vmix_apply_nonlocal_tendencies(grid, this, ms, dt)
-      !! Apply the KPP non-local (counter-gradient) tracer tendency
-      !! computed by `vmix_apply_kpp_overlay`.  Updates
-      !! `hT`, `hS` from the divergence of `gamma_t` / `gamma_s` at
-      !! interfaces:
+      !! Apply the KPP non-local (counter-gradient) tracer transport
+      !! (Large, McWilliams & Doney 1994, eq. 20) computed by
+      !! `vmix_apply_kpp_overlay`, in FLUX form.  `gamma_t` / `gamma_s`
+      !! hold the kinematic non-local flux at each interface
+      !! (interface `k+1` sits above layer `k`, interface `k` below — the
+      !! ROMS-style k=1-bed convention), and each layer takes the flux
+      !! divergence:
       !!
-      !!   hT(k) += dt · (γ_T(k+1) - γ_T(k))
+      !!   h(k)·Δc(k) = dt · (F(k+1) - F(k))
       !!
-      !! (interface k+1 sits above layer k, interface k below — the
-      !! ROMS-style k=1-bed convention).  γ at the bed (k=1) and
-      !! free surface (k=nz+1) is identically zero, so the surface
-      !! and bed layers see only the lower / upper neighbour's γ.
+      !! **Column conservation.**  The term is an internal redistribution:
+      !! the shape function `G(σ) = σ(1-σ)²` vanishes at the surface and at
+      !! the boundary-layer base, so `gamma` is identically zero at the bed
+      !! (`k = 1`) and the free surface (`k = nz+1`) and nothing crosses the
+      !! column boundary (nothing is booked in a surface budget).  The sum
+      !! `Σ_k h·Δc` telescopes to zero only if EVERY layer takes its share.
+      !! A layer at or below `H_VANISHED` refuses a deposit
+      !! (`rdb_conc_add_source`), so an open interface next to it would
+      !! drop that share and leak the tracer (a heat residual ~1e-8 of the
+      !! column per step on z*/z_fixed columns with vanished bed or top
+      !! fillers).  Therefore `F(k)` is CLOSED (zero) at any interface
+      !! adjacent to a vanished layer — the same criterion that closes a
+      !! lateral face in `hdiff` — so a vanished layer receives exactly
+      !! zero and the live layers' divergence telescopes to zero exactly.
+      !! On a column with no vanished layer the arithmetic is unchanged
+      !! (bit-identical).
       !!
-      !! No-op when γ is all zero (stabilizing flux or KPP
-      !! disabled).  Touches only the layers with index_salinity /
-      !! index_temperature in the tracer registry — extra tracers
-      !! are diffusive only under KPP.
+      !! No-op when γ is all zero (stabilizing flux or KPP disabled).
+      !! Touches temperature, salinity and the pseudo-salt mirror (which
+      !! takes salinity's `gamma_s`); other passive tracers are diffusive
+      !! only under KPP.
       type(hgrid_t), intent(in) :: grid
       type(ocean_vmix_t), intent(in) :: this
       type(multilayer_state_t), intent(inout) :: ms
       real(wp), intent(in) :: dt
 
       integer :: i, j, k, nx, ny, nz, it_T, it_S, it_ps
+      real(wp) :: f_up, f_dn
 
       nx = grid%nx_total
       ny = grid%ny_total
@@ -1600,27 +1616,68 @@ contains
       it_ps = ms%idx_pseudo_salt
 
       if (it_T > 0) then
-         do concurrent(k=1:nz, j=1:ny, i=1:nx)
+         do concurrent(k=1:nz, j=1:ny, i=1:nx) local(f_up, f_dn)
+            f_up = 0.0_wp
+            f_dn = 0.0_wp
+            if (k < nz) f_up = nonlocal_face_flux(this%gamma_t(i, j, k + 1), &
+                                                  ms%h_layer(i, j, k), ms%h_layer(i, j, k + 1))
+            if (k > 1) f_dn = nonlocal_face_flux(this%gamma_t(i, j, k), &
+                                                 ms%h_layer(i, j, k - 1), ms%h_layer(i, j, k))
             ms%tracers(it_T)%c(i, j, k) = rdb_conc_add_source(ms%tracers(it_T)%c(i, j, k), ms%h_layer(i, j, k), &
-                                                              dt*(this%gamma_t(i, j, k + 1) - this%gamma_t(i, j, k)))
+                                                              dt*(f_up - f_dn))
          end do
       end if
       if (it_S > 0) then
-         do concurrent(k=1:nz, j=1:ny, i=1:nx)
+         do concurrent(k=1:nz, j=1:ny, i=1:nx) local(f_up, f_dn)
+            f_up = 0.0_wp
+            f_dn = 0.0_wp
+            if (k < nz) f_up = nonlocal_face_flux(this%gamma_s(i, j, k + 1), &
+                                                  ms%h_layer(i, j, k), ms%h_layer(i, j, k + 1))
+            if (k > 1) f_dn = nonlocal_face_flux(this%gamma_s(i, j, k), &
+                                                 ms%h_layer(i, j, k - 1), ms%h_layer(i, j, k))
             ms%tracers(it_S)%c(i, j, k) = rdb_conc_add_source(ms%tracers(it_S)%c(i, j, k), ms%h_layer(i, j, k), &
-                                                              dt*(this%gamma_s(i, j, k + 1) - this%gamma_s(i, j, k)))
+                                                              dt*(f_up - f_dn))
          end do
       end if
-      ! Pseudo-salt mirror: identical gamma_s expression, identical dt
-      ! (§5.4.2) — `it_ps` is a HOST scalar hoisted above, exactly like
-      ! `it_T`/`it_S`, so this is legal inside `do concurrent`.
+      ! Pseudo-salt mirror: identical gamma_s expression, identical dt and
+      ! identical face closure (§5.4.2) — `it_ps` is a HOST scalar hoisted
+      ! above, exactly like `it_T`/`it_S`, so this is legal inside
+      ! `do concurrent`.
       if (it_ps > 0) then
-         do concurrent(k=1:nz, j=1:ny, i=1:nx)
+         do concurrent(k=1:nz, j=1:ny, i=1:nx) local(f_up, f_dn)
+            f_up = 0.0_wp
+            f_dn = 0.0_wp
+            if (k < nz) f_up = nonlocal_face_flux(this%gamma_s(i, j, k + 1), &
+                                                  ms%h_layer(i, j, k), ms%h_layer(i, j, k + 1))
+            if (k > 1) f_dn = nonlocal_face_flux(this%gamma_s(i, j, k), &
+                                                 ms%h_layer(i, j, k - 1), ms%h_layer(i, j, k))
             ms%tracers(it_ps)%c(i, j, k) = rdb_conc_add_source(ms%tracers(it_ps)%c(i, j, k), ms%h_layer(i, j, k), &
-                                                               dt*(this%gamma_s(i, j, k + 1) - this%gamma_s(i, j, k)))
+                                                               dt*(f_up - f_dn))
          end do
       end if
    end subroutine vmix_apply_nonlocal_tendencies
+
+   pure function nonlocal_face_flux(gamma, h_below, h_above) result(flux)
+      !$acc routine seq
+      !! The KPP non-local flux carried by one interior interface: `gamma`
+      !! when BOTH adjacent layers are live (`h > H_VANISHED`), zero
+      !! otherwise.  A vanished layer refuses deposits
+      !! (`rdb_conc_add_source`), so an interface open onto it would drop
+      !! that layer's share of the divergence and break column
+      !! conservation; closing it keeps `Σ h·Δc = 0` exactly.
+      real(wp), intent(in) :: gamma
+         !! Non-local flux at the interface (tracer units · m/s).
+      real(wp), intent(in) :: h_below
+         !! Thickness (m) of the layer below the interface.
+      real(wp), intent(in) :: h_above
+         !! Thickness (m) of the layer above the interface.
+      real(wp) :: flux
+      if (h_below > H_VANISHED .and. h_above > H_VANISHED) then
+         flux = gamma
+      else
+         flux = 0.0_wp
+      end if
+   end function nonlocal_face_flux
 
    pure subroutine vmix_add_kv_ml_invz2(grid, this, ms)
       !! Augment `this%kv` with an extra near-surface viscosity:
