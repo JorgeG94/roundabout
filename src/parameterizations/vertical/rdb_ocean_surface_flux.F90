@@ -1134,8 +1134,8 @@ contains
       !! Penetrating irradiance at downward depth `d`:
       !!   I(d) = I0 · [ R·exp(-d/zeta1) + (1-R)·exp(-d/zeta2) ]
       !! with `I0 = sw_pen_frac · Q_heat(i,j)`.  Per-layer absorbed SW =
-      !! `I(d_top) - I(d_bot)`; the bed (`k = k_bot`, the first LIVE layer
-      !! counting up — `1` off `z_fixed`) is treated as opaque
+      !! `I(d_top) - I(d_bot)`; the bed (the deepest live layer at or above
+      !! `k = k_bot`; vanished layers are transparent) is treated as opaque
       !! (`I_bot := 0`) so the column absorbs all of `I0` and energy is
       !! conserved exactly (Σ_k absorbed_k = I0).
       !!
@@ -1325,8 +1325,12 @@ contains
       !! Per-column two-band shortwave redistribution.  Explicit-shape
       !! dummies so NVHPC stdpar compiles device kernels against static
       !! bounds.  Difference form (`I(d_top) - I(d_bot)`) — no division
-      !! by `h`, so a vanishing layer (`h → 0 ⇒ d_top == d_bot`) absorbs
-      !! zero automatically with no guard.  The transmission `T(d)` is
+      !! by `h`.  A layer at or below `H_VANISHED` would refuse its share
+      !! (`rdb_conc_add_source`), so it is treated as TRANSPARENT: the
+      !! light it would have absorbed passes to the next live layer, and
+      !! the opaque-bed residual lands on the deepest LIVE layer — the
+      !! column absorbs exactly `I0` and the budget books exactly what was
+      !! deposited.  The transmission `T(d)` is
       !! the shared `sw_transmission` (same-module ⇒ inlined by NVHPC),
       !! so the deposition and the boundary-layer coupling cannot diverge.
       !!
@@ -1354,26 +1358,42 @@ contains
       real(wp), intent(in)    :: wet_mask(nx, ny)
       real(wp), intent(in)    :: sw_src(nx, ny)
       real(wp), intent(in)    :: inv_scale, sw_pen_frac, R, zeta1, zeta2
-      integer :: i, j, k
+      integer :: i, j, k, k_dep
       real(wp) :: i0col, d_top, d_bot, trans_top, trans_bot, absorbed, add
 
       do concurrent(j=1:ny, i=1:nx) local(i0col, d_top, d_bot, trans_top, &
-                                          trans_bot, absorbed, add, k)
+                                          trans_bot, absorbed, add, k, k_dep)
          i0col = sw_pen_frac*sw_src(i, j)*wet_mask(i, j)
+         ! Deepest LIVE layer takes the opaque-bed residual: `k_bot` is `1`
+         ! off `z_fixed` and can itself be vanished (z* bed fillers), and a
+         ! vanished layer refuses the deposit.  Vanished layers are
+         ! TRANSPARENT: they absorb nothing and the light passes to the next
+         ! live layer below (`trans_top` is carried), so the column still
+         ! absorbs exactly `I0`.  No vanished layer => bit-identical.
+         k_dep = k_bot(i, j)
+         do k = k_bot(i, j), nz
+            if (h_layer(i, j, k) > H_VANISHED) then
+               k_dep = k
+               exit
+            end if
+         end do
          d_top = 0.0_wp
-         do k = nz, k_bot(i, j), -1
+         trans_top = sw_transmission(d_top, R, zeta1, zeta2)
+         do k = nz, k_dep, -1
             d_bot = d_top + h_layer(i, j, k)
-            trans_top = sw_transmission(d_top, R, zeta1, zeta2)
-            if (k > k_bot(i, j)) then
+            if (k > k_dep) then
                trans_bot = sw_transmission(d_bot, R, zeta1, zeta2)
             else
                trans_bot = 0.0_wp   ! bed opaque: column absorbs all of I0
             end if
-            absorbed = i0col*(trans_top - trans_bot)
-            add = inv_scale*absorbed
-            if (k == k_top(i, j)) add = add - inv_scale*i0col   ! remove the surface lump
-            c(i, j, k) = rdb_conc_add_source(c(i, j, k), h_layer(i, j, k), add)
-            budget(i, j, k) = budget(i, j, k) + rdb_conc_accepted_source(h_layer(i, j, k), add)
+            if (h_layer(i, j, k) > H_VANISHED) then
+               absorbed = i0col*(trans_top - trans_bot)
+               add = inv_scale*absorbed
+               if (k == k_top(i, j)) add = add - inv_scale*i0col   ! remove the surface lump
+               c(i, j, k) = rdb_conc_add_source(c(i, j, k), h_layer(i, j, k), add)
+               budget(i, j, k) = budget(i, j, k) + rdb_conc_accepted_source(h_layer(i, j, k), add)
+               trans_top = trans_bot
+            end if
             d_top = d_bot
          end do
       end do
@@ -1411,26 +1431,42 @@ contains
       real(wp), intent(in)    :: cover_frac(nx, ny)
       real(wp), intent(in)    :: sw_src(nx, ny)
       real(wp), intent(in)    :: inv_scale, sw_pen_frac, R, zeta1, zeta2
-      integer :: i, j, k
+      integer :: i, j, k, k_dep
       real(wp) :: i0col, d_top, d_bot, trans_top, trans_bot, absorbed, add
 
       do concurrent(j=1:ny, i=1:nx) local(i0col, d_top, d_bot, trans_top, &
-                                          trans_bot, absorbed, add, k)
+                                          trans_bot, absorbed, add, k, k_dep)
          i0col = sw_pen_frac*sw_src(i, j)*wet_mask(i, j)*(1.0_wp - cover_frac(i, j))
+         ! Deepest LIVE layer takes the opaque-bed residual: `k_bot` is `1`
+         ! off `z_fixed` and can itself be vanished (z* bed fillers), and a
+         ! vanished layer refuses the deposit.  Vanished layers are
+         ! TRANSPARENT: they absorb nothing and the light passes to the next
+         ! live layer below (`trans_top` is carried), so the column still
+         ! absorbs exactly `I0`.  No vanished layer => bit-identical.
+         k_dep = k_bot(i, j)
+         do k = k_bot(i, j), nz
+            if (h_layer(i, j, k) > H_VANISHED) then
+               k_dep = k
+               exit
+            end if
+         end do
          d_top = 0.0_wp
-         do k = nz, k_bot(i, j), -1
+         trans_top = sw_transmission(d_top, R, zeta1, zeta2)
+         do k = nz, k_dep, -1
             d_bot = d_top + h_layer(i, j, k)
-            trans_top = sw_transmission(d_top, R, zeta1, zeta2)
-            if (k > k_bot(i, j)) then
+            if (k > k_dep) then
                trans_bot = sw_transmission(d_bot, R, zeta1, zeta2)
             else
                trans_bot = 0.0_wp   ! bed opaque: column absorbs all of I0
             end if
-            absorbed = i0col*(trans_top - trans_bot)
-            add = inv_scale*absorbed
-            if (k == k_top(i, j)) add = add - inv_scale*i0col   ! remove the surface lump
-            c(i, j, k) = rdb_conc_add_source(c(i, j, k), h_layer(i, j, k), add)
-            budget(i, j, k) = budget(i, j, k) + rdb_conc_accepted_source(h_layer(i, j, k), add)
+            if (h_layer(i, j, k) > H_VANISHED) then
+               absorbed = i0col*(trans_top - trans_bot)
+               add = inv_scale*absorbed
+               if (k == k_top(i, j)) add = add - inv_scale*i0col   ! remove the surface lump
+               c(i, j, k) = rdb_conc_add_source(c(i, j, k), h_layer(i, j, k), add)
+               budget(i, j, k) = budget(i, j, k) + rdb_conc_accepted_source(h_layer(i, j, k), add)
+               trans_top = trans_bot
+            end if
             d_top = d_bot
          end do
       end do
@@ -1458,26 +1494,42 @@ contains
       real(wp), intent(in)    :: inv_scale
       real(wp), intent(in)    :: frac(nb)
       real(wp), intent(in)    :: kappa(nx, ny, nb)
-      integer :: i, j, k
+      integer :: i, j, k, k_dep
       real(wp) :: i0col, d_top, d_bot, trans_top, trans_bot, absorbed, add
 
       do concurrent(j=1:ny, i=1:nx) local(i0col, d_top, d_bot, trans_top, &
-                                          trans_bot, absorbed, add, k)
+                                          trans_bot, absorbed, add, k, k_dep)
          i0col = sw_src(i, j)*wet_mask(i, j)
+         ! Deepest LIVE layer takes the opaque-bed residual: `k_bot` is `1`
+         ! off `z_fixed` and can itself be vanished (z* bed fillers), and a
+         ! vanished layer refuses the deposit.  Vanished layers are
+         ! TRANSPARENT: they absorb nothing and the light passes to the next
+         ! live layer below (`trans_top` is carried), so the column still
+         ! absorbs exactly `I0`.  No vanished layer => bit-identical.
+         k_dep = k_bot(i, j)
+         do k = k_bot(i, j), nz
+            if (h_layer(i, j, k) > H_VANISHED) then
+               k_dep = k
+               exit
+            end if
+         end do
          d_top = 0.0_wp
-         do k = nz, k_bot(i, j), -1
+         trans_top = sw_transmission_nb(d_top, i, j, nx, ny, nb, kappa, frac)
+         do k = nz, k_dep, -1
             d_bot = d_top + h_layer(i, j, k)
-            trans_top = sw_transmission_nb(d_top, i, j, nx, ny, nb, kappa, frac)
-            if (k > k_bot(i, j)) then
+            if (k > k_dep) then
                trans_bot = sw_transmission_nb(d_bot, i, j, nx, ny, nb, kappa, frac)
             else
                trans_bot = 0.0_wp   ! bed opaque: column absorbs all of I0
             end if
-            absorbed = i0col*(trans_top - trans_bot)
-            add = inv_scale*absorbed
-            if (k == k_top(i, j)) add = add - inv_scale*i0col   ! remove the surface lump
-            c(i, j, k) = rdb_conc_add_source(c(i, j, k), h_layer(i, j, k), add)
-            budget(i, j, k) = budget(i, j, k) + rdb_conc_accepted_source(h_layer(i, j, k), add)
+            if (h_layer(i, j, k) > H_VANISHED) then
+               absorbed = i0col*(trans_top - trans_bot)
+               add = inv_scale*absorbed
+               if (k == k_top(i, j)) add = add - inv_scale*i0col   ! remove the surface lump
+               c(i, j, k) = rdb_conc_add_source(c(i, j, k), h_layer(i, j, k), add)
+               budget(i, j, k) = budget(i, j, k) + rdb_conc_accepted_source(h_layer(i, j, k), add)
+               trans_top = trans_bot
+            end if
             d_top = d_bot
          end do
       end do
@@ -1503,26 +1555,42 @@ contains
       real(wp), intent(in)    :: inv_scale
       real(wp), intent(in)    :: frac(nb)
       real(wp), intent(in)    :: kappa(nx, ny, nb)
-      integer :: i, j, k
+      integer :: i, j, k, k_dep
       real(wp) :: i0col, d_top, d_bot, trans_top, trans_bot, absorbed, add
 
       do concurrent(j=1:ny, i=1:nx) local(i0col, d_top, d_bot, trans_top, &
-                                          trans_bot, absorbed, add, k)
+                                          trans_bot, absorbed, add, k, k_dep)
          i0col = sw_src(i, j)*wet_mask(i, j)*(1.0_wp - cover_frac(i, j))
+         ! Deepest LIVE layer takes the opaque-bed residual: `k_bot` is `1`
+         ! off `z_fixed` and can itself be vanished (z* bed fillers), and a
+         ! vanished layer refuses the deposit.  Vanished layers are
+         ! TRANSPARENT: they absorb nothing and the light passes to the next
+         ! live layer below (`trans_top` is carried), so the column still
+         ! absorbs exactly `I0`.  No vanished layer => bit-identical.
+         k_dep = k_bot(i, j)
+         do k = k_bot(i, j), nz
+            if (h_layer(i, j, k) > H_VANISHED) then
+               k_dep = k
+               exit
+            end if
+         end do
          d_top = 0.0_wp
-         do k = nz, k_bot(i, j), -1
+         trans_top = sw_transmission_nb(d_top, i, j, nx, ny, nb, kappa, frac)
+         do k = nz, k_dep, -1
             d_bot = d_top + h_layer(i, j, k)
-            trans_top = sw_transmission_nb(d_top, i, j, nx, ny, nb, kappa, frac)
-            if (k > k_bot(i, j)) then
+            if (k > k_dep) then
                trans_bot = sw_transmission_nb(d_bot, i, j, nx, ny, nb, kappa, frac)
             else
-               trans_bot = 0.0_wp
+               trans_bot = 0.0_wp   ! bed opaque: column absorbs all of I0
             end if
-            absorbed = i0col*(trans_top - trans_bot)
-            add = inv_scale*absorbed
-            if (k == k_top(i, j)) add = add - inv_scale*i0col   ! remove the surface lump
-            c(i, j, k) = rdb_conc_add_source(c(i, j, k), h_layer(i, j, k), add)
-            budget(i, j, k) = budget(i, j, k) + rdb_conc_accepted_source(h_layer(i, j, k), add)
+            if (h_layer(i, j, k) > H_VANISHED) then
+               absorbed = i0col*(trans_top - trans_bot)
+               add = inv_scale*absorbed
+               if (k == k_top(i, j)) add = add - inv_scale*i0col   ! remove the surface lump
+               c(i, j, k) = rdb_conc_add_source(c(i, j, k), h_layer(i, j, k), add)
+               budget(i, j, k) = budget(i, j, k) + rdb_conc_accepted_source(h_layer(i, j, k), add)
+               trans_top = trans_bot
+            end if
             d_top = d_bot
          end do
       end do

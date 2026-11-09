@@ -68,6 +68,8 @@ contains
                   new_unittest("vanished_top_layer_refuses_the_deposit", test_refuse_vanished), &
                   new_unittest("fully_dry_column_refuses_and_books_nothing", test_refuse_dry_column), &
                   new_unittest("sw_lump_and_deposit_hit_the_same_layer", test_sw_same_layer), &
+                  new_unittest("sw_bed_residual_skips_a_vanished_bed", test_sw_vanished_bed), &
+                  new_unittest("sw_passes_through_a_vanished_interior_layer", test_sw_vanished_interior), &
                   new_unittest("kpp_nonlocal_conserves_vanished_bed", test_nonlocal_vanished_bed), &
                   new_unittest("kpp_nonlocal_conserves_vanished_interior", test_nonlocal_vanished_interior), &
                   new_unittest("kpp_nonlocal_conserves_top_fillers", test_nonlocal_top_fillers) &
@@ -546,6 +548,72 @@ contains
       call check_nonlocal_conserves(error, ms, grid, [1, NZ_Z - 2, NZ_Z - 1, NZ_Z], "top fillers")
       call ms%destroy()
    end subroutine test_nonlocal_top_fillers
+
+   subroutine check_sw_absorbs_all(error, ms, grid, kvan, label)
+      !! Surface deposit + two-band SW on a column with vanished layers
+      !! `kvan(:)`: the column absorbs the FULL net flux (booked source =
+      !! `Q·dt/(ρ0·cp)` per wet column, nothing lost to a refused share),
+      !! the total changes by exactly the booked source and every vanished
+      !! layer keeps its concentration.
+      type(error_type), allocatable, intent(out) :: error
+      type(multilayer_state_t), intent(inout) :: ms
+      type(hgrid_t), intent(in) :: grid
+      integer, intent(in) :: kvan(:)
+      character(len=*), intent(in) :: label
+      real(wp), parameter :: STALE_T = 7.25_wp, Q = 100.0_wp
+      real(wp) :: t0s, t1s, scale_t, expect
+      integer :: n
+
+      do n = 1, size(kvan)
+         ms%h_layer(:, :, kvan(n)) = H_FILL
+         ms%tracers(ms%idx_temperature)%c(:, :, kvan(n)) = STALE_T
+      end do
+      t0s = sum(ms%h_layer*ms%tracers(ms%idx_temperature)%c)
+      call apply_flux_sw(grid, ms, Q)
+      t1s = sum(ms%h_layer*ms%tracers(ms%idx_temperature)%c)
+      scale_t = sum(abs(ms%h_layer*ms%tracers(ms%idx_temperature)%c))
+      expect = Q*DT_STEP/(RHO0*SEAWATER_CP)*ms%wet_mask(2, 2)
+
+      call check(error, abs(sum(ms%heat_budget_surface(2, 2, :)) - expect) <= 1.0e-13_wp*expect, &
+                 label//": the column absorbs the whole net flux")
+      if (allocated(error)) return
+      call check(error, abs((t1s - t0s) - sum(ms%heat_budget_surface)) <= 1.0e-14_wp*scale_t, &
+                 label//": heat delta total = booked surface source")
+      if (allocated(error)) return
+      do n = 1, size(kvan)
+         call check(error, all(ms%tracers(ms%idx_temperature)%c(:, :, kvan(n)) == STALE_T), &
+                    label//": a vanished layer keeps its concentration")
+         if (allocated(error)) return
+      end do
+   end subroutine check_sw_absorbs_all
+
+   subroutine test_sw_vanished_bed(error)
+      !! `k_bot = 1` off `z_fixed` even when the bed layer is a vanished z*
+      !! filler.  The opaque-bed residual (the light reaching the bed,
+      !! about a quarter of `I0` in this 14 m column) must land on the
+      !! deepest LIVE layer instead of being refused by the vanished one.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+
+      call build_state(ms, grid, NZ_S, 0)
+      ms%h_layer(:, :, 2:NZ_S) = 2.0_wp   ! shallow: plenty of light reaches the bed
+      call check_sw_absorbs_all(error, ms, grid, [1], "SW vanished bed")
+      call ms%destroy()
+   end subroutine test_sw_vanished_bed
+
+   subroutine test_sw_vanished_interior(error)
+      !! A vanished interior layer is transparent: the light it would have
+      !! absorbed passes to the live layer below.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+
+      call build_state(ms, grid, NZ_S, 0)
+      ms%h_layer(:, :, :) = 0.5_wp
+      call check_sw_absorbs_all(error, ms, grid, [1, 3, NZ_S - 1], "SW vanished interior")
+      call ms%destroy()
+   end subroutine test_sw_vanished_interior
 
    subroutine test_top_drag_spindown(error)
       !! LINEAR top drag, layer-only mode, under full ice cover: the
