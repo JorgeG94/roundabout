@@ -51,7 +51,7 @@ module rdb_ocean_sss_restore
    !! mapped by `ms` / `sf` / `metrics`.
    use, intrinsic :: iso_fortran_env, only: int64, real64
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
-   use rdb_constants, only: H_DIV_EPS, H_VANISHED, wp
+   use rdb_constants, only: H_DIV_EPS, H_VANISHED, NZ_STACK_MAX, wp
    use rdb_grid, only: hgrid_t
    use rdb_ocean_metrics, only: ocean_metrics_t
    use rdb_multilayer_state, only: multilayer_state_t
@@ -184,7 +184,7 @@ contains
       !$acc&         present(c, h_layer, tgt, wet, cover, areaT, k_top)
       do j = ng + 1, ny - ng
          do i = ng + 1, nx - ng
-            kt = k_top(i, j)
+            kt = rdb_vl_first_live(nx, ny, nz, h_layer, i, j, k_top(i, j))
             ow = wet(i, j)
             if (use_cover) ow = ow*(1.0_wp - cover(i, j))
             call sss_cell_flux(c(i, j, kt), h_layer(i, j, kt), tgt(i, j), ow, &
@@ -235,7 +235,7 @@ contains
       !$acc&         present(c, h_layer, tgt, wet, cover, k_top)
       do j = ng + 1, ny - ng
          do i = ng + 1, nx - ng
-            kt = k_top(i, j)
+            kt = rdb_vl_first_live(nx, ny, nz, h_layer, i, j, k_top(i, j))
             ow = wet(i, j)
             if (use_cover) ow = ow*(1.0_wp - cover(i, j))
             call sss_cell_flux(c(i, j, kt), h_layer(i, j, kt), tgt(i, j), ow, &
@@ -272,7 +272,7 @@ contains
       integer :: i, j, kt
       real(wp) :: f, pw, ow, inc
       do concurrent(j=1:ny, i=1:nx) local(f, pw, ow, inc, kt)
-         kt = k_top(i, j)
+         kt = rdb_vl_first_live(nx, ny, nz, h_layer, i, j, k_top(i, j))
          ow = wet(i, j)
          if (use_cover) ow = ow*(1.0_wp - cover(i, j))
          call sss_cell_flux(c(i, j, kt), h_layer(i, j, kt), tgt(i, j), ow, &
@@ -420,6 +420,7 @@ contains
       end if
    end subroutine deposit_dispatch
 
+#include "rdb_vanished_layer.inc"
 #include "rdb_tracer_conc.inc"
 
 end module rdb_ocean_sss_restore

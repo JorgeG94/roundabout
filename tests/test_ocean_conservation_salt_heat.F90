@@ -54,7 +54,8 @@ module test_ocean_conservation_salt_heat
    use rdb_ocean_metrics, only: ocean_metrics_t
    use ocean_test_metrics, only: make_cartesian_metrics, destroy_cartesian_metrics
    use rdb_ocean_surface_flux, only: ocean_surface_flux_t, &
-                                     ocean_surface_flux_apply_tracers
+                                     ocean_surface_flux_apply_tracers, &
+                                     ocean_surface_flux_apply_sw_penetration
    use rdb_ocean_console_stats, only: ocean_budget_src, ocean_budget_out, &
                                       ocean_budget_is_active, ocean_heat_src_sum
    use rdb_ocean_geothermal, only: ocean_geothermal_t, &
@@ -92,7 +93,9 @@ contains
                   new_unittest("windowed_drain_with_surface_flux", &
                                test_windowed_drain_with_surface_flux), &
                   new_unittest("windowed_drain_pred_corr_budget", &
-                               test_windowed_drain_pc_budget) &
+                               test_windowed_drain_pc_budget), &
+                  new_unittest("surface_flux_first_live_layer", &
+                               test_surface_flux_first_live) &
                   ]
    end subroutine collect_ocean_conservation_salt_heat_tests
 
@@ -1702,5 +1705,98 @@ contains
       out_heat = ocean_budget_out(area_sum(ms%heat_budget_horiz_adv, nx, ny, area_w), &
                                   area_sum(ms%heat_budget_hdiff, nx, ny, area_w), stage_weight)
    end subroutine window_totals
+
+   subroutine test_surface_flux_first_live(error)
+      !! A surface layer that has collapsed at run time (`h(nz) = 0`, not
+      !! the configure-time `k_top`) must not eat the surface flux.  The
+      !! heat, salt and shortwave deposits all land on the FIRST LIVE layer
+      !! below it, the budgets book the full flux, and the column content
+      !! `sum_k h_k c_k` changes by exactly `flux * dt / (rho0 [cp])`.  The
+      !! stale filler carries T = -40 / S = 77 so a deposit that leaked into
+      !! (or read from) it is unmistakable.  Without the fix the deposit is
+      !! refused by `rdb_conc_add_source` and booked as 0.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      type(ocean_surface_flux_t) :: sf
+      real(wp), parameter :: H0 = 50.0_wp
+      real(wp), parameter :: DT = 600.0_wp
+      real(wp), parameter :: Q_HEAT = 200.0_wp
+      real(wp), parameter :: Q_SALT = 1.0e-4_wp
+      real(wp), parameter :: T_FILL = -40.0_wp, S_FILL = 77.0_wp
+      ! Round-off floor of h*(c_new - c_old) on a ~H0*35 content.
+      real(wp), parameter :: TOLC = 1.0e-13_wp*H0*35.0_wp
+      integer :: i, j, k, nx, ny
+      real(wp) :: heat_exp, salt_exp, dcol_h, dcol_s, bud_h, bud_s, t_before(NZ), s_before(NZ)
+
+      checks: block
+         call make_grid(grid, 4, 4, 5000.0_wp, 5000.0_wp)
+         nx = grid%nx_total
+         ny = grid%ny_total
+         ms%nz_ml = NZ
+         call ms%init(grid)
+         call sf%init(grid)
+         ms%h_layer = H0
+         ms%h_layer(:, :, NZ) = 0.0_wp                   ! collapsed top layer
+         ms%tracers(ms%idx_temperature)%c = 15.0_wp
+         ms%tracers(ms%idx_salinity)%c = 35.0_wp
+         ms%tracers(ms%idx_temperature)%c(:, :, NZ) = T_FILL
+         ms%tracers(ms%idx_salinity)%c(:, :, NZ) = S_FILL
+         call sf%set_surface_flux_const(Q_HEAT, Q_SALT)
+         call sf%set_sw_penetration(0.5_wp, 0.58_wp, 0.35_wp, 23.0_wp)
+         i = NGHOST + 2
+         j = NGHOST + 2
+         t_before = ms%tracers(ms%idx_temperature)%c(i, j, :)
+         s_before = ms%tracers(ms%idx_salinity)%c(i, j, :)
+
+         !$acc enter data copyin(ms, sf)
+         call ms%enter_data()
+         call sf%enter_data()
+         call ocean_surface_flux_apply_tracers(grid, sf, ms, DT)
+         call ocean_surface_flux_apply_sw_penetration(grid, sf, ms, DT)
+         call pull_budgets(ms)
+         associate (cT => ms%tracers(ms%idx_temperature)%c, &
+                    cS => ms%tracers(ms%idx_salinity)%c)
+            !$acc update self(cT, cS)
+         end associate
+         call sf%exit_data()
+         call ms%exit_data()
+         !$acc exit data delete(ms, sf)
+
+         heat_exp = Q_HEAT*DT/(sf%rho0*sf%cp)
+         salt_exp = Q_SALT*DT/sf%rho0
+         dcol_h = 0.0_wp
+         dcol_s = 0.0_wp
+         do k = 1, NZ
+            dcol_h = dcol_h + ms%h_layer(i, j, k)*(ms%tracers(ms%idx_temperature)%c(i, j, k) - t_before(k))
+            dcol_s = dcol_s + ms%h_layer(i, j, k)*(ms%tracers(ms%idx_salinity)%c(i, j, k) - s_before(k))
+         end do
+         bud_h = sum(ms%heat_budget_surface(i, j, :))
+         bud_s = sum(ms%salt_budget_surface(i, j, :))
+
+         call check(error, abs(dcol_h - heat_exp) <= TOLC, &
+                    "column heat content must change by exactly Q*dt/(rho0 cp)")
+         if (allocated(error)) exit checks
+         call check(error, abs(dcol_s - salt_exp) <= TOLC, &
+                    "column salt content must change by exactly Qs*dt/rho0")
+         if (allocated(error)) exit checks
+         call check(error, abs(bud_h - heat_exp) <= TOLC, &
+                    "heat surface budget must book the full flux")
+         if (allocated(error)) exit checks
+         call check(error, abs(bud_s - salt_exp) <= TOLC, &
+                    "salt surface budget must book the full flux")
+         if (allocated(error)) exit checks
+         ! The first live layer (nz-1) took the surface deposit; the
+         ! collapsed filler was left alone.
+         call check(error, ms%tracers(ms%idx_salinity)%c(i, j, NZ) == S_FILL .and. &
+                    ms%tracers(ms%idx_temperature)%c(i, j, NZ) == T_FILL, &
+                    "the collapsed filler layer must be untouched")
+         if (allocated(error)) exit checks
+         call check(error, ms%salt_budget_surface(i, j, NZ - 1) > 0.0_wp, &
+                    "the salt deposit must be booked on the first live layer")
+      end block checks
+      call sf%destroy()
+      call ms%destroy()
+   end subroutine test_surface_flux_first_live
 
 end module test_ocean_conservation_salt_heat

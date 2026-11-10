@@ -156,7 +156,7 @@ All data-parallel loops use `do concurrent`. GPU offload is NVHPC `-stdpar=gpu` 
 
 ### Vertical Layer Convention (load-bearing)
 
-The layer stack is **bottom-up (ROMS-style)**: `k=1` is the bed, `k=nz` is the surface layer. Surface forcings land at `(:,:,nz)` (`k_top` under a `z_fixed` rigid top); bed forcings at `(:,:,1)` — precisely, at the first LIVE layer counting up, `multilayer_state_t%k_bot` (`≡ 1` off `z_fixed`). Any new layered kernel must follow this — PGF, rho_ref, per-layer drag, vcoord output, surface tracer fluxes, vertical advection/diffusion all assume it. Regression gates: `test_ocean_conservation_salt_heat`, `test_ocean_sw_penetration` (positive Q warms `k=nz` and preserves stratification), `test_ocean_vcoord*`.
+The layer stack is **bottom-up (ROMS-style)**: `k=1` is the bed, `k=nz` is the surface layer. Surface forcings land at `(:,:,nz)` (`k_top` under a `z_fixed` rigid top), and are read/deposited at the first LIVE layer at or below that (`rdb_vl_first_live`, scanned per step so a top layer that collapses at run time does not swallow the flux); bed forcings at `(:,:,1)` — precisely, at the first LIVE layer counting up, `multilayer_state_t%k_bot` (`≡ 1` off `z_fixed`). Any new layered kernel must follow this — PGF, rho_ref, per-layer drag, vcoord output, surface tracer fluxes, vertical advection/diffusion all assume it. Regression gates: `test_ocean_conservation_salt_heat`, `test_ocean_sw_penetration` (positive Q warms `k=nz` and preserves stratification), `test_ocean_vcoord*`.
 
 ### Ocean dyn-core (`sim_type='ocean'`, structured C-grid)
 

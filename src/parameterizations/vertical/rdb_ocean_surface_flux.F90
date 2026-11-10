@@ -113,7 +113,7 @@
 !!
 !! Which of these change real column MASS is in `docs/codebase/CONTRACTS.md`.
 module rdb_ocean_surface_flux
-   use rdb_constants, only: wp, SEAWATER_CP_DEFAULT, H_DIV_EPS, H_VANISHED
+   use rdb_constants, only: wp, SEAWATER_CP_DEFAULT, H_DIV_EPS, H_VANISHED, NZ_STACK_MAX
    use rdb_grid, only: hgrid_t
    use rdb_multilayer_state, only: multilayer_state_t
    use, intrinsic :: iso_fortran_env, only: int64
@@ -986,10 +986,11 @@ contains
       real(wp), intent(in) :: wet_mask(nx, ny)
       real(wp), intent(in) :: s_min
       integer, intent(in) :: k_top(nx, ny)
-      integer :: i, j
-      do concurrent(j=1:ny, i=1:nx)
-         if (wet_mask(i, j) > 0.5_wp .and. h_layer(i, j, k_top(i, j)) > H_DIV_EPS) then
-            c(i, j, k_top(i, j)) = max(c(i, j, k_top(i, j)), s_min)
+      integer :: i, j, kt
+      do concurrent(j=1:ny, i=1:nx) local(kt)
+         kt = rdb_vl_first_live(nx, ny, nz, h_layer, i, j, k_top(i, j))
+         if (wet_mask(i, j) > 0.5_wp .and. h_layer(i, j, kt) > H_DIV_EPS) then
+            c(i, j, kt) = max(c(i, j, kt), s_min)
          end if
       end do
    end subroutine bound_salinity_top_impl
@@ -1033,13 +1034,14 @@ contains
          !! every column on every coordinate but `z_fixed` under a rigid
          !! top), so this reads the same memory as the literal `nz` it
          !! replaced and the arithmetic is bit-identical.
-      integer :: i, j
+      integer :: i, j, kt
       real(wp) :: cell
-      do concurrent(j=1:ny, i=1:nx) local(cell)
+      do concurrent(j=1:ny, i=1:nx) local(cell, kt)
+         kt = rdb_vl_first_live(nx, ny, nz, h_layer, i, j, k_top(i, j))
          cell = inv_scale*Q_field(i, j)*wet_mask(i, j)
-         c(i, j, k_top(i, j)) = rdb_conc_add_source(c(i, j, k_top(i, j)), h_layer(i, j, k_top(i, j)), cell)
-         budget(i, j, k_top(i, j)) = budget(i, j, k_top(i, j)) + &
-                                     rdb_conc_accepted_source(h_layer(i, j, k_top(i, j)), cell)
+         c(i, j, kt) = rdb_conc_add_source(c(i, j, kt), h_layer(i, j, kt), cell)
+         budget(i, j, kt) = budget(i, j, kt) + &
+                            rdb_conc_accepted_source(h_layer(i, j, kt), cell)
       end do
    end subroutine apply_surface_src_2d_impl
 
@@ -1063,13 +1065,14 @@ contains
       real(wp), intent(in)    :: inv_scale
       integer, intent(in)    :: k_top(nx, ny)
          !! See `apply_surface_src_2d_impl`.
-      integer :: i, j
+      integer :: i, j, kt
       real(wp) :: cell
-      do concurrent(j=1:ny, i=1:nx) local(cell)
+      do concurrent(j=1:ny, i=1:nx) local(cell, kt)
+         kt = rdb_vl_first_live(nx, ny, nz, h_layer, i, j, k_top(i, j))
          cell = inv_scale*Q_field(i, j)*wet_mask(i, j)*wet_dyn(i, j)
-         c(i, j, k_top(i, j)) = rdb_conc_add_source(c(i, j, k_top(i, j)), h_layer(i, j, k_top(i, j)), cell)
-         budget(i, j, k_top(i, j)) = budget(i, j, k_top(i, j)) + &
-                                     rdb_conc_accepted_source(h_layer(i, j, k_top(i, j)), cell)
+         c(i, j, kt) = rdb_conc_add_source(c(i, j, kt), h_layer(i, j, kt), cell)
+         budget(i, j, kt) = budget(i, j, kt) + &
+                            rdb_conc_accepted_source(h_layer(i, j, kt), cell)
       end do
    end subroutine apply_surface_src_2d_dyn_impl
 
@@ -1094,11 +1097,12 @@ contains
          !! See `apply_surface_src_2d_impl`.  The SAME index salinity
          !! used, so the pseudo-salt increment stays bit-identical to
          !! salinity's and the deviation keeps measuring transport.
-      integer :: i, j
+      integer :: i, j, kt
       real(wp) :: cell
-      do concurrent(j=1:ny, i=1:nx) local(cell)
+      do concurrent(j=1:ny, i=1:nx) local(cell, kt)
+         kt = rdb_vl_first_live(nx, ny, nz, h_layer, i, j, k_top(i, j))
          cell = inv_scale*Q_field(i, j)*wet_mask(i, j)
-         c(i, j, k_top(i, j)) = rdb_conc_add_source(c(i, j, k_top(i, j)), h_layer(i, j, k_top(i, j)), cell)
+         c(i, j, kt) = rdb_conc_add_source(c(i, j, kt), h_layer(i, j, kt), cell)
       end do
    end subroutine apply_surface_src_2d_nobudget_impl
 
@@ -1115,11 +1119,12 @@ contains
       real(wp), intent(in)    :: inv_scale
       integer, intent(in)    :: k_top(nx, ny)
          !! See `apply_surface_src_2d_impl`.
-      integer :: i, j
+      integer :: i, j, kt
       real(wp) :: cell
-      do concurrent(j=1:ny, i=1:nx) local(cell)
+      do concurrent(j=1:ny, i=1:nx) local(cell, kt)
+         kt = rdb_vl_first_live(nx, ny, nz, h_layer, i, j, k_top(i, j))
          cell = inv_scale*Q_field(i, j)*wet_mask(i, j)*wet_dyn(i, j)
-         c(i, j, k_top(i, j)) = rdb_conc_add_source(c(i, j, k_top(i, j)), h_layer(i, j, k_top(i, j)), cell)
+         c(i, j, kt) = rdb_conc_add_source(c(i, j, kt), h_layer(i, j, kt), cell)
       end do
    end subroutine apply_surface_src_2d_dyn_nobudget_impl
 
@@ -1357,11 +1362,12 @@ contains
       real(wp), intent(in)    :: wet_mask(nx, ny)
       real(wp), intent(in)    :: sw_src(nx, ny)
       real(wp), intent(in)    :: inv_scale, sw_pen_frac, R, zeta1, zeta2
-      integer :: i, j, k, k_dep
+      integer :: i, j, k, k_dep, kt
       real(wp) :: i0col, d_top, d_bot, trans_top, trans_bot, absorbed, add
 
       do concurrent(j=1:ny, i=1:nx) local(i0col, d_top, d_bot, trans_top, &
-                                          trans_bot, absorbed, add, k, k_dep)
+                                          trans_bot, absorbed, add, k, k_dep, kt)
+         kt = rdb_vl_first_live(nx, ny, nz, h_layer, i, j, k_top(i, j))
          i0col = sw_pen_frac*sw_src(i, j)*wet_mask(i, j)
          ! Deepest LIVE layer takes the opaque-bed residual: `k_bot` is `1`
          ! off `z_fixed` and can itself be vanished (z* bed fillers), and a
@@ -1388,7 +1394,7 @@ contains
             if (h_layer(i, j, k) > H_VANISHED) then
                absorbed = i0col*(trans_top - trans_bot)
                add = inv_scale*absorbed
-               if (k == k_top(i, j)) add = add - inv_scale*i0col   ! remove the surface lump
+               if (k == kt) add = add - inv_scale*i0col   ! remove the surface lump
                c(i, j, k) = rdb_conc_add_source(c(i, j, k), h_layer(i, j, k), add)
                budget(i, j, k) = budget(i, j, k) + rdb_conc_accepted_source(h_layer(i, j, k), add)
                trans_top = trans_bot
@@ -1430,11 +1436,12 @@ contains
       real(wp), intent(in)    :: cover_frac(nx, ny)
       real(wp), intent(in)    :: sw_src(nx, ny)
       real(wp), intent(in)    :: inv_scale, sw_pen_frac, R, zeta1, zeta2
-      integer :: i, j, k, k_dep
+      integer :: i, j, k, k_dep, kt
       real(wp) :: i0col, d_top, d_bot, trans_top, trans_bot, absorbed, add
 
       do concurrent(j=1:ny, i=1:nx) local(i0col, d_top, d_bot, trans_top, &
-                                          trans_bot, absorbed, add, k, k_dep)
+                                          trans_bot, absorbed, add, k, k_dep, kt)
+         kt = rdb_vl_first_live(nx, ny, nz, h_layer, i, j, k_top(i, j))
          i0col = sw_pen_frac*sw_src(i, j)*wet_mask(i, j)*(1.0_wp - cover_frac(i, j))
          ! Deepest LIVE layer takes the opaque-bed residual: `k_bot` is `1`
          ! off `z_fixed` and can itself be vanished (z* bed fillers), and a
@@ -1461,7 +1468,7 @@ contains
             if (h_layer(i, j, k) > H_VANISHED) then
                absorbed = i0col*(trans_top - trans_bot)
                add = inv_scale*absorbed
-               if (k == k_top(i, j)) add = add - inv_scale*i0col   ! remove the surface lump
+               if (k == kt) add = add - inv_scale*i0col   ! remove the surface lump
                c(i, j, k) = rdb_conc_add_source(c(i, j, k), h_layer(i, j, k), add)
                budget(i, j, k) = budget(i, j, k) + rdb_conc_accepted_source(h_layer(i, j, k), add)
                trans_top = trans_bot
@@ -1493,11 +1500,12 @@ contains
       real(wp), intent(in)    :: inv_scale
       real(wp), intent(in)    :: frac(nb)
       real(wp), intent(in)    :: kappa(nx, ny, nb)
-      integer :: i, j, k, k_dep
+      integer :: i, j, k, k_dep, kt
       real(wp) :: i0col, d_top, d_bot, trans_top, trans_bot, absorbed, add
 
       do concurrent(j=1:ny, i=1:nx) local(i0col, d_top, d_bot, trans_top, &
-                                          trans_bot, absorbed, add, k, k_dep)
+                                          trans_bot, absorbed, add, k, k_dep, kt)
+         kt = rdb_vl_first_live(nx, ny, nz, h_layer, i, j, k_top(i, j))
          i0col = sw_src(i, j)*wet_mask(i, j)
          ! Deepest LIVE layer takes the opaque-bed residual: `k_bot` is `1`
          ! off `z_fixed` and can itself be vanished (z* bed fillers), and a
@@ -1524,7 +1532,7 @@ contains
             if (h_layer(i, j, k) > H_VANISHED) then
                absorbed = i0col*(trans_top - trans_bot)
                add = inv_scale*absorbed
-               if (k == k_top(i, j)) add = add - inv_scale*i0col   ! remove the surface lump
+               if (k == kt) add = add - inv_scale*i0col   ! remove the surface lump
                c(i, j, k) = rdb_conc_add_source(c(i, j, k), h_layer(i, j, k), add)
                budget(i, j, k) = budget(i, j, k) + rdb_conc_accepted_source(h_layer(i, j, k), add)
                trans_top = trans_bot
@@ -1554,11 +1562,12 @@ contains
       real(wp), intent(in)    :: inv_scale
       real(wp), intent(in)    :: frac(nb)
       real(wp), intent(in)    :: kappa(nx, ny, nb)
-      integer :: i, j, k, k_dep
+      integer :: i, j, k, k_dep, kt
       real(wp) :: i0col, d_top, d_bot, trans_top, trans_bot, absorbed, add
 
       do concurrent(j=1:ny, i=1:nx) local(i0col, d_top, d_bot, trans_top, &
-                                          trans_bot, absorbed, add, k, k_dep)
+                                          trans_bot, absorbed, add, k, k_dep, kt)
+         kt = rdb_vl_first_live(nx, ny, nz, h_layer, i, j, k_top(i, j))
          i0col = sw_src(i, j)*wet_mask(i, j)*(1.0_wp - cover_frac(i, j))
          ! Deepest LIVE layer takes the opaque-bed residual: `k_bot` is `1`
          ! off `z_fixed` and can itself be vanished (z* bed fillers), and a
@@ -1585,7 +1594,7 @@ contains
             if (h_layer(i, j, k) > H_VANISHED) then
                absorbed = i0col*(trans_top - trans_bot)
                add = inv_scale*absorbed
-               if (k == k_top(i, j)) add = add - inv_scale*i0col   ! remove the surface lump
+               if (k == kt) add = add - inv_scale*i0col   ! remove the surface lump
                c(i, j, k) = rdb_conc_add_source(c(i, j, k), h_layer(i, j, k), add)
                budget(i, j, k) = budget(i, j, k) + rdb_conc_accepted_source(h_layer(i, j, k), add)
                trans_top = trans_bot
@@ -1685,7 +1694,7 @@ contains
                                                      ms%h_layer, ms%wet_mask, cover_frac, &
                                                      dt*sf%restore_piston_T, &
                                                      sf%restore_T_target, sf%h_min, &
-                                                     nz, nx, ny)
+                                                     ms%k_top, nz, nx, ny)
          end if
          if (idx_S > 0 .and. sf%has_restore_S) then
             call apply_surface_restore_2d_cover_impl(ms%tracers(idx_S)%c, &
@@ -1693,7 +1702,7 @@ contains
                                                      ms%h_layer, ms%wet_mask, cover_frac, &
                                                      dt*sf%restore_piston_S, &
                                                      sf%restore_S_target, sf%h_min, &
-                                                     nz, nx, ny)
+                                                     ms%k_top, nz, nx, ny)
          end if
          return
       end if
@@ -1708,7 +1717,7 @@ contains
                                             ms%h_layer, ms%wet_mask, &
                                             dt*sf%restore_piston_T, &
                                             sf%restore_T_target, sf%h_min, &
-                                            nz, nx, ny)
+                                            ms%k_top, nz, nx, ny)
       end if
       if (idx_S > 0 .and. sf%has_restore_S) then
          call apply_surface_restore_2d_impl(ms%tracers(idx_S)%c, &
@@ -1716,15 +1725,15 @@ contains
                                             ms%h_layer, ms%wet_mask, &
                                             dt*sf%restore_piston_S, &
                                             sf%restore_S_target, sf%h_min, &
-                                            nz, nx, ny)
+                                            ms%k_top, nz, nx, ny)
       end if
    end subroutine ocean_surface_restore_apply_tracers
 
    pure subroutine apply_surface_restore_2d_impl(c, budget, h_layer, &
                                                  wet_mask, dt_piston, tgt, &
-                                                 h_min, nz, nx, ny)
+                                                 h_min, k_top, nz, nx, ny)
       !! Stamp the per-step restoring increment `dt·p·(target - surf)·
-      !! wet_mask` onto the top layer (k = nz) of a tracer's c array
+      !! wet_mask` onto the first live layer from the top (`k_top`, normally `nz`) of a tracer's c array
       !! and mirror it into the matching budget contributor.
       !! Explicit-shape dummies so NVHPC stdpar compiles device kernels
       !! against static bounds.
@@ -1739,19 +1748,22 @@ contains
       real(wp), intent(in)    :: h_layer(nx, ny, nz)
       real(wp), intent(in)    :: wet_mask(nx, ny)
       real(wp), intent(in)    :: dt_piston, tgt, h_min
-      integer :: i, j
+      integer, intent(in)    :: k_top(nx, ny)
+         !! `ms%k_top`; the surface layer is the first LIVE one at or below it.
+      integer :: i, j, kt
       real(wp) :: surf, inc
-      do concurrent(j=1:ny, i=1:nx) local(surf, inc)
-         surf = c(i, j, nz)
+      do concurrent(j=1:ny, i=1:nx) local(surf, inc, kt)
+         kt = rdb_vl_first_live(nx, ny, nz, h_layer, i, j, k_top(i, j))
+         surf = c(i, j, kt)
          inc = dt_piston*(tgt - surf)*wet_mask(i, j)
-         c(i, j, nz) = rdb_conc_add_source(c(i, j, nz), h_layer(i, j, nz), inc)
-         budget(i, j, nz) = budget(i, j, nz) + rdb_conc_accepted_source(h_layer(i, j, nz), inc)
+         c(i, j, kt) = rdb_conc_add_source(c(i, j, kt), h_layer(i, j, kt), inc)
+         budget(i, j, kt) = budget(i, j, kt) + rdb_conc_accepted_source(h_layer(i, j, kt), inc)
       end do
    end subroutine apply_surface_restore_2d_impl
 
    pure subroutine apply_surface_restore_2d_cover_impl(c, budget, h_layer, &
                                                        wet_mask, cover_frac, dt_piston, &
-                                                       tgt, h_min, nz, nx, ny)
+                                                       tgt, h_min, k_top, nz, nx, ny)
       !! Ice-shelf-cover twin of `apply_surface_restore_2d_impl`: the
       !! open-water factor `1 - cover_frac` composes multiplicatively
       !! with `wet_mask`, so a covered column receives EXACTLY zero
@@ -1766,16 +1778,19 @@ contains
       real(wp), intent(in)    :: wet_mask(nx, ny)
       real(wp), intent(in)    :: cover_frac(nx, ny)
       real(wp), intent(in)    :: dt_piston, tgt, h_min
-      integer :: i, j
+      integer, intent(in)    :: k_top(nx, ny)
+         !! `ms%k_top`; the surface layer is the first LIVE one at or below it.
+      integer :: i, j, kt
       real(wp) :: surf, inc
-      do concurrent(j=1:ny, i=1:nx) local(surf, inc)
+      do concurrent(j=1:ny, i=1:nx) local(surf, inc, kt)
          ! surface restoring measures the surface concentration against a
          ! CALLER-supplied floor `h_min` (a restoring depth), not the
          ! vanish marker; zero would restore toward a fictitious fresh sea.
-         surf = c(i, j, nz)
+         kt = rdb_vl_first_live(nx, ny, nz, h_layer, i, j, k_top(i, j))
+         surf = c(i, j, kt)
          inc = dt_piston*(tgt - surf)*wet_mask(i, j)*(1.0_wp - cover_frac(i, j))
-         c(i, j, nz) = rdb_conc_add_source(c(i, j, nz), h_layer(i, j, nz), inc)
-         budget(i, j, nz) = budget(i, j, nz) + rdb_conc_accepted_source(h_layer(i, j, nz), inc)
+         c(i, j, kt) = rdb_conc_add_source(c(i, j, kt), h_layer(i, j, kt), inc)
+         budget(i, j, kt) = budget(i, j, kt) + rdb_conc_accepted_source(h_layer(i, j, kt), inc)
       end do
    end subroutine apply_surface_restore_2d_cover_impl
 
@@ -1947,7 +1962,7 @@ contains
             sf%heat_content_lrunoff, sf%heat_content_frunoff, sf%heat_content_seaice_melt, &
             sf%evap, sf%salt_flux, sf%salt_cavity, &
             ms%tracers(idx_T)%c, ms%h_layer, ms%wet_mask, cover_frac, &
-            sf%Q_heat_const, sf%Q_salt_const, sf%cp, sf%h_min, nz, nx, ny)
+            sf%Q_heat_const, sf%Q_salt_const, sf%cp, sf%h_min, ms%k_top, nz, nx, ny)
          sf%q_assembled = 1.0_wp
          return
       end if
@@ -1959,7 +1974,7 @@ contains
          sf%heat_content_lrunoff, sf%heat_content_frunoff, sf%heat_content_seaice_melt, &
          sf%evap, sf%salt_flux, sf%salt_cavity, &
          ms%tracers(idx_T)%c, ms%h_layer, ms%wet_mask, &
-         sf%Q_heat_const, sf%Q_salt_const, sf%cp, sf%h_min, nz, nx, ny)
+         sf%Q_heat_const, sf%Q_salt_const, sf%cp, sf%h_min, ms%k_top, nz, nx, ny)
       sf%q_assembled = 1.0_wp
    end subroutine ocean_surface_flux_assemble
 
@@ -1972,7 +1987,7 @@ contains
                                                 heat_content_frunoff, heat_content_seaice_melt, &
                                                 evap, salt_flux, salt_cavity, &
                                                 c_T, h_layer, wet_mask, &
-                                                Q_heat_const, Q_salt_const, cp, h_min, &
+                                                Q_heat_const, Q_salt_const, cp, h_min, k_top, &
                                                 nz, nx, ny)
       !! Flat `do concurrent` kernel — explicit-shape dummies, integer
       !! dims declared first (decl-order, ifx #8586).  See
@@ -1989,14 +2004,17 @@ contains
       real(wp), intent(in)    :: evap(nx, ny), salt_flux(nx, ny), salt_cavity(nx, ny)
       real(wp), intent(in)    :: c_T(nx, ny, nz), h_layer(nx, ny, nz), wet_mask(nx, ny)
       real(wp), intent(in)    :: Q_heat_const, Q_salt_const, cp, h_min
-      integer :: i, j
+      integer, intent(in)    :: k_top(nx, ny)
+         !! `ms%k_top`; SST is read at the first LIVE layer at or below it.
+      integer :: i, j, kt
       real(wp) :: sst, massin, massout
 
-      do concurrent(j=1:ny, i=1:nx) local(sst, massin, massout)
+      do concurrent(j=1:ny, i=1:nx) local(sst, massin, massout, kt)
          massin = heat_content_lprec(i, j) + heat_content_fprec(i, j) &
                   + heat_content_vprec(i, j) + heat_content_lrunoff(i, j) &
                   + heat_content_frunoff(i, j) + heat_content_seaice_melt(i, j)
-         sst = c_T(i, j, nz)
+         kt = rdb_vl_first_live(nx, ny, nz, h_layer, i, j, k_top(i, j))
+         sst = c_T(i, j, kt)
          massout = cp*sst*evap(i, j)
          heat_content_massin(i, j) = wet_mask(i, j)*massin
          heat_content_massout(i, j) = wet_mask(i, j)*massout
@@ -2019,7 +2037,7 @@ contains
                                                       heat_content_frunoff, heat_content_seaice_melt, &
                                                       evap, salt_flux, salt_cavity, &
                                                       c_T, h_layer, wet_mask, cover_frac, &
-                                                      Q_heat_const, Q_salt_const, cp, h_min, &
+                                                      Q_heat_const, Q_salt_const, cp, h_min, k_top, &
                                                       nz, nx, ny)
       !! Ice-shelf-cover twin of `ocean_surfflux_assemble_impl`: the
       !! open-water factor `open_f = 1 - cover_frac` multiplies the
@@ -2052,17 +2070,20 @@ contains
       real(wp), intent(in)    :: c_T(nx, ny, nz), h_layer(nx, ny, nz), wet_mask(nx, ny)
       real(wp), intent(in)    :: cover_frac(nx, ny)
       real(wp), intent(in)    :: Q_heat_const, Q_salt_const, cp, h_min
-      integer :: i, j
+      integer, intent(in)    :: k_top(nx, ny)
+         !! `ms%k_top`; SST is read at the first LIVE layer at or below it.
+      integer :: i, j, kt
       real(wp) :: sst, massin, massout, open_f
 
-      do concurrent(j=1:ny, i=1:nx) local(sst, massin, massout, open_f)
+      do concurrent(j=1:ny, i=1:nx) local(sst, massin, massout, open_f, kt)
          open_f = 1.0_wp - cover_frac(i, j)
          massin = open_f*(heat_content_lprec(i, j) + heat_content_fprec(i, j) &
                           + heat_content_vprec(i, j) + heat_content_lrunoff(i, j) &
                           + heat_content_frunoff(i, j) + heat_content_seaice_melt(i, j))
          ! same caller-supplied `h_min` floor — the SST carrying the
          ! evaporative heat content must stay a temperature.
-         sst = c_T(i, j, nz)
+         kt = rdb_vl_first_live(nx, ny, nz, h_layer, i, j, k_top(i, j))
+         sst = c_T(i, j, kt)
          massout = open_f*cp*sst*evap(i, j)
          heat_content_massin(i, j) = wet_mask(i, j)*massin
          heat_content_massout(i, j) = wet_mask(i, j)*massout
@@ -2075,6 +2096,7 @@ contains
       end do
    end subroutine ocean_surfflux_assemble_cover_impl
 
+#include "rdb_vanished_layer.inc"
 #include "rdb_tracer_conc.inc"
 
 end module rdb_ocean_surface_flux

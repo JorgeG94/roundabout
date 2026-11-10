@@ -58,7 +58,8 @@ contains
                   new_unittest("restore_S_exponential", test_relax_S), &
                   new_unittest("restore_budget_contributor", test_budget), &
                   new_unittest("restore_off_bit_identity", test_off), &
-                  new_unittest("restore_land_no_op", test_land) &
+                  new_unittest("restore_land_no_op", test_land), &
+                  new_unittest("restore_reads_first_live", test_first_live) &
                   ]
    end subroutine collect_ocean_restore_tests
 
@@ -309,5 +310,45 @@ contains
       end block checks
       call sf%destroy(); call eos%destroy(); call ms%destroy()
    end subroutine test_land
+
+   subroutine test_first_live(error)
+      !! The surface layer is the first LIVE one from the top.  With the
+      !! top layer collapsed (`h(nz) = 0`, stale T = -40) the restore must
+      !! read SST from layer `nz-1` (T0) and deposit there: the increment
+      !! is `dt*p*(T* - T0)`, booked in full on `nz-1`.  Reading the
+      !! filler's -40 would give a ~4x larger increment, and into a layer
+      !! that refuses it.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      type(eos_t) :: eos
+      type(ocean_surface_flux_t) :: sf
+      real(wp), parameter :: T0 = 10.0_wp, TSTAR = 20.0_wp, T_FILL = -40.0_wp
+      real(wp) :: inc, c_new
+      integer :: i, j
+      checks: block
+         call make_grid(grid)
+         call setup(grid, ms, eos, sf, T0, 35.0_wp)
+         ms%h_layer(:, :, NZ) = 0.0_wp
+         ms%tracers(ms%idx_temperature)%c(:, :, NZ) = T_FILL
+         call sf%set_restore(.true., .false., PISTON_T_DAY, 0.0_wp, TSTAR, 0.0_wp)
+         call run_restore(grid, sf, ms, 1)
+
+         i = grid%nx_total/2
+         j = grid%ny_total/2
+         inc = DT*(PISTON_T_DAY/86400.0_wp)*(TSTAR - T0)
+         c_new = ms%tracers(ms%idx_temperature)%c(i, j, NZ - 1)
+         call check(error, abs(H_LAYER*(c_new - T0) - inc) < 1.0e-12_wp*inc, &
+                    "restore must deposit dt*p*(T*-T_first_live) on the first live layer")
+         if (allocated(error)) exit checks
+         call check(error, abs(ms%heat_budget_surface(i, j, NZ - 1) - inc) < 1.0e-12_wp*inc, &
+                    "restore budget must book the full increment on the first live layer")
+         if (allocated(error)) exit checks
+         call check(error, ms%tracers(ms%idx_temperature)%c(i, j, NZ) == T_FILL .and. &
+                    ms%heat_budget_surface(i, j, NZ) == 0.0_wp, &
+                    "the collapsed filler layer must be untouched and unbooked")
+      end block checks
+      call sf%destroy(); call eos%destroy(); call ms%destroy()
+   end subroutine test_first_live
 
 end module test_ocean_restore

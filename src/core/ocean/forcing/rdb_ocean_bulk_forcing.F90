@@ -84,7 +84,7 @@ module rdb_ocean_bulk_forcing
    !! T_s"). No salt component is written (v1 bulk fluxes carry no
    !! virtual-salt term), so `has_salt` is left untouched.
    use, intrinsic :: iso_fortran_env, only: int64
-   use rdb_constants, only: H_VANISHED, wp, H_DIV_EPS
+   use rdb_constants, only: H_VANISHED, NZ_STACK_MAX, wp, H_DIV_EPS
    use rdb_grid, only: hgrid_t
    use rdb_config, only: config_t, ocean_atm_forcing_config_t
    use rdb_ocean_metrics, only: ocean_metrics_t
@@ -294,7 +294,7 @@ contains
                                   atm%uas, atm%vas, atm%tas, atm%huss, atm%psl, &
                                   atm%rlds, atm%rsds, atm%prra, atm%prsn, &
                                   ms%u_face_x_layer, ms%v_face_y_layer, &
-                                  ms%tracers(idx_T)%c, ms%tracers(idx_Sarg)%c, ms%h_layer, &
+                                  ms%tracers(idx_T)%c, ms%tracers(idx_Sarg)%c, ms%h_layer, ms%k_top, &
                                   cons_abs, this%open_water, &
                                   this%taux_c, this%tauy_c, &
                                   sf%q_sens, sf%q_lat, sf%evap, sf%q_sw, sf%q_lw, &
@@ -336,7 +336,7 @@ contains
                                           wind_relative, ocean_albedo, z_wind, z_ta, emissivity, &
                                           wet_T, angle_dx, uas, vas, tas, huss, psl, &
                                           rlds, rsds, prra, prsn, &
-                                          u_face_x_layer, v_face_y_layer, c_T, c_S, h_layer, &
+                                          u_face_x_layer, v_face_y_layer, c_T, c_S, h_layer, k_top, &
                                           cons_abs, open_water, &
                                           taux_c, tauy_c, q_sens, q_lat, evap, q_sw, q_lw, &
                                           lprec, fprec, p_surf_atm, &
@@ -355,6 +355,9 @@ contains
       real(wp), intent(in) :: rlds(nx, ny), rsds(nx, ny), prra(nx, ny), prsn(nx, ny)
       real(wp), intent(in) :: u_face_x_layer(nx + 1, ny, nz), v_face_y_layer(nx, ny + 1, nz)
       real(wp), intent(in) :: c_T(nx, ny, nz), c_S(nx, ny, nz), h_layer(nx, ny, nz)
+      integer, intent(in) :: k_top(nx, ny)
+         !! `ms%k_top`.  The surface layer (u, v, SST) is the first LIVE
+         !! layer at or below it (`rdb_vl_first_live`), not a literal `nz`.
       real(wp), intent(in) :: open_water(nx, ny)
       real(wp), intent(inout) :: taux_c(nx, ny), tauy_c(nx, ny)
       real(wp), intent(inout) :: q_sens(nx, ny), q_lat(nx, ny), evap(nx, ny)
@@ -371,15 +374,16 @@ contains
          !! Specific heat (J/kg/K) of the heat content of precipitation:
          !! `sf%cp` (`&ocean_eos_nml c_p`, default 3992).
 
-      integer :: i, j, ii, jj
+      integer :: i, j, ii, jj, kt
       real(wp) :: ow, cosA, sinA, u_g, v_g, u_c, v_c, sst, sst_f, sst_k, lw_up
       real(wp) :: taux, tauy, sens, lat, evp, cd, ch, ce, ustar
 
       do concurrent(j=1:nyp, i=1:nxp) &
-         local(ii, jj, ow, cosA, sinA, u_g, v_g, u_c, v_c, sst, sst_f, sst_k, lw_up, &
+         local(ii, jj, kt, ow, cosA, sinA, u_g, v_g, u_c, v_c, sst, sst_f, sst_k, lw_up, &
                taux, tauy, sens, lat, evp, cd, ch, ce, ustar)
          ii = ng + i
          jj = ng + j
+         kt = rdb_vl_first_live(nx, ny, nz, h_layer, ii, jj, k_top(ii, jj))
          if (wet_T(ii, jj) > 0.5_wp) then
             ow = open_water(ii, jj)
             cosA = cos(angle_dx(ii, jj))
@@ -387,20 +391,20 @@ contains
             u_g = cosA*uas(ii, jj) + sinA*vas(ii, jj)
             v_g = -sinA*uas(ii, jj) + cosA*vas(ii, jj)
             if (wind_relative) then
-               u_c = 0.5_wp*(u_face_x_layer(ii, jj, nz) + u_face_x_layer(ii + 1, jj, nz))
-               v_c = 0.5_wp*(v_face_y_layer(ii, jj, nz) + v_face_y_layer(ii, jj + 1, nz))
+               u_c = 0.5_wp*(u_face_x_layer(ii, jj, kt) + u_face_x_layer(ii + 1, jj, kt))
+               v_c = 0.5_wp*(v_face_y_layer(ii, jj, kt) + v_face_y_layer(ii, jj + 1, kt))
             else
                u_c = 0.0_wp
                v_c = 0.0_wp
             end if
-            sst = c_T(ii, jj, nz)
+            sst = c_T(ii, jj, kt)
             ! Bulk formulae and longwave emission take a POTENTIAL
             ! temperature; the model T is CT under cons_abs.  The heat
             ! content of the precipitation below keeps the model T
             ! (ocean-frame enthalpy with c_p).
             sst_f = sst
             if (cons_abs) then
-               sst_f = pt_from_ct(c_S(ii, jj, nz), sst)
+               sst_f = pt_from_ct(c_S(ii, jj, kt), sst)
             end if
             call bulk_flux_column(u_g, v_g, u_c, v_c, tas(ii, jj), huss(ii, jj), psl(ii, jj), sst_f, &
                                   z_wind, z_ta, n_iter, &
@@ -469,6 +473,7 @@ contains
       end do
    end subroutine bulk_forcing_stress_face_impl
 
+#include "rdb_vanished_layer.inc"
 #include "rdb_tracer_conc.inc"
 
 end module rdb_ocean_bulk_forcing
