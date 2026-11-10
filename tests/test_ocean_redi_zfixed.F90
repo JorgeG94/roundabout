@@ -53,6 +53,16 @@
 !!     in the model (coefficients at the start of the thermo step, the flux
 !!     after continuity).  Fails on the floored read `hTr/max(h, 1e-20)`:
 !!     measured hT = 2.4e18 in the drained cell and a live T of -3.0e16.
+!!  6. `filler_paired_flux_conserves` — Phase B on a hand-specified pairing
+!!     (open staircase, closed faces OFF).  Face A pairs a LIVE left layer
+!!     with a bed FILLER right layer (the `hEff ~ 2*h_filler` sublayer the
+!!     neutral search can form against a filler); face B pairs two live
+!!     layers (non-vacuity: it must move tracer).  A filler refuses deposits
+!!     (the tracer is stored as a concentration), so a flux paired with a
+!!     filler on EITHER end must be dropped on BOTH ends of the face, else the
+!!     live side exchanges tracer with nothing: `sum(h*c)` of T and S is
+!!     conserved to round-off and the live cells beside face A are untouched.
+!!     Fails on a guard that tests only one side of the face.
 module test_ocean_redi_zfixed
    use testdrive, only: new_unittest, unittest_type, error_type, check
    use rdb_constants, only: wp, H_VANISHED
@@ -103,7 +113,8 @@ contains
                   new_unittest("tilted_isopycnals_open_window", test_tilted_open_window), &
                   new_unittest("ice_draft_open_window", test_ice_draft), &
                   new_unittest("all_open_matches_full_column", test_all_open_bitwise), &
-                  new_unittest("open_steps_drained_cell_bounded", test_open_drained_cell) &
+                  new_unittest("open_steps_drained_cell_bounded", test_open_drained_cell), &
+                  new_unittest("filler_paired_flux_conserves", test_filler_paired_flux) &
                   ]
    end subroutine collect_ocean_redi_zfixed_tests
 
@@ -686,5 +697,99 @@ contains
       call rd%destroy()
       call ms%destroy()
    end subroutine test_open_drained_cell
+
+   ! ------------------------------------------------------------------
+   ! Case 6: a flux paired with a filler is dropped on both ends of the face
+   ! ------------------------------------------------------------------
+   subroutine test_filler_paired_flux(error)
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(ocean_metrics_t) :: metrics
+      type(multilayer_state_t) :: ms
+      type(ocean_redi_t) :: rd
+      type(eos_t) :: eos
+      real(wp), allocatable :: tgt(:, :, :), t_init(:, :, :)
+      integer :: i, j, k, ia, ja, ka, ib, jb, kb, s
+      real(wp) :: t0s, s0s, t1s, s1s, move_a, move_b
+      character(len=160) :: msg
+
+      call build_case(grid, metrics, ms, rd, eos, tgt, 0.0_wp, GX, GY, GZ, SX, SY, &
+                      .true., .false.)
+      checks: block
+         ! Face A: u-face (ia, ja) between cells ia-1 and ia; layer ka is live
+         ! on the left and a bed filler on the right.
+         ia = 0
+         do k = 1, NZ
+            do j = NG + 1, NG + NYP
+               do i = NG + 2, NG + NXP
+                  if (ia == 0 .and. tgt(i - 1, j, k) > H_VANISHED .and. &
+                      tgt(i, j, k) <= H_VANISHED) then
+                     ia = i; ja = j; ka = k
+                  end if
+               end do
+            end do
+         end do
+         call check(error, ia > 0, "the open staircase must carry a live|filler u-face")
+         if (allocated(error)) exit checks
+         ! Face B: a live|live u-face at the surface layer, a different row.
+         ib = NG + 2
+         jb = merge(NG + NYP, NG + 1, ja == NG + 1)
+         kb = NZ
+         call check(error, tgt(ib - 1, jb, kb) > H_VANISHED .and. tgt(ib, jb, kb) > H_VANISHED, &
+                    "face B must be live on both sides")
+         if (allocated(error)) exit checks
+         s = rd%nsurf
+         call check(error, s >= 2, "need at least two neutral surfaces")
+         if (allocated(error)) exit checks
+
+         t0s = phys_content(ms, ms%idx_temperature)
+         s0s = phys_content(ms, ms%idx_salinity)
+         allocate (t_init, source=ms%tracers(ms%idx_temperature)%c)
+
+         call map_in(ms, rd)
+         call redi_calc_coeffs(grid, metrics, eos, rd, ms)   ! kb/kt windows, sizes
+         !$acc update self(rd%uKoL, rd%uKoR, rd%uhEff, rd%uPoL, rd%uPoR)
+         !$acc update self(rd%vhEff)
+         ! Replace Phase A's pairing by the two hand-built sublayers (top-down
+         ! layer index = NZ + 1 - native layer; one sublayer inside one layer).
+         rd%uhEff = 0.0_wp
+         rd%vhEff = 0.0_wp
+         rd%uKoL(ia, ja, 1:2) = NZ + 1 - ka
+         rd%uKoR(ia, ja, 1:2) = NZ + 1 - ka
+         rd%uPoL(ia, ja, 1) = 0.0_wp; rd%uPoL(ia, ja, 2) = 1.0_wp
+         rd%uPoR(ia, ja, 1) = 0.0_wp; rd%uPoR(ia, ja, 2) = 1.0_wp
+         rd%uhEff(ia, ja, 1) = 2.0_wp*H_MIN
+         rd%uKoL(ib, jb, 1:2) = NZ + 1 - kb
+         rd%uKoR(ib, jb, 1:2) = NZ + 1 - kb
+         rd%uPoL(ib, jb, 1) = 0.0_wp; rd%uPoL(ib, jb, 2) = 1.0_wp
+         rd%uPoR(ib, jb, 1) = 0.0_wp; rd%uPoR(ib, jb, 2) = 1.0_wp
+         rd%uhEff(ib, jb, 1) = 1.0_wp
+         !$acc update device(rd%uKoL, rd%uKoR, rd%uhEff, rd%uPoL, rd%uPoR, rd%vhEff)
+         call redi_apply_flux(grid, metrics, rd, ms, DT)
+         call pull_back(ms, rd)
+         call map_out(ms, rd, metrics)
+
+         move_b = abs(ms%tracers(ms%idx_temperature)%c(ib, jb, kb) - &
+                      t_init(ib, jb, kb))
+         call check(error, move_b > 1.0e-6_wp, &
+                    "the live|live sublayer must move tracer (non-vacuity)")
+         if (allocated(error)) exit checks
+         move_a = abs(ms%tracers(ms%idx_temperature)%c(ia - 1, ja, ka) - &
+                      t_init(ia - 1, ja, ka))
+         t1s = phys_content(ms, ms%idx_temperature)
+         s1s = phys_content(ms, ms%idx_salinity)
+         write (msg, '(a,es10.3,a,es10.3,a,es10.3)') "rel dT-content ", &
+            abs(t1s - t0s)/abs(t0s), ", rel dS-content ", abs(s1s - s0s)/abs(s0s), &
+            ", live-side dT ", move_a
+         call check(error, abs(t1s - t0s) <= 1.0e-13_wp*abs(t0s) .and. &
+                    abs(s1s - s0s) <= 1.0e-13_wp*abs(s0s), &
+                    "a flux paired with a filler must not change T or S content: "//trim(msg))
+         if (allocated(error)) exit checks
+         call check(error, move_a == 0.0_wp, &
+                    "the live cell beside a filler pairing must be untouched: "//trim(msg))
+      end block checks
+      call rd%destroy()
+      call ms%destroy()
+   end subroutine test_filler_paired_flux
 
 end module test_ocean_redi_zfixed
