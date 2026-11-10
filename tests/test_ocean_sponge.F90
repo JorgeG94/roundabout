@@ -129,7 +129,7 @@ contains
          ms%nz_ml = NZ
          call ms%init(grid)
          ms%h_layer = 1.0_wp
-         ms%tracers(ms%idx_salinity)%hTr = S_IC*ms%h_layer
+         ms%tracers(ms%idx_salinity)%c = S_IC
 
          sp%enable = .true.
          call sp%init(grid, nz_ml=NZ, n_tracers=size(ms%tracers))
@@ -146,7 +146,7 @@ contains
          do step = 1, NSTEPS
             call ocean_sponge_apply_maps(grid, sp, ms, DT)
          end do
-         !$acc update self(ms%tracers(ms%idx_salinity)%hTr)
+         !$acc update self(ms%tracers(ms%idx_salinity)%c)
          call sp%exit_data()
          call ms%exit_data()
          !$acc exit data delete(ms, sp)
@@ -160,7 +160,7 @@ contains
             do j = j0, j1
                do i = i0, i1
                   ! h_layer == 1 everywhere, so hTr IS the concentration.
-                  err = abs(ms%tracers(ms%idx_salinity)%hTr(i, j, k) - expected)/abs(expected)
+                  err = abs(ms%tracers(ms%idx_salinity)%c(i, j, k) - expected)/abs(expected)
                   max_rel_err = max(max_rel_err, err)
                end do
             end do
@@ -259,8 +259,8 @@ contains
          ms%h_layer = 3.0_wp
          ms%u_face_x_layer = 0.7_wp
          ms%v_face_y_layer = -0.4_wp
-         ms%tracers(ms%idx_salinity)%hTr = 35.0_wp*ms%h_layer
-         ms%tracers(ms%idx_temperature)%hTr = 12.0_wp*ms%h_layer
+         ms%tracers(ms%idx_salinity)%c = 35.0_wp
+         ms%tracers(ms%idx_temperature)%c = 12.0_wp
 
          sp%enable = .true.
          call sp%init(grid, nz_ml=NZ, n_tracers=size(ms%tracers))
@@ -276,8 +276,8 @@ contains
 
          allocate (u0, source=ms%u_face_x_layer)
          allocate (v0, source=ms%v_face_y_layer)
-         allocate (s0, source=ms%tracers(ms%idx_salinity)%hTr)
-         allocate (t0, source=ms%tracers(ms%idx_temperature)%hTr)
+         allocate (s0, source=ms%tracers(ms%idx_salinity)%c)
+         allocate (t0, source=ms%tracers(ms%idx_temperature)%c)
          allocate (h0, source=ms%h_layer)
 
          !$acc enter data copyin(ms, sp)
@@ -287,8 +287,8 @@ contains
             call ocean_sponge_apply_maps(grid, sp, ms, DT)
          end do
          !$acc update self(ms%u_face_x_layer, ms%v_face_y_layer, ms%h_layer)
-         !$acc update self(ms%tracers(ms%idx_salinity)%hTr)
-         !$acc update self(ms%tracers(ms%idx_temperature)%hTr)
+         !$acc update self(ms%tracers(ms%idx_salinity)%c)
+         !$acc update self(ms%tracers(ms%idx_temperature)%c)
          !$acc update self(ms%salt_budget_sponge, ms%heat_budget_sponge)
          call sp%exit_data()
          call ms%exit_data()
@@ -300,10 +300,10 @@ contains
          call check(error, all(ms%v_face_y_layer == v0), &
                     "v_face_y_layer must be bit-for-bit unchanged when idamp_v==0 everywhere")
          if (allocated(error)) exit checks
-         call check(error, all(ms%tracers(ms%idx_salinity)%hTr == s0), &
+         call check(error, all(ms%tracers(ms%idx_salinity)%c == s0), &
                     "salinity hTr must be bit-for-bit unchanged when idamp_h==0 everywhere")
          if (allocated(error)) exit checks
-         call check(error, all(ms%tracers(ms%idx_temperature)%hTr == t0), &
+         call check(error, all(ms%tracers(ms%idx_temperature)%c == t0), &
                     "temperature hTr must be bit-for-bit unchanged when idamp_h==0 everywhere")
          if (allocated(error)) exit checks
          call check(error, all(ms%h_layer == h0), &
@@ -475,7 +475,7 @@ contains
          ms%nz_ml = NZ
          call ms%init(grid)
          ms%h_layer = H0
-         ms%tracers(ms%idx_temperature)%hTr = T0*H0
+         ms%tracers(ms%idx_temperature)%c = T0
 
          sp%enable = .true.
          call sp%init(grid, nz_ml=NZ, n_tracers=size(ms%tracers))
@@ -484,7 +484,7 @@ contains
          sp%idamp_h = LAMBDA
          sp%ref_tracer(:, :, :, ms%idx_temperature) = T_REF
 
-         ref_heat = area_sum(ms%tracers(ms%idx_temperature)%hTr, nx, ny, area_w)*RHO_WATER
+         ref_heat = area_sum(ms%h_layer*ms%tracers(ms%idx_temperature)%c, nx, ny, area_w)*RHO_WATER
 
          ! Faithful two-stage RK2 (the sponge fires once per stage, like
          ! the surface flux): budget accumulates the raw sum over both
@@ -495,17 +495,17 @@ contains
          call sp%enter_data()
          call ocean_sponge_apply_maps(grid, sp, ms, DT)
          call ocean_sponge_apply_maps(grid, sp, ms, DT)
-         !$acc update self(ms%tracers(ms%idx_temperature)%hTr, ms%heat_budget_sponge)
+         !$acc update self(ms%tracers(ms%idx_temperature)%c, ms%heat_budget_sponge)
          call sp%exit_data()
          call ms%exit_data()
          !$acc exit data delete(ms, sp)
 
          ! Manual RK2 average (physics 0.5) — matches the production
          ! rk2_average step (§3.5: the accumulator itself is NOT averaged).
-         ms%tracers(ms%idx_temperature)%hTr = &
-            0.5_wp*(T0*H0 + ms%tracers(ms%idx_temperature)%hTr)
+         ms%tracers(ms%idx_temperature)%c = &
+            0.5_wp*(T0 + ms%tracers(ms%idx_temperature)%c)
 
-         total_heat = area_sum(ms%tracers(ms%idx_temperature)%hTr, nx, ny, area_w)*RHO_WATER
+         total_heat = area_sum(ms%h_layer*ms%tracers(ms%idx_temperature)%c, nx, ny, area_w)*RHO_WATER
          change_heat = total_heat - ref_heat
 
          src_heat = ocean_budget_src(ocean_heat_src_sum(0.0_wp, 0.0_wp, &
@@ -559,7 +559,7 @@ contains
          call ms%init(grid)
          ms%h_layer = H0
          idx_T = ms%idx_temperature
-         ms%tracers(idx_T)%hTr = T_IC*H0
+         ms%tracers(idx_T)%c = T_IC
 
          sp%enable = .true.
          call sp%init(grid, nz_ml=NZ, n_tracers=size(ms%tracers))
@@ -570,7 +570,7 @@ contains
 
          ! Mutate ms AFTER the snapshot — stands in for a warm-restart read
          ! overwriting the seeded IC with a different mid-run state.
-         ms%tracers(idx_T)%hTr = T_RESTART*H0
+         ms%tracers(idx_T)%c = T_RESTART
 
          call check(error, all(sp%ref_tracer(:, :, :, idx_T) == T_IC), &
                     "sponge reference must equal the IC (T_IC), bit-for-bit, "// &
@@ -840,15 +840,15 @@ contains
          !$acc update self(sp%ref_tracer)
          ! Seed the state exactly T_OFFSET above the analytic target.
          do k = 1, NZ
-            ms%tracers(ms%idx_temperature)%hTr(:, :, k) = &
-               (sp%ref_tracer(:, :, k, ms%idx_temperature) + T_OFFSET)*ms%h_layer(:, :, k)
+            ms%tracers(ms%idx_temperature)%c(:, :, k) = &
+               (sp%ref_tracer(:, :, k, ms%idx_temperature) + T_OFFSET)
          end do
-         !$acc update device(ms%tracers(ms%idx_temperature)%hTr)
+         !$acc update device(ms%tracers(ms%idx_temperature)%c)
 
          do step = 1, NSTEPS
             call ocean_sponge_apply_maps(grid, sp, ms, DT)
          end do
-         !$acc update self(ms%tracers(ms%idx_temperature)%hTr)
+         !$acc update self(ms%tracers(ms%idx_temperature)%c)
          call sp%exit_data()
          call ms%exit_data()
          !$acc exit data delete(ms, sp)
@@ -859,7 +859,7 @@ contains
             do j = grid%nghost + 1, grid%nghost + NY_PHYS
                do i = grid%nghost + 1, grid%nghost + NX_PHYS
                   tgt = sp%ref_tracer(i, j, k, ms%idx_temperature)
-                  got = ms%tracers(ms%idx_temperature)%hTr(i, j, k)/ms%h_layer(i, j, k)
+                  got = ms%tracers(ms%idx_temperature)%c(i, j, k)
                   dev = got - tgt
                   worst = max(worst, abs(dev - want_dev))
                end do
@@ -902,7 +902,7 @@ contains
          ip = grid%nghost + 2
          jp = grid%nghost + 2
          ! Uniform COLD initial condition.
-         ms%tracers(ms%idx_temperature)%hTr = T_COLD*ms%h_layer
+         ms%tracers(ms%idx_temperature)%c = T_COLD
          t_bed_before = T_COLD
 
          !$acc enter data copyin(ms, sp)
@@ -913,13 +913,13 @@ contains
             call ocean_sponge_apply_maps(grid, sp, ms, DT)
          end do
          !$acc update self(sp%ref_tracer)
-         !$acc update self(ms%tracers(ms%idx_temperature)%hTr)
+         !$acc update self(ms%tracers(ms%idx_temperature)%c)
          call sp%exit_data()
          call ms%exit_data()
          !$acc exit data delete(ms, sp)
 
          tgt_bed = sp%ref_tracer(ip, jp, 1, ms%idx_temperature)
-         t_bed_after = ms%tracers(ms%idx_temperature)%hTr(ip, jp, 1)/ms%h_layer(ip, jp, 1)
+         t_bed_after = ms%tracers(ms%idx_temperature)%c(ip, jp, 1)
 
          call check(error, tgt_bed > T_COLD + 0.1_wp, &
                     "the WARM linear target must be warmer than the COLD IC at the bed")

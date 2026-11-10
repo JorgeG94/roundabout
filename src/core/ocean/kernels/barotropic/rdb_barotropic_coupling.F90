@@ -1341,7 +1341,8 @@ contains
    end subroutine face_depth_mean_v
 
    pure subroutine apply_bt_correction(bt_work, ms, dt, metrics, skip_h_rescale, &
-                                       grid, use_bc_pgf, use_visc_rem, scale, n_nonfin, n_inner)
+                                       grid, use_bc_pgf, use_visc_rem, scale, n_nonfin, n_inner, &
+                                       rescale_tracers)
       !! Replace the bt mode in the per-layer face velocities with the
       !! barotropic-substep end-step value, adding `Δu·wt_k` to every layer,
       !! `Δu = u_bt_end − u_bt_at_n − dt·F_bt_u` (same for v). Split-explicit
@@ -1350,8 +1351,10 @@ contains
       !! Both legs of the corrector use the same end-step anchor (mismatched
       !! anchors overshoot the gravity-wave phase speed). Also rescales
       !! `h_layer` uniformly so the column total matches `H_ref + η_end`.
-      !! `hTr` is deliberately NOT rescaled (would break exact tracer mass
-      !! conservation; T = hTr/h drifts by O((η_end−η*_slow)/H) per step).
+      !! The tracer CONTENT `h·c` is deliberately NOT rescaled (would break
+      !! exact tracer mass conservation): each `c` is divided by the ratio
+      !! `h` is multiplied by (`bt_rescale_conc_impl`), so `c` drifts by
+      !! O((η_end−η*_slow)/H) per step instead.
       !!
       !! ### The fold weight
       !!
@@ -1412,6 +1415,11 @@ contains
          !! `Δu·(Σ_closed h)/(Σ_k h)` — preserved by CANCELLATION rather
          !! than by construction.
       logical, intent(in), optional :: skip_h_rescale
+      logical, intent(in), optional :: rescale_tracers
+         !! Default `.true.`: divide each `c` by the ratio `h` is multiplied by
+         !! so the content `h*c` survives the rescale.  The pred_corr PREDICTOR
+         !! passes `.false.`: its provisional `h` is discarded afterwards and
+         !! its tracers are never advanced.
       type(hgrid_t), intent(in), optional :: grid
       logical, intent(in), optional :: use_bc_pgf
       logical, intent(in), optional :: use_visc_rem
@@ -1465,6 +1473,8 @@ contains
          !! their first use for why this is inlined rather than called.
       integer :: il, ir, jl, jr, frhat_scheme
       logical :: do_rescale, do_bc_pgf, do_visc_rem, do_open, do_bt_rescale
+      integer :: it
+      logical :: do_tr_rescale
 
       ! FRHAT_HYBRID only under closed faces -- see `derive_bt_from_layers`'
       ! matching comment (the same gate `compute_bt_rem_from_visc_rem`
@@ -1549,7 +1559,7 @@ contains
                if (frhat_scheme == FRHAT_HYBRID) then
                   d_shallow_loc = -min(href_l, href_r)
                   e_cur_loc = e_prev + h_arith_loc
-                  ! vanished-ok: hand-inlined frhat_h_face_step copy (NVHPC call-site miscompile, see local() comment above)
+                  ! hand-inlined frhat_h_face_step copy (NVHPC call-site miscompile, see local() comment above)
                   if (hl_loc <= H_VANISHED .or. hr_loc <= H_VANISHED) then
                      h_face = (hl_loc*hr_loc)/(h_arith_loc + H_DIV_EPS)
                   else if (e_prev >= d_shallow_loc) then
@@ -1613,7 +1623,7 @@ contains
                if (frhat_scheme == FRHAT_HYBRID) then
                   d_shallow_loc = -min(href_l, href_r)
                   e_cur_loc = e_prev + h_arith_loc
-                  ! vanished-ok: hand-inlined frhat_h_face_step copy, same reason as the u-branch above
+                  ! hand-inlined frhat_h_face_step copy, same reason as the u-branch above
                   if (hl_loc <= H_VANISHED .or. hr_loc <= H_VANISHED) then
                      h_face = (hl_loc*hr_loc)/(h_arith_loc + H_DIV_EPS)
                   else if (e_prev >= d_shallow_loc) then
@@ -1724,7 +1734,7 @@ contains
                   if (frhat_scheme == FRHAT_HYBRID) then
                      d_shallow_loc = -min(href_l, href_r)
                      e_cur_loc = e_prev + h_arith_loc
-                     ! vanished-ok: hand-inlined frhat_h_face_step copy (NVHPC call-site miscompile, see local() comment above)
+                     ! hand-inlined frhat_h_face_step copy (NVHPC call-site miscompile, see local() comment above)
                      if (hl_loc <= H_VANISHED .or. hr_loc <= H_VANISHED) then
                         h_face = (hl_loc*hr_loc)/(h_arith_loc + H_DIV_EPS)
                      else if (e_prev >= d_shallow_loc) then
@@ -1785,7 +1795,7 @@ contains
                   if (frhat_scheme == FRHAT_HYBRID) then
                      d_shallow_loc = -min(href_l, href_r)
                      e_cur_loc = e_prev + h_arith_loc
-                     ! vanished-ok: hand-inlined frhat_h_face_step copy, same reason as the u-branch above
+                     ! hand-inlined frhat_h_face_step copy, same reason as the u-branch above
                      if (hl_loc <= H_VANISHED .or. hr_loc <= H_VANISHED) then
                         h_face = (hl_loc*hr_loc)/(h_arith_loc + H_DIV_EPS)
                      else if (e_prev >= d_shallow_loc) then
@@ -1843,6 +1853,20 @@ contains
       end if
 
       if (do_rescale) then
+         ! The tracer CONTENT `h*c` must survive the rescale (the slow
+         ! continuity moved tracer and water together; this step only
+         ! re-anchors the column total on the barotropic mode), so each
+         ! `c` is divided by the same ratio `h` is multiplied by.  Runs
+         ! BEFORE the `h` rescale, which it reads.
+         do_tr_rescale = .true.
+         if (present(rescale_tracers)) do_tr_rescale = rescale_tracers
+         if (allocated(ms%tracers) .and. do_tr_rescale) then
+            do it = 1, size(ms%tracers)
+               call bt_rescale_conc_impl(size(ms%h_layer, 1), size(ms%h_layer, 2), nz, &
+                                         ms%h_layer, bt_work%bt_H_ref, bt_work%bt_eta_end, &
+                                         ms%tracers(it)%c)
+            end do
+         end if
          do concurrent(j=1:size(ms%h_layer, 2), i=1:size(ms%h_layer, 1)) &
             local(k, total_h_old, total_h_new, ratio)
             total_h_old = 0.0_wp
@@ -1859,6 +1883,32 @@ contains
          end do
       end if
    end subroutine apply_bt_correction
+
+   pure subroutine bt_rescale_conc_impl(nx, ny, nz, h_layer, H_ref, eta_end, c)
+      !! Companion of the `h` rescale in `apply_bt_correction`: the column's
+      !! layers are scaled by `ratio = (H_ref + eta_end)/Σ_k h`, so the stored
+      !! concentration is divided by `ratio` and the content `h*c` is
+      !! unchanged (conserved tracer mass; the legacy "hTr is not rescaled"
+      !! behaviour in the concentration storage).
+      integer, intent(in) :: nx, ny, nz
+      real(wp), intent(in) :: h_layer(nx, ny, nz)
+      real(wp), intent(in) :: H_ref(nx, ny), eta_end(nx, ny)
+      real(wp), intent(inout) :: c(nx, ny, nz)
+      integer :: i, j, k
+      real(wp) :: total_h_old, ratio
+      do concurrent(j=1:ny, i=1:nx) local(k, total_h_old, ratio)
+         total_h_old = 0.0_wp
+         do k = 1, nz
+            total_h_old = total_h_old + h_layer(i, j, k)
+         end do
+         ratio = (H_ref(i, j) + eta_end(i, j))/max(total_h_old, tiny(1.0_wp))
+         if (total_h_old > 0.0_wp .and. ratio > 0.0_wp) then
+            do k = 1, nz
+               c(i, j, k) = c(i, j, k)/ratio
+            end do
+         end if
+      end do
+   end subroutine bt_rescale_conc_impl
 
    pure subroutine snapshot_eta_PF(bt_work)
       !! Snapshot `bt_eta` into `eta_PF` — the free-surface height the slow PGF
@@ -2105,7 +2155,7 @@ contains
             if (scheme == FRHAT_HYBRID) then
                d_shallow_loc = -min(href_l, href_r)
                e_cur_loc = e_prev + h_arith_loc
-               ! vanished-ok: hand-inlined frhat_h_face_step copy (NVHPC call-site miscompile, see docstring above)
+               ! hand-inlined frhat_h_face_step copy (NVHPC call-site miscompile, see docstring above)
                if (hl_loc <= H_VANISHED .or. hr_loc <= H_VANISHED) then
                   h_face = (hl_loc*hr_loc)/(h_arith_loc + H_DIV_EPS)
                else if (e_prev >= d_shallow_loc) then
@@ -2152,7 +2202,7 @@ contains
             if (scheme == FRHAT_HYBRID) then
                d_shallow_loc = -min(href_l, href_r)
                e_cur_loc = e_prev + h_arith_loc
-               ! vanished-ok: hand-inlined frhat_h_face_step copy, same reason as the E-face loop above
+               ! hand-inlined frhat_h_face_step copy, same reason as the E-face loop above
                if (hl_loc <= H_VANISHED .or. hr_loc <= H_VANISHED) then
                   h_face = (hl_loc*hr_loc)/(h_arith_loc + H_DIV_EPS)
                else if (e_prev >= d_shallow_loc) then
@@ -2199,7 +2249,7 @@ contains
             if (scheme == FRHAT_HYBRID) then
                d_shallow_loc = -min(href_l, href_r)
                e_cur_loc = e_prev + h_arith_loc
-               ! vanished-ok: hand-inlined frhat_h_face_step copy, same reason as the E-face loop above
+               ! hand-inlined frhat_h_face_step copy, same reason as the E-face loop above
                if (hl_loc <= H_VANISHED .or. hr_loc <= H_VANISHED) then
                   h_face = (hl_loc*hr_loc)/(h_arith_loc + H_DIV_EPS)
                else if (e_prev >= d_shallow_loc) then
@@ -2246,7 +2296,7 @@ contains
             if (scheme == FRHAT_HYBRID) then
                d_shallow_loc = -min(href_l, href_r)
                e_cur_loc = e_prev + h_arith_loc
-               ! vanished-ok: hand-inlined frhat_h_face_step copy, same reason as the E-face loop above
+               ! hand-inlined frhat_h_face_step copy, same reason as the E-face loop above
                if (hl_loc <= H_VANISHED .or. hr_loc <= H_VANISHED) then
                   h_face = (hl_loc*hr_loc)/(h_arith_loc + H_DIV_EPS)
                else if (e_prev >= d_shallow_loc) then

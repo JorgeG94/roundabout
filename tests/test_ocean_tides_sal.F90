@@ -221,8 +221,8 @@ contains
       ms%u_face_x_layer = 0.0_wp
       ms%v_face_y_layer = 0.0_wp
       do k = 1, NZ
-         ms%tracers(ms%idx_salinity)%hTr(:, :, k) = eos%S_ref*(H_TOTAL/real(NZ, wp))
-         ms%tracers(ms%idx_temperature)%hTr(:, :, k) = eos%T_ref*(H_TOTAL/real(NZ, wp))
+         ms%tracers(ms%idx_salinity)%c(:, :, k) = eos%S_ref*(H_TOTAL/real(NZ, wp))
+         ms%tracers(ms%idx_temperature)%c(:, :, k) = eos%T_ref*(H_TOTAL/real(NZ, wp))
       end do
       dyn%bt_work%bt_H_ref = H_TOTAL
 

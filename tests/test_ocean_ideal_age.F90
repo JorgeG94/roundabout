@@ -8,15 +8,14 @@
 !!   * Aging from zero: after one step, interior age = dt; surface
 !!     (untouched by the age-only kernel) stays 0.
 !!   * Surface reset: pre-existing top-layer age gets overwritten to
-!!     `young_eff * h_layer` regardless of its initial value.
+!!     `young_eff` regardless of its initial value.
 !!   * Linear-in-time: after N steps with no flow, interior age = N·dt.
 !!   * Interior conservation: surface reset doesn't touch subsurface
 !!     layers (bottom-up-convention guard — the single highest-
 !!     probability transcription bug against the top-down MOM6
 !!     reference).
-!!   * young_val sets a concentration*thickness, not a raw
-!!     concentration — the single most likely units bug in the split
-!!     kernel.
+!!   * young_val sets the surface CONCENTRATION `young_eff` directly
+!!     (no thickness factor) — the stored prognostic is the age itself.
 !!   * The growth-rate evaluator is exponential in `t` with the right
 !!     sign, and short-circuits to bitwise-zero `exp`-free at the
 !!     shipped defaults.
@@ -120,8 +119,8 @@ contains
    end subroutine test_init_default_off
 
    subroutine test_one_step_from_zero(error)
-      !! All hTr_age starts at 0.  After one interior-aging-only step:
-      !!   * Subsurface (k < nz): hTr = dt · h_layer
+      !! All age concentration starts at 0.  After one interior-aging-only step:
+      !!   * Subsurface (k < nz): age = dt
       !!   * Surface (k = nz): untouched (still 0) — the age-step
       !!     kernel now owns k=1..nz-1 exclusively; the reset is a
       !!     separate kernel (PR-7).
@@ -132,20 +131,20 @@ contains
       integer :: nx, ny
 
       call setup(grid, ms, with_age=.true.)
-      ms%tracers(ms%idx_age)%hTr = 0.0_wp
+      ms%tracers(ms%idx_age)%c = 0.0_wp
       nx = grid%nx_total
       ny = grid%ny_total
 
-      call ocean_ideal_age_age_step(ms%tracers(ms%idx_age)%hTr, ms%h_layer, &
+      call ocean_ideal_age_age_step(ms%tracers(ms%idx_age)%c, ms%h_layer, &
                                     DT, nx, ny, NZ)
 
-      expected_sub = DT*H_EACH
-      actual_sub = ms%tracers(ms%idx_age)%hTr(nx/2, ny/2, 1)
+      expected_sub = DT
+      actual_sub = ms%tracers(ms%idx_age)%c(nx/2, ny/2, 1)
       call check(error, abs(actual_sub - expected_sub) < 1.0e-12_wp, &
-                 "subsurface age after one step should be dt · h_layer")
+                 "subsurface age after one step should be dt")
 
       if (.not. allocated(error)) then
-         surface_val = maxval(abs(ms%tracers(ms%idx_age)%hTr(:, :, NZ)))
+         surface_val = maxval(abs(ms%tracers(ms%idx_age)%c(:, :, NZ)))
          call check(error, surface_val < 1.0e-12_wp, &
                     "surface layer must be untouched by the age-only kernel")
       end if
@@ -165,13 +164,13 @@ contains
       call setup(grid, ms, with_age=.true.)
       nx = grid%nx_total
       ny = grid%ny_total
-      ms%tracers(ms%idx_age)%hTr = 0.0_wp
-      ms%tracers(ms%idx_age)%hTr(:, :, NZ) = 5.0e8_wp   ! garbage to clear
+      ms%tracers(ms%idx_age)%c = 0.0_wp
+      ms%tracers(ms%idx_age)%c(:, :, NZ) = 5.0e8_wp   ! garbage to clear
 
-      call ocean_ideal_age_reset_step(ms%tracers(ms%idx_age)%hTr, ms%h_layer, &
+      call ocean_ideal_age_reset_step(ms%tracers(ms%idx_age)%c, ms%h_layer, &
                                       0.0_wp, nx, ny, NZ)
 
-      surface_val = maxval(abs(ms%tracers(ms%idx_age)%hTr(:, :, NZ)))
+      surface_val = maxval(abs(ms%tracers(ms%idx_age)%c(:, :, NZ)))
       call check(error, surface_val < 1.0e-12_wp, &
                  "surface layer must be reset to zero even from large IC")
       call ms%destroy()
@@ -189,16 +188,16 @@ contains
       integer :: n_iter, nx, ny
 
       call setup(grid, ms, with_age=.true.)
-      ms%tracers(ms%idx_age)%hTr = 0.0_wp
+      ms%tracers(ms%idx_age)%c = 0.0_wp
       nx = grid%nx_total
       ny = grid%ny_total
       do n_iter = 1, N_STEPS
-         call ocean_ideal_age_age_step(ms%tracers(ms%idx_age)%hTr, ms%h_layer, &
+         call ocean_ideal_age_age_step(ms%tracers(ms%idx_age)%c, ms%h_layer, &
                                        DT, nx, ny, NZ)
       end do
 
-      ! Concentration in seconds = hTr / h_layer at any subsurface cell.
-      conc = ms%tracers(ms%idx_age)%hTr(nx/2, ny/2, 2)/ms%h_layer(nx/2, ny/2, 2)
+      ! The stored c IS the age in seconds at any subsurface cell.
+      conc = ms%tracers(ms%idx_age)%c(nx/2, ny/2, 2)
       expected = real(N_STEPS, wp)*DT
       call check(error, abs(conc - expected) < 1.0e-9_wp, &
                  "subsurface age after N steps must equal N·dt")
@@ -221,18 +220,18 @@ contains
       call setup(grid, ms, with_age=.true.)
       nx = grid%nx_total
       ny = grid%ny_total
-      ms%tracers(ms%idx_age)%hTr = 0.0_wp
+      ms%tracers(ms%idx_age)%c = 0.0_wp
 
       ! Two age-steps so subsurface ages by 2·DT, then one reset.
-      call ocean_ideal_age_age_step(ms%tracers(ms%idx_age)%hTr, ms%h_layer, &
+      call ocean_ideal_age_age_step(ms%tracers(ms%idx_age)%c, ms%h_layer, &
                                     DT, nx, ny, NZ)
-      call ocean_ideal_age_age_step(ms%tracers(ms%idx_age)%hTr, ms%h_layer, &
+      call ocean_ideal_age_age_step(ms%tracers(ms%idx_age)%c, ms%h_layer, &
                                     DT, nx, ny, NZ)
-      call ocean_ideal_age_reset_step(ms%tracers(ms%idx_age)%hTr, ms%h_layer, &
+      call ocean_ideal_age_reset_step(ms%tracers(ms%idx_age)%c, ms%h_layer, &
                                       0.0_wp, nx, ny, NZ)
 
-      sub_age = ms%tracers(ms%idx_age)%hTr(nx/2, ny/2, 1)/H_EACH
-      surface_age = ms%tracers(ms%idx_age)%hTr(nx/2, ny/2, NZ)/H_EACH
+      sub_age = ms%tracers(ms%idx_age)%c(nx/2, ny/2, 1)
+      surface_age = ms%tracers(ms%idx_age)%c(nx/2, ny/2, NZ)
       call check(error, abs(sub_age - 2.0_wp*DT) < 1.0e-9_wp, &
                  "subsurface (bed, k=1) ages 2·dt over 2 steps and is untouched by the reset")
       if (.not. allocated(error)) call check(error, abs(surface_age) < 1.0e-12_wp, &
@@ -241,11 +240,9 @@ contains
    end subroutine test_surface_reset_isolates_top
 
    subroutine test_young_val_sets_surface(error)
-      !! `ocean_ideal_age_reset_step` writes a CONCENTRATION times
-      !! thickness (`young_eff * h_layer`), not a raw concentration —
-      !! the single most likely units bug in the new kernel (the old
-      !! hard-coded `young_eff=0` reset never exercised the h_layer
-      !! factor since 0*h == 0 either way).
+      !! `ocean_ideal_age_reset_step` writes the CONCENTRATION `young_eff`
+      !! (seconds) directly; the stored prognostic carries no thickness
+      !! factor any more, so a non-zero `young_eff` must land verbatim.
       type(error_type), allocatable, intent(out) :: error
       type(hgrid_t) :: grid
       type(multilayer_state_t) :: ms
@@ -256,21 +253,21 @@ contains
       call setup(grid, ms, with_age=.true.)
       nx = grid%nx_total
       ny = grid%ny_total
-      ms%tracers(ms%idx_age)%hTr = 0.0_wp
-      call ocean_ideal_age_age_step(ms%tracers(ms%idx_age)%hTr, ms%h_layer, &
+      ms%tracers(ms%idx_age)%c = 0.0_wp
+      call ocean_ideal_age_age_step(ms%tracers(ms%idx_age)%c, ms%h_layer, &
                                     DT, nx, ny, NZ)
-      sub_before = ms%tracers(ms%idx_age)%hTr(nx/2, ny/2, 1)
+      sub_before = ms%tracers(ms%idx_age)%c(nx/2, ny/2, 1)
 
-      call ocean_ideal_age_reset_step(ms%tracers(ms%idx_age)%hTr, ms%h_layer, &
+      call ocean_ideal_age_reset_step(ms%tracers(ms%idx_age)%c, ms%h_layer, &
                                       YOUNG_EFF, nx, ny, NZ)
 
-      expected_hTr = YOUNG_EFF*H_EACH
-      actual_hTr = ms%tracers(ms%idx_age)%hTr(nx/2, ny/2, NZ)
+      expected_hTr = YOUNG_EFF
+      actual_hTr = ms%tracers(ms%idx_age)%c(nx/2, ny/2, NZ)
       call check(error, abs(actual_hTr - expected_hTr) < 1.0e-12_wp, &
-                 "surface hTr must equal young_eff * h_layer exactly")
+                 "surface age concentration must equal young_eff exactly")
       if (.not. allocated(error)) then
          call check(error, &
-                    abs(ms%tracers(ms%idx_age)%hTr(nx/2, ny/2, 1) - sub_before) < 1.0e-12_wp, &
+                    abs(ms%tracers(ms%idx_age)%c(nx/2, ny/2, 1) - sub_before) < 1.0e-12_wp, &
                     "reset must not touch subsurface layers")
       end if
       call ms%destroy()

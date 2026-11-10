@@ -32,8 +32,7 @@ What it does
    tuple stays in the report as its witness.
 3. **The checks** (`evaluate_cell`), in order, stop at the first failure:
      1  REFUSED  -- expected (PHYSICAL / KNOWN_GAP) or FAIL;
-     2  CRASH / NONFINITE -- non-zero exit, a nan-catch, the vanished-content
-        tripwire (`check_vanished_content`, ON in every cell), the remap
+     2  CRASH / NONFINITE -- non-zero exit, a nan-catch, the remap
         precondition guard, a non-finite console scalar; a crashing cell is
         re-run with `&ocean_debug_nml chksum` over the last steps to name the
         phase that MINTED the first non-finite;
@@ -248,7 +247,7 @@ BASE = {
     "vcoord_nml": {
         "remap_method": "ppm", "zstar_h_min": 1.0e-4,
         "remap_boundary_extrap": True, "remap_nonuniform_weights": True,
-        "remap_check_preconditions": True, "check_vanished_content": True,
+        "remap_check_preconditions": True,
         # rho / hycom targets: potential density at the surface, spanning
         # the IC's 1025.5 .. 1028.4 kg/m3 under every EOS on the axis.
         "rho_ref_pressure": 0.0, "rho_target_light": 1025.2, "rho_target_dense": 1028.6,

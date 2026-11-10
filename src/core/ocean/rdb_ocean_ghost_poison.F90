@@ -118,8 +118,8 @@ contains
       ! ------------------------------------------------------------------
       if (allocated(ms%tracers)) then
          do it = 1, size(ms%tracers)
-            if (allocated(ms%tracers(it)%hTr)) then
-               call poison_centre_3d(ms%tracers(it)%hTr, nxl, nyl, ng, nzt, qnan, &
+            if (allocated(ms%tracers(it)%c)) then
+               call poison_centre_3d(ms%tracers(it)%c, nxl, nyl, ng, nzt, qnan, &
                                      poison_w, poison_e, poison_s, poison_n)
             end if
          end do

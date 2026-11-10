@@ -23,7 +23,7 @@ from . import _compose, _ffi
 from ._config import Config
 from ._errors import (AlreadyExistsError, NotInitialisedError,
                        RdbReadOnlyError, RdbUnsupportedError, check)
-from ._field import DerivedField, DiagnosticField, Field, Loc
+from ._field import DiagnosticField, Field, Loc
 from ._nml_parse import (config_from_namelist_text, merge_explicit,
                           resolve_relative_file_paths)
 
@@ -498,9 +498,8 @@ class Model:
         """Stage the initial CONCENTRATION of tracer ``name`` (its own
         units; ``"temperature"``, ``"salinity"``, ``"pseudo_salt"``, ...) on
         a pending handle: shape ``(nx, ny, nz)``, ``k = 0`` the bed. The
-        content ``conc * h`` is formed against the final ``h`` at
-        :meth:`finalize`, so staging order versus :meth:`stage_h` does not
-        matter. An unknown name raises
+        concentration is stored as given, so staging order versus
+        :meth:`stage_h` does not matter. An unknown name raises
         :class:`~rdb._errors.TracerNotFoundError` at finalize. Staging
         salinity re-seeds pseudo-salt from it unless pseudo-salt is staged
         itself."""
@@ -949,12 +948,13 @@ class Model:
             names.append(buf.raw[:n].decode("utf-8"))
         return names
 
-    def tracer(self, name: str) -> DerivedField:
+    def tracer(self, name: str) -> Field:
         """Concentration (its own units: degC/PSU/...) for the tracer
-        `name`, by NAME -- never index. Raises TracerNotFoundError if no
-        such tracer is registered."""
-        htr_field = self._raw_tracer_field(name)
-        h_field = self.h
+        `name`, by NAME -- never index. A zero-copy, writable view onto
+        the stored concentration. A vanished (filler) layer holds the
+        last water's finite value, NOT NaN: mask on ``model.h`` where a
+        display needs it. Raises TracerNotFoundError if no such tracer
+        is registered."""
         units = "degC" if name == "temperature" else (
             "PSU" if name == "salinity" else "")
 
@@ -963,11 +963,12 @@ class Model:
             return self._lib.rdb_ocean_set_tracer(
                 handle, enc, len(enc), arr, *shape)
 
-        return DerivedField(self, name, htr_field, h_field, units=units,
-                             long_name=f"tracer {name!r} concentration",
-                             setter=setter)
+        return self._raw_tracer_field(
+            name, units=units, long_name=f"tracer {name!r} concentration",
+            setter=setter)
 
-    def _raw_tracer_field(self, name: str) -> Field:
+    def _raw_tracer_field(self, name: str, units: str = "",
+                          long_name: str = "", setter=None) -> Field:
         self._check_alive()
         enc = name.encode("utf-8")
         ptr = ctypes.c_void_p()
@@ -980,8 +981,10 @@ class Model:
             ctypes.byref(nx), ctypes.byref(ny), ctypes.byref(nz),
             ctypes.byref(gen))
         check(status, "rdb_ocean_get_tracer_ptr")
-        return Field(self, name + ".hTr", ptr.value,
-                     (nx.value, ny.value, nz.value), gen.value, (C, C, C))
+        return Field(self, name, ptr.value,
+                     (nx.value, ny.value, nz.value), gen.value, (C, C, C),
+                     units=units, long_name=long_name, setter=setter,
+                     interior=True)
 
     # ---- diagnostics (P7) -----------------------------------------------
     @property
@@ -1033,13 +1036,13 @@ class Model:
                                (C, C, C), long_name=f"diagnostic {name!r}")
 
     @property
-    def temperature(self) -> DerivedField:
-        """Layer temperature (degC), DERIVED from hT/h (D3.2)."""
+    def temperature(self) -> Field:
+        """Layer temperature (degC): the stored concentration."""
         return self.tracer("temperature")
 
     @property
-    def salinity(self) -> DerivedField:
-        """Layer salinity (PSU), DERIVED from hS/h (D3.2)."""
+    def salinity(self) -> Field:
+        """Layer salinity (PSU): the stored concentration."""
         return self.tracer("salinity")
 
     def __repr__(self):

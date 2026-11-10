@@ -9,7 +9,7 @@
 !!      read the restart into B (overwriting the seed).
 !!   4. Advance BOTH A and B one more step.
 !!   5. Assert every prognostic field (h_layer, u/v_face_x/y_layer,
-!!      every tracers(:)%hTr, barotropic h/u_face_x/v_face_y) is
+!!      every tracers(:)%c, barotropic h/u_face_x/v_face_y) is
 !!      byte-identical between A and B.
 !!
 !! Variants:
@@ -44,6 +44,8 @@ module test_ocean_restart
    use rdb_state, only: register_default_tracers
    use rdb_ocean_dyn, only: ocean_dyn_step_split
    use rdb_ocean_surface_flux, only: ocean_surface_flux_t
+   use netcdf, only: nf90_open, nf90_close, nf90_redef, nf90_enddef, nf90_rename_var, &
+                     nf90_inq_varid, nf90_put_var, NF90_WRITE, NF90_NOERR
    use rdb_ocean_periodic, only: ocean_periodic_wrap_state, ocean_periodic_wrap_centre_2d
    implicit none
    private
@@ -92,7 +94,9 @@ contains
                   new_unittest("restart_decomp_mismatch_errors", test_decomp_mismatch), &
                   new_unittest("restart_decomp_mismatch_read_wrapper", &
                                test_decomp_mismatch_read), &
-                  new_unittest("restart_bit_exact_wetdry", test_bit_exact_wetdry) &
+                  new_unittest("restart_bit_exact_wetdry", test_bit_exact_wetdry), &
+                  new_unittest("restart_legacy_content_tracer_converts", &
+                               test_legacy_content_tracer) &
                   ]
    end subroutine collect_ocean_restart_tests
 
@@ -214,8 +218,8 @@ contains
                   do k = 1, NZ
                      h_ratio = H_PATCH_LAYER/state%multilayer%h_layer(i, j, k)
                      do it_t = 1, size(state%multilayer%tracers)
-                        state%multilayer%tracers(it_t)%hTr(i, j, k) = &
-                           state%multilayer%tracers(it_t)%hTr(i, j, k)*h_ratio
+                        state%multilayer%tracers(it_t)%c(i, j, k) = &
+                           state%multilayer%tracers(it_t)%c(i, j, k)*h_ratio
                      end do
                      state%multilayer%h_layer(i, j, k) = H_PATCH_LAYER
                   end do
@@ -240,8 +244,8 @@ contains
                h_new = WD_HELD_DEPTH/real(NZ, wp)
                h_ratio = h_new/state%multilayer%h_layer(WD_WET_I, WD_WET_J, k)
                do it_t = 1, size(state%multilayer%tracers)
-                  state%multilayer%tracers(it_t)%hTr(WD_WET_I, WD_WET_J, k) = &
-                     state%multilayer%tracers(it_t)%hTr(WD_WET_I, WD_WET_J, k)*h_ratio
+                  state%multilayer%tracers(it_t)%c(WD_WET_I, WD_WET_J, k) = &
+                     state%multilayer%tracers(it_t)%c(WD_WET_I, WD_WET_J, k)*h_ratio
                end do
                state%multilayer%h_layer(WD_WET_I, WD_WET_J, k) = h_new
             end do
@@ -253,8 +257,8 @@ contains
                h_new = 2.0_wp*H_VANISHED
                h_ratio = h_new/state%multilayer%h_layer(WD_EMRG_I, WD_EMRG_J, k)
                do it_t = 1, size(state%multilayer%tracers)
-                  state%multilayer%tracers(it_t)%hTr(WD_EMRG_I, WD_EMRG_J, k) = &
-                     state%multilayer%tracers(it_t)%hTr(WD_EMRG_I, WD_EMRG_J, k)*h_ratio
+                  state%multilayer%tracers(it_t)%c(WD_EMRG_I, WD_EMRG_J, k) = &
+                     state%multilayer%tracers(it_t)%c(WD_EMRG_I, WD_EMRG_J, k)*h_ratio
                end do
                state%multilayer%h_layer(WD_EMRG_I, WD_EMRG_J, k) = h_new
             end do
@@ -566,9 +570,9 @@ contains
       if (allocated(error)) return
 
       do it = 1, size(A%multilayer%tracers)
-         !$acc update self(A%multilayer%tracers(it)%hTr, B%multilayer%tracers(it)%hTr)
-         ok = arrays_identical_3d(A%multilayer%tracers(it)%hTr, &
-                                  B%multilayer%tracers(it)%hTr)
+         !$acc update self(A%multilayer%tracers(it)%c, B%multilayer%tracers(it)%c)
+         ok = arrays_identical_3d(A%multilayer%tracers(it)%c, &
+                                  B%multilayer%tracers(it)%c)
          call check(error, ok, "tracer hTr not bit-identical after restart")
          if (allocated(error)) exit
       end do
@@ -597,6 +601,103 @@ contains
       call teardown(B, sfB)
       call cleanup_file(FN)
    end subroutine roundtrip
+
+   subroutine test_legacy_content_tracer(error)
+      !! A pre-concentration restart stores tracers as CONTENT `h*c` under
+      !! `tracer_hTr_<n>`.  Write a normal restart from A, rewrite its
+      !! tracer variables into that legacy form (rename + overwrite with
+      !! `h*c`), read it into a fresh B and check B holds `c = hTr/h` on
+      !! live layers (ghosts included: the file holds the full local
+      !! arrays) and the donor's concentration in a vanished layer.
+      type(error_type), allocatable, intent(out) :: error
+      type(config_t) :: cfg
+      type(hgrid_t) :: gA, gB
+      type(ocean_state_t) :: A, B
+      type(ocean_surface_flux_t) :: sfA
+      type(decomp_t) :: decomp
+      character(len=*), parameter :: FN = "test_ocean_restart_legacy.nc"
+      integer, parameter :: IV = NGHOST + 2, JV = NGHOST + 3
+      real(wp) :: t_read, cexp, cdon
+      real(wp), allocatable :: hr(:, :, :), content(:, :, :)
+      integer :: step_read, s, it, i, j, k, ncid, varid, st, nt
+      character(len=16) :: tag, newtag
+      logical :: ok
+
+      call make_cfg(cfg, physics_rich=.false., wetdry=.false.)
+      call decomp_init(decomp, NX, NY, 1, 1, 0)
+      call cleanup_file(FN)
+      call setup_state(cfg, gA, A, sfA, .false.)
+      do s = 1, 2
+         call advance(gA, A, sfA)
+      end do
+      ! One vanished bottom layer in a column (k=1 is the bed).
+      !$acc update self(A%multilayer%h_layer)
+      A%multilayer%h_layer(IV, JV, 1) = 0.5_wp*H_VANISHED
+      !$acc update device(A%multilayer%h_layer)
+      call ocean_state_restart_write(A, gA, decomp, FN, 2.0_wp*DT, 2)
+      nt = size(A%multilayer%tracers)
+
+      ! Rewrite the file into the legacy content form.
+      st = nf90_open(FN, NF90_WRITE, ncid)
+      call check(error, st == NF90_NOERR, "legacy test: cannot reopen restart file")
+      if (allocated(error)) return
+      hr = A%multilayer%h_layer
+      allocate (content(NX + 2*NGHOST, NY + 2*NGHOST, NZ))
+      do it = 1, nt
+         !$acc update self(A%multilayer%tracers(it)%c)
+         write (tag, "(A,I0)") "tracer_c_", it
+         write (newtag, "(A,I0)") "tracer_hTr_", it
+         content = A%multilayer%tracers(it)%c*hr
+         st = nf90_inq_varid(ncid, trim(tag), varid)
+         call check(error, st == NF90_NOERR, "legacy test: restart lacks "//trim(tag))
+         if (allocated(error)) return
+         st = nf90_redef(ncid)
+         st = nf90_rename_var(ncid, varid, trim(newtag))
+         st = nf90_enddef(ncid)
+         st = nf90_put_var(ncid, varid, content)
+         call check(error, st == NF90_NOERR, "legacy test: cannot write "//trim(newtag))
+         if (allocated(error)) return
+      end do
+      st = nf90_close(ncid)
+
+      ! Fresh B: cold seed, then read the legacy file.
+      call gB%init(NX, NY, NGHOST, DX, DX)
+      B%multilayer%nz_ml = NZ
+      call B%init(gB)
+      call metrics_fill_cartesian(B%metrics, gB, gB%dx, gB%dy)
+      call metrics_finalize(B%metrics)
+      call ocean_state_seed_from_cfg(B, gB, cfg)
+      call register_default_tracers( &
+         B%multilayer%tracers(B%multilayer%idx_salinity), &
+         B%multilayer%tracers(B%multilayer%idx_temperature), cfg)
+      call ocean_state_restart_read(B, gB, decomp, FN, t_read, step_read)
+
+      ok = .true.
+      do it = 1, nt
+         do j = 1, NY + 2*NGHOST
+            do i = 1, NX + 2*NGHOST
+               do k = 1, NZ
+                  if (B%multilayer%h_layer(i, j, k) > H_VANISHED) then
+                     cexp = A%multilayer%tracers(it)%c(i, j, k)* &
+                            hr(i, j, k)/B%multilayer%h_layer(i, j, k)
+                     if (abs(B%multilayer%tracers(it)%c(i, j, k) - cexp) > &
+                         1.0e-12_wp*max(abs(cexp), 1.0_wp)) ok = .false.
+                  end if
+               end do
+            end do
+         end do
+         ! Vanished layer: takes the nearest live layer above (k=2).
+         cdon = B%multilayer%tracers(it)%c(IV, JV, 2)
+         if (B%multilayer%tracers(it)%c(IV, JV, 1) /= cdon) ok = .false.
+      end do
+      call check(error, ok, "legacy tracer_hTr_<n> did not convert to c = hTr/h on load")
+      if (.not. allocated(error)) then
+         call check(error, B%multilayer%h_layer(IV, JV, 1) <= H_VANISHED, &
+                    "legacy test: vanished-layer precondition lost")
+      end if
+      call teardown(A, sfA)
+      call cleanup_file(FN)
+   end subroutine test_legacy_content_tracer
 
    subroutine test_bit_exact_closed(error)
       type(error_type), allocatable, intent(out) :: error

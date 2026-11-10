@@ -225,8 +225,8 @@ contains
       end do
       if (.false.) S_k(1) = eos%S_ref   ! reference EOS access; silence unused
       do k = 1, NZ
-         ms%tracers(ms%idx_salinity)%hTr(:, :, k) = S_k(k)*ms%h_layer(:, :, k)
-         ms%tracers(ms%idx_temperature)%hTr(:, :, k) = T_k(k)*ms%h_layer(:, :, k)
+         ms%tracers(ms%idx_salinity)%c(:, :, k) = S_k(k)
+         ms%tracers(ms%idx_temperature)%c(:, :, k) = T_k(k)
       end do
    end subroutine stamp_stratification
 
@@ -266,8 +266,8 @@ contains
          vc%coord_type = VCOORD_SIGMA
          call stamp_stratification(ms, eos, S_top=eos%S_ref - 1.0_wp, T_top=eos%T_ref + 2.0_wp, &
                                    dSdk=0.5_wp, dTdk=-1.0_wp)
-         allocate (hS_ic, source=ms%tracers(ms%idx_salinity)%hTr)
-         allocate (hT_ic, source=ms%tracers(ms%idx_temperature)%hTr)
+         allocate (hS_ic, source=ms%tracers(ms%idx_salinity)%c)
+         allocate (hT_ic, source=ms%tracers(ms%idx_temperature)%c)
 
          call map_in(grid, metrics, ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn, vc)
          call ocean_dyn_step_split(grid, metrics, dyn, eos, cor, ct, pgf, hv, bd, ss, &
@@ -277,8 +277,8 @@ contains
          max_dh = maxval(abs(ms%h_layer - H0))
          max_du = maxval(abs(ms%u_face_x_layer))
          max_dv = maxval(abs(ms%v_face_y_layer))
-         max_dS = maxval(abs(ms%tracers(ms%idx_salinity)%hTr - hS_ic))
-         max_dT = maxval(abs(ms%tracers(ms%idx_temperature)%hTr - hT_ic))
+         max_dS = maxval(abs(ms%tracers(ms%idx_salinity)%c - hS_ic))
+         max_dT = maxval(abs(ms%tracers(ms%idx_temperature)%c - hT_ic))
 
          call check(error, max_dh < 1.0e-10_wp, "lake-at-rest SIGMA: h drifted")
          if (allocated(error)) exit checks
@@ -347,8 +347,8 @@ contains
          dyn%bt_work%bt_H_ref = H_BED
          call stamp_stratification(ms, eos, S_top=eos%S_ref - 1.0_wp, T_top=eos%T_ref + 2.0_wp, &
                                    dSdk=0.5_wp, dTdk=-1.0_wp)
-         allocate (hS_ic, source=ms%tracers(ms%idx_salinity)%hTr)
-         allocate (hT_ic, source=ms%tracers(ms%idx_temperature)%hTr)
+         allocate (hS_ic, source=ms%tracers(ms%idx_salinity)%c)
+         allocate (hT_ic, source=ms%tracers(ms%idx_temperature)%c)
 
          call map_in(grid, metrics, ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn, vc)
          call ocean_dyn_step_split(grid, metrics, dyn, eos, cor, ct, pgf, hv, bd, ss, &
@@ -366,8 +366,8 @@ contains
          end do
          max_du = maxval(abs(ms%u_face_x_layer))
          max_dv = maxval(abs(ms%v_face_y_layer))
-         max_dS = maxval(abs(ms%tracers(ms%idx_salinity)%hTr - hS_ic))
-         max_dT = maxval(abs(ms%tracers(ms%idx_temperature)%hTr - hT_ic))
+         max_dS = maxval(abs(ms%tracers(ms%idx_salinity)%c - hS_ic))
+         max_dT = maxval(abs(ms%tracers(ms%idx_temperature)%c - hT_ic))
 
          call check(error, max_dh < 1.0e-9_wp, "lake-at-rest ZSTAR_FULL: h drifted")
          if (allocated(error)) exit checks
@@ -435,10 +435,10 @@ contains
                do i = 1, nx
                   ms%h_layer(i, j, k) = H_BASE + 0.01_wp*sin( &
                                         2.0_wp*PI*real(i, wp)/real(nx, wp))
-                  ms%tracers(ms%idx_salinity)%hTr(i, j, k) = ms%h_layer(i, j, k)*( &
-                                                             eos%S_ref + 0.5_wp*cos(2.0_wp*PI*real(j, wp)/real(ny, wp)))
-                  ms%tracers(ms%idx_temperature)%hTr(i, j, k) = ms%h_layer(i, j, k)*( &
-                                                                eos%T_ref + 0.3_wp*sin(2.0_wp*PI*real(i, wp)/real(nx, wp)))
+                  ms%tracers(ms%idx_salinity)%c(i, j, k) = ( &
+                                                           eos%S_ref + 0.5_wp*cos(2.0_wp*PI*real(j, wp)/real(ny, wp)))
+                  ms%tracers(ms%idx_temperature)%c(i, j, k) = ( &
+                                                              eos%T_ref + 0.3_wp*sin(2.0_wp*PI*real(i, wp)/real(nx, wp)))
                end do
             end do
             do j = 1, ny
@@ -459,8 +459,8 @@ contains
          dyn%bt_work%bt_H_ref = real(NZ, wp)*H_BASE
 
          total_h0 = sum(ms%h_layer)*grid%dx*grid%dy
-         total_S0 = sum(ms%tracers(ms%idx_salinity)%hTr)*grid%dx*grid%dy
-         total_T0 = sum(ms%tracers(ms%idx_temperature)%hTr)*grid%dx*grid%dy
+         total_S0 = sum(ms%h_layer*ms%tracers(ms%idx_salinity)%c)*grid%dx*grid%dy
+         total_T0 = sum(ms%h_layer*ms%tracers(ms%idx_temperature)%c)*grid%dx*grid%dy
 
          call map_in(grid, metrics, ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn, vc)
          do step = 1, N_STEPS
@@ -470,8 +470,8 @@ contains
          call map_out(metrics, ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn, vc)
 
          total_h = sum(ms%h_layer)*grid%dx*grid%dy
-         total_S = sum(ms%tracers(ms%idx_salinity)%hTr)*grid%dx*grid%dy
-         total_T = sum(ms%tracers(ms%idx_temperature)%hTr)*grid%dx*grid%dy
+         total_S = sum(ms%h_layer*ms%tracers(ms%idx_salinity)%c)*grid%dx*grid%dy
+         total_T = sum(ms%h_layer*ms%tracers(ms%idx_temperature)%c)*grid%dx*grid%dy
          drift_h = abs(total_h - total_h0)/abs(total_h0)
          drift_S = abs(total_S - total_S0)/abs(total_S0)
          drift_T = abs(total_T - total_T0)/abs(total_T0)
@@ -548,12 +548,12 @@ contains
                do i = 1, nx
                   ms%h_layer(i, j, k) = H_BASE + 0.02_wp*sin( &
                                         2.0_wp*PI*real(i, wp)/real(nx, wp))
-                  ms%tracers(ms%idx_salinity)%hTr(i, j, k) = ms%h_layer(i, j, k)* &
-                                                             (eos%S_ref + 0.3_wp*sin( &
-                                                              PI*real(j, wp)/real(ny, wp)))
-                  ms%tracers(ms%idx_temperature)%hTr(i, j, k) = ms%h_layer(i, j, k)* &
-                                                                (eos%T_ref + 0.2_wp*cos( &
-                                                                 PI*real(i, wp)/real(nx, wp)))
+                  ms%tracers(ms%idx_salinity)%c(i, j, k) = &
+                     (eos%S_ref + 0.3_wp*sin( &
+                      PI*real(j, wp)/real(ny, wp)))
+                  ms%tracers(ms%idx_temperature)%c(i, j, k) = &
+                     (eos%T_ref + 0.2_wp*cos( &
+                      PI*real(i, wp)/real(nx, wp)))
                end do
             end do
             ! Non-zero face velocities so continuity changes h_layer.
@@ -568,8 +568,8 @@ contains
          dyn%dt_therm_ratio = 2
 
          total_h0 = sum(ms%h_layer)*grid%dx*grid%dy
-         total_S0 = sum(ms%tracers(ms%idx_salinity)%hTr)*grid%dx*grid%dy
-         total_T0 = sum(ms%tracers(ms%idx_temperature)%hTr)*grid%dx*grid%dy
+         total_S0 = sum(ms%h_layer*ms%tracers(ms%idx_salinity)%c)*grid%dx*grid%dy
+         total_T0 = sum(ms%h_layer*ms%tracers(ms%idx_temperature)%c)*grid%dx*grid%dy
 
          call map_in(grid, metrics, ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn, vc)
 
@@ -602,8 +602,8 @@ contains
          ! remap fires (Lagrangian continuity conserves mass; remap conserves
          ! by its own discrete accounting).
          total_h = sum(ms%h_layer)*grid%dx*grid%dy
-         total_S = sum(ms%tracers(ms%idx_salinity)%hTr)*grid%dx*grid%dy
-         total_T = sum(ms%tracers(ms%idx_temperature)%hTr)*grid%dx*grid%dy
+         total_S = sum(ms%h_layer*ms%tracers(ms%idx_salinity)%c)*grid%dx*grid%dy
+         total_T = sum(ms%h_layer*ms%tracers(ms%idx_temperature)%c)*grid%dx*grid%dy
          call check(error, abs(total_h - total_h0)/abs(total_h0) < 1.0e-10_wp, &
                     "cadence ZSTAR: total h not conserved")
          if (allocated(error)) exit checks
@@ -662,8 +662,8 @@ contains
                do i = 1, nx
                   ms%h_layer(i, j, k) = H_BASE + 0.02_wp*sin( &
                                         2.0_wp*PI*real(i, wp)/real(nx, wp))
-                  ms%tracers(ms%idx_salinity)%hTr(i, j, k) = ms%h_layer(i, j, k)*eos%S_ref
-                  ms%tracers(ms%idx_temperature)%hTr(i, j, k) = ms%h_layer(i, j, k)*eos%T_ref
+                  ms%tracers(ms%idx_salinity)%c(i, j, k) = eos%S_ref
+                  ms%tracers(ms%idx_temperature)%c(i, j, k) = eos%T_ref
                end do
             end do
             do j = 1, ny

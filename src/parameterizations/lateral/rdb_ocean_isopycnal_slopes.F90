@@ -280,8 +280,8 @@ contains
       ! top-level allocatables into the flat-impl kernel.
       call ocean_slopes_compute_impl(grid, metrics, eos, slopes, ms, &
                                      ms%h_layer, &
-                                     ms%tracers(ms%idx_temperature)%hTr, &
-                                     ms%tracers(ms%idx_salinity)%hTr, dt)
+                                     ms%tracers(ms%idx_temperature)%c, &
+                                     ms%tracers(ms%idx_salinity)%c, dt)
    end subroutine ocean_slopes_compute
 
    subroutine ocean_slopes_compute_impl(grid, metrics, eos, slopes, ms, &
@@ -431,11 +431,10 @@ contains
       h0c = h_neglect
 
       if (kap_dt_x2 <= 0.0_wp .or. nz < 2) then
-         ! No smoothing — pass the raw tracer-from-hTr through.
+         ! No smoothing — pass the stored concentration through.
          do concurrent(k=1:nz, j=1:ny, i=1:nx)
-            h_eff = max(h_layer(i, j, k), H_VANISHED)
-            t_fill(i, j, k) = t_htr(i, j, k)/h_eff
-            s_fill(i, j, k) = s_htr(i, j, k)/h_eff
+            t_fill(i, j, k) = t_htr(i, j, k)
+            s_fill(i, j, k) = s_htr(i, j, k)
          end do
          return
       end if
@@ -446,12 +445,10 @@ contains
       ! "k=1" as the first boundary row.
       do concurrent(j=1:ny, i=1:nx) &
          local(k, ent, c1, b1, d1, h_tr, h_eff, t_in, s_in)
-         ! T,S from hTr/h (floor h consistently — vanished layers feed a
-         ! near-zero raw T that the diffusion then overwrites).
+         ! T,S are the stored concentrations.
          do k = 1, nz
-            h_eff = max(h_layer(i, j, k), H_VANISHED)
-            t_in(k) = t_htr(i, j, k)/h_eff
-            s_in(k) = s_htr(i, j, k)/h_eff
+            t_in(k) = t_htr(i, j, k)
+            s_in(k) = s_htr(i, j, k)
          end do
 
          ! Forward elimination — first (bed) boundary row at k=1.

@@ -469,8 +469,8 @@ contains
       if (ms%idx_temperature <= 0 .or. ms%idx_salinity <= 0) return
 
       call tidal_mixing_column_kernel(grid, this, ms, &
-                                      ms%tracers(ms%idx_temperature)%hTr, &
-                                      ms%tracers(ms%idx_salinity)%hTr)
+                                      ms%tracers(ms%idx_temperature)%c, &
+                                      ms%tracers(ms%idx_salinity)%c)
    end subroutine tidal_mixing_compute
 
    pure subroutine column_layer_n2(eos, rho0, nz, h_col, t_col, s_col, n2_col)
@@ -543,7 +543,7 @@ contains
       type(ocean_tidal_mixing_t), intent(inout) :: this
       type(multilayer_state_t), intent(in) :: ms
       ! assumed-shape-ok: tracer registry outer-shim — caller host-dereferences
-      ! ms%tracers(idx)%hTr before passing; size varies per tracer slot
+      ! ms%tracers(idx)%c before passing; size varies per tracer slot
       ! (see CLAUDE.md "outer-shim + flat-impl" pattern); thermo cadence.
       real(wp), intent(in) :: hT(:, :, :)
          !! Temperature tracer hTr (degC*m), host-dereferenced.
@@ -597,9 +597,8 @@ contains
             do k = 1, nz
                dz_eff = max(ms%h_layer(i, j, k), H_VANISHED)
                h_col(k) = dz_eff
-               denom = 1.0_wp/max(ms%h_layer(i, j, k), H_DIV_EPS)
-               t_col(k) = hT(i, j, k)*denom
-               s_col(k) = hS(i, j, k)*denom
+               t_col(k) = hT(i, j, k)
+               s_col(k) = hS(i, j, k)
                if (k >= kbed) h_tot = h_tot + ms%h_layer(i, j, k)
             end do
 
@@ -788,7 +787,7 @@ contains
                if (this%bed_lump .and. k == kbed) then
                   tke_used = 0.0_wp
                else if (this%limiter_reinject .and. k > kbed .and. k < nz) then
-                  ! vanished-ok: a vanished layer is skipped (takes no power)
+                  ! a vanished layer is skipped (takes no power)
                   if (ms%h_layer(i, j, k) <= H_VANISHED) then
                      tke_used = 0.0_wp
                   else if (kd_max_l >= 0.0_wp) then

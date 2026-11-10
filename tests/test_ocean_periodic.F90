@@ -449,8 +449,8 @@ contains
          ms%u_face_x_layer = U0
          ms%v_face_y_layer = 0.0_wp
          do k = 1, NZ
-            ms%tracers(ms%idx_salinity)%hTr(:, :, k) = eos%S_ref*H0
-            ms%tracers(ms%idx_temperature)%hTr(:, :, k) = eos%T_ref*H0
+            ms%tracers(ms%idx_salinity)%c(:, :, k) = eos%S_ref
+            ms%tracers(ms%idx_temperature)%c(:, :, k) = eos%T_ref
          end do
          dyn%bt_work%bt_H_ref = real(NZ, wp)*H0
 
@@ -582,10 +582,8 @@ contains
             end do
          end do
          do k = 1, NZ
-            ms_a%tracers(ms_a%idx_salinity)%hTr(:, :, k) = &
-               eos_a%S_ref*ms_a%h_layer(:, :, k)
-            ms_a%tracers(ms_a%idx_temperature)%hTr(:, :, k) = &
-               eos_a%T_ref*ms_a%h_layer(:, :, k)
+            ms_a%tracers(ms_a%idx_salinity)%c(:, :, k) = eos_a%S_ref
+            ms_a%tracers(ms_a%idx_temperature)%c(:, :, k) = eos_a%T_ref
          end do
          dyn_a%bt_work%bt_H_ref = real(NZ, wp)*H0
 
@@ -608,10 +606,8 @@ contains
             end do
          end do
          do k = 1, NZ
-            ms_b%tracers(ms_b%idx_salinity)%hTr(:, :, k) = &
-               eos_b%S_ref*ms_b%h_layer(:, :, k)
-            ms_b%tracers(ms_b%idx_temperature)%hTr(:, :, k) = &
-               eos_b%T_ref*ms_b%h_layer(:, :, k)
+            ms_b%tracers(ms_b%idx_salinity)%c(:, :, k) = eos_b%S_ref
+            ms_b%tracers(ms_b%idx_temperature)%c(:, :, k) = eos_b%T_ref
          end do
          dyn_b%bt_work%bt_H_ref = real(NZ, wp)*H0
 
@@ -753,8 +749,8 @@ contains
          end do
          ! Tracer proportional to h
          do k = 1, NZ
-            ms%tracers(ms%idx_salinity)%hTr(:, :, k) = eos%S_ref*ms%h_layer(:, :, k)
-            ms%tracers(ms%idx_temperature)%hTr(:, :, k) = eos%T_ref*ms%h_layer(:, :, k)
+            ms%tracers(ms%idx_salinity)%c(:, :, k) = eos%S_ref
+            ms%tracers(ms%idx_temperature)%c(:, :, k) = eos%T_ref
          end do
          dyn%bt_work%bt_H_ref = real(NZ, wp)*H0
          ! Wrap ghosts at init (uniform H, so trivial but correct)
@@ -766,7 +762,7 @@ contains
 
          ! Total over physical interior only (ghost cells would double-count)
          total_h0 = sum(ms%h_layer(i0:i1, j0:j1, :))*grid%dx*grid%dy
-         total_S0 = sum(ms%tracers(ms%idx_salinity)%hTr(i0:i1, j0:j1, :))*grid%dx*grid%dy
+         total_S0 = sum(ms%h_layer(i0:i1, j0:j1, :)*ms%tracers(ms%idx_salinity)%c(i0:i1, j0:j1, :))*grid%dx*grid%dy
 
          call map_in(grid, metrics, ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
          !$acc update device(dyn%bt_work%bt_H_ref)
@@ -777,11 +773,11 @@ contains
                va, hd, vd, vmix, ms, DT, N_INNER, bc=bc)
          end do
 
-         !$acc update self(ms%h_layer, ms%tracers(ms%idx_salinity)%hTr)
+         !$acc update self(ms%h_layer, ms%tracers(ms%idx_salinity)%c)
          call map_out(metrics, ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
 
          total_h = sum(ms%h_layer(i0:i1, j0:j1, :))*grid%dx*grid%dy
-         total_S = sum(ms%tracers(ms%idx_salinity)%hTr(i0:i1, j0:j1, :))*grid%dx*grid%dy
+         total_S = sum(ms%h_layer(i0:i1, j0:j1, :)*ms%tracers(ms%idx_salinity)%c(i0:i1, j0:j1, :))*grid%dx*grid%dy
          drift_h = abs(total_h - total_h0)/abs(total_h0)
          drift_S = abs(total_S - total_S0)/abs(total_S0)
 
@@ -852,8 +848,8 @@ contains
          ms%u_face_x_layer = U0
          ms%v_face_y_layer = 0.0_wp
          do k = 1, NZ
-            ms%tracers(ms%idx_salinity)%hTr(:, :, k) = eos%S_ref*H0
-            ms%tracers(ms%idx_temperature)%hTr(:, :, k) = eos%T_ref*H0
+            ms%tracers(ms%idx_salinity)%c(:, :, k) = eos%S_ref
+            ms%tracers(ms%idx_temperature)%c(:, :, k) = eos%T_ref
          end do
          dyn%bt_work%bt_H_ref = real(NZ, wp)*H0
          call ocean_periodic_wrap_centre_2d(dyn%bt_work%bt_H_ref, &
@@ -1072,10 +1068,10 @@ contains
 
          ! Seed tracers proportional to h, then wrap the multilayer state ghosts.
          do k = 1, NZ
-            ms_a%tracers(ms_a%idx_salinity)%hTr(:, :, k) = eos_a%S_ref*ms_a%h_layer(:, :, k)
-            ms_a%tracers(ms_a%idx_temperature)%hTr(:, :, k) = eos_a%T_ref*ms_a%h_layer(:, :, k)
-            ms_b%tracers(ms_b%idx_salinity)%hTr(:, :, k) = eos_b%S_ref*ms_b%h_layer(:, :, k)
-            ms_b%tracers(ms_b%idx_temperature)%hTr(:, :, k) = eos_b%T_ref*ms_b%h_layer(:, :, k)
+            ms_a%tracers(ms_a%idx_salinity)%c(:, :, k) = eos_a%S_ref
+            ms_a%tracers(ms_a%idx_temperature)%c(:, :, k) = eos_a%T_ref
+            ms_b%tracers(ms_b%idx_salinity)%c(:, :, k) = eos_b%S_ref
+            ms_b%tracers(ms_b%idx_temperature)%c(:, :, k) = eos_b%T_ref
          end do
          call ocean_periodic_wrap_state(grid, bc, ms_a)
          call ocean_periodic_wrap_state(grid, bc, ms_b)

@@ -243,7 +243,7 @@ contains
       state%multilayer%h_layer = 5.0_wp
       it = state%multilayer%idx_temperature
       do k = 1, NZ
-         state%multilayer%tracers(it)%hTr(:, :, k) = 5.0_wp*(1.0_wp/real(2*k + 1, wp))
+         state%multilayer%tracers(it)%c(:, :, k) = 5.0_wp*(1.0_wp/real(2*k + 1, wp))
       end do
 
       call state%diag%register("temperature", units="degC", fill=fill_temperature, &

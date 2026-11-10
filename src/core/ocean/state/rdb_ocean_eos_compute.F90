@@ -66,8 +66,8 @@ contains
       if (ms%idx_salinity <= 0 .or. ms%idx_temperature <= 0) return
 
       call eos_compute_arrays(eos, ms%h_layer, &
-                              ms%tracers(ms%idx_salinity)%hTr, &
-                              ms%tracers(ms%idx_temperature)%hTr, &
+                              ms%tracers(ms%idx_salinity)%c, &
+                              ms%tracers(ms%idx_temperature)%c, &
                               ms%rho_layer, nx, ny, nz)
    end subroutine ocean_eos_compute
 

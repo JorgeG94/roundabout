@@ -222,7 +222,7 @@ contains
       !!   * h_layer stays at its IC bit-for-bit (zero flow → no
       !!     thickness change)
       !!   * Column salt conserved exactly (Q_salt = 0, no flow)
-      !!   * Column heat ΔΣ(hT) = N · dt · Q_heat / (ρ_0 · cp)
+      !!   * Column heat ΔΣ(h·T) = N · dt · Q_heat / (ρ_0 · cp)
       !!     to round-off — surface forcing is the only source
       !!   * BL depth at the end > BL depth after step 1
       !!     (cooling deepens the BL through KPP)
@@ -271,13 +271,13 @@ contains
          ms%u_face_x_layer = 0.0_wp
          ms%v_face_y_layer = 0.0_wp
          do k = 1, NZ
-            ms%tracers(ms%idx_salinity)%hTr(:, :, k) = eos%S_ref*H_LAYER
-            ms%tracers(ms%idx_temperature)%hTr(:, :, k) = &
-               (eos%T_ref + real(k - 1, wp))*H_LAYER
+            ms%tracers(ms%idx_salinity)%c(:, :, k) = eos%S_ref
+            ms%tracers(ms%idx_temperature)%c(:, :, k) = &
+               (eos%T_ref + real(k - 1, wp))
             ms%rho_layer(:, :, k) = eos%rho0 + 0.5_wp*real(NZ - k, wp)
          end do
-         allocate (hT_ic, source=ms%tracers(ms%idx_temperature)%hTr)
-         allocate (hS_ic, source=ms%tracers(ms%idx_salinity)%hTr)
+         allocate (hT_ic, source=ms%tracers(ms%idx_temperature)%c)
+         allocate (hS_ic, source=ms%tracers(ms%idx_salinity)%c)
          allocate (h_ic, source=ms%h_layer)
 
          call ss%set_wind_stress_const(0.0_wp, 0.0_wp)
@@ -311,7 +311,7 @@ contains
          ! homogeneous after the KPP bulk-Ri sweep was extended to wall
          ! columns).  Per-cell salt
          ! must therefore stay at its IC to round-off.
-         max_dsalt = maxval(abs(ms%tracers(ms%idx_salinity)%hTr - hS_ic))
+         max_dsalt = maxval(abs(ms%tracers(ms%idx_salinity)%c - hS_ic))
          call check(error, max_dsalt < 1.0e-10_wp, &
                     "cooling+KPP: per-cell salt drifted under zero flow")
          if (allocated(error)) exit checks
@@ -338,8 +338,8 @@ contains
          do j = 1, grid%ny_total
             do i = 1, grid%nx_total
                max_budget_dev = max(max_budget_dev, abs( &
-                                    sum(ms%tracers(ms%idx_temperature)%hTr(i, j, :) &
-                                        - hT_ic(i, j, :)) &
+                                    sum(ms%h_layer(i, j, :)*(ms%tracers(ms%idx_temperature)%c(i, j, :) &
+                                                             - hT_ic(i, j, :))) &
                                     - heat_budget_expected))
             end do
          end do
@@ -399,8 +399,8 @@ contains
          ms%u_face_x_layer = 0.0_wp
          ms%v_face_y_layer = 0.0_wp
          do k = 1, NZ
-            ms%tracers(ms%idx_salinity)%hTr(:, :, k) = eos%S_ref*H_LAYER
-            ms%tracers(ms%idx_temperature)%hTr(:, :, k) = eos%T_ref*H_LAYER
+            ms%tracers(ms%idx_salinity)%c(:, :, k) = eos%S_ref
+            ms%tracers(ms%idx_temperature)%c(:, :, k) = eos%T_ref
             ms%rho_layer(:, :, k) = eos%rho0
          end do
 
@@ -536,8 +536,8 @@ contains
                                             sin(2.0_wp*PI*real(i - 1, wp)/real(nx - 1, wp))
             end do
          end do
-         ms%tracers(ms%idx_salinity)%hTr(:, :, k) = eos%S_ref*H_BASE
-         ms%tracers(ms%idx_temperature)%hTr(:, :, k) = (eos%T_ref + real(NZ - k, wp))*H_BASE
+         ms%tracers(ms%idx_salinity)%c(:, :, k) = eos%S_ref
+         ms%tracers(ms%idx_temperature)%c(:, :, k) = (eos%T_ref + real(NZ - k, wp))
          ms%rho_layer(:, :, k) = eos%rho0 + 0.5_wp*real(NZ - k, wp)
       end do
 
@@ -555,8 +555,8 @@ contains
       ! sub-block.  Probe globally over all cells.
       allocate (mass_ic(nx, ny), salt_ic(nx, ny), heat_ic(nx, ny))
       mass_ic = sum(ms%h_layer, dim=3)
-      salt_ic = sum(ms%tracers(ms%idx_salinity)%hTr, dim=3)
-      heat_ic = sum(ms%tracers(ms%idx_temperature)%hTr, dim=3)
+      salt_ic = sum(ms%h_layer*ms%tracers(ms%idx_salinity)%c, dim=3)
+      heat_ic = sum(ms%h_layer*ms%tracers(ms%idx_temperature)%c, dim=3)
 
       call map_in_all(grid, metrics, ms, ct, cor, pgf, hv, bd, ss, sf, va, hd, vd, vmix)
       do step = 1, N_STEPS
@@ -571,9 +571,9 @@ contains
          global_mass_before = sum(mass_ic)
          global_mass_after = sum(sum(ms%h_layer, dim=3))
          global_salt_before = sum(salt_ic)
-         global_salt_after = sum(sum(ms%tracers(ms%idx_salinity)%hTr, dim=3))
+         global_salt_after = sum(sum(ms%h_layer*ms%tracers(ms%idx_salinity)%c, dim=3))
          global_heat_before = sum(heat_ic)
-         global_heat_after = sum(sum(ms%tracers(ms%idx_temperature)%hTr, dim=3))
+         global_heat_after = sum(sum(ms%h_layer*ms%tracers(ms%idx_temperature)%c, dim=3))
          max_dmass = abs(global_mass_after - global_mass_before)
          max_dsalt = abs(global_salt_after - global_salt_before)
          max_dheat = abs(global_heat_after - global_heat_before)

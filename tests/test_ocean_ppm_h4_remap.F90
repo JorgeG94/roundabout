@@ -392,10 +392,10 @@ contains
                   ms_h4%h_layer(i, j, k) = dz(k)
                   ! Smooth tracer: sin(pi * k_frac) so the profile has curvature
                   ! that the H4 stencil resolves better than PPM.
-                  ms_ppm%tracers(ms_ppm%idx_salinity)%hTr(i, j, k) = &
-                     (S_REF + sin(3.14159265358979323846_wp*real(k, wp)/real(NZ, wp)))*dz(k)
-                  ms_h4%tracers(ms_h4%idx_salinity)%hTr(i, j, k) = &
-                     ms_ppm%tracers(ms_ppm%idx_salinity)%hTr(i, j, k)
+                  ms_ppm%tracers(ms_ppm%idx_salinity)%c(i, j, k) = &
+                     (S_REF + sin(3.14159265358979323846_wp*real(k, wp)/real(NZ, wp)))
+                  ms_h4%tracers(ms_h4%idx_salinity)%c(i, j, k) = &
+                     ms_ppm%tracers(ms_ppm%idx_salinity)%c(i, j, k)
                end do
             end do
          end do
@@ -405,7 +405,7 @@ contains
          do k = 1, NZ
             do j = 1, ny_tot
                do i = 1, nx_tot
-                  mass_old = mass_old + ms_ppm%tracers(ms_ppm%idx_salinity)%hTr(i, j, k)
+                  mass_old = mass_old + ms_ppm%h_layer(i, j, k)*ms_ppm%tracers(ms_ppm%idx_salinity)%c(i, j, k)
                end do
             end do
          end do
@@ -472,8 +472,8 @@ contains
             do j = 1, ny_tot
                do i = 1, nx_tot
                   max_diff = max(max_diff, &
-                                 abs(ms_ppm%tracers(ms_ppm%idx_salinity)%hTr(i, j, k) - &
-                                     ms_h4%tracers(ms_h4%idx_salinity)%hTr(i, j, k)))
+                                 abs(ms_ppm%tracers(ms_ppm%idx_salinity)%c(i, j, k) - &
+                                     ms_h4%tracers(ms_h4%idx_salinity)%c(i, j, k)))
                end do
             end do
          end do
@@ -486,7 +486,7 @@ contains
          do k = 1, NZ
             do j = 1, ny_tot
                do i = 1, nx_tot
-                  mass_ppm = mass_ppm + ms_ppm%tracers(ms_ppm%idx_salinity)%hTr(i, j, k)
+                  mass_ppm = mass_ppm + ms_ppm%h_layer(i, j, k)*ms_ppm%tracers(ms_ppm%idx_salinity)%c(i, j, k)
                end do
             end do
          end do
@@ -500,7 +500,7 @@ contains
          do k = 1, NZ
             do j = 1, ny_tot
                do i = 1, nx_tot
-                  mass_h4 = mass_h4 + ms_h4%tracers(ms_h4%idx_salinity)%hTr(i, j, k)
+                  mass_h4 = mass_h4 + ms_h4%h_layer(i, j, k)*ms_h4%tracers(ms_h4%idx_salinity)%c(i, j, k)
                end do
             end do
          end do
@@ -560,10 +560,10 @@ contains
                do i = 1, nx_tot
                   ms_ppm%h_layer(i, j, k) = dz(k)
                   ms_pqm%h_layer(i, j, k) = dz(k)
-                  ms_ppm%tracers(ms_ppm%idx_salinity)%hTr(i, j, k) = &
-                     (S_REF + sin(3.14159265358979323846_wp*real(k, wp)/real(NZ, wp)))*dz(k)
-                  ms_pqm%tracers(ms_pqm%idx_salinity)%hTr(i, j, k) = &
-                     ms_ppm%tracers(ms_ppm%idx_salinity)%hTr(i, j, k)
+                  ms_ppm%tracers(ms_ppm%idx_salinity)%c(i, j, k) = &
+                     (S_REF + sin(3.14159265358979323846_wp*real(k, wp)/real(NZ, wp)))
+                  ms_pqm%tracers(ms_pqm%idx_salinity)%c(i, j, k) = &
+                     ms_ppm%tracers(ms_ppm%idx_salinity)%c(i, j, k)
                end do
             end do
          end do
@@ -572,7 +572,7 @@ contains
          do k = 1, NZ
             do j = 1, ny_tot
                do i = 1, nx_tot
-                  mass_old = mass_old + ms_ppm%tracers(ms_ppm%idx_salinity)%hTr(i, j, k)
+                  mass_old = mass_old + ms_ppm%h_layer(i, j, k)*ms_ppm%tracers(ms_ppm%idx_salinity)%c(i, j, k)
                end do
             end do
          end do
@@ -630,8 +630,8 @@ contains
             do j = 1, ny_tot
                do i = 1, nx_tot
                   max_diff = max(max_diff, &
-                                 abs(ms_ppm%tracers(ms_ppm%idx_salinity)%hTr(i, j, k) - &
-                                     ms_pqm%tracers(ms_pqm%idx_salinity)%hTr(i, j, k)))
+                                 abs(ms_ppm%tracers(ms_ppm%idx_salinity)%c(i, j, k) - &
+                                     ms_pqm%tracers(ms_pqm%idx_salinity)%c(i, j, k)))
                end do
             end do
          end do
@@ -644,7 +644,7 @@ contains
          do k = 1, NZ
             do j = 1, ny_tot
                do i = 1, nx_tot
-                  mass_ppm = mass_ppm + ms_ppm%tracers(ms_ppm%idx_salinity)%hTr(i, j, k)
+                  mass_ppm = mass_ppm + ms_ppm%h_layer(i, j, k)*ms_ppm%tracers(ms_ppm%idx_salinity)%c(i, j, k)
                end do
             end do
          end do
@@ -657,7 +657,7 @@ contains
          do k = 1, NZ
             do j = 1, ny_tot
                do i = 1, nx_tot
-                  mass_pqm = mass_pqm + ms_pqm%tracers(ms_pqm%idx_salinity)%hTr(i, j, k)
+                  mass_pqm = mass_pqm + ms_pqm%h_layer(i, j, k)*ms_pqm%tracers(ms_pqm%idx_salinity)%c(i, j, k)
                end do
             end do
          end do

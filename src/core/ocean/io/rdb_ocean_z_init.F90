@@ -2,7 +2,7 @@
 module rdb_ocean_z_init
    !! Puts a GEOPOTENTIAL T(z)/S(z) profile onto the seeded layer
    !! centres (`&ocean_zinit_nml`) and writes the multilayer tracer slots
-   !! as `hTr = value * h_layer`.  Two sources, `&ocean_zinit_nml source`:
+   !! as `c = value`.  Two sources, `&ocean_zinit_nml source`:
    !!
    !!   * `"file"` (default) — reads pre-regridded T + S from a
    !!     model-grid NetCDF and interpolates linearly in depth.
@@ -232,17 +232,17 @@ contains
                if (convert) call convert_pot_prac_to_cons_abs(nz_ml, t_col, s_col)
             end if
 
-            ! Roundabout tracer convention: hTr = value * h_layer.
+            ! Roundabout tracer convention: c = value.
             if (idx_T > 0) then
                do k = 1, nz_ml
-                  ms%tracers(idx_T)%hTr(ng + i, ng + j, k) = &
-                     t_col(k)*ms%h_layer(ng + i, ng + j, k)
+                  ms%tracers(idx_T)%c(ng + i, ng + j, k) = &
+                     t_col(k)
                end do
             end if
             if (idx_S > 0) then
                do k = 1, nz_ml
-                  ms%tracers(idx_S)%hTr(ng + i, ng + j, k) = &
-                     s_col(k)*ms%h_layer(ng + i, ng + j, k)
+                  ms%tracers(idx_S)%c(ng + i, ng + j, k) = &
+                     s_col(k)
                end do
             end if
          end do
@@ -338,7 +338,7 @@ contains
       !! `T(z) = lin_t_ref + lin_dt_dz*z`, `S(z) = lin_s_ref +
       !! lin_ds_dz*z` (`z` positive UP, zero at the `z = 0` datum),
       !! sampled at each layer centre's TRUE geopotential depth and
-      !! written as `hTr = value * h_layer`.
+      !! written as `c = value`.
       !!
       !! Opens no file, so — unlike the NetCDF path — it fills the FULL
       !! array INCLUDING the ghost rows and the dry columns: the formula
@@ -388,16 +388,14 @@ contains
             call build_z_ctr(ms%h_layer(i, j, :), nz_ml, z_top, z_ctr)
             if (idx_T > 0) then
                do k = 1, nz_ml
-                  ms%tracers(idx_T)%hTr(i, j, k) = &
-                     linear_in_z(cfg%lin_t_ref, cfg%lin_dt_dz, z_ctr(k))* &
-                     ms%h_layer(i, j, k)
+                  ms%tracers(idx_T)%c(i, j, k) = &
+                     linear_in_z(cfg%lin_t_ref, cfg%lin_dt_dz, z_ctr(k))
                end do
             end if
             if (idx_S > 0) then
                do k = 1, nz_ml
-                  ms%tracers(idx_S)%hTr(i, j, k) = &
-                     linear_in_z(cfg%lin_s_ref, cfg%lin_ds_dz, z_ctr(k))* &
-                     ms%h_layer(i, j, k)
+                  ms%tracers(idx_S)%c(i, j, k) = &
+                     linear_in_z(cfg%lin_s_ref, cfg%lin_ds_dz, z_ctr(k))
                end do
             end if
          end do

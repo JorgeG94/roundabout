@@ -218,7 +218,7 @@ contains
    ! -----------------------------------------------------------------
 
    subroutine deposit_column(grid, sf, nz, dz, absorbed_frac)
-      !! Run the SW deposition on a hTr = 0 uniform column and return the
+      !! Run the SW deposition on a c = 0 uniform column and return the
       !! fraction of I0 absorbed in each layer (surface lump added back).
       type(hgrid_t), intent(in) :: grid
       type(ocean_surface_flux_t), intent(inout) :: sf
@@ -233,7 +233,7 @@ contains
       ms%nz_ml = nz
       call ms%init(grid)
       ms%h_layer = dz
-      ms%tracers(ms%idx_temperature)%hTr = 0.0_wp
+      ms%tracers(ms%idx_temperature)%c = 0.0_wp
       i = grid%nx_total/2
       j = grid%ny_total/2
       i0 = sf%Q_heat(i, j)
@@ -243,7 +243,7 @@ contains
       call ms%enter_data()
       call sf%enter_data()
       call ocean_surface_flux_apply_sw_penetration(grid, sf, ms, DT)
-      associate (hT => ms%tracers(ms%idx_temperature)%hTr)
+      associate (hT => ms%tracers(ms%idx_temperature)%c)
          !$acc update self(hT)
       end associate
       call sf%exit_data()
@@ -251,7 +251,7 @@ contains
       !$acc exit data delete(ms, sf)
 
       do k = 1, nz
-         absorbed_frac(k) = ms%tracers(ms%idx_temperature)%hTr(i, j, k)/(inv_scale*i0)
+         absorbed_frac(k) = ms%tracers(ms%idx_temperature)%c(i, j, k)*dz/(inv_scale*i0)
       end do
       absorbed_frac(nz) = absorbed_frac(nz) + 1.0_wp   ! put the surface lump back
       call ms%destroy()
@@ -472,8 +472,8 @@ contains
       ms%v_face_y_layer = 0.0_wp
       do k = 1, NZ
          ms%rho_layer(:, :, k) = 1030.0_wp
-         ms%tracers(ms%idx_temperature)%hTr(:, :, k) = 15.0_wp*5.0_wp
-         ms%tracers(ms%idx_salinity)%hTr(:, :, k) = 35.0_wp*5.0_wp
+         ms%tracers(ms%idx_temperature)%c(:, :, k) = 15.0_wp
+         ms%tracers(ms%idx_salinity)%c(:, :, k) = 35.0_wp
       end do
       call vmix%init(grid, nz_ml=NZ)
       vmix%c_vt2 = 0.0_wp
@@ -608,8 +608,8 @@ contains
       ms%u_face_x_layer = 0.0_wp
       ms%v_face_y_layer = 0.0_wp
       do k = 1, nz
-         ms%tracers(ms%idx_temperature)%hTr(:, :, k) = 12.0_wp*dz
-         ms%tracers(ms%idx_salinity)%hTr(:, :, k) = 35.0_wp*dz
+         ms%tracers(ms%idx_temperature)%c(:, :, k) = 12.0_wp
+         ms%tracers(ms%idx_salinity)%c(:, :, k) = 35.0_wp
       end do
       call epbl%init(grid, nz_ml=nz)
       epbl%enable = .true.

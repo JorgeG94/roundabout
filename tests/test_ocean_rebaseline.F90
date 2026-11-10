@@ -214,9 +214,9 @@ contains
       s%h = h%state%multilayer%h_layer
       s%u = h%state%multilayer%u_face_x_layer
       s%v = h%state%multilayer%v_face_y_layer
-      s%hT = h%state%multilayer%tracers(it)%hTr
-      s%hS = h%state%multilayer%tracers(is)%hTr
-      s%hP = h%state%multilayer%tracers(ip)%hTr
+      s%hT = h%state%multilayer%tracers(it)%c
+      s%hS = h%state%multilayer%tracers(is)%c
+      s%hP = h%state%multilayer%tracers(ip)%c
       s%rho = h%state%multilayer%rho_layer
       s%eta = h%state%dyn%bt_work%bt_eta
       s%refT = h%state%sponge%ref_tracer(:, :, :, it)

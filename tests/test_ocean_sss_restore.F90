@@ -105,8 +105,8 @@ contains
       call eos%init(grid)
       call sf%init(grid)
       ms%h_layer = H0
-      ms%tracers(ms%idx_temperature)%hTr = 10.0_wp*H0
-      ms%tracers(ms%idx_salinity)%hTr = S0*H0
+      ms%tracers(ms%idx_temperature)%c = 10.0_wp
+      ms%tracers(ms%idx_salinity)%c = S0
       call sf%set_restore(.false., .true., 0.0_wp, PISTON_DAY, 0.0_wp, 0.0_wp)
       call sf%set_restore_file(grid, PISTON_DAY, max_delta, net_mode, conv)
       sf%sss_target = S0
@@ -123,7 +123,7 @@ contains
    subroutine pull_unmap(ms, sf)
       type(multilayer_state_t), intent(inout) :: ms
       type(ocean_surface_flux_t), intent(inout) :: sf
-      associate (hS => ms%tracers(ms%idx_salinity)%hTr, sbud => ms%salt_budget_surface)
+      associate (hS => ms%tracers(ms%idx_salinity)%c, sbud => ms%salt_budget_surface)
          !$acc update self(hS, sbud)
       end associate
       call sf%exit_data()
@@ -195,7 +195,7 @@ contains
                     "a cell at target must not change")
          if (allocated(error)) exit checks
          ! The budget contributor mirrors the deposit.
-         call check(error, abs((ms%tracers(ms%idx_salinity)%hTr(NG + 1, NG + 1, NZ) - S0*H0) &
+         call check(error, abs(H0*(ms%tracers(ms%idx_salinity)%c(NG + 1, NG + 1, NZ) - S0) &
                                - inc_at(ms, NG + 1, NG + 1)) < 1.0e-12_wp, &
                     "the tracer must move by exactly what salt_budget_surface records")
       end block checks
@@ -450,7 +450,7 @@ contains
          call ocean_data_input_update_all(reader, tq(k))
          call ocean_data_forcing_apply(df, reader, grid, ss, sf, bc, tq(k))
          call ocean_sss_restore_apply(grid, metrics, sf, ms, DT)
-         associate (hS => ms%tracers(ms%idx_salinity)%hTr)
+         associate (hS => ms%tracers(ms%idx_salinity)%c)
             !$acc update self(hS)
             do j = NG + 1, NG + NYP
                do i = NG + 1, NG + NXP
@@ -463,7 +463,7 @@ contains
                      s_before = S0 + (DT*W*(0.5_wp*(v0(ip, jp) + v1(ip, jp)) - S0))/H0
                   end if
                   expect = (s_before*H0 + DT*W*(tgt - s_before))/H0
-                  call check(error, abs(hS(i, j, NZ)/H0 - expect) <= 1.0e-12_wp*S0, &
+                  call check(error, abs(hS(i, j, NZ) - expect) <= 1.0e-12_wp*S0, &
                              "surface salinity must follow the piston law toward "// &
                              "the time-blended file target")
                   if (allocated(error)) exit checks
@@ -501,7 +501,7 @@ contains
    end subroutine test_conservation
 
    subroutine conservation_run(net_mode, dtotal, integ, scale_ref)
-      !! Total `sum A hS` change over 10 steps (`dtotal`), the integral of
+      !! Total `sum A h S` change over 10 steps (`dtotal`), the integral of
       !! the budget contributor (`integ`), and the initial total.
       integer, intent(in) :: net_mode
       real(wp), intent(out) :: dtotal, integ, scale_ref
@@ -524,7 +524,7 @@ contains
       t_before = 0.0_wp
       do j = NG + 1, NG + NYP
          do i = NG + 1, NG + NXP
-            t_before = t_before + a(i, j)*ms%tracers(ms%idx_salinity)%hTr(i, j, NZ)
+            t_before = t_before + a(i, j)*ms%h_layer(i, j, NZ)*ms%tracers(ms%idx_salinity)%c(i, j, NZ)
          end do
       end do
       scale_ref = t_before
@@ -537,7 +537,7 @@ contains
       integ = 0.0_wp
       do j = NG + 1, NG + NYP
          do i = NG + 1, NG + NXP
-            t_after = t_after + a(i, j)*ms%tracers(ms%idx_salinity)%hTr(i, j, NZ)
+            t_after = t_after + a(i, j)*ms%h_layer(i, j, NZ)*ms%tracers(ms%idx_salinity)%c(i, j, NZ)
             integ = integ + a(i, j)*ms%salt_budget_surface(i, j, NZ)
          end do
       end do

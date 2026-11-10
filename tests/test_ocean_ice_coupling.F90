@@ -104,9 +104,9 @@ contains
       call sf%set_surface_flux_const(0.0_wp, 0.0_wp)
 
       ms%h_layer = H_LAYER
-      ms%tracers(ms%idx_salinity)%hTr = S_INIT*H_LAYER
-      ms%tracers(ms%idx_temperature)%hTr = T_DEEP*H_LAYER
-      ms%tracers(ms%idx_temperature)%hTr(:, :, NZ) = t_surface*H_LAYER
+      ms%tracers(ms%idx_salinity)%c = S_INIT
+      ms%tracers(ms%idx_temperature)%c = T_DEEP
+      ms%tracers(ms%idx_temperature)%c(:, :, NZ) = t_surface
    end subroutine setup_state
 
    subroutine run_uptake(grid, eos, ms, ice)
@@ -123,8 +123,8 @@ contains
       call ms%enter_data()
       call ice%enter_data()
       call ice_frazil_uptake(grid, eos, ms, ice, DT_THERM)
-      associate (hT => ms%tracers(ms%idx_temperature)%hTr, &
-                 hS => ms%tracers(ms%idx_salinity)%hTr, &
+      associate (hT => ms%tracers(ms%idx_temperature)%c, &
+                 hS => ms%tracers(ms%idx_salinity)%c, &
                  fz => ice%frazil_heat, mi => ice%m_ice, ei => ice%enth_ice, &
                  si => ice%sal_ice, mf => ice%m_frozen_diag, sd => ice%salt_flux_diag)
          !$acc update self(hT, hS, fz, mi, ei, si, mf, sd)
@@ -159,8 +159,8 @@ contains
       call ice_ocean_brine_flux(sf, ice)
       call ocean_surface_flux_apply_tracers(grid, sf, ms, DT_THERM)
 
-      associate (hT => ms%tracers(ms%idx_temperature)%hTr, &
-                 hS => ms%tracers(ms%idx_salinity)%hTr, &
+      associate (hT => ms%tracers(ms%idx_temperature)%c, &
+                 hS => ms%tracers(ms%idx_salinity)%c, &
                  fz => ice%frazil_heat, mi => ice%m_ice, ei => ice%enth_ice, &
                  si => ice%sal_ice, mf => ice%m_frozen_diag, sd => ice%salt_flux_diag, &
                  qs => sf%Q_salt)
@@ -208,11 +208,11 @@ contains
          call setup_state(grid, ms, eos, ice, sf, 0.0_wp)
          t_f = eos_freezing_point(eos, S_INIT, 0.0_wp)
          ! Re-seed the surface at t_f exactly (post-clamp state).
-         ms%tracers(ms%idx_temperature)%hTr(:, :, NZ) = t_f*H_LAYER
+         ms%tracers(ms%idx_temperature)%c(:, :, NZ) = t_f
          ice%frazil_heat = E_BANK
 
-         allocate (hT_ic, source=ms%tracers(ms%idx_temperature)%hTr)
-         allocate (hS_ic, source=ms%tracers(ms%idx_salinity)%hTr)
+         allocate (hT_ic, source=ms%tracers(ms%idx_temperature)%c)
+         allocate (hS_ic, source=ms%tracers(ms%idx_salinity)%c)
 
          call run_uptake(grid, eos, ms, ice)
 
@@ -267,11 +267,11 @@ contains
          end do
 
          ! ---- Ocean tracers untouched by the uptake itself ----
-         call check(error, maxval(abs(ms%tracers(ms%idx_temperature)%hTr - hT_ic)) < 1.0e-14_wp, &
-                    "uptake must not touch hTr_T")
+         call check(error, maxval(abs(ms%tracers(ms%idx_temperature)%c - hT_ic)) < 1.0e-14_wp, &
+                    "uptake must not touch the T concentration")
          if (allocated(error)) exit checks
-         call check(error, maxval(abs(ms%tracers(ms%idx_salinity)%hTr - hS_ic)) < 1.0e-14_wp, &
-                    "uptake must not touch hTr_S")
+         call check(error, maxval(abs(ms%tracers(ms%idx_salinity)%c - hS_ic)) < 1.0e-14_wp, &
+                    "uptake must not touch the S concentration")
 
       end block checks
       if (allocated(hT_ic)) deallocate (hT_ic)
@@ -295,16 +295,16 @@ contains
 
          call setup_state(grid, ms, eos, ice, sf, 0.0_wp)
          t_f = eos_freezing_point(eos, S_INIT, 0.0_wp)
-         ms%tracers(ms%idx_temperature)%hTr(:, :, NZ) = t_f*H_LAYER
+         ms%tracers(ms%idx_temperature)%c(:, :, NZ) = t_f
          ice%frazil_heat = E_BANK
 
          ip = grid%nx_total/2
          jp = grid%ny_total/2
-         s_before = ms%tracers(ms%idx_salinity)%hTr(ip, jp, NZ)/H_LAYER
+         s_before = ms%tracers(ms%idx_salinity)%c(ip, jp, NZ)
 
          call run_chain(grid, eos, ms, ice, sf, do_accumulate=.false.)
 
-         s_after = ms%tracers(ms%idx_salinity)%hTr(ip, jp, NZ)/H_LAYER
+         s_after = ms%tracers(ms%idx_salinity)%c(ip, jp, NZ)
 
          call check(error, sf%has_salt, "has_salt must be latched true")
          if (allocated(error)) exit checks
@@ -322,14 +322,14 @@ contains
 
          expected_dhS = ice%m_frozen_diag(ip, jp)*(S_INIT - ICE_BULK_SALINITY)
          tol = 1.0e-12_wp*abs(expected_dhS)
-         call check(error, abs(sf%rho0*(ms%tracers(ms%idx_salinity)%hTr(ip, jp, NZ) &
-                                        - s_before*H_LAYER) - expected_dhS) <= tol, &
+         call check(error, abs(sf%rho0*H_LAYER*(ms%tracers(ms%idx_salinity)%c(ip, jp, NZ) &
+                                                - s_before) - expected_dhS) <= tol, &
                     "salt added to the ocean must equal the salt rejected")
          if (allocated(error)) exit checks
 
          do k = 1, NZ - 1
-            call check(error, abs(ms%tracers(ms%idx_salinity)%hTr(ip, jp, k) &
-                                  - S_INIT*H_LAYER) < 1.0e-12_wp, &
+            call check(error, abs(ms%tracers(ms%idx_salinity)%c(ip, jp, k) &
+                                  - S_INIT) < 1.0e-12_wp, &
                        "sub-surface salinity must be untouched")
             if (allocated(error)) exit checks
          end do
@@ -354,7 +354,7 @@ contains
       checks: block
 
          call setup_state(grid, ms, eos, ice, sf, T_COLD)
-         allocate (hS_ic, source=ms%tracers(ms%idx_salinity)%hTr)
+         allocate (hS_ic, source=ms%tracers(ms%idx_salinity)%c)
 
          call run_chain(grid, eos, ms, ice, sf, do_accumulate=.true.)
 
@@ -365,7 +365,7 @@ contains
          ! to t_f but never touches S, so s_surf_pre == the IC value.
          t_f = eos_freezing_point(eos, S_INIT, 0.0_wp)
          s_surf_pre = S_INIT
-         call check(error, abs(hS_ic(ip, jp, NZ)/H_LAYER - s_surf_pre) < 1.0e-12_wp, &
+         call check(error, abs(hS_ic(ip, jp, NZ) - s_surf_pre) < 1.0e-12_wp, &
                     "the clamp must not move S (s_surf_pre == IC value)")
          if (allocated(error)) exit checks
 
@@ -375,8 +375,8 @@ contains
 
          d_ocean = 0.0_wp
          do k = 1, NZ
-            d_ocean = d_ocean + sf%rho0*(ms%tracers(ms%idx_salinity)%hTr(ip, jp, k) &
-                                         - hS_ic(ip, jp, k))
+            d_ocean = d_ocean + sf%rho0*ms%h_layer(ip, jp, k)*(ms%tracers(ms%idx_salinity)%c(ip, jp, k) &
+                                                               - hS_ic(ip, jp, k))
          end do
 
          ice_salt = 0.0_wp
@@ -410,17 +410,17 @@ contains
 
          call setup_state(grid, ms, eos, ice, sf, T_WARM)
          ! Bank already all-zero from ice%init.
-         allocate (hT_ic, source=ms%tracers(ms%idx_temperature)%hTr)
-         allocate (hS_ic, source=ms%tracers(ms%idx_salinity)%hTr)
+         allocate (hT_ic, source=ms%tracers(ms%idx_temperature)%c)
+         allocate (hS_ic, source=ms%tracers(ms%idx_salinity)%c)
          allocate (m_ice_ic, source=ice%m_ice)
          allocate (enth_ice_ic, source=ice%enth_ice)
 
          call run_chain(grid, eos, ms, ice, sf, do_accumulate=.true.)
 
-         call check(error, maxval(abs(ms%tracers(ms%idx_temperature)%hTr - hT_ic)) == 0.0_wp, &
+         call check(error, maxval(abs(ms%tracers(ms%idx_temperature)%c - hT_ic)) == 0.0_wp, &
                     "hT must be bit-identical")
          if (allocated(error)) exit checks
-         call check(error, maxval(abs(ms%tracers(ms%idx_salinity)%hTr - hS_ic)) == 0.0_wp, &
+         call check(error, maxval(abs(ms%tracers(ms%idx_salinity)%c - hS_ic)) == 0.0_wp, &
                     "hS must be bit-identical")
          if (allocated(error)) exit checks
          call check(error, maxval(abs(ice%m_ice - m_ice_ic)) == 0.0_wp, &
@@ -462,7 +462,7 @@ contains
 
          call setup_state(grid, ms, eos, ice, sf, 0.0_wp)
          t_f = eos_freezing_point(eos, S_INIT, 0.0_wp)
-         ms%tracers(ms%idx_temperature)%hTr(:, :, NZ) = t_f*H_LAYER
+         ms%tracers(ms%idx_temperature)%c(:, :, NZ) = t_f
          ice%frazil_heat = E_BANK   ! seeded everywhere, INCLUDING ghosts
 
          i_land = NGHOST + 2
@@ -555,7 +555,7 @@ contains
          call setup_state(grid, ms, eos, ice, sf, CT)
          call eos_apply_ts_convention(eos, TS_CONS_ABS, TFREEZE_FORM_TEOS_POLY, 0.0_wp)
          eos%c_p = CP_TEST
-         ms%tracers(ms%idx_salinity)%hTr = SA*H_LAYER
+         ms%tracers(ms%idx_salinity)%c = SA
          ice%m_ice(:, :, 1) = 1.0_wp
          ct_f = eos_freezing_point(eos, SA, 0.0_wp)
          call run_basal(grid, eos, ms, ice)
@@ -596,8 +596,8 @@ contains
          call setup_state(grid, ms, eos, ice, sf, T_WARM)
          ice%m_ice(:, :, 1) = 1.0_wp
          t_f = eos_freezing_point(eos, S_INIT, 0.0_wp)
-         t_sfc = (T_WARM*H_LAYER)/H_LAYER
-         s_sfc = (S_INIT*H_LAYER)/H_LAYER
+         t_sfc = T_WARM
+         s_sfc = S_INIT
          call run_basal(grid, eos, ms, ice)
          ip = grid%nx_total/2
          jp = grid%ny_total/2
@@ -631,8 +631,8 @@ contains
          ct_f = eos_freezing_point(eos, SA, 0.0_wp)
          th_f = pt_from_ct(SA, ct_f)
          sp = sp_from_sr(SA)
-         ms%tracers(ms%idx_salinity)%hTr = SA*H_LAYER
-         ms%tracers(ms%idx_temperature)%hTr(:, :, NZ) = ct_f*H_LAYER
+         ms%tracers(ms%idx_salinity)%c = SA
+         ms%tracers(ms%idx_temperature)%c(:, :, NZ) = ct_f
          ice%frazil_heat = E_BANK
          call run_uptake(grid, eos, ms, ice)
          ip = grid%nx_total/2

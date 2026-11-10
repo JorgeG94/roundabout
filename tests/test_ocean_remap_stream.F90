@@ -1,8 +1,7 @@
 !! Streaming tracer remap (`ocean_remap_tracer_field_stream`) vs the
 !! stack-based reference (`ocean_remap_tracer_field`), both in CONCENTRATION
 !! form (White & Adcroft 2008): `c_old` -> PPM on `c` -> overlap integral ->
-!! bounded `c_new` -> `hTr = c_new*h_new`, with no pool merge and no defect
-!! fold.
+!! bounded `c_new` -> `c = c_new`, with no pool merge and no defect fold.
 !!
 !! The stream is the DEFAULT kernel (`&vcoord_nml remap_kernel = "stream"`).
 !! On a field of adversarial columns (uniform, 1e3-stretched, bed / top /
@@ -10,8 +9,8 @@
 !! vice versa, sawtooth / step / spike / constant profiles, dead columns,
 !! exact-zero target layers, a column total that differs by a few ulp, coarse
 !! and fine targets) at `nz in {3, 4, 7, 50, 128}` it is checked that
-!!   * stream and reference agree (hTr, budget, c_new, bounding amount) to
-!!     `STREAM_REF_ULPS` ulp of the column scale, with and without the
+!!   * stream and reference agree (content `h_new*c`, budget, c_new, bounding
+!!     amount) to `STREAM_REF_ULPS` ulp of the column content scale, with and without the
 !!     optional `budget` -- BITWISE with FMA contraction off for the ALE remap
 !!     files, a few ulp without (see the constant);
 !!   * on every column, both kernels (a) conserve the column content to
@@ -19,8 +18,9 @@
 !!     `c_new` inside the range of the source column, and (c) give an exactly
 !!     empty target (`h_new = 0`) the mean of the source cell containing its
 !!     bottom interface.
-!! Fillers enter with invariant I1' (`hTr = h*c_donor`), which is what the tail
-!! `enforce_vanished_content` guarantees in production.
+!! Fillers enter holding their donor's concentration as their stale `c`
+!! (a filler carries no content of its own; the remap reads it as a cell
+!! value in the stencil, bounded by its neighbours).
 !!
 !! Columns 27-33 are built from dyadic thicknesses so that source and target
 !! interfaces coincide EXACTLY (`z_old(ko) == z_new(k)`): identical grids,
@@ -52,7 +52,7 @@ module test_ocean_remap_stream
    real(wp), parameter :: H_TOT = 100.0_wp
    real(wp), parameter :: STREAM_REF_ULPS = 16.0_wp
       !! Allowed stream-vs-reference disagreement, in units of
-      !! `epsilon * (|hTr| scale)`.  The two kernels evaluate textually
+      !! `epsilon * (|content| scale)`.  The two kernels evaluate textually
       !! identical expressions in different files and loop shapes; a compiler
       !! that contracts `a*b + c` into an FMA decides per expression context,
       !! so they differ by a few ulp on a default (`-march=native`) build and
@@ -73,7 +73,8 @@ contains
                   new_unittest("stream_matches_reference_nz128", test_nz128), &
                   new_unittest("stream_nz200_conserves_bounded_fallback", test_nz200), &
                   new_unittest("dispatch_falls_back_to_reference", test_dispatch), &
-                  new_unittest("bnd_extrap_linear_unclamped_conserved", test_bnd_extrap_linear) &
+                  new_unittest("bnd_extrap_linear_unclamped_conserved", test_bnd_extrap_linear), &
+                  new_unittest("stale_filler_donor_stencil", test_stale_filler) &
                   ]
    end subroutine collect_ocean_remap_stream_tests
 
@@ -156,7 +157,8 @@ contains
    end subroutine layer_thickness
 
    subroutine build_column(ic, nz, h_old, h_new, q)
-      !! Column `ic` of the adversarial field.
+      !! Column `ic` of the adversarial field; `q` is the stored source
+      !! concentration (a filler holds its donor's).
       integer, intent(in) :: ic, nz
       real(wp), intent(out) :: h_old(nz), h_new(nz), q(nz)
       logical :: fo(nz), fn(nz), direct
@@ -275,7 +277,7 @@ contains
 
       if (direct) then
          call direct_grids(ic, nz, h_old, h_new)
-         call content_with_i1p(nz, h_old, c, q)
+         call donor_conc(nz, h_old, c, q)
          return
       end if
       call layer_thickness(nz, kind_o, fo, H_TOT, h_old)
@@ -296,7 +298,7 @@ contains
          call rescale_live(nz, h_old, H_TOT)
          call rescale_live(nz, h_new, H_TOT)
       end if
-      call content_with_i1p(nz, h_old, c, q)
+      call donor_conc(nz, h_old, c, q)
    end subroutine build_column
 
    subroutine donor_conc(nz, h, c_live, c_don)
@@ -323,16 +325,6 @@ contains
          c_don(k) = cd
       end do
    end subroutine donor_conc
-
-   subroutine content_with_i1p(nz, h_old, c, q)
-      !! Content `h*c` on a live layer, `h*c_donor` on a filler (invariant I1').
-      integer, intent(in) :: nz
-      real(wp), intent(in) :: h_old(nz), c(nz)
-      real(wp), intent(out) :: q(nz)
-      real(wp) :: cd(nz)
-      call donor_conc(nz, h_old, c, cd)
-      q = h_old*cd
-   end subroutine content_with_i1p
 
    subroutine direct_grids(ic, nz, h_old, h_new)
       !! Dyadic thicknesses chosen so that source and target interfaces
@@ -413,10 +405,10 @@ contains
       end if
    end subroutine rescale_live
 
-   subroutine fill_field(nz, h_old, h_new, hTr, budget)
+   subroutine fill_field(nz, h_old, h_new, c, budget)
       integer, intent(in) :: nz
       real(wp), intent(out) :: h_old(NC, 1, nz), h_new(NC, 1, nz)
-      real(wp), intent(out) :: hTr(NC, 1, nz), budget(NC, 1, nz)
+      real(wp), intent(out) :: c(NC, 1, nz), budget(NC, 1, nz)
       real(wp) :: ho(nz), hn(nz), q(nz)
       integer :: ic, k
       do ic = 1, NC
@@ -424,7 +416,7 @@ contains
          do k = 1, nz
             h_old(ic, 1, k) = ho(k)
             h_new(ic, 1, k) = hn(k)
-            hTr(ic, 1, k) = q(k)
+            c(ic, 1, k) = q(k)
             budget(ic, 1, k) = 1.0e-3_wp*real(ic, wp) + 1.0e-6_wp*real(k, wp)
          end do
       end do
@@ -439,9 +431,10 @@ contains
       column_has_filler = any(h_old <= H_VANISHED) .or. any(h_new <= H_VANISHED)
    end function column_has_filler
 
-   subroutine column_properties(nz, h_old, h_new, hTr0, hTr1, c_new, clamp, n_cons, n_bound, n_fb, n_clamp)
+   subroutine column_properties(nz, h_old, h_new, c0, c1, c_new, clamp, n_cons, n_bound, n_fb, n_clamp)
       !! The three claims on ONE remapped column, in concentration form.
-      !!  * conservation: `sum(hTr1) - sum(hTr0) - sum(clamp)` is round-off,
+      !!  * conservation: the content `sum(h_new*c1) - sum(h_old*c0) - sum(clamp)`
+      !!    is round-off,
       !!    skipped where the column totals differ by more than 1e-9*H_TOT (a
       !!    dead target column keeps no water, by contract);
       !!  * bounding: on a matched column the recorded amount is itself
@@ -452,20 +445,18 @@ contains
       !!    cell containing its bottom interface (the topmost cell if the
       !!    interface lies above the column).
       integer, intent(in) :: nz
-      real(wp), intent(in) :: h_old(nz), h_new(nz), hTr0(nz), hTr1(nz), c_new(nz), clamp(nz)
+      real(wp), intent(in) :: h_old(nz), h_new(nz), c0(nz), c1(nz), c_new(nz), clamp(nz)
       integer, intent(inout) :: n_cons, n_bound, n_fb, n_clamp
-      real(wp) :: c_live(nz), c_old(nz), z_old(nz), zn_lo, s_abs, tol, cmin, cmax
+      real(wp) :: c_old(nz), z_old(nz), zn_lo, s_abs, tol, cmin, cmax
       integer :: k, m
 
-      c_live = 0.0_wp
-      do k = 1, nz
-         if (h_old(k) > H_VANISHED) c_live(k) = hTr0(k)/h_old(k)
-      end do
-      call donor_conc(nz, h_old, c_live, c_old)
-      s_abs = max(sum(abs(hTr0)), 1.0_wp)
+      ! The stored concentration IS the source value every layer reads (a
+      ! filler holds its donor's), so no conversion is needed.
+      c_old = c0
+      s_abs = max(sum(abs(h_old*c0)), 1.0_wp)
       tol = 1.0e-13_wp*s_abs
       if (abs(sum(h_new) - sum(h_old)) <= 1.0e-9_wp*H_TOT) then
-         if (abs(sum(hTr1) - sum(hTr0) - sum(clamp)) > tol) n_cons = n_cons + 1
+         if (abs(sum(h_new*c1) - sum(h_old*c0) - sum(clamp)) > tol) n_cons = n_cons + 1
          if (abs(sum(clamp)) > tol) n_clamp = n_clamp + 1
       end if
       cmin = minval(c_old)
@@ -554,12 +545,14 @@ contains
          free = .not. column_has_filler(nz, h_old(ic, 1, :), h_new(ic, 1, :))
          if (free) n_free_cols = n_free_cols + 1
          do k = 1, nz
-            scale = max(abs(tr0(ic, 1, k)), abs(tr_ref(ic, 1, k)), maxval(abs(tr0(ic, 1, :))), 1.0e-300_wp)
-            u = max(abs(tr_ref(ic, 1, k) - tr_str(ic, 1, k)), abs(bud_ref(ic, 1, k) - bud_str(ic, 1, k)), &
+            ! All comparisons are on CONTENT (times h_new): a few-ulp-thin
+            ! target amplifies the integral's round-off by h_src/h_new in c
+            ! (which is why the bounding exists), not in the content.
+            scale = max(abs(h_old(ic, 1, k)*tr0(ic, 1, k)), abs(h_new(ic, 1, k)*tr_ref(ic, 1, k)), &
+                        maxval(abs(h_old(ic, 1, :)*tr0(ic, 1, :))), 1.0e-300_wp)
+            u = max(abs(h_new(ic, 1, k)*(tr_ref(ic, 1, k) - tr_str(ic, 1, k))), &
+                    abs(bud_ref(ic, 1, k) - bud_str(ic, 1, k)), &
                     abs(cl_ref(ic, 1, k) - cl_str(ic, 1, k)))/(epsilon(1.0_wp)*scale)
-            ! The target concentration is compared as CONTENT (times h_new): a
-            ! few-ulp-thin target amplifies the integral's round-off by
-            ! h_src/h_new in c (which is why the bounding exists), not in hTr.
             u = max(u, abs(cn_ref(ic, 1, k) - cn_str(ic, 1, k))*h_new(ic, 1, k)/(epsilon(1.0_wp)*scale))
             worst = max(worst, u)
             if (free) worst_free = max(worst_free, u)
@@ -582,8 +575,9 @@ contains
       worst2 = 0.0_wp
       do ic = 1, NC
          do k = 1, nz
-            scale = max(abs(tr0(ic, 1, k)), abs(tr_ref(ic, 1, k)), maxval(abs(tr0(ic, 1, :))), 1.0e-300_wp)
-            worst2 = max(worst2, abs(tr_ref(ic, 1, k) - tr_str(ic, 1, k))/(epsilon(1.0_wp)*scale))
+            scale = max(abs(h_old(ic, 1, k)*tr0(ic, 1, k)), abs(h_new(ic, 1, k)*tr_ref(ic, 1, k)), &
+                        maxval(abs(h_old(ic, 1, :)*tr0(ic, 1, :))), 1.0e-300_wp)
+            worst2 = max(worst2, abs(h_new(ic, 1, k)*(tr_ref(ic, 1, k) - tr_str(ic, 1, k)))/(epsilon(1.0_wp)*scale))
          end do
       end do
       ! Unmap BEFORE any check can return, so a failing assertion cannot
@@ -609,7 +603,7 @@ contains
       call check(error, nk_ref + nk_str, 0, "recorded bounding amount is not round-off")
       if (allocated(error)) return
 
-      write (msg, '(a,i0,a,es9.2,a)') "nz=", nz, ": hTr (no budget) differs by ", worst2, " ulp"
+      write (msg, '(a,i0,a,es9.2,a)') "nz=", nz, ": content (no budget) differs by ", worst2, " ulp"
       call check(error, worst2 <= STREAM_REF_ULPS, trim(msg))
    end subroutine compare_kernels
 
@@ -619,13 +613,13 @@ contains
       !! fallback hold on every column.
       type(error_type), allocatable, intent(out) :: error
       integer, parameter :: NZ = 200
-      real(wp), allocatable :: h_old(:, :, :), h_new(:, :, :), hTr(:, :, :), tr0(:, :, :)
+      real(wp), allocatable :: h_old(:, :, :), h_new(:, :, :), c(:, :, :), tr0(:, :, :)
       real(wp), allocatable :: bud(:, :, :), cn(:, :, :), cl(:, :, :), c_old(:, :, :)
       real(wp), allocatable :: z_old(:, :, :), z_new(:, :, :), q_lft(:, :, :), q_rgt(:, :, :), q_six(:, :, :)
       real(wp) :: s_bud
       integer :: ic, k, n_cons, n_bound, n_fb, n_clamp, n_bud
 
-      allocate (h_old(NC, 1, NZ), h_new(NC, 1, NZ), hTr(NC, 1, NZ), tr0(NC, 1, NZ))
+      allocate (h_old(NC, 1, NZ), h_new(NC, 1, NZ), c(NC, 1, NZ), tr0(NC, 1, NZ))
       allocate (bud(NC, 1, NZ), cn(NC, 1, NZ), cl(NC, 1, NZ), c_old(NC, 1, NZ))
       allocate (z_old(NC, 1, NZ), z_new(NC, 1, NZ), q_lft(NC, 1, NZ), q_rgt(NC, 1, NZ), q_six(NC, 1, NZ))
       z_old = 0.0_wp
@@ -637,14 +631,14 @@ contains
       cn = 0.0_wp
       cl = 0.0_wp
       call fill_field(NZ, h_old, h_new, tr0, bud)
-      hTr = tr0
+      c = tr0
       bud = 0.0_wp
-      !$acc enter data copyin(h_old, h_new, hTr, bud, cn, cl, c_old, z_old, z_new, q_lft, q_rgt, q_six)
-      call ocean_remap_tracer_field_stream(NC, 1, NZ, h_old, h_new, hTr, &
+      !$acc enter data copyin(h_old, h_new, c, bud, cn, cl, c_old, z_old, z_new, q_lft, q_rgt, q_six)
+      call ocean_remap_tracer_field_stream(NC, 1, NZ, h_old, h_new, c, &
                                            c_old, z_old, z_new, q_lft, q_rgt, q_six, &
                                            budget=bud, c_new_out=cn, clamp_out=cl)
-      !$acc update self(hTr, bud, cn, cl)
-      !$acc exit data delete(h_old, h_new, hTr, bud, cn, cl, c_old, z_old, z_new, q_lft, q_rgt, q_six)
+      !$acc update self(c, bud, cn, cl)
+      !$acc exit data delete(h_old, h_new, c, bud, cn, cl, c_old, z_old, z_new, q_lft, q_rgt, q_six)
 
       n_cons = 0
       n_bound = 0
@@ -652,15 +646,15 @@ contains
       n_clamp = 0
       n_bud = 0
       do ic = 1, NC
-         call column_properties(NZ, h_old(ic, 1, :), h_new(ic, 1, :), tr0(ic, 1, :), hTr(ic, 1, :), &
+         call column_properties(NZ, h_old(ic, 1, :), h_new(ic, 1, :), tr0(ic, 1, :), c(ic, 1, :), &
                                 cn(ic, 1, :), cl(ic, 1, :), n_cons, n_bound, n_fb, n_clamp)
          ! The budget telescopes to the content change.
          s_bud = 0.0_wp
          do k = 1, NZ
             s_bud = s_bud + bud(ic, 1, k)
          end do
-         if (abs(s_bud - (sum(hTr(ic, 1, :)) - sum(tr0(ic, 1, :)))) > &
-             1.0e-13_wp*max(sum(abs(tr0(ic, 1, :))), 1.0_wp)) n_bud = n_bud + 1
+         if (abs(s_bud - (sum(h_new(ic, 1, :)*c(ic, 1, :)) - sum(h_old(ic, 1, :)*tr0(ic, 1, :)))) > &
+             1.0e-13_wp*max(sum(abs(h_old(ic, 1, :)*tr0(ic, 1, :))), 1.0_wp)) n_bud = n_bud + 1
       end do
       call check(error, n_cons, 0, "nz=200: column content not conserved (with the bounding amount)")
       if (allocated(error)) return
@@ -746,9 +740,10 @@ contains
             h_new(ic, 1, k) = (1000.0_wp - real(ic, wp) - 15.0_wp*real(ic, wp))/real(NZ - 4, wp)
          end do
          ! S linear in z (z up from the bed): fresher toward the surface.
+         ! The field is stored as concentration; content is h*c.
          z = 0.0_wp
          do k = 1, NZ
-            tr0(ic, 1, k) = h_old(ic, 1, k)*(34.55_wp - 7.5e-4_wp*(z + 0.5_wp*h_old(ic, 1, k)))
+            tr0(ic, 1, k) = 34.55_wp - 7.5e-4_wp*(z + 0.5_wp*h_old(ic, 1, k))
             z = z + h_old(ic, 1, k)
          end do
       end do
@@ -768,8 +763,8 @@ contains
             !$acc update self(hTr, bud, cn, cl)
             !$acc exit data delete(h_old, h_new, hTr, bud, cn, cl)
             do ic = 1, NCOL
-               s0 = sum(tr0(ic, 1, :))
-               s1 = sum(hTr(ic, 1, :))
+               s0 = sum(h_old(ic, 1, :)*tr0(ic, 1, :))
+               s1 = sum(h_new(ic, 1, :)*hTr(ic, 1, :))
                worst_cons = max(worst_cons, abs(s1 - s0)/s0)
                worst_clamp = max(worst_clamp, maxval(abs(cl(ic, 1, :)))/s0)
             end do
@@ -781,5 +776,141 @@ contains
       write (msg, '(a,es9.2)') "bnd_extrap linear column: bounding moved (relative) ", worst_clamp
       call check(error, worst_clamp <= 1.0e-14_wp, trim(msg))
    end subroutine test_bnd_extrap_linear
+
+   subroutine test_stale_filler(error)
+      !! Fillers (`h <= H_VANISHED`) keep the STALE concentration they last
+      !! held.  Both kernels read a filler through its donor in every
+      !! reconstruction stencil, and carry the filler's own excess
+      !! `c_fill − c_donor` as a uniform offset over its interval.  Checked, on
+      !! a bed run, an interior filler, a top filler and an identity remap:
+      !!  (a) the column content `sum(h_old·c_old)` is conserved (with the
+      !!      recorded bounding amount, itself round-off);
+      !!  (b) stream and reference agree to `STREAM_REF_ULPS`;
+      !!  (c) every target fed by live sources only is BIT-IDENTICAL to the
+      !!      same column with the fillers holding their donor's value -- a
+      !!      stale filler never tilts a live neighbour's parabola;
+      !!  (d) under the identity remap every layer, filler included, keeps its
+      !!      value to round-off.
+      type(error_type), allocatable, intent(out) :: error
+      integer, parameter :: NZ = 8, NCOL = 3
+      real(wp) :: h_old(NCOL, 1, NZ), h_new(NCOL, 1, NZ), c0(NCOL, 1, NZ), cd(NCOL, 1, NZ)
+      real(wp) :: c(NCOL, 1, NZ), cn(NCOL, 1, NZ), cl(NCOL, 1, NZ)
+      real(wp) :: c_old(NCOL, 1, NZ), z_old(NCOL, 1, NZ), z_new(NCOL, 1, NZ)
+      real(wp) :: q_lft(NCOL, 1, NZ), q_rgt(NCOL, 1, NZ), q_six(NCOL, 1, NZ)
+      real(wp) :: res(NCOL, 1, NZ, 2, 2)
+         !! Final `c`: (..., kernel 1=stream 2=reference, case 1=stale 2=donor).
+      real(wp) :: clamp(NCOL, 1, NZ, 2)
+      real(wp) :: s0, s1, scale, zo_lo, zo_hi, zn_lo, zn_hi
+      integer :: ic, k, m, ik, icase, n_cons, n_ref, n_live, n_id, n_clamp
+      logical :: fed_by_filler
+      character(len=160) :: msg
+
+      h_old = 12.5_wp
+      h_new = 12.5_wp
+      ! col 1: bed run k = 1, 2; live interfaces move.
+      h_old(1, 1, 1:2) = 1.0e-5_wp
+      h_new(1, 1, 1:2) = 1.0e-5_wp
+      h_new(1, 1, 3:NZ) = [10.0_wp, 15.0_wp, 9.0_wp, 16.0_wp, 11.0_wp, 14.0_wp]
+      ! col 2: interior filler k = 4, top filler k = 8; live interfaces move.
+      h_old(2, 1, 4) = 1.0e-5_wp
+      h_old(2, 1, 8) = 0.0_wp
+      h_new(2, 1, 4) = 1.0e-5_wp
+      h_new(2, 1, 8) = 0.0_wp
+      h_new(2, 1, [1, 2, 3, 5, 6, 7]) = [14.0_wp, 11.0_wp, 13.0_wp, 12.0_wp, 15.0_wp, 10.0_wp]
+      ! col 3: identity remap with fillers at 1, 5, 8.
+      h_old(3, 1, [1, 5, 8]) = 2.0e-5_wp
+      h_new(3, 1, :) = h_old(3, 1, :)
+      do ic = 1, 2
+         call rescale_live(NZ, h_new(ic, 1, :), sum(h_old(ic, 1, :), mask=h_old(ic, 1, :) > H_VANISHED))
+      end do
+      do ic = 1, NCOL
+         do k = 1, NZ
+            c0(ic, 1, k) = 10.0_wp + 0.3_wp*real(k, wp) + 0.11_wp*real(k*k, wp)
+            if (h_old(ic, 1, k) <= H_VANISHED) c0(ic, 1, k) = merge(-20.0_wp, 60.0_wp, mod(k, 2) == 0)
+         end do
+         call donor_conc(NZ, h_old(ic, 1, :), c0(ic, 1, :), cd(ic, 1, :))
+      end do
+
+      do icase = 1, 2
+         do ik = 1, 2
+            c = merge(c0, cd, icase == 1)
+            cn = 0.0_wp
+            cl = 0.0_wp
+            c_old = 0.0_wp
+            z_old = 0.0_wp
+            z_new = 0.0_wp
+            q_lft = 0.0_wp
+            q_rgt = 0.0_wp
+            q_six = 0.0_wp
+            !$acc enter data copyin(h_old, h_new, c, cn, cl, c_old, z_old, z_new, q_lft, q_rgt, q_six)
+            if (ik == 1) then
+               call ocean_remap_tracer_field_stream(NCOL, 1, NZ, h_old, h_new, c, &
+                                                    c_old, z_old, z_new, q_lft, q_rgt, q_six, &
+                                                    c_new_out=cn, clamp_out=cl)
+            else
+               call ocean_remap_tracer_field(NCOL, 1, NZ, h_old, h_new, c, REMAP_PPM, &
+                                             .false., .false., c_new_out=cn, clamp_out=cl)
+            end if
+            !$acc update self(c, cn, cl)
+            !$acc exit data delete(h_old, h_new, c, cn, cl, c_old, z_old, z_new, q_lft, q_rgt, q_six)
+            res(:, :, :, ik, icase) = c
+            if (icase == 1) clamp(:, :, :, ik) = cl
+         end do
+      end do
+
+      n_cons = 0
+      n_ref = 0
+      n_live = 0
+      n_id = 0
+      n_clamp = 0
+      do ic = 1, NCOL
+         s0 = sum(h_old(ic, 1, :)*c0(ic, 1, :))
+         scale = sum(abs(h_old(ic, 1, :)*c0(ic, 1, :)))
+         do ik = 1, 2
+            s1 = sum(h_new(ic, 1, :)*res(ic, 1, :, ik, 1))
+            if (abs(s1 - sum(clamp(ic, 1, :, ik)) - s0) > 1.0e-14_wp*scale) n_cons = n_cons + 1
+            if (maxval(abs(clamp(ic, 1, :, ik))) > 1.0e-14_wp*scale) n_clamp = n_clamp + 1
+         end do
+         do k = 1, NZ
+            if (abs(h_new(ic, 1, k)*(res(ic, 1, k, 1, 1) - res(ic, 1, k, 2, 1))) > &
+                STREAM_REF_ULPS*epsilon(1.0_wp)*scale) n_ref = n_ref + 1
+            ! Is target k fed by any source filler?
+            fed_by_filler = .false.
+            zn_lo = sum(h_new(ic, 1, 1:k - 1))
+            zn_hi = zn_lo + h_new(ic, 1, k)
+            zo_lo = 0.0_wp
+            do m = 1, NZ
+               zo_hi = zo_lo + h_old(ic, 1, m)
+               if (h_old(ic, 1, m) <= H_VANISHED .and. min(zn_hi, zo_hi) - max(zn_lo, zo_lo) > 0.0_wp) &
+                  fed_by_filler = .true.
+               zo_lo = zo_hi
+            end do
+            if (.not. fed_by_filler .and. h_new(ic, 1, k) > H_VANISHED) then
+               do ik = 1, 2
+                  if (res(ic, 1, k, ik, 1) /= res(ic, 1, k, ik, 2)) n_live = n_live + 1
+               end do
+            end if
+            if (ic == 3 .and. h_old(ic, 1, k) > 0.0_wp) then
+               do ik = 1, 2
+                  ! A 2e-5 m filler 50 m up the column: its overlap is formed
+                  ! from interface positions good to an ulp of 50 m, ~4e-10
+                  ! relative.  The test separates "keeps its own value" from
+                  ! "takes the donor's" (tens of percent), not round-off.
+                  if (abs(res(ic, 1, k, ik, 1) - c0(ic, 1, k)) > 1.0e-8_wp*abs(c0(ic, 1, k))) n_id = n_id + 1
+               end do
+            end if
+         end do
+      end do
+      write (msg, '(a,i0)') "stale fillers: columns not conserving content: ", n_cons
+      call check(error, n_cons, 0, trim(msg))
+      if (allocated(error)) return
+      call check(error, n_clamp, 0, "stale fillers: bounding moved more than round-off")
+      if (allocated(error)) return
+      call check(error, n_ref, 0, "stale fillers: stream and reference disagree")
+      if (allocated(error)) return
+      call check(error, n_live, 0, "stale fillers: a live-fed target depends on a filler's stale value")
+      if (allocated(error)) return
+      call check(error, n_id, 0, "stale fillers: identity remap does not preserve every layer")
+   end subroutine test_stale_filler
 
 end module test_ocean_remap_stream

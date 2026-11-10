@@ -219,7 +219,7 @@ contains
       call snap3(r, tag//" v", e%state%multilayer%v_face_y_layer, .true.)
       do it = 1, size(e%state%multilayer%tracers)
          write (nm, '(a,a,i0)') tag, " hTr", it
-         call snap3(r, trim(nm), e%state%multilayer%tracers(it)%hTr, .false.)
+         call snap3(r, trim(nm), e%state%multilayer%tracers(it)%c, .false.)
       end do
    end subroutine snap_ml
 
@@ -300,8 +300,8 @@ contains
                do i = NG + 1, NG + nxl
                   ig = i - NG + io
                   jg = j - NG + jo
-                  e%state%multilayer%tracers(it)%hTr(i, j, k) = &
-                     e%state%multilayer%tracers(it)%hTr(i, j, k)* &
+                  e%state%multilayer%tracers(it)%c(i, j, k) = &
+                     e%state%multilayer%tracers(it)%c(i, j, k)* &
                      (1.0_wp + real(modulo(3*ig + jg + it, 7) - 3, wp)/1024.0_wp)
                end do
             end do
@@ -354,36 +354,36 @@ contains
          call fill3(ms%u_face_x_layer, e, 2, 0)
          call fill3(ms%v_face_y_layer, e, 3, 1)
          do it = 1, nt
-            call fill3(ms%tracers(it)%hTr, e, 10 + it, 0)
+            call fill3(ms%tracers(it)%c, e, 10 + it, 0)
          end do
          !$acc update device(ms%h_layer, ms%u_face_x_layer, ms%v_face_y_layer)
          do it = 1, nt
-            !$acc update device(ms%tracers(it)%hTr)
+            !$acc update device(ms%tracers(it)%c)
          end do
          call ocean_fold_wrap_state(e%grid, e%state%bc, ms)
          !$acc update self(ms%h_layer, ms%u_face_x_layer, ms%v_face_y_layer)
          do it = 1, nt
-            !$acc update self(ms%tracers(it)%hTr)
+            !$acc update self(ms%tracers(it)%c)
          end do
          call snap_ml(r, "D", e)
 
          ! C: the centre-field group (mid Lie split, tracer refresh).
          call fill3(ms%h_layer, e, 4, 0)
          do it = 1, nt
-            call fill3(ms%tracers(it)%hTr, e, 20 + it, 0)
+            call fill3(ms%tracers(it)%c, e, 20 + it, 0)
          end do
          !$acc update device(ms%h_layer)
          do it = 1, nt
-            !$acc update device(ms%tracers(it)%hTr)
+            !$acc update device(ms%tracers(it)%c)
          end do
          call ocean_fold_wrap_centre_3d_state(e%grid, e%state%bc, ms)
          !$acc update self(ms%h_layer)
          do it = 1, nt
-            !$acc update self(ms%tracers(it)%hTr)
+            !$acc update self(ms%tracers(it)%c)
          end do
          call snap3(r, "C h", ms%h_layer, .false.)
          do it = 1, nt
-            call snap3(r, "C hTr", ms%tracers(it)%hTr, .false.)
+            call snap3(r, "C hTr", ms%tracers(it)%c, .false.)
          end do
 
          ! M: the pred_corr time-means (allocated under the default scheme).

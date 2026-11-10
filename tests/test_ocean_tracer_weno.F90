@@ -172,7 +172,7 @@ contains
          do j = 1, ny
             do i = 1, nx
                ms%h_layer(i, j, k) = H0 - (ct%uhtr(i + 1, j, k) - ct%uhtr(i, j, k))/(DX*DY)
-               ms%tracers(ms%idx_salinity)%hTr(i, j, k) = C0*H0
+               ms%tracers(ms%idx_salinity)%c(i, j, k) = C0
             end do
          end do
       end do
@@ -183,7 +183,7 @@ contains
       do k = 1, NZ
          do j = j0, j1
             do i = i0, i1
-               conc = ms%tracers(ms%idx_salinity)%hTr(i, j, k)/ms%h_layer(i, j, k)
+               conc = ms%tracers(ms%idx_salinity)%c(i, j, k)
                cmax_err = max(cmax_err, abs(conc - C0))
             end do
          end do
@@ -261,18 +261,18 @@ contains
                else
                   conc = BG
                end if
-               ms%tracers(ms%idx_salinity)%hTr(i, j, k) = conc*H0
+               ms%tracers(ms%idx_salinity)%c(i, j, k) = conc
             end do
          end do
       end do
-      mass0 = area*sum(ms%tracers(ms%idx_salinity)%hTr(i0:i1, j0:j1, :))
+      mass0 = area*sum(ms%tracers(ms%idx_salinity)%c(i0:i1, j0:j1, :))
       ! Initial interior total variation (concentration) along i.
       tv0 = 0.0_wp
       do k = 1, NZ
          do j = j0, j1
             do i = i0, i1 - 1
-               tv0 = tv0 + abs(ms%tracers(ms%idx_salinity)%hTr(i + 1, j, k) &
-                               - ms%tracers(ms%idx_salinity)%hTr(i, j, k))/H0
+               tv0 = tv0 + abs(ms%tracers(ms%idx_salinity)%c(i + 1, j, k) &
+                               - ms%tracers(ms%idx_salinity)%c(i, j, k))/H0
             end do
          end do
       end do
@@ -284,7 +284,7 @@ contains
          call one_window(grid, metrics, ct, ms, RATIO, bc)
       end do
 
-      mass1 = area*sum(ms%tracers(ms%idx_salinity)%hTr(i0:i1, j0:j1, :))
+      mass1 = area*sum(ms%tracers(ms%idx_salinity)%c(i0:i1, j0:j1, :))
       mass_rel = abs(mass1 - mass0)/abs(mass0)
       peak = 0.0_wp
       cmin = huge(1.0_wp)
@@ -292,13 +292,13 @@ contains
       do k = 1, NZ
          do j = j0, j1
             do i = i0, i1
-               conc = ms%tracers(ms%idx_salinity)%hTr(i, j, k)/H0
+               conc = ms%tracers(ms%idx_salinity)%c(i, j, k)
                peak = max(peak, conc)
                cmin = min(cmin, conc)
             end do
             do i = i0, i1 - 1
-               tv = tv + abs(ms%tracers(ms%idx_salinity)%hTr(i + 1, j, k) &
-                             - ms%tracers(ms%idx_salinity)%hTr(i, j, k))/H0
+               tv = tv + abs(ms%tracers(ms%idx_salinity)%c(i + 1, j, k) &
+                             - ms%tracers(ms%idx_salinity)%c(i, j, k))/H0
             end do
          end do
       end do
@@ -398,11 +398,11 @@ contains
                else
                   c = BG
                end if
-               ms%tracers(ms%idx_salinity)%hTr(i, j, k) = c*H0
+               ms%tracers(ms%idx_salinity)%c(i, j, k) = c
             end do
          end do
       end do
-      mass0 = sum(ms%tracers(ms%idx_salinity)%hTr(i0:i1, j0:j1, :))
+      mass0 = sum(ms%tracers(ms%idx_salinity)%c(i0:i1, j0:j1, :))
       ! Spatially uniform transport ⇒ div = 0 ⇒ hprev = H0; usign < 0 ⇒
       ! uhtr < 0 at every face ⇒ the drain takes the u<0 branch.
       uvol = usign*real(RATIO, wp)*U0*H0*DY*DT_STEP
@@ -411,7 +411,7 @@ contains
          ct%vhtr = 0.0_wp
          call one_window(grid, metrics, ct, ms, RATIO, bc)
       end do
-      mass1 = sum(ms%tracers(ms%idx_salinity)%hTr(i0:i1, j0:j1, :))
+      mass1 = sum(ms%tracers(ms%idx_salinity)%c(i0:i1, j0:j1, :))
       mass_rel = abs(mass1 - mass0)/abs(mass0)
       allocate (conc(nx, ny, NZ))
       cmin = huge(1.0_wp)
@@ -419,7 +419,7 @@ contains
       do k = 1, NZ
          do j = 1, ny
             do i = 1, nx
-               val = ms%tracers(ms%idx_salinity)%hTr(i, j, k)/H0
+               val = ms%tracers(ms%idx_salinity)%c(i, j, k)
                conc(i, j, k) = val
                if (.not. (abs(val) <= huge(1.0_wp))) has_nan = .true.
                if (i >= i0 .and. i <= i1 .and. j >= j0 .and. j <= j1) then
@@ -506,26 +506,41 @@ contains
       do k = 1, NZ
          do j = 1, ny
             do i = 1, nx
-               ms%tracers(ms%idx_salinity)%hTr(i, j, k) = &
-                  (BG + AMP*0.5_wp*(1.0_wp + cos(2.0_wp*PI*real(j - 1, wp)/real(ny, wp))))*H0
+               ms%tracers(ms%idx_salinity)%c(i, j, k) = &
+                  (BG + AMP*0.5_wp*(1.0_wp + cos(2.0_wp*PI*real(j - 1, wp)/real(ny, wp))))
             end do
          end do
       end do
-      mass0 = sum(ms%tracers(ms%idx_salinity)%hTr)
       vvol = real(RATIO, wp)*V0*H0*DX*DT_STEP
+      ! The drain's c is the WINDOW-START concentration on
+      ! hprev = h_end + div(vhtr)/area (outer faces carry no flux), so the
+      ! conserved content per window is sum(hprev*c_start) = sum(h_end*c_end).
+      mass_rel = 0.0_wp
       do w = 1, N_WIN
          ct%uhtr = 0.0_wp
          ct%vhtr = vvol   ! uniform northward; drain zeros the outer faces
+         ct%vhtr(:, 1, :) = 0.0_wp
+         ct%vhtr(:, ny + 1, :) = 0.0_wp
+         mass0 = 0.0_wp
+         do k = 1, NZ
+            do j = 1, ny
+               do i = 1, nx
+                  mass0 = mass0 + (ms%h_layer(i, j, k) + &
+                                   (ct%vhtr(i, j + 1, k) - ct%vhtr(i, j, k))/(DX*DY))* &
+                          ms%tracers(ms%idx_salinity)%c(i, j, k)
+               end do
+            end do
+         end do
          call one_window(grid, metrics, ct, ms, RATIO, bc)
+         mass1 = sum(ms%h_layer*ms%tracers(ms%idx_salinity)%c)
+         mass_rel = max(mass_rel, abs(mass1 - mass0)/abs(mass0))
       end do
-      mass1 = sum(ms%tracers(ms%idx_salinity)%hTr)
-      mass_rel = abs(mass1 - mass0)/abs(mass0)
       cmin = huge(1.0_wp)
       has_nan = .false.
       do k = 1, NZ
          do j = 1, ny
             do i = 1, nx
-               val = ms%tracers(ms%idx_salinity)%hTr(i, j, k)
+               val = ms%tracers(ms%idx_salinity)%c(i, j, k)
                if (.not. (abs(val) <= huge(1.0_wp))) has_nan = .true.
                cmin = min(cmin, val)
             end do
@@ -584,25 +599,25 @@ contains
                else
                   c = BG
                end if
-               ms%tracers(ms%idx_salinity)%hTr(i, j, k) = c*H0
+               ms%tracers(ms%idx_salinity)%c(i, j, k) = c
             end do
          end do
       end do
-      mass0 = sum(ms%tracers(ms%idx_salinity)%hTr(i0:i1, j0:j1, :))
+      mass0 = sum(ms%tracers(ms%idx_salinity)%c(i0:i1, j0:j1, :))
       uvol = real(RATIO, wp)*U0*H0*DY*DT_STEP
       do w = 1, N_WIN
          ct%uhtr = uvol
          ct%vhtr = 0.0_wp
          call one_window(grid, metrics, ct, ms, RATIO, bc)
       end do
-      mass1 = sum(ms%tracers(ms%idx_salinity)%hTr(i0:i1, j0:j1, :))
+      mass1 = sum(ms%tracers(ms%idx_salinity)%c(i0:i1, j0:j1, :))
       mass_rel = abs(mass1 - mass0)/abs(mass0)
       cmin = huge(1.0_wp)
       has_nan = .false.
       do k = 1, NZ
          do j = j0, j1
             do i = i0, i1
-               val = ms%tracers(ms%idx_salinity)%hTr(i, j, k)/H0
+               val = ms%tracers(ms%idx_salinity)%c(i, j, k)
                if (.not. (abs(val) <= huge(1.0_wp))) has_nan = .true.
                cmin = min(cmin, val)
             end do

@@ -319,8 +319,8 @@ contains
          u_k = DU*tanh((SHEAR_DEPTH - z_sd)/SHEAR_WIDTH)
 
          ms%h_layer(:, :, k) = h_k
-         ms%tracers(ms%idx_temperature)%hTr(:, :, k) = t_k*h_k
-         ms%tracers(ms%idx_salinity)%hTr(:, :, k) = 35.0_wp*h_k
+         ms%tracers(ms%idx_temperature)%c(:, :, k) = t_k
+         ms%tracers(ms%idx_salinity)%c(:, :, k) = 35.0_wp
          ms%u_face_x_layer(:, :, k) = u_k
       end do
    end subroutine setup_zstar_like_column

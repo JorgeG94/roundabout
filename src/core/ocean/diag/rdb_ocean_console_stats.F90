@@ -11,7 +11,7 @@ module rdb_ocean_console_stats
    !!   * `Max CFL`       — max (|u_c|·dt·idxT + |v_c|·dt·idyT)
    !!
    !! Reductions run on device. Tracer sums go through a flat-impl helper
-   !! to dodge the registry deep deref (`ms%tracers(idx)%hTr` — NVHPC
+   !! to dodge the registry deep deref (`ms%tracers(idx)%c` — NVHPC
    !! can't follow inside an inlined reduction kernel). Initial values
    !! captured on the first call; later calls report relative drift.
    use, intrinsic :: iso_fortran_env, only: int64, real64
@@ -63,9 +63,9 @@ module rdb_ocean_console_stats
    public :: compute_ice_totals
       !! Public only for the unit-test suite (`test_ocean_ice_diags`), which
       !! pins this console-side gather copy against the fills' copy.
-   public :: compute_total_h_efp, compute_total_tracer_efp
+   public :: compute_total_h_efp, compute_total_tracer_efp, compute_total_content_efp
    public :: compute_total_ke_efp, compute_ice_totals_efp
-   public :: compute_total_h, compute_total_tracer, compute_total_ke
+   public :: compute_total_h, compute_total_tracer, compute_total_content, compute_total_ke
       !! Public only for the unit-test suite (PR-32,
       !! `test_ocean_console_stats_efp`), which pins `efp_decompose_impl`
       !! (the in-module `!$acc routine seq` duplicate of
@@ -433,15 +433,15 @@ contains
          efp_local(IX_KE) = compute_total_ke_efp(ms%h_layer, ms%u_face_x_layer, &
                                                  ms%v_face_y_layer, metrics%areaT, grid%nghost)
          if (ms%idx_temperature > 0) then
-            efp_local(IX_HEAT) = compute_total_tracer_efp(ms%tracers(ms%idx_temperature)%hTr, &
+            efp_local(IX_HEAT) = compute_total_tracer_efp(ms%tracers(ms%idx_temperature)%c, ms%h_layer, &
                                                           metrics%areaT, grid%nghost)
          end if
          if (ms%idx_salinity > 0) then
-            efp_local(IX_SALT) = compute_total_tracer_efp(ms%tracers(ms%idx_salinity)%hTr, &
+            efp_local(IX_SALT) = compute_total_tracer_efp(ms%tracers(ms%idx_salinity)%c, ms%h_layer, &
                                                           metrics%areaT, grid%nghost)
          end if
          if (ms%idx_age > 0) then
-            efp_local(IX_AGE) = compute_total_tracer_efp(ms%tracers(ms%idx_age)%hTr, &
+            efp_local(IX_AGE) = compute_total_tracer_efp(ms%tracers(ms%idx_age)%c, ms%h_layer, &
                                                          metrics%areaT, grid%nghost)
          end if
          if (ice_on) then
@@ -483,20 +483,20 @@ contains
          raw_ke = compute_total_ke(ms%h_layer, ms%u_face_x_layer, &
                                    ms%v_face_y_layer, metrics%areaT, grid%nghost)
          if (ms%idx_temperature > 0) then
-            raw_heat = compute_total_tracer(ms%tracers(ms%idx_temperature)%hTr, &
+            raw_heat = compute_total_tracer(ms%tracers(ms%idx_temperature)%c, ms%h_layer, &
                                             metrics%areaT, grid%nghost)
          else
             raw_heat = 0.0_wp
          end if
          if (ms%idx_salinity > 0) then
-            raw_salt = compute_total_tracer(ms%tracers(ms%idx_salinity)%hTr, &
+            raw_salt = compute_total_tracer(ms%tracers(ms%idx_salinity)%c, ms%h_layer, &
                                             metrics%areaT, grid%nghost)
          else
             raw_salt = 0.0_wp
          end if
          ! Ideal-age tracer: passive, reported whenever registered (volume-mean).
          if (ms%idx_age > 0) then
-            raw_age = compute_total_tracer(ms%tracers(ms%idx_age)%hTr, &
+            raw_age = compute_total_tracer(ms%tracers(ms%idx_age)%c, ms%h_layer, &
                                            metrics%areaT, grid%nghost)
          else
             raw_age = 0.0_wp
@@ -612,20 +612,20 @@ contains
             ! print the same digits on every rank count (they used to stay
             ! on the FP path even with `reproducing_sums`).
             efp_bl = efp_t()
-            efp_bl(1) = compute_total_tracer_efp(ms%salt_budget_surface, metrics%areaT, grid%nghost)
-            efp_bl(2) = compute_total_tracer_efp(ms%salt_budget_sponge, metrics%areaT, grid%nghost)
-            efp_bl(3) = compute_total_tracer_efp(ms%salt_budget_horiz_adv, metrics%areaT, grid%nghost)
-            efp_bl(4) = compute_total_tracer_efp(ms%salt_budget_hdiff, metrics%areaT, grid%nghost)
+            efp_bl(1) = compute_total_content_efp(ms%salt_budget_surface, metrics%areaT, grid%nghost)
+            efp_bl(2) = compute_total_content_efp(ms%salt_budget_sponge, metrics%areaT, grid%nghost)
+            efp_bl(3) = compute_total_content_efp(ms%salt_budget_horiz_adv, metrics%areaT, grid%nghost)
+            efp_bl(4) = compute_total_content_efp(ms%salt_budget_hdiff, metrics%areaT, grid%nghost)
             call halo_allreduce_efp_list(efp_bl, efp_bg, NVAL_BUD)
             b_salt_surf = real(efp_to_real(efp_bg(1)), wp)
             b_salt_sponge = real(efp_to_real(efp_bg(2)), wp)
             b_salt_adv = real(efp_to_real(efp_bg(3)), wp)
             b_salt_hdiff = real(efp_to_real(efp_bg(4)), wp)
          else
-            b_salt_surf = compute_total_tracer(ms%salt_budget_surface, metrics%areaT, grid%nghost)
-            b_salt_sponge = compute_total_tracer(ms%salt_budget_sponge, metrics%areaT, grid%nghost)
-            b_salt_adv = compute_total_tracer(ms%salt_budget_horiz_adv, metrics%areaT, grid%nghost)
-            b_salt_hdiff = compute_total_tracer(ms%salt_budget_hdiff, metrics%areaT, grid%nghost)
+            b_salt_surf = compute_total_content(ms%salt_budget_surface, metrics%areaT, grid%nghost)
+            b_salt_sponge = compute_total_content(ms%salt_budget_sponge, metrics%areaT, grid%nghost)
+            b_salt_adv = compute_total_content(ms%salt_budget_horiz_adv, metrics%areaT, grid%nghost)
+            b_salt_hdiff = compute_total_content(ms%salt_budget_hdiff, metrics%areaT, grid%nghost)
             tmp = b_salt_surf
             call halo_allreduce_sum(tmp, b_salt_surf)
             tmp = b_salt_sponge
@@ -646,13 +646,13 @@ contains
          b_heat_frazil = 0.0_wp
          if (use_efp) then
             efp_bl = efp_t()
-            efp_bl(1) = compute_total_tracer_efp(ms%heat_budget_surface, metrics%areaT, grid%nghost)
-            efp_bl(2) = compute_total_tracer_efp(ms%heat_budget_geothermal, metrics%areaT, grid%nghost)
-            efp_bl(3) = compute_total_tracer_efp(ms%heat_budget_sponge, metrics%areaT, grid%nghost)
-            efp_bl(4) = compute_total_tracer_efp(ms%heat_budget_horiz_adv, metrics%areaT, grid%nghost)
-            efp_bl(5) = compute_total_tracer_efp(ms%heat_budget_hdiff, metrics%areaT, grid%nghost)
+            efp_bl(1) = compute_total_content_efp(ms%heat_budget_surface, metrics%areaT, grid%nghost)
+            efp_bl(2) = compute_total_content_efp(ms%heat_budget_geothermal, metrics%areaT, grid%nghost)
+            efp_bl(3) = compute_total_content_efp(ms%heat_budget_sponge, metrics%areaT, grid%nghost)
+            efp_bl(4) = compute_total_content_efp(ms%heat_budget_horiz_adv, metrics%areaT, grid%nghost)
+            efp_bl(5) = compute_total_content_efp(ms%heat_budget_hdiff, metrics%areaT, grid%nghost)
             if (present(heat_budget_frazil)) then
-               efp_bl(6) = compute_total_tracer_efp(heat_budget_frazil, metrics%areaT, grid%nghost)
+               efp_bl(6) = compute_total_content_efp(heat_budget_frazil, metrics%areaT, grid%nghost)
             end if
             call halo_allreduce_efp_list(efp_bl, efp_bg, NVAL_BUD)
             b_heat_surf = real(efp_to_real(efp_bg(1)), wp)
@@ -662,11 +662,11 @@ contains
             b_heat_hdiff = real(efp_to_real(efp_bg(5)), wp)
             if (present(heat_budget_frazil)) b_heat_frazil = real(efp_to_real(efp_bg(6)), wp)
          else
-            b_heat_surf = compute_total_tracer(ms%heat_budget_surface, metrics%areaT, grid%nghost)
-            b_heat_geo = compute_total_tracer(ms%heat_budget_geothermal, metrics%areaT, grid%nghost)
-            b_heat_sponge = compute_total_tracer(ms%heat_budget_sponge, metrics%areaT, grid%nghost)
-            b_heat_adv = compute_total_tracer(ms%heat_budget_horiz_adv, metrics%areaT, grid%nghost)
-            b_heat_hdiff = compute_total_tracer(ms%heat_budget_hdiff, metrics%areaT, grid%nghost)
+            b_heat_surf = compute_total_content(ms%heat_budget_surface, metrics%areaT, grid%nghost)
+            b_heat_geo = compute_total_content(ms%heat_budget_geothermal, metrics%areaT, grid%nghost)
+            b_heat_sponge = compute_total_content(ms%heat_budget_sponge, metrics%areaT, grid%nghost)
+            b_heat_adv = compute_total_content(ms%heat_budget_horiz_adv, metrics%areaT, grid%nghost)
+            b_heat_hdiff = compute_total_content(ms%heat_budget_hdiff, metrics%areaT, grid%nghost)
             tmp = b_heat_surf
             call halo_allreduce_sum(tmp, b_heat_surf)
             tmp = b_heat_geo
@@ -678,8 +678,8 @@ contains
             tmp = b_heat_hdiff
             call halo_allreduce_sum(tmp, b_heat_hdiff)
             if (present(heat_budget_frazil)) then
-               b_heat_frazil = compute_total_tracer(heat_budget_frazil, &
-                                                    metrics%areaT, grid%nghost)
+               b_heat_frazil = compute_total_content(heat_budget_frazil, &
+                                                     metrics%areaT, grid%nghost)
                tmp = b_heat_frazil
                call halo_allreduce_sum(tmp, b_heat_frazil)
             end if
@@ -775,7 +775,40 @@ contains
       total = acc
    end function compute_total_h
 
-   function compute_total_tracer(hTr, areaT, nghost) result(total)
+   function compute_total_tracer(hTr, h, areaT, nghost) result(total)
+      !! `Σ h(i,j,k)·c(i,j,k)·areaT(i,j)` over PHYSICAL cells (ghosts excluded).
+      !! Same explicit-reduction pattern as `compute_total_h`.
+      real(wp), intent(in) :: hTr(:, :, :)
+         !! Tracer concentration `c`.
+      real(wp), intent(in) :: h(:, :, :)
+         !! Layer thickness; the total is `Σ h·c·areaT`.
+      real(wp), intent(in) :: areaT(:, :)
+      integer, intent(in) :: nghost
+      real(wp) :: total
+      real(wp) :: acc, p
+      integer :: i, j, k, nx, ny, nz, i_lo, i_hi, j_lo, j_hi
+      nx = min(size(hTr, 1), size(areaT, 1))
+      ny = min(size(hTr, 2), size(areaT, 2))
+      nz = size(hTr, 3)
+      i_lo = nghost + 1
+      i_hi = nx - nghost
+      j_lo = nghost + 1
+      j_hi = ny - nghost
+      acc = 0.0_wp
+      ! acc-kept: assumed-shape dummy hTr/areaT (dc-assumed-shape)
+      !$acc parallel loop collapse(3) reduction(+:acc) present(hTr, h, areaT)
+      do k = 1, nz
+         do j = j_lo, j_hi
+            do i = i_lo, i_hi
+               p = h(i, j, k)*hTr(i, j, k)
+               acc = acc + p*areaT(i, j)
+            end do
+         end do
+      end do
+      total = acc
+   end function compute_total_tracer
+
+   function compute_total_content(hTr, areaT, nghost) result(total)
       !! `Σ hTr(i,j,k)·areaT(i,j)` over PHYSICAL cells (ghosts excluded).
       !! Same explicit-reduction pattern as `compute_total_h`.
       real(wp), intent(in) :: hTr(:, :, :)
@@ -802,7 +835,7 @@ contains
          end do
       end do
       total = acc
-   end function compute_total_tracer
+   end function compute_total_content
 
    subroutine compute_ice_totals(wet_T, areaT, part_size, m_ice, ncat, nghost, &
                                  wet_area, ci_area, hi_area)
@@ -1083,7 +1116,67 @@ contains
       end do
    end function compute_total_h_efp
 
-   function compute_total_tracer_efp(hTr, areaT, nghost) result(total)
+   function compute_total_tracer_efp(hTr, h, areaT, nghost) result(total)
+      !! EFP twin of `compute_total_tracer`.  See `compute_total_h_efp`
+      !! for the k-slab blocking design; ghost exclusion + extent clamping
+      !! copied verbatim from `compute_total_tracer`.
+      real(wp), intent(in) :: hTr(:, :, :)
+         !! Tracer concentration `c`.
+      real(wp), intent(in) :: h(:, :, :)
+         !! Layer thickness; the total is `Σ h·c·areaT`.
+      real(wp), intent(in) :: areaT(:, :)
+      integer, intent(in) :: nghost
+      type(efp_t) :: total
+      integer :: i, j, k, nx, ny, nz, i_lo, i_hi, j_lo, j_hi
+      integer(int64) :: e1, e2, e3, e4, e5, e6, epoison
+      integer(int64) :: d1, d2, d3, d4, d5, d6, dpoison
+      integer(int64) :: slab_e(EFP_DIGITS)
+      real(real64) :: val
+
+      nx = min(size(hTr, 1), size(areaT, 1))
+      ny = min(size(hTr, 2), size(areaT, 2))
+      nz = size(hTr, 3)
+      i_lo = nghost + 1
+      i_hi = nx - nghost
+      j_lo = nghost + 1
+      j_hi = ny - nghost
+      call efp_summands_guard(i_hi - i_lo + 1, j_hi - j_lo + 1, "compute_total_tracer_efp")
+
+      total%v = 0_int64
+      total%poison = 0_int64
+      do k = 1, nz
+         e1 = 0_int64
+         e2 = 0_int64
+         e3 = 0_int64
+         e4 = 0_int64
+         e5 = 0_int64
+         e6 = 0_int64
+         epoison = 0_int64
+         ! acc-kept: EFP reproducing-sum path, left exactly as-is + assumed-shape dummy
+         !$acc parallel loop collapse(2) reduction(+:e1,e2,e3,e4,e5,e6,epoison) &
+         !$acc&         private(val, d1, d2, d3, d4, d5, d6, dpoison) present(hTr, h, areaT)
+         do j = j_lo, j_hi
+            do i = i_lo, i_hi
+               val = real(h(i, j, k)*hTr(i, j, k), real64)*real(areaT(i, j), real64)
+               call efp_decompose_impl(val, d1, d2, d3, d4, d5, d6, dpoison)
+               e1 = e1 + d1
+               e2 = e2 + d2
+               e3 = e3 + d3
+               e4 = e4 + d4
+               e5 = e5 + d5
+               e6 = e6 + d6
+               epoison = epoison + dpoison
+            end do
+         end do
+         slab_e = [e1, e2, e3, e4, e5, e6]
+         call efp_carry(slab_e)
+         total%v = total%v + slab_e
+         total%poison = total%poison + epoison
+         call efp_carry(total%v)
+      end do
+   end function compute_total_tracer_efp
+
+   function compute_total_content_efp(hTr, areaT, nghost) result(total)
       !! EFP twin of `compute_total_tracer`.  See `compute_total_h_efp`
       !! for the k-slab blocking design; ghost exclusion + extent clamping
       !! copied verbatim from `compute_total_tracer`.
@@ -1104,7 +1197,7 @@ contains
       i_hi = nx - nghost
       j_lo = nghost + 1
       j_hi = ny - nghost
-      call efp_summands_guard(i_hi - i_lo + 1, j_hi - j_lo + 1, "compute_total_tracer_efp")
+      call efp_summands_guard(i_hi - i_lo + 1, j_hi - j_lo + 1, "compute_total_content_efp")
 
       total%v = 0_int64
       total%poison = 0_int64
@@ -1138,7 +1231,7 @@ contains
          total%poison = total%poison + epoison
          call efp_carry(total%v)
       end do
-   end function compute_total_tracer_efp
+   end function compute_total_content_efp
 
    function compute_total_ke_efp(h_layer, u_face, v_face, areaT, nghost) result(total)
       !! EFP twin of `compute_total_ke`.  See `compute_total_h_efp` for the

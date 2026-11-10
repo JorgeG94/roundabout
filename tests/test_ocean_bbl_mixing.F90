@@ -46,7 +46,8 @@ contains
                   new_unittest("face_to_cell", test_face_to_cell), &
                   new_unittest("fail_loud", test_fail_loud), &
                   new_unittest("merge_kt_only_additive", test_merge), &
-                  new_unittest("column_kernel_n2", test_column_kernel_n2) &
+                  new_unittest("column_kernel_n2", test_column_kernel_n2), &
+                  new_unittest("column_kernel_filler_donor", test_column_kernel_filler) &
                   ]
    end subroutine collect_ocean_bbl_mixing_tests
 
@@ -413,8 +414,8 @@ contains
       end do
       do k = 1, NZ
          h(:, :, k) = dz
-         ht(:, :, k) = tk(k)*dz
-         hs(:, :, k) = 35.0_wp*dz
+         ht(:, :, k) = tk(k)        ! concentration, not content
+         hs(:, :, k) = 35.0_wp
       end do
       wet = 1.0_wp
       kb = 1
@@ -443,5 +444,57 @@ contains
       if (allocated(error)) return
       call check(error, kd(2, 2, 1) == 0.0_wp .and. kd(2, 2, NZ + 1) == 0.0_wp, "end-caps zero")
    end subroutine test_column_kernel_n2
+
+   subroutine test_column_kernel_filler(error)
+      !! A bed filler (`h <= H_VANISHED`) keeps the stale water it last held.
+      !! The kernel must read it through its donor (the live layer above), so
+      !! `kd_int` is bit-identical to the same column with the filler holding
+      !! the donor's T/S.  Reading the raw stored value puts a spurious
+      !! interface N^2 next to the bed.
+      type(error_type), allocatable, intent(out) :: error
+      integer, parameter :: NX = 2, NY = 2, NZ = 10
+      type(eos_t) :: eos
+      real(wp) :: h(NX, NY, NZ), ct(NX, NY, NZ), cs(NX, NY, NZ), wet(NX, NY)
+      integer :: kb(NX, NY)
+      real(wp) :: ust(NX, NY), ke(NX, NY), fa(NX, NY), kd(NX, NY, NZ + 1), kd_ref(NX, NY, NZ + 1)
+      real(wp) :: rho0_l
+      integer :: k, pass
+
+      eos%variant = EOS_VARIANT_LINEAR
+      eos%alpha_T = 0.2_wp
+      eos%beta_S = 1035.0_wp*7.6e-4_wp
+      eos%rho0 = 1035.0_wp
+      rho0_l = eos%rho0
+      wet = 1.0_wp
+      kb = 1
+      ust = 0.01_wp
+      ke = 1.0e-4_wp
+      fa = 0.0_wp
+      do pass = 1, 2
+         do k = 1, NZ
+            h(:, :, k) = 20.0_wp
+            ct(:, :, k) = 10.0_wp + 0.05_wp*real(k*k, wp)
+            cs(:, :, k) = 35.0_wp
+         end do
+         h(:, :, 1) = 1.0e-5_wp
+         if (pass == 1) then
+            ct(:, :, 1) = ct(1, 1, 2)          ! filler holds its donor's water
+            cs(:, :, 1) = cs(1, 1, 2)
+         else
+            ct(:, :, 1) = -40.0_wp             ! stale water, far from the donor
+            cs(:, :, 1) = 5.0_wp
+         end if
+         !$acc enter data copyin(h, ct, cs, wet, kb, ust, ke, fa) create(kd)
+         call bbl_mixing_compute_impl(NX, NY, NZ, h, ct, cs, wet, kb, eos, rho0_l, ust, ke, fa, &
+                                      0.5_wp, 1.0e30_wp, .true., OM2, VK, 0.1_wp, kd)
+         !$acc update self(kd)
+         !$acc exit data delete(h, ct, cs, wet, kb, ust, ke, fa, kd)
+         if (pass == 1) kd_ref = kd
+      end do
+      call check(error, any(kd_ref > 0.0_wp), "filler column: BBL mixes at all")
+      if (allocated(error)) return
+      call check(error, all(kd == kd_ref), &
+                 "filler column: kd_int must not depend on a filler's stale T/S (donor read)")
+   end subroutine test_column_kernel_filler
 
 end module test_ocean_bbl_mixing

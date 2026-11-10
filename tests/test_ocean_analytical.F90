@@ -279,11 +279,11 @@ contains
          do k = 1, NZ
             z_c = (real(NZ - k, wp) + 0.5_wp)*DZ
             if (z_c < 0.5_wp*H0) then
-               ms%tracers(idx_T)%hTr(:, :, k) = T_WARM*DZ
+               ms%tracers(idx_T)%c(:, :, k) = T_WARM
             else
-               ms%tracers(idx_T)%hTr(:, :, k) = T_COLD*DZ
+               ms%tracers(idx_T)%c(:, :, k) = T_COLD
             end if
-            ms%tracers(ms%idx_salinity)%hTr(:, :, k) = eos%S_ref*DZ
+            ms%tracers(ms%idx_salinity)%c(:, :, k) = eos%S_ref
             ms%rho_layer(:, :, k) = eos%rho0
          end do
 
@@ -303,7 +303,7 @@ contains
          ! `NZ·DZ·T_MEAN` doesn't match the realised IC.
          i_probe = NGHOST + 2
          j_probe = NGHOST + 2
-         heat_ic = sum(ms%tracers(idx_T)%hTr(i_probe, j_probe, :))
+         heat_ic = sum(ms%h_layer(i_probe, j_probe, :)*ms%tracers(idx_T)%c(i_probe, j_probe, :))
 
          call map_in_slots(grid, metrics, ms, ct, cor, pgf, hv, bd, ss, sf, va, hd, vd, vmix, dyn)
          do step = 1, N_STEPS
@@ -313,7 +313,7 @@ contains
 
          ! Probe the same interior column we snapshotted above.
          do k = 1, NZ
-            T_num(k) = ms%tracers(idx_T)%hTr(i_probe, j_probe, k)/ms%h_layer(i_probe, j_probe, k)
+            T_num(k) = ms%tracers(idx_T)%c(i_probe, j_probe, k)
          end do
 
          ! Compare against erfc.  Depth from surface: z_c at k.
@@ -338,7 +338,7 @@ contains
 
          ! Column heat conserved to round-off (the apply step is
          ! flux-form and the boundaries are closed).
-         heat_final = sum(ms%tracers(idx_T)%hTr(i_probe, j_probe, :))
+         heat_final = sum(ms%h_layer(i_probe, j_probe, :)*ms%tracers(idx_T)%c(i_probe, j_probe, :))
          call check(error, abs(heat_final - heat_ic) < 1.0e-10_wp*abs(heat_ic), &
                     "vdiff_erfc: column heat drift > round-off under closed BC")
       end block checks
@@ -417,10 +417,10 @@ contains
                      x_i = (real(i - NGHOST, wp) - 0.5_wp)*DX
                      eta_i = ETA_AMP*exp(-((x_i - x_centre)/SIGMA_X)**2)
                      ms%h_layer(i, j, k) = dz + eta_i/real(NZ, wp)
-                     ms%tracers(ms%idx_temperature)%hTr(i, j, k) = &
-                        eos%T_ref*ms%h_layer(i, j, k)
-                     ms%tracers(ms%idx_salinity)%hTr(i, j, k) = &
-                        eos%S_ref*ms%h_layer(i, j, k)
+                     ms%tracers(ms%idx_temperature)%c(i, j, k) = &
+                        eos%T_ref
+                     ms%tracers(ms%idx_salinity)%c(i, j, k) = &
+                        eos%S_ref
                      ms%rho_layer(i, j, k) = eos%rho0
                   end block
                end do
@@ -601,10 +601,10 @@ contains
                   ! Width ~3*dx so the gradient is resolved.
                   ms%h_layer(i, j, k) = dz - (ETA_STEP/real(NZ, wp))* &
                                         tanh((x_i - x_centre)/(3.0_wp*DX))
-                  ms%tracers(ms%idx_temperature)%hTr(i, j, k) = &
-                     eos%T_ref*ms%h_layer(i, j, k)
-                  ms%tracers(ms%idx_salinity)%hTr(i, j, k) = &
-                     eos%S_ref*ms%h_layer(i, j, k)
+                  ms%tracers(ms%idx_temperature)%c(i, j, k) = &
+                     eos%T_ref
+                  ms%tracers(ms%idx_salinity)%c(i, j, k) = &
+                     eos%S_ref
                   ms%rho_layer(i, j, k) = eos%rho0
                end do
             end do
@@ -733,8 +733,8 @@ write (msg, '("geostrophic_adjust: v_mean at centre = ", es12.4, " m/s (expected
       ! makes the split driver skip `tracer_advect_vertical` and
       ! the `apply_bt_correction` h-rescale; the ALE remap after
       ! `rk2_average` relayers (h_layer, every hTr) onto target_h
-      ! conservatively per column — preserves both bit-exact
-      ! `sum(hTr)` and per-column `S = hTr/h`.  Without this,
+      ! conservatively per column — preserves both the
+      ! content `sum(h*c)` and the per-column concentration `S`.  Without this,
       ! the Eulerian-z surface-flux dilemma seeds a baroclinic
       ! feedback that NaNs around step ~2100 under realistic β_S.
       call vc%init(grid, nz_ml=NZ)
@@ -755,10 +755,10 @@ write (msg, '("geostrophic_adjust: v_mean at centre = ", es12.4, " m/s (expected
                x_i = (real(i - NGHOST, wp) - 0.5_wp)*DX
                ms%h_layer(i, j, k) = dz - (ETA_STEP/real(NZ, wp))* &
                                      tanh((x_i - x_centre)/(3.0_wp*DX))
-               ms%tracers(ms%idx_temperature)%hTr(i, j, k) = &
-                  eos%T_ref*ms%h_layer(i, j, k)
-               ms%tracers(ms%idx_salinity)%hTr(i, j, k) = &
-                  eos%S_ref*ms%h_layer(i, j, k)
+               ms%tracers(ms%idx_temperature)%c(i, j, k) = &
+                  eos%T_ref
+               ms%tracers(ms%idx_salinity)%c(i, j, k) = &
+                  eos%S_ref
                ms%rho_layer(i, j, k) = eos%rho0
             end do
          end do
@@ -945,8 +945,8 @@ write (msg, '("geostrophic_adjust: v_mean at centre = ", es12.4, " m/s (expected
             ms%u_face_x_layer(:, :, k) = 0.0_wp
             ms%v_face_y_layer(:, :, k) = 0.0_wp
             ms%rho_layer(:, :, k) = eos%rho0
-            ms%tracers(idx_T)%hTr(:, :, k) = eos%T_ref*dz
-            ms%tracers(idx_S)%hTr(:, :, k) = eos%S_ref*dz
+            ms%tracers(idx_T)%c(:, :, k) = eos%T_ref
+            ms%tracers(idx_S)%c(:, :, k) = eos%S_ref
          end do
 
          ! Set up the bt reference column thickness for the split driver.
@@ -1201,8 +1201,8 @@ write (msg, '("geostrophic_adjust: v_mean at centre = ", es12.4, " m/s (expected
             ms%u_face_x_layer(:, :, k) = 0.0_wp
             ms%v_face_y_layer(:, :, k) = 0.0_wp
             ms%rho_layer(:, :, k) = eos%rho0
-            ms%tracers(idx_T)%hTr(:, :, k) = eos%T_ref*dz
-            ms%tracers(idx_S)%hTr(:, :, k) = eos%S_ref*dz
+            ms%tracers(idx_T)%c(:, :, k) = eos%T_ref
+            ms%tracers(idx_S)%c(:, :, k) = eos%S_ref
          end do
 
          dyn%bt_work%bt_H_ref = H0
@@ -1421,7 +1421,7 @@ write (msg, '("geostrophic_adjust: v_mean at centre = ", es12.4, " m/s (expected
             ms%u_face_x_layer(:, :, k) = 0.0_wp
             ms%v_face_y_layer(:, :, k) = 0.0_wp
             ms%rho_layer(:, :, k) = eos%rho0
-            ms%tracers(idx_T)%hTr(:, :, k) = eos%T_ref*dz
+            ms%tracers(idx_T)%c(:, :, k) = eos%T_ref
          end do
 
          do k = 1, NZ
@@ -1433,7 +1433,7 @@ write (msg, '("geostrophic_adjust: v_mean at centre = ", es12.4, " m/s (expected
                      y_phys = (real(j - NGHOST, wp) - 0.5_wp)*DY
                      r2 = (x_phys - x_c)**2 + (y_phys - y_c)**2
                      S_local = S_ref + S_PERT*exp(-r2/sigma_pulse**2)
-                     ms%tracers(idx_S)%hTr(i, j, k) = S_local*dz
+                     ms%tracers(idx_S)%c(i, j, k) = S_local
                   end block
                end do
             end do
@@ -1441,9 +1441,9 @@ write (msg, '("geostrophic_adjust: v_mean at centre = ", es12.4, " m/s (expected
 
          ! Snapshot initial pulse state.
          allocate (hTr_init(grid%nx_total, grid%ny_total, NZ))
-         hTr_init = ms%tracers(idx_S)%hTr
+         hTr_init = ms%h_layer*ms%tracers(idx_S)%c    ! content snapshot
 
-         hTr_sum_init = kahan_sum_interior(ms%tracers(idx_S)%hTr, grid, NZ)
+         hTr_sum_init = kahan_sum_interior(ms%tracers(idx_S)%c, grid, NZ, ms%h_layer)
          S_min_init = huge(1.0_wp)
          S_max_init = -huge(1.0_wp)
          do k = 1, NZ
@@ -1451,7 +1451,7 @@ write (msg, '("geostrophic_adjust: v_mean at centre = ", es12.4, " m/s (expected
                do i = NGHOST + 1, NGHOST + NX
                   block
                      real(wp) :: S_local
-                     S_local = ms%tracers(idx_S)%hTr(i, j, k)/ms%h_layer(i, j, k)
+                     S_local = ms%tracers(idx_S)%c(i, j, k)
                      S_min_init = min(S_min_init, S_local)
                      S_max_init = max(S_max_init, S_local)
                   end block
@@ -1469,7 +1469,7 @@ write (msg, '("geostrophic_adjust: v_mean at centre = ", es12.4, " m/s (expected
          call map_out_slots(metrics, ms, ct, cor, pgf, hv, bd, ss, sf, va, hd, vd, vmix, dyn)
 
          ! ---- Final-state diagnostics ----
-         hTr_sum_final = kahan_sum_interior(ms%tracers(idx_S)%hTr, grid, NZ)
+         hTr_sum_final = kahan_sum_interior(ms%tracers(idx_S)%c, grid, NZ, ms%h_layer)
          S_min_final = huge(1.0_wp)
          S_max_final = -huge(1.0_wp)
          deform_l2 = 0.0_wp
@@ -1478,10 +1478,10 @@ write (msg, '("geostrophic_adjust: v_mean at centre = ", es12.4, " m/s (expected
                do i = NGHOST + 1, NGHOST + NX
                   block
                      real(wp) :: S_local
-                     S_local = ms%tracers(idx_S)%hTr(i, j, k)/ms%h_layer(i, j, k)
+                     S_local = ms%tracers(idx_S)%c(i, j, k)
                      S_min_final = min(S_min_final, S_local)
                      S_max_final = max(S_max_final, S_local)
-                     deform_l2 = deform_l2 + (ms%tracers(idx_S)%hTr(i, j, k) - hTr_init(i, j, k))**2
+                     deform_l2 = deform_l2 + (ms%h_layer(i, j, k)*ms%tracers(idx_S)%c(i, j, k) - hTr_init(i, j, k))**2
                   end block
                end do
             end do
@@ -1676,19 +1676,19 @@ write (msg, '("geostrophic_adjust: v_mean at centre = ", es12.4, " m/s (expected
             ms%u_face_x_layer(:, :, k) = 0.0_wp
             ms%v_face_y_layer(:, :, k) = 0.0_wp
             ms%rho_layer(:, :, k) = eos%rho0
-            ms%tracers(idx_T)%hTr(:, :, k) = T_REF*dz
+            ms%tracers(idx_T)%c(:, :, k) = T_REF
             do j = 1, grid%ny_total
                do i = 1, grid%nx_total
                   if (i <= i_lock) then
-                     ms%tracers(idx_S)%hTr(i, j, k) = S_DENSE*dz
+                     ms%tracers(idx_S)%c(i, j, k) = S_DENSE
                   else
-                     ms%tracers(idx_S)%hTr(i, j, k) = S_LIGHT*dz
+                     ms%tracers(idx_S)%c(i, j, k) = S_LIGHT
                   end if
                end do
             end do
          end do
 
-         hTr_S_init = kahan_sum_interior(ms%tracers(idx_S)%hTr, grid, NZ)
+         hTr_S_init = kahan_sum_interior(ms%tracers(idx_S)%c, grid, NZ, ms%h_layer)
 
          dyn%bt_work%bt_H_ref = H0
 
@@ -1700,7 +1700,7 @@ write (msg, '("geostrophic_adjust: v_mean at centre = ", es12.4, " m/s (expected
          call map_out_slots(metrics, ms, ct, cor, pgf, hv, bd, ss, sf, va, hd, vd, vmix, dyn)
 
          ! Final diagnostics.
-         hTr_S_final = kahan_sum_interior(ms%tracers(idx_S)%hTr, grid, NZ)
+         hTr_S_final = kahan_sum_interior(ms%tracers(idx_S)%c, grid, NZ, ms%h_layer)
          mass_rel_err = abs(hTr_S_final - hTr_S_init)/abs(hTr_S_init)
 
          S_min_final = huge(1.0_wp)
@@ -1713,7 +1713,7 @@ write (msg, '("geostrophic_adjust: v_mean at centre = ", es12.4, " m/s (expected
                do i = NGHOST + 1, NGHOST + NX
                   block
                      real(wp) :: S_local
-                     S_local = ms%tracers(idx_S)%hTr(i, j, k)/ms%h_layer(i, j, k)
+                     S_local = ms%tracers(idx_S)%c(i, j, k)
                      S_min_final = min(S_min_final, S_local)
                      S_max_final = max(S_max_final, S_local)
                      if (k == 1 .and. i > i_lock) then
@@ -1786,7 +1786,7 @@ write (msg, '("geostrophic_adjust: v_mean at centre = ", es12.4, " m/s (expected
       call destroy_slots(ms, ct, cor, pgf, hv, bd, ss, sf, va, hd, vd, vmix, eos, dyn)
    end subroutine test_lock_exchange
 
-   function kahan_sum_interior(field, grid, nz) result(total)
+   function kahan_sum_interior(field, grid, nz, weight) result(total)
       !! Compensated summation of `field` over the physical-interior
       !! cells (excluding ghosts).  Plain `sum`/loop accumulators have
       !! O(N·ε·max) round-off — at 2500 cells × max~4e7 that's already
@@ -1794,17 +1794,22 @@ write (msg, '("geostrophic_adjust: v_mean at centre = ", es12.4, " m/s (expected
       !! < 1e-5.  Kahan compensation reduces the bound to O(ε), letting
       !! the test distinguish a true conservation breach from FP
       !! reduction noise.
+      !! With `weight` (the layer thickness) the sum is the tracer CONTENT
+      !! `Σ weight·field` of a concentration field.
       real(wp), intent(in) :: field(:, :, :)
       type(hgrid_t), intent(in) :: grid
       integer, intent(in) :: nz
-      real(wp) :: total, c, y, t
+      real(wp), intent(in), optional :: weight(:, :, :)
+      real(wp) :: total, c, y, t, f
       integer :: i, j, k
       total = 0.0_wp
       c = 0.0_wp
       do k = 1, nz
          do j = grid%nghost + 1, grid%nghost + grid%ny_phys
             do i = grid%nghost + 1, grid%nghost + grid%nx_phys
-               y = field(i, j, k) - c
+               f = field(i, j, k)
+               if (present(weight)) f = weight(i, j, k)*f
+               y = f - c
                t = total + y
                c = (t - total) - y
                total = t

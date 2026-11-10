@@ -381,9 +381,9 @@ contains
       ! registry slot.
       if (allocated(ms%tracers)) then
          do it = 1, size(ms%tracers)
-            if (.not. allocated(ms%tracers(it)%hTr)) cycle
+            if (.not. allocated(ms%tracers(it)%c)) cycle
             write (tname, "(a,i0)") "hTr_", it
-            call rdb_debug_chksum(grid, ms%tracers(it)%hTr, label, trim(tname), stage, step, &
+            call rdb_debug_chksum(grid, ms%tracers(it)%c, label, trim(tname), stage, step, &
                                   probe, LOC_H)
          end do
       end if

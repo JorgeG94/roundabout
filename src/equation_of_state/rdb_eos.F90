@@ -796,7 +796,7 @@ contains
       end select
    end subroutine eos_apply_tfreeze_set
 
-   subroutine eos_compute_arrays(eos, h_layer, hS_layer, hT_layer, &
+   subroutine eos_compute_arrays(eos, h_layer, S_layer, T_layer, &
                                  rho_layer, nx, ny, nz)
       !! Variant dispatch on bare 3D arrays — the state-agnostic body of
       !! `ocean_eos_compute` (the shim hosted in
@@ -824,27 +824,27 @@ contains
       type(eos_t), intent(in) :: eos
       integer, intent(in) :: nx, ny, nz
       real(wp), intent(in) :: h_layer(nx, ny, nz)
-      real(wp), intent(in) :: hS_layer(nx, ny, nz)
-      real(wp), intent(in) :: hT_layer(nx, ny, nz)
+      real(wp), intent(in) :: S_layer(nx, ny, nz)
+      real(wp), intent(in) :: T_layer(nx, ny, nz)
       real(wp), intent(out) :: rho_layer(nx, ny, nz)
 
       select case (eos%variant)
       case (EOS_VARIANT_LINEAR)
-         call eos_linear_impl(h_layer, hS_layer, hT_layer, rho_layer, &
+         call eos_linear_impl(h_layer, S_layer, T_layer, rho_layer, &
                               eos%rho0, eos%beta_S, eos%S_ref, &
                               eos%alpha_T, eos%T_ref, &
                               nx, ny, nz)
       case (EOS_VARIANT_WRIGHT_97)
-         call eos_wright_impl(h_layer, hS_layer, hT_layer, rho_layer, &
+         call eos_wright_impl(h_layer, S_layer, T_layer, rho_layer, &
                               eos%rho0, eos%p_ref, &
                               nx, ny, nz)
       case (EOS_VARIANT_ROQUET_SPV)
-         call eos_roquet_spv_impl(h_layer, hS_layer, hT_layer, rho_layer, &
+         call eos_roquet_spv_impl(h_layer, S_layer, T_layer, rho_layer, &
                                   eos%rho0, eos%p_ref, &
                                   eos%ts_convention == TS_CONS_ABS, &
                                   nx, ny, nz)
       case (EOS_VARIANT_ROQUET_RHO)
-         call eos_roquet_rho_impl(h_layer, hS_layer, hT_layer, rho_layer, &
+         call eos_roquet_rho_impl(h_layer, S_layer, T_layer, rho_layer, &
                                   eos%rho0, eos%p_ref, &
                                   eos%ts_convention == TS_CONS_ABS, &
                                   nx, ny, nz)
@@ -853,7 +853,7 @@ contains
       end select
    end subroutine eos_compute_arrays
 
-   pure subroutine eos_linear_impl(h_layer, hS_layer, hT_layer, rho_layer, &
+   pure subroutine eos_linear_impl(h_layer, S_layer, T_layer, rho_layer, &
                                    rho_0, beta_S, S_ref, &
                                    alpha_T, T_ref, &
                                    nx, ny, nz)
@@ -861,7 +861,7 @@ contains
       !!
       !!   rho_k = rho_0 + beta_S * (S_k - S_ref) - alpha_T * (T_k - T_ref)
       !!
-      !! where S_k = hS_k / h_k, T_k = hT_k / h_k.  `beta_S` and
+      !! where `S_k`, `T_k` are the layer concentrations.  `beta_S` and
       !! `alpha_T` are pre-multiplied sensitivities in kg/m³ per unit
       !! S / T — standard seawater values are 0.78 and 0.17.
       !!
@@ -870,9 +870,8 @@ contains
       !! the EOS finite under ZSTAR_FULL when bed-side layers can pinch out.
       !! The gate is `> H_VANISHED` (not `> 0`): during an active drain the
       !! PPM positivity limiter guarantees `h >= 0` but NOT `h >= H_VANISHED`,
-      !! so a layer at e.g. `h = 1e-8` with `hS ≈ 35·1e-8` would pass a
-      !! `> 0` gate and give `S = hS/h ≈ 5e2 PSU` ⇒ corrupted ρ ⇒ garbage
-      !! PGF.  `> H_VANISHED` (the D4 vanished-layer role) returns rho_0 for
+      !! so a layer at e.g. `h = 1e-8` would pass a `> 0` gate and feed a
+      !! (possibly stale) filler concentration to the EOS ⇒ garbage PGF.  `> H_VANISHED` (the D4 vanished-layer role) returns rho_0 for
       !! any layer in `(0, H_VANISHED]`.  Bit-identical for any config whose
       !! layers all exceed H_VANISHED.  CAVEAT: ZSTAR_FULL floors vanishing
       !! bed layers to `zstar_h_min` (type default 1.0e-4; the shipped
@@ -887,19 +886,18 @@ contains
       !! double-gyre helpers) pass unchanged on both toolchains.
       integer, intent(in) :: nx, ny, nz
       real(wp), intent(in) :: h_layer(nx, ny, nz)
-      real(wp), intent(in) :: hS_layer(nx, ny, nz)
-      real(wp), intent(in) :: hT_layer(nx, ny, nz)
+      real(wp), intent(in) :: S_layer(nx, ny, nz)
+      real(wp), intent(in) :: T_layer(nx, ny, nz)
       real(wp), intent(out) :: rho_layer(nx, ny, nz)
       real(wp), intent(in) :: rho_0, beta_S, S_ref, alpha_T, T_ref
 
       integer :: i, j, k
-      real(wp) :: inv_h, S_k, T_k
+      real(wp) :: S_k, T_k
 
-      do concurrent(k=1:nz, j=1:ny, i=1:nx) local(inv_h, S_k, T_k)
+      do concurrent(k=1:nz, j=1:ny, i=1:nx) local(S_k, T_k)
          if (h_layer(i, j, k) > H_VANISHED) then
-            inv_h = 1.0_wp/h_layer(i, j, k)
-            S_k = hS_layer(i, j, k)*inv_h
-            T_k = hT_layer(i, j, k)*inv_h
+            S_k = S_layer(i, j, k)
+            T_k = T_layer(i, j, k)
          else
             S_k = S_ref
             T_k = T_ref
@@ -908,7 +906,7 @@ contains
       end do
    end subroutine eos_linear_impl
 
-   pure subroutine eos_wright_impl(h_layer, hS_layer, hT_layer, rho_layer, &
+   pure subroutine eos_wright_impl(h_layer, S_layer, T_layer, rho_layer, &
                                    rho_0, p_ref, nx, ny, nz)
       !! Wright (1997) rational EOS evaluated at a single reference
       !! pressure `p_ref`, which is a SCALAR by design — see the
@@ -927,22 +925,21 @@ contains
       !! across the MOM6 test suite.
       integer, intent(in) :: nx, ny, nz
       real(wp), intent(in) :: h_layer(nx, ny, nz)
-      real(wp), intent(in) :: hS_layer(nx, ny, nz)
-      real(wp), intent(in) :: hT_layer(nx, ny, nz)
+      real(wp), intent(in) :: S_layer(nx, ny, nz)
+      real(wp), intent(in) :: T_layer(nx, ny, nz)
       real(wp), intent(out) :: rho_layer(nx, ny, nz)
       real(wp), intent(in) :: rho_0, p_ref
 
       integer :: i, j, k
-      real(wp) :: inv_h, S_k, T_k, T_sq, T_cu
+      real(wp) :: S_k, T_k, T_sq, T_cu
       real(wp) :: alpha_0, p_0, lambda, p_plus_p0, denom
 
       do concurrent(k=1:nz, j=1:ny, i=1:nx) &
-         local(inv_h, S_k, T_k, T_sq, T_cu, &
+         local(S_k, T_k, T_sq, T_cu, &
                alpha_0, p_0, lambda, p_plus_p0, denom)
          if (h_layer(i, j, k) > H_VANISHED) then
-            inv_h = 1.0_wp/h_layer(i, j, k)
-            S_k = hS_layer(i, j, k)*inv_h
-            T_k = hT_layer(i, j, k)*inv_h
+            S_k = S_layer(i, j, k)
+            T_k = T_layer(i, j, k)
             T_sq = T_k*T_k
             T_cu = T_sq*T_k
 
@@ -961,7 +958,7 @@ contains
       end do
    end subroutine eos_wright_impl
 
-   pure subroutine eos_roquet_spv_impl(h_layer, hS_layer, hT_layer, rho_layer, &
+   pure subroutine eos_roquet_spv_impl(h_layer, S_layer, T_layer, rho_layer, &
                                        rho_0, p_ref, cons, nx, ny, nz)
       !! Roquet et al. (2015) SpV EOS evaluated at a single reference
       !! pressure `p_ref` (a SCALAR by design — see the
@@ -980,24 +977,23 @@ contains
       !! configure in `configure_ocean_pgf`.)
       integer, intent(in) :: nx, ny, nz
       real(wp), intent(in) :: h_layer(nx, ny, nz)
-      real(wp), intent(in) :: hS_layer(nx, ny, nz)
-      real(wp), intent(in) :: hT_layer(nx, ny, nz)
+      real(wp), intent(in) :: S_layer(nx, ny, nz)
+      real(wp), intent(in) :: T_layer(nx, ny, nz)
       real(wp), intent(out) :: rho_layer(nx, ny, nz)
       real(wp), intent(in) :: rho_0, p_ref
       logical, intent(in) :: cons
          !! `.true.` = (T, S) are (CT, SA) (`TS_CONS_ABS`): no conversion.
 
       integer :: i, j, k
-      real(wp) :: inv_h, S_k, T_k, sv_k
+      real(wp) :: S_k, T_k, sv_k
 
       ! Value-only (`roquet_spv_value`): the derivatives `roquet_spv_point`
       ! also returns were discarded here.
       do concurrent(k=1:nz, j=1:ny, i=1:nx) &
-         local(inv_h, S_k, T_k, sv_k)
+         local(S_k, T_k, sv_k)
          if (h_layer(i, j, k) > H_VANISHED) then
-            inv_h = 1.0_wp/h_layer(i, j, k)
-            S_k = hS_layer(i, j, k)*inv_h
-            T_k = hT_layer(i, j, k)*inv_h
+            S_k = S_layer(i, j, k)
+            T_k = T_layer(i, j, k)
             sv_k = roquet_spv_value(T_k, S_k, p_ref, cons)
             rho_layer(i, j, k) = 1.0_wp/sv_k
          else
@@ -1006,7 +1002,7 @@ contains
       end do
    end subroutine eos_roquet_spv_impl
 
-   pure subroutine eos_roquet_rho_impl(h_layer, hS_layer, hT_layer, rho_layer, &
+   pure subroutine eos_roquet_rho_impl(h_layer, S_layer, T_layer, rho_layer, &
                                        rho_0, p_ref, cons, nx, ny, nz)
       !! Roquet et al. (2015) in-situ-density EOS (polyTEOS10_55t)
       !! evaluated at a single reference pressure `p_ref` (a SCALAR by
@@ -1018,24 +1014,23 @@ contains
       !! polynomial, not specific volume.
       integer, intent(in) :: nx, ny, nz
       real(wp), intent(in) :: h_layer(nx, ny, nz)
-      real(wp), intent(in) :: hS_layer(nx, ny, nz)
-      real(wp), intent(in) :: hT_layer(nx, ny, nz)
+      real(wp), intent(in) :: S_layer(nx, ny, nz)
+      real(wp), intent(in) :: T_layer(nx, ny, nz)
       real(wp), intent(out) :: rho_layer(nx, ny, nz)
       real(wp), intent(in) :: rho_0, p_ref
       logical, intent(in) :: cons
          !! `.true.` = (T, S) are (CT, SA) (`TS_CONS_ABS`): no conversion.
 
       integer :: i, j, k
-      real(wp) :: inv_h, S_k, T_k
+      real(wp) :: S_k, T_k
 
       do concurrent(k=1:nz, j=1:ny, i=1:nx) &
-         local(inv_h, S_k, T_k)
-         ! vanished-ok: substitutes rho_0 on a vanished layer, the same
+         local(S_k, T_k)
+         ! substitutes rho_0 on a vanished layer, the same
          ! fallback eos_linear_impl/eos_wright_impl/eos_roquet_spv_impl use.
          if (h_layer(i, j, k) > H_VANISHED) then
-            inv_h = 1.0_wp/h_layer(i, j, k)
-            S_k = hS_layer(i, j, k)*inv_h
-            T_k = hT_layer(i, j, k)*inv_h
+            S_k = S_layer(i, j, k)
+            T_k = T_layer(i, j, k)
             rho_layer(i, j, k) = roquet_rho_value(T_k, S_k, p_ref, cons)
          else
             rho_layer(i, j, k) = rho_0
@@ -1043,7 +1038,7 @@ contains
       end do
    end subroutine eos_roquet_rho_impl
 
-   pure subroutine eos_wright_pgf_column_sweep_impl(h_layer, hS_layer, hT_layer, &
+   pure subroutine eos_wright_pgf_column_sweep_impl(h_layer, S_layer, T_layer, &
                                                     rho_layer_seed, p_top, p_edge_out, &
                                                     rho_insitu_out, gravity, rho_0, &
                                                     nx, ny, nz)
@@ -1130,8 +1125,8 @@ contains
       !! the existing PGF Pass 1 + vdiff column kernels).
       integer, intent(in) :: nx, ny, nz
       real(wp), intent(in) :: h_layer(nx, ny, nz)
-      real(wp), intent(in) :: hS_layer(nx, ny, nz)
-      real(wp), intent(in) :: hT_layer(nx, ny, nz)
+      real(wp), intent(in) :: S_layer(nx, ny, nz)
+      real(wp), intent(in) :: T_layer(nx, ny, nz)
       real(wp), intent(in) :: rho_layer_seed(nx, ny, nz)
       real(wp), intent(in) :: p_top(nx, ny)
          !! Top-of-column pressure (Pa, `>= 0`) the EOS argument is
@@ -1141,20 +1136,19 @@ contains
       real(wp), intent(in) :: gravity, rho_0
 
       integer :: i, j, k
-      real(wp) :: p_above, p_centre_seed, p_top_ij, inv_h, S_k, T_k, T_sq, T_cu
+      real(wp) :: p_above, p_centre_seed, p_top_ij, S_k, T_k, T_sq, T_cu
       real(wp) :: alpha_0, p_0, lambda, p_plus_p0, denom, rho_k
 
       do concurrent(j=1:ny, i=1:nx) &
-         local(k, p_above, p_centre_seed, p_top_ij, inv_h, S_k, T_k, T_sq, T_cu, &
+         local(k, p_above, p_centre_seed, p_top_ij, S_k, T_k, T_sq, T_cu, &
                alpha_0, p_0, lambda, p_plus_p0, denom, rho_k)
          p_edge_out(i, j, nz + 1) = 0.0_wp
          p_above = 0.0_wp
          p_top_ij = p_top(i, j)
          do k = nz, 1, -1
             if (h_layer(i, j, k) > H_VANISHED) then
-               inv_h = 1.0_wp/h_layer(i, j, k)
-               S_k = hS_layer(i, j, k)*inv_h
-               T_k = hT_layer(i, j, k)*inv_h
+               S_k = S_layer(i, j, k)
+               T_k = T_layer(i, j, k)
                T_sq = T_k*T_k
                T_cu = T_sq*T_k
 

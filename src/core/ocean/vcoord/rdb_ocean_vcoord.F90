@@ -2,7 +2,7 @@
 module rdb_ocean_vcoord
    !! Holds the vertical-coordinate configuration and the per-step
    !! target grid that the ALE remap step relamps `multilayer.h_layer`
-   !! + every `multilayer.tracers(t)%hTr` onto.  The coastal path has
+   !! + every `multilayer.tracers(t)%c` onto.  The coastal path has
    !! `VCOORD_SIGMA`, `VCOORD_ZSIGMA`, `VCOORD_ZSTAR`, `VCOORD_ZSTAR_SIGMA`,
    !! `VCOORD_ZSTAR_FULL` plus `rdb_remap_column`; this module is the
    !! C-grid counterpart for the ocean dynamical core.
@@ -33,7 +33,7 @@ module rdb_ocean_vcoord
    !! Collaborator hand-off — remaining Phase 5g work (Layer 3):
    !!   1. Driver wiring in `ocean_dyn_step_split`: call
    !!      `compute_target_h(total_h_2d, dyn%bt_work%bt_eta)` then invoke the
-   !!      remap kernel on `multilayer.h_layer` + each `tracers(t)%hTr`
+   !!      remap kernel on `multilayer.h_layer` + each `tracers(t)%c`
    !!      + face velocities.  Recompute `bt_eta` from the new sum of
    !!      `h_layer - bt_H_ref`.
    !!   2. Face-velocity remap adapter — MOM6 reconstructs u at centres,
@@ -204,7 +204,7 @@ module rdb_ocean_vcoord
       ! ---- Per-column target thickness ----
       ! Recomputed every outer step from (H, eta) per the coord_type
       ! case.  Consumed by the remap kernel (Layer 3) to advance
-      ! `multilayer.h_layer` and every `tracers(t)%hTr`.
+      ! `multilayer.h_layer` and every `tracers(t)%c`.
       real(wp), allocatable :: target_h(:, :, :)
          !! Target layer thickness (m), shape `(nx, ny, nz_ml)`.
 
@@ -439,15 +439,6 @@ module rdb_ocean_vcoord
          !! capped at a 1.25× rescale factor.  The barotropic/depth-mean
          !! component is never touched (mode-split consistency).  Default
          !! `.false.` ⇒ velocities unchanged ⇒ bit-identical.
-      logical :: check_vanished_content = .false.
-         !! `&vcoord_nml check_vanished_content` — the I1′ tripwire.  Carried
-         !! on this slot (rather than on `ocean_dyn_t`) because the vertical
-         !! coordinate is what MAKES vanished layers, so the knob that
-         !! polices them belongs beside `zstar_h_min` and the filler
-         !! contract.  A plain scalar on the type: it rides the existing
-         !! `copyin(this)` and adds no device array.  Read by
-         !! `check_vanished_invariant_or_die` in `rdb_ocean_dyn`.  Default
-         !! `.false.` ⇒ no scan, no cost.
       logical :: zfixed_closed_faces = .false.
          !! `&vcoord_nml zfixed_closed_faces` — partial-step z-level face
          !! closure.  Meaningful on the three GEOMETRIC families that

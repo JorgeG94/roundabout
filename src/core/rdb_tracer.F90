@@ -2,8 +2,9 @@
 module rdb_tracer
    !! Per-tracer state and config for the layered ocean solver.
    !!
-   !! Holds the prognostic field `hTr` (= h * Tr), the RK2 save buffer
-   !! `hTr0`, and all scalar config the kernels consume (initial value,
+   !! Holds the prognostic field `c` (the tracer CONCENTRATION, units of the
+   !! tracer per unit mass or volume; Griffies et al. 2020), the RK2 save
+   !! buffer `c0`, and all scalar config the kernels consume (initial value,
    !! BC inflow value, physical clamp bounds, vertical/horizontal
    !! background diffusivities, and a linear-EOS contribution
    !! `eos_coeff * (Tr - eos_ref)`).
@@ -41,8 +42,8 @@ module rdb_tracer
          !! string => no standard_name attribute is written.
 
       ! Prognostic field and RK2 save (nx_total, ny_total, nz_ml)
-      real(wp), allocatable :: hTr(:, :, :)
-      real(wp), allocatable :: hTr0(:, :, :)
+      real(wp), allocatable :: c(:, :, :)
+      real(wp), allocatable :: c0(:, :, :)
 
       ! Scalar config
       real(wp) :: tr_init = 0.0_wp
@@ -89,9 +90,9 @@ module rdb_tracer
 contains
 
    subroutine tracer_init(this, grid, nz)
-      !! Allocate hTr / hTr0 at the multilayer grid size, zero-filled.
+      !! Allocate c / c0 at the multilayer grid size, zero-filled.
       !! Caller is responsible for populating the prognostic field
-      !! (e.g. `hTr = h_layer * tr_init`) after layer thicknesses are set.
+      !! (e.g. `c = tr_init`) after layer thicknesses are set.
       class(tracer_t), intent(inout) :: this
       type(hgrid_t), intent(in)    :: grid
       integer, intent(in)    :: nz
@@ -101,22 +102,22 @@ contains
       nx = grid%nx_total
       ny = grid%ny_total
 
-      allocate (this%hTr(nx, ny, nz), source=0.0_wp)
-      allocate (this%hTr0(nx, ny, nz), source=0.0_wp)
+      allocate (this%c(nx, ny, nz), source=0.0_wp)
+      allocate (this%c0(nx, ny, nz), source=0.0_wp)
    end subroutine tracer_init
 
    subroutine tracer_destroy(this)
       class(tracer_t), intent(inout) :: this
 
-      if (allocated(this%hTr)) deallocate (this%hTr)
-      if (allocated(this%hTr0)) deallocate (this%hTr0)
+      if (allocated(this%c)) deallocate (this%c)
+      if (allocated(this%c0)) deallocate (this%c0)
    end subroutine tracer_destroy
 
    pure function tracer_bytes(this) result(nbytes)
-      !! Counted allocatable footprint of one tracer (hTr + RK2 save).
+      !! Counted allocatable footprint of one tracer (c + RK2 save).
       class(tracer_t), intent(in) :: this
       integer(int64) :: nbytes
-      nbytes = arr_bytes(this%hTr) + arr_bytes(this%hTr0)
+      nbytes = arr_bytes(this%c) + arr_bytes(this%c0)
    end function tracer_bytes
 
 end module rdb_tracer

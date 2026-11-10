@@ -210,8 +210,8 @@ contains
          call ct%init(grid, nz_ml=NZ)
 
          ms%h_layer = H0
-         ms%tracers(ms%idx_salinity)%hTr = S0*H0
-         ms%tracers(ms%idx_temperature)%hTr = T0*H0
+         ms%tracers(ms%idx_salinity)%c = S0
+         ms%tracers(ms%idx_temperature)%c = T0
 
          ! --- Part A: uniform mass flux → zero divergence → zero budget ---
          ! mass_flux uniform ⇒ Tr_face_left uniform ⇒ divergence 0 ⇒ budget ≈ 0
@@ -241,8 +241,8 @@ contains
          ! Reset accumulators to isolate Part B
          ms%salt_budget_horiz_adv = 0.0_wp
          ms%heat_budget_horiz_adv = 0.0_wp
-         ms%tracers(ms%idx_salinity)%hTr = S0*H0
-         ms%tracers(ms%idx_temperature)%hTr = T0*H0
+         ms%tracers(ms%idx_salinity)%c = S0
+         ms%tracers(ms%idx_temperature)%c = T0
 
          ! mass_flux_x(i,j,k) = A_RAMP·i ⇒ Tr_face_left(i) = A_RAMP·i·Tr
          ! per-cell divergence F(i+1)−F(i) = A_RAMP·Tr ⇒ budget += −dt·A_RAMP·Tr·iareaT
@@ -365,8 +365,8 @@ contains
          call sf%init(grid)
 
          ms%h_layer = H0
-         ms%tracers(ms%idx_salinity)%hTr = S0*H0
-         ms%tracers(ms%idx_temperature)%hTr = T0*H0
+         ms%tracers(ms%idx_salinity)%c = S0
+         ms%tracers(ms%idx_temperature)%c = T0
          ms%u_face_x_layer = 0.02_wp
          ms%v_face_y_layer = 0.01_wp
          ms%mass_flux_x_layer = 0.0_wp
@@ -375,11 +375,11 @@ contains
          call sf%set_surface_flux_const(Q_HEAT, Q_SALT)
 
          ! Initial totals (host-side, before enter_data)
-         ref_salt = sum(ms%tracers(ms%idx_salinity)%hTr(NGHOST + 1:nx - NGHOST, &
-                                                        NGHOST + 1:ny - NGHOST, :)) &
+         ref_salt = sum(ms%h_layer(NGHOST + 1:nx - NGHOST, NGHOST + 1:ny - NGHOST, :)* &
+                        ms%tracers(ms%idx_salinity)%c(NGHOST + 1:nx - NGHOST, NGHOST + 1:ny - NGHOST, :)) &
                     *grid%dx*grid%dy*RHO_WATER
-         ref_heat = sum(ms%tracers(ms%idx_temperature)%hTr(NGHOST + 1:nx - NGHOST, &
-                                                           NGHOST + 1:ny - NGHOST, :)) &
+         ref_heat = sum(ms%h_layer(NGHOST + 1:nx - NGHOST, NGHOST + 1:ny - NGHOST, :)* &
+                        ms%tracers(ms%idx_temperature)%c(NGHOST + 1:nx - NGHOST, NGHOST + 1:ny - NGHOST, :)) &
                     *grid%dx*grid%dy*RHO_WATER
 
          !$acc enter data copyin(ms, sf, ct)
@@ -402,11 +402,11 @@ contains
          !$acc exit data delete(ms, sf, ct)
 
          ! Post-run totals (host-side, ghosts excluded)
-         total_salt = sum(ms%tracers(ms%idx_salinity)%hTr(NGHOST + 1:nx - NGHOST, &
-                                                          NGHOST + 1:ny - NGHOST, :)) &
+         total_salt = sum(ms%h_layer(NGHOST + 1:nx - NGHOST, NGHOST + 1:ny - NGHOST, :)* &
+                          ms%tracers(ms%idx_salinity)%c(NGHOST + 1:nx - NGHOST, NGHOST + 1:ny - NGHOST, :)) &
                       *grid%dx*grid%dy*RHO_WATER
-         total_heat = sum(ms%tracers(ms%idx_temperature)%hTr(NGHOST + 1:nx - NGHOST, &
-                                                             NGHOST + 1:ny - NGHOST, :)) &
+         total_heat = sum(ms%h_layer(NGHOST + 1:nx - NGHOST, NGHOST + 1:ny - NGHOST, :)* &
+                          ms%tracers(ms%idx_temperature)%c(NGHOST + 1:nx - NGHOST, NGHOST + 1:ny - NGHOST, :)) &
                       *grid%dx*grid%dy*RHO_WATER
 
          ! Budget term reductions (mirroring compute_total_tracer stencil)
@@ -502,7 +502,7 @@ contains
       integer, parameter :: NY_PHYS = 6
       integer :: nx, ny
       integer :: is, it
-      real(wp), allocatable :: hS0(:, :, :), hT0(:, :, :)
+      real(wp), allocatable :: hS0(:, :, :), hT0(:, :, :), hH0(:, :, :)
       real(wp) :: ref_salt, ref_heat, total_salt, total_heat
       real(wp) :: change_salt, change_heat
       real(wp) :: src_salt, src_heat, out_salt, out_heat
@@ -525,8 +525,8 @@ contains
          scale_v = area_w*RHO_WATER
 
          ms%h_layer = H0
-         ms%tracers(is)%hTr = S0*H0
-         ms%tracers(it)%hTr = T0*H0
+         ms%tracers(is)%c = S0
+         ms%tracers(it)%c = T0
          ! Small nonzero velocity so advection actually runs (closed basin ⇒
          ! interior advection telescopes to ~0, but the budget IS filled).
          ms%u_face_x_layer = 0.02_wp
@@ -538,11 +538,14 @@ contains
 
          ! Save the pre-step tracer fields (host) to form the manual RK2
          ! average AND to reference the interior total.
-         allocate (hS0, source=ms%tracers(is)%hTr)
-         allocate (hT0, source=ms%tracers(it)%hTr)
+         allocate (hH0, source=ms%h_layer)
+         allocate (hS0, source=ms%tracers(is)%c)
+         allocate (hT0, source=ms%tracers(it)%c)
 
-         ref_salt = sum(hS0(NGHOST + 1:nx - NGHOST, NGHOST + 1:ny - NGHOST, :))*scale_v
-         ref_heat = sum(hT0(NGHOST + 1:nx - NGHOST, NGHOST + 1:ny - NGHOST, :))*scale_v
+         ref_salt = sum(hH0(NGHOST + 1:nx - NGHOST, NGHOST + 1:ny - NGHOST, :)* &
+                        hS0(NGHOST + 1:nx - NGHOST, NGHOST + 1:ny - NGHOST, :))*scale_v
+         ref_heat = sum(hH0(NGHOST + 1:nx - NGHOST, NGHOST + 1:ny - NGHOST, :)* &
+                        hT0(NGHOST + 1:nx - NGHOST, NGHOST + 1:ny - NGHOST, :))*scale_v
 
          !$acc enter data copyin(ms, sf, ct)
          call ms%enter_data()
@@ -570,14 +573,15 @@ contains
          ! convention — that separation is what makes this a genuine guard:
          ! mutate RK2_STAGE_WEIGHT in the module and closure (a) breaks,
          ! because total_change stays 0.5·Σ_stages while src/out shift.
-         ms%tracers(is)%hTr = 0.5_wp*(hS0 + ms%tracers(is)%hTr)
-         ms%tracers(it)%hTr = 0.5_wp*(hT0 + ms%tracers(it)%hTr)
+         ms%tracers(is)%c = (hH0*hS0 + ms%h_layer*ms%tracers(is)%c)/(hH0 + ms%h_layer)
+         ms%tracers(it)%c = (hH0*hT0 + ms%h_layer*ms%tracers(it)%c)/(hH0 + ms%h_layer)
+         ms%h_layer = 0.5_wp*(hH0 + ms%h_layer)
 
          ! ---- Post-average interior totals ----
-         total_salt = sum(ms%tracers(is)%hTr(NGHOST + 1:nx - NGHOST, &
-                                             NGHOST + 1:ny - NGHOST, :))*scale_v
-         total_heat = sum(ms%tracers(it)%hTr(NGHOST + 1:nx - NGHOST, &
-                                             NGHOST + 1:ny - NGHOST, :))*scale_v
+         total_salt = sum(ms%h_layer(NGHOST + 1:nx - NGHOST, NGHOST + 1:ny - NGHOST, :)* &
+                          ms%tracers(is)%c(NGHOST + 1:nx - NGHOST, NGHOST + 1:ny - NGHOST, :))*scale_v
+         total_heat = sum(ms%h_layer(NGHOST + 1:nx - NGHOST, NGHOST + 1:ny - NGHOST, :)* &
+                          ms%tracers(it)%c(NGHOST + 1:nx - NGHOST, NGHOST + 1:ny - NGHOST, :))*scale_v
          change_salt = total_salt - ref_salt
          change_heat = total_heat - ref_heat
 
@@ -619,6 +623,7 @@ contains
                     "heat change must equal src on a closed basin (out ~ 0)")
 
       end block checks
+      if (allocated(hH0)) deallocate (hH0)
       if (allocated(hS0)) deallocate (hS0)
       if (allocated(hT0)) deallocate (hT0)
       call ct%destroy()
@@ -684,20 +689,20 @@ contains
          ! Identical S/T/h/velocity ICs on both states.
          ms_a%h_layer = H0
          ms_b%h_layer = H0
-         ms_a%tracers(ms_a%idx_salinity)%hTr = S0*H0
-         ms_b%tracers(ms_b%idx_salinity)%hTr = S0*H0
-         ms_a%tracers(ms_a%idx_temperature)%hTr = T0*H0
-         ms_b%tracers(ms_b%idx_temperature)%hTr = T0*H0
+         ms_a%tracers(ms_a%idx_salinity)%c = S0
+         ms_b%tracers(ms_b%idx_salinity)%c = S0
+         ms_a%tracers(ms_a%idx_temperature)%c = T0
+         ms_b%tracers(ms_b%idx_temperature)%c = T0
          ! Age: spatially-varying so advection actually moves it (else the
          ! "age changed" assertion could pass trivially for the wrong reason).
          do k = 1, NZ
             do j = 1, ny
                do i = 1, nx
-                  ms_b%tracers(ia)%hTr(i, j, k) = H0*(1.0_wp + 0.1_wp*real(i + j, wp))
+                  ms_b%tracers(ia)%c(i, j, k) = (1.0_wp + 0.1_wp*real(i + j, wp))
                end do
             end do
          end do
-         allocate (age_before, source=ms_b%tracers(ia)%hTr)
+         allocate (age_before, source=ms_b%tracers(ia)%c)
 
          ! Same smooth velocity field on both.
          do k = 1, NZ
@@ -731,7 +736,7 @@ contains
          call map_out(ms_b, ct_b)
 
          ! (1) The age tracer moved ⇒ the else (no-budget) advect path ran.
-         max_age_change = maxval(abs(ms_b%tracers(ia)%hTr - age_before))
+         max_age_change = maxval(abs(ms_b%tracers(ia)%c - age_before))
          call check(error, max_age_change > 0.0_wp, &
                     "age tracer hTr must change under advection (else-branch path ran)")
          if (allocated(error)) exit checks
@@ -857,7 +862,7 @@ contains
       integer, parameter :: NX_PHYS = 8
       integer, parameter :: NY_PHYS = 6
       integer :: nx, ny, is, it
-      real(wp), allocatable :: hT0(:, :, :), hS0(:, :, :)
+      real(wp), allocatable :: hT0(:, :, :), hS0(:, :, :), hH0(:, :, :)
       real(wp) :: ref_heat, ref_salt, total_heat, total_salt
       real(wp) :: change_heat, change_salt
       real(wp) :: src_heat, out_heat, res_heat
@@ -879,16 +884,19 @@ contains
          scale_v = area_w*RHO_WATER
 
          ms%h_layer = H0
-         ms%tracers(is)%hTr = S0*H0
-         ms%tracers(it)%hTr = T0*H0
+         ms%tracers(is)%c = S0
+         ms%tracers(it)%c = T0
 
          geo%enable = .true.
          geo%q_geo_const = Q_GEO
 
-         allocate (hS0, source=ms%tracers(is)%hTr)
-         allocate (hT0, source=ms%tracers(it)%hTr)
-         ref_heat = sum(hT0(NGHOST + 1:nx - NGHOST, NGHOST + 1:ny - NGHOST, :))*scale_v
-         ref_salt = sum(hS0(NGHOST + 1:nx - NGHOST, NGHOST + 1:ny - NGHOST, :))*scale_v
+         allocate (hH0, source=ms%h_layer)
+         allocate (hS0, source=ms%tracers(is)%c)
+         allocate (hT0, source=ms%tracers(it)%c)
+         ref_heat = sum(hH0(NGHOST + 1:nx - NGHOST, NGHOST + 1:ny - NGHOST, :)* &
+                        hT0(NGHOST + 1:nx - NGHOST, NGHOST + 1:ny - NGHOST, :))*scale_v
+         ref_salt = sum(hH0(NGHOST + 1:nx - NGHOST, NGHOST + 1:ny - NGHOST, :)* &
+                        hS0(NGHOST + 1:nx - NGHOST, NGHOST + 1:ny - NGHOST, :))*scale_v
 
          !$acc enter data copyin(ms, geo)
          call ms%enter_data()
@@ -903,13 +911,14 @@ contains
          !$acc exit data delete(ms, geo)
 
          ! Manual RK2 average (physics 0.5).
-         ms%tracers(is)%hTr = 0.5_wp*(hS0 + ms%tracers(is)%hTr)
-         ms%tracers(it)%hTr = 0.5_wp*(hT0 + ms%tracers(it)%hTr)
+         ms%tracers(is)%c = (hH0*hS0 + ms%h_layer*ms%tracers(is)%c)/(hH0 + ms%h_layer)
+         ms%tracers(it)%c = (hH0*hT0 + ms%h_layer*ms%tracers(it)%c)/(hH0 + ms%h_layer)
+         ms%h_layer = 0.5_wp*(hH0 + ms%h_layer)
 
-         total_heat = sum(ms%tracers(it)%hTr(NGHOST + 1:nx - NGHOST, &
-                                             NGHOST + 1:ny - NGHOST, :))*scale_v
-         total_salt = sum(ms%tracers(is)%hTr(NGHOST + 1:nx - NGHOST, &
-                                             NGHOST + 1:ny - NGHOST, :))*scale_v
+         total_heat = sum(ms%h_layer(NGHOST + 1:nx - NGHOST, NGHOST + 1:ny - NGHOST, :)* &
+                          ms%tracers(it)%c(NGHOST + 1:nx - NGHOST, NGHOST + 1:ny - NGHOST, :))*scale_v
+         total_salt = sum(ms%h_layer(NGHOST + 1:nx - NGHOST, NGHOST + 1:ny - NGHOST, :)* &
+                          ms%tracers(is)%c(NGHOST + 1:nx - NGHOST, NGHOST + 1:ny - NGHOST, :))*scale_v
          change_heat = total_heat - ref_heat
          change_salt = total_salt - ref_salt
 
@@ -959,6 +968,7 @@ contains
                     "salt must be unchanged by geothermal (heat-only source)")
 
       end block checks
+      if (allocated(hH0)) deallocate (hH0)
       if (allocated(hS0)) deallocate (hS0)
       if (allocated(hT0)) deallocate (hT0)
       call ms%destroy()
@@ -1022,8 +1032,8 @@ contains
          do k = 1, NZ
             do j = 1, ny
                do i = 1, nx
-                  ms%tracers(ms%idx_temperature)%hTr(i, j, k) = &
-                     (A_TR + B_TR*real(i, wp))*H0
+                  ms%tracers(ms%idx_temperature)%c(i, j, k) = &
+                     (A_TR + B_TR*real(i, wp))
                end do
             end do
          end do
@@ -1031,18 +1041,19 @@ contains
          ! Uniform through-flow: mass flux M at EVERY x-face, including the two
          ! boundary faces (i=1 and i=nx+1) so tracer enters/leaves the domain.
          allocate (mfx(nx + 1, ny, NZ), source=MFLUX)
-         allocate (hTr0, source=ms%tracers(ms%idx_temperature)%hTr)
+         allocate (hTr0, source=ms%tracers(ms%idx_temperature)%c)
          allocate (fxl(nx + 1, ny, NZ), source=0.0_wp)
          allocate (fxr(nx + 1, ny, NZ), source=0.0_wp)
          allocate (budget(nx, ny, NZ), source=0.0_wp)
 
-         ref_heat = sum(hTr0(NGHOST + 1:nx - NGHOST, NGHOST + 1:ny - NGHOST, :))*scale_v
+         ref_heat = sum(ms%h_layer(NGHOST + 1:nx - NGHOST, NGHOST + 1:ny - NGHOST, :)* &
+                        hTr0(NGHOST + 1:nx - NGHOST, NGHOST + 1:ny - NGHOST, :))*scale_v
 
          ! Faithful 2-stage RK2 on the impl (uniform flux ⇒ same mfx each
          ! stage); budget accumulates over both stages via +=.
          ! GPU (-gpu=mem:separate): the impl's `do concurrent` gets NO implicit
          ! copies, so every argument must be device-present.  ms (h_layer +
-         ! tracers%hTr) goes through the production deep-map; the local scratch
+         ! tracers%c) goes through the production deep-map; the local scratch
          ! (mfx / fxl / fxr / budget) is mapped explicitly.  metrics is already
          ! device-resident (make_cartesian_metrics).  All inert on host builds.
          !$acc enter data copyin(ms)
@@ -1050,24 +1061,24 @@ contains
          !$acc enter data copyin(mfx) create(fxl, fxr) copyin(budget)
          call tracer_advect_zonal_one_impl(nx, ny, NZ, DT, metrics%iareaT, &
                                            metrics%wet_T, ms%h_layer, ms%h_layer, &
-                                           ms%tracers(ms%idx_temperature)%hTr, mfx, &
+                                           ms%tracers(ms%idx_temperature)%c, mfx, &
                                            fxl, fxr, budget_adv=budget)
          fxl = 0.0_wp
          fxr = 0.0_wp
          call tracer_advect_zonal_one_impl(nx, ny, NZ, DT, metrics%iareaT, &
                                            metrics%wet_T, ms%h_layer, ms%h_layer, &
-                                           ms%tracers(ms%idx_temperature)%hTr, mfx, &
+                                           ms%tracers(ms%idx_temperature)%c, mfx, &
                                            fxl, fxr, budget_adv=budget)
          !$acc update self(budget)
          !$acc exit data delete(mfx, fxl, fxr, budget)
          call ms%exit_data()
          !$acc exit data delete(ms)
          ! Manual RK2 average (physics 0.5).
-         ms%tracers(ms%idx_temperature)%hTr = &
-            0.5_wp*(hTr0 + ms%tracers(ms%idx_temperature)%hTr)
+         ms%tracers(ms%idx_temperature)%c = &
+            0.5_wp*(hTr0 + ms%tracers(ms%idx_temperature)%c)
 
-         total_heat = sum(ms%tracers(ms%idx_temperature)%hTr(NGHOST + 1:nx - NGHOST, &
-                                                             NGHOST + 1:ny - NGHOST, :))*scale_v
+         total_heat = sum(ms%h_layer(NGHOST + 1:nx - NGHOST, NGHOST + 1:ny - NGHOST, :)* &
+                          ms%tracers(ms%idx_temperature)%c(NGHOST + 1:nx - NGHOST, NGHOST + 1:ny - NGHOST, :))*scale_v
          change_heat = total_heat - ref_heat
 
          ! out via the production helper (weight + sign + ρ), no hdiff, src = 0.
@@ -1152,7 +1163,7 @@ contains
          call ct%init(grid, nz_ml=NZ)
 
          ms%h_layer = H0
-         ms%tracers(ms%idx_temperature)%hTr = T0*H0
+         ms%tracers(ms%idx_temperature)%c = T0
          ! Spatially-varying velocity so the mass fluxes (and hence the tracer
          ! advection) are nontrivial across the domain.
          do k = 1, NZ
@@ -1181,7 +1192,7 @@ contains
          !$acc update self(ms%mass_flux_x_layer)
          allocate (mfx, source=ms%mass_flux_x_layer)
 
-         allocate (hTr0, source=ms%tracers(ms%idx_temperature)%hTr)
+         allocate (hTr0, source=ms%tracers(ms%idx_temperature)%c)
          allocate (hTr_a, source=hTr0)
          allocate (hTr_b, source=hTr0)
          allocate (fxl_a(nx + 1, ny, NZ), source=0.0_wp)
@@ -1214,8 +1225,8 @@ contains
          ! Meridional: apply the zonal-updated hTr, recompute the meridional
          ! mass flux, then repeat the WITH-vs-WITHOUT contrast.  Reuse hTr_a as
          ! the common input for both runs (it equals hTr_b bit-for-bit here).
-         ms%tracers(ms%idx_temperature)%hTr = hTr_a
-         !$acc update device(ms%tracers(ms%idx_temperature)%hTr)
+         ms%tracers(ms%idx_temperature)%c = hTr_a
+         !$acc update device(ms%tracers(ms%idx_temperature)%c)
          call continuity_meridional_flux(grid, metrics, ct, ms, DT)
          !$acc update self(ms%mass_flux_y_layer)
          allocate (mfy, source=ms%mass_flux_y_layer)
@@ -1282,6 +1293,22 @@ contains
          f(i, j, k) = 0.5_wp*(f0(i, j, k) + f(i, j, k))
       end do
    end subroutine rk2_avg_3d
+
+   pure subroutine rk2_avg_conc_3d(nx, ny, nz_lev, h0, c0, h1, c)
+      !! Device-side mass-weighted RK2 average of a CONCENTRATION,
+      !! `c = (h0 c0 + h1 c1)/(h0 + h1)` (the production
+      !! `rk2_average_conc_3d`, private to `rdb_ocean_dyn`).  Must run BEFORE
+      !! the thickness average; keeps `c1` where there is no water.
+      integer, intent(in) :: nx, ny, nz_lev
+      real(wp), intent(in) :: h0(nx, ny, nz_lev), c0(nx, ny, nz_lev), h1(nx, ny, nz_lev)
+      real(wp), intent(inout) :: c(nx, ny, nz_lev)
+      integer :: i, j, k
+      do concurrent(k=1:nz_lev, j=1:ny, i=1:nx)
+         if (h0(i, j, k) + h1(i, j, k) > 1.0e-20_wp) &
+            c(i, j, k) = (h0(i, j, k)*c0(i, j, k) + h1(i, j, k)*c(i, j, k)) &
+                         /(h0(i, j, k) + h1(i, j, k))
+      end do
+   end subroutine rk2_avg_conc_3d
 
    subroutine test_windowed_drain_with_surface_flux(error)
       !! REGRESSION (2026-09-12): the windowed tracer-advection drain
@@ -1373,8 +1400,8 @@ contains
             do j = 1, ny
                do i = 1, nx
                   ang = 0.7_wp*real(i, wp) + 0.4_wp*real(j, wp) + 0.3_wp*real(k, wp)
-                  ms%tracers(is)%hTr(i, j, k) = (S0 + 0.8_wp*sin(ang))*H0
-                  ms%tracers(it)%hTr(i, j, k) = (T0 + 2.0_wp*cos(ang))*H0
+                  ms%tracers(is)%c(i, j, k) = (S0 + 0.8_wp*sin(ang))
+                  ms%tracers(it)%c(i, j, k) = (T0 + 2.0_wp*cos(ang))
                   ms%u_face_x_layer(i, j, k) = 0.05_wp*sin(0.5_wp*real(i, wp))
                   ms%v_face_y_layer(i, j, k) = 0.04_wp*cos(0.3_wp*real(j, wp))
                end do
@@ -1389,8 +1416,8 @@ contains
          allocate (hs_save(nx, ny, NZ), source=0.0_wp)
          allocate (ht_save(nx, ny, NZ), source=0.0_wp)
 
-         ref_salt = area_sum(ms%tracers(is)%hTr, nx, ny, area_w)*RHO_WATER
-         ref_heat = area_sum(ms%tracers(it)%hTr, nx, ny, area_w)*RHO_WATER
+         ref_salt = area_sum(ms%h_layer*ms%tracers(is)%c, nx, ny, area_w)*RHO_WATER
+         ref_heat = area_sum(ms%h_layer*ms%tracers(it)%c, nx, ny, area_w)*RHO_WATER
 
          !$acc enter data copyin(ms, sf, ct)
          call ms%enter_data()
@@ -1517,8 +1544,8 @@ contains
             do j = 1, ny
                do i = 1, nx
                   ang = 0.7_wp*real(i, wp) + 0.4_wp*real(j, wp) + 0.3_wp*real(k, wp)
-                  ms%tracers(is)%hTr(i, j, k) = (S0 + 0.8_wp*sin(ang))*H0
-                  ms%tracers(it)%hTr(i, j, k) = (T0 + 2.0_wp*cos(ang))*H0
+                  ms%tracers(is)%c(i, j, k) = (S0 + 0.8_wp*sin(ang))
+                  ms%tracers(it)%c(i, j, k) = (T0 + 2.0_wp*cos(ang))
                   ms%u_face_x_layer(i, j, k) = 0.05_wp*sin(0.5_wp*real(i, wp))
                   ms%v_face_y_layer(i, j, k) = 0.04_wp*cos(0.3_wp*real(j, wp))
                end do
@@ -1529,8 +1556,8 @@ contains
 
          call sf%set_surface_flux_const(Q_HEAT, Q_SALT)
 
-         ref_salt = area_sum(ms%tracers(is)%hTr, nx, ny, area_w)*RHO_WATER
-         ref_heat = area_sum(ms%tracers(it)%hTr, nx, ny, area_w)*RHO_WATER
+         ref_salt = area_sum(ms%h_layer*ms%tracers(is)%c, nx, ny, area_w)*RHO_WATER
+         ref_heat = area_sum(ms%h_layer*ms%tracers(it)%c, nx, ny, area_w)*RHO_WATER
 
          !$acc enter data copyin(ms, sf, ct)
          call ms%enter_data()
@@ -1614,8 +1641,8 @@ contains
       real(wp), intent(inout) :: ht_save(nx, ny, nz_lev)
 
       call copy_3d(nx, ny, nz_lev, ms%h_layer, h_save)
-      call copy_3d(nx, ny, nz_lev, ms%tracers(is)%hTr, hs_save)
-      call copy_3d(nx, ny, nz_lev, ms%tracers(it)%hTr, ht_save)
+      call copy_3d(nx, ny, nz_lev, ms%tracers(is)%c, hs_save)
+      call copy_3d(nx, ny, nz_lev, ms%tracers(it)%c, ht_save)
 
       call continuity_tracer_step_split(grid, metrics, ct, ms, dt, &
                                         tracer_mode=TR_MODE_ACCUMULATE)
@@ -1624,9 +1651,10 @@ contains
                                         tracer_mode=TR_MODE_ACCUMULATE)
       call ocean_surface_flux_apply_tracers(grid, sf, ms, dt)
 
+      ! Tracers first (mass-weighted, reads the un-averaged h pair), then h.
+      call rk2_avg_conc_3d(nx, ny, nz_lev, h_save, hs_save, ms%h_layer, ms%tracers(is)%c)
+      call rk2_avg_conc_3d(nx, ny, nz_lev, h_save, ht_save, ms%h_layer, ms%tracers(it)%c)
       call rk2_avg_3d(nx, ny, nz_lev, h_save, ms%h_layer)
-      call rk2_avg_3d(nx, ny, nz_lev, hs_save, ms%tracers(is)%hTr)
-      call rk2_avg_3d(nx, ny, nz_lev, ht_save, ms%tracers(it)%hTr)
    end subroutine window_outer_step
 
    subroutine window_outer_step_pc(grid, metrics, ct, ms, sf, dt)
@@ -1657,12 +1685,13 @@ contains
          !! Console stage weight; absent => the ssp_rk2 default (0.5).
 
       call pull_budgets(ms)
-      associate (hs => ms%tracers(is)%hTr, ht => ms%tracers(it)%hTr)
+      associate (hs => ms%tracers(is)%c, ht => ms%tracers(it)%c)
          !$acc update self(hs, ht) if_present
       end associate
+      !$acc update self(ms%h_layer) if_present
 
-      total_salt = area_sum(ms%tracers(is)%hTr, nx, ny, area_w)*RHO_WATER
-      total_heat = area_sum(ms%tracers(it)%hTr, nx, ny, area_w)*RHO_WATER
+      total_salt = area_sum(ms%h_layer*ms%tracers(is)%c, nx, ny, area_w)*RHO_WATER
+      total_heat = area_sum(ms%h_layer*ms%tracers(it)%c, nx, ny, area_w)*RHO_WATER
       src_salt = ocean_budget_src(area_sum(ms%salt_budget_surface, nx, ny, area_w), stage_weight)
       src_heat = ocean_budget_src(ocean_heat_src_sum( &
                                   area_sum(ms%heat_budget_surface, nx, ny, area_w), &

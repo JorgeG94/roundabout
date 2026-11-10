@@ -152,25 +152,24 @@ contains
                else
                   t_val = 11.0_wp - 0.005_wp*(zdep - MLD)
                end if
-               ms%tracers(ms%idx_temperature)%hTr(i, j, k) = t_val*tgt(i, j, k)
-               ms%tracers(ms%idx_salinity)%hTr(i, j, k) = S0*tgt(i, j, k)
+               ms%tracers(ms%idx_temperature)%c(i, j, k) = t_val
+               ms%tracers(ms%idx_salinity)%c(i, j, k) = S0
             end do
          end do
       end do
-      ! Fillers take their donor's T before the I1' sweep (see GM twin).
+      ! Fillers keep a stale T and carry no content; hand them their donor's T.
       do j = 1, nj
          do i = 1, ni
             t_val = -1.0_wp
             do k = NZ, 1, -1
                if (tgt(i, j, k) > H_VANISHED) then
-                  t_val = ms%tracers(ms%idx_temperature)%hTr(i, j, k)/tgt(i, j, k)
+                  t_val = ms%tracers(ms%idx_temperature)%c(i, j, k)
                else if (t_val >= 0.0_wp) then
-                  ms%tracers(ms%idx_temperature)%hTr(i, j, k) = t_val*tgt(i, j, k)
+                  ms%tracers(ms%idx_temperature)%c(i, j, k) = t_val
                end if
             end do
          end do
       end do
-      call ms%enforce_vanished_content_host(ni, nj)
       call set_rho_host(ms)
 
       call epbl%init(grid, nz_ml=NZ)
@@ -193,7 +192,7 @@ contains
          do j = 1, size(ms%h_layer, 2)
             do i = 1, size(ms%h_layer, 1)
                if (ms%h_layer(i, j, k) > H_VANISHED) then
-                  t = ms%tracers(ms%idx_temperature)%hTr(i, j, k)/ms%h_layer(i, j, k)
+                  t = ms%tracers(ms%idx_temperature)%c(i, j, k)
                   ms%rho_layer(i, j, k) = RHO0 - ALPHA_RHO*(t - T0)
                else
                   ms%rho_layer(i, j, k) = RHO_FILLER
@@ -319,8 +318,8 @@ contains
             end do
             if (kt < 4) cycle
             if (ms%h_layer(i, j, kt - 3) <= H_VANISHED) cycle
-            tt = ms%tracers(ms%idx_temperature)%hTr(i, j, kt)/ms%h_layer(i, j, kt)
-            tb = ms%tracers(ms%idx_temperature)%hTr(i, j, kt - 3)/ms%h_layer(i, j, kt - 3)
+            tt = ms%tracers(ms%idx_temperature)%c(i, j, kt)
+            tb = ms%tracers(ms%idx_temperature)%c(i, j, kt - 3)
             s = s + (tt - tb)
             n = n + 1
          end do
@@ -370,7 +369,7 @@ contains
          do j = NG + 1, nj - NG
             do i = NG + 1, ni - NG
                if (ms%h_layer(i, j, k) <= H_VANISHED) cycle
-               t = ms%tracers(ms%idx_temperature)%hTr(i, j, k)/ms%h_layer(i, j, k)
+               t = ms%tracers(ms%idx_temperature)%c(i, j, k)
                tmin = min(tmin, t)
                tmax = max(tmax, t)
             end do
@@ -390,6 +389,7 @@ contains
       type(ocean_mle_t) :: mle
       real(wp), allocatable :: tgt(:, :, :)
       integer :: ni, nj, n_closed
+      real(wp), allocatable :: c_fill0(:, :, :)
       real(wp) :: worst_closed, worst_colsum, max_flux, worst_b, worst_h
       character(len=128) :: msg
 
@@ -499,7 +499,7 @@ contains
       type(ocean_epbl_t) :: epbl
       type(ocean_mle_t) :: mle
       type(continuity_t) :: ct
-      real(wp), allocatable :: tgt(:, :, :), h_fill0(:, :, :)
+      real(wp), allocatable :: tgt(:, :, :), h_fill0(:, :, :), c_fill0(:, :, :)
       integer, parameter :: NSTEP = 24
       integer :: it, ni, nj, n_closed, n_bad, n_bad_max
       real(wp) :: worst_closed, worst_colsum, max_flux, worst_i1
@@ -513,8 +513,10 @@ contains
       nj = grid%ny_total
       call ct%init(grid, nz_ml=NZ)
       allocate (h_fill0, source=ms%h_layer)
+      allocate (c_fill0, source=ms%tracers(ms%idx_temperature)%c)
       m0 = sum(ms%h_layer(NG + 1:ni - NG, NG + 1:nj - NG, :))
-      t0s = sum(ms%tracers(ms%idx_temperature)%hTr(NG + 1:ni - NG, NG + 1:nj - NG, :))
+      t0s = sum(ms%h_layer(NG + 1:ni - NG, NG + 1:nj - NG, :)* &
+                ms%tracers(ms%idx_temperature)%c(NG + 1:ni - NG, NG + 1:nj - NG, :))
       s0 = ml_strat(ms, ni, nj)
       call live_t_range(ms, ni, nj, tmin0, tmax0)
       tmin_run = tmin0
@@ -531,11 +533,8 @@ contains
          do it = 1, NSTEP
             call mle_compute_transports(grid, metrics, mle, ms, epbl, dt_limit=DT)
             call continuity_tracer_step_split(grid, metrics, ct, ms, DT, mle=mle)
-            call ms%enforce_vanished_content(ni, nj)
-            call ms%scan_vanished_content(ni, nj, n_bad, worst_i1)
-            n_bad_max = max(n_bad_max, n_bad)
             !$acc update self(mle%uhml, mle%vhml, ms%h_layer)
-            !$acc update self(ms%tracers(ms%idx_temperature)%hTr)
+            !$acc update self(ms%tracers(ms%idx_temperature)%c)
             call census(metrics, ms, mle, ni, nj, n_closed, worst_closed, &
                         worst_colsum, max_flux)
             wc_max = max(wc_max, worst_closed)
@@ -544,9 +543,12 @@ contains
             finite_all = finite_all .and. all(ieee_is_finite(mle%uhml)) .and. &
                          all(ieee_is_finite(mle%vhml)) .and. &
                          all(ieee_is_finite(ms%h_layer)) .and. &
-                         all(ieee_is_finite(ms%tracers(ms%idx_temperature)%hTr))
+                         all(ieee_is_finite(ms%tracers(ms%idx_temperature)%c))
             fill_h_kept = fill_h_kept .and. &
                           all(merge(ms%h_layer == h_fill0, .true., h_fill0 <= H_VANISHED))
+            ! fillers carry no content and keep their stale concentration
+            n_bad_max = max(n_bad_max, count(h_fill0 <= H_VANISHED .and. &
+                                             ms%tracers(ms%idx_temperature)%c /= c_fill0))
             call live_t_range(ms, ni, nj, tmin, tmax)
             tmin_run = min(tmin_run, tmin)
             tmax_run = max(tmax_run, tmax)
@@ -574,10 +576,11 @@ contains
          call check(error, fill_h_kept, &
                     "a filler's thickness must not change (no MLE mass into it)")
          if (allocated(error)) exit checks
-         call check(error, n_bad_max == 0, "I1' must hold after every step")
+         call check(error, n_bad_max == 0, "a filler's concentration must stay untouched")
          if (allocated(error)) exit checks
          m1 = sum(ms%h_layer(NG + 1:ni - NG, NG + 1:nj - NG, :))
-         t1s = sum(ms%tracers(ms%idx_temperature)%hTr(NG + 1:ni - NG, NG + 1:nj - NG, :))
+         t1s = sum(ms%h_layer(NG + 1:ni - NG, NG + 1:nj - NG, :)* &
+                   ms%tracers(ms%idx_temperature)%c(NG + 1:ni - NG, NG + 1:nj - NG, :))
          call check(error, abs(m1 - m0) <= 1.0e-13_wp*m0, "MLE must conserve mass")
          if (allocated(error)) exit checks
          call check(error, abs(t1s - t0s) <= 1.0e-13_wp*abs(t0s), &

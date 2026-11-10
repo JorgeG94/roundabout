@@ -859,17 +859,15 @@ contains
       ! straddle the rank seams.
       if (label == "file_readers") then
          nml = nml//"&vcoord_nml vcoord_type = 'z_fixed', zfixed_closed_faces = .true., "// &
-               "z_fixed_profile = 'tanh', z_fixed_dz_top = 100.0, "// &
-               "check_vanished_content = .true. /"//NL
+               "z_fixed_profile = 'tanh', z_fixed_dz_top = 100.0 /"//NL
       else if (label == "file_readers_zstar_full") then
          nml = nml//"&vcoord_nml vcoord_type = 'zstar_full', zstar_h_surf_target = 1500.0, "// &
-               "zfixed_closed_faces = .true., check_vanished_content = .true. /"//NL
+               "zfixed_closed_faces = .true. /"//NL
       else if (label == "file_readers_zstar") then
          ! MOM6 z*: the z_fixed staircase (the same fillers, the same mask)
          ! with every live layer dilated by the column's (H + eta)/H each
          ! regrid, and the IC seeded on the eta = 0 target.
-         nml = nml//"&vcoord_nml vcoord_type = 'zstar', zfixed_closed_faces = .true., "// &
-               "check_vanished_content = .true. /"//NL
+         nml = nml//"&vcoord_nml vcoord_type = 'zstar', zfixed_closed_faces = .true. /"//NL
       end if
       if (label /= "file_readers" .and. label /= "file_readers_zstar_full" .and. &
           label /= "file_readers_zstar") then

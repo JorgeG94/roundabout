@@ -690,9 +690,9 @@ contains
             do k = 1, NZ
                if (allocated(ms%tracers)) then
                   if (ms%idx_salinity > 0) &
-                     ms%tracers(ms%idx_salinity)%hTr(i, j, k) = eos%S_ref*ms%h_layer(i, j, k)
+                     ms%tracers(ms%idx_salinity)%c(i, j, k) = eos%S_ref
                   if (ms%idx_temperature > 0) &
-                     ms%tracers(ms%idx_temperature)%hTr(i, j, k) = eos%T_ref*ms%h_layer(i, j, k)
+                     ms%tracers(ms%idx_temperature)%c(i, j, k) = eos%T_ref
                end if
             end do
             x_f = real(i - ig, wp)

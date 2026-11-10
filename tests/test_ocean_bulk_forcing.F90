@@ -149,7 +149,7 @@ contains
       ms%nz_ml = 1
       call ms%init(grid)
       ms%h_layer = H0
-      ms%tracers(ms%idx_temperature)%hTr = SST_DEGC*H0
+      ms%tracers(ms%idx_temperature)%c = SST_DEGC
       ms%u_face_x_layer = 0.0_wp
       ms%v_face_y_layer = 0.0_wp
    end subroutine make_ms
@@ -292,7 +292,7 @@ contains
          jp = grid%nghost + 2
 
          call make_ms(grid, ms)
-         ms%tracers(ms%idx_salinity)%hTr = SA_TOP*H0
+         ms%tracers(ms%idx_salinity)%c = SA_TOP
          call make_atm(grid, atm)
          call make_bulk_forcing(grid, .true., bf)
          bf%cons_abs = .true.

@@ -816,8 +816,8 @@ contains
       ms%u_face_x_layer = 0.0_wp
       ms%v_face_y_layer = 0.0_wp
       do k = 1, NZ
-         ms%tracers(ms%idx_salinity)%hTr(:, :, k) = eos%S_ref*EK_H_LAYER
-         ms%tracers(ms%idx_temperature)%hTr(:, :, k) = eos%T_ref*EK_H_LAYER
+         ms%tracers(ms%idx_salinity)%c(:, :, k) = eos%S_ref
+         ms%tracers(ms%idx_temperature)%c(:, :, k) = eos%T_ref
          ms%rho_layer(:, :, k) = eos%rho0
       end do
       call sf%set_surface_flux_const(0.0_wp, 0.0_wp)

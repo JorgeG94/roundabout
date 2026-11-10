@@ -99,8 +99,8 @@ contains
             ms%u_face_x_layer(:, :, k) = 0.0_wp
             ms%rho_layer(:, :, k) = 1030.0_wp - 0.5_wp*real(k - 1, wp)
          end if
-         ms%tracers(ms%idx_salinity)%hTr(:, :, k) = S_REF*H_LAYER
-         ms%tracers(ms%idx_temperature)%hTr(:, :, k) = T_REF*H_LAYER
+         ms%tracers(ms%idx_salinity)%c(:, :, k) = S_REF
+         ms%tracers(ms%idx_temperature)%c(:, :, k) = T_REF
       end do
    end subroutine setup_state
 
@@ -154,12 +154,12 @@ contains
          call ss%set_wind_stress_const(0.1_wp, 0.0_wp)
          call sf%set_surface_flux_const(500.0_wp, 0.0_wp)    ! W/m² downward → warming
 
-         allocate (hT_ic, source=ms%tracers(ms%idx_temperature)%hTr)
+         allocate (hT_ic, source=ms%tracers(ms%idx_temperature)%c)
 
          call run_overlay(grid, ms, vmix, ss, sf, DT, do_apply=.true.)
 
          max_gamma = maxval(abs(vmix%gamma_t)) + maxval(abs(vmix%gamma_s))
-         max_dT = maxval(abs(ms%tracers(ms%idx_temperature)%hTr - hT_ic))
+         max_dT = maxval(abs(ms%tracers(ms%idx_temperature)%c - hT_ic))
 
          call check(error, max_gamma < 1.0e-15_wp, &
                     "stabilizing flux: γ_T or γ_S non-zero")
@@ -200,7 +200,7 @@ contains
          call ss%set_wind_stress_const(0.1_wp, 0.0_wp)
          call sf%set_surface_flux_const(-500.0_wp, 0.0_wp)     ! cooling
 
-         allocate (hT_ic, source=ms%tracers(ms%idx_temperature)%hTr)
+         allocate (hT_ic, source=ms%tracers(ms%idx_temperature)%c)
 
          call run_overlay(grid, ms, vmix, ss, sf, DT, do_apply=.true.)
 
@@ -211,9 +211,9 @@ contains
 
          i_probe = grid%nx_total/2
          j_probe = grid%ny_total/2
-         dT_surface = ms%tracers(ms%idx_temperature)%hTr(i_probe, j_probe, NZ) - &
+         dT_surface = ms%tracers(ms%idx_temperature)%c(i_probe, j_probe, NZ) - &
                       hT_ic(i_probe, j_probe, NZ)
-         dT_subsurface = ms%tracers(ms%idx_temperature)%hTr(i_probe, j_probe, NZ - 1) - &
+         dT_subsurface = ms%tracers(ms%idx_temperature)%c(i_probe, j_probe, NZ - 1) - &
                          hT_ic(i_probe, j_probe, NZ - 1)
 
          ! Non-local in isolation (no surface_flux_apply): the
@@ -254,11 +254,11 @@ contains
 
       allocate (col_before(grid%nx_total, grid%ny_total))
       allocate (col_after(grid%nx_total, grid%ny_total))
-      col_before = sum(ms%tracers(ms%idx_temperature)%hTr, dim=3)
+      col_before = sum(ms%tracers(ms%idx_temperature)%c, dim=3)
 
       call run_overlay(grid, ms, vmix, ss, sf, DT, do_apply=.true.)
 
-      col_after = sum(ms%tracers(ms%idx_temperature)%hTr, dim=3)
+      col_after = sum(ms%tracers(ms%idx_temperature)%c, dim=3)
       max_drift = maxval(abs(col_after - col_before))
 
       call check(error, max_drift < 1.0e-9_wp, &

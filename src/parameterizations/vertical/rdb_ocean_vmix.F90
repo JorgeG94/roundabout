@@ -81,7 +81,7 @@ module rdb_ocean_vmix
    !! the convective 1 m^2/s passes through untouched; a caller who sets
    !! `kd_max < kd_conv` will silently cap the convective value -- that
    !! is the gate doing its job, not a convection bug.
-   use rdb_constants, only: wp, GRAVITY, PI, H_VANISHED, DEG2RAD
+   use rdb_constants, only: H_DIV_EPS, wp, GRAVITY, PI, H_VANISHED, DEG2RAD
    use rdb_grid, only: hgrid_t
    use rdb_multilayer_state, only: multilayer_state_t
    use rdb_ocean_surface_stress, only: ocean_surface_stress_t
@@ -1064,7 +1064,7 @@ contains
       !!
       !! E4: this shim is also the OUTER SHIM for the surface (T, S) the
       !! `buoyancy_coeffs = "eos"` path needs — the tracer registry is an
-      !! array of derived types, so `ms%tracers(t)%hTr` is dereferenced
+      !! array of derived types, so `ms%tracers(t)%c` is dereferenced
       !! HERE, on the host, and the flat top-level arrays are handed down
       !! as explicit-shape dummies (array-of-derived-type device
       !! indirection rule).  They are passed UNCONDITIONALLY, on both
@@ -1079,16 +1079,16 @@ contains
       if (sf%sw_from_qsw) then
          call vmix_kpp_overlay_impl(grid, this, ms, ss, sf, &
                                     grid%nx_total, grid%ny_total, ms%nz_ml, sf%q_sw, &
-                                    ms%tracers(ms%idx_temperature)%hTr, &
-                                    ms%tracers(ms%idx_salinity)%hTr, &
+                                    ms%tracers(ms%idx_temperature)%c, &
+                                    ms%tracers(ms%idx_salinity)%c, &
                                     sf%has_sw, sf%sw_pen_frac, sf%sw_band_ratio, &
                                     sf%sw_zeta1, sf%sw_zeta2, this%kpp_sw_method, &
                                     sf%sw_chl, sf%sw_nb, sf%sw_frac, sf%sw_kappa)
       else
          call vmix_kpp_overlay_impl(grid, this, ms, ss, sf, &
                                     grid%nx_total, grid%ny_total, ms%nz_ml, sf%Q_heat, &
-                                    ms%tracers(ms%idx_temperature)%hTr, &
-                                    ms%tracers(ms%idx_salinity)%hTr, &
+                                    ms%tracers(ms%idx_temperature)%c, &
+                                    ms%tracers(ms%idx_salinity)%c, &
                                     sf%has_sw, sf%sw_pen_frac, sf%sw_band_ratio, &
                                     sf%sw_zeta1, sf%sw_zeta2, this%kpp_sw_method, &
                                     sf%sw_chl, sf%sw_nb, sf%sw_frac, sf%sw_kappa)
@@ -1329,12 +1329,12 @@ contains
          b_buoy = this%eos%beta_S
          if (this%buoyancy_coeffs == BUOY_COEFFS_EOS) then
             h_sfc = ms%h_layer(i, j, nz)
-            ! vanished-ok: falls back to the CONSTANT `eos%alpha_T`/`beta_S`, not to a zero
+            ! falls back to the CONSTANT `eos%alpha_T`/`beta_S`, not to a zero
             ! concentration: a vanished surface layer must not hand the
             ! buoyancy flux fresh / 0 degC coefficients.
             if (h_sfc > H_VANISHED) then
-               t_sfc = temp_h(i, j, nz)/h_sfc
-               s_sfc = salt_h(i, j, nz)/h_sfc
+               t_sfc = temp_h(i, j, nz)
+               s_sfc = salt_h(i, j, nz)
                p_buoy = p_buoy_ref
                if (this%p_top_in_eos) p_buoy = ms%p_top(i, j)
                call eos_buoyancy_coeffs(this%eos, t_sfc, s_sfc, p_buoy, &
@@ -1440,12 +1440,12 @@ contains
          b_buoy = this%eos%beta_S
          if (this%buoyancy_coeffs == BUOY_COEFFS_EOS) then
             h_sfc = ms%h_layer(i, j, nz)
-            ! vanished-ok: falls back to the CONSTANT `eos%alpha_T`/`beta_S`, not to a zero
+            ! falls back to the CONSTANT `eos%alpha_T`/`beta_S`, not to a zero
             ! concentration: a vanished surface layer must not hand the
             ! buoyancy flux fresh / 0 degC coefficients.
             if (h_sfc > H_VANISHED) then
-               t_sfc = temp_h(i, j, nz)/h_sfc
-               s_sfc = salt_h(i, j, nz)/h_sfc
+               t_sfc = temp_h(i, j, nz)
+               s_sfc = salt_h(i, j, nz)
                p_buoy = p_buoy_ref
                if (this%p_top_in_eos) p_buoy = ms%p_top(i, j)
                call eos_buoyancy_coeffs(this%eos, t_sfc, s_sfc, p_buoy, &
@@ -1569,28 +1569,44 @@ contains
    end function kpp_sw_method_is_implemented
 
    pure subroutine vmix_apply_nonlocal_tendencies(grid, this, ms, dt)
-      !! Apply the KPP non-local (counter-gradient) tracer tendency
-      !! computed by `vmix_apply_kpp_overlay`.  Updates
-      !! `hT`, `hS` from the divergence of `gamma_t` / `gamma_s` at
-      !! interfaces:
+      !! Apply the KPP non-local (counter-gradient) tracer transport
+      !! (Large, McWilliams & Doney 1994, eq. 20) computed by
+      !! `vmix_apply_kpp_overlay`, in FLUX form.  `gamma_t` / `gamma_s`
+      !! hold the kinematic non-local flux at each interface
+      !! (interface `k+1` sits above layer `k`, interface `k` below — the
+      !! ROMS-style k=1-bed convention), and each layer takes the flux
+      !! divergence:
       !!
-      !!   hT(k) += dt · (γ_T(k+1) - γ_T(k))
+      !!   h(k)·Δc(k) = dt · (F(k+1) - F(k))
       !!
-      !! (interface k+1 sits above layer k, interface k below — the
-      !! ROMS-style k=1-bed convention).  γ at the bed (k=1) and
-      !! free surface (k=nz+1) is identically zero, so the surface
-      !! and bed layers see only the lower / upper neighbour's γ.
+      !! **Column conservation.**  The term is an internal redistribution:
+      !! the shape function `G(σ) = σ(1-σ)²` vanishes at the surface and at
+      !! the boundary-layer base, so `gamma` is identically zero at the bed
+      !! (`k = 1`) and the free surface (`k = nz+1`) and nothing crosses the
+      !! column boundary (nothing is booked in a surface budget).  The sum
+      !! `Σ_k h·Δc` telescopes to zero only if EVERY layer takes its share.
+      !! A layer at or below `H_VANISHED` refuses a deposit
+      !! (`rdb_conc_add_source`), so an open interface next to it would
+      !! drop that share and leak the tracer (a heat residual ~1e-8 of the
+      !! column per step on z*/z_fixed columns with vanished bed or top
+      !! fillers).  Therefore `F(k)` is CLOSED (zero) at any interface
+      !! adjacent to a vanished layer — the same criterion that closes a
+      !! lateral face in `hdiff` — so a vanished layer receives exactly
+      !! zero and the live layers' divergence telescopes to zero exactly.
+      !! On a column with no vanished layer the arithmetic is unchanged
+      !! (bit-identical).
       !!
-      !! No-op when γ is all zero (stabilizing flux or KPP
-      !! disabled).  Touches only the layers with index_salinity /
-      !! index_temperature in the tracer registry — extra tracers
-      !! are diffusive only under KPP.
+      !! No-op when γ is all zero (stabilizing flux or KPP disabled).
+      !! Touches temperature, salinity and the pseudo-salt mirror (which
+      !! takes salinity's `gamma_s`); other passive tracers are diffusive
+      !! only under KPP.
       type(hgrid_t), intent(in) :: grid
       type(ocean_vmix_t), intent(in) :: this
       type(multilayer_state_t), intent(inout) :: ms
       real(wp), intent(in) :: dt
 
       integer :: i, j, k, nx, ny, nz, it_T, it_S, it_ps
+      real(wp) :: f_up, f_dn
 
       nx = grid%nx_total
       ny = grid%ny_total
@@ -1600,27 +1616,68 @@ contains
       it_ps = ms%idx_pseudo_salt
 
       if (it_T > 0) then
-         do concurrent(k=1:nz, j=1:ny, i=1:nx)
-            ms%tracers(it_T)%hTr(i, j, k) = rdb_conc_add_source(ms%tracers(it_T)%hTr(i, j, k), ms%h_layer(i, j, k), &
-                                                                dt*(this%gamma_t(i, j, k + 1) - this%gamma_t(i, j, k)))
+         do concurrent(k=1:nz, j=1:ny, i=1:nx) local(f_up, f_dn)
+            f_up = 0.0_wp
+            f_dn = 0.0_wp
+            if (k < nz) f_up = nonlocal_face_flux(this%gamma_t(i, j, k + 1), &
+                                                  ms%h_layer(i, j, k), ms%h_layer(i, j, k + 1))
+            if (k > 1) f_dn = nonlocal_face_flux(this%gamma_t(i, j, k), &
+                                                 ms%h_layer(i, j, k - 1), ms%h_layer(i, j, k))
+            ms%tracers(it_T)%c(i, j, k) = rdb_conc_add_source(ms%tracers(it_T)%c(i, j, k), ms%h_layer(i, j, k), &
+                                                              dt*(f_up - f_dn))
          end do
       end if
       if (it_S > 0) then
-         do concurrent(k=1:nz, j=1:ny, i=1:nx)
-            ms%tracers(it_S)%hTr(i, j, k) = rdb_conc_add_source(ms%tracers(it_S)%hTr(i, j, k), ms%h_layer(i, j, k), &
-                                                                dt*(this%gamma_s(i, j, k + 1) - this%gamma_s(i, j, k)))
+         do concurrent(k=1:nz, j=1:ny, i=1:nx) local(f_up, f_dn)
+            f_up = 0.0_wp
+            f_dn = 0.0_wp
+            if (k < nz) f_up = nonlocal_face_flux(this%gamma_s(i, j, k + 1), &
+                                                  ms%h_layer(i, j, k), ms%h_layer(i, j, k + 1))
+            if (k > 1) f_dn = nonlocal_face_flux(this%gamma_s(i, j, k), &
+                                                 ms%h_layer(i, j, k - 1), ms%h_layer(i, j, k))
+            ms%tracers(it_S)%c(i, j, k) = rdb_conc_add_source(ms%tracers(it_S)%c(i, j, k), ms%h_layer(i, j, k), &
+                                                              dt*(f_up - f_dn))
          end do
       end if
-      ! Pseudo-salt mirror: identical gamma_s expression, identical dt
-      ! (§5.4.2) — `it_ps` is a HOST scalar hoisted above, exactly like
-      ! `it_T`/`it_S`, so this is legal inside `do concurrent`.
+      ! Pseudo-salt mirror: identical gamma_s expression, identical dt and
+      ! identical face closure (§5.4.2) — `it_ps` is a HOST scalar hoisted
+      ! above, exactly like `it_T`/`it_S`, so this is legal inside
+      ! `do concurrent`.
       if (it_ps > 0) then
-         do concurrent(k=1:nz, j=1:ny, i=1:nx)
-            ms%tracers(it_ps)%hTr(i, j, k) = rdb_conc_add_source(ms%tracers(it_ps)%hTr(i, j, k), ms%h_layer(i, j, k), &
-                                                                 dt*(this%gamma_s(i, j, k + 1) - this%gamma_s(i, j, k)))
+         do concurrent(k=1:nz, j=1:ny, i=1:nx) local(f_up, f_dn)
+            f_up = 0.0_wp
+            f_dn = 0.0_wp
+            if (k < nz) f_up = nonlocal_face_flux(this%gamma_s(i, j, k + 1), &
+                                                  ms%h_layer(i, j, k), ms%h_layer(i, j, k + 1))
+            if (k > 1) f_dn = nonlocal_face_flux(this%gamma_s(i, j, k), &
+                                                 ms%h_layer(i, j, k - 1), ms%h_layer(i, j, k))
+            ms%tracers(it_ps)%c(i, j, k) = rdb_conc_add_source(ms%tracers(it_ps)%c(i, j, k), ms%h_layer(i, j, k), &
+                                                               dt*(f_up - f_dn))
          end do
       end if
    end subroutine vmix_apply_nonlocal_tendencies
+
+   pure function nonlocal_face_flux(gamma, h_below, h_above) result(flux)
+      !$acc routine seq
+      !! The KPP non-local flux carried by one interior interface: `gamma`
+      !! when BOTH adjacent layers are live (`h > H_VANISHED`), zero
+      !! otherwise.  A vanished layer refuses deposits
+      !! (`rdb_conc_add_source`), so an interface open onto it would drop
+      !! that layer's share of the divergence and break column
+      !! conservation; closing it keeps `Σ h·Δc = 0` exactly.
+      real(wp), intent(in) :: gamma
+         !! Non-local flux at the interface (tracer units · m/s).
+      real(wp), intent(in) :: h_below
+         !! Thickness (m) of the layer below the interface.
+      real(wp), intent(in) :: h_above
+         !! Thickness (m) of the layer above the interface.
+      real(wp) :: flux
+      if (h_below > H_VANISHED .and. h_above > H_VANISHED) then
+         flux = gamma
+      else
+         flux = 0.0_wp
+      end if
+   end function nonlocal_face_flux
 
    pure subroutine vmix_add_kv_ml_invz2(grid, this, ms)
       !! Augment `this%kv` with an extra near-surface viscosity:
@@ -1800,8 +1857,8 @@ contains
          ! both for its GPU parallelism and so its byte-identity is
          ! structural rather than argued.
          call vmix_split_ddiff_eos_impl(nx, ny, nz + 1, this%kt, this%ks, &
-                                        ms%tracers(ms%idx_temperature)%hTr, &
-                                        ms%tracers(ms%idx_salinity)%hTr, ms%h_layer, &
+                                        ms%tracers(ms%idx_temperature)%c, &
+                                        ms%tracers(ms%idx_salinity)%c, ms%h_layer, &
                                         ms%p_top, this%eos, this%rho0, &
                                         this%p_top_in_eos, &
                                         this%ddiff_strat_param_max, this%ddiff_kappa_s, &
@@ -1814,8 +1871,8 @@ contains
          ! host and hand the flat top-level arrays to the do-concurrent
          ! impl (array-of-derived-type device indirection rule).
          call vmix_split_ddiff_impl(nx, ny, nz + 1, this%kt, this%ks, &
-                                    ms%tracers(ms%idx_temperature)%hTr, &
-                                    ms%tracers(ms%idx_salinity)%hTr, ms%h_layer, &
+                                    ms%tracers(ms%idx_temperature)%c, &
+                                    ms%tracers(ms%idx_salinity)%c, ms%h_layer, &
                                     this%eos%alpha_T, this%eos%beta_S, &
                                     this%ddiff_strat_param_max, this%ddiff_kappa_s, &
                                     this%ddiff_exp1, this%ddiff_exp2, &
@@ -1894,8 +1951,8 @@ contains
             hl = h_layer(i, j, k - 1)  ! lower layer
             if (hu > H_VANISHED .and. hl > H_VANISHED) then
                ! alpha*dT and beta*dS across interface k (upper - lower)
-               adT = alpha_T*(temp_h(i, j, k)/hu - temp_h(i, j, k - 1)/hl)
-               bdS = beta_S*(salt_h(i, j, k)/hu - salt_h(i, j, k - 1)/hl)
+               adT = alpha_T*(temp_h(i, j, k) - temp_h(i, j, k - 1))
+               bdS = beta_S*(salt_h(i, j, k) - salt_h(i, j, k - 1))
 
                if (adT >= bdS .and. bdS > 0.0_wp) then
                   ! ---- salt fingering (R_rho >= 1) ----
@@ -2024,14 +2081,14 @@ contains
             if (k >= 2 .and. k <= nz) then
                hu = h_layer(i, j, k)      ! upper layer (toward surface)
                hl = h_layer(i, j, k - 1)  ! lower layer
-               ! vanished-ok: a PAIRWISE gate — the double-diffusive term needs BOTH layers
+               ! a PAIRWISE gate — the double-diffusive term needs BOTH layers
                ! live and is skipped otherwise; a per-layer `rdb_vl_conc` would
                ! silently make the difference finite.
                if (hu > H_VANISHED .and. hl > H_VANISHED) then
-                  t_u = temp_h(i, j, k)/hu
-                  t_l = temp_h(i, j, k - 1)/hl
-                  s_u = salt_h(i, j, k)/hu
-                  s_l = salt_h(i, j, k - 1)/hl
+                  t_u = temp_h(i, j, k)
+                  t_l = temp_h(i, j, k - 1)
+                  s_u = salt_h(i, j, k)
+                  s_l = salt_h(i, j, k - 1)
                   ! α, β at the interface state: the mean of the two
                   ! abutting layer centres (the same two-point average
                   ! the ΔT / ΔS below are differences of), at the in-situ
