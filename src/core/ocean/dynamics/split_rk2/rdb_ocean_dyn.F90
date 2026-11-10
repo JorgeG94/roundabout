@@ -5339,8 +5339,8 @@ contains
                                    dyn%bt_work%bt_uhbt, dyn%bt_work%bt_vhbt, &
                                    dyn%bt_work%bt_eta_end, dyn%bt_work%bt_ubt_end, &
                                    dyn%bt_work%bt_vbt_end)
-         ! Exit seam freshen: leaves downstream consumers exactly what v1's
-         ! last in-loop exchange left (fresh normal-width seam ghosts).
+         ! Exit seam freshen: fresh normal-width seam ghosts of the time
+         ! mean, as the bt_halo = 0 path leaves them on exit.
          call profiler_start("ocean_comms_bt")
          call ocean_halo_bt_group_2d(dyn%bt_work%bt_eta, dyn%bt_work%bt_ubt, &
                                      dyn%bt_work%bt_vbt)
