@@ -1091,7 +1091,12 @@ contains
       !! deviation would measure the bookkeeping instead of the transport.
       !!
       !! The arithmetic is the SAME EXPRESSION as the salt branch above,
-      !! so the increment is bit-identical to salinity's.
+      !! including the APPLIED (clamped) `dh` returned by
+      !! `cavity_melt_thickness_pair`, so the increment is bit-identical
+      !! to salinity's even when the `H_CAVITY_FLOOR` clamp fires with a
+      !! non-zero `s_ice`.  This is the Shao et al. (2016) pseudo-salt
+      !! construction: the same flux as salinity, so any deviation is
+      !! transport-path error only.
       integer, intent(in) :: nx
          !! First dimension.
       integer, intent(in) :: ny
@@ -1133,7 +1138,7 @@ contains
             dh = melt(i, j)*dt_over_rho0
             call cavity_melt_thickness_pair(h0, dh, hn, thin)
             virt = -melt(i, j)*(s_far(i, j) - s_ice)
-            cell_s = -inv_rho0_dt*virt + melt(i, j)*dt_over_rho0*s_ice
+            cell_s = -inv_rho0_dt*virt + dh*s_ice
             c(i, j, k_top(i, j)) = rdb_conc_add_source_mass(c(i, j, k_top(i, j)), h0, hn, cell_s)
          end if
       end do

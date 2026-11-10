@@ -156,6 +156,8 @@ contains
                                test_passive_dilution), &
                   new_unittest("pseudo_salt_mirror_matches_salinity_exactly", &
                                test_pseudo_salt_mirror), &
+                  new_unittest("pseudo_salt_mirror_matches_salinity_when_clamp_fires_with_ice_salinity", &
+                               test_pseudo_salt_mirror_clamped), &
                   new_unittest("compensation_withdrawal_is_volume_over_open_area", &
                                test_comp_withdrawal), &
                   new_unittest("compensation_leaves_open_ocean_concentrations_alone", &
@@ -840,6 +842,51 @@ contains
       call check(error, psc == sc, &
                  "pseudo-salt tracks salinity bit-for-bit under the mass form")
    end subroutine test_pseudo_salt_mirror
+
+   subroutine test_pseudo_salt_mirror_clamped(error)
+      !! The mirror must deposit the APPLIED (clamped) `dh*s_ice`, not the
+      !! requested `melt*dt/rho_0*s_ice`.  A freezing flux far larger than
+      !! the 1 mm top layer fires the `H_CAVITY_FLOOR` clamp while
+      !! `s_ice /= 0`; pseudo-salt seeded to `S` (Shao et al., 2016) must
+      !! then stay bit-for-bit equal to it, since both receive the same
+      !! flux.  Before the fix the mirror used the unclamped withdrawal.
+      type(error_type), allocatable, intent(out) :: error
+      real(wp) :: a_h(1, 1), a_melt(1, 1), a_sfar(1, 1), a_tb(1, 1)
+      real(wp) :: a_hl(1, 1, 1), a_s(1, 1, 1), a_t(1, 1, 1), a_ps(1, 1, 1)
+      real(wp) :: a_sb(1, 1, 1), a_hb(1, 1, 1)
+      real(wp), parameter :: S_ICE = 5.0_wp
+      integer :: a_ktop(1, 1)
+      integer :: n_thin
+
+      a_h(1, 1) = 1.0_wp
+      a_melt(1, 1) = -1.0_wp*RHO0/DTC
+      a_sfar(1, 1) = S0
+      a_tb(1, 1) = TB
+      a_hl(1, 1, 1) = 1.0e-3_wp
+      a_s(1, 1, 1) = S0
+      a_ps(1, 1, 1) = S0
+      a_t(1, 1, 1) = T0
+      a_sb(1, 1, 1) = 0.0_wp
+      a_hb(1, 1, 1) = 0.0_wp
+      a_ktop(1, 1) = 1
+
+      !$acc enter data copyin(a_h, a_melt, a_sfar, a_tb, a_hl, a_s, a_t, a_ps, a_sb, a_hb, a_ktop)
+      !$acc update device(a_h, a_melt, a_sfar, a_tb, a_hl, a_s, a_t, a_ps, a_sb, a_hb, a_ktop)
+      call cavity_mass_salt_mirror_impl(1, 1, 1, DTC/RHO0, DTC/RHO0, S_ICE, &
+                                        a_h, a_melt, a_sfar, a_hl, a_ps, a_ktop)
+      call cavity_mass_apply_impl(1, 1, 1, DTC/RHO0, DTC/RHO0, S_ICE, &
+                                  a_h, a_melt, a_sfar, a_tb, &
+                                  a_hl, a_s, a_t, a_sb, a_hb, a_ktop, n_thin)
+      !$acc update self(a_hl, a_s, a_ps)
+      !$acc exit data delete(a_h, a_melt, a_sfar, a_tb, a_hl, a_s, a_t, a_ps, a_sb, a_hb, a_ktop)
+
+      call check(error, n_thin == 1, "the clamp fired")
+      if (allocated(error)) return
+      call check(error, a_s(1, 1, 1) /= S0, "salinity moved (non-trivial case)")
+      if (allocated(error)) return
+      call check(error, a_ps(1, 1, 1) == a_s(1, 1, 1), &
+                 "pseudo-salt equals salinity bit-for-bit when the clamp fires and s_ice /= 0")
+   end subroutine test_pseudo_salt_mirror_clamped
 
    subroutine test_comp_withdrawal(error)
       !! The uniform sink's arithmetic, and its no-open-ocean fallback —
