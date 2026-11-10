@@ -1763,6 +1763,17 @@ contains
       !$acc end kernels
       !$acc wait(1)   ! single drain: the whole substep ran on async(1)
       !$acc end data
+      ! Exit seam freshen.  The accumulators above add each substep's η/u/v
+      ! BEFORE that substep's grouped exchange, so a seam ghost of the time
+      ! mean holds this rank's own (inexact) ghost-row march, not the
+      ! neighbour's owned value -- and the pred_corr corrector reads it.
+      ! Refresh once here; the march-in path does the same after `copy_out`.
+      ! Single rank, non-periodic: no-op.
+      if (.not. marchin) then
+         call profiler_start("ocean_comms_bt")
+         call ocean_halo_bt_group_2d(bt_eta, bt_ubt, bt_vbt)
+         call profiler_stop("ocean_comms_bt")
+      end if
 
       ! Refresh the persistent Chapman state from the end-of-step η.
       ! Next outer-step's substep block reads this as `eta_old` when
