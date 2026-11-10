@@ -692,6 +692,13 @@ contains
             end if
          end block
 
+         if (trim(cfg%remap_kernel) /= "stream" .and. &
+             trim(cfg%remap_kernel) /= "reference") then
+            call logger%error("&vcoord_nml remap_kernel = '"//trim(cfg%remap_kernel)// &
+                              "' is not one of 'stream', 'reference'")
+            has_error = .true.
+         end if
+
          ! `VCOORD_ZSIGMA` is NOT a working coordinate on the ocean path.
          ! Its deep branch reads `z_ref_global` as a table of absolute
          ! reference depths in METRES

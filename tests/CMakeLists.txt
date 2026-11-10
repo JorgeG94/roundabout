@@ -282,6 +282,7 @@ set(RDB_TESTS
     "test_vcoord_parse|test_vcoord_parse|collect_vcoord_parse_tests|vcoord_parse|ocean"
     "test_ocean_remap|test_ocean_remap|collect_ocean_remap_tests|ocean_remap|ocean"
     "test_ocean_remap_vanished|test_ocean_remap_vanished|collect_ocean_remap_vanished_tests|ocean_remap_vanished|ocean"
+    "test_ocean_remap_stream|test_ocean_remap_stream|collect_ocean_remap_stream_tests|ocean_remap_stream|ocean"
     "test_ocean_vanished_constancy|test_ocean_vanished_constancy|collect_ocean_vanished_constancy_tests|ocean_vanished_constancy|ocean"
     "test_ocean_lagrangian_staircase|test_ocean_lagrangian_staircase|collect_ocean_lagrangian_staircase_tests|ocean_lagrangian_staircase|ocean"
     "test_ocean_regrid_refine|test_ocean_regrid_refine|collect_ocean_regrid_refine_tests|ocean_regrid_refine|ocean"

@@ -3675,6 +3675,17 @@ contains
       ! layer grid, and restart checkpoints carry `outer_step_count` so a
       ! mid-Lagrangian resume re-aligns the cadence bit-exactly.
       if (present(vcoord) .and. dyn%is_remap_step()) then
+         ! Concentration-form remap input.  The remap reads each layer's
+         ! concentration (a filler's is its donor's) and never a filler's
+         ! content, so any content this step's writers parked in a filler
+         ! since the last sweep must be pooled into its donor FIRST or the
+         ! remap would drop it (cavity z_fixed: Salt/Heat Error 1e-8..1e-6
+         ! without this).  Cadence-bounded (remap steps only); a textual no-op
+         ! on columns without sub-threshold layers.  Goes away with the
+         ! content storage.
+         call profiler_start("ocean_vanished_i1")
+         call ms%enforce_vanished_content(grid%nx_total, grid%ny_total)
+         call profiler_stop("ocean_vanished_i1")
          call profiler_start("ocean_ale_remap")
          ! The grid time-filter relaxes once per thermo interval, so it
          ! must see the aggregate thermo dt (= dt at dt_therm_ratio=1, the

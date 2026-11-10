@@ -288,6 +288,11 @@ contains
                              "ALE remap: non-uniform-grid PLM slope + PPM edge weights "// &
                              "(Colella-Woodward 1984 eqs 1.6-1.8) instead of the "// &
                              "equal-thickness specialisations"))
+      ps => cfg%remap_kernel
+      call g%add(nml_enum("remap_kernel", ps, &
+                          "ALE tracer-remap kernel: stream (k-parallel, no column "// &
+                          "stacks) or reference (stack oracle); same concentration-form semantics", &
+                          allowed=[character(len=9) :: "stream", "reference"]))
       pl => cfg%remap_check_preconditions
       call g%add(nml_logical("remap_check_preconditions", pl, &
                              "ALE remap: fail loud when a column violates the overlap "// &
