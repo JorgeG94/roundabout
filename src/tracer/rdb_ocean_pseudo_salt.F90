@@ -84,7 +84,7 @@ contains
    end subroutine ocean_pseudo_salt_register
 
    pure subroutine ocean_pseudo_salt_seed(ms)
-      !! Seed `hTr(idx_pseudo_salt) = hTr(idx_salinity)` over the FULL
+      !! Seed `c(idx_pseudo_salt) = c(idx_salinity)` over the FULL
       !! array shape (nx_total, ny_total, nz_ml) — ghosts included,
       !! matching MOM6's `isd:ied, jsd:jed` seed (§4 of the plan). A
       !! halved ghost band would make the deviation diagnostic non-zero
@@ -98,9 +98,9 @@ contains
       ms%tracers(ms%idx_pseudo_salt)%c = ms%tracers(ms%idx_salinity)%c
    end subroutine ocean_pseudo_salt_seed
 
-   pure subroutine ocean_pseudo_salt_deviation(h_layer, hTr_ps, hTr_s, buf, nx, ny, nz, &
+   pure subroutine ocean_pseudo_salt_deviation(h_layer, c_ps, c_sal, buf, nx, ny, nz, &
                                                missing)
-      !! Diagnostic helper: `D(i,j,k) = hTr_ps/h - hTr_s/h`, i.e. the
+      !! Diagnostic helper: `D(i,j,k) = c_ps - c_sal`, i.e. the
       !! pseudo-salt concentration minus the salinity concentration.
       !!
       !! A vanished layer (`rdb_vl_is_live` false — the ONE predicate, see
@@ -114,8 +114,8 @@ contains
       !! `H_VANISHED` were divided through at all.
       integer, intent(in)     :: nx, ny, nz
       real(wp), intent(in)    :: h_layer(nx, ny, nz)
-      real(wp), intent(in)    :: hTr_ps(nx, ny, nz)
-      real(wp), intent(in)    :: hTr_s(nx, ny, nz)
+      real(wp), intent(in)    :: c_ps(nx, ny, nz)
+      real(wp), intent(in)    :: c_sal(nx, ny, nz)
       real(wp), intent(inout) :: buf(nx, ny, nz)
       real(wp), intent(in)    :: missing
          !! Value written on a vanished layer (the diagnostics' NaN).
@@ -125,7 +125,7 @@ contains
       do concurrent(k=1:nz, j=1:ny, i=1:nx)
          h = h_layer(i, j, k)
          if (rdb_vl_is_live(h)) then
-            buf(i, j, k) = hTr_ps(i, j, k) - hTr_s(i, j, k)
+            buf(i, j, k) = c_ps(i, j, k) - c_sal(i, j, k)
          else
             buf(i, j, k) = missing
          end if

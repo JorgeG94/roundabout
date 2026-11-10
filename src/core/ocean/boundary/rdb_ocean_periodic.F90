@@ -71,7 +71,7 @@ contains
    subroutine ocean_periodic_wrap_centre_3d(fld, nx_total, ny_total, nz, &
                                             nx_phys, ny_phys, nghost, &
                                             wrap_x, wrap_y, no_wait)
-      !! Fill ghost cells of a cell-centred 3D field (e.g. h_layer, hTr, T, S).
+      !! Fill ghost cells of a cell-centred 3D field (e.g. h_layer, c, T, S).
       !! `no_wait` (optional, default .false.): when .true., loops issue on
       !! OpenACC queue 1 and the routine returns WITHOUT syncing, so a batched
       !! caller can pipeline many tiny ghost-slab wraps and `!$acc wait(1)`

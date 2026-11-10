@@ -12,7 +12,7 @@ module rdb_ocean_reinit
    !!
    !! ## Device discipline (`-gpu=...,mem:separate`)
    !! The caller has already drained the windowed tracer accumulator and
-   !! refreshed the HOST copies of `h`, `u`, `v` and every `hTr` from the
+   !! refreshed the HOST copies of `h`, `u`, `v` and every `c` from the
    !! device, so the host is authoritative on entry.  Every host write below
    !! is followed by an `!$acc update device(<leaf array>)`; every value a
    !! device kernel produced (`rho_layer`, `bt_eta`, the seam-wrapped state)
@@ -127,7 +127,7 @@ contains
    end subroutine ocean_balance_apply
 
    subroutine refresh_seam_ghosts(state, grid)
-      !! Make the host AND device ghost cells of `h`, `u`, `v`, `hTr` consistent
+      !! Make the host AND device ghost cells of `h`, `u`, `v`, `c` consistent
       !! with their (host-authoritative) interior.
       type(ocean_state_t), intent(inout) :: state
       type(hgrid_t), intent(in) :: grid
@@ -160,7 +160,7 @@ contains
 
    subroutine push_state(state)
       !! Host -> device for the prognostic leaves this module writes: `h`,
-      !! `u`, `v` and every registered tracer's `hTr`.  Leaf arrays only.
+      !! `u`, `v` and every registered tracer's `c`.  Leaf arrays only.
       type(ocean_state_t), intent(inout) :: state
       integer :: it
 

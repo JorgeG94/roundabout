@@ -178,7 +178,7 @@ module rdb_ocean_dyn
 #endif
 
    ! ---- Baroclinic-stability diagnostic (debug-gated, default OFF) ----
-   ! Probes in `run_stage_split` print max|hTr_S/h_layer - bcdiag_S_ref|
+   ! Probes in `run_stage_split` print max|c_S - bcdiag_S_ref|
    ! after each kernel call.  All probes early-return when disabled, so
    ! production paths are unaffected; tests set `bcdiag_enabled = .true.`.
    logical, public, save :: bcdiag_enabled = .false.
@@ -697,7 +697,7 @@ contains
       !! Mandatory end-of-segment flush of the windowed tracer-advect
       !! accumulators (spec §(c) — MOM6's `n == n_max`).  Drains any OPEN
       !! accumulation window (`t_dyn_rel_adv > 0`) so no Lagrangian-advanced
-      !! `h_layer` is ever paired with FROZEN `hTr` at an output write, a
+      !! `h_layer` is ever paired with FROZEN `c` at an output write, a
       !! restart checkpoint, or the end of a run segment whose length is not
       !! an exact multiple of `dt_tracer_advect_ratio`.
       !!
@@ -983,7 +983,7 @@ contains
       !! Each stage runs every compute kernel in sequence, then the
       !! apply step.  The two SSP-RK2 stages save the prognostic
       !! state into the *_0 buffers (h_layer0, u_face_x_layer0,
-      !! v_face_y_layer0, plus hTr0 on every registered tracer),
+      !! v_face_y_layer0, plus c0 on every registered tracer),
       !! run two full FE substeps, and average with the saved
       !! state to recover the second-order-accurate result.
       !!
@@ -1098,10 +1098,9 @@ contains
 
       ! ---- RK2 average: u^(n+1) = 0.5 * (u^n + stage2 result) ----
       ! Tracers are averaged BEFORE `h_layer`: the tracer average is
-      ! ordered ahead of the thickness average so a mass-weighted form
+      ! ordered ahead of the thickness average so the mass-weighted form
       ! (`h0·c0 + h1·c1` over `h0 + h1`) can read the un-averaged
-      ! `h_layer0`/`h_layer` pair.  In content form it reads neither, so the
-      ! order is bit-identical.
+      ! `h_layer0`/`h_layer` pair.
       if (allocated(ms%tracers)) then
          do it = 1, size(ms%tracers)
             call rk2_average_conc_3d(ms%h_layer0, ms%tracers(it)%c0, ms%h_layer, &
@@ -1169,9 +1168,9 @@ contains
       !!   3. continuity_tracer_step_split — interleaved
       !!      Lie-split horizontal step: zonal flux + tracer zonal +
       !!      apply zonal + meridional flux + tracer meridional +
-      !!      apply meridional.  Updates h AND hTr together; the
+      !!      apply meridional.  Updates h AND c together; the
       !!      CWC discrete theorem holds (uniform T stays uniform).
-      !!   4. tracer_hdiff — Laplacian diffusion on hTr.
+      !!   4. tracer_hdiff — Laplacian diffusion on c.
       !!   5. compute_w_from_continuity — diagnose w from the total
       !!      horizontal divergence stored in `flux_h_layer`.
       !!   6. tracer_advect_vertical — upwind-in-z + h update that
@@ -1312,7 +1311,7 @@ contains
       !   ratio == 1 (default) → the existing every-step fused
       !     continuity+tracer kernel runs verbatim ⇒ bit-identical.
       !   ratio  > 1 → TR_MODE_ACCUMULATE: advance h + accumulate
-      !     0.5·mass_flux·dt into ct%uhtr/vhtr per RK2 stage (hTr frozen);
+      !     0.5·mass_flux·dt into ct%uhtr/vhtr per RK2 stage (c frozen);
       !     the boundary drain in `ocean_dyn_step` spends them.
       if (dyn%dt_tracer_advect_ratio <= 1) then
          call continuity_tracer_step_split(grid, metrics, ct, ms, dt)
@@ -1335,7 +1334,7 @@ contains
       ! Velocity-side applies (no thermodynamics gate).  Async-chained on
       ! OpenACC queue 1 (additive accumulations onto u_face/v_face, FIFO-
       ! ordered).  The interleaved tracer applies below run on the default
-      ! queue but touch disjoint arrays (hTr), so there is no cross-queue
+      ! queue but touch disjoint arrays (c), so there is no cross-queue
       ! race.  ONE `!$acc wait(1)` before vmix — the first device consumer
       ! that reads the applied u_face/v_face (shear).
       call coriolis_adv_apply_tendencies(cor, ms, dt, no_wait=.true.)
@@ -2591,7 +2590,7 @@ contains
 
    pure subroutine save_state(ms)
       !! Copy h_layer, u_face_x_layer, v_face_y_layer into the *_0
-      !! save buffers on the multilayer state.  Per-tracer hTr is
+      !! save buffers on the multilayer state.  Per-tracer c is
       !! saved by the caller via copy_field_3d (the registry has to
       !! be walked on the host).
       type(multilayer_state_t), intent(inout) :: ms
@@ -2919,7 +2918,7 @@ contains
 
    pure subroutine copy_field_3d(src, dst, nx, ny, nz)
       !! src -> dst flat copy on the device.  Bare-array shim avoids
-      !! the deep struct deref inside do-concurrent (tracer hTr lives
+      !! the deep struct deref inside do-concurrent (tracer c lives
       !! in an array-of-derived-types registry).
       integer, intent(in) :: nx, ny, nz
       real(wp), intent(in)  :: src(nx, ny, nz)
@@ -2935,9 +2934,9 @@ contains
       !! `c <- (h0·c0 + h1·c1)/(h0 + h1)`, with `(h0, c0)` the step-entry
       !! save and `(h1, c1)` the stage-2 result.  It must run BEFORE
       !! `rk2_average` averages `h_layer` (it reads the un-averaged pair).
-      !! This is exactly the ratio of the averaged content to the averaged
-      !! thickness the content form took, and a convex combination of `c0` and
-      !! `c1`, so a uniform field stays uniform.  A column pair with no water
+      !! This is the ratio of the averaged content to the averaged thickness,
+      !! and a convex combination of `c0` and `c1`, so a uniform field stays
+      !! uniform.  A column pair with no water
       !! (`h0 + h1 <= H_DIV_EPS`) keeps `c1`.
       integer, intent(in) :: nx, ny, nz
       real(wp), intent(in) :: h_saved(nx, ny, nz), c_saved(nx, ny, nz)
@@ -3636,7 +3635,7 @@ contains
       ! Phase 2 (6b) windowed horizontal tracer-advect DRAIN.  Only active
       ! when `dt_tracer_advect_ratio > 1`; the every-step path (ratio = 1)
       ! never accumulated, so this is a hard no-op there (bit-identical).
-      ! Runs AFTER the RK2 average (hTr is the window-start frozen mass,
+      ! Runs AFTER the RK2 average (c is the held window-start concentration,
       ! h_layer is the RK2-averaged window-end thickness) and BEFORE the
       ! ALE remap (spec §(c) ordering: advect-then-reset → remap).
       !
@@ -3670,7 +3669,7 @@ contains
       ! and the GM / Redi / MLE terms are computed in the stage chain.)
       if (dyn%thermo_deferred() .and. dyn%enable_thermodynamics .and. dyn%is_thermo_step()) then
          ! Lateral tracer diffusion first (OM3: right after tracer advection,
-         ! full tracer dt): the drain wraps hTr's ghosts on a single rank
+         ! full tracer dt): the drain wraps c's ghosts on a single rank
          ! only, so refresh them before the stencil reads.
          call profiler_start("ocean_deferred_tracer")
          call refresh_tracer_ghosts(grid, ms, bc)
@@ -3899,8 +3898,8 @@ contains
       real(wp) :: h_min_pass, acc_wt
 
       ! ---- 5. Ghost fills at open edges (before continuity PPM) ----
-      ! Fill h_layer and tracer hTr ghost cells at any open-ish edge
-      ! using zero-gradient (h) and upwind-aware (hTr) logic.
+      ! Fill h_layer and tracer c ghost cells at any open-ish edge
+      ! using zero-gradient (h) and upwind-aware (c) logic.
       ! This generalises the CLAMPED-only ghost fill inside
       ! rdb_continuity::tracer_advect_zonal/meridional to cover OPEN /
       ! TIDAL / CHAPMAN / NESTED as well.
@@ -3936,7 +3935,7 @@ contains
       ! After apply_zonal + apply_meridional, `sum_k(h_layer)` equals
       ! `H_ref + bt_eta_end` to machine precision — no h rescale
       ! needed afterwards.  Tracer rides the same renormalised
-      ! fluxes ⇒ per-column `T = hTr/h` stays exact.
+      ! fluxes ⇒ a uniform `c` stays exact.
       call profiler_start("ocean_continuity")
       ! `mle_fold_active` is .true. on every step: the FK transports are
       ! recomputed every dynamics step, so the fold is too.
@@ -3944,7 +3943,7 @@ contains
       ! Phase 2 (6b) horizontal-tracer-advect cadence: ratio == 1 ⇒
       ! TR_MODE_ADVECT (fused every-step advect, bit-identical); ratio > 1
       ! ⇒ TR_MODE_ACCUMULATE (advance h + accumulate ½·flux·dt into
-      ! ct%uhtr/vhtr per RK2 stage, hTr frozen).  The boundary drain runs
+      ! ct%uhtr/vhtr per RK2 stage, c frozen).  The boundary drain runs
       ! once per window in ocean_dyn_step_split.
       ! Window-accumulator weight: ssp_rk2 averages two stages (0.5 each);
       ! pred_corr accumulates only in its corrector (the predictor is
@@ -4077,7 +4076,7 @@ contains
       call profiler_start("ocean_tracer_hdiff")
       ! diabatic_first = .false. (N > 1): hdiff + Redi run once per interval in
       ! `apply_deferred_tracer_step`, after the window drain, with the full
-      ! tracer dt -- here they would act on the held (pre-drain) hTr.
+      ! tracer dt -- here they would act on the held (pre-drain) c.
       call tracer_hdiff(grid, metrics, hd, ms, therm_dt, &
                         active=therm_active .and. .not. dyn%thermo_deferred(), bc=bc)
       call profiler_stop("ocean_tracer_hdiff")
@@ -4531,8 +4530,8 @@ contains
    end subroutine check_remap_preconditions_or_die
 
    subroutine probe_dS(grid, ms, label, stage, outer_step)
-      !! Debug-gated diagnostic.  Pulls `h_layer` + `hTr_S` from device
-      !! and prints `max|hTr_S/h_layer - bcdiag_S_ref|` over interior
+      !! Debug-gated diagnostic.  Pulls `h_layer` + `c_S` from device
+      !! and prints `max|c_S - bcdiag_S_ref|` over interior
       !! columns.  Early-returns when `bcdiag_enabled = .false.` or
       !! after `bcdiag_step_limit` outer steps have completed.
       !!
@@ -4682,7 +4681,7 @@ contains
          !! and `apply_bt_correction`'s h-rescale is skipped.  The
          !! MOM6-constrained slow continuity makes `sum_k(h_layer)`
          !! self-consistent with the barotropic-substep η; the ALE remap at
-         !! the end of the outer step relayers (h, hTr) onto
+         !! the end of the outer step relayers (h, c) onto
          !! `vcoord%target_h` conservatively.  Absent or EULERIAN_Z
          !! ⇒ the historical Eulerian-z code path.
       type(ocean_bc_state_t), intent(inout), optional :: bc
@@ -4917,7 +4916,7 @@ contains
 
       ! ---- 2. Compute all slow tendencies ----
       ! All read h^n / u^n / v^n into per-kernel scratch buffers.
-      ! No writes to h_layer, hTr, u_face, or v_face yet.
+      ! No writes to h_layer, c, u_face, or v_face yet.
       call profiler_start("ocean_eos")
       ! See the note at the other ocean_eos_compute call site: the EOS is a
       ! dynamics term and must NOT be held across the thermo window. Note the
@@ -5436,7 +5435,7 @@ contains
       ! the slow continuity's `h_layer` is authoritative, and any
       ! FP residual gets absorbed by the ALE remap at end of outer
       ! step rather than redistributed across layers (which would
-      ! corrupt S = hTr/h).
+      ! corrupt S).
       ! bc-PGF correction: form `e_anom` from the post-substep
       ! η state and the pre-PGF snapshot.  Then apply_bt_correction
       ! consumes it via the optional `use_bc_pgf` path.  Gated;
@@ -5679,7 +5678,7 @@ contains
          ! tracer advection reads next are no longer images of the
          ! neighbour.  Serial, that happened only at a periodic wrap; on a
          ! decomposed run it happened at every seam, so the answer
-         ! depended on where the seam fell (1 ULP in hTr at a seam cell by
+         ! depended on where the seam fell (1 ULP in c at a seam cell by
          ! step 12 of the spherical 2x1 case, growing from there).  The
          ! `ssp_rk2` chain runs straight after the stage-entry exchange
          ! and never sees this.  Refresh the tracer ghosts (exchange, local

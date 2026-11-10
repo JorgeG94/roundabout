@@ -19,7 +19,7 @@ contains
    subroutine register_default_tracers(tr_S, tr_T, cfg)
       !! Overlay scalar config onto the already-allocated salinity /
       !! temperature tracer slots (by reference, so every caller shares the
-      !! overlay).  Does not touch hTr / hTr0 — those are populated by the
+      !! overlay).  Does not touch c / c0 — those are populated by the
       !! path's IC step once h_layer is known.
       type(tracer_t), intent(inout) :: tr_S
       type(tracer_t), intent(inout) :: tr_T

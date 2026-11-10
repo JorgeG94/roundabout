@@ -1188,11 +1188,11 @@ contains
          !! Caller-selected irradiance source (`sf%Q_heat` or `sf%q_sw`),
          !! explicit-shape (per-RK2-stage kernel: no assumed-shape waiver).
       real(wp), intent(in) :: temp_h(nx_arg, ny_arg, nz_arg)
-         !! `hTr` of the temperature tracer (degC·m), flattened off the
+         !! The temperature concentration (degC), flattened off the
          !! registry by the shim.  Read ONLY under
          !! `buoyancy_coeffs == BUOY_COEFFS_EOS`, and only at `k = nz`.
       real(wp), intent(in) :: salt_h(nx_arg, ny_arg, nz_arg)
-         !! `hTr` of the salinity tracer (PSU·m).  Same contract.
+         !! The salinity concentration (PSU).  Same contract.
       logical, intent(in) :: sw_active
          !! Host-side `sf%has_sw` gate — false ⇒ `B_0` uses the unmodified
          !! legacy source line (bit-identity).
@@ -1925,9 +1925,9 @@ contains
       real(wp), intent(inout) :: kt(nx, ny, nzp1)
       real(wp), intent(inout) :: ks(nx, ny, nzp1)
       real(wp), intent(in) :: temp_h(nx, ny, nzp1 - 1)
-         !! Temperature thickness-integral hTr = T*h_layer (degC*m).
+         !! Temperature concentration (degC).
       real(wp), intent(in) :: salt_h(nx, ny, nzp1 - 1)
-         !! Salinity thickness-integral hTr = S*h_layer (PSU*m).
+         !! Salinity concentration (PSU).
       real(wp), intent(in) :: h_layer(nx, ny, nzp1 - 1)
       real(wp), intent(in) :: alpha_T, beta_S
          !! |d rho/dT| and d rho/dS (kg/m^3 per degC / per PSU).
@@ -2037,9 +2037,9 @@ contains
       real(wp), intent(inout) :: kt(nx, ny, nzp1)
       real(wp), intent(inout) :: ks(nx, ny, nzp1)
       real(wp), intent(in) :: temp_h(nx, ny, nzp1 - 1)
-         !! `hTr` of temperature (degC·m).
+         !! Temperature concentration (degC).
       real(wp), intent(in) :: salt_h(nx, ny, nzp1 - 1)
-         !! `hTr` of salinity (PSU·m).
+         !! Salinity concentration (PSU).
       real(wp), intent(in) :: h_layer(nx, ny, nzp1 - 1)
       real(wp), intent(in) :: p_top(nx, ny)
          !! Surface load (Pa) — `multilayer_state_t%p_top`, the zero array
@@ -2082,7 +2082,7 @@ contains
                hu = h_layer(i, j, k)      ! upper layer (toward surface)
                hl = h_layer(i, j, k - 1)  ! lower layer
                ! a PAIRWISE gate — the double-diffusive term needs BOTH layers
-               ! live and is skipped otherwise; a per-layer `rdb_vl_conc` would
+               ! live and is skipped otherwise; a per-layer donor read (`rdb_vl_column_conc`) would
                ! silently make the difference finite.
                if (hu > H_VANISHED .and. hl > H_VANISHED) then
                   t_u = temp_h(i, j, k)

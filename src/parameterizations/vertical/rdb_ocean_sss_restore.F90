@@ -85,14 +85,14 @@ module rdb_ocean_sss_restore
 
 contains
 
-   pure subroutine sss_cell_flux(hTr, h, tgt_in, w_open, coef, max_delta, h_min, &
+   pure subroutine sss_cell_flux(c, h, tgt_in, w_open, coef, max_delta, h_min, &
                                  convert_sp, f, pw)
       !! Restoring salt flux of one cell (steps 1-2 above).  `coef` is
       !! `rho0 * w`.  `pw` is the participation weight: the open fraction
       !! for a participating cell, `0` for a cell that is closed or has a
       !! non-finite target (those return `f = 0`).
       !$acc routine seq
-      real(wp), intent(in) :: hTr
+      real(wp), intent(in) :: c
          !! Surface-layer `S * h` [g/kg m].
       real(wp), intent(in) :: h
          !! Surface-layer thickness [m].
@@ -119,7 +119,7 @@ contains
       if (convert_sp) tgt = sr_from_sp(tgt_in)
       ! surface concentration against a caller-supplied
       ! restoring floor, as the scalar restoring path does.
-      ds = tgt - hTr
+      ds = tgt - c
       ds = sign(min(abs(ds), max_delta), ds)
       f = coef*ds*w_open
       pw = w_open
@@ -148,14 +148,14 @@ contains
       end if
    end subroutine sss_net_factors
 
-   function sss_flux_sums(mode, nx, ny, nz, ng, hTr, h_layer, tgt, wet, cover, use_cover, &
+   function sss_flux_sums(mode, nx, ny, nz, ng, c, h_layer, tgt, wet, cover, use_cover, &
                           areaT, k_top, coef, max_delta, h_min, convert_sp) result(tot)
       !! Rank-LOCAL EFP area integral over physical cells of one
       !! integrand: `mode = SUM_POS` -> `A max(F,0)`, `SUM_NEG` ->
       !! `A min(F,0)`, `SUM_AREA` -> `A * participation`.  One device
       !! reduction; combine across ranks with `halo_allreduce_efp_list`.
       integer, intent(in) :: mode, nx, ny, nz, ng
-      real(wp), intent(in) :: hTr(nx, ny, nz)
+      real(wp), intent(in) :: c(nx, ny, nz)
       real(wp), intent(in) :: h_layer(nx, ny, nz)
       real(wp), intent(in) :: tgt(nx, ny)
       real(wp), intent(in) :: wet(nx, ny)
@@ -181,13 +181,13 @@ contains
       epoison = 0_int64
       !$acc parallel loop collapse(2) reduction(+:e1,e2,e3,e4,e5,e6,epoison) &
       !$acc&         private(f, pw, ow, val, kt, d1, d2, d3, d4, d5, d6, dpoison) &
-      !$acc&         present(hTr, h_layer, tgt, wet, cover, areaT, k_top)
+      !$acc&         present(c, h_layer, tgt, wet, cover, areaT, k_top)
       do j = ng + 1, ny - ng
          do i = ng + 1, nx - ng
             kt = k_top(i, j)
             ow = wet(i, j)
             if (use_cover) ow = ow*(1.0_wp - cover(i, j))
-            call sss_cell_flux(hTr(i, j, kt), h_layer(i, j, kt), tgt(i, j), ow, &
+            call sss_cell_flux(c(i, j, kt), h_layer(i, j, kt), tgt(i, j), ow, &
                                coef, max_delta, h_min, convert_sp, f, pw)
             select case (mode)
             case (SUM_POS)
@@ -213,12 +213,12 @@ contains
       tot%poison = epoison
    end function sss_flux_sums
 
-   function sss_flux_maxabs(nx, ny, nz, ng, hTr, h_layer, tgt, wet, cover, use_cover, &
+   function sss_flux_maxabs(nx, ny, nz, ng, c, h_layer, tgt, wet, cover, use_cover, &
                             k_top, coef, max_delta, h_min, convert_sp) result(fmax)
       !! Rank-local `max |F|` over physical cells (before the net
       !! adjustment); a diagnostic for the sparse progress line.
       integer, intent(in) :: nx, ny, nz, ng
-      real(wp), intent(in) :: hTr(nx, ny, nz)
+      real(wp), intent(in) :: c(nx, ny, nz)
       real(wp), intent(in) :: h_layer(nx, ny, nz)
       real(wp), intent(in) :: tgt(nx, ny)
       real(wp), intent(in) :: wet(nx, ny)
@@ -232,20 +232,20 @@ contains
       real(wp) :: f, pw, ow
       fmax = 0.0_wp
       !$acc parallel loop collapse(2) reduction(max:fmax) private(f, pw, ow, kt) &
-      !$acc&         present(hTr, h_layer, tgt, wet, cover, k_top)
+      !$acc&         present(c, h_layer, tgt, wet, cover, k_top)
       do j = ng + 1, ny - ng
          do i = ng + 1, nx - ng
             kt = k_top(i, j)
             ow = wet(i, j)
             if (use_cover) ow = ow*(1.0_wp - cover(i, j))
-            call sss_cell_flux(hTr(i, j, kt), h_layer(i, j, kt), tgt(i, j), ow, &
+            call sss_cell_flux(c(i, j, kt), h_layer(i, j, kt), tgt(i, j), ow, &
                                coef, max_delta, h_min, convert_sp, f, pw)
             fmax = max(fmax, abs(f))
          end do
       end do
    end function sss_flux_maxabs
 
-   pure subroutine sss_deposit_impl(nx, ny, nz, hTr, budget, h_layer, tgt, wet, cover, &
+   pure subroutine sss_deposit_impl(nx, ny, nz, c, budget, h_layer, tgt, wet, cover, &
                                     use_cover, k_top, coef, max_delta, h_min, convert_sp, &
                                     net_mode, fpos, fneg, shift, inv_scale)
       !! Recompute `F`, apply the net adjustment, and deposit
@@ -253,7 +253,7 @@ contains
       !! and the salt budget contributor.  Over the full array (ghosts
       !! included - the target's ghosts were exchanged).
       integer, intent(in) :: nx, ny, nz
-      real(wp), intent(inout) :: hTr(nx, ny, nz)
+      real(wp), intent(inout) :: c(nx, ny, nz)
       real(wp), intent(inout) :: budget(nx, ny, nz)
       real(wp), intent(in) :: h_layer(nx, ny, nz)
       real(wp), intent(in) :: tgt(nx, ny)
@@ -275,7 +275,7 @@ contains
          kt = k_top(i, j)
          ow = wet(i, j)
          if (use_cover) ow = ow*(1.0_wp - cover(i, j))
-         call sss_cell_flux(hTr(i, j, kt), h_layer(i, j, kt), tgt(i, j), ow, &
+         call sss_cell_flux(c(i, j, kt), h_layer(i, j, kt), tgt(i, j), ow, &
                             coef, max_delta, h_min, convert_sp, f, pw)
          if (net_mode == SSS_NET_SCALE) then
             if (f > 0.0_wp) then
@@ -287,7 +287,7 @@ contains
             f = f - shift*pw
          end if
          inc = inv_scale*f
-         hTr(i, j, kt) = rdb_conc_add_source(hTr(i, j, kt), h_layer(i, j, kt), inc)
+         c(i, j, kt) = rdb_conc_add_source(c(i, j, kt), h_layer(i, j, kt), inc)
          budget(i, j, kt) = budget(i, j, kt) + rdb_conc_accepted_source(h_layer(i, j, kt), inc)
       end do
    end subroutine sss_deposit_impl

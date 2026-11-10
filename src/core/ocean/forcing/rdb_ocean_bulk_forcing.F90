@@ -336,7 +336,7 @@ contains
                                           wind_relative, ocean_albedo, z_wind, z_ta, emissivity, &
                                           wet_T, angle_dx, uas, vas, tas, huss, psl, &
                                           rlds, rsds, prra, prsn, &
-                                          u_face_x_layer, v_face_y_layer, hTr_T, hTr_S, h_layer, &
+                                          u_face_x_layer, v_face_y_layer, c_T, c_S, h_layer, &
                                           cons_abs, open_water, &
                                           taux_c, tauy_c, q_sens, q_lat, evap, q_sw, q_lw, &
                                           lprec, fprec, p_surf_atm, &
@@ -354,7 +354,7 @@ contains
       real(wp), intent(in) :: uas(nx, ny), vas(nx, ny), tas(nx, ny), huss(nx, ny), psl(nx, ny)
       real(wp), intent(in) :: rlds(nx, ny), rsds(nx, ny), prra(nx, ny), prsn(nx, ny)
       real(wp), intent(in) :: u_face_x_layer(nx + 1, ny, nz), v_face_y_layer(nx, ny + 1, nz)
-      real(wp), intent(in) :: hTr_T(nx, ny, nz), hTr_S(nx, ny, nz), h_layer(nx, ny, nz)
+      real(wp), intent(in) :: c_T(nx, ny, nz), c_S(nx, ny, nz), h_layer(nx, ny, nz)
       real(wp), intent(in) :: open_water(nx, ny)
       real(wp), intent(inout) :: taux_c(nx, ny), tauy_c(nx, ny)
       real(wp), intent(inout) :: q_sens(nx, ny), q_lat(nx, ny), evap(nx, ny)
@@ -365,7 +365,7 @@ contains
          !! `.true.` under `&ocean_eos_nml ts_convention = "cons_abs"`
          !! (with a salinity tracer): the SST handed to the bulk formulae
          !! and to the longwave emission is `pt_from_ct(SA, CT)` of the top
-         !! layer, SA = `hTr_S/h`.  `.false.` takes the model T as is
+         !! layer, SA = `c_S`.  `.false.` takes the model T as is
          !! (bit-identical default).
       real(wp), intent(in) :: cp
          !! Specific heat (J/kg/K) of the heat content of precipitation:
@@ -393,14 +393,14 @@ contains
                u_c = 0.0_wp
                v_c = 0.0_wp
             end if
-            sst = hTr_T(ii, jj, nz)
+            sst = c_T(ii, jj, nz)
             ! Bulk formulae and longwave emission take a POTENTIAL
             ! temperature; the model T is CT under cons_abs.  The heat
             ! content of the precipitation below keeps the model T
             ! (ocean-frame enthalpy with c_p).
             sst_f = sst
             if (cons_abs) then
-               sst_f = pt_from_ct(hTr_S(ii, jj, nz), sst)
+               sst_f = pt_from_ct(c_S(ii, jj, nz), sst)
             end if
             call bulk_flux_column(u_g, v_g, u_c, v_c, tas(ii, jj), huss(ii, jj), psl(ii, jj), sst_f, &
                                   z_wind, z_ta, n_iter, &

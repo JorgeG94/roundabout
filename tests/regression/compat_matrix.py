@@ -745,7 +745,6 @@ _BUDGET_RE = re.compile(
     r"\s+Error\s+(?P<err>" + _NUM + r")")
 _TOTAL_STEPS_RE = re.compile(r"^\s*Total steps:\s*(\d+)", re.MULTILINE)
 _NAN_CATCH_RE = re.compile(r"\[nan-catch\] (?:outer step (\d+)|stage \d+ step (\d+))")
-_I1_RE = re.compile(r"\[I1'\] vanished-layer invariant violated at outer step (\d+)")
 _PRECOND_RE = re.compile(r"ALE remap preconditions violated at outer step\s+(\d+)")
 _CRASH_RE = re.compile(r"error stop|segmentation fault|floating point exception|"
                        r"program received signal|\baborted\b", re.IGNORECASE)
@@ -946,14 +945,12 @@ def parse_run(text):
     for m in _TOTAL_STEPS_RE.finditer(text):
         total = int(m.group(1))
     nan_steps = [int(a or b) for a, b in _NAN_CATCH_RE.findall(text)]
-    i1 = _I1_RE.search(text)
     pre = _PRECOND_RE.search(text)
     crash = _CRASH_RE.search(text)
     stop = re.search(r"ERROR STOP\s*(.*)", text)
     return {"stats": stats, "budget": budget, "total_steps": total,
             "error_stop": stop.group(1).strip()[:200] if stop else None,
             "nan_catch_steps": nan_steps,
-            "i1_step": int(i1.group(1)) if i1 else None,
             "precond_step": int(pre.group(1)) if pre else None,
             "crash_marker": crash.group(0) if crash else None}
 
@@ -969,13 +966,11 @@ def classify_run(rc, p):
                 break
         if bad_scalar:
             break
-    steps = [x for x in ([p["i1_step"], p["precond_step"]] + p["nan_catch_steps"]
+    steps = [x for x in ([p["precond_step"]] + p["nan_catch_steps"]
                          + ([bad_scalar[1]] if bad_scalar else [])) if x]
     first = min(steps) if steps else None
     if rc != 0 or p["total_steps"] != N_STEPS:
         why = []
-        if p["i1_step"]:
-            why.append("I1' tripwire at step {}".format(p["i1_step"]))
         if p["precond_step"]:
             why.append("remap preconditions at step {}".format(p["precond_step"]))
         if p["nan_catch_steps"]:

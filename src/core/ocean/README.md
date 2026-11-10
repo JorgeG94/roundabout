@@ -25,7 +25,8 @@ Conventions you need before reading any kernel:
 
 - Layers are bottom-up: `k = 1` is the bed and `k = nz` is the surface layer.
 - `u_face_x(i,j,k)` is on the face between cell `(i,j)` and `(i+1,j)`; `v_face_y` is the same in `j`.
-- Tracers are stored as content, `hTr = h*c` (thickness times concentration), never as concentration.
+- Tracers are stored as concentration `c` (`tracer_t%c`); the conserved content `h*c` is formed only where a
+  budget or console total needs it. See "Vanished layers" below.
 - Every data-parallel loop is a `do concurrent`. The GPU build has separate device memory, so every array a
   kernel touches must be mapped (see `FORTRAN_STYLE.md`).
 
@@ -81,7 +82,7 @@ sea-ice block writes surface-flux components that the finalize step assembles. T
 2. **Per-step refreshes** (top of `ocean_dyn_step_split`): equilibrium tide and self-attraction, the
    surface-pressure seam and `p_top`, mixed-layer-eddy transports, wave speed, isopycnal slopes, GM / VarMix /
    MEKE coefficients, Redi coefficients.
-3. **Save** the layer state and tracer content (and the viscous bottom boundary layer, `vdiff_set_viscous_bbl`).
+3. **Save** the layer state and tracer concentration (and the viscous bottom boundary layer, `vdiff_set_viscous_bbl`).
 4. **Two stages** of `run_stage_split` (under `pred_corr` the second is the corrector, and its single
    full-step update is the step):
    1. fill ghosts and periodic or fold seams; derive the barotropic state `(η, u_bt, v_bt)` from the layers;
@@ -125,6 +126,24 @@ Restart checkpoints, console statistics and diagnostic output are written by the
 6. Update the synthesis docs in the same change: `docs/CLOSURE_MATRIX.md`, `docs/CAPABILITIES_AND_LIMITATIONS.md`,
    and the matching guide under `docs/howto/`. Write the contract in the owning module's `!!` docstring.
 
+## Vanished layers
+
+`z_fixed`, `zstar`, `zstar_full` and wet/dry leave inert filler layers with `h <= H_VANISHED`. Because the
+stored tracer is the concentration `c`, a filler needs no maintenance: it keeps the last `c` it held, and
+transport weights it by its own (tiny) thickness. There is no invariant to enforce and no sweep. The rules:
+
+- **Deposits are refused.** A layer at or below `H_VANISHED` takes no source (`rdb_conc_add_source` returns
+  `c`); a caller that books the deposit in a budget books `rdb_conc_accepted_source`, so budgets record only
+  what the tracer received.
+- **Faces and interfaces next to a filler are closed** for horizontal diffusion, Redi, and the KPP non-local
+  interface flux. Vertical diffusion solves on `c` with identity rows for fillers.
+- **Shortwave passes through.** A filler is transparent; light that reaches the bed lands on the deepest live
+  layer, and the surface lump is removed from `k_top`, the layer it was deposited into.
+- **Remap** runs on `c`. The target is bounded by the source cells that contributed to it, and an empty target
+  takes the `c` of the source cell holding its bottom interface. The bounding shows up in the remap budget slot.
+- **Readers** that integrate a filler's `c` over a depth it does not occupy (FV-MOM6 pressure force, BBL, Redi,
+  diagnostics) substitute the donor live layer through `rdb_vl_column_conc`.
+
 ## Where to read more
 
 Contracts live in the module that owns them. `docs/codebase/CONTRACTS.md` has the full lookup table and
@@ -132,7 +151,8 @@ the rules that have no single owner (indexing, `is_init`, memory gating, one rho
 
 | Topic | Read |
 |---|---|
-| Vanished layers: invariant I1′, the pool, who may substitute what | header of `src/shared_module_utilities/rdb_vanished_layer.inc` |
+| Vanished layers: the live predicate, the donor read, who may substitute what | header of `src/shared_module_utilities/rdb_vanished_layer.inc` |
+| Tracer source deposits and the refusal rule | header of `src/shared_module_utilities/rdb_tracer_conc.inc` |
 | `p_top`, the three pressures, rules for a builder joining the seam | `p_top` in `src/core/rdb_multilayer_state.F90` |
 | `eta_forcing` seam: tide + SAL + surface pressure | `src/core/ocean/forcing/rdb_ocean_p_surf.F90` |
 | `F_slow` seam, the `bt_rem` accumulator, frozen-reference subtraction | `src/core/ocean/kernels/barotropic/rdb_barotropic_coupling.F90` |

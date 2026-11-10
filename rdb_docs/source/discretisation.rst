@@ -86,10 +86,10 @@ directionally split continuity-PPM** scheme. Per layer, per step:
 .. code-block:: text
 
    1. zonal_flux                 Phi_x from h^n
-   2. tracer_advect_zonal        hTr <- hTr - dt d(Phi_x T)/dx   at h^n
-   3. apply_zonal                h   <- h^n - dt dPhi_x/dx       (= h*)
+   2. tracer_advect_zonal        T <- (h^n T - dt d(Phi_x T)/dx) / h*
+   3. apply_zonal                h <- h^n - dt dPhi_x/dx         (= h*)
    4. meridional_flux            Phi_y from h*
-   5. tracer_advect_meridional   hTr <- hTr - dt d(Phi_y T)/dy   at h*
+   5. tracer_advect_meridional   T <- (h* T - dt d(Phi_y T)/dy) / h^{n+1}
    6. apply_meridional           h   <- h* - dt dPhi_y/dy        (= h^{n+1})
 
 The mass flux through an x-face is

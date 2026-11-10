@@ -358,12 +358,11 @@ contains
                        "the on-target seed must give every shelf column 4 fillers")
             if (allocated(error)) exit leg_on
             ! The stratification, PER COORDINATE LAYER (5, 7, ..., 15 degC
-            ! bed to surface), with every filler holding its DONOR's value
-            ! (I1′).  Written here rather than taken from `&tracer_nml`:
-            ! a per-index IC gives the shelf's fillers 5-11 degC of
-            ! FOREIGN content, which the seed's I1′ pooling then folds into
-            ! the live partial cell above (12.9998 instead of 13 degC, a
-            ! real density step at an OPEN face).  This state has no
+            ! bed to surface), with every filler holding its DONOR's value.
+            ! Written here rather than taken from `&tracer_nml`: a per-index
+            ! IC gives the shelf's fillers 5-11 degC of FOREIGN
+            ! concentration, which an open-face reader would integrate
+            ! (a real density step at an OPEN face).  This state has no
             ! horizontal density difference at any open face.
             allocate (t_seed(nx_p, ny_p, nz_p), s_seed(nx_p, ny_p, nz_p))
             s_seed = 35.0_c_double

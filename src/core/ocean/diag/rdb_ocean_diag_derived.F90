@@ -705,14 +705,14 @@ contains
       end select
    end subroutine fill_salinity_sp
 
-   pure subroutine fill_temperature_pt_impl(cons, h_layer, hTr_T, hTr_S, buf)
+   pure subroutine fill_temperature_pt_impl(cons, h_layer, c_T, c_S, buf)
       !! `buf = theta` on live layers (`cons`: from CT, SA; else a copy of
       !! T), IEEE NaN on vanished ones.
       logical, intent(in) :: cons
       ! assumed-shape-ok: diag fill — fires once per output frame (cadence-bounded).
       real(wp), intent(in)    :: h_layer(:, :, :)
-      real(wp), intent(in)    :: hTr_T(:, :, :)  ! assumed-shape-ok: diag fill — cadence-bounded
-      real(wp), intent(in)    :: hTr_S(:, :, :)  ! assumed-shape-ok: diag fill — cadence-bounded
+      real(wp), intent(in)    :: c_T(:, :, :)  ! assumed-shape-ok: diag fill — cadence-bounded
+      real(wp), intent(in)    :: c_S(:, :, :)  ! assumed-shape-ok: diag fill — cadence-bounded
       real(wp), intent(inout) :: buf(:, :, :)  ! assumed-shape-ok: diag fill — cadence-bounded
       integer :: i, j, k, nx, ny, nz
       real(wp) :: qnan, h
@@ -725,10 +725,10 @@ contains
          ! NaN missing-data sentinel, as `fill_tracer_impl`.
          if (rdb_vl_is_live(h)) then
             if (cons) then
-               buf(i, j, k) = pt_from_ct(hTr_S(i, j, k), &
-                                         hTr_T(i, j, k))
+               buf(i, j, k) = pt_from_ct(c_S(i, j, k), &
+                                         c_T(i, j, k))
             else
-               buf(i, j, k) = hTr_T(i, j, k)
+               buf(i, j, k) = c_T(i, j, k)
             end if
          else
             buf(i, j, k) = qnan
@@ -736,13 +736,13 @@ contains
       end do
    end subroutine fill_temperature_pt_impl
 
-   pure subroutine fill_salinity_sp_impl(cons, h_layer, hTr_S, buf)
+   pure subroutine fill_salinity_sp_impl(cons, h_layer, c_S, buf)
       !! `buf = SP` on live layers (`cons`: `sp_from_sr(SA)`; else a copy
       !! of S), IEEE NaN on vanished ones.
       logical, intent(in) :: cons
       ! assumed-shape-ok: diag fill — fires once per output frame (cadence-bounded).
       real(wp), intent(in)    :: h_layer(:, :, :)
-      real(wp), intent(in)    :: hTr_S(:, :, :)  ! assumed-shape-ok: diag fill — cadence-bounded
+      real(wp), intent(in)    :: c_S(:, :, :)  ! assumed-shape-ok: diag fill — cadence-bounded
       real(wp), intent(inout) :: buf(:, :, :)  ! assumed-shape-ok: diag fill — cadence-bounded
       integer :: i, j, k, nx, ny, nz
       real(wp) :: qnan, h
@@ -755,9 +755,9 @@ contains
          ! NaN missing-data sentinel, as `fill_tracer_impl`.
          if (rdb_vl_is_live(h)) then
             if (cons) then
-               buf(i, j, k) = sp_from_sr(hTr_S(i, j, k))
+               buf(i, j, k) = sp_from_sr(c_S(i, j, k))
             else
-               buf(i, j, k) = hTr_S(i, j, k)
+               buf(i, j, k) = c_S(i, j, k)
             end if
          else
             buf(i, j, k) = qnan

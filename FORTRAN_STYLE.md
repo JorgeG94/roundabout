@@ -6,7 +6,7 @@ own.
 
 This guide is the *how*. [`CLAUDE.md`](CLAUDE.md) is the companion: its
 **Gotchas** section records the traps that have already cost real debugging
-time (GPU data motion, compiler bugs, the vanished-layer rule), and it wins
+time (GPU data motion, compiler bugs, the thin-layer constants), and it wins
 where the two disagree. Much of what follows is enforced by the pre-commit
 hooks and CI (see [Enforcement](#enforcement)); the rest is checked in review,
 including by the `pr-review` skill (`.claude/skills/pr-review/SKILL.md`).
@@ -193,7 +193,7 @@ end function face_thickness
 
 ```fortran
 ! Bad - a public entry point taking the pieces
-subroutine sponge_apply(h_layer, hTr, u, v, nx, ny, nz, ng, tau, width, dt)
+subroutine sponge_apply(h_layer, c, u, v, nx, ny, nz, ng, tau, width, dt)
 
 ! Good - the public entry point takes the objects ...
 subroutine sponge_apply(sponge, ms, grid, dt)
@@ -666,7 +666,7 @@ end do
 ### What remains genuinely painful
 
 - **Indirect access through a derived-type-array component inside a kernel.**
-  Writing `ms%tracers(it)%hTr(i, j, k)` directly inside a `do concurrent` or
+  Writing `ms%tracers(it)%c(i, j, k)` directly inside a `do concurrent` or
   `!$acc parallel loop` hits `CUDA_ERROR_ILLEGAL_ADDRESS`: two levels of
   descriptor indirection aren't reachable on the device. **Fix: outer shim +
   inner impl.** The outer routine dereferences the registry on the host and
@@ -679,15 +679,15 @@ end do
   ```fortran
   ! Bad - the kernel chases the registry indirection on the device
   do concurrent (k = 1:nz, j = 1:ny, i = 1:nx)
-     ms%tracers(it)%hTr(i, j, k) = ms%tracers(it)%hTr(i, j, k)*(1.0_wp - rate(i, j))
+     ms%tracers(it)%c(i, j, k) = ms%tracers(it)%c(i, j, k)*(1.0_wp - rate(i, j))
   end do
 
   ! Good - the shim hands a flat array to the kernel
-  call relax_tracer_impl(ms%tracers(it)%hTr, rate, nx, ny, nz)
+  call relax_tracer_impl(ms%tracers(it)%c, rate, nx, ny, nz)
 
-  pure subroutine relax_tracer_impl(hTr, rate, nx, ny, nz)
+  pure subroutine relax_tracer_impl(c, rate, nx, ny, nz)
      integer, intent(in) :: nx, ny, nz
-     real(wp), intent(inout) :: hTr(nx, ny, nz)
+     real(wp), intent(inout) :: c(nx, ny, nz)
      real(wp), intent(in) :: rate(nx, ny)
      ! ...
   end subroutine relax_tracer_impl
@@ -989,7 +989,7 @@ end module rdb_ocean_example
   `fortitude` (language hygiene; `fortitude.toml`, line length 178; skips
   `tests/`, `benchmarks/` and `tools/`), and the project hooks:
   `no-mpi-in-rdb`, `dc-assumed-shape`, `dc-intrinsic-shadow`, `dc-transfer`,
-  `decl-order`, `vanished-layer`, `openmp-portability`,
+  `decl-order`, `openmp-portability`,
   `check-closure-matrix`, `test-regime-labels`, `check-bytes-accounting`.
   Run `pre-commit run --all` before committing.
 - **CI**: the compiler matrix above, the MPI legs, the tier-2 stability sweep

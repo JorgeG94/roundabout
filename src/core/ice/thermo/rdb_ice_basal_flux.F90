@@ -66,7 +66,7 @@ contains
                                        grid%nx_total, grid%ny_total)
    end subroutine ice_compute_basal_flux
 
-   pure subroutine ice_compute_basal_flux_impl(hTr_T, hTr_S, h_layer, wet_mask, m_ice, eos, &
+   pure subroutine ice_compute_basal_flux_impl(c_T, c_S, h_layer, wet_mask, m_ice, eos, &
                                                fb, sst_seam, ssurf_seam, tfw_seam, &
                                                dt_therm, nghost, ncat, nz, nx, ny)
       !! Device kernel over PHYSICAL cells (ghosts excluded — same
@@ -88,8 +88,8 @@ contains
       !! arrays that use them. Inner `if` gate only (never a masked
       !! `do concurrent` header).
       integer, intent(in) :: nghost, ncat, nz, nx, ny
-      real(wp), intent(in) :: hTr_T(nx, ny, nz)
-      real(wp), intent(in) :: hTr_S(nx, ny, nz)
+      real(wp), intent(in) :: c_T(nx, ny, nz)
+      real(wp), intent(in) :: c_S(nx, ny, nz)
       real(wp), intent(in) :: h_layer(nx, ny, nz)
       real(wp), intent(in) :: wet_mask(nx, ny)
       real(wp), intent(in) :: m_ice(nx, ny, ncat)
@@ -118,8 +118,8 @@ contains
          tfw_seam(i, j) = 0.0_wp
          h = h_layer(i, j, nz)
          if (wet_mask(i, j) > 0.5_wp .and. h > H_VANISHED) then
-            sst = hTr_T(i, j, nz)
-            s_surf = hTr_S(i, j, nz)
+            sst = c_T(i, j, nz)
+            s_surf = c_S(i, j, nz)
             tfw = eos_freezing_point(eos, s_surf, 0.0_wp)
             ! OCEAN-side available heat: model T, S, T_f (CT, SA, CT liquidus
             ! under cons_abs) -- formed BEFORE the ice-boundary conversion.

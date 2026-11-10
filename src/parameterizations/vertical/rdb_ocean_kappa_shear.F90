@@ -427,7 +427,7 @@ contains
    pure subroutine kappa_shear_compute(grid, this, ms, dt, wet_t, wet_u, wet_v)
       !! Run kappa-shear over the domain: fill `this%kd_int` (interface
       !! diffusivity).  Call at thermo cadence with the thermo dt.
-      !! Outer shim: dereferences the tracer-registry hTr arrays on the
+      !! Outer shim: dereferences the tracer-registry c arrays on the
       !! host (the array-of-DT indirection blocks NVHPC device codegen),
       !! then forwards to the column kernel.  Velocities reach the
       !! kernel as the C-grid face arrays, face-averaged to tracer
@@ -486,7 +486,7 @@ contains
       !!
       !! Pipeline:
       !!   gather (FLIP global bottom-up -> local surface-down): h
-      !!          (floored), u,v face-averaged to centre, T,S = hTr/h.
+      !!          (floored), u,v face-averaged to centre, T,S = c (stored concentration).
       !!   D4 (massless_merge on + column has a vanished layer): build the
       !!          merge maps, fold vanished layers onto the massive
       !!          sub-grid (nzc<=nz), solve there, interp kappa/TKE back.
@@ -504,9 +504,9 @@ contains
       ! ms%tracers(idx)%c before passing; size varies per tracer slot
       ! (see CLAUDE.md "outer-shim + flat-impl" pattern); thermo cadence.
       real(wp), intent(in) :: hT(:, :, :)
-         !! Temperature tracer hTr (degC*m), host-dereferenced.
+         !! Temperature concentration (degC), host-dereferenced.
       real(wp), intent(in) :: hS(:, :, :)  ! assumed-shape-ok: tracer registry outer-shim; thermo cadence
-         !! Salinity tracer hTr (PSU*m), host-dereferenced.
+         !! Salinity concentration (PSU), host-dereferenced.
       real(wp), intent(in) :: dt
 
       integer :: i, j, k, kg, nx, ny, nz, nzc
@@ -668,8 +668,8 @@ contains
       !!         repeated evaluation is bitwise identical to MOM6's
       !!         precomputed h_at_u/h_at_v Pass A, non-OBC-bug form).
       !!   T,S : 4-cell mask-AND-thickness-weighted average.  The
-      !!         registry stores hTr = h*T, which is exactly the
-      !!         weighted quantity, so we sum wet*hTr directly.
+      !!         registry stores the concentration c, so the corner value
+      !!         is sum(wet*h*c)/sum(wet*h).
       !!   h   : 4-cell mask-weighted average (no thickness weight —
       !!         it IS the thickness).
       !! Returns RAW h (no floor) — the caller decides floor vs

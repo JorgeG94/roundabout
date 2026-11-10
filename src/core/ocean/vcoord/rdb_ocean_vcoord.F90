@@ -270,7 +270,7 @@ module rdb_ocean_vcoord
       real(wp), allocatable :: remap_conc_t(:, :, :)
          !! Layer-mean T concentration scratch for the `VCOORD_RHO`
          !! density inversion, shape `(nx, ny, nz)`.  Built from
-         !! `hTr / remap_h_old` (vanishing-layer-guarded) once per remap.
+         !! the stored `c` (donor-substituted on a vanished layer) once per remap.
       real(wp), allocatable :: remap_conc_s(:, :, :)
          !! Layer-mean S concentration scratch for `VCOORD_RHO`, shape
          !! `(nx, ny, nz)`.

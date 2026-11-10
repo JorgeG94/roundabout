@@ -48,7 +48,7 @@ module rdb_ice_frazil_uptake
    !! [PSU·kg/m²/s]. The ocean's water MASS is not reduced (volume-
    !! conserving virtual-salt-flux ocean — MOM6/SIS2 default); the
    !! closed-budget identity is exact by construction:
-   !! `rho0*Delta(sum_k hTr_S) + salt_into_ice == m_frozen*s_surf` per
+   !! `rho0*Delta(sum_k h·c_S) + salt_into_ice == m_frozen*s_surf` per
    !! cell (`rho0 = sf%rho0`; the surface-flux apply gives
    !! `Delta(hS) = Q_salt*dt_therm/rho0`). Freshwater/mass coupling is
    !! PR-3c+ territory. NOTE: when `s_surf < ICE_BULK_SALINITY` the
@@ -137,7 +137,7 @@ contains
       end if
    end subroutine ice_frazil_uptake
 
-   pure subroutine ice_frazil_uptake_impl(hTr_T, hTr_S, h_layer, wet_mask, eos, &
+   pure subroutine ice_frazil_uptake_impl(c_T, c_S, h_layer, wet_mask, eos, &
                                           frazil_heat, m_ice, m_snow, enth_ice, sal_ice, &
                                           m_frozen_diag, salt_flux_diag, &
                                           dt_therm, nghost, ncat, nk, nz, nx, ny)
@@ -161,8 +161,8 @@ contains
       !! spend it, matching the "never discard a bank" contract of
       !! `rdb_ice_frazil`.
       integer, intent(in) :: nghost, ncat, nk, nz, nx, ny
-      real(wp), intent(in) :: hTr_T(nx, ny, nz)
-      real(wp), intent(in) :: hTr_S(nx, ny, nz)
+      real(wp), intent(in) :: c_T(nx, ny, nz)
+      real(wp), intent(in) :: c_S(nx, ny, nz)
       real(wp), intent(in) :: h_layer(nx, ny, nz)
       real(wp), intent(in) :: wet_mask(nx, ny)
       type(eos_t), intent(in) :: eos
@@ -195,8 +195,8 @@ contains
          salt_flux_diag(i, j) = 0.0_wp
          h = h_layer(i, j, nz)
          if (wet_mask(i, j) > 0.5_wp .and. h > H_VANISHED .and. frazil_heat(i, j) > 0.0_wp) then
-            sst = hTr_T(i, j, nz)
-            s_surf = hTr_S(i, j, nz)
+            sst = c_T(i, j, nz)
+            s_surf = c_S(i, j, nz)
             tfw = eos_freezing_point(eos, s_surf, 0.0_wp)
             if (cons) then
                ! Ice-boundary conversion (IOC/SCOR/IAPSO 2010; McDougall &
@@ -227,7 +227,7 @@ contains
       end do
    end subroutine ice_frazil_uptake_impl
 
-   pure subroutine ice_frazil_uptake_multicat_impl(hTr_T, hTr_S, h_layer, wet_mask, eos, &
+   pure subroutine ice_frazil_uptake_multicat_impl(c_T, c_S, h_layer, wet_mask, eos, &
                                                    frazil_heat, part_size, m_ice, m_snow, &
                                                    enth_ice, sal_ice, &
                                                    m_frozen_diag, salt_flux_diag, &
@@ -266,8 +266,8 @@ contains
       !! arrays that use them. Inner `if` gate only, serial `do cat` scan
       !! for k_merge — never a masked `do concurrent` header.
       integer, intent(in) :: nghost, ncat, nk, nz, nx, ny
-      real(wp), intent(in) :: hTr_T(nx, ny, nz)
-      real(wp), intent(in) :: hTr_S(nx, ny, nz)
+      real(wp), intent(in) :: c_T(nx, ny, nz)
+      real(wp), intent(in) :: c_S(nx, ny, nz)
       real(wp), intent(in) :: h_layer(nx, ny, nz)
       real(wp), intent(in) :: wet_mask(nx, ny)
       type(eos_t), intent(in) :: eos
@@ -304,8 +304,8 @@ contains
          salt_flux_diag(i, j) = 0.0_wp
          h = h_layer(i, j, nz)
          if (wet_mask(i, j) > 0.5_wp .and. h > H_VANISHED .and. frazil_heat(i, j) > 0.0_wp) then
-            sst = hTr_T(i, j, nz)
-            s_surf = hTr_S(i, j, nz)
+            sst = c_T(i, j, nz)
+            s_surf = c_S(i, j, nz)
             tfw = eos_freezing_point(eos, s_surf, 0.0_wp)
             if (cons) then
                ! Ice-boundary conversion (IOC/SCOR/IAPSO 2010; McDougall &

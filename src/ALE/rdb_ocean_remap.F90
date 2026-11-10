@@ -6,21 +6,18 @@ module rdb_ocean_remap
    !! `rdb_remap_column` (shared with coastal); this module wires it across the
    !! registered tracer slot list plus the face-velocity pass.
    !!
-   !! Per-column conservation: sum_k(hTr) is preserved to round-off (the
+   !! Per-column conservation: sum_k(h*c) is preserved to round-off (the
    !! content the bounding moves and the few-ulp sliver of a column-total
    !! mismatch land in the remap budget slot, which is how they are measured).
    !!
-   !! **The tracer remap computes on CONCENTRATION** (White & Adcroft 2008;
-   !! Griffies et al. 2020).  `c_old` is the I1′-aware column concentration
-   !! (`rdb_vl_column_conc`: `hTr/h` on a live layer, the donor's `c` on a
-   !! filler); the PPM reconstruction (Colella & Woodward 1984) and the
-   !! overlap integral run on `c`, giving `c_new` directly; the target is
-   !! bounded by the source cells that contributed and an empty target takes
-   !! the mean of the source cell containing its bottom interface.  The tracer
-   !! is still STORED as content, so the commit is `hTr = c_new·h_new`; there
-   !! are no read/write pool merges and no defect fold around the kernel.  The
-   !! tail `enforce_vanished_content` (I1′) is the only place fillers are
-   !! re-pooled.
+   !! **The tracer remap computes on the stored CONCENTRATION** (White &
+   !! Adcroft 2008; Griffies et al. 2020).  The PPM reconstruction (Colella &
+   !! Woodward 1984) and the overlap integral run on `c`, giving `c_new`
+   !! directly; a vanished source layer is just a cell value in the stencil
+   !! (it keeps its last `c`); the target is bounded by the source cells that
+   !! contributed, and an empty target takes the mean of the source cell
+   !! containing its bottom interface.  There are no read/write pool merges
+   !! and no defect fold around the kernel.
 #ifdef LFORTRAN_PASSING
    use rdb_constants, only: wp, REMAP_PPM, H_VANISHED, H_DIV_EPS
 #else
@@ -44,8 +41,6 @@ module rdb_ocean_remap
    ! literal here, which is a third definition waiting to drift from the
    ! constant of record.
    !
-   ! The per-LAYER donor read now goes through `rdb_vl_column_conc`, the included
-   ! single definition (`src/shared_module_utilities/rdb_vanished_layer.inc`).
    ! Every test of the marker is a STRICT `>`: a layer sitting exactly ON it
    ! reads as vanished, which is what the geometric vcoord families rely on
    ! (see `rdb_vcoord :: vcoord_h_min_role`).
@@ -346,7 +341,7 @@ contains
       !!    target's bottom interface (the topmost cell if it lies above the
       !!    column) — the water that interface sits in, never a made-up `0`.
       !! `clamp_amt(k) = h_new(k)·(c_new_final − c_new_raw)` is the content
-      !! the closure moves; it is part of `hTr_new − hTr_old`, hence of the
+      !! the closure moves; it is part of `h_new·c_new − h_old·c_old`, hence of the
       !! remap budget slot.
       !!
       !! **Boundary cells under `bnd_extrap`.**  The linear-exact boundary
@@ -653,12 +648,8 @@ contains
       !!  1. `do concurrent(j,i)`, serial `k`: interface prefix sums
       !!     `z_old(k) = z_old(k-1) + h_old(k)`, `z_new` likewise (from 0,
       !!     increasing `k`, as `remap_column_ppm`) and the source
-      !!     concentration `c_old = hTr/h_old` per layer; a filler
-      !!     (`h_old <= H_VANISHED`) reads the concentration of its donor, the
-      !!     nearest live layer above it (the topmost live layer for fillers
-      !!     above the water), `0` on a column with no live layer: the
-      !!     I1′-aware `rdb_vl_column_conc`, on global scratch.  No pooling,
-      !!     no filler pre-scan: a filler is just a cell value.
+      !!     concentration scratch `c_old = c` per layer.  No pooling, no
+      !!     filler pre-scan: a filler is just a cell value.
       !!  2. `do concurrent(k,j,i)`, one thread per SOURCE cell: raw edges
       !!     from the window `c_old(k-2..k+2)`, Colella & Woodward (1984)
       !!     limiter, the limited parabola stored in `q_lft`/`q_rgt`/`q_six`.
@@ -667,10 +658,10 @@ contains
       !!     cells, `c_new = integral/h_new`, bounded to the range of those
       !!     cells' reconstruction stencils (an empty target, `h_new <= 0`, or one with no
       !!     contributor takes the mean of the source cell containing its
-      !!     bottom interface), then the commit: `budget += c_new·h_new − hTr`
-      !!     and `hTr = c_new·h_new`.  Kernel 3 reads `hTr` of its OWN cell
-      !!     only (all neighbours' content went through `c_old` in kernel 1),
-      !!     so the commit needs no separate pass.
+      !!     bottom interface), then the commit: `budget += c_new·h_new − c·h_old`
+      !!     and `c = c_new`.  Kernel 3 reads `c` of its OWN cell only (all
+      !!     neighbours went through `c_old` in kernel 1), so the commit needs
+      !!     no separate pass.
       !!
       !! **Why kernel 3 equals the reference walk.**  The reference computes
       !! each target's `integral` as `0.0` plus, in increasing source index
@@ -926,7 +917,7 @@ contains
       !! Face-velocity pass of the ALE remap. Remaps u_face_x_layer and
       !! v_face_y_layer h_old→h_new using arithmetic-mean face thicknesses and
       !! the per-column kernel. Public only for the unit-test suite.
-      !! Velocity treated as the face "concentration" (analogous to T=hTr/h at
+      !! Velocity treated as the face "concentration" (analogous to the tracer c at
       !! centres); per-face conservation sum_k(h_face·u_face) preserved
       !! (momentum-conserving). Outer-wall faces take the adjacent cell's
       !! thickness verbatim (no across-cell to average).
@@ -1413,21 +1404,21 @@ contains
       end do
    end subroutine ocean_remap_scan_preconditions
 
-   pure subroutine build_ts_concentration(nx, ny, nz, h_old, hTr_T, hTr_S, conc_t, conc_s)
+   pure subroutine build_ts_concentration(nx, ny, nz, h_old, c_T, c_S, conc_t, conc_s)
       !! Copy the stored layer-mean T/S concentrations into the VCOORD_RHO /
       !! HYCOM density-inversion scratch (the tracers ARE concentrations, so
       !! this is a plain copy; `h_old` is kept for the call signature).
       !! Flat-impl, explicit-shape; one cadence-bounded launch per remap.
       integer, intent(in) :: nx, ny, nz
       real(wp), intent(in) :: h_old(nx, ny, nz)
-      real(wp), intent(in) :: hTr_T(nx, ny, nz)
-      real(wp), intent(in) :: hTr_S(nx, ny, nz)
+      real(wp), intent(in) :: c_T(nx, ny, nz)
+      real(wp), intent(in) :: c_S(nx, ny, nz)
       real(wp), intent(out) :: conc_t(nx, ny, nz)
       real(wp), intent(out) :: conc_s(nx, ny, nz)
       integer :: i, j, k
       do concurrent(k=1:nz, j=1:ny, i=1:nx)
-         conc_t(i, j, k) = hTr_T(i, j, k)
-         conc_s(i, j, k) = hTr_S(i, j, k)
+         conc_t(i, j, k) = c_T(i, j, k)
+         conc_s(i, j, k) = c_S(i, j, k)
       end do
    end subroutine build_ts_concentration
 

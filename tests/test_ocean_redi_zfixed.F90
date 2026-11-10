@@ -1,7 +1,7 @@
 !! Redi continuous neutral diffusion on `z_fixed` with partial-step CLOSED
 !! faces (`&vcoord_nml zfixed_closed_faces`).  Every case runs the
-!! production device kernels — `redi_calc_coeffs` + `redi_apply_flux` (+ the
-!! I1′ enforcement point and its scan for the multi-step case) — over a
+!! production device kernels — `redi_calc_coeffs` + `redi_apply_flux` (for the
+!! multi-step case) — over a
 !! hand-specified staircase whose layer thicknesses AND closed-face masks come
 !! from the SAME production builders a configured run uses
 !! (`ocean_vcoord_z_fixed_target_uniform` → `ocean_vcoord_closed_face_masks`),
@@ -16,7 +16,7 @@
 !! effective thickness scatters (Phase B) into native layers `nz+1-KoL` /
 !! `nz+1-KoR`, and both must be open at the face and live on both sides
 !! (`pairing_census`).  Phase B is then checked on the tracer field itself
-!! (fillers untouched, content, extrema, finiteness, I1′).
+!! (fillers untouched, content, extrema, finiteness).
 !!
 !!  1. `uniform_ts_zero_flux` — uniform T/S over the staircase (every
 !!     neutral-surface comparison is a tie): the Redi update is identically
@@ -28,7 +28,7 @@
 !!     shallow side's bed) has the density of live water across it: NSTEP
 !!     steps, no pairing touches a closed face-layer or a filler, fillers'
 !!     content untouched by Redi, T and S content conserved to round-off, no
-!!     new extrema, all finite, I1′ after every step.  Fails on the pre-port
+!!     new extrema, all finite.  Fails on the pre-port
 !!     Redi (full-column pairing: closed face-layers paired with hEff up to
 !!     the layer thickness).
 !!  3. `ice_draft_open_window` — fillers ABOVE the open column (an ice
@@ -45,7 +45,7 @@
 !!     1-degree Southern Ocean reached at step 12 (a thin partial cell
 !!     beside two open filler faces, drained by the GM bolus flux folded into
 !!     the same continuity sweeps as the resolved flux).  Redi must read that
-!!     layer's concentration by the I1′ rule (`rdb_vl_column_conc`: a
+!!     layer's concentration through the donor read (`rdb_vl_column_conc`: a
 !!     non-live layer reads its donor's), so every live cell stays inside the
 !!     initial live range, no cell's content exceeds 2·max|c|·H_NOM, and
 !!     everything stays finite.  Phase A (`redi_calc_coeffs`) runs on the
@@ -124,8 +124,7 @@ contains
       !! `(1,1,1)` placeholders and the knob is off.
       !!
       !! T = T0 + gz*z + gx*x + gy*y and S = S0 + sx*x + sy*y at the NOMINAL
-      !! layer height; fillers are then given their donor's concentration
-      !! and the host twin of the enforcement point establishes I1′.
+      !! layer height; fillers are then given their donor's concentration.
       type(hgrid_t), intent(out) :: grid
       type(ocean_metrics_t), intent(inout) :: metrics
       type(multilayer_state_t), intent(inout) :: ms

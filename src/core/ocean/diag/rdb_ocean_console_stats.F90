@@ -222,7 +222,7 @@ contains
       !! un-instrumented interior source is active.
       !!
       !! `horiz_adv_budget_valid = .false.` declares that some horizontal
-      !! tracer transport moved `hTr` without being recorded in
+      !! tracer transport moved tracer content without being recorded in
       !! `*_budget_horiz_adv`, so a "closed" residual read off that
       !! accumulator would be WRONG.
       !!
@@ -249,7 +249,7 @@ contains
       !! PR-23 (real sponge) note: this gate used to carry a
       !! `sponge_relax_tracers` fall-back — the legacy band sponge's tracer
       !! sink was an un-instrumented interior source. Both sponge paths are
-      !! now instrumented (the legacy band's `hTr` sink was folded into the
+      !! now instrumented (the legacy band's content sink was folded into the
       !! same accumulators the map-driven path uses — see
       !! `ms%salt_budget_sponge` / `heat_budget_sponge` and
       !! `ocean_heat_src_sum` / `ocean_salt_src_sum`), so the gate is dead
@@ -775,10 +775,10 @@ contains
       total = acc
    end function compute_total_h
 
-   function compute_total_tracer(hTr, h, areaT, nghost) result(total)
+   function compute_total_tracer(c, h, areaT, nghost) result(total)
       !! `Σ h(i,j,k)·c(i,j,k)·areaT(i,j)` over PHYSICAL cells (ghosts excluded).
       !! Same explicit-reduction pattern as `compute_total_h`.
-      real(wp), intent(in) :: hTr(:, :, :)
+      real(wp), intent(in) :: c(:, :, :)
          !! Tracer concentration `c`.
       real(wp), intent(in) :: h(:, :, :)
          !! Layer thickness; the total is `Σ h·c·areaT`.
@@ -787,20 +787,20 @@ contains
       real(wp) :: total
       real(wp) :: acc, p
       integer :: i, j, k, nx, ny, nz, i_lo, i_hi, j_lo, j_hi
-      nx = min(size(hTr, 1), size(areaT, 1))
-      ny = min(size(hTr, 2), size(areaT, 2))
-      nz = size(hTr, 3)
+      nx = min(size(c, 1), size(areaT, 1))
+      ny = min(size(c, 2), size(areaT, 2))
+      nz = size(c, 3)
       i_lo = nghost + 1
       i_hi = nx - nghost
       j_lo = nghost + 1
       j_hi = ny - nghost
       acc = 0.0_wp
-      ! acc-kept: assumed-shape dummy hTr/areaT (dc-assumed-shape)
-      !$acc parallel loop collapse(3) reduction(+:acc) present(hTr, h, areaT)
+      ! acc-kept: assumed-shape dummy c/areaT (dc-assumed-shape)
+      !$acc parallel loop collapse(3) reduction(+:acc) present(c, h, areaT)
       do k = 1, nz
          do j = j_lo, j_hi
             do i = i_lo, i_hi
-               p = h(i, j, k)*hTr(i, j, k)
+               p = h(i, j, k)*c(i, j, k)
                acc = acc + p*areaT(i, j)
             end do
          end do
@@ -808,29 +808,29 @@ contains
       total = acc
    end function compute_total_tracer
 
-   function compute_total_content(hTr, areaT, nghost) result(total)
-      !! `Σ hTr(i,j,k)·areaT(i,j)` over PHYSICAL cells (ghosts excluded).
+   function compute_total_content(content, areaT, nghost) result(total)
+      !! `Σ content(i,j,k)·areaT(i,j)` over PHYSICAL cells (ghosts excluded).
       !! Same explicit-reduction pattern as `compute_total_h`.
-      real(wp), intent(in) :: hTr(:, :, :)
+      real(wp), intent(in) :: content(:, :, :)
       real(wp), intent(in) :: areaT(:, :)
       integer, intent(in) :: nghost
       real(wp) :: total
       real(wp) :: acc
       integer :: i, j, k, nx, ny, nz, i_lo, i_hi, j_lo, j_hi
-      nx = min(size(hTr, 1), size(areaT, 1))
-      ny = min(size(hTr, 2), size(areaT, 2))
-      nz = size(hTr, 3)
+      nx = min(size(content, 1), size(areaT, 1))
+      ny = min(size(content, 2), size(areaT, 2))
+      nz = size(content, 3)
       i_lo = nghost + 1
       i_hi = nx - nghost
       j_lo = nghost + 1
       j_hi = ny - nghost
       acc = 0.0_wp
-      ! acc-kept: assumed-shape dummy hTr/areaT (dc-assumed-shape)
-      !$acc parallel loop collapse(3) reduction(+:acc) present(hTr, areaT)
+      ! acc-kept: assumed-shape dummy content/areaT (dc-assumed-shape)
+      !$acc parallel loop collapse(3) reduction(+:acc) present(content, areaT)
       do k = 1, nz
          do j = j_lo, j_hi
             do i = i_lo, i_hi
-               acc = acc + hTr(i, j, k)*areaT(i, j)
+               acc = acc + content(i, j, k)*areaT(i, j)
             end do
          end do
       end do
@@ -1116,11 +1116,11 @@ contains
       end do
    end function compute_total_h_efp
 
-   function compute_total_tracer_efp(hTr, h, areaT, nghost) result(total)
+   function compute_total_tracer_efp(c, h, areaT, nghost) result(total)
       !! EFP twin of `compute_total_tracer`.  See `compute_total_h_efp`
       !! for the k-slab blocking design; ghost exclusion + extent clamping
       !! copied verbatim from `compute_total_tracer`.
-      real(wp), intent(in) :: hTr(:, :, :)
+      real(wp), intent(in) :: c(:, :, :)
          !! Tracer concentration `c`.
       real(wp), intent(in) :: h(:, :, :)
          !! Layer thickness; the total is `Σ h·c·areaT`.
@@ -1133,9 +1133,9 @@ contains
       integer(int64) :: slab_e(EFP_DIGITS)
       real(real64) :: val
 
-      nx = min(size(hTr, 1), size(areaT, 1))
-      ny = min(size(hTr, 2), size(areaT, 2))
-      nz = size(hTr, 3)
+      nx = min(size(c, 1), size(areaT, 1))
+      ny = min(size(c, 2), size(areaT, 2))
+      nz = size(c, 3)
       i_lo = nghost + 1
       i_hi = nx - nghost
       j_lo = nghost + 1
@@ -1154,10 +1154,10 @@ contains
          epoison = 0_int64
          ! acc-kept: EFP reproducing-sum path, left exactly as-is + assumed-shape dummy
          !$acc parallel loop collapse(2) reduction(+:e1,e2,e3,e4,e5,e6,epoison) &
-         !$acc&         private(val, d1, d2, d3, d4, d5, d6, dpoison) present(hTr, h, areaT)
+         !$acc&         private(val, d1, d2, d3, d4, d5, d6, dpoison) present(c, h, areaT)
          do j = j_lo, j_hi
             do i = i_lo, i_hi
-               val = real(h(i, j, k)*hTr(i, j, k), real64)*real(areaT(i, j), real64)
+               val = real(h(i, j, k)*c(i, j, k), real64)*real(areaT(i, j), real64)
                call efp_decompose_impl(val, d1, d2, d3, d4, d5, d6, dpoison)
                e1 = e1 + d1
                e2 = e2 + d2
@@ -1176,11 +1176,11 @@ contains
       end do
    end function compute_total_tracer_efp
 
-   function compute_total_content_efp(hTr, areaT, nghost) result(total)
+   function compute_total_content_efp(content, areaT, nghost) result(total)
       !! EFP twin of `compute_total_tracer`.  See `compute_total_h_efp`
       !! for the k-slab blocking design; ghost exclusion + extent clamping
       !! copied verbatim from `compute_total_tracer`.
-      real(wp), intent(in) :: hTr(:, :, :)
+      real(wp), intent(in) :: content(:, :, :)
       real(wp), intent(in) :: areaT(:, :)
       integer, intent(in) :: nghost
       type(efp_t) :: total
@@ -1190,9 +1190,9 @@ contains
       integer(int64) :: slab_e(EFP_DIGITS)
       real(real64) :: val
 
-      nx = min(size(hTr, 1), size(areaT, 1))
-      ny = min(size(hTr, 2), size(areaT, 2))
-      nz = size(hTr, 3)
+      nx = min(size(content, 1), size(areaT, 1))
+      ny = min(size(content, 2), size(areaT, 2))
+      nz = size(content, 3)
       i_lo = nghost + 1
       i_hi = nx - nghost
       j_lo = nghost + 1
@@ -1211,10 +1211,10 @@ contains
          epoison = 0_int64
          ! acc-kept: EFP reproducing-sum path, left exactly as-is + assumed-shape dummy
          !$acc parallel loop collapse(2) reduction(+:e1,e2,e3,e4,e5,e6,epoison) &
-         !$acc&         private(val, d1, d2, d3, d4, d5, d6, dpoison) present(hTr, areaT)
+         !$acc&         private(val, d1, d2, d3, d4, d5, d6, dpoison) present(content, areaT)
          do j = j_lo, j_hi
             do i = i_lo, i_hi
-               val = real(hTr(i, j, k), real64)*real(areaT(i, j), real64)
+               val = real(content(i, j, k), real64)*real(areaT(i, j), real64)
                call efp_decompose_impl(val, d1, d2, d3, d4, d5, d6, dpoison)
                e1 = e1 + d1
                e2 = e2 + d2

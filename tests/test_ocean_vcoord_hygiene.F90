@@ -393,7 +393,7 @@ contains
       !! melt off, from rest) on the v0.1.0 defaults: the knob spins up
       !! En ~ 1E-03 m2/s2 within 3 hours and holds it for 30 days,
       !! ~19 000x the layer-mean-density run (it went non-finite at day
-      !! 0.41 before I1' and bebt = 0.1) — the in-layer PLM/PPM edge build
+      !! 0.41 before the filler rule and bebt = 0.1) — the in-layer PLM/PPM edge build
       !! reads the inert top-side fillers as neighbouring water at the
       !! partial top cell (`cavity_rest_growth_diagnosis.md` §Q.0 item
       !! 9).  Until the

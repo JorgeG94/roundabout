@@ -95,7 +95,7 @@ contains
          !! Conservative Temperature / Absolute Salinity before they are
          !! stored (`convert_pot_prac_to_cons_abs`: SA first, then CT from
          !! the converted SA).  The conversion acts on T and S, never on
-         !! `hTr`.  Absent / `.false.` is bit-identical to before.
+         !! `c`.  Absent / `.false.` is bit-identical to before.
 
       integer :: ncid, ng, nx, ny, nz_ml, nz_src, local_ierr
       integer :: idx_S, idx_T, i, j, k

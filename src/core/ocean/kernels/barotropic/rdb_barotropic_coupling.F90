@@ -1888,8 +1888,7 @@ contains
       !! Companion of the `h` rescale in `apply_bt_correction`: the column's
       !! layers are scaled by `ratio = (H_ref + eta_end)/Σ_k h`, so the stored
       !! concentration is divided by `ratio` and the content `h*c` is
-      !! unchanged (conserved tracer mass; the legacy "hTr is not rescaled"
-      !! behaviour in the concentration storage).
+      !! unchanged (conserved tracer content).
       integer, intent(in) :: nx, ny, nz
       real(wp), intent(in) :: h_layer(nx, ny, nz)
       real(wp), intent(in) :: H_ref(nx, ny), eta_end(nx, ny)

@@ -81,7 +81,7 @@ Every guide is a specialisation of this. From the top-level `CLAUDE.md`:
    caught a real bug. Default to "add a test" over "audit the code".
 4. **`pre-commit run --all` + fortitude** — pass before committing.
 5. **`ctest` green on the GPU build** (never `-j N` — every worker shares one GPU;
-   `ctest -R rdb` is the rdb-only regression subset, ~177 tests).
+   `ctest -R rdb` is the rdb-only regression subset; `ctest -N -R rdb` gives the current count).
 6. **One capability per commit, one PR per capability.** Smaller PRs review faster
    and bisect cleanly. (Exception: several branches that each just add a namelist +
    IC + test → bundle into one `feat/<area>` PR.)

@@ -275,7 +275,7 @@ contains
             "slopes%set_bathymetry(barotropic%b) before enter_data"
       end if
 
-      ! Outer shim: dereference the tracer-registry hTr arrays (array of
+      ! Outer shim: dereference the tracer-registry c arrays (array of
       ! derived types ⇒ device indirection) on the host, pass the flat
       ! top-level allocatables into the flat-impl kernel.
       call ocean_slopes_compute_impl(grid, metrics, eos, slopes, ms, &
@@ -403,7 +403,7 @@ contains
       !! Fill massless layers in T/S with sensible values via one pass of
       !! constant-`kappa·dt` vertical diffusion — a SINGLE forward-elim +
       !! back-sub Thomas sweep per column (no iteration).  Operates on the
-      !! tracer-from-hTr conversion (`T = hTr/h`) and writes the scratch
+      !! stored concentrations (`T = c`) and writes the scratch
       !! `t_fill`/`s_fill`; the prognostic tracers are untouched.
       !!
       !! `kap_dt_x2 = 2·kappa·dt`; the inter-layer entrainment is

@@ -1,8 +1,7 @@
 !! Gent-McWilliams thickness diffusion on `z_fixed` with partial-step
 !! CLOSED faces (`&vcoord_nml zfixed_closed_faces`).  Every case runs the
 !! production device kernels — `ocean_slopes_compute` +
-!! `gm_compute_transports` (+ the GM operator `continuity_gm_apply` and
-!! the I1′ enforcement point for the multi-step case) — over a
+!! `gm_compute_transports` (+ the GM operator `continuity_gm_apply` for the multi-step case) — over a
 !! hand-specified staircase whose layer thicknesses AND closed-face masks
 !! come from the SAME production builders a configured run uses
 !! (`ocean_vcoord_z_fixed_target_uniform` → `ocean_vcoord_closed_face_masks`),
@@ -94,8 +93,7 @@ contains
       !! T is a function of NOMINAL layer depth plus a horizontal tilt
       !! `gx*x + gy*y`: with `gx = gy = 0` every column carries the same T
       !! in the same layer — a z-level (flat) stratification.  Fillers are
-      !! then given their donor's concentration (I1′) by the host twin of
-      !! the enforcement point.
+      !! then given their donor's concentration.
       type(hgrid_t), intent(out) :: grid
       type(ocean_metrics_t), intent(inout) :: metrics
       type(multilayer_state_t), intent(inout) :: ms

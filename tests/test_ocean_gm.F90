@@ -1096,8 +1096,8 @@ contains
    end subroutine test_ebt_config_refusals
 
    subroutine fill_layers(ms, h, ni, nj, nz)
-      !! Set `h_layer` and T/S content (T warm over cold, S uniform; a
-      !! filler carries its donor's concentration, I1').
+      !! Set `h_layer` and T/S concentration (T warm over cold, S uniform; a
+      !! filler carries its donor's value).
       type(multilayer_state_t), intent(inout) :: ms
       integer, intent(in) :: ni, nj, nz
       real(wp), intent(in) :: h(ni, nj, nz)

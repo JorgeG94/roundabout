@@ -353,7 +353,7 @@ module rdb_multilayer_state
          !! Set by `enter_data`, cleared by `exit_data`.  While locked,
          !! `register_passive_tracer` REFUSES: the device map snapshots
          !! `tracers(:)` element-by-element, so a slot appended after the
-         !! map has no device `hTr` and the first kernel touching it faults
+         !! map has no device `c` and the first kernel touching it faults
          !! on the `mem:separate` build.
 
       ! ---- Budget contributor slots ----
@@ -367,57 +367,57 @@ module rdb_multilayer_state
          !! recovers m³).  Shape (nx, ny, nz_ml).  Zero in a closed
          !! basin (perfect telescope).
       real(wp), allocatable :: heat_budget_surface(:, :, :)
-         !! hTr (K·m) change per cell per step attributed to the surface
+         !! Content `h*c` (K·m) change per cell per step attributed to the surface
          !! heat-flux kernel.  Populated only at `k_top(i,j)`, the first
          !! LIVE layer — which is `nz_ml` on every column with no
          !! top-side filler, i.e. everywhere but an ice-covered column
          !! under a quasi-geopotential coordinate; zero elsewhere.  Sign
          !! convention: positive = source into the ocean.
       real(wp), allocatable :: salt_budget_surface(:, :, :)
-         !! hTr (PSU·m) change per cell per step attributed to the
+         !! Content `h*c` (PSU·m) change per cell per step attributed to the
          !! surface salt-flux kernel.  Same shape + indexing convention
          !! as `heat_budget_surface` (`k_top`, not a literal `nz_ml`).
       real(wp), allocatable :: heat_budget_geothermal(:, :, :)
-         !! hTr (K·m) change per cell per step attributed to the
+         !! Content `h*c` (K·m) change per cell per step attributed to the
          !! geothermal bottom-heat-flux kernel.  Populated only at the
          !! lowest massive layer (k=1 in the common case); zero
          !! elsewhere.  Sign convention: positive = source into the
          !! ocean from below.
       real(wp), allocatable :: heat_budget_sponge(:, :, :)
-         !! hTr (K·m) change per cell per layer per step attributed to
+         !! Content `h*c` (K·m) change per cell per layer per step attributed to
          !! the map-driven sponge's tracer relaxation
          !! (`rdb_ocean_sponge::relax_tracer_budget_impl`).  Zero unless
          !! `&ocean_sponge_nml enable=.true., relax_tracers=.true.`.
          !! Sign convention: positive = source into the ocean (relaxing
          !! toward a warmer reference).  Not drained by the sponge.
       real(wp), allocatable :: salt_budget_sponge(:, :, :)
-         !! hTr (PSU·m) change per cell per layer per step attributed to
+         !! Content `h*c` (PSU·m) change per cell per layer per step attributed to
          !! the map-driven sponge's tracer relaxation.  Same shape +
          !! indexing convention as `heat_budget_sponge`.
       real(wp), allocatable :: heat_budget_vert_adv(:, :, :)
-         !! hTr (K·m) change per cell per layer per step attributed to
+         !! Content `h*c` (K·m) change per cell per layer per step attributed to
          !! the first-order-upwind vertical-advection kernel for
          !! temperature.  Closed-BC kernel: column sum telescopes to
          !! zero, so the spatial integral is zero to FP.
       real(wp), allocatable :: salt_budget_vert_adv(:, :, :)
-         !! hTr (PSU·m) change per cell per layer per step for
+         !! Content `h*c` (PSU·m) change per cell per layer per step for
          !! salinity.  Same closed-BC telescope property.
       real(wp), allocatable :: heat_budget_vdiff(:, :, :)
-         !! hTr (K·m) change per cell per layer per step attributed to
+         !! Content `h*c` (K·m) change per cell per layer per step attributed to
          !! the backward-Euler vertical-diffusion tridiag solve for
          !! temperature.  Closed BCs (no flux through bed or surface)
          !! ⇒ column sum telescopes to zero.
       real(wp), allocatable :: salt_budget_vdiff(:, :, :)
          !! Salinity analogue of `heat_budget_vdiff`.
       real(wp), allocatable :: heat_budget_hdiff(:, :, :)
-         !! hTr (K·m) change per cell per layer per step attributed to
+         !! Content `h*c` (K·m) change per cell per layer per step attributed to
          !! the Laplacian horizontal-diffusion kernel for temperature.
          !! Closed walls (wall faces forced to zero) ⇒ spatial integral
          !! telescopes to zero.
       real(wp), allocatable :: salt_budget_hdiff(:, :, :)
          !! Salinity analogue of `heat_budget_hdiff`.
       real(wp), allocatable :: heat_budget_horiz_adv(:, :, :)
-         !! hTr (°C·m) change per cell per layer, accumulated (summed)
+         !! Content `h*c` (°C·m) change per cell per layer, accumulated (summed)
          !! across BOTH RK2 stages from t=0 (`+=` each stage, never zeroed
          !! mid-step; no 0.5 weight here — the console applies it),
          !! attributed to the continuity-PPM HORIZONTAL tracer advection
@@ -433,7 +433,7 @@ module rdb_multilayer_state
          !! step.  Column-conservative ⇒ Σ_k = 0 per (i, j).  Non-zero
          !! residual flags a remap conservation leak.
       real(wp), allocatable :: heat_budget_remap(:, :, :)
-         !! Per-cell `hTr_new − hTr_old` from the ALE remap step for
+         !! Per-cell `h_new*c_new - h_old*c_old` from the ALE remap step for
          !! temperature.  Same column-telescope property.
       real(wp), allocatable :: salt_budget_remap(:, :, :)
          !! Salinity analogue.
@@ -681,7 +681,7 @@ contains
       !! init'd, or locked by `enter_data`).  MUST be called after `init`
       !! and BEFORE `enter_data` — and, on the ocean path, before
       !! `ocean_bc_state_init` sizes `bc%n_tracers`.  Caller populates
-      !! `hTr` once layer thicknesses exist, and may set
+      !! `c` once layer thicknesses exist, and may set
       !! `tracers(idx)%standard_name` / the pipeline opt-outs directly
       !! (public components).  S/T/age keep their indices.
       class(multilayer_state_t), intent(inout) :: this
@@ -722,7 +722,7 @@ contains
       call move_alloc(this%tracers, tmp)
       allocate (this%tracers(n_old + 1))
       ! Deep-copy the existing tracers (intrinsic assignment reallocates
-      ! the allocatable hTr / hTr0 components and copies their data).
+      ! the allocatable c / c0 components and copies their data).
       do it = 1, n_old
          this%tracers(it) = tmp(it)
       end do
@@ -743,7 +743,7 @@ contains
    subroutine multilayer_state_enter_data(this)
       !! Attach the C-grid multilayer allocatables to the device.  The
       !! tracer registry uses the two-step pattern: array descriptor
-      !! first, then each element's hTr / hTr0 — NVHPC stdpar can't
+      !! first, then each element's c / c0 — NVHPC stdpar can't
       !! dereference `tracers(it)%c` from a do-concurrent body
       !! otherwise.
       class(multilayer_state_t), intent(inout) :: this
@@ -795,7 +795,7 @@ contains
 
    subroutine multilayer_state_exit_data(this)
       !! Reverse of `enter_data`.  Copy out the prognostic fields and
-      !! the tracer hTr arrays (so post-run host inspection works),
+      !! the tracer c arrays (so post-run host inspection works),
       !! drop scratch + RK saves.  Tracer registry tears down per-
       !! element first, then the array descriptor — mirror of
       !! `enter_data` order.

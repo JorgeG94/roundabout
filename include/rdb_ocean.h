@@ -22,9 +22,9 @@
  * rdb_ocean_refresh_host() before dereferencing a stale pointer.
  * `generation` is the handle's outer-step count at the moment of the call.
  * Raw pointers point at FULL (ghost-inclusive) arrays; ghost width comes
- * from rdb_ocean_get_grid_info(). Tracer arrays are the raw `h*Tr` store
- * (NOT concentration) — dividing by `h_layer` (with an H_VANISHED guard) is
- * the caller's job, not this library's.
+ * from rdb_ocean_get_grid_info(). Tracer arrays are the stored
+ * CONCENTRATION (degC, psu, ...); the conserved content is `h_layer*c`.
+ * A vanished layer (h <= H_VANISHED) holds the last value it had.
  *
  * P2.5 scope (this revision): pre-create GEOMETRY INJECTION
  * (Oceananigans-style — docs/ocean_python_api_plan.md S5b) via a
@@ -397,7 +397,7 @@ int rdb_ocean_get_tracer_count(rdb_ocean_handle handle, int *count_out);
 int rdb_ocean_list_tracers(rdb_ocean_handle handle, int idx, char *buf,
                               int cap);
 
-/* Raw h*Tr store (NOT concentration) for the tracer named `name`
+/* Stored concentration (NOT h*Tr content) for the tracer named `name`
  * (name_len bytes, need not be NUL-terminated): (nx_total, ny_total,
  * nz_ml). RDB_OCEAN_ERR_NOT_FOUND if no tracer matches. */
 int rdb_ocean_get_tracer_ptr(rdb_ocean_handle handle, const char *name,

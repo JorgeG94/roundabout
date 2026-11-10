@@ -346,8 +346,8 @@ contains
    end function budget_total_mass
 
    pure function budget_total_tracer(ms, it, mask, areaT) result(total)
-      !! Total tracer content: Σ over masked interior of `hTr·areaT·weight`
-      !! over k.  `hTr` is thickness-weighted, so this is ∫(tracer·volume),
+      !! Total tracer content: Σ over masked interior of `h·c·areaT·weight`
+      !! over k, i.e. ∫(tracer·volume),
       !! the conserved quantity.  Public only for the unit-test suite.
       type(multilayer_state_t), intent(in) :: ms
       integer, intent(in) :: it

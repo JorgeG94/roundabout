@@ -164,7 +164,7 @@ The first attempt at this namelist (global viscosity, `nu_h = 2000`) ran
 for 573 days and then blew up: at outer step 27528 (day 573.5) the
 barotropic correction produced ~4000 non-finite faces
 (`[nan-catch] ... non-finite BT-correction faces`) and the run aborted on
-the vanished-layer invariant (`ERROR STOP I1' violated`). It reproduces
+a vanished-layer invariant check (`ERROR STOP I1' violated`, since removed with the content-form tracer store). It reproduces
 bit for bit, and from a day-540 restart.
 
 **Where.** Not in the ACC, not at the Antarctic coast, not in a western

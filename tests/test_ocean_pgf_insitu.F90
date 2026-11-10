@@ -25,8 +25,8 @@
 !!    (in-situ and potential density coincide): on and off agree to the
 !!    bit.
 !! 4. open_step_filler_faces_{pcm,plm,ppm} — the same resting partial-step
-!!    columns, but the bed fillers hold their I1′ content (`h·c_live`, the
-!!    partial bed cell's T/S) and EVERY face is read, including a live layer
+!!    columns, but the bed fillers hold the partial bed cell's T/S
+!!    (their donor's `c_live`) and EVERY face is read, including a live layer
 !!    facing a filler: under `zstar` (closed faces off) those faces are OPEN
 !!    and their PGF drives the flow.  Two gates.  (a) A vanished layer's
 !!    sub-marker thickness must not change the answer: fillers of 1e-4 m
@@ -560,11 +560,10 @@ contains
       call ms%destroy()
    end subroutine test_linear_bitident
 
-   subroutine seed_open_steps_i1prime(ms, eos, nz, hlay, depth, b, h_fill)
+   subroutine seed_open_steps_donor(ms, eos, nz, hlay, depth, b, h_fill)
       !! `seed_zlevel_steps` with the bed fillers (thickness `h_fill`)
-      !! holding their I1′ content: `h_fill·c_live`, `c_live` the T/S of the
-      !! nearest live layer above (the partial bed cell) — what
-      !! `enforce_vanished_content` leaves on every z-like column.
+      !! holding the T/S of the nearest live layer above (the partial bed
+      !! cell), `c_live`, the value a donor read substitutes.
       type(multilayer_state_t), intent(inout) :: ms
       type(eos_t), intent(in) :: eos
       integer, intent(in) :: nz
@@ -601,7 +600,7 @@ contains
             end do
          end do
       end do
-   end subroutine seed_open_steps_i1prime
+   end subroutine seed_open_steps_donor
 
    subroutine test_open_step_pcm(error)
       type(error_type), allocatable, intent(out) :: error
@@ -662,7 +661,7 @@ contains
             depth(i) = 2600.0_wp + 137.0_wp*real(mod(7*i, 10), wp)
          end do
          do ifill = 1, 2
-            call seed_open_steps_i1prime(ms, eos, NZ, HLAY, depth, b, H_FILLS(ifill))
+            call seed_open_steps_donor(ms, eos, NZ, HLAY, depth, b, H_FILLS(ifill))
             call make_pgf(pgf, grid, NZ, b, .true., .false.)
             pgf%reconstruct_for_pressure = recon
             pgf%recon_scheme = scheme

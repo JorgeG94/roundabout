@@ -62,7 +62,7 @@ Each section starts with a table. The columns are feature, status, key knob and 
 | BT, barotropic | The depth-averaged, fast gravity-wave mode. It is sub-cycled inside each outer step. |
 | Bit-identical | Equal in every bit of every owned value. "Byte-identical" means the same for output files. |
 | Fail-loud | A configure-time check that refuses the run and says why, instead of running something unvalidated. |
-| Filler, vanished layer | A layer thinner than `H_VANISHED` (1.5e-4 m). It exists only to keep the layer count fixed. |
+| Filler, vanished layer | A layer thinner than `H_VANISHED` (1.5e-4 m). It exists only to keep the layer count fixed. Tracers keep their last concentration there; deposits into it are refused, and diffusion, KPP non-local and shortwave pass around it. |
 | Closed faces | A static per-layer wall where a z-level layer is a filler on either side of a velocity face. |
 | Cavity | An ice-shelf cavity: a static ice draft over the ocean. |
 | rx0 | Slope stiffness of a terrain-following grid, `\|ΔH\|/(H_a+H_b)` across one face. |
@@ -163,7 +163,7 @@ Both schemes wrap the same nonlinear barotropic fast loop. The stability suite r
 | Bottom drag | Shipped | `&ocean_bdrag_nml form`, `hbbl` | `linear` or `quadratic` (default). Acts through the vertical viscosity by default. **No drag acts until a coefficient is set:** `cd`, `r` and `hbbl` all default to 0 (`form` defaults to `"quadratic"`, which with `cd = 0` is off). |
 | Side-wall (channel) drag | Shipped, opt-in | `&ocean_bdrag_nml channel_drag` | The barotropic substep does not feel it during the fast loop. |
 | Dynamic wetting and drying | Shipped, narrow envelope | `&ocean_wetdry_nml enable` | Sigma coordinate only, single rank, split solver and `ppm_limit_pos` required. |
-| ALE remap | Shipped | `&vcoord_nml remap_method` | `ppm` (default), `ppm_h4`, `pqm`. Runs at the thermo cadence. The default PPM tracer remap runs k-parallel kernels over global scratch (`remap_kernel = "stream"`, agreeing bitwise with the `"reference"` stack kernel on columns without vanished layers), so it has no `NZ_STACK_MAX` cap; the rest of the tree still does. The tracer remap computes on concentration (reconstruct and integrate `c`, bound the target by the source stencil range, an empty target takes the source-cell mean) and no longer pools vanished-layer content around the kernel; the tail I1′ sweep is the only place fillers are re-pooled. |
+| ALE remap | Shipped | `&vcoord_nml remap_method` | `ppm` (default), `ppm_h4`, `pqm`. Runs at the thermo cadence. The default PPM tracer remap runs k-parallel kernels over global scratch (`remap_kernel = "stream"`, agreeing with the `"reference"` stack kernel to a few ulp (FMA contraction)), so it has no `NZ_STACK_MAX` cap; the rest of the tree still does. The tracer remap computes on the stored concentration (reconstruct and integrate `c`, bound the target by the source stencil range, an empty target takes the source-cell mean; a filler is read through its donor in every reconstruction stencil and carries its own excess as a uniform offset, so a stale filler never tilts a live layer's parabola); there is no pooling of vanished-layer content around the kernel. |
 | Vertical advection | Shipped | – | Eulerian. `w` is diagnosed from continuity. |
 | Along-coordinate tracer Laplacian | Shipped, opt-in | `&ocean_hdiff_nml kappa_h` | Diffuses along model surfaces, not neutral surfaces. `&ocean_redi_nml` is the neutral path, and replaces this operator in a single-operator setup (OM3 parity is `kappa_h = 0`; both on warns). Redi has opt-in diffusive-CFL control (`check_diffusive_cfl`, `max_diffusive_cfl`): a local face cap plus subcycling. |
 | Passive tracers | Shipped | `&ocean_tracers_nml enable_ideal_age`, `enable_pseudo_salt` | No namelist-declared arbitrary dye, CFC or BGC package yet. |
@@ -589,7 +589,7 @@ Multi-rank scaling of the global 1-degree case is in [section 11](#11-mpi-and-do
 - **Restarts are bit-exact.** A resume reproduces the writer's next steps bitwise, ghosts included. This holds on the production engine path as well as for hand-built states. It includes sea ice, wet/dry hysteresis and the `pred_corr` predictor's reused viscous tendency. A 4-rank 1/4-degree Southern Ocean resumed from day 730 matches the straight run bit for bit at day 732.
 - **A missing required field on read is fatal.** Some fields are optional, so an older checkpoint resumes with a documented degradation.
 - **Diagnostics that cannot run.** Requesting a canonical diagnostic whose feature gate is closed (for example `age` with `enable_ideal_age = .false.`) logs a warning that names the diagnostic and the likely gate. `name:off` stays a silent no-op.
-- **`land_fill_t` and `land_fill_s` are inert on interior land cells.** The land-state contract (`h_layer = H_VANISHED`, `hTr = 0`) overrides them.
+- **`land_fill_t` and `land_fill_s` are inert on interior land cells.** The land-state contract (`h_layer = H_VANISHED`, `c = 0`) overrides them.
 
 **Full notes in the archive:**
 

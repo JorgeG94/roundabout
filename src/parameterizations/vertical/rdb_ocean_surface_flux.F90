@@ -868,10 +868,9 @@ contains
       !!   d(hT_top)/dt = Q_heat(i,j) / (rho_0 · cp)
       !! For salinity
       !!   d(hS_top)/dt = Q_salt(i,j) / rho_0
-      !! (Both expressed in units that match the `c` convention:
-      !! `c = T·h` so the forcing has units of T·h/s = K·m/s.
-      !! Q_heat / (rho_0·cp) has units (W/m^2)/(kg/m^3·J/kg/K) =
-      !! K·m/s ✓.)
+      !! (Content units, K·m/s: Q_heat / (rho_0·cp) has units
+      !! (W/m^2)/(kg/m^3·J/kg/K) = K·m/s.  The stored concentration `c`
+      !! receives it through `rdb_conc_add_source`, which divides by `h`.)
       !!
       !! Reads the 2D `Q_heat(:,:)` / `Q_salt(:,:)` fields per column
       !! (seeded uniformly from the scalar knobs by default; overwritten
@@ -1608,8 +1607,8 @@ contains
       !! unchanged and adds no second device sync of `Q_*`.
       !!
       !! Bottom-up convention: surface = `k = nz`, bed = `k = 1`.  The
-      !! surface concentration is `c(i,j,nz) / max(h_layer(i,j,nz),
-      !! h_min)`.  Per thermo step, in c-space:
+      !! surface concentration is the stored `c(i,j,nz)`.  Per thermo
+      !! step, as content:
       !!   d(hT_top) = dt · p_T · (T_target - SST) · wet_mask   [K·m]
       !!   d(hS_top) = dt · p_S · (S_target - SSS) · wet_mask   [PSU·m]
       !! (The `rho0·cp` of the equivalent W/m^2 restoring heat flux
@@ -1732,10 +1731,8 @@ contains
       !!
       !! `dt_piston` = dt·piston [m] is the column-invariant multiplier
       !! the caller derives from `sf` (the `rho0·cp` cancels — see the
-      !! caller doc).  The surface concentration is recovered as
-      !! `c(nz) / max(h_layer(nz), h_min)`; the `h_min` floor keeps the
-      !! relaxation finite under a pinched top layer (rate `p/h`
-      !! saturates rather than diverges).
+      !! caller doc).  The surface concentration is the stored `c(nz)`;
+      !! the content increment enters through `rdb_conc_add_source`.
       integer, intent(in)    :: nz, nx, ny
       real(wp), intent(inout) :: c(nx, ny, nz)
       real(wp), intent(inout) :: budget(nx, ny, nz)

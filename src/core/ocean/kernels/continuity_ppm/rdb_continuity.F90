@@ -53,8 +53,8 @@ module rdb_continuity
    implicit none
    private
 
-   ! Phase 2 (6b) windowed-drain floors.  DRAIN_MIN_H guards Tr = hTr/h
-   ! at vanishing thickness (concentration space); DRAIN_MIN_VOL guards
+   ! Phase 2 (6b) windowed-drain floors.  DRAIN_MIN_H guards the drain's
+   ! thickness divisions at vanishing thickness; DRAIN_MIN_VOL guards
    ! the per-pass Courant denominator areaT·hprev.  Same role as MOM6's
    ! Angstrom_H / a small volume floor.
    real(wp), parameter :: DRAIN_MIN_H = 1.0e-10_wp
@@ -69,11 +69,11 @@ module rdb_continuity
    ! carry the RAW SUM over both RK2 stages, because `rk2_average` halves the
    ! state change and the console reporter re-applies that same
    ! `RK2_STAGE_WEIGHT = 0.5` (see `ocean_budget_out`).  Every windowed-drain
-   ! write to `hTr` that happens OUTSIDE a stage -- the end-of-window
-   ! concentration un-hold and the drain sub-cycle itself, both fired once per
+   ! budget write that happens OUTSIDE a stage -- the end-of-window
+   ! hold release and the drain sub-cycle itself, both fired once per
    ! outer step on the already-averaged state -- therefore has to be
    ! pre-multiplied by 2 so the reporter's 0.5 recovers it 1:1.  In-stage
-   ! writes (the per-stage concentration hold) use weight 1, like every other
+   ! writes (the per-stage hold) use weight 1, like every other
    ! in-stage accumulator.  Mutating this breaks
    ! `windowed_drain_with_surface_flux` (test_ocean_conservation_salt_heat).
    real(wp), parameter :: DRAIN_BUDGET_POST_AVERAGE_WEIGHT = 2.0_wp
@@ -123,7 +123,7 @@ module rdb_continuity
       !! predictor state is discarded except for u_av / h_av).
       !! Windowed mode (ratio > 1): advance h, accumulate
       !! 0.5·mass_flux·dt into uhtr/vhtr, SKIP the per-step tracer advect
-      !! (hTr held frozen until the boundary drain).
+      !! (c held frozen until the boundary drain).
 
 #ifdef RDB_ENABLE_TESTING
    ! ----------------------------------------------------------------------
@@ -148,7 +148,7 @@ module rdb_continuity
    public :: tracer_advect_meridional
    ! Per-direction tracer-advect IMPLs — exposed so the conservation test can
    ! drive the budget-fill WITH vs WITHOUT the optional budget_adv arg on
-   ! identical inputs (proving the fill loop never perturbs hTr — the
+   ! identical inputs (proving the fill loop never perturbs c — the
    ! present(budget_adv)-ABSENT path, which the wrapper-level S/T tests can't
    ! contrast because they always pass budget_adv for S and T).
    public :: tracer_advect_zonal_one_impl
@@ -188,8 +188,8 @@ module rdb_continuity
          !! cfg%ocean%isopycnal%angstrom_h at setup, but only PASSED to the
          !! h-update kernels when the active vcoord is VCOORD_LAGRANGIAN
          !! (gated at the dyn call site). 0 ⇒ off ⇒ bit-identical.
-         !! R7: floor lifts h but NOT hTr, so Tr=hTr/h shifts on a floored
-         !! layer. Harmless for the adiabatic isopycnal config; thermo-on
+         !! R7: the floor lifts h at fixed c, which injects tracer content on a
+         !! floored layer. Harmless for the adiabatic isopycnal config; thermo-on
          !! isopycnal correctness is OUT OF SCOPE for v1.
       logical :: conservative_floor = .false.
          !! When `.true.` (set from cfg%ocean%isopycnal%conservative_floor at
@@ -275,19 +275,18 @@ module rdb_continuity
          !! (every non-Lagrangian coord) the P1 `max(edge, 2·h_lim)` floor is
          !! inert (edges are already `>= 0`), but the P2 outflux limiter still
          !! engages to keep every layer `>= 0` (avail = max(h, 0)).
-      logical :: hTr_holds_conc = .false.
-         !! True while the frozen tracer content `hTr` has been re-weighted
-         !! onto the CURRENT `h_layer` so that the concentration
-         !! `T = hTr/h_layer` is the (invariant) window-start value.  Set by
+      logical :: window_hold_open = .false.
+         !! True while a windowed budget hold is open: the tracer `c` has
+         !! been held while `h_layer` advanced, and `tracer_window_hold` has
+         !! booked the content change `Σ c·δh`.  Set by
          !! `continuity_tracer_step_split` in TR_MODE_ACCUMULATE, cleared by
-         !! `continuity_tracer_drain` once it has converted `hTr` back onto
-         !! the reconstructed window-start thickness `hprev`.
+         !! `continuity_tracer_drain` once `tracer_window_release` has
+         !! cancelled the booking.
          !!
-         !! It exists so the drain's input contract stays EXPLICIT: `.false.`
-         !! means "hTr is content on the window-start thickness" (the
-         !! white-box unit tests that seed the drain directly, and the
-         !! historical behaviour); `.true.` means "hTr is content on the
-         !! current thickness".  Host-only — never read inside a kernel.
+         !! It keeps the drain's input contract EXPLICIT: `.false.` means no
+         !! hold was booked (the white-box unit tests that seed the drain
+         !! directly), `.true.` means a release is owed.  Host-only — never
+         !! read inside a kernel.
       logical :: windowed_advection = .false.
          !! Gates the ALLOCATION of the Phase-2 windowed-advection state (13
          !! 3D arrays: `uhtr`/`vhtr` accumulators + the (6b) drain
@@ -433,11 +432,10 @@ module rdb_continuity
       real(wp), allocatable :: hprev_work(:, :, :)
       real(wp), allocatable :: h_win_start(:, :, :)
          !! Layer thickness captured when an accumulation window OPENS.
-         !! Paired with `hTr_holds_conc`: the per-stage concentration hold
-         !! re-weights `hTr` onto the evolving `h_layer`, and the drain undoes
-         !! it with THIS array, which returns `hTr` bit-for-bit to the frozen
-         !! window-start content the drain has always consumed.  (Undoing via
-         !! the reconstructed `hprev` instead would be equivalent only where
+         !! Paired with `window_hold_open`: the per-stage hold books
+         !! `Σ c·δh` against the evolving `h_layer`, and the release cancels
+         !! it against THIS array, the exact window-start thickness.
+         !! (Releasing against the reconstructed `hprev` instead would be equivalent only where
          !! `hprev == h_win_start` exactly, and would silently convert any
          !! reconstruction residual — e.g. from a thin-layer `h_min` clip —
          !! into a tracer-mass drift.)
@@ -455,7 +453,7 @@ module rdb_continuity
       real(wp), allocatable :: tr_flux_y(:, :, :)
          !! Per-pass meridional tracer flux F (m^3 · concentration).
       real(wp), allocatable :: tr_work(:, :, :)
-         !! Current concentration Tr = hTr/hprev_work (rebuilt per pass).
+         !! Current concentration (rebuilt per pass from `c` on `hprev_work`).
       real(wp), allocatable :: pal(:, :, :)
          !! CW parabola left-edge value per cell (rebuilt per pass).
       real(wp), allocatable :: par(:, :, :)
@@ -1269,7 +1267,7 @@ contains
       ! next stage's `mass_flux = u·h_face` would treat as a wall
       ! flux.  Without this zeroing, the PPM scheme transports
       ! tracer mass across the physical wall into ghost cells, and
-      ! `sum(hTr)` drifts by ~1e-6 over hundreds of outer steps.
+      ! the tracer content `sum(h*c)` drifts by ~1e-6 over hundreds of outer steps.
       ! Mirrors MOM6's `mask2dCu` face mask convention.  Under MPI
       ! decomposition the gate now reads bc%has_west / bc%has_east
       ! (the flag mirrors decomp%has_west / has_east set at driver
@@ -1449,7 +1447,7 @@ contains
          !! be renormalised like any interior face (O4 seam fix — the
          !! un-renormalised seam face left per-layer fluxes inconsistent
          !! with `uhbt`; the Eulerian-z h-rescale hid it in h while
-         !! tracers rode the raw fluxes, breaking hTr/h at the seam).
+         !! tracers rode the raw fluxes, breaking the tracer at the seam).
       ! assumed-shape-ok: mirrors the `uhbt` waiver above — visc_rem is a
       ! (nx+1, ny, nz) face array the caller holds on `bt_work`, and the
       ! routine is cadence-bounded (once per stage, not per substep).
@@ -2304,7 +2302,7 @@ contains
 
    pure subroutine tracer_advect_zonal(grid, metrics, this, ms, dt, h_before, h_after, bc)
       !! Zonal half of the direction-split tracer advection.
-      !! Mirrors `tracer_advect` but updates `hTr` using
+      !! Mirrors `tracer_advect` but updates `c` using
       !! only the x-direction tracer mass flux.  Companion to
       !! `tracer_advect_meridional`.  Both are called
       !! interleaved with the continuity substeps by
@@ -2312,7 +2310,7 @@ contains
       !!
       !! OBC inflow handling: when `bc%<edge>%bc_type == OBC_CLAMPED`
       !! and `bc%<edge>%clamped_tracer(it)` carries a prescribed value,
-      !! the ghost-cell `hTr` is set so the downstream upwind pick
+      !! the ghost-cell `c` is set so the downstream upwind pick
       !! reads the prescribed boundary value on inflow.  Override is
       !! a no-op for OBC_WALL (no flux crosses the face anyway).
       type(hgrid_t), intent(in) :: grid
@@ -2333,7 +2331,7 @@ contains
 
       ! Set ALL ghost columns (i = 1..nghost) on the west side to the
       ! clamped value so the impl's hard-coded boundary-halo writes
-      ! (Tr_face_*_x(1..3, ...) all read hTr(1) or hTr(2)) all see the
+      ! (Tr_face_*_x(1..3, ...) all read c(1) or c(2)) all see the
       ! prescribed value, regardless of which is upwind.
       i_w_ghost = grid%nghost
       i_e_ghost = grid%nghost + grid%nx_phys + 1
@@ -2491,17 +2489,17 @@ contains
       !! CWC discrete theorem holds in the split form:
       !!
       !!   1. zonal_flux        — Φx from h^n
-      !!   2. tracer_advect_zonal — hTr ← hTr - dt·∂(Φx·T)/∂x at h^n
+      !!   2. tracer_advect_zonal — c ← (h^n·c - dt·∂(Φx·c)/∂x) / h^*
       !!   3. apply_zonal       — h ← h^n - dt·∂Φx/∂x  (= h^*)
       !!   4. meridional_flux   — Φy from h^*
-      !!   5. tracer_advect_meridional — hTr ← hTr - dt·∂(Φy·T)/∂y at h^*
+      !!   5. tracer_advect_meridional — c ← (h^*·c - dt·∂(Φy·c)/∂y) / h^{n+1}
       !!   6. apply_meridional  — h ← h^* - dt·∂Φy/∂y  (= h^{n+1})
       !!
-      !! Uniform T preserved: after step 2, hTr = (h - dt·div_x)·T;
-      !! after step 3, h = h - dt·div_x, so hTr/h = T still.  After
-      !! step 5, hTr = (h^* - dt·div_y)·T = h^{n+1}·T.  After step 6,
-      !! hTr/h = T.  Same CWC theorem as the unsplit form, lifted
-      !! per direction.
+      !! Uniform c preserved: each tracer update divides by the thickness the
+      !! SAME fluxes produce in the following step, so for uniform c the
+      !! numerator is (h^n - dt·div_x)·c = h^*·c and c is unchanged; likewise
+      !! for steps 5-6.  Same CWC theorem as the unsplit form, lifted per
+      !! direction.
       !!
       !! `flux_h_layer` ends the step holding the total horizontal
       !! divergence (sum of x and y substeps) — that's what the
@@ -2513,7 +2511,7 @@ contains
       !! continuity advance `h_layer` consistently with the fast
       !! loop's `η_end` — MOM6's split-explicit pattern.  The same
       !! constrained fluxes feed tracer advection, so per-column
-      !! `T = hTr/h` stays uniform under the constraint.
+      !! a uniform `c` stays uniform under the constraint.
       type(hgrid_t), intent(in) :: grid
       type(ocean_metrics_t), intent(in) :: metrics
       type(continuity_t), intent(inout) :: this
@@ -2558,7 +2556,7 @@ contains
          !! `TR_MODE_ACCUMULATE` ⇒ advance h, accumulate
          !! `tr_accum_weight·mass_flux·dt` into `this%uhtr/vhtr` (one +=
          !! per call; closes the reconstruction against the step-mean h),
-         !! and SKIP the per-step tracer advect so `hTr` stays frozen until
+         !! and SKIP the per-step tracer advect so `c` stays frozen until
          !! the boundary drain.
       real(wp), intent(in), optional :: tr_accum_weight
          !! Weight of this call's transport in the window accumulator.
@@ -2619,17 +2617,17 @@ contains
       ny_phys = grid%ny_phys
       nghost = grid%nghost
 
-      ! Windowed-advect concentration hold (step 1 of 2).  In
-      ! TR_MODE_ACCUMULATE the horizontal tracer advect is deferred to the
-      ! end-of-window drain, so `hTr` must not move — but `h_layer` does,
-      ! every stage.  Snapshot the pre-continuity thickness so the paired
-      ! rescale at the bottom of this routine can hold `T = hTr/h_layer`
-      ! fixed instead of holding `hTr` fixed.  `hprev_work` is idle here:
+      ! Windowed-advect hold (step 1 of 2).  In TR_MODE_ACCUMULATE the
+      ! horizontal tracer advect is deferred to the end-of-window drain, so
+      ! `c` does not move — but `h_layer` does, every stage.  Snapshot the
+      ! pre-continuity thickness so the paired budget hold at the bottom of
+      ! this routine can record the content change `Σ c·δh`.  `hprev_work`
+      ! is idle here:
       ! the drain is the only other consumer and it runs at outer-step end.
       if (mode == TR_MODE_ACCUMULATE) then
          ! First accumulate stage of a window: latch the window-start
          ! thickness the drain will use to undo the hold exactly.
-         call tracer_window_latch(this, ms, nx, ny, nz,.not. this%hTr_holds_conc)
+         call tracer_window_latch(this, ms, nx, ny, nz,.not. this%window_hold_open)
       end if
 
       if (present(uhbt) .and. present(bc)) then
@@ -2654,7 +2652,7 @@ contains
       ! fold above adds `uhml` at the physical WALL faces, which the
       ! resolved flux had zeroed.  Without re-zeroing, the bolus transports
       ! tracer mass across the wall into the ghost halo and the
-      ! physical-domain `sum(hTr)` drifts.  BC-aware: periodic / open edges
+      ! physical-domain tracer content `sum(h*c)` drifts.  BC-aware: periodic / open edges
       ! keep the folded transport.
       if (fold_wall) then
          ! Re-close the physical walls after the MLE fold.  An MPI seam
@@ -2705,13 +2703,13 @@ contains
       if (mode == TR_MODE_ACCUMULATE) then
          ! Windowed mode: accumulate this stage's zonal mass flux (with
          ! the RK2 0.5 weight baked in) and SKIP the tracer advect so
-         ! hTr stays frozen.  hprev = h^{n+1} + div(uhtr) then closes
+         ! c stays frozen.  hprev = h^{n+1} + div(uhtr) then closes
          ! the reconstruction against the RK2-averaged h.
          call accumulate_flux_x(nx + 1, ny, nz, dt, acc_w, ms%mass_flux_x_layer, this%uhtr)
       end if
       ! One shared `h⁻ → h⁺` pair per direction: snapshot h⁻, let continuity
       ! write h⁺, THEN advect the tracers with that pair.  The tracer kernels
-      ! read only h⁻ (content form), so the order change is bit-identical.
+      ! read only h⁻ (they recompute h⁺ from the same fluxes), so the order change is bit-identical.
       if (do_adv) call drain_copy_3d(nx, ny, nz, ms%h_layer, this%h_pair_prev%data)
       if (h_min_use > 0.0_wp) then
          call continuity_apply_zonal(grid, metrics, ms, dt, h_min=h_min_use)
@@ -2727,7 +2725,7 @@ contains
       end if
 
       ! Mid-Lie-split MPI seam exchange (O3 correctness fix): after the zonal
-      ! apply updates h_layer (and hTr in ADVECT mode) the meridional flux
+      ! apply updates h_layer (and c in ADVECT mode) the meridional flux
       ! reconstruction reads h ghost columns that the NEIGHBOUR rank's zonal
       ! apply has updated — but those ghosts were never re-exchanged.  Without
       ! this exchange an x-rank seam leaks ~3e-9/day global mass.
@@ -2833,7 +2831,7 @@ contains
       ! twice; its two flux slots were computed independently (PPM
       ! reconstruction, vhbt renormalisation, MLE bolus, limiter) and
       ! agree only up to rounding.  Project the FINAL flux antisymmetric
-      ! (and refill the rows above it) before it touches h / hTr / the
+      ! (and refill the rows above it) before it touches h / c / the
       ! accumulated transport, so the cross-fold exchange telescopes: what
       ! leaves cell (i,nj) through its north face is exactly what enters
       ! cell (ni+1-i,nj).  No-op when not folding.  px > 1: no halo
@@ -2860,21 +2858,17 @@ contains
             call tracer_advect_meridional(grid, metrics, this, ms, dt, this%h_pair_prev%data, ms%h_layer)
          end if
       end if
-      ! Windowed-advect concentration hold (step 2 of 2).  Both applies have
-      ! advanced `h_layer`; re-weight the frozen tracer content onto it so the
-      ! concentration every downstream consumer reads (`ocean_eos_compute` →
-      ! ρ → PGF, vdiff, hdiff, vertical advect, diagnostics) is EXACTLY the
-      ! window-start value, as it is in MOM6 (whose prognostic `Tr%t` is a
-      ! concentration and is therefore thickness-invariant for free).
-      ! Without this, `T` drifts by the full window thickness divergence and
-      ! the resulting grid-scale buoyancy error closes an exponentially
-      ! growing EOS→PGF→divergence loop.  Composes with `rk2_average`:
-      ! `hTr0 = T·h^n` and `hTr = T·h^(2)` average to `T·h^(n+1)`, so `T` is
-      ! still exactly `T`.  `continuity_tracer_drain` converts back before it
-      ! spends the accumulated transports.
+      ! Windowed-advect hold (step 2 of 2).  Both applies have advanced
+      ! `h_layer` while `c` was held, so the concentration every downstream
+      ! consumer reads (`ocean_eos_compute` → ρ → PGF, vdiff, hdiff,
+      ! vertical advect, diagnostics) is EXACTLY the window-start value.  The
+      ! content change `Σ c·δh` is recorded in the horizontal-advection
+      ! budget (weight `w`) so the console closes at every report.
+      ! `continuity_tracer_drain` releases the hold before it spends the
+      ! accumulated transports.
       if (mode == TR_MODE_ACCUMULATE) then
          call tracer_window_hold(this, ms, nx, ny, nz, DRAIN_BUDGET_IN_STAGE_WEIGHT)
-         this%hTr_holds_conc = .true.
+         this%window_hold_open = .true.
       end if
 
       ! P3: fold this call's limited-face count into the running total (one
@@ -3722,7 +3716,7 @@ contains
       !! the reference oracle for split `tracer_advect_zonal`/`_meridional`.
       !! Per-layer PPM tracer advection — iterates over the tracer
       !! registry on the multilayer C-grid state and forwards each
-      !! tracer's hTr array to the flat-impl below.  Extendable by
+      !! tracer's c array to the flat-impl below.  Extendable by
       !! construction: appending a new entry to `ms%tracers(:)` (BGC,
       !! sediment, passive scalar) drops it in without touching this
       !! routine.  Per-tracer behaviour gates on
@@ -4160,12 +4154,12 @@ contains
       !! Hallberg 2006; MOM6 ADVECT_PPM).  Conservation is structural:
       !!
       !!   hprev = areaT·h_end + div(uhtr)        (≈ window-start thickness)
-      !!   Tr_start = hTr_frozen / hprev          (window-start concentration)
+      !!   Tr_start = c (held)                  (window-start concentration)
       !!
       !! the drain evolves hprev → h_end while moving tracer with each
       !! limited transport portion; at the end hprev == h_end so
-      !! Σ(hTr) = Σ(Tr_start·hprev) = Σ(hTr_frozen) to round-off.  Do NOT
-      !! seed the concentration from hTr/h_end (that is the drifted value).
+      !! Σ(Tr·hprev) = Σ(Tr_start·hprev_start) to round-off.  The
+      !! concentration is the held `c`, which is the window-start value.
       !!
       !! Per-pass re-reconstruction (V2): the PPM parabola is rebuilt from
       !! the CURRENT Tr at the start of every sub-cycle pass.  The
@@ -4252,7 +4246,7 @@ contains
       ! clamp/hatch below and leaking ~5%/day of tracer.  Limited uhtr/vhtr
       ! feed BOTH the reconstruction AND the sub-cycle seed (drain_copy_3d
       ! below), so the drain still telescopes exactly onto h_end and
-      ! Σ(areaT·hTr) is conserved.  Inert (bit-identical) when no cell
+      ! Σ(areaT·h·c) is conserved.  Inert (bit-identical) when no cell
       ! would otherwise go vol ≤ areaT·h_min (ratio=1 / FK off / benign
       ! windows).  tr_work is reused as the per-cell scale scratch — it is
       ! overwritten by drain_parabola_* in the sub-cycle before any read.
@@ -4272,37 +4266,35 @@ contains
       end do
 
       ! ---- Reconstruct hprev = areaT·h_end + div(uhtr) (volume → thickness) ----
-      ! + vanishing-layer hatch.  Done on the FROZEN hTr grid: the cell's
-      ! window-start thickness, against which the frozen tracer mass is a
-      ! consistent concentration.
+      ! + vanishing-layer hatch.  Done on the FROZEN window-start grid: the cell's
+      ! window-start thickness, against which the held concentration is
+      ! consistent.
       call drain_reconstruct_hprev(nx, ny, nz, metrics%areaT, metrics%iareaT, &
                                    ms%h_layer, this%uhtr, this%vhtr, this%hprev_work)
       call drain_wrap_centre(this%hprev_work, nx, ny, nz, nx_phys, ny_phys, nghost, &
                              per_x, per_y, fold_n)
 
-      ! Undo the per-stage concentration hold applied by
-      ! `continuity_tracer_step_split`: `hTr` currently carries the frozen
-      ! window-start concentration weighted by the CURRENT (window-end)
-      ! thickness, and the sub-cycle below needs it weighted by the
-      ! window-START thickness `hprev` it just reconstructed.  This restores
-      ! exactly the content the drain consumed before the concentration hold
-      ! existed, so the drain — and everything it produces — is unchanged.
-      if (this%hTr_holds_conc) then
+      ! Release the per-stage budget hold booked by
+      ! `continuity_tracer_step_split`: `c` is the held window-start
+      ! concentration and the sub-cycle below weights it by the window-START
+      ! thickness `hprev` it just reconstructed, so the `Σ c·δh` booked per
+      ! stage against the evolving `h_layer` is cancelled here.
+      if (this%window_hold_open) then
          call tracer_window_release(this, ms, nx, ny, nz, post_w)
-         this%hTr_holds_conc = .false.
+         this%window_hold_open = .false.
       end if
 
-      ! ---- Seam-wrap the frozen tracer mass before the first reconstruction ----
+      ! ---- Seam-wrap the held tracer before the first reconstruction ----
       ! The PPM parabola (drain_parabola_*) reads the seam-adjacent cells'
-      ! tracer concentration Tr = hTr/hprev at the ghost band (a ±2 stencil).
+      ! tracer concentration Tr = c at the ghost band (a ±2 stencil).
       ! hprev is already periodic/fold-consistent (wrapped above), but the
-      ! frozen hTr the drain inherits is NOT guaranteed periodic in its ghost
-      ! halo (the dynamics wrap h_layer, not necessarily the windowed hTr), so
+      ! held c the drain inherits is NOT guaranteed periodic in its ghost
+      ! halo (the dynamics wrap h_layer, not necessarily the windowed c), so
       ! a seam-physical cell's reconstruction read a different Tr than its
       ! translated interior image — breaking bit-exact translation invariance
-      ! (the per-pass updates re-wrap hTr at the end, but the FIRST pass's
+      ! (the per-pass updates re-wrap c at the end, but the FIRST pass's
       ! parabola already consumed the stale ghosts).  Wrap every advected
-      ! tracer's hTr once here so pass 1 sees the same periodic/fold ghosts
+      ! tracer's c once here so pass 1 sees the same periodic/fold ghosts
       ! the later passes do.  No-op on non-periodic walls (bit-identical).
       do it = 1, size(ms%tracers)
          if (.not. allocated(ms%tracers(it)%c)) cycle
@@ -4360,14 +4352,14 @@ contains
          ! the wrapped face (drain_limit_x writes only interior faces 2..nx
          ! + zeros the array edges; without the wrap the two images of a
          ! seam face disagree ⇒ the flux divergence does not telescope and
-         ! Σ(areaT·hTr) leaks at the seam).  No-op on non-periodic walls.
+         ! Σ(areaT·h·c) leaks at the seam).  No-op on non-periodic walls.
          call drain_wrap_face_x(this%uhh_x, nx, ny, nz, nx_phys, ny_phys, nghost, &
                                 per_x, per_y, fold_n, skip_halo=.true.)
          do it = 1, size(ms%tracers)
             if (.not. allocated(ms%tracers(it)%c)) cycle
             if (.not. ms%tracers(it)%do_horizontal_advection) cycle
             if (this%tracer_h3) then
-               ! ppm_h3: Huynh edges + CW84 limiter on Tr = hTr/hprev; uhh is
+               ! ppm_h3: Huynh edges + CW84 limiter on Tr = c; uhh is
                ! a volume so the flux below is a tracer volume.
                call drain_fill_conc(nx, ny, nz, ms%tracers(it)%c, this%hprev_work, this%tr_work)
                call drain_wrap_centre(this%tr_work, nx, ny, nz, nx_phys, ny_phys, nghost, &
@@ -4397,7 +4389,7 @@ contains
             else
                ! Q6 WENO drain: reconstruct the swept-average donor-edge
                ! concentration with the WENO ladder instead of the CW
-               ! parabola.  Build Tr = hTr/hprev, wrap it so seam-adjacent
+               ! parabola.  Build Tr = c, wrap it so seam-adjacent
                ! stencils read consistent ghosts (the WENO reach is wider
                ! than PPM's — the wrap must cover the widest rung), then
                ! evaluate the swept face flux directly from Tr.
@@ -4442,7 +4434,7 @@ contains
             if (.not. allocated(ms%tracers(it)%c)) cycle
             if (.not. ms%tracers(it)%do_horizontal_advection) cycle
             if (this%tracer_h3) then
-               ! ppm_h3: Huynh edges + CW84 limiter on Tr = hTr/hprev; uhh is
+               ! ppm_h3: Huynh edges + CW84 limiter on Tr = c; uhh is
                ! a volume so the flux below is a tracer volume.
                call drain_fill_conc(nx, ny, nz, ms%tracers(it)%c, this%hprev_work, this%tr_work)
                call drain_wrap_centre(this%tr_work, nx, ny, nz, nx_phys, ny_phys, nghost, &
@@ -4585,7 +4577,7 @@ contains
    ! Drain compute kernels (flat-impl, explicit-shape, do concurrent).
    ! Face convention: x-face i lies between cell (i-1) and cell (i);
    ! positive uhtr(i) ⇒ rightward ⇒ donor = cell (i-1).  Mirrors the
-   ! every-step advect (divergence hTr(i) -= (F(i+1)-F(i))·iareaT).
+   ! every-step advect (divergence c(i) -= (F(i+1)-F(i))·iareaT/h).
    ! Transport (uhr/uhh) and the limiter work in area-weighted VOLUME
    ! (m^3); thickness `hprev_work` is m; `Vprev = areaT·hprev_work`.
    ! ====================================================================
@@ -4641,7 +4633,7 @@ contains
       !! vol and converges.  Scaling is applied multiplicatively to the
       !! transport, so the limited uhtr/vhtr are used CONSISTENTLY for both
       !! the reconstruction and the sub-cycle ⇒ the drain still telescopes
-      !! exactly onto h_end and Σ(areaT·hTr) is conserved to round-off.
+      !! exactly onto h_end and Σ(areaT·h·c) is conserved to round-off.
       !!
       !! Inert when every vol > areaT·h_min already (scale = 1 everywhere),
       !! so ratio=1 / FK-off / non-overdrawing windows are bit-identical.
@@ -4952,9 +4944,9 @@ contains
       end do
    end subroutine drain_limit_y
 
-   pure subroutine drain_parabola_x(nx, ny, nz, wet_T, hTr, hprev, tr, aL, aR, a6)
+   pure subroutine drain_parabola_x(nx, ny, nz, wet_T, c, hprev, tr, aL, aR, a6)
       !! Rebuild the per-cell zonal CW PPM parabola from the CURRENT Tr =
-      !! hTr/hprev (V2 — per pass).  Interior cells (3..nx-2) use the
+      !! c (V2 — per pass).  Interior cells (3..nx-2) use the
       !! limited PPM edges; the 2-cell boundary band falls back to PCM
       !! (aL=aR=Tr ⇒ swept reduces to the donor value, 1st order),
       !! matching tracer_advect_zonal_one_impl's near-wall band.
@@ -4968,7 +4960,7 @@ contains
       !! bit-identical for all-wet (`wet_T≡1`).
       integer, intent(in) :: nx, ny, nz
       real(wp), intent(in) :: wet_T(nx, ny)
-      real(wp), intent(in) :: hTr(nx, ny, nz), hprev(nx, ny, nz)
+      real(wp), intent(in) :: c(nx, ny, nz), hprev(nx, ny, nz)
       real(wp), intent(inout) :: tr(nx, ny, nz), aL(nx, ny, nz), aR(nx, ny, nz)
       real(wp), intent(inout) :: a6(nx, ny, nz)
       integer :: i, j, k
@@ -4977,7 +4969,7 @@ contains
 
       ! Concentration field (guard zero thickness).
       do concurrent(k=1:nz, j=1:ny, i=1:nx)
-         tr(i, j, k) = hTr(i, j, k)
+         tr(i, j, k) = c(i, j, k)
       end do
       ! Interior PPM parabola.
       do concurrent(k=1:nz, j=1:ny, i=3:nx - 2) &
@@ -5008,13 +5000,13 @@ contains
       end do
    end subroutine drain_parabola_x
 
-   pure subroutine drain_parabola_y(nx, ny, nz, wet_T, hTr, hprev, tr, aL, aR, a6)
+   pure subroutine drain_parabola_y(nx, ny, nz, wet_T, c, hprev, tr, aL, aR, a6)
       !! Meridional analogue of drain_parabola_x.  aL = south-edge,
       !! aR = north-edge value of each cell.  Mirror-T at land
       !! neighbours (C2); bit-identical for all-wet.
       integer, intent(in) :: nx, ny, nz
       real(wp), intent(in) :: wet_T(nx, ny)
-      real(wp), intent(in) :: hTr(nx, ny, nz), hprev(nx, ny, nz)
+      real(wp), intent(in) :: c(nx, ny, nz), hprev(nx, ny, nz)
       real(wp), intent(inout) :: tr(nx, ny, nz), aL(nx, ny, nz), aR(nx, ny, nz)
       real(wp), intent(inout) :: a6(nx, ny, nz)
       integer :: i, j, k
@@ -5022,7 +5014,7 @@ contains
       real(wp) :: dh_m1, dh_0, dh_p1, Tr_left, Tr_right
 
       do concurrent(k=1:nz, j=1:ny, i=1:nx)
-         tr(i, j, k) = hTr(i, j, k)
+         tr(i, j, k) = c(i, j, k)
       end do
       do concurrent(k=1:nz, j=3:ny - 2, i=1:nx) &
          local(Tr_m2, Tr_m1, Tr_0, Tr_p1, Tr_p2, dh_m1, dh_0, dh_p1, Tr_left, Tr_right)
@@ -5147,7 +5139,7 @@ contains
    !
    ! The WENO path replaces the CW-PPM parabola (drain_parabola_* +
    ! drain_swept_flux_*) with a per-face swept-average WENO reconstruction
-   ! evaluated straight from the concentration field Tr = hTr/hprev.  The
+   ! evaluated straight from the concentration field Tr = c.  The
    ! swept-average convention is IDENTICAL to the CW-PPM path:
    !
    !   * the donor cell is (f-1) for u>0 and (f) for u<0 (f = the face
@@ -5170,17 +5162,17 @@ contains
    ! nghost >= the configure-enforced per-rung minimum (weno5→3, 7→4, 9→5).
    ! ====================================================================
 
-   pure subroutine drain_fill_conc(nx, ny, nz, hTr, hprev, tr)
-      !! Concentration field Tr = hTr / max(hprev, DRAIN_MIN_H) for the WENO
+   pure subroutine drain_fill_conc(nx, ny, nz, c, hprev, tr)
+      !! Concentration field Tr = c for the WENO
       !! drain (the CW path builds the same field as the first loop of
       !! drain_parabola_*; factored out so the WENO path can reuse it
       !! without the parabola coefficients).
       integer, intent(in) :: nx, ny, nz
-      real(wp), intent(in) :: hTr(nx, ny, nz), hprev(nx, ny, nz)
+      real(wp), intent(in) :: c(nx, ny, nz), hprev(nx, ny, nz)
       real(wp), intent(inout) :: tr(nx, ny, nz)
       integer :: i, j, k
       do concurrent(k=1:nz, j=1:ny, i=1:nx)
-         tr(i, j, k) = hTr(i, j, k)
+         tr(i, j, k) = c(i, j, k)
       end do
    end subroutine drain_fill_conc
 
@@ -5294,7 +5286,7 @@ contains
       !! the interior, so the full-rung stencil is valid everywhere — force
       !! full rung (no position-based degradation).  This keeps the two
       !! images of a wrapped seam face bit-identical, so the interior flux
-      !! telescopes and Σ(areaT·hTr) is conserved.  The per-rung nghost
+      !! telescopes and Σ(areaT·h·c) is conserved.  The per-rung nghost
       !! minimum (fail-loud at configure) guarantees the full-rung reads at
       !! the seam faces stay in [1, nx].  On a non-periodic (wall) axis the
       !! position ladder degrades toward the array edge; wall faces carry no
@@ -5393,7 +5385,7 @@ contains
    pure subroutine drain_swept_flux_x_h3(nx, ny, nz, areaT, uhh, hprev, tr, wet_T, F)
       !! `ppm_h3` analogue of `drain_swept_flux_x`: swept-average zonal face
       !! flux VOLUME (`uhh` is a per-pass volume, not a rate) from the
-      !! concentration field `tr = hTr/hprev`.  The donor Courant number is
+      !! concentration field `tr = c`.  The donor Courant number is
       !! `uhh/(areaT*hprev)` and `ppm_h3_face_flux` returns `uhh` times the
       !! swept mean, so `F` has the units `drain_update_tracer_x` expects.
       !! Stencil is donor +-1 (Huynh 1997 edges, Colella & Woodward 1984

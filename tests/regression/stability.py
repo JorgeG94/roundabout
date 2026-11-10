@@ -1902,7 +1902,7 @@ def self_test():
 
     # (7d) The day-anchored En claims (gate E6, Ocean0 melt off under
     #      z_fixed). Checkpoints are the V100 measurements on the v0.1.0
-    #      defaults (bebt = 0.1, renorm_consistent_flux, I1'), read off the
+    #      defaults (bebt = 0.1, renorm_consistent_flux; earlier filler rule), read off the
     #      [stats] series: the protocol leg (nu_h = 6, the tier-1 row) must
     #      pass all four, the inviscid leg (nu_h = 0: 0.180 /day d15-30 and
     #      accelerating, 1.441E-06 at day 30) must fail the two 30-day

@@ -861,7 +861,7 @@ STABILITY_CASES = [
                "were scoped XFAIL here (a one-time -1.524E-06 / -2.030E-06 "
                "step at the first remap: the IC relamp draining the "
                "fillers' tracer content) until the vanished-layer content "
-               "rule I1' landed; MEASURED with it (gfortran 15.1 Release, "
+               "rule landed; MEASURED with it (gfortran 15.1 Release, "
                "tier 2, 0.5 d): worst |Error| Salt 1.663E-13, Heat "
                "3.396E-13, Mass 1.804E-14 (ssp_rk2 twin 2.108E-13 / "
                "3.836E-13 / 2.043E-14), peak En 1.025E-08.",

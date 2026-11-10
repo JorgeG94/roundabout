@@ -21,10 +21,10 @@ tracer-advect step (no accumulation window is ever cut by a remap).
   (twice per outer step), on the stage-instantaneous transport. Cheapest
   per step; tracer↔thickness consistency to RK2 truncation order.
 - **`dt_tracer_advect_ratio = N > 1`:** during the dynamics the thickness
-  advances while the tracer's CONCENTRATION `T = hTr/h_layer` is held fixed
-  (`hTr` is re-weighted onto the new `h` each stage — MOM6's prognostic IS a
-  concentration, so it gets this for free; freezing the CONTENT instead
-  corrupts every `T = hTr/h` consumer, the EOS above all), and the layer mass
+  advances while the tracer's CONCENTRATION `c` is held fixed (the stored
+  prognostic IS the concentration, so this is free; the content `h·c`
+  follows the new `h` and the budgets are told so by the hold/release
+  bookkeeping), and the layer mass
   transport is accumulated (`uhtr += ½·mass_flux·dt` per stage). Once per
   `N`-step window the accumulated *time-mean* transport advects every tracer
   in a single conservative swept-PPM **drain** (CFL sub-cycled),
@@ -73,7 +73,7 @@ entirely.
 
 `ratio > 1` runs on any rank count, bit-identical to the single-rank run.
 The drain fields a pass reads off-tile (the accumulated `uhtr`/`vhtr`, then
-each pass's tracer content, reconstructed thickness and remaining transport)
+each pass's tracer concentration, reconstructed thickness and remaining transport)
 are halo-exchanged; fields every rank rebuilds identically from those (the
 concentrations, the PPM edge values) are recomputed locally instead. And
 the sub-cycle pass count comes from one global-max CFL per window, so every

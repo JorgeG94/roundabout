@@ -10,7 +10,7 @@ module rdb_ice_ocean_coupler
    !! **TRAP #2 — sign convention** (resolved against the CODE, not the
    !! (now-fixed) stale module-header docstring of
    !! `rdb_ocean_surface_flux`): `apply_surface_src_2d_impl` does
-   !! `hTr_S(i,j,nz) += (dt/rho0) * Q_salt(i,j) * wet_mask(i,j)`, i.e.
+   !! `c_S(i,j,nz) += (dt/rho0) * Q_salt(i,j) * wet_mask(i,j) / h_top`, i.e.
    !! `dS/dt = +Q_salt/(rho0*h_top)` — Q_salt is POSITIVE-SALINIFIES.
    !! Brine rejection (freezing seawater leaves excess salt behind) must
    !! RAISE the ocean surface salinity, so `salt_flux_diag` (already
@@ -98,7 +98,7 @@ contains
       !! **Components off** (default):
       !!   Q_salt(i,j) = Q_salt_const + salt_flux_diag(i,j)
       !! POSITIVE SALINIFIES (TRAP #2 above — matches
-      !! `apply_surface_src_2d_impl`'s `hTr_S += dt/rho0*Q_salt`). This
+      !! `apply_surface_src_2d_impl`'s `h*c_S += dt/rho0*Q_salt`). This
       !! is a FULL OVERWRITE from the configure-time constant plus the
       !! last uptake's rate: no accumulation drift, and a thermo window
       !! with no freezing resets the field back to the background

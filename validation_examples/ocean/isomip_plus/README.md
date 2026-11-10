@@ -338,6 +338,7 @@ Heat :-4.723233226E+15  Error -7.994E-02  out 5.593E+06  src -1.062E+13
 
 61 % of the initial salt content, appearing as a step change between step 0
 and step 1 and then flat. **It was a real defect, not a baseline artefact.**
+(Tracers were stored as content `hTr = h*c` at the time; they are concentrations now.)
 A grounded column's water column `b − z_draft` is NEGATIVE — −314 m on
 average here — so its seeded `h_layer` was negative, and the land tracer
 hold `val = hTr/max(h_old, H_VANISHED); hTr = val*H_VANISHED` is an exact
@@ -351,7 +352,7 @@ grounded columns' summed DEPTH DEFICIT `Σ(z_draft − b)`, not their area,
 which is why 39.4 % and 14 % grounded gave 6.09E-01 and 1.87E-02 rather
 than anything proportional to the fraction.
 
-A land T-cell now holds `h_layer = H_VANISHED` and `hTr = 0` — the state
+A land T-cell now holds `h_layer = H_VANISHED` and `c = 0` — the state
 every vanished-gated operator already holds it at — and a grounded column's
 barotropic datum is `0` rather than a negative water column. The same run
 today:

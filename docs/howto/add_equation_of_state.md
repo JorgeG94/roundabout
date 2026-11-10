@@ -9,7 +9,7 @@ Adding a variant is filling in an arm plus wiring the parse.
 
 `ocean_eos_compute(eos, ms, active)`
 (`src/core/ocean/state/rdb_ocean_eos_compute.F90`) is the outer shim: it pulls
-`ms%tracers(idx)%hTr` off the registry on the *host* and hands flat arrays to
+`ms%tracers(idx)%c` (the concentration) off the registry on the *host* and hands flat arrays to
 `eos_compute_arrays` in `rdb_eos.F90`, which does
 `select case (eos%variant)` over `EOS_VARIANT_LINEAR` / `EOS_VARIANT_WRIGHT_97`
 / `EOS_VARIANT_ROQUET_SPV` (`EOS_VARIANT_TEOS10` is reserved and **fails loud**
