@@ -788,8 +788,8 @@ contains
          ms%u_face_x_layer = 0.0_wp
          ms%v_face_y_layer = 0.0_wp
          do k = 1, NZC
-            ms%tracers(ms%idx_salinity)%hTr(:, :, k) = S_k(k)*H0
-            ms%tracers(ms%idx_temperature)%hTr(:, :, k) = T_k(k)*H0
+            ms%tracers(ms%idx_salinity)%c(:, :, k) = S_k(k)
+            ms%tracers(ms%idx_temperature)%c(:, :, k) = T_k(k)
          end do
          dyn%bt_work%bt_H_ref = real(NZC, wp)*H0
 

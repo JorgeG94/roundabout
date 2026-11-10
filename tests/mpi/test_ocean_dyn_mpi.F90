@@ -901,12 +901,12 @@ contains
 
       ! Measure initial mass + tracer sums
       !$acc update self(ms%h_layer)
-      !$acc update self(ms%tracers(ms%idx_salinity)%hTr)
-      !$acc update self(ms%tracers(ms%idx_temperature)%hTr)
+      !$acc update self(ms%tracers(ms%idx_salinity)%c)
+      !$acc update self(ms%tracers(ms%idx_temperature)%c)
       local_mass0 = interior_mass_sum(ms%h_layer, NX_G, NY_G, ng_use, NZ, DX, DY)
       mass0 = local_mass0  ! serial — no allreduce needed; same on all ranks
-      salt0 = interior_tracer_sum(ms%tracers(ms%idx_salinity)%hTr, NX_G, NY_G, ng_use, NZ, DX, DY)
-      heat0 = interior_tracer_sum(ms%tracers(ms%idx_temperature)%hTr, NX_G, NY_G, ng_use, NZ, DX, DY)
+      salt0 = interior_tracer_sum(ms%tracers(ms%idx_salinity)%c, ms%h_layer, NX_G, NY_G, ng_use, NZ, DX, DY)
+      heat0 = interior_tracer_sum(ms%tracers(ms%idx_temperature)%c, ms%h_layer, NX_G, NY_G, ng_use, NZ, DX, DY)
 
       ! Step N_STEPS
       do step = 1, N_STEPS
@@ -917,16 +917,16 @@ contains
 
       ! Pull state to host for measurement
       !$acc update self(ms%h_layer, ms%u_face_x_layer, ms%v_face_y_layer)
-      !$acc update self(ms%tracers(ms%idx_salinity)%hTr)
-      !$acc update self(ms%tracers(ms%idx_temperature)%hTr)
+      !$acc update self(ms%tracers(ms%idx_salinity)%c)
+      !$acc update self(ms%tracers(ms%idx_temperature)%c)
 
       local_massN = interior_mass_sum(ms%h_layer, NX_G, NY_G, ng_use, NZ, DX, DY)
       local_ke = interior_ke_sum(ms%h_layer, ms%u_face_x_layer, ms%v_face_y_layer, &
                                  NX_G, NY_G, ng_use, NZ, DX, DY)
       massN = local_massN
       ke_out = local_ke
-      saltN = interior_tracer_sum(ms%tracers(ms%idx_salinity)%hTr, NX_G, NY_G, ng_use, NZ, DX, DY)
-      heatN = interior_tracer_sum(ms%tracers(ms%idx_temperature)%hTr, NX_G, NY_G, ng_use, NZ, DX, DY)
+      saltN = interior_tracer_sum(ms%tracers(ms%idx_salinity)%c, ms%h_layer, NX_G, NY_G, ng_use, NZ, DX, DY)
+      heatN = interior_tracer_sum(ms%tracers(ms%idx_temperature)%c, ms%h_layer, NX_G, NY_G, ng_use, NZ, DX, DY)
 
       ! Cleanup
       call dyn%exit_data()
@@ -1112,13 +1112,13 @@ contains
 
       ! Measure initial mass + tracer sums (allreduce over ranks)
       !$acc update self(ms%h_layer)
-      !$acc update self(ms%tracers(ms%idx_salinity)%hTr)
-      !$acc update self(ms%tracers(ms%idx_temperature)%hTr)
+      !$acc update self(ms%tracers(ms%idx_salinity)%c)
+      !$acc update self(ms%tracers(ms%idx_temperature)%c)
       local_mass0 = interior_mass_sum(ms%h_layer, nxl, nyl, ng_use, NZ, DX, DY)
       call halo_allreduce_sum(local_mass0, global_mass0)
       mass0 = global_mass0
-      local_salt0 = interior_tracer_sum(ms%tracers(ms%idx_salinity)%hTr, nxl, nyl, ng_use, NZ, DX, DY)
-      local_heat0 = interior_tracer_sum(ms%tracers(ms%idx_temperature)%hTr, nxl, nyl, ng_use, NZ, DX, DY)
+      local_salt0 = interior_tracer_sum(ms%tracers(ms%idx_salinity)%c, ms%h_layer, nxl, nyl, ng_use, NZ, DX, DY)
+      local_heat0 = interior_tracer_sum(ms%tracers(ms%idx_temperature)%c, ms%h_layer, nxl, nyl, ng_use, NZ, DX, DY)
       call halo_allreduce_sum(local_salt0, global_salt0)
       call halo_allreduce_sum(local_heat0, global_heat0)
       salt0 = global_salt0
@@ -1144,8 +1144,8 @@ contains
 
       ! Pull state to host for measurement
       !$acc update self(ms%h_layer, ms%u_face_x_layer, ms%v_face_y_layer)
-      !$acc update self(ms%tracers(ms%idx_salinity)%hTr)
-      !$acc update self(ms%tracers(ms%idx_temperature)%hTr)
+      !$acc update self(ms%tracers(ms%idx_salinity)%c)
+      !$acc update self(ms%tracers(ms%idx_temperature)%c)
 
       local_massN = interior_mass_sum(ms%h_layer, nxl, nyl, ng_use, NZ, DX, DY)
       local_ke = interior_ke_sum(ms%h_layer, ms%u_face_x_layer, ms%v_face_y_layer, &
@@ -1154,8 +1154,8 @@ contains
       call halo_allreduce_sum(local_ke, global_ke)
       massN = global_massN
       ke_out = global_ke
-      local_saltN = interior_tracer_sum(ms%tracers(ms%idx_salinity)%hTr, nxl, nyl, ng_use, NZ, DX, DY)
-      local_heatN = interior_tracer_sum(ms%tracers(ms%idx_temperature)%hTr, nxl, nyl, ng_use, NZ, DX, DY)
+      local_saltN = interior_tracer_sum(ms%tracers(ms%idx_salinity)%c, ms%h_layer, nxl, nyl, ng_use, NZ, DX, DY)
+      local_heatN = interior_tracer_sum(ms%tracers(ms%idx_temperature)%c, ms%h_layer, nxl, nyl, ng_use, NZ, DX, DY)
       call halo_allreduce_sum(local_saltN, global_saltN)
       call halo_allreduce_sum(local_heatN, global_heatN)
       saltN = global_saltN
@@ -1437,8 +1437,8 @@ contains
                ! (e.g. nghost=2) leaves salt clean while heat drifts + grows.
                t_struct = eos%T_ref*(1.0_wp + 0.20_wp* &
                                      sin(2.0_wp*PI*real(i_global, wp)/real(nx_g, wp)))
-               ms%tracers(ms%idx_salinity)%hTr(i, j, k) = eos%S_ref*ms%h_layer(i, j, k)
-               ms%tracers(ms%idx_temperature)%hTr(i, j, k) = t_struct*ms%h_layer(i, j, k)
+               ms%tracers(ms%idx_salinity)%c(i, j, k) = eos%S_ref
+               ms%tracers(ms%idx_temperature)%c(i, j, k) = t_struct
             end do
          end do
       end do
@@ -1481,14 +1481,15 @@ contains
    end function interior_mass_sum
 
    ! =======================================================================
-   ! Compute interior tracer sum on host:  sum_interior( hTr ) * area.
-   ! Mirrors interior_mass_sum for a single tracer's hTr slice (PSU·m /
-   ! °C·m per cell before the area weight).  Used for the salt/heat
-   ! closure + agreement checks.
+   ! Compute interior tracer CONTENT on host:  sum_interior( h * c ) * area.
+   ! Mirrors interior_mass_sum for a single tracer's concentration `c`
+   ! weighted by the layer thickness (PSU·m / °C·m per cell before the area
+   ! weight).  Used for the salt/heat closure + agreement checks.
    ! =======================================================================
-   pure function interior_tracer_sum(hTr, nx_phys, ny_phys, ng, nz_in, dx, dy) result(total)
+   pure function interior_tracer_sum(c, h, nx_phys, ny_phys, ng, nz_in, dx, dy) result(total)
       integer, intent(in) :: nx_phys, ny_phys, ng, nz_in
-      real(wp), intent(in) :: hTr(ng + nx_phys + ng, ng + ny_phys + ng, nz_in)
+      real(wp), intent(in) :: c(ng + nx_phys + ng, ng + ny_phys + ng, nz_in)
+      real(wp), intent(in) :: h(ng + nx_phys + ng, ng + ny_phys + ng, nz_in)
       real(wp), intent(in) :: dx, dy
       real(wp) :: total
       integer :: i, j, k
@@ -1498,7 +1499,7 @@ contains
       do k = 1, nz_in
          do j = ng + 1, ng + ny_phys
             do i = ng + 1, ng + nx_phys
-               total = total + hTr(i, j, k)*area
+               total = total + h(i, j, k)*c(i, j, k)*area
             end do
          end do
       end do

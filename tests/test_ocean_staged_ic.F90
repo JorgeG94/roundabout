@@ -215,8 +215,8 @@ contains
       is = e1%state%multilayer%idx_salinity
       call check(error, ip > 0, "pseudo-salt was not registered")
       if (allocated(error)) return
-      call check(error, all(e1%state%multilayer%tracers(ip)%hTr == &
-                            e1%state%multilayer%tracers(is)%hTr), &
+      call check(error, all(e1%state%multilayer%tracers(ip)%c == &
+                            e1%state%multilayer%tracers(is)%c), &
                  "pseudo-salt is not bit-for-bit the staged S")
       if (allocated(error)) return
       call engine_teardown(e1)
@@ -233,16 +233,15 @@ contains
       do k = 1, NZ
          do j = 1, NY
             do i = 1, NX
-               c = e2%state%multilayer%tracers(ip)%hTr(NG + i, NG + j, k)/ &
-                   e2%state%multilayer%h_layer(NG + i, NG + j, k)
+               c = e2%state%multilayer%tracers(ip)%c(NG + i, NG + j, k)
                call check(error, abs(c - pc(i, j, k)) <= 8.0_wp*epsilon(1.0_wp)*abs(pc(i, j, k)), &
                           "staged pseudo-salt was overwritten by the S re-seed")
                if (allocated(error)) return
             end do
          end do
       end do
-      call check(error, any(e2%state%multilayer%tracers(ip)%hTr /= &
-                            e2%state%multilayer%tracers(is)%hTr), &
+      call check(error, any(e2%state%multilayer%tracers(ip)%c /= &
+                            e2%state%multilayer%tracers(is)%c), &
                  "pseudo-salt still equals S although it was staged separately")
       call engine_teardown(e2)
    end subroutine test_pseudo_salt
@@ -268,8 +267,7 @@ contains
       do k = 1, NZ
          do j = 1, NY
             do i = 1, NX
-               c = engine%state%multilayer%tracers(it)%hTr(NG + i, NG + j, k)/ &
-                   engine%state%multilayer%h_layer(NG + i, NG + j, k)
+               c = engine%state%multilayer%tracers(it)%c(NG + i, NG + j, k)
                call check(error, abs(c - tc(i, j, k)) <= 4.0_wp*epsilon(1.0_wp)*abs(tc(i, j, k)), &
                           "T concentration is not the staged one within a few ulp")
                if (allocated(error)) return
@@ -281,8 +279,7 @@ contains
       end do
       ! S was not staged: its concentration must survive the h change.
       it = engine%state%multilayer%idx_salinity
-      c = engine%state%multilayer%tracers(it)%hTr(NG + 3, NG + 4, 2)/ &
-          engine%state%multilayer%h_layer(NG + 3, NG + 4, 2)
+      c = engine%state%multilayer%tracers(it)%c(NG + 3, NG + 4, 2)
       call check(error, abs(c - 35.0_wp) <= 8.0_wp*epsilon(1.0_wp)*35.0_wp, &
                  "unstaged S lost its concentration across a staged h")
       call engine_teardown(engine)

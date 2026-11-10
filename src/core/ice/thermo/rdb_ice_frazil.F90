@@ -44,7 +44,7 @@ contains
    pure subroutine ice_frazil_accumulate(grid, eos, ms, frazil_heat, &
                                          heat_budget_frazil)
       !! Outer shim (outer-shim + flat-impl pattern): dereference the
-      !! tracer registry (`ms%tracers(idx)%hTr`) on the HOST and forward
+      !! tracer registry (`ms%tracers(idx)%c`) on the HOST and forward
       !! bare arrays to the device kernel — NVHPC stdpar cannot follow
       !! the array-of-derived-types indirection inside a do-concurrent
       !! body.  No-op when either S or T is unregistered.
@@ -65,8 +65,8 @@ contains
       idx_S = ms%idx_salinity
       if (idx_T <= 0 .or. idx_S <= 0) return
 
-      call ice_frazil_accumulate_impl(ms%tracers(idx_T)%hTr, &
-                                      ms%tracers(idx_S)%hTr, &
+      call ice_frazil_accumulate_impl(ms%tracers(idx_T)%c, &
+                                      ms%tracers(idx_S)%c, &
                                       ms%h_layer, ms%wet_mask, &
                                       frazil_heat, heat_budget_frazil, &
                                       eos, grid%nghost, &
@@ -117,16 +117,16 @@ contains
       do concurrent(j=j_lo:j_hi, i=i_lo:i_hi) local(h, t_sfc, s_sfc, t_f, d_htr)
          h = h_layer(i, j, nz)
          if (wet_mask(i, j) > 0.5_wp .and. h > H_VANISHED) then
-            t_sfc = rdb_conc_of_raw(hTr_T(i, j, nz), h)
-            s_sfc = rdb_conc_of_raw(hTr_S(i, j, nz), h)
+            t_sfc = hTr_T(i, j, nz)
+            s_sfc = hTr_S(i, j, nz)
             t_f = eos_freezing_point(eos, s_sfc, 0.0_wp)
             if (t_sfc < t_f) then
                d_htr = h*(t_f - t_sfc)
                frazil_heat(i, j) = frazil_heat(i, j) &
                                    + RHO_WATER*eos%c_p*d_htr
                heat_budget_frazil(i, j, 1) = heat_budget_frazil(i, j, 1) + d_htr
-               ! Exact clamp: T_after = (h·T_f)/h == T_f.
-               hTr_T(i, j, nz) = h*t_f
+               ! Exact clamp: T_after == T_f.
+               hTr_T(i, j, nz) = t_f
             end if
          end if
       end do
@@ -160,8 +160,8 @@ contains
       idx_S = ms%idx_salinity
       if (idx_T <= 0 .or. idx_S <= 0) return
 
-      call ice_frazil_accumulate_column_impl(ms%tracers(idx_T)%hTr, &
-                                             ms%tracers(idx_S)%hTr, &
+      call ice_frazil_accumulate_column_impl(ms%tracers(idx_T)%c, &
+                                             ms%tracers(idx_S)%c, &
                                              ms%h_layer, ms%wet_mask, &
                                              frazil_heat, heat_budget_frazil, &
                                              eos, pressure_dependent, reclaim, &
@@ -236,8 +236,8 @@ contains
             ! ---- 1. reclaim on the surface layer ----
             if (reclaim .and. f_bank > 0.0_wp) then
                h = h_layer(i, j, nz)
-               t_k = rdb_vl_conc(hTr_T(i, j, nz), h)
-               s_k = rdb_vl_conc(hTr_S(i, j, nz), h)
+               t_k = hTr_T(i, j, nz)
+               s_k = hTr_S(i, j, nz)
                p_k = 0.0_wp
                if (pressure_dependent) p_k = 0.5_wp*gr*h
                t_f = eos_freezing_point(eos, s_k, p_k)
@@ -251,7 +251,7 @@ contains
                      new_t = t_f
                   end if
                   dsum = dsum + h*(new_t - t_k)
-                  hTr_T(i, j, nz) = h*new_t
+                  hTr_T(i, j, nz) = new_t
                end if
             end if
 
@@ -259,9 +259,9 @@ contains
             do k = 1, nz
                h = h_layer(i, j, k)
                if (h <= H_DIV_EPS) cycle
-               t_k = rdb_vl_conc(hTr_T(i, j, k), h)
+               t_k = hTr_T(i, j, k)
                if (t_k < 1.0_wp .or. c > 0.0_wp) then
-                  s_k = rdb_vl_conc(hTr_S(i, j, k), h)
+                  s_k = hTr_S(i, j, k)
                   p_k = 0.0_wp
                   if (pressure_dependent) then
                      p_k = 0.5_wp*gr*h_layer(i, j, nz)
@@ -275,7 +275,7 @@ contains
                      if (t_k < t_f) then
                         c = c + hc*(t_f - t_k)
                         dsum = dsum + h*(t_f - t_k)
-                        hTr_T(i, j, k) = h*t_f
+                        hTr_T(i, j, k) = t_f
                      end if
                   else if (c > 0.0_wp .or. t_k < t_f) then
                      if (c + hc*(t_f - t_k) < 0.0_wp) then
@@ -286,7 +286,7 @@ contains
                         new_t = t_f
                      end if
                      dsum = dsum + h*(new_t - t_k)
-                     hTr_T(i, j, k) = h*new_t
+                     hTr_T(i, j, k) = new_t
                   end if
                end if
             end do

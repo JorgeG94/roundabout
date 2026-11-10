@@ -1,4 +1,4 @@
-"""D3: interior-by-default shape, read-only views, derived concentration
+"""D3: interior-by-default shape, read-only views, tracer concentration
 fields, and the lazy-sync generation counter -- silent re-sync on access,
 no explicit sync_host() call ever required."""
 
@@ -24,29 +24,15 @@ def test_view_is_read_only(ocean_nml):
         assert info["data"][1] is True  # (address, readonly) -- readonly
 
 
-def test_derived_field_differs_from_raw_htr(ocean_nml):
+def test_tracer_field_is_the_stored_concentration(ocean_nml):
     with rdb.Model(ocean_nml) as m:
         T = m.temperature
-        h = m.h
         t_val = T[0, 0, 0]
-        htr = T.hTr
-        htr_val = htr[0, 0, 0]
-        h_val = h[0, 0, 0]
-        # hTr is h*T, not T -- they differ whenever h != 1.
-        assert htr_val != t_val
-        assert abs(htr_val - t_val * h_val) < 1e-9
-        # temperature is close to the namelist's initial_temperature=12.0
+        # temperature is the namelist's initial_temperature=12.0 (the store
+        # IS the concentration, not h*T, so h plays no part).
         assert abs(t_val - 12.0) < 1e-6
-
-
-def test_derived_field_array_interface_raises(ocean_nml):
-    with rdb.Model(ocean_nml) as m:
-        T = m.temperature
-        try:
-            _ = T.__array_interface__
-            assert False, "expected RdbUnsupportedError"
-        except rdb.RdbUnsupportedError:
-            pass
+        # a zero-copy raw field: it exposes a buffer
+        assert T.__array_interface__["data"][1] is True  # read-only view
 
 
 def test_field_read_after_step_silently_resyncs(ocean_nml):

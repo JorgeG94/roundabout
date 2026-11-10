@@ -198,11 +198,11 @@ contains
             do k = 1, NZ
                ms%h_layer(i, j, k) = d_ic/real(NZ, wp)
                ! S: west saltier (S_ref+1) -> east fresher (S_ref-1);
-               ! T uniform.  hTr = conc * h_layer.
-               ms%tracers(ms%idx_salinity)%hTr(i, j, k) = &
-                  (eos%S_ref + 2.0_wp*(0.5_wp - frac))*ms%h_layer(i, j, k)
-               ms%tracers(ms%idx_temperature)%hTr(i, j, k) = &
-                  eos%T_ref*ms%h_layer(i, j, k)
+               ! T uniform.  c = concentration.
+               ms%tracers(ms%idx_salinity)%c(i, j, k) = &
+                  (eos%S_ref + 2.0_wp*(0.5_wp - frac))
+               ms%tracers(ms%idx_temperature)%c(i, j, k) = &
+                  eos%T_ref
                ms%rho_layer(i, j, k) = eos%rho0
             end do
             was_wet_rest(i) = .true.
@@ -239,8 +239,8 @@ contains
             if (mod(step, PROBE) == 0 .or. step == N_STEPS) then
                !$acc update self(ms%h_layer, ms%u_face_x_layer, ms%v_face_y_layer, &
                !$acc&            ms%rho_layer, &
-               !$acc&            ms%tracers(ms%idx_salinity)%hTr, &
-               !$acc&            ms%tracers(ms%idx_temperature)%hTr, &
+               !$acc&            ms%tracers(ms%idx_salinity)%c, &
+               !$acc&            ms%tracers(ms%idx_temperature)%c, &
                !$acc&            dyn%bt_work%wd_wet_dyn)
 
                ! No NaN/Inf anywhere.
@@ -372,8 +372,8 @@ contains
          do i = 1, nx
             do k = 1, NZ
                ms%h_layer(i, j, k) = htop_deep   ! default: deep everywhere
-               ms%tracers(idT)%hTr(i, j, k) = eos%T_ref*ms%h_layer(i, j, k)
-               ms%tracers(idS)%hTr(i, j, k) = eos%S_ref*ms%h_layer(i, j, k)
+               ms%tracers(idT)%c(i, j, k) = eos%T_ref
+               ms%tracers(idS)%c(i, j, k) = eos%S_ref
             end do
          end do
       end do
@@ -385,8 +385,8 @@ contains
          wet_dyn(i_dry, j) = 0.0_wp   ! dynamically dry -> gate must block
       end do
 
-      allocate (hT_ic, source=ms%tracers(idT)%hTr)
-      allocate (hS_ic, source=ms%tracers(idS)%hTr)
+      allocate (hT_ic, source=ms%tracers(idT)%c)
+      allocate (hS_ic, source=ms%tracers(idS)%c)
 
       call sf%set_surface_flux_const(Q_HEAT, Q_SALT)
 
@@ -488,7 +488,7 @@ contains
    end subroutine enable_wetdry_full
 
    pure real(wp) function tracer_content(ms, idx, i0, i1, j0, j1, nz) result(c)
-      !! Σ hTr over interior physical cells (all layers) — the conserved
+      !! Σ h·c over interior physical cells (all layers) — the conserved
       !! tracer CONTENT (concentration·thickness integrated).
       type(multilayer_state_t), intent(in) :: ms
       integer, intent(in) :: idx, i0, i1, j0, j1, nz
@@ -497,7 +497,7 @@ contains
       do k = 1, nz
          do j = j0, j1
             do i = i0, i1
-               c = c + ms%tracers(idx)%hTr(i, j, k)
+               c = c + ms%tracers(idx)%c(i, j, k)*ms%h_layer(i, j, k)
             end do
          end do
       end do
@@ -534,8 +534,8 @@ contains
       end if
       if (allocated(ms%tracers)) then
          do t = 1, size(ms%tracers)
-            if (.not. allocated(ms%tracers(t)%hTr)) cycle
-            if (any(ieee_is_nan(ms%tracers(t)%hTr))) then
+            if (.not. allocated(ms%tracers(t)%c)) cycle
+            if (any(ieee_is_nan(ms%tracers(t)%c))) then
                ok = .false.
                if (present(culprit)) write (culprit, '("tracer ", i0, " hTr")') t
                return
@@ -553,14 +553,14 @@ contains
       integer :: k
       do k = 1, nz
          ms%h_layer(i, j, k) = htop
-         ms%tracers(ms%idx_temperature)%hTr(i, j, k) = T_ref*htop
-         ms%tracers(ms%idx_salinity)%hTr(i, j, k) = S_ref*htop
+         ms%tracers(ms%idx_temperature)%c(i, j, k) = T_ref
+         ms%tracers(ms%idx_salinity)%c(i, j, k) = S_ref
       end do
    end subroutine set_column
 
    pure real(wp) function col_dtop(ms, ic, idx, i, ig, nyp, nz) result(dtop)
       !! Row-averaged top-layer (k = nz) concentration change for column
-      !! `i`: mean over physical rows of (hTr - hTr_ic)/h_layer.
+      !! `i`: mean over physical rows of (c - c_ic).
       type(multilayer_state_t), intent(in) :: ms
       real(wp), intent(in) :: ic(:, :, :)
       integer, intent(in) :: idx, i, ig, nyp, nz
@@ -570,7 +570,7 @@ contains
       do j = ig + 1, ig + nyp
          h = ms%h_layer(i, j, nz)
          if (h > 0.0_wp) then
-            acc = acc + (ms%tracers(idx)%hTr(i, j, nz) - ic(i, j, nz))/h
+            acc = acc + (ms%tracers(idx)%c(i, j, nz) - ic(i, j, nz))
          end if
       end do
       dtop = acc/real(nyp, wp)
@@ -587,8 +587,8 @@ contains
       call ms%enter_data()
       call sf%enter_data()
       call ocean_surface_flux_apply_tracers(grid, sf, ms, dt, wet_dyn=wet_dyn)
-      associate (hT => ms%tracers(ms%idx_temperature)%hTr, &
-                 hS => ms%tracers(ms%idx_salinity)%hTr)
+      associate (hT => ms%tracers(ms%idx_temperature)%c, &
+                 hS => ms%tracers(ms%idx_salinity)%c)
          !$acc update self(hT, hS)
       end associate
       call sf%exit_data()

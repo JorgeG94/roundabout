@@ -113,8 +113,8 @@ contains
          do j = 1, grid%ny_total
             do i = 1, grid%nx_total
                ms%h_layer(i, j, k) = h_lay(k)
-               ms%tracers(ms%idx_temperature)%hTr(i, j, k) = T_lay(k)*h_lay(k)
-               ms%tracers(ms%idx_salinity)%hTr(i, j, k) = S_lay(k)*h_lay(k)
+               ms%tracers(ms%idx_temperature)%c(i, j, k) = T_lay(k)
+               ms%tracers(ms%idx_salinity)%c(i, j, k) = S_lay(k)
             end do
          end do
       end do
@@ -160,8 +160,8 @@ contains
          T_lay = [4.0_wp, 18.0_wp]
          S_lay = [S_REF, S_REF]
          call setup_column(grid, ms, NZ, h_lay, T_lay, S_lay)
-         Th0 = sum(ms%tracers(ms%idx_temperature)%hTr(1, 1, :))
-         Sh0 = sum(ms%tracers(ms%idx_salinity)%hTr(1, 1, :))
+         Th0 = sum(ms%h_layer(1, 1, :)*ms%tracers(ms%idx_temperature)%c(1, 1, :))
+         Sh0 = sum(ms%h_layer(1, 1, :)*ms%tracers(ms%idx_salinity)%c(1, 1, :))
 
          rho_warm = lin_rho(18.0_wp, S_REF)
          rho_cold = lin_rho(4.0_wp, S_REF)
@@ -182,8 +182,8 @@ contains
                     "two-layer: surface layer should equal the warm-layer thickness")
          if (allocated(error)) exit checks
 
-         Th1 = sum(ms%tracers(ms%idx_temperature)%hTr(1, 1, :))
-         Sh1 = sum(ms%tracers(ms%idx_salinity)%hTr(1, 1, :))
+         Th1 = sum(ms%h_layer(1, 1, :)*ms%tracers(ms%idx_temperature)%c(1, 1, :))
+         Sh1 = sum(ms%h_layer(1, 1, :)*ms%tracers(ms%idx_salinity)%c(1, 1, :))
          call check(error, abs(Th1 - Th0) < 1.0e-9_wp, "two-layer: T*h conserved")
          if (allocated(error)) exit checks
          call check(error, abs(Sh1 - Sh0) < 1.0e-9_wp, "two-layer: S*h conserved")
@@ -221,8 +221,8 @@ contains
             rho_lay(k) = lin_rho(T_lay(k), S_REF)
          end do
          call setup_column(grid, ms, NZ, h_lay, T_lay, S_lay)
-         Th0 = sum(ms%tracers(ms%idx_temperature)%hTr(1, 1, :))
-         Sh0 = sum(ms%tracers(ms%idx_salinity)%hTr(1, 1, :))
+         Th0 = sum(ms%h_layer(1, 1, :)*ms%tracers(ms%idx_temperature)%c(1, 1, :))
+         Sh0 = sum(ms%h_layer(1, 1, :)*ms%tracers(ms%idx_salinity)%c(1, 1, :))
 
          call vc%init(grid, nz_ml=NZ)
          vc%coord_type = VCOORD_RHO
@@ -240,8 +240,8 @@ contains
          ! the target-interface midpoints, so a constant/flat column would
          ! FAIL (the weak "within range" check alone is tautological).
          do k = NZ, 1, -1           ! walk bed-up: density must not increase
-            Tk = ms%tracers(ms%idx_temperature)%hTr(1, 1, k)/ms%h_layer(1, 1, k)
-            Sk = ms%tracers(ms%idx_salinity)%hTr(1, 1, k)/ms%h_layer(1, 1, k)
+            Tk = ms%tracers(ms%idx_temperature)%c(1, 1, k)
+            Sk = ms%tracers(ms%idx_salinity)%c(1, 1, k)
             rho_new = lin_rho(Tk, Sk)
             call check(error, rho_new >= rmin - 1.0e-6_wp .and. rho_new <= rmax + 1.0e-6_wp, &
                        "linear strat: recovered density within target range")
@@ -256,17 +256,17 @@ contains
             if (allocated(error)) exit checks
          end do
          ! Real stratification preserved (a flat column collapses this spread).
-         Tk = ms%tracers(ms%idx_temperature)%hTr(1, 1, 1)/ms%h_layer(1, 1, 1)
-         Sk = ms%tracers(ms%idx_salinity)%hTr(1, 1, 1)/ms%h_layer(1, 1, 1)
+         Tk = ms%tracers(ms%idx_temperature)%c(1, 1, 1)
+         Sk = ms%tracers(ms%idx_salinity)%c(1, 1, 1)
          rho_new = lin_rho(Tk, Sk)
-         Tk = ms%tracers(ms%idx_temperature)%hTr(1, 1, NZ)/ms%h_layer(1, 1, NZ)
-         Sk = ms%tracers(ms%idx_salinity)%hTr(1, 1, NZ)/ms%h_layer(1, 1, NZ)
+         Tk = ms%tracers(ms%idx_temperature)%c(1, 1, NZ)
+         Sk = ms%tracers(ms%idx_salinity)%c(1, 1, NZ)
          call check(error, (rho_new - lin_rho(Tk, Sk)) > 0.5_wp*(rmax - rmin), &
                     "linear strat: bed-to-surface density spread preserved")
          if (allocated(error)) exit checks
 
-         Th1 = sum(ms%tracers(ms%idx_temperature)%hTr(1, 1, :))
-         Sh1 = sum(ms%tracers(ms%idx_salinity)%hTr(1, 1, :))
+         Th1 = sum(ms%h_layer(1, 1, :)*ms%tracers(ms%idx_temperature)%c(1, 1, :))
+         Sh1 = sum(ms%h_layer(1, 1, :)*ms%tracers(ms%idx_salinity)%c(1, 1, :))
          call check(error, abs(Th1 - Th0) < 1.0e-9_wp, "linear strat: T*h conserved")
          if (allocated(error)) exit checks
          call check(error, abs(Sh1 - Sh0) < 1.0e-9_wp, "linear strat: S*h conserved")
@@ -299,8 +299,8 @@ contains
          T_lay = [10.0_wp, 10.0_wp, 10.01_wp, 9.99_wp, 10.0_wp]
          S_lay = S_REF
          call setup_column(grid, ms, NZ, h_lay, T_lay, S_lay)
-         Th0 = sum(ms%tracers(ms%idx_temperature)%hTr(1, 1, :))
-         Sh0 = sum(ms%tracers(ms%idx_salinity)%hTr(1, 1, :))
+         Th0 = sum(ms%h_layer(1, 1, :)*ms%tracers(ms%idx_temperature)%c(1, 1, :))
+         Sh0 = sum(ms%h_layer(1, 1, :)*ms%tracers(ms%idx_salinity)%c(1, 1, :))
 
          call vc%init(grid, nz_ml=NZ)
          vc%coord_type = VCOORD_RHO
@@ -323,8 +323,8 @@ contains
                     "unstable: column total conserved")
          if (allocated(error)) exit checks
 
-         Th1 = sum(ms%tracers(ms%idx_temperature)%hTr(1, 1, :))
-         Sh1 = sum(ms%tracers(ms%idx_salinity)%hTr(1, 1, :))
+         Th1 = sum(ms%h_layer(1, 1, :)*ms%tracers(ms%idx_temperature)%c(1, 1, :))
+         Sh1 = sum(ms%h_layer(1, 1, :)*ms%tracers(ms%idx_salinity)%c(1, 1, :))
          call check(error, abs(Th1 - Th0) < 1.0e-8_wp, "unstable: T*h conserved")
          if (allocated(error)) exit checks
          call check(error, abs(Sh1 - Sh0) < 1.0e-8_wp, "unstable: S*h conserved")
@@ -356,7 +356,7 @@ contains
             S_lay(k) = S_REF
          end do
          call setup_column(grid, ms, NZ, h_lay, T_lay, S_lay)
-         Th0 = sum(ms%tracers(ms%idx_temperature)%hTr(1, 1, :))
+         Th0 = sum(ms%h_layer(1, 1, :)*ms%tracers(ms%idx_temperature)%c(1, 1, :))
          nx = grid%nx_total
          ny = grid%ny_total
 
@@ -379,7 +379,7 @@ contains
          call vc%enter_data()
          call ocean_apply_ale_remap_step(grid, vc, ms, bt_eta, bt_H_ref, &
                                          method=REMAP_PPM, eos=eos)
-         !$acc update self(ms%h_layer, ms%tracers(ms%idx_temperature)%hTr)
+         !$acc update self(ms%h_layer, ms%tracers(ms%idx_temperature)%c)
          !$acc update self(bt_eta)
          call vc%exit_data()
          call ms%exit_data()
@@ -396,7 +396,7 @@ contains
          call check(error, abs(Hsum - 100.0_wp) < 1.0e-7_wp, &
                     "device: column total conserved")
          if (allocated(error)) exit checks
-         Th1 = sum(ms%tracers(ms%idx_temperature)%hTr(1, 1, :))
+         Th1 = sum(ms%h_layer(1, 1, :)*ms%tracers(ms%idx_temperature)%c(1, 1, :))
          call check(error, abs(Th1 - Th0) < 1.0e-7_wp, "device: T*h conserved")
       end block checks
       if (allocated(bt_eta)) deallocate (bt_eta)
@@ -478,8 +478,8 @@ contains
          T_lay = [10.0_wp, 10.0_wp, 10.0_wp, 10.0_wp, 10.0_wp]
          S_lay = S_REF
          call setup_column(grid, ms, NZ, h_lay, T_lay, S_lay)
-         Th0 = sum(ms%tracers(ms%idx_temperature)%hTr(1, 1, :))
-         Sh0 = sum(ms%tracers(ms%idx_salinity)%hTr(1, 1, :))
+         Th0 = sum(ms%h_layer(1, 1, :)*ms%tracers(ms%idx_temperature)%c(1, 1, :))
+         Sh0 = sum(ms%h_layer(1, 1, :)*ms%tracers(ms%idx_salinity)%c(1, 1, :))
 
          call vc%init(grid, nz_ml=NZ)
          vc%coord_type = VCOORD_RHO
@@ -496,8 +496,8 @@ contains
          ! tracer mass here and conservation breaks.
          call run_remap_host(grid, vc, ms, eos)
 
-         Th2 = sum(ms%tracers(ms%idx_temperature)%hTr(1, 1, :))
-         Sh2 = sum(ms%tracers(ms%idx_salinity)%hTr(1, 1, :))
+         Th2 = sum(ms%h_layer(1, 1, :)*ms%tracers(ms%idx_temperature)%c(1, 1, :))
+         Sh2 = sum(ms%h_layer(1, 1, :)*ms%tracers(ms%idx_salinity)%c(1, 1, :))
          call check(error, abs(Th2 - Th0) < 1.0e-9_wp, &
                     "multi-regrid: T*h conserved across two regrids")
          if (allocated(error)) exit checks
@@ -522,10 +522,10 @@ contains
       !! sum(S*h) conserved to round-off.
       !!
       !! `all_vanished`: every source layer is at `H_VANISHED` (a land
-      !! column).  Such a column has no live layer, so the remap's I1'
-      !! content rule zeroes its tracer content whatever the coordinate
-      !! does (`rdb_vl_merge_content`: `hTr = 0` in a column with no live
-      !! layer) — the T/S checks are replaced by "h is left bit-for-bit".
+      !! column).  Such a column has no live layer: whatever the coordinate
+      !! does, its layers carry no content, so the T/S content checks are
+      !! replaced by "h is left bit-for-bit and the empty layers keep
+      !! their stale concentration c" (concentration-form storage).
       type(error_type), allocatable, intent(out) :: error
       integer, intent(in) :: coord
       character(len=*), intent(in) :: label
@@ -547,8 +547,8 @@ contains
          call setup_column(grid, ms, nz, h_lay, T_lay, S_lay)
          h_before = ms%h_layer(1, 1, :)
          H0 = sum(ms%h_layer(1, 1, :))
-         Th0 = sum(ms%tracers(ms%idx_temperature)%hTr(1, 1, :))
-         Sh0 = sum(ms%tracers(ms%idx_salinity)%hTr(1, 1, :))
+         Th0 = sum(ms%h_layer(1, 1, :)*ms%tracers(ms%idx_temperature)%c(1, 1, :))
+         Sh0 = sum(ms%h_layer(1, 1, :)*ms%tracers(ms%idx_salinity)%c(1, 1, :))
          call vc%init(grid, nz_ml=nz)
          vc%coord_type = coord
          do k = 0, nz
@@ -575,12 +575,18 @@ contains
          if (all_vanished) then
             call check(error, all(ms%h_layer(1, 1, :) == h_before), &
                        label//": too-thin column left bit-for-bit")
+            if (allocated(error)) exit checks
+            ! Concentration form: empty layers keep their stale c (they
+            ! carry no content), so the uniform seed stays uniform.
+            call check(error, all(ms%tracers(ms%idx_temperature)%c(1, 1, :) == T_lay) .and. &
+                       all(ms%tracers(ms%idx_salinity)%c(1, 1, :) == S_lay), &
+                       label//": empty layers keep their stale concentration")
             exit checks
          end if
-         call check(error, abs(sum(ms%tracers(ms%idx_temperature)%hTr(1, 1, :)) - Th0) &
+         call check(error, abs(sum(ms%h_layer(1, 1, :)*ms%tracers(ms%idx_temperature)%c(1, 1, :)) - Th0) &
                     <= 1.0e-13_wp*max(abs(Th0), 1.0_wp), label//": T*h conserved")
          if (allocated(error)) exit checks
-         call check(error, abs(sum(ms%tracers(ms%idx_salinity)%hTr(1, 1, :)) - Sh0) &
+         call check(error, abs(sum(ms%h_layer(1, 1, :)*ms%tracers(ms%idx_salinity)%c(1, 1, :)) - Sh0) &
                     <= 1.0e-13_wp*max(abs(Sh0), 1.0_wp), label//": S*h conserved")
       end block checks
       call vc%destroy()

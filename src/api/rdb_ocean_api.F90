@@ -791,7 +791,7 @@ contains
       !! Stage the CONCENTRATION field `(nx_p, ny_p, nz_p)` (the tracer's own
       !! units) of the tracer named `name` on the PENDING handle. The name is
       !! resolved against the registry at finalize
-      !! (`OCEAN_STATUS_ERR_NOT_FOUND` if unknown); the content `hTr = conc*h`
+      !! (`OCEAN_STATUS_ERR_NOT_FOUND` if unknown); the concentration `c = conc`
       !! is formed against the final (possibly staged) `h`. Staging the same
       !! name twice keeps the last.
       type(c_ptr), intent(in), value :: c_handle
@@ -1669,7 +1669,7 @@ contains
          status = int(ierr_local, c_int)
          return
       end if
-      tmp => h%state%multilayer%tracers(found)%hTr
+      tmp => h%state%multilayer%tracers(found)%c
       call fill_getter_3d(ptr, nx, ny, nz, gen, tmp, h%state%dyn%outer_step_count)
    end function rdb_ocean_get_tracer_ptr
 
@@ -1678,10 +1678,8 @@ contains
    ! device array(s) it just mutated, so calling one mid-run with no
    ! intervening read/refresh cannot rewind live device state to a stale
    ! host snapshot — the exact regression `ocean_setter_no_clobber` guards.
-   ! No hTr -> Tr division happens here (D3.2) — the tracer setter takes
-   ! concentration and forms `hTr = h_layer * value` on the physical
-   ! interior using the CURRENT thickness (refreshed first); every other
-   ! setter is a plain overwrite of its own array.
+   ! The tracer is stored as concentration, so the tracer setter is a plain
+   ! overwrite of `c` on the physical interior, like every other setter.
    ! ================================================================
 
    function rdb_ocean_set_h(c_handle, h_data, nx_p, ny_p, nz_p) result(status) &
@@ -1986,9 +1984,9 @@ contains
       !! temperature, PSU for salinity) on the physical interior. Verbatim
       !! the recovered `ocean_set_tracer_impl` sequence, generalised from
       !! hardcoded S/T to any registered tracer BY NAME: flush the
-      !! windowed-advection accumulator -> refresh host (need the LIVE
-      !! `h_layer` to form `hTr = h_layer*value`) -> mutate `hTr` on the
-      !! physical interior -> narrow-push `hTr` -> recompute `rho_layer`
+      !! windowed-advection accumulator -> refresh host -> overwrite
+      !! the stored concentration `c` on the physical interior -> narrow-push
+      !! `c` -> recompute `rho_layer`
       !! (pulled back to host so it stays authoritative; honours
       !! `enable_thermodynamics` like the time step, so prescribed `layer_rho_init`
       !! densities survive when it is off).
@@ -2032,15 +2030,15 @@ contains
       call ocean_handle_refresh_host(h)
 
       ng = h%grid%nghost
-      associate (hl => h%state%multilayer%h_layer, htr => h%state%multilayer%tracers(it)%hTr)
+      associate (conc => h%state%multilayer%tracers(it)%c)
          do k = 1, nz_p
             do j = 1, ny_p
                do i = 1, nx_p
-                  htr(ng + i, ng + j, k) = hl(ng + i, ng + j, k)*real(data(i, j, k), wp)
+                  conc(ng + i, ng + j, k) = real(data(i, j, k), wp)
                end do
             end do
          end do
-         !$acc update device(htr)
+         !$acc update device(conc)
       end associate
       call ocean_eos_compute(h%state%eos, h%state%multilayer, &
                              active=h%state%dyn%enable_thermodynamics)
@@ -2513,7 +2511,7 @@ contains
          !$acc&            ms%w_interface, ms%rho_layer)
          if (allocated(ms%tracers)) then
             do it = 1, size(ms%tracers)
-               !$acc update self(ms%tracers(it)%hTr)
+               !$acc update self(ms%tracers(it)%c)
             end do
          end if
          !$acc update self(bt%b, bw%bt_eta)

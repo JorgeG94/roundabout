@@ -33,13 +33,13 @@ from ._errors import (AlreadyExistsError, BadShapeError,
 from ._ffi import (BATHY_DEPTH_POSITIVE_DOWN, BATHY_HEIGHT_POSITIVE_UP,
                     LibraryNotFoundError, available_diagnostics,
                     find_library, get_lib)
-from ._field import DerivedField, DiagnosticField, Field, Loc
+from ._field import DiagnosticField, Field, Loc
 from ._knob import RdbDeadKnobWarning
 from ._model import Model
 from .diagnostics import Diagnostics, Duration, Restart
 
 __all__ = [
-    "Model", "Field", "DerivedField", "DiagnosticField", "Loc",
+    "Model", "Field", "DiagnosticField", "Loc",
     "Config", "RdbDeadKnobWarning",
     "Diagnostics", "Duration", "Restart", "available_diagnostics",
     "find_library", "get_lib", "LibraryNotFoundError",

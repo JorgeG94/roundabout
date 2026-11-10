@@ -154,8 +154,8 @@ contains
          else
             ms%h_layer(:, :, k) = H_LIVE
          end if
-         ms%tracers(idx_t)%hTr(:, :, k) = ms%h_layer(:, :, k)*t_k
-         ms%tracers(idx_s)%hTr(:, :, k) = ms%h_layer(:, :, k)*34.5_wp
+         ms%tracers(idx_t)%c(:, :, k) = t_k
+         ms%tracers(idx_s)%c(:, :, k) = 34.5_wp
          if (k < kb) then
             ms%u_face_x_layer(:, :, k) = 0.0_wp
          else
@@ -626,13 +626,13 @@ contains
       geo%enable = .true.
       geo%q_geo_const = QGEO
       geo%rho0 = RHO0
-      allocate (ht0, source=ms%tracers(ms%idx_temperature)%hTr)
+      allocate (ht0, source=ms%tracers(ms%idx_temperature)%c)
       src = DT*QGEO/(geo%rho0*geo%cp)
 
       !$acc enter data copyin(ms, geo)
       call ms%enter_data()
       call ocean_geothermal_apply_tracers(grid, geo, ms, DT)
-      associate (hT => ms%tracers(ms%idx_temperature)%hTr, &
+      associate (hT => ms%tracers(ms%idx_temperature)%c, &
                  bgeo => ms%heat_budget_geothermal)
          !$acc update self(hT, bgeo)
       end associate
@@ -645,10 +645,10 @@ contains
          do j = 1, ny
             do i = 1, nx
                if (k == kb) then
-                  err_kb = max(err_kb, abs(ms%tracers(ms%idx_temperature)%hTr(i, j, k) &
-                                           - ht0(i, j, k) - src))
+                  err_kb = max(err_kb, abs(ms%tracers(ms%idx_temperature)%c(i, j, k) &
+                                           - ht0(i, j, k) - src/ms%h_layer(i, j, k)))
                else
-                  err_other = max(err_other, abs(ms%tracers(ms%idx_temperature)%hTr(i, j, k) &
+                  err_other = max(err_other, abs(ms%tracers(ms%idx_temperature)%c(i, j, k) &
                                                  - ht0(i, j, k)))
                end if
             end do

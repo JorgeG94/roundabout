@@ -65,6 +65,7 @@ contains
       real(wp), intent(inout) :: hprev(np + 2*NG, NY, 1), hTr(np + 2*NG, NY, 1)
       logical, intent(in) :: h3
       integer :: nx, i
+      real(wp) :: divu(NY), divf(NY), hnew(NY)
       real(wp), allocatable :: areaT(:, :), iareaT(:, :), wet(:, :), tr(:, :, :), F(:, :, :)
       real(wp), allocatable :: pal(:, :, :), par(:, :, :), pa6(:, :, :)
       nx = np + 2*NG
@@ -99,9 +100,13 @@ contains
          call drain_swept_flux_x(nx, NY, 1, areaT, uhh, hprev, pal, par, pa6, F)
          !$acc end data
       end if
+      ! Concentration update (as drain_update_tracer_x): c is the prognostic.
       do i = 1, nx
-         hTr(i, :, 1) = hTr(i, :, 1) - (F(i + 1, :, 1) - F(i, :, 1))*iareaT(i, :)
-         hprev(i, :, 1) = hprev(i, :, 1) - (uhh(i + 1, :, 1) - uhh(i, :, 1))*iareaT(i, :)
+         divu = (uhh(i + 1, :, 1) - uhh(i, :, 1))*iareaT(i, :)
+         divf = (F(i + 1, :, 1) - F(i, :, 1))*iareaT(i, :)
+         hnew = hprev(i, :, 1) - divu
+         hTr(i, :, 1) = hTr(i, :, 1) + (hTr(i, :, 1)*divu - divf)/hnew
+         hprev(i, :, 1) = hnew
       end do
       call wrap_c(np, hprev(:, :, 1))
       call wrap_c(np, hTr(:, :, 1))
@@ -136,7 +141,7 @@ contains
          call one_pass(np, uhh, hprev, hTr, .true.)
          exc = max(exc, maxval(abs(hprev - 1.0_wp)))
       end do
-      err = maxval(abs(hTr(NG + 1:NG + np, :, 1)/hprev(NG + 1:NG + np, :, 1) - C0))/C0
+      err = maxval(abs(hTr(NG + 1:NG + np, :, 1) - C0))/C0
       write (output_unit, '(a,es10.3,a,es10.3)') '  [drain h3] uniform rel err = ', err, &
          '  max hprev excursion = ', exc
       call check(error, exc > 0.01_wp, "flow must actually be divergent")
@@ -167,7 +172,7 @@ contains
       do i = 1, np
          ex(i) = 1.0_wp + 0.5_wp*sin(2.0_wp*PI*(real(i - 1, wp) + 0.5_wp)/real(np, wp))
       end do
-      l1 = sum(abs(hTr(NG + 1:NG + np, 1, 1)/hprev(NG + 1:NG + np, 1, 1) - ex))/real(np, wp)
+      l1 = sum(abs(hTr(NG + 1:NG + np, 1, 1) - ex))/real(np, wp)
    end function sine_l1
 
    subroutine test_sine(error)
@@ -205,8 +210,8 @@ contains
       do n = 1, 6
          if (mod(n, 2) == 0) uhh = -uhh
          call one_pass(np, uhh, hprev, hTr, .true.)
-         cmin = min(cmin, minval(hTr(NG + 1:NG + np, :, 1)/hprev(NG + 1:NG + np, :, 1)))
-         cmax = max(cmax, maxval(hTr(NG + 1:NG + np, :, 1)/hprev(NG + 1:NG + np, :, 1)))
+         cmin = min(cmin, minval(hTr(NG + 1:NG + np, :, 1)))
+         cmax = max(cmax, maxval(hTr(NG + 1:NG + np, :, 1)))
       end do
       write (output_unit, '(a,2es11.3)') '  [drain h3] step min/max excursion = ', cmin, cmax - 1.0_wp
       call check(error, cmin > -1.0e-12_wp .and. cmax < 1.0_wp + 1.0e-12_wp, "no new extrema")
@@ -249,9 +254,9 @@ contains
          do j = 1, ny
             do i = 1, nx
                ph = 2.0_wp*PI*real(modulo(i - i0 + shift, NXP), wp)/real(NXP, wp)
-               ms%tracers(ms%idx_salinity)%hTr(i, j, k) = H0*(2.0_wp + sin(ph) + 0.4_wp*cos(3.0_wp*ph) &
-                                                              + 0.05_wp*real(j - j0, wp))
-               ms%tracers(ms%idx_temperature)%hTr(i, j, k) = 10.0_wp*H0
+               ms%tracers(ms%idx_salinity)%c(i, j, k) = (2.0_wp + sin(ph) + 0.4_wp*cos(3.0_wp*ph) &
+                                                         + 0.05_wp*real(j - j0, wp))
+               ms%tracers(ms%idx_temperature)%c(i, j, k) = 10.0_wp
             end do
          end do
       end do
@@ -264,7 +269,17 @@ contains
             ct%vhtr(i, j, :) = 0.8_wp*(1.0_wp + 0.5_wp*sin(ph))
          end do
       end do
-      mass0 = sum(ms%tracers(ms%idx_salinity)%hTr(i0:NG + NXP, j0:j1, :))
+      ! c is the window-START concentration on hprev = h_end + div(vhtr)/area
+      ! (uhtr is uniform in x: no zonal divergence); content is sum(h*c).
+      mass0 = 0.0_wp
+      do k = 1, NZ
+         do j = j0, j1
+            do i = i0, NG + NXP
+               mass0 = mass0 + (H0 + ct%vhtr(i, j + 1, k) - ct%vhtr(i, j, k))* &
+                       ms%tracers(ms%idx_salinity)%c(i, j, k)
+            end do
+         end do
+      end do
       !$acc enter data copyin(ms)
       call ms%enter_data()
       !$acc enter data copyin(ct)
@@ -280,9 +295,9 @@ contains
       !$acc exit data delete(ct)
       call ms%exit_data()
       !$acc exit data delete(ms)
-      mass1 = sum(ms%tracers(ms%idx_salinity)%hTr(i0:NG + NXP, j0:j1, :))
+      mass1 = sum(ms%h_layer(i0:NG + NXP, j0:j1, :)*ms%tracers(ms%idx_salinity)%c(i0:NG + NXP, j0:j1, :))
       allocate (hTr_out(NXP, NYP))
-      hTr_out = ms%tracers(ms%idx_salinity)%hTr(i0:NG + NXP, j0:j1, 1)
+      hTr_out = ms%tracers(ms%idx_salinity)%c(i0:NG + NXP, j0:j1, 1)
       call ct%destroy()
       call ms%destroy()
       call destroy_cartesian_metrics(metrics)

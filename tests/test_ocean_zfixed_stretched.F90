@@ -354,7 +354,7 @@ contains
       character(len=200) :: msg
 
       nml = nml_flat_lid("vcoord_type = 'z_fixed', zfixed_closed_faces = .true., "// &
-                         "check_vanished_content = .true., z_fixed_profile = 'tanh', "// &
+                         "z_fixed_profile = 'tanh', "// &
                          "z_fixed_dz_top = 10.0, z_fixed_tanh_center = 0.5, "// &
                          "z_fixed_tanh_width = 0.25")
       handle = c_null_ptr

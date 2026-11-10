@@ -379,9 +379,9 @@ contains
       type(multilayer_state_t), intent(inout) :: ms
       integer :: k
       do k = 1, NZ
-         ms%tracers(ms%idx_temperature)%hTr(:, :, k) = &
+         ms%tracers(ms%idx_temperature)%c(:, :, k) = &
             (10.0_wp + 0.5_wp*real(k - 1, wp))*ms%h_layer(:, :, k)
-         ms%tracers(ms%idx_salinity)%hTr(:, :, k) = 35.0_wp*ms%h_layer(:, :, k)
+         ms%tracers(ms%idx_salinity)%c(:, :, k) = 35.0_wp
       end do
    end subroutine seed_TS_uniform
 

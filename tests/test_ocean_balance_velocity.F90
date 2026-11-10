@@ -139,7 +139,7 @@ contains
    subroutine balanced_fields(beta, dT, dtdz, ref_level, flatten, u, v, h, ierr)
       !! The `none` seed, mapped to the device, then `ocean_balance_velocity`.
       !! `flatten`: set every column to `sum h = b` (flat SSH) BEFORE the call,
-      !! scaling `hTr` with `h` (concentration kept).
+      !! rescaling `h` (the stored concentration `c` is untouched).
       real(wp), intent(in) :: beta, dT, dtdz
       character(len=*), intent(in) :: ref_level
       logical, intent(in) :: flatten
@@ -148,7 +148,7 @@ contains
       type(ocean_engine_t) :: engine
       type(config_t) :: cfg
       logical :: ok
-      integer :: i, j, it, nx, ny, nz
+      integer :: i, j, nx, ny, nz
       real(wp) :: s
 
       ierr = -1
@@ -166,10 +166,7 @@ contains
             do i = 1, nx
                s = engine%state%barotropic%b(i, j)/sum(engine%state%multilayer%h_layer(i, j, :))
                engine%state%multilayer%h_layer(i, j, :) = s*engine%state%multilayer%h_layer(i, j, :)
-               do it = 1, size(engine%state%multilayer%tracers)
-                  engine%state%multilayer%tracers(it)%hTr(i, j, :) = &
-                     s*engine%state%multilayer%tracers(it)%hTr(i, j, :)
-               end do
+               ! Tracers are stored as concentration: rescaling h leaves c as is.
             end do
          end do
       end if

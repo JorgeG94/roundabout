@@ -511,9 +511,9 @@ contains
          if (allocated(error)) exit compare
 
          do it = 1, size(A%multilayer%tracers)
-            !$acc update self(A%multilayer%tracers(it)%hTr, B%multilayer%tracers(it)%hTr)
-            ok = arrays_identical_3d(A%multilayer%tracers(it)%hTr, &
-                                     B%multilayer%tracers(it)%hTr)
+            !$acc update self(A%multilayer%tracers(it)%c, B%multilayer%tracers(it)%c)
+            ok = arrays_identical_3d(A%multilayer%tracers(it)%c, &
+                                     B%multilayer%tracers(it)%c)
             call check(error, ok, "step (N+1): tracer hTr not bit-identical")
             if (allocated(error)) exit
          end do

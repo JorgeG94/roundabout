@@ -8,10 +8,11 @@ stdlib-only P3 constraint (no numpy anywhere in this module):
   1. INTERIOR BY DEFAULT. ``model.h`` is ``(nx, ny, nz)``, never the
      ghost-inclusive full extent. Ghosts are reachable only through the
      explicitly named ``.with_halo``.
-  2. CONCENTRATION, NOT hTr. ``model.temperature`` is degC -- a DERIVED
-     copy (the store is h*Tr), dividing only where ``h > H_VANISHED``
-     and writing NaN elsewhere. The raw store is available as
-     ``field.hTr``.
+  2. CONCENTRATION. ``model.temperature`` is degC and IS the stored
+     prognostic (the tracer store is the concentration c, not h*c): a
+     zero-copy view, writable through the narrow setter. A vanished
+     (filler) layer holds the last water's finite value, not NaN --
+     mask on ``model.h`` where a display needs it.
   3. STAGGERING IS AN ATTRIBUTE. Every field carries ``.location``, shown
      in ``repr()``.
   4. LAZY SYNC BY GENERATION, SILENT RE-SYNC. A field remembers the outer
@@ -272,86 +273,6 @@ class Field:
         scope = "interior" if self._interior else "with_halo"
         return (f"Field({self._name}, ({locs}), shape={self.shape}, "
                 f"unit={self.units!r}, {scope}, generation={self._gen})")
-
-
-class DerivedField(Field):
-    """A field COMPUTED from the store (hTr / h), so it is copy-only.
-
-    THE GUARD: concentration = hTr / h only where ``h > H_VANISHED``
-    (1.5e-4 m); elsewhere NaN -- not 0.0 (0 degC / 0 PSU are both legal
-    ocean values, so 0.0 would read a vanished layer as ice-point
-    freshwater rather than as missing; see D3.2).
-    """
-
-    __slots__ = ("_h_field",)
-
-    def __init__(self, model, name, htr_field, h_field, units="",
-                 long_name="", setter=None):
-        self._model = model
-        self._name = name
-        self._ptr = htr_field._ptr
-        self._full_shape = htr_field._full_shape
-        self._gen = htr_field._gen
-        self._epoch = model._epoch
-        self.location = htr_field.location
-        self.units = units
-        self.long_name = long_name
-        self._ghost = model.nghost
-        self._setter = setter
-        self._interior = True
-        self._h_field = h_field
-
-    @property
-    def hTr(self):
-        """The raw h*Tr store -- a zero-copy Field view."""
-        return Field(self._model, self._name + ".hTr", self._ptr,
-                     self._full_shape, self._gen, self.location,
-                     units=f"m*({self.units})" if self.units else "",
-                     long_name=self.long_name, setter=None, interior=True)
-
-    @property
-    def __array_interface__(self):
-        raise RdbUnsupportedError(
-            f"{self._name} is derived (hTr / h) and has no contiguous "
-            f"buffer of its own. Use {self._name}.hTr for the raw store, "
-            f"or {self._name}.copy() / {self._name}[...] for the "
-            f"concentration.")
-
-    def copy(self):
-        htr = Field(self._model, self._name, self._ptr, self._full_shape,
-                    self._gen, self.location, interior=True)
-        htr_nested = htr.copy()
-        h_nested = self._h_field.copy()
-        return _divide_guarded(htr_nested, h_nested)
-
-    def __getitem__(self, idx):
-        nested = self.copy()
-        if idx is Ellipsis or idx == slice(None):
-            return nested
-        if isinstance(idx, tuple) and len(idx) == self.ndim and all(
-                isinstance(i, int) for i in idx):
-            v = nested
-            for i in idx:
-                v = v[i]
-            return v
-        # Same numpy fallback as Field.__getitem__, but over the COPY
-        # (`nested`) -- a DerivedField has no contiguous buffer of its
-        # own to hand numpy zero-copy (see __array_interface__ above),
-        # so this is np.asarray(a Python nested list), not a view.
-        try:
-            import numpy as _np
-        except ImportError:
-            raise RdbUnsupportedError(
-                f"{self._name}: partial slicing without numpy is not "
-                f"supported in this build. Use {self._name}[...] or "
-                f"{self._name}.copy(), or install numpy.") from None
-        return _np.asarray(nested)[idx]
-
-
-def _divide_guarded(htr_nested, h_nested):
-    if isinstance(htr_nested, list):
-        return [_divide_guarded(a, b) for a, b in zip(htr_nested, h_nested)]
-    return htr_nested / h_nested if h_nested > H_VANISHED else math.nan
 
 
 def _assign_into(nested, idx, value):

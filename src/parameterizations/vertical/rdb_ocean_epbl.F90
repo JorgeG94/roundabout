@@ -883,8 +883,8 @@ contains
       sw_ctke_active = this%epbl_sw_ctke .and. sf%has_sw
       if (sw_ctke_active .and. sf%sw_from_qsw) then
          call epbl_column_kernel(grid, this, ms, &
-                                 ms%tracers(ms%idx_temperature)%hTr, &
-                                 ms%tracers(ms%idx_salinity)%hTr, &
+                                 ms%tracers(ms%idx_temperature)%c, &
+                                 ms%tracers(ms%idx_salinity)%c, &
                                  ss, dt, &
                                  sf%Q_heat, 1.0_wp/(this%rho0*sf%cp), &
                                  sf%Q_salt, 1.0_wp/this%rho0, &
@@ -894,8 +894,8 @@ contains
                                  ms%wet_mask, this%in_eos, nx, ny)
       else
          call epbl_column_kernel(grid, this, ms, &
-                                 ms%tracers(ms%idx_temperature)%hTr, &
-                                 ms%tracers(ms%idx_salinity)%hTr, &
+                                 ms%tracers(ms%idx_temperature)%c, &
+                                 ms%tracers(ms%idx_salinity)%c, &
                                  ss, dt, &
                                  sf%Q_heat, 1.0_wp/(this%rho0*sf%cp), &
                                  sf%Q_salt, 1.0_wp/this%rho0, &
@@ -941,7 +941,7 @@ contains
       type(ocean_epbl_t), intent(inout) :: this
       type(multilayer_state_t), intent(in) :: ms
       ! assumed-shape-ok: tracer registry outer-shim — caller host-dereferences
-      ! ms%tracers(idx)%hTr before passing; size varies per tracer slot
+      ! ms%tracers(idx)%c before passing; size varies per tracer slot
       ! (see CLAUDE.md "outer-shim + flat-impl" pattern); thermo cadence.
       real(wp), intent(in) :: hT(:, :, :)
          !! Temperature tracer hTr (degC*m), host-dereferenced.
@@ -989,7 +989,7 @@ contains
       ! prep locals
       integer :: k
       real(wp) :: q_t_kin, q_s_kin
-      real(wp) :: hk, hk_eff, inv_h, t0k, s0k, dmass, dpres, p_mid, pres
+      real(wp) :: hk, hk_eff, t0k, s0k, dmass, dpres, p_mid, pres
       real(wp) :: dsv_dt_k, dsv_ds_k, dsv_dt_sfc, dsv_ds_sfc, h_sum
       ! forcing / environment locals
       real(wp) :: ustar, absf, idecay, mech_in
@@ -1026,7 +1026,7 @@ contains
       nz = ms%nz_ml
 
       do concurrent(j=1:ny, i=1:nx) &
-         local(k, hk, hk_eff, inv_h, t0k, s0k, dmass, dpres, p_mid, pres, &
+         local(k, hk, hk_eff, t0k, s0k, dmass, dpres, p_mid, pres, &
                dsv_dt_k, dsv_ds_k, dsv_dt_sfc, dsv_ds_sfc, h_sum, &
                ustar, absf, idecay, mech_in, b0, ctke_sfc, &
                obl_it, n_its, min_mld, max_mld, mld_guess, mld_found, &
@@ -1077,9 +1077,8 @@ contains
          do k = nz, 1, -1
             hk = ms%h_layer(i, j, k)
             if (hk > 0.0_wp) then
-               inv_h = 1.0_wp/(hk + H_NEGLECT)
-               t0k = hT(i, j, k)*inv_h
-               s0k = hS(i, j, k)*inv_h
+               t0k = hT(i, j, k)
+               s0k = hS(i, j, k)
             else
                t0k = 0.0_wp
                s0k = 0.0_wp

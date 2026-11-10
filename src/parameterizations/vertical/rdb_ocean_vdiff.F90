@@ -4,8 +4,8 @@
 !!   * `vdiff_apply_momentum` — implicit vertical viscosity
 !!     on `u_face_x_layer` and `v_face_y_layer`.
 !!   * `vdiff_apply_tracers` — implicit vertical diffusivity on every
-!!     registered tracer (operates on `T = hTr/h`, writes back
-!!     `hTr = T*h`; `h_layer` is untouched).  Takes TWO diffusivity
+!!     registered tracer (operates on the concentration `c`;
+!!     `h_layer` is untouched).  Takes TWO diffusivity
 !!     sources, `kt_source` (temperature) and `ks_source` (salinity +
 !!     every passive tracer, MOM6's `Kd_salt` convention) — see the
 !!     routine's own docstring for the three-case dispatch.
@@ -35,9 +35,9 @@
 !! is `do concurrent (j, i)`.
 module rdb_ocean_vdiff
 #ifdef LFORTRAN_PASSING
-   use rdb_constants, only: wp, H_VANISHED, GRAVITY
+   use rdb_constants, only: H_DIV_EPS, wp, H_VANISHED, GRAVITY
 #else
-   use rdb_constants, only: wp, H_VANISHED, NZ_STACK_MAX, GRAVITY
+   use rdb_constants, only: H_DIV_EPS, wp, H_VANISHED, NZ_STACK_MAX, GRAVITY
 #endif
    use rdb_grid, only: hgrid_t
    use rdb_eos, only: eos_t, eos_density_derivs
@@ -841,9 +841,9 @@ contains
       use_eos = ms%idx_temperature > 0 .and. ms%idx_salinity > 0
       if (use_eos) then
          call bbl_column_conc_impl(nx, ny, nz, ms%h_layer, &
-                                   ms%tracers(ms%idx_temperature)%hTr, this%bbl_conc_t)
+                                   ms%tracers(ms%idx_temperature)%c, this%bbl_conc_t)
          call bbl_column_conc_impl(nx, ny, nz, ms%h_layer, &
-                                   ms%tracers(ms%idx_salinity)%hTr, this%bbl_conc_s)
+                                   ms%tracers(ms%idx_salinity)%c, this%bbl_conc_s)
       end if
       call bbl_faces_impl(nx + 1, ny, nx, ny, nz, .true., &
                           ms%u_face_x_layer, ms%v_face_y_layer, ms%h_layer, ms%wet_mask, &
@@ -1185,17 +1185,17 @@ contains
          if (two_pass .and. it /= ms%idx_temperature) cycle
          select case (ms%tracers(it)%budget_id)
          case (TRACER_BUDGET_HEAT)
-            call apply_factored_tracer(nx, ny, nz, ms%h_layer, ms%tracers(it)%hTr, &
+            call apply_factored_tracer(nx, ny, nz, ms%h_layer, ms%tracers(it)%c, &
                                        this%a_diag_t%data, this%b_diag_t%data, &
                                        this%c_diag_t%data, this%rhs_t%data, &
                                        budget=ms%heat_budget_vdiff)
          case (TRACER_BUDGET_SALT)
-            call apply_factored_tracer(nx, ny, nz, ms%h_layer, ms%tracers(it)%hTr, &
+            call apply_factored_tracer(nx, ny, nz, ms%h_layer, ms%tracers(it)%c, &
                                        this%a_diag_t%data, this%b_diag_t%data, &
                                        this%c_diag_t%data, this%rhs_t%data, &
                                        budget=ms%salt_budget_vdiff)
          case default
-            call apply_factored_tracer(nx, ny, nz, ms%h_layer, ms%tracers(it)%hTr, &
+            call apply_factored_tracer(nx, ny, nz, ms%h_layer, ms%tracers(it)%c, &
                                        this%a_diag_t%data, this%b_diag_t%data, &
                                        this%c_diag_t%data, this%rhs_t%data)
          end select
@@ -1213,12 +1213,12 @@ contains
          if (.not. ms%tracers(it)%do_vertical_diffusion) cycle
          if (it == ms%idx_temperature) cycle
          if (it == ms%idx_salinity) then
-            call apply_factored_tracer(nx, ny, nz, ms%h_layer, ms%tracers(it)%hTr, &
+            call apply_factored_tracer(nx, ny, nz, ms%h_layer, ms%tracers(it)%c, &
                                        this%a_diag_t%data, this%b_diag_t%data, &
                                        this%c_diag_t%data, this%rhs_t%data, &
                                        budget=ms%salt_budget_vdiff)
          else
-            call apply_factored_tracer(nx, ny, nz, ms%h_layer, ms%tracers(it)%hTr, &
+            call apply_factored_tracer(nx, ny, nz, ms%h_layer, ms%tracers(it)%c, &
                                        this%a_diag_t%data, this%b_diag_t%data, &
                                        this%c_diag_t%data, this%rhs_t%data)
          end if
@@ -1348,20 +1348,24 @@ contains
       end do
    end subroutine build_factorize_tracer_matrix
 
-   pure subroutine apply_factored_tracer(nx, ny, nz, h_layer, hTr, &
+   pure subroutine apply_factored_tracer(nx, ny, nz, h_layer, c, &
                                          a_diag, b_diag, c_diag, rhs, budget)
       !! Apply the pre-factored tridiagonal (from
-      !! `build_factorize_tracer_matrix`) to one tracer: form `T = hTr/h`,
-      !! run the Thomas RHS sweep + back-substitution against the stored
-      !! pivots, and reconstitute `hTr = T_new * h_layer`.  Operates on
-      !! concentration so it conserves cell-centred T; `h_layer` and the
-      !! factored `a/b/c` are read-only (shared across every tracer).
+      !! `build_factorize_tracer_matrix`) to one tracer's CONCENTRATION: run
+      !! the Thomas RHS sweep + back-substitution against the stored pivots
+      !! and store `c_new`.  The matrix is weighted by the floored thickness
+      !! `h̃ = max(h, H_VANISHED)`, so Σ h̃·c is conserved and a layer at or
+      !! below `H_VANISHED` is an identity row that keeps its `c` exactly;
+      !! `h_layer` and the factored `a/b/c` are read-only (shared across
+      !! every tracer).
       !!
       !! When `budget` is present, accumulate the per-cell increment
-      !! (T_new·h − hTr_old) into the contributor slot before overwriting.
+      !! `h·c_new − h·c_old` into the contributor slot before overwriting
+      !! (two standalone products so the budget telescopes with the console
+      !! total).
       integer, intent(in) :: nx, ny, nz
       real(wp), intent(in) :: h_layer(nx, ny, nz)
-      real(wp), intent(inout) :: hTr(nx, ny, nz)
+      real(wp), intent(inout) :: c(nx, ny, nz)
       real(wp), intent(in) :: a_diag(nx, ny, nz)
       real(wp), intent(in) :: b_diag(nx, ny, nz)
       real(wp), intent(in) :: c_diag(nx, ny, nz)
@@ -1369,21 +1373,14 @@ contains
       real(wp), intent(inout), optional :: budget(nx, ny, nz)
 
       integer :: i, j, k
-      real(wp) :: hTr_new
+      real(wp) :: p_new, p_old
 
-      do concurrent(j=1:ny, i=1:nx) local(k, hTr_new)
-         ! RHS = T = hTr/h̃, where h̃ = max(h, H_VANISHED) is the SAME floored
-         ! thickness used by build_factorize_tracer_matrix.  A vanishing /
-         ! collapsed layer (h ≤ H_VANISHED, e.g. a thin z* surface layer
-         ! driven ≤ 0 by combined Fox-Kemper + resolved transport on an
-         ! intermediate RK2 stage) is decoupled (identity row in the matrix)
-         ! and reconstituted with the same h̃ ⇒ hTr is preserved EXACTLY
-         ! rather than zeroed (the previous `h ≤ 0 → T = 0 → hTr = 0` branch
-         ! silently dropped its frozen tracer mass → ~5%/day leak under
-         ! FK × windowed advect).  For h ≫ H_VANISHED (sigma / double_gyre)
-         ! h̃ = h exactly ⇒ bit-identical.
+      do concurrent(j=1:ny, i=1:nx) local(k, p_new, p_old)
+         ! RHS = c.  A vanishing / collapsed layer (h ≤ H_VANISHED) is an
+         ! identity row of the matrix (built with the same floored h̃), so its
+         ! c is preserved EXACTLY.
          do k = 1, nz
-            rhs(i, j, k) = rdb_conc_of_floor(hTr(i, j, k), h_layer(i, j, k), H_VANISHED)
+            rhs(i, j, k) = c(i, j, k)
          end do
 
          ! ---- Thomas RHS forward sweep against the stored pivots ----
@@ -1397,19 +1394,20 @@ contains
             rhs(i, j, k) = rhs(i, j, k) - c_diag(i, j, k)*rhs(i, j, k + 1)
          end do
 
-         ! ---- Reconstitute hTr = T_new * h ----
+         ! ---- Store c_new (budget = h·c_new − h·c_old) ----
          ! Budget write gated INSIDE the single do concurrent (splitting
          ! present() into two loops makes NVHPC emit a far slower kernel
          ! for one branch — see the remap fix).
          if (present(budget)) then
             do k = 1, nz
-               hTr_new = rdb_content_of_floor(rhs(i, j, k), h_layer(i, j, k), H_VANISHED)
-               budget(i, j, k) = budget(i, j, k) + (hTr_new - hTr(i, j, k))
-               hTr(i, j, k) = hTr_new
+               p_new = h_layer(i, j, k)*rhs(i, j, k)
+               p_old = h_layer(i, j, k)*c(i, j, k)
+               budget(i, j, k) = budget(i, j, k) + (p_new - p_old)
+               c(i, j, k) = rhs(i, j, k)
             end do
          else
             do k = 1, nz
-               hTr(i, j, k) = rdb_content_of_floor(rhs(i, j, k), h_layer(i, j, k), H_VANISHED)
+               c(i, j, k) = rhs(i, j, k)
             end do
          end if
       end do
@@ -2111,7 +2109,7 @@ contains
       ! z-level partial steps: no shear across an interface that touches a
       ! CLOSED face layer.  The tracer twin does exactly this,
       ! unconditionally, in `build_factorize_tracer_matrix`.
-      ! vanished-ok: row decoupling across a z-level wall (the closed-face rule) —
+      ! row decoupling across a z-level wall (the closed-face rule) —
       ! a momentum-grid question, not a tracer concentration.
       cut = zlevel_faces .and. (hv_lo <= H_VANISHED .or. hv_hi <= H_VANISHED)
    end subroutine vdiff_interface_coupling

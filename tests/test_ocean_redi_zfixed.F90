@@ -186,32 +186,30 @@ contains
             do i = 1, ni
                ip = min(max(i - NG, 1), NXP)
                x = real(ip, wp)*DX
-               ms%tracers(ms%idx_temperature)%hTr(i, j, k) = &
-                  (T0 + gz_*zc + gx_*x + gy_*y)*tgt(i, j, k)
-               ms%tracers(ms%idx_salinity)%hTr(i, j, k) = (S0 + sx_*x + sy_*y)*tgt(i, j, k)
+               ms%tracers(ms%idx_temperature)%c(i, j, k) = &
+                  (T0 + gz_*zc + gx_*x + gy_*y)
+               ms%tracers(ms%idx_salinity)%c(i, j, k) = (S0 + sx_*x + sy_*y)
             end do
          end do
       end do
-      ! Hand each filler its donor's concentration BEFORE the I1' sweep, so
-      ! the sweep's pooling mixes equal concentrations and does not shift
-      ! the donor (cf. test_ocean_gm_zfixed).
+      ! Hand each filler its donor's concentration (fillers keep a stale
+      ! concentration and carry no content; cf. test_ocean_gm_zfixed).
       do it = 1, 2
-         associate (q => ms%tracers(merge(ms%idx_temperature, ms%idx_salinity, it == 1))%hTr)
+         associate (q => ms%tracers(merge(ms%idx_temperature, ms%idx_salinity, it == 1))%c)
             do j = 1, nj
                do i = 1, ni
                   c_val = -huge(1.0_wp)
                   do k = NZ, 1, -1
                      if (tgt(i, j, k) > H_VANISHED) then
-                        c_val = q(i, j, k)/tgt(i, j, k)
+                        c_val = q(i, j, k)
                      else if (c_val > -huge(1.0_wp)) then
-                        q(i, j, k) = c_val*tgt(i, j, k)
+                        q(i, j, k) = c_val
                      end if
                   end do
                end do
             end do
          end associate
       end do
-      call ms%enforce_vanished_content_host(ni, nj)
 
       call rd%init(grid, nz_ml=NZ)
       rd%enable = .true.
@@ -240,8 +238,8 @@ contains
       type(ocean_redi_t), intent(inout) :: rd
       !$acc update self(rd%uKoL, rd%uKoR, rd%uhEff, rd%uPoL, rd%uPoR)
       !$acc update self(rd%vKoL, rd%vKoR, rd%vhEff, rd%vPoL, rd%vPoR)
-      !$acc update self(ms%tracers(ms%idx_temperature)%hTr)
-      !$acc update self(ms%tracers(ms%idx_salinity)%hTr)
+      !$acc update self(ms%tracers(ms%idx_temperature)%c)
+      !$acc update self(ms%tracers(ms%idx_salinity)%c)
    end subroutine pull_back
 
    subroutine map_out(ms, rd, metrics)
@@ -326,7 +324,8 @@ contains
       !! among themselves; the physical-domain walls are closed to Redi).
       type(multilayer_state_t), intent(in) :: ms
       integer, intent(in) :: idx
-      s = sum(ms%tracers(idx)%hTr(NG + 1:NG + NXP, NG + 1:NG + NYP, :))
+      s = sum(ms%h_layer(NG + 1:NG + NXP, NG + 1:NG + NYP, :)* &
+              ms%tracers(idx)%c(NG + 1:NG + NXP, NG + 1:NG + NYP, :))
    end function phys_content
 
    subroutine live_range(ms, idx, cmin, cmax)
@@ -342,7 +341,7 @@ contains
          do j = NG + 1, NG + NYP
             do i = NG + 1, NG + NXP
                if (ms%h_layer(i, j, k) <= H_VANISHED) cycle
-               c = ms%tracers(idx)%hTr(i, j, k)/ms%h_layer(i, j, k)
+               c = ms%tracers(idx)%c(i, j, k)
                cmin = min(cmin, c)
                cmax = max(cmax, c)
             end do
@@ -373,8 +372,8 @@ contains
                     count(metrics%open_v < 0.5_wp) > 0, &
                     "the staircase must close u- AND v-face layers")
          if (allocated(error)) exit checks
-         allocate (t_in, source=ms%tracers(ms%idx_temperature)%hTr)
-         allocate (s_in, source=ms%tracers(ms%idx_salinity)%hTr)
+         allocate (t_in, source=ms%tracers(ms%idx_temperature)%c)
+         allocate (s_in, source=ms%tracers(ms%idx_salinity)%c)
 
          call map_in(ms, rd)
          call redi_calc_coeffs(grid, metrics, eos, rd, ms)
@@ -382,14 +381,14 @@ contains
          call pull_back(ms, rd)
          call map_out(ms, rd, metrics)
 
-         call check(error, all_finite_3d(ms%tracers(ms%idx_temperature)%hTr) .and. &
-                    all_finite_3d(ms%tracers(ms%idx_salinity)%hTr) .and. &
+         call check(error, all_finite_3d(ms%tracers(ms%idx_temperature)%c) .and. &
+                    all_finite_3d(ms%tracers(ms%idx_salinity)%c) .and. &
                     all_finite_3d(rd%uhEff) .and. all_finite_3d(rd%vhEff) .and. &
                     all_finite_3d(rd%uPoL) .and. all_finite_3d(rd%vPoR), &
                     "every field must stay finite (all-tie neutral sweep)")
          if (allocated(error)) exit checks
-         dmax = max(maxval(abs(ms%tracers(ms%idx_temperature)%hTr - t_in)), &
-                    maxval(abs(ms%tracers(ms%idx_salinity)%hTr - s_in)))
+         dmax = max(maxval(abs(ms%tracers(ms%idx_temperature)%c - t_in)), &
+                    maxval(abs(ms%tracers(ms%idx_salinity)%c - s_in)))
          write (msg, '(a,es10.3)') "max|d hTr| = ", dmax
          call check(error, dmax == 0.0_wp, &
                     "uniform T/S: the Redi update must be identically zero: "//trim(msg))
@@ -411,8 +410,8 @@ contains
       real(wp), allocatable :: tgt(:, :, :), t_prev(:, :, :), s_prev(:, :, :)
       real(wp), allocatable :: t_init(:, :, :)
       integer, parameter :: NSTEP = 10
-      integer :: it, ni, nj, n_pair, n_bad, n_pair_tot, n_bad_tot, n_i1, n_i1_max
-      real(wp) :: worst_heff, wh_max, worst_i1, t0s, s0s, t1s, s1s
+      integer :: it, ni, nj, n_pair, n_bad, n_pair_tot, n_bad_tot
+      real(wp) :: worst_heff, wh_max, t0s, s0s, t1s, s1s
       real(wp) :: tmin0, tmax0, smin0, smax0, tmin, tmax, smin, smax, ext, dtmax
       logical :: finite_all, fill_kept
       character(len=128) :: msg
@@ -425,11 +424,10 @@ contains
       s0s = phys_content(ms, ms%idx_salinity)
       call live_range(ms, ms%idx_temperature, tmin0, tmax0)
       call live_range(ms, ms%idx_salinity, smin0, smax0)
-      allocate (t_init, source=ms%tracers(ms%idx_temperature)%hTr)
+      allocate (t_init, source=ms%tracers(ms%idx_temperature)%c)
 
       n_pair_tot = 0
       n_bad_tot = 0
-      n_i1_max = 0
       wh_max = 0.0_wp
       ext = 0.0_wp
       finite_all = .true.
@@ -437,32 +435,27 @@ contains
       checks: block
          call map_in(ms, rd)
          do it = 1, NSTEP
-            allocate (t_prev, source=ms%tracers(ms%idx_temperature)%hTr)
-            allocate (s_prev, source=ms%tracers(ms%idx_salinity)%hTr)
+            allocate (t_prev, source=ms%tracers(ms%idx_temperature)%c)
+            allocate (s_prev, source=ms%tracers(ms%idx_salinity)%c)
             call redi_calc_coeffs(grid, metrics, eos, rd, ms)
             call redi_apply_flux(grid, metrics, rd, ms, DT)
             call pull_back(ms, rd)
             ! Redi alone, before the step tail: a filler's content is
             ! untouched (no flux into or out of it).
             fill_kept = fill_kept .and. &
-                        all(merge(ms%tracers(ms%idx_temperature)%hTr == t_prev, .true., &
+                        all(merge(ms%tracers(ms%idx_temperature)%c == t_prev, .true., &
                                   tgt <= H_VANISHED)) .and. &
-                        all(merge(ms%tracers(ms%idx_salinity)%hTr == s_prev, .true., &
+                        all(merge(ms%tracers(ms%idx_salinity)%c == s_prev, .true., &
                                   tgt <= H_VANISHED))
             call pairing_census(metrics, ms, rd, ni, nj, n_pair, n_bad, worst_heff)
             n_pair_tot = n_pair_tot + n_pair
             n_bad_tot = n_bad_tot + n_bad
             wh_max = max(wh_max, worst_heff)
-            ! The production step tail: restore I1′ (Redi moved the donors'
-            ! concentration), then the tripwire scan.
-            call ms%enforce_vanished_content(ni, nj)
-            call ms%scan_vanished_content(ni, nj, n_i1, worst_i1)
-            n_i1_max = max(n_i1_max, n_i1)
-            !$acc update self(ms%tracers(ms%idx_temperature)%hTr)
-            !$acc update self(ms%tracers(ms%idx_salinity)%hTr)
+            !$acc update self(ms%tracers(ms%idx_temperature)%c)
+            !$acc update self(ms%tracers(ms%idx_salinity)%c)
             finite_all = finite_all .and. &
-                         all_finite_3d(ms%tracers(ms%idx_temperature)%hTr) .and. &
-                         all_finite_3d(ms%tracers(ms%idx_salinity)%hTr) .and. &
+                         all_finite_3d(ms%tracers(ms%idx_temperature)%c) .and. &
+                         all_finite_3d(ms%tracers(ms%idx_salinity)%c) .and. &
                          all_finite_3d(rd%uhEff) .and. all_finite_3d(rd%vhEff) .and. &
                          all_finite_3d(rd%uPoL) .and. all_finite_3d(rd%uPoR) .and. &
                          all_finite_3d(rd%vPoL) .and. all_finite_3d(rd%vPoR)
@@ -481,13 +474,11 @@ contains
                     "no neutral sublayer may pair a CLOSED face-layer or a filler: "//trim(msg))
          if (allocated(error)) exit checks
          call check(error, fill_kept, &
-                    "Redi must not change a filler's content (no flux into or out of it)")
+                    "Redi must not change a filler's concentration (no flux into or out of it)")
          if (allocated(error)) exit checks
          call check(error, finite_all, "hTr and the Redi coefficients must stay finite")
          if (allocated(error)) exit checks
-         call check(error, n_i1_max == 0, "I1' must hold after every step")
-         if (allocated(error)) exit checks
-         dtmax = maxval(abs(ms%tracers(ms%idx_temperature)%hTr - t_init))
+         dtmax = maxval(abs(ms%tracers(ms%idx_temperature)%c - t_init))
          call check(error, dtmax > 1.0e-3_wp, &
                     "tilted isopycnals with spice must drive a non-trivial Redi flux")
          if (allocated(error)) exit checks
@@ -533,7 +524,7 @@ contains
          call check(error, all(tgt(:, :, NZ) <= H_VANISHED), &
                     "the k = nz layer must be a filler under the draft")
          if (allocated(error)) exit checks
-         allocate (t_prev, source=ms%tracers(ms%idx_temperature)%hTr)
+         allocate (t_prev, source=ms%tracers(ms%idx_temperature)%c)
          t0s = phys_content(ms, ms%idx_temperature)
 
          call map_in(ms, rd)
@@ -551,11 +542,11 @@ contains
          call check(error, n_bad == 0, &
                     "no neutral sublayer may reach a draft or bed filler: "//trim(msg))
          if (allocated(error)) exit checks
-         call check(error, all(merge(ms%tracers(ms%idx_temperature)%hTr == t_prev, .true., &
+         call check(error, all(merge(ms%tracers(ms%idx_temperature)%c == t_prev, .true., &
                                      tgt <= H_VANISHED)), &
                     "Redi must not change a draft filler's content")
          if (allocated(error)) exit checks
-         call check(error, all_finite_3d(ms%tracers(ms%idx_temperature)%hTr), &
+         call check(error, all_finite_3d(ms%tracers(ms%idx_temperature)%c), &
                     "T must stay finite under the draft")
          if (allocated(error)) exit checks
          t1s = phys_content(ms, ms%idx_temperature)
@@ -584,15 +575,15 @@ contains
          closed = pass == 2
          call build_case(grid, metrics, ms, rd, eos, tgt, 0.0_wp, GX, GY, GZ, SX, SY, &
                          .false., closed)
-         if (pass == 1) allocate (t_in, source=ms%tracers(ms%idx_temperature)%hTr)
+         if (pass == 1) allocate (t_in, source=ms%tracers(ms%idx_temperature)%c)
          call map_in(ms, rd)
          call redi_calc_coeffs(grid, metrics, eos, rd, ms)
          call redi_apply_flux(grid, metrics, rd, ms, DT)
          call pull_back(ms, rd)
          call map_out(ms, rd, metrics)
          if (pass == 1) then
-            allocate (t_off, source=ms%tracers(ms%idx_temperature)%hTr)
-            allocate (s_off, source=ms%tracers(ms%idx_salinity)%hTr)
+            allocate (t_off, source=ms%tracers(ms%idx_temperature)%c)
+            allocate (s_off, source=ms%tracers(ms%idx_salinity)%c)
          end if
          if (pass == 2) exit
          call rd%destroy()
@@ -602,8 +593,8 @@ contains
          call check(error, maxval(abs(t_off - t_in)) > 0.0_wp, &
                     "the flat-bed case must carry a Redi flux (non-vacuous)")
          if (allocated(error)) exit checks
-         call check(error, all(ms%tracers(ms%idx_temperature)%hTr == t_off) .and. &
-                    all(ms%tracers(ms%idx_salinity)%hTr == s_off), &
+         call check(error, all(ms%tracers(ms%idx_temperature)%c == t_off) .and. &
+                    all(ms%tracers(ms%idx_salinity)%c == s_off), &
                     "all-open window must reproduce the full-column Redi bitwise")
       end block checks
       call rd%destroy()
@@ -647,8 +638,8 @@ contains
          call check(error, id > 0, "the open staircase must carry an interior bed filler")
          if (allocated(error)) exit checks
          kd = kd + 1
-         c_t = ms%tracers(ms%idx_temperature)%hTr(id, jd, kd)/ms%h_layer(id, jd, kd)
-         c_s = ms%tracers(ms%idx_salinity)%hTr(id, jd, kd)/ms%h_layer(id, jd, kd)
+         c_t = ms%tracers(ms%idx_temperature)%c(id, jd, kd)
+         c_s = ms%tracers(ms%idx_salinity)%c(id, jd, kd)
 
          ! Phase A on the healthy state (the model runs it at the start of
          ! the thermo step) ...
@@ -656,33 +647,33 @@ contains
          call redi_calc_coeffs(grid, metrics, eos, rd, ms)
          ! ... then continuity over-drains the cell to the observed -8.2e-4 m,
          ! its content advected with it, and Phase B runs on that state.
-         !$acc update self(ms%h_layer, ms%tracers(ms%idx_temperature)%hTr)
-         !$acc update self(ms%tracers(ms%idx_salinity)%hTr)
+         !$acc update self(ms%h_layer, ms%tracers(ms%idx_temperature)%c)
+         !$acc update self(ms%tracers(ms%idx_salinity)%c)
          ms%h_layer(id, jd, kd) = -8.2e-4_wp
-         ms%tracers(ms%idx_temperature)%hTr(id, jd, kd) = c_t*ms%h_layer(id, jd, kd)
-         ms%tracers(ms%idx_salinity)%hTr(id, jd, kd) = c_s*ms%h_layer(id, jd, kd)
-         !$acc update device(ms%h_layer, ms%tracers(ms%idx_temperature)%hTr)
-         !$acc update device(ms%tracers(ms%idx_salinity)%hTr)
+         ms%tracers(ms%idx_temperature)%c(id, jd, kd) = c_t
+         ms%tracers(ms%idx_salinity)%c(id, jd, kd) = c_s
+         !$acc update device(ms%h_layer, ms%tracers(ms%idx_temperature)%c)
+         !$acc update device(ms%tracers(ms%idx_salinity)%c)
          call redi_apply_flux(grid, metrics, rd, ms, DT)
          call pull_back(ms, rd)
          call map_out(ms, rd, metrics)
 
-         call check(error, all_finite_3d(ms%tracers(ms%idx_temperature)%hTr) .and. &
-                    all_finite_3d(ms%tracers(ms%idx_salinity)%hTr), &
+         call check(error, all_finite_3d(ms%tracers(ms%idx_temperature)%c) .and. &
+                    all_finite_3d(ms%tracers(ms%idx_salinity)%c), &
                     "open steps, drained cell: the Redi update must stay finite")
          if (allocated(error)) exit checks
-         ! Content bound on EVERY cell, the drained one included: twice the
-         ! largest concentration times the thickest layer.  The initial state
-         ! sits ON `max|c|*H_NOM` (a full layer at the warmest T), so the bound
-         ! needs room for round-off (GPU FMA); the defect is 1e18.
-         write (msg, '(a,2es12.4)') "max|hT|, max|hS| = ", &
-            maxval(abs(ms%tracers(ms%idx_temperature)%hTr)), &
-            maxval(abs(ms%tracers(ms%idx_salinity)%hTr))
-         call check(error, maxval(abs(ms%tracers(ms%idx_temperature)%hTr)) <= &
-                    2.0_wp*max(abs(tmin0), abs(tmax0))*H_NOM .and. &
-                    maxval(abs(ms%tracers(ms%idx_salinity)%hTr)) <= &
-                    2.0_wp*max(abs(smin0), abs(smax0))*H_NOM, &
-                    "open steps, drained cell: unbounded content: "//trim(msg))
+         ! Bound on EVERY cell, the drained one included: no concentration may
+         ! exceed twice the largest initial |c| (a vanished/negative-h cell
+         ! keeps its stale c; dividing the Redi content change by its
+         ! sliver thickness blows c up).
+         write (msg, '(a,2es12.4)') "max|T|, max|S| = ", &
+            maxval(abs(ms%tracers(ms%idx_temperature)%c)), &
+            maxval(abs(ms%tracers(ms%idx_salinity)%c))
+         call check(error, maxval(abs(ms%tracers(ms%idx_temperature)%c)) <= &
+                    2.0_wp*max(abs(tmin0), abs(tmax0)) .and. &
+                    maxval(abs(ms%tracers(ms%idx_salinity)%c)) <= &
+                    2.0_wp*max(abs(smin0), abs(smax0)), &
+                    "open steps, drained cell: unbounded concentration: "//trim(msg))
          if (allocated(error)) exit checks
          call live_range(ms, ms%idx_temperature, tmin, tmax)
          call live_range(ms, ms%idx_salinity, smin, smax)

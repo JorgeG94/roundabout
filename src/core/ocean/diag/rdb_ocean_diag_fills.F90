@@ -206,7 +206,7 @@ contains
    end subroutine fill_ssh_bt_impl
 
    subroutine fill_temperature(state_handle, buf)
-      !! Layer temperature = tracers(idx_temperature)%hTr / h_layer.
+      !! Layer temperature = tracers(idx_temperature)%c / h_layer.
       !! Tracer-registry indirection dereferenced HOST-side before the
       !! flat-impl kernel (array-of-DT deep deref blocks NVHPC device
       !! codegen).  Public only for the unit-test suite.
@@ -221,7 +221,7 @@ contains
             return
          end if
          call fill_tracer_impl(state%multilayer%h_layer, &
-                               state%multilayer%tracers(it)%hTr, buf)
+                               state%multilayer%tracers(it)%c, buf)
       end select
    end subroutine fill_temperature
 
@@ -238,12 +238,12 @@ contains
             return
          end if
          call fill_tracer_impl(state%multilayer%h_layer, &
-                               state%multilayer%tracers(it)%hTr, buf)
+                               state%multilayer%tracers(it)%c, buf)
       end select
    end subroutine fill_salinity
 
    subroutine fill_age(state_handle, buf)
-      !! Layer ideal age = tracers(idx_age)%hTr / h_layer (s).  Read-out only;
+      !! Layer ideal age = tracers(idx_age)%c / h_layer (s).  Read-out only;
       !! registered when `&ocean_tracers_nml enable_ideal_age` (idx_age > 0).
       class(*), intent(in) :: state_handle
       real(wp), intent(inout) :: buf(:, :, :)
@@ -256,12 +256,12 @@ contains
             return
          end if
          call fill_tracer_impl(state%multilayer%h_layer, &
-                               state%multilayer%tracers(it)%hTr, buf)
+                               state%multilayer%tracers(it)%c, buf)
       end select
    end subroutine fill_age
 
    subroutine fill_pseudo_salt(state_handle, buf)
-      !! Layer pseudo-salt = tracers(idx_pseudo_salt)%hTr / h_layer (psu).
+      !! Layer pseudo-salt = tracers(idx_pseudo_salt)%c / h_layer (psu).
       !! Read-out only; registered when `&ocean_tracers_nml
       !! enable_pseudo_salt` (idx_pseudo_salt > 0).  Mirrors `fill_age`.
       class(*), intent(in) :: state_handle
@@ -275,7 +275,7 @@ contains
             return
          end if
          call fill_tracer_impl(state%multilayer%h_layer, &
-                               state%multilayer%tracers(it)%hTr, buf)
+                               state%multilayer%tracers(it)%c, buf)
       end select
    end subroutine fill_pseudo_salt
 
@@ -296,8 +296,8 @@ contains
             return
          end if
          call ocean_pseudo_salt_deviation(state%multilayer%h_layer, &
-                                          state%multilayer%tracers(it_ps)%hTr, &
-                                          state%multilayer%tracers(it_s)%hTr, buf, &
+                                          state%multilayer%tracers(it_ps)%c, &
+                                          state%multilayer%tracers(it_s)%c, buf, &
                                           size(buf, 1), size(buf, 2), size(buf, 3), &
                                           ieee_value(0.0_wp, ieee_quiet_nan))
       end select
@@ -339,12 +339,12 @@ contains
       qnan = ieee_value(0.0_wp, ieee_quiet_nan)
       do concurrent(k=1:min(nz, nz_h), j=1:ny, i=1:nx)
          h = h_layer(i, j, k)
-         ! vanished-ok: a diagnostic substitutes the NaN missing-data
+         ! a diagnostic substitutes the NaN missing-data
          ! sentinel on a vanished layer, not `rdb_vl_conc`'s copy of the
          ! donor's concentration (README
          ! consumer table); the live branch IS `rdb_vl_conc`.
          if (rdb_vl_is_live(h)) then
-            buf(i, j, k) = rdb_vl_conc(hTr(i, j, k), h)
+            buf(i, j, k) = hTr(i, j, k)
          else
             buf(i, j, k) = qnan
          end if
@@ -1330,8 +1330,8 @@ contains
             return
          end if
          call remap_layer_to_density_impl(state%multilayer%h_layer, &
-                                          state%multilayer%tracers(it)%hTr, &
-                                          state%multilayer%tracers(is_)%hTr, &
+                                          state%multilayer%tracers(it)%c, &
+                                          state%multilayer%tracers(is_)%c, &
                                           state%eos, pref, z_out, &
                                           layer_buf, output_buf, is_extensive, &
                                           diag_remap_method)
@@ -1399,8 +1399,8 @@ contains
             if (rdb_vl_is_live(hh)) then
                dz_old(k) = hh
                q_old(k) = layer_buf(i, j, nz - k + 1)
-               tt = rdb_vl_conc(hT(i, j, nz - k + 1), hh)
-               ss = rdb_vl_conc(hS(i, j, nz - k + 1), hh)
+               tt = hT(i, j, nz - k + 1)
+               ss = hS(i, j, nz - k + 1)
                rhoc(k) = eos_density_point(eos, tt, ss, rho_ref_p)
                if (.not. seen_live) then
                   ! Back-fill the vanished run above the first live layer.

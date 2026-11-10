@@ -14,7 +14,7 @@ contains
       !! Registered (always):
       !!   barotropic prognostics h, u_face_x, v_face_y;
       !!   multilayer prognostics h_layer, u/v_face_x/y_layer, every
-      !!   tracers(:)%hTr (registry-of-registries — iterate the tracer
+      !!   tracers(:)%c (registry-of-registries — iterate the tracer
       !!   registry so passive tracers join automatically).
       !! Registered (conditionally — only when the slot's persistent
       !!   array is allocated):
@@ -52,7 +52,7 @@ contains
       !!     END of each thermo step, and every step until the next one
       !!     reads that assembly -- carried state, with SST-dependent terms
       !!     no configure-time re-assembly could reproduce.
-      !!   RK saves (h_layer0, hTr0, *_layer0) + bt accumulators
+      !!   RK saves (h_layer0, *_layer0) + bt accumulators
       !!     (bt_eta/ubt/...) — step-internal scratch, re-zeroed at the
       !!     top of every outer step (restart is step-aligned).
       !!   bt_H_ref — recomputed from `b` by configure_ocean_bt_split;
@@ -148,8 +148,8 @@ contains
          ! --- Tracers (registry-of-registries) ---
          if (allocated(state%multilayer%tracers)) then
             do it = 1, size(state%multilayer%tracers)
-               write (tag, "(A,I0)") "tracer_hTr_", it
-               call register_full_3d(reg, trim(tag), state%multilayer%tracers(it)%hTr)
+               write (tag, "(A,I0)") "tracer_c_", it
+               call register_full_3d(reg, trim(tag), state%multilayer%tracers(it)%c)
             end do
          end if
          ! --- pred_corr step time-means (SPEC S1).  Under
@@ -780,6 +780,7 @@ contains
                    code=restart_mismatch_status_code(local_ierr))
       end if
       if (local_ierr == 0) then
+         call convert_legacy_tracer_content(state, reg)
          state%dyn%outer_step_count = osc
          ! PR-2 (bt-rem-from-av-rem review): record whether THIS read
          ! actually found vmix_kv (vs. an older checkpoint without it, or
@@ -795,6 +796,63 @@ contains
       return
 #endif
    end subroutine ocean_state_restart_read
+
+   subroutine convert_legacy_tracer_content(state, reg)
+      !! One-time conversion of a pre-concentration restart: every tracer
+      !! entry satisfied from the legacy `tracer_hTr_<n>` variable holds
+      !! CONTENT `h*c` and becomes `c = hTr/h` on live layers
+      !! (`h > H_VANISHED`).  A filler (`h <= H_VANISHED`) took its content
+      !! from the old pooling invariant, so it takes its donor's
+      !! concentration: the nearest live layer above it, else the topmost
+      !! live layer; a column with no live layer holds `c = 0`.
+      type(ocean_state_t), intent(inout) :: state
+      type(restart_registry_t), intent(in) :: reg
+      integer :: e, it, i, j, k, kk, nx, ny, nz
+      character(len=64) :: tag
+      real(wp) :: hk, c_don
+
+      if (.not. allocated(state%multilayer%tracers)) return
+      nx = size(state%multilayer%h_layer, 1)
+      ny = size(state%multilayer%h_layer, 2)
+      nz = size(state%multilayer%h_layer, 3)
+      do it = 1, size(state%multilayer%tracers)
+         write (tag, "(A,I0)") "tracer_c_", it
+         do e = 1, reg%n
+            if (trim(reg%entries(e)%tag) /= trim(tag)) cycle
+            if (.not. reg%entries(e)%legacy_content) cycle
+            do j = 1, ny
+               do i = 1, nx
+                  ! Live layers first (in place), then fillers from live c.
+                  do k = 1, nz
+                     hk = state%multilayer%h_layer(i, j, k)
+                     if (hk > H_VANISHED) then  ! geometry (live-layer test), not a tracer update
+                        state%multilayer%tracers(it)%c(i, j, k) = &
+                           state%multilayer%tracers(it)%c(i, j, k)/hk
+                     end if
+                  end do
+                  c_don = 0.0_wp
+                  do k = nz, 1, -1  ! topmost live layer (fallback donor)
+                     if (state%multilayer%h_layer(i, j, k) > H_VANISHED) then  ! geometry (live-layer test), not a tracer update
+                        c_don = state%multilayer%tracers(it)%c(i, j, k)
+                        exit
+                     end if
+                  end do
+                  do k = 1, nz
+                     if (state%multilayer%h_layer(i, j, k) > H_VANISHED) cycle  ! geometry (live-layer test), not a tracer update
+                     state%multilayer%tracers(it)%c(i, j, k) = c_don
+                     do kk = k + 1, nz  ! nearest live layer above
+                        if (state%multilayer%h_layer(i, j, kk) > H_VANISHED) then  ! geometry (live-layer test), not a tracer update
+                           state%multilayer%tracers(it)%c(i, j, k) = &
+                              state%multilayer%tracers(it)%c(i, j, kk)
+                           exit
+                        end if
+                     end do
+                  end do
+               end do
+            end do
+         end do
+      end do
+   end subroutine convert_legacy_tracer_content
 
    pure function restart_mismatch_kind(code) result(kind)
       !! Map the check-decomp ierr code (INTERNAL 1/2/3 convention —

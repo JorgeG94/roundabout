@@ -95,7 +95,7 @@ contains
       type(multilayer_state_t), intent(inout) :: ms
 
       if (ms%idx_pseudo_salt <= 0 .or. ms%idx_salinity <= 0) return
-      ms%tracers(ms%idx_pseudo_salt)%hTr = ms%tracers(ms%idx_salinity)%hTr
+      ms%tracers(ms%idx_pseudo_salt)%c = ms%tracers(ms%idx_salinity)%c
    end subroutine ocean_pseudo_salt_seed
 
    pure subroutine ocean_pseudo_salt_deviation(h_layer, hTr_ps, hTr_s, buf, nx, ny, nz, &
@@ -125,7 +125,7 @@ contains
       do concurrent(k=1:nz, j=1:ny, i=1:nx)
          h = h_layer(i, j, k)
          if (rdb_vl_is_live(h)) then
-            buf(i, j, k) = rdb_vl_conc(hTr_ps(i, j, k), h) - rdb_vl_conc(hTr_s(i, j, k), h)
+            buf(i, j, k) = hTr_ps(i, j, k) - hTr_s(i, j, k)
          else
             buf(i, j, k) = missing
          end if

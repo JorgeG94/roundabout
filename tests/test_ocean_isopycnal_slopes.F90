@@ -178,8 +178,8 @@ contains
                do i = 1, ni
                   x_c = real(i, wp)*DX
                   t_val = T0 + GZ*z_c + GX*x_c
-                  ms%tracers(ms%idx_temperature)%hTr(i, j, k) = t_val*DZ
-                  ms%tracers(ms%idx_salinity)%hTr(i, j, k) = S0*DZ
+                  ms%tracers(ms%idx_temperature)%c(i, j, k) = t_val
+                  ms%tracers(ms%idx_salinity)%c(i, j, k) = S0
                end do
             end do
          end do
@@ -272,10 +272,10 @@ contains
                   ! at fixed k ⇒ zero along-layer horizontal ρ-gradient.
                   z_c = (real(k, wp) - 0.5_wp)
                   t_val = T0 + GZ*DZ0*z_c
-                  ms%tracers(ms%idx_temperature)%hTr(i, j, k) = &
-                     t_val*ms%h_layer(i, j, k)
-                  ms%tracers(ms%idx_salinity)%hTr(i, j, k) = &
-                     S0*ms%h_layer(i, j, k)
+                  ms%tracers(ms%idx_temperature)%c(i, j, k) = &
+                     t_val
+                  ms%tracers(ms%idx_salinity)%c(i, j, k) = &
+                     S0
                end do
             end do
          end do
@@ -340,8 +340,8 @@ contains
          do k = 1, NZ
             z_c = (real(k, wp) - 0.5_wp)*DZ
             t_val = T0 + GZ*z_c
-            ms%tracers(ms%idx_temperature)%hTr(:, :, k) = t_val*DZ
-            ms%tracers(ms%idx_salinity)%hTr(:, :, k) = S0*DZ
+            ms%tracers(ms%idx_temperature)%c(:, :, k) = t_val
+            ms%tracers(ms%idx_salinity)%c(:, :, k) = S0
          end do
 
          call map_in(ms, metrics, grid, sl)
@@ -390,8 +390,8 @@ contains
                do i = 1, ni
                   x_c = real(i, wp)*DX
                   t_val = T0 + GZ*z_c + GX*x_c
-                  ms%tracers(ms%idx_temperature)%hTr(i, j, k) = t_val*DZ
-                  ms%tracers(ms%idx_salinity)%hTr(i, j, k) = S0*DZ
+                  ms%tracers(ms%idx_temperature)%c(i, j, k) = t_val
+                  ms%tracers(ms%idx_salinity)%c(i, j, k) = S0
                end do
             end do
          end do
@@ -438,8 +438,8 @@ contains
          do k = 1, NZ
             z_c = (real(k, wp) - 0.5_wp)*DZ
             t_val = T0 + GZ*z_c     ! warmer up ⇒ stable
-            ms%tracers(ms%idx_temperature)%hTr(:, :, k) = t_val*DZ
-            ms%tracers(ms%idx_salinity)%hTr(:, :, k) = S0*DZ
+            ms%tracers(ms%idx_temperature)%c(:, :, k) = t_val
+            ms%tracers(ms%idx_salinity)%c(:, :, k) = S0
          end do
 
          call map_in(ms, metrics, grid, sl)
@@ -511,12 +511,12 @@ contains
                   if (k == KBAD) then
                      ! Vanished layer: tiny thickness, garbage (0) tracer.
                      ms%h_layer(i, j, k) = 0.5_wp*H_VANISHED
-                     ms%tracers(ms%idx_temperature)%hTr(i, j, k) = 0.0_wp
-                     ms%tracers(ms%idx_salinity)%hTr(i, j, k) = 0.0_wp
+                     ms%tracers(ms%idx_temperature)%c(i, j, k) = 0.0_wp
+                     ms%tracers(ms%idx_salinity)%c(i, j, k) = 0.0_wp
                   else
                      ms%h_layer(i, j, k) = DZ
-                     ms%tracers(ms%idx_temperature)%hTr(i, j, k) = t_val*DZ
-                     ms%tracers(ms%idx_salinity)%hTr(i, j, k) = S0*DZ
+                     ms%tracers(ms%idx_temperature)%c(i, j, k) = t_val
+                     ms%tracers(ms%idx_salinity)%c(i, j, k) = S0
                   end if
                end do
             end do

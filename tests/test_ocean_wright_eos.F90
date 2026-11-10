@@ -75,8 +75,8 @@ contains
       type(multilayer_state_t), intent(inout) :: ms
       real(wp), intent(in) :: h_val, t_val, s_val
       ms%h_layer = h_val
-      ms%tracers(ms%idx_salinity)%hTr = s_val*h_val
-      ms%tracers(ms%idx_temperature)%hTr = t_val*h_val
+      ms%tracers(ms%idx_salinity)%c = s_val
+      ms%tracers(ms%idx_temperature)%c = t_val
    end subroutine fill_uniform
 
    ! -----------------------------------------------------------------
@@ -241,8 +241,8 @@ contains
          eos%rho0 = 1035.0_wp
 
          ms%h_layer = 10.0_wp
-         ms%tracers(ms%idx_salinity)%hTr = 35.0_wp*10.0_wp
-         ms%tracers(ms%idx_temperature)%hTr = 10.0_wp*10.0_wp
+         ms%tracers(ms%idx_salinity)%c = 35.0_wp
+         ms%tracers(ms%idx_temperature)%c = 10.0_wp
          ! Pinch out one interior cell
          ms%h_layer(NGHOST + 1, NGHOST + 1, 1) = 0.0_wp
          call run_wright(ms, eos)

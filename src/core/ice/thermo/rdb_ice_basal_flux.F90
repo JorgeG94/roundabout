@@ -31,7 +31,7 @@ module rdb_ice_basal_flux
    !! both fb and the column's ocean-side inputs, keeping them at the same
    !! one-step-lagged snapshot (physically consistent, PLAN_ICE_PR3c
    !! §"Ocean -> ice basal heat flux").
-   use rdb_constants, only: wp, RHO_WATER, H_VANISHED
+   use rdb_constants, only: H_DIV_EPS, wp, RHO_WATER, H_VANISHED
    use rdb_grid, only: hgrid_t
    use rdb_multilayer_state, only: multilayer_state_t
    use rdb_eos, only: eos_t, eos_freezing_point, TS_CONS_ABS
@@ -44,7 +44,7 @@ module rdb_ice_basal_flux
 contains
    pure subroutine ice_compute_basal_flux(grid, eos, ms, ice, dt_therm)
       !! Outer shim (outer-shim + flat-impl pattern): dereference the
-      !! tracer registry (`ms%tracers(idx)%hTr`) on the HOST and forward
+      !! tracer registry (`ms%tracers(idx)%c`) on the HOST and forward
       !! bare arrays to the device kernel — same rule as `ice_frazil_accumulate`
       !! / `ice_frazil_uptake`. No-op when either S or T is unregistered.
       type(hgrid_t), intent(in) :: grid
@@ -59,7 +59,7 @@ contains
       idx_T = ms%idx_temperature
       idx_S = ms%idx_salinity
       if (idx_T <= 0 .or. idx_S <= 0) return
-      call ice_compute_basal_flux_impl(ms%tracers(idx_T)%hTr, ms%tracers(idx_S)%hTr, &
+      call ice_compute_basal_flux_impl(ms%tracers(idx_T)%c, ms%tracers(idx_S)%c, &
                                        ms%h_layer, ms%wet_mask, ice%m_ice, eos, &
                                        ice%fb, ice%sst_seam, ice%ssurf_seam, ice%tfw_seam, &
                                        dt_therm, grid%nghost, ice%ncat, ms%nz_ml, &
@@ -118,8 +118,8 @@ contains
          tfw_seam(i, j) = 0.0_wp
          h = h_layer(i, j, nz)
          if (wet_mask(i, j) > 0.5_wp .and. h > H_VANISHED) then
-            sst = rdb_conc_of_raw(hTr_T(i, j, nz), h)
-            s_surf = rdb_conc_of_raw(hTr_S(i, j, nz), h)
+            sst = hTr_T(i, j, nz)
+            s_surf = hTr_S(i, j, nz)
             tfw = eos_freezing_point(eos, s_surf, 0.0_wp)
             ! OCEAN-side available heat: model T, S, T_f (CT, SA, CT liquidus
             ! under cons_abs) -- formed BEFORE the ice-boundary conversion.

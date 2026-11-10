@@ -151,8 +151,8 @@ contains
          !$acc update self(ms%h_layer, ms%u_face_x_layer, ms%v_face_y_layer)
          if (allocated(ms%tracers)) then
             do it = 1, size(ms%tracers)
-               if (.not. allocated(ms%tracers(it)%hTr)) cycle
-               !$acc update self(ms%tracers(it)%hTr)
+               if (.not. allocated(ms%tracers(it)%c)) cycle
+               !$acc update self(ms%tracers(it)%c)
             end do
          end if
       end associate
@@ -168,8 +168,8 @@ contains
          !$acc update device(ms%h_layer, ms%u_face_x_layer, ms%v_face_y_layer)
          if (allocated(ms%tracers)) then
             do it = 1, size(ms%tracers)
-               if (.not. allocated(ms%tracers(it)%hTr)) cycle
-               !$acc update device(ms%tracers(it)%hTr)
+               if (.not. allocated(ms%tracers(it)%c)) cycle
+               !$acc update device(ms%tracers(it)%c)
             end do
          end if
       end associate

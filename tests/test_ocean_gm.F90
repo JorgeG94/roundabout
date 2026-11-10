@@ -178,8 +178,8 @@ contains
             do i = 1, ni
                x_c = real(i, wp)*grid%dx
                t_val = T0 + GZ*z_c + gx*x_c
-               ms%tracers(ms%idx_temperature)%hTr(i, j, k) = t_val*dz
-               ms%tracers(ms%idx_salinity)%hTr(i, j, k) = S0*dz
+               ms%tracers(ms%idx_temperature)%c(i, j, k) = t_val
+               ms%tracers(ms%idx_salinity)%c(i, j, k) = S0
             end do
          end do
       end do
@@ -399,10 +399,10 @@ contains
                ms%h_layer(i, j, 1) = h1w
                ms%h_layer(i, j, 2) = HTOT - h1w
                ! cold bottom (k=1), warm surface (k=2); uniform in x.
-               ms%tracers(ms%idx_temperature)%hTr(i, j, 1) = 8.0_wp*ms%h_layer(i, j, 1)
-               ms%tracers(ms%idx_temperature)%hTr(i, j, 2) = 16.0_wp*ms%h_layer(i, j, 2)
-               ms%tracers(ms%idx_salinity)%hTr(i, j, 1) = S0*ms%h_layer(i, j, 1)
-               ms%tracers(ms%idx_salinity)%hTr(i, j, 2) = S0*ms%h_layer(i, j, 2)
+               ms%tracers(ms%idx_temperature)%c(i, j, 1) = 8.0_wp
+               ms%tracers(ms%idx_temperature)%c(i, j, 2) = 16.0_wp
+               ms%tracers(ms%idx_salinity)%c(i, j, 1) = S0
+               ms%tracers(ms%idx_salinity)%c(i, j, 2) = S0
             end do
          end do
 
@@ -1026,8 +1026,8 @@ contains
          end do
          ebt(4, 3, :) = 0.0_wp
          hsum0 = sum(ms%h_layer)
-         tsum0 = sum(ms%tracers(ms%idx_temperature)%hTr)
-         ssum0 = sum(ms%tracers(ms%idx_salinity)%hTr)
+         tsum0 = sum(ms%h_layer*ms%tracers(ms%idx_temperature)%c)
+         ssum0 = sum(ms%h_layer*ms%tracers(ms%idx_salinity)%c)
          call map_in_ct(ms, sl, gm, ct)
          !$acc enter data copyin(ebt)
          call ocean_slopes_compute(grid, metrics, eos, sl, ms, DT)
@@ -1039,8 +1039,8 @@ contains
          !$acc exit data delete(ebt)
          call map_out_ct(ms, sl, gm, ct)
          hsum = sum(ms%h_layer)
-         tsum = sum(ms%tracers(ms%idx_temperature)%hTr)
-         ssum = sum(ms%tracers(ms%idx_salinity)%hTr)
+         tsum = sum(ms%h_layer*ms%tracers(ms%idx_temperature)%c)
+         ssum = sum(ms%h_layer*ms%tracers(ms%idx_salinity)%c)
          call check(error, maxval(abs(u0)) > 0.0_wp, "ebt conserve: transport must be non-trivial")
          if (allocated(error)) exit checks
          call check(error, abs(hsum - hsum0)/abs(hsum0) < 1.0e-10_wp, "ebt GM: mass conserved")
@@ -1106,12 +1106,12 @@ contains
       ms%u_face_x_layer = 0.0_wp
       ms%v_face_y_layer = 0.0_wp
       do k = 1, nz
-         ms%tracers(ms%idx_temperature)%hTr(:, :, k) = (2.0_wp + 4.0_wp*real(k, wp))*h(:, :, k)
-         ms%tracers(ms%idx_salinity)%hTr(:, :, k) = S0*h(:, :, k)
+         ms%tracers(ms%idx_temperature)%c(:, :, k) = (2.0_wp + 4.0_wp*real(k, wp))
+         ms%tracers(ms%idx_salinity)%c(:, :, k) = S0
       end do
-      ! I1': the bed fillers carry the layer above's temperature.
+      ! Bed fillers (vanished) keep a stale concentration; they carry no content.
       where (h(:, :, 1) <= H_VANISHED) &
-         ms%tracers(ms%idx_temperature)%hTr(:, :, 1) = (2.0_wp + 8.0_wp)*h(:, :, 1)
+         ms%tracers(ms%idx_temperature)%c(:, :, 1) = 2.0_wp + 8.0_wp
    end subroutine fill_layers
 
    ! ------------------------------------------------------------------
@@ -1142,8 +1142,8 @@ contains
       type(ocean_gm_t), intent(inout) :: gm
       type(continuity_t), intent(inout) :: ct
       !$acc update self(ms%h_layer)
-      !$acc update self(ms%tracers(ms%idx_temperature)%hTr)
-      !$acc update self(ms%tracers(ms%idx_salinity)%hTr)
+      !$acc update self(ms%tracers(ms%idx_temperature)%c)
+      !$acc update self(ms%tracers(ms%idx_salinity)%c)
       call ct%exit_data()
       !$acc exit data delete(ct)
       call gm%exit_data()
@@ -1178,7 +1178,7 @@ contains
       do k = 1, nz
          do j = j0, j1
             do i = i0, i1
-               s = s + ms%tracers(idx)%hTr(i, j, k)
+               s = s + ms%h_layer(i, j, k)*ms%tracers(idx)%c(i, j, k)
             end do
          end do
       end do

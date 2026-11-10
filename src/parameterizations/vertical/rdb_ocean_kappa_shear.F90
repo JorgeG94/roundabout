@@ -461,8 +461,8 @@ contains
                                         ms%nz_ml, dt, &
                                         ms%h_layer, ms%u_face_x_layer, &
                                         ms%v_face_y_layer, &
-                                        ms%tracers(ms%idx_temperature)%hTr, &
-                                        ms%tracers(ms%idx_salinity)%hTr, &
+                                        ms%tracers(ms%idx_temperature)%c, &
+                                        ms%tracers(ms%idx_salinity)%c, &
                                         wet_t, wet_u, wet_v)
          call kappa_shear_vertex_scatter(grid%nx_total, grid%ny_total, &
                                          ms%nz_ml + 1, &
@@ -472,8 +472,8 @@ contains
                                          this%kd_int, this%tke_int)
       else
          call kappa_shear_column_kernel(grid, this, ms, &
-                                        ms%tracers(ms%idx_temperature)%hTr, &
-                                        ms%tracers(ms%idx_salinity)%hTr, dt)
+                                        ms%tracers(ms%idx_temperature)%c, &
+                                        ms%tracers(ms%idx_salinity)%c, dt)
       end if
    end subroutine kappa_shear_compute
 
@@ -501,7 +501,7 @@ contains
       type(ocean_kappa_shear_t), intent(inout) :: this
       type(multilayer_state_t), intent(in) :: ms
       ! assumed-shape-ok: tracer registry outer-shim — caller host-dereferences
-      ! ms%tracers(idx)%hTr before passing; size varies per tracer slot
+      ! ms%tracers(idx)%c before passing; size varies per tracer slot
       ! (see CLAUDE.md "outer-shim + flat-impl" pattern); thermo cadence.
       real(wp), intent(in) :: hT(:, :, :)
          !! Temperature tracer hTr (degC*m), host-dereferenced.
@@ -510,7 +510,7 @@ contains
       real(wp), intent(in) :: dt
 
       integer :: i, j, k, kg, nx, ny, nz, nzc
-      real(wp) :: f2_val, hk, inv_h
+      real(wp) :: f2_val, hk
       logical :: merge_on, do_merge
       ! gathered surface-down column inputs
       real(wp) :: h_sd(NZL), u_sd(NZL), v_sd(NZL), t_sd(NZL), s_sd(NZL)
@@ -530,7 +530,7 @@ contains
       merge_on = this%massless_merge
 
       do concurrent(j=1:ny, i=1:nx) &
-         local(k, kg, nzc, f2_val, hk, inv_h, do_merge, &
+         local(k, kg, nzc, f2_val, hk, do_merge, &
                h_sd, u_sd, v_sd, t_sd, s_sd, &
                idz_s, idz_int_s, hint_s, il2_s, &
                kappa_avg_sd, tke_avg_sd, &
@@ -577,9 +577,8 @@ contains
                ! even for a vanished layer).
                do k = 1, nz
                   kg = nz + 1 - k
-                  inv_h = 1.0_wp/max(h_sd(k), H_DIV_EPS)
-                  t_sd(k) = hT(i, j, kg)*inv_h
-                  s_sd(k) = hS(i, j, kg)*inv_h
+                  t_sd(k) = hT(i, j, kg)
+                  s_sd(k) = hS(i, j, kg)
                end do
 
                ! Build maps -> merge fields -> solve on nzc -> interp back.
@@ -609,10 +608,9 @@ contains
                do k = 1, nz
                   kg = nz + 1 - k
                   hk = max(h_sd(k), H_VANISHED)
-                  inv_h = 1.0_wp/hk
                   h_sd(k) = hk
-                  t_sd(k) = hT(i, j, kg)*inv_h
-                  s_sd(k) = hS(i, j, kg)*inv_h
+                  t_sd(k) = hT(i, j, kg)
+                  s_sd(k) = hS(i, j, kg)
                end do
 
                ! ---- Precompute the thickness grids (h_Int, 1/h, L_bdry) ----
@@ -730,10 +728,11 @@ contains
          ! 4-cell mask*thickness weight (diagonal pairs first).
          hwt = ((w_sw*h_sw + w_ne*h_ne) + (w_se*h_se + w_nw*h_nw))
          i_hwt = 1.0_wp/(hwt + H_DIV_EPS)
-         t_sd(k) = ((w_sw*hT(ic - 1, jc - 1, kg) + w_ne*hT(ic, jc, kg)) + &
-                    (w_se*hT(ic, jc - 1, kg) + w_nw*hT(ic - 1, jc, kg)))*i_hwt
-         s_sd(k) = ((w_sw*hS(ic - 1, jc - 1, kg) + w_ne*hS(ic, jc, kg)) + &
-                    (w_se*hS(ic, jc - 1, kg) + w_nw*hS(ic - 1, jc, kg)))*i_hwt
+         ! Thickness-weighted mean of the four corner-cell concentrations.
+         t_sd(k) = (((w_sw*h_sw)*hT(ic - 1, jc - 1, kg) + (w_ne*h_ne)*hT(ic, jc, kg)) + &
+                    ((w_se*h_se)*hT(ic, jc - 1, kg) + (w_nw*h_nw)*hT(ic - 1, jc, kg)))*i_hwt
+         s_sd(k) = (((w_sw*h_sw)*hS(ic - 1, jc - 1, kg) + (w_ne*h_ne)*hS(ic, jc, kg)) + &
+                    ((w_se*h_se)*hS(ic, jc - 1, kg) + (w_nw*h_nw)*hS(ic - 1, jc, kg)))*i_hwt
 
          ! 4-cell mask-weighted thickness (mean of the WET cells only —
          ! a partially-wet corner is not diluted by land zeros).

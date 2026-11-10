@@ -66,8 +66,8 @@ contains
       call ms%enter_data()
       call sf%enter_data()
       call ocean_surface_flux_apply_tracers(grid, sf, ms, dt)
-      associate (hT => ms%tracers(ms%idx_temperature)%hTr, &
-                 hS => ms%tracers(ms%idx_salinity)%hTr)
+      associate (hT => ms%tracers(ms%idx_temperature)%c, &
+                 hS => ms%tracers(ms%idx_salinity)%c)
          !$acc update self(hT, hS)
       end associate
       call sf%exit_data()
@@ -97,18 +97,18 @@ contains
          call sf%init(grid)
 
          ms%h_layer = H_LAYER
-         ms%tracers(ms%idx_temperature)%hTr = eos%T_ref*H_LAYER
-         ms%tracers(ms%idx_salinity)%hTr = eos%S_ref*H_LAYER
-         allocate (hT_ic, source=ms%tracers(ms%idx_temperature)%hTr)
-         allocate (hS_ic, source=ms%tracers(ms%idx_salinity)%hTr)
+         ms%tracers(ms%idx_temperature)%c = eos%T_ref
+         ms%tracers(ms%idx_salinity)%c = eos%S_ref
+         allocate (hT_ic, source=ms%tracers(ms%idx_temperature)%c)
+         allocate (hS_ic, source=ms%tracers(ms%idx_salinity)%c)
 
          call sf%set_surface_flux_const(0.0_wp, 0.0_wp)
          call run_apply(grid, sf, ms, DT)
 
-         call check(error, maxval(abs(ms%tracers(ms%idx_temperature)%hTr - hT_ic)) < 1.0e-14_wp, &
+         call check(error, maxval(abs(ms%tracers(ms%idx_temperature)%c - hT_ic)) < 1.0e-14_wp, &
                     "zero-flux apply modified hT")
          if (allocated(error)) exit checks
-         call check(error, maxval(abs(ms%tracers(ms%idx_salinity)%hTr - hS_ic)) < 1.0e-14_wp, &
+         call check(error, maxval(abs(ms%tracers(ms%idx_salinity)%c - hS_ic)) < 1.0e-14_wp, &
                     "zero-flux apply modified hS")
 
       end block checks
@@ -141,8 +141,8 @@ contains
          call sf%init(grid)
 
          ms%h_layer = H_LAYER
-         ms%tracers(ms%idx_temperature)%hTr = eos%T_ref*H_LAYER
-         ms%tracers(ms%idx_salinity)%hTr = eos%S_ref*H_LAYER
+         ms%tracers(ms%idx_temperature)%c = eos%T_ref
+         ms%tracers(ms%idx_salinity)%c = eos%S_ref
 
          call sf%set_surface_flux_const(Q_HEAT, 0.0_wp)
          call run_apply(grid, sf, ms, DT)
@@ -150,12 +150,12 @@ contains
          i_probe = grid%nx_total/2
          j_probe = grid%ny_total/2
          expected_dhT = DT*Q_HEAT/(sf%rho0*sf%cp)
-         max_top_err = abs(ms%tracers(ms%idx_temperature)%hTr(i_probe, j_probe, NZ) &
-                           - (eos%T_ref*H_LAYER + expected_dhT))
+         max_top_err = abs(ms%tracers(ms%idx_temperature)%c(i_probe, j_probe, NZ) &
+                           - (eos%T_ref + expected_dhT/H_LAYER))
          max_other_drift = 0.0_wp
          do k = 1, NZ - 1
             max_other_drift = max(max_other_drift, &
-                                  abs(ms%tracers(ms%idx_temperature)%hTr(i_probe, j_probe, k) - eos%T_ref*H_LAYER))
+                                  abs(ms%tracers(ms%idx_temperature)%c(i_probe, j_probe, k) - eos%T_ref))
          end do
 
          call check(error, max_top_err < 1.0e-10_wp, &
@@ -190,8 +190,8 @@ contains
          call sf%init(grid)
 
          ms%h_layer = H_LAYER
-         ms%tracers(ms%idx_temperature)%hTr = eos%T_ref*H_LAYER
-         ms%tracers(ms%idx_salinity)%hTr = eos%S_ref*H_LAYER
+         ms%tracers(ms%idx_temperature)%c = eos%T_ref
+         ms%tracers(ms%idx_salinity)%c = eos%S_ref
 
          call sf%set_surface_flux_const(0.0_wp, Q_SALT)
          call run_apply(grid, sf, ms, DT)
@@ -199,12 +199,12 @@ contains
          i_probe = grid%nx_total/2
          j_probe = grid%ny_total/2
          expected_dhS = DT*Q_SALT/sf%rho0
-         max_top_err = abs(ms%tracers(ms%idx_salinity)%hTr(i_probe, j_probe, NZ) &
-                           - (eos%S_ref*H_LAYER + expected_dhS))
+         max_top_err = abs(ms%tracers(ms%idx_salinity)%c(i_probe, j_probe, NZ) &
+                           - (eos%S_ref + expected_dhS/H_LAYER))
          max_other_drift = 0.0_wp
          do k = 1, NZ - 1
             max_other_drift = max(max_other_drift, &
-                                  abs(ms%tracers(ms%idx_salinity)%hTr(i_probe, j_probe, k) - eos%S_ref*H_LAYER))
+                                  abs(ms%tracers(ms%idx_salinity)%c(i_probe, j_probe, k) - eos%S_ref))
          end do
 
          call check(error, max_top_err < 1.0e-10_wp, &
@@ -259,8 +259,8 @@ contains
          idx_salt = budgets%n_contributors
 
          ms%h_layer = H_LAYER
-         ms%tracers(ms%idx_temperature)%hTr = eos%T_ref*H_LAYER
-         ms%tracers(ms%idx_salinity)%hTr = eos%S_ref*H_LAYER
+         ms%tracers(ms%idx_temperature)%c = eos%T_ref
+         ms%tracers(ms%idx_salinity)%c = eos%S_ref
 
          call sf%set_surface_flux_const(Q_HEAT, Q_SALT)
 
@@ -325,8 +325,8 @@ contains
          call sf%init(grid)
 
          ms%h_layer = H_LAYER
-         ms%tracers(ms%idx_temperature)%hTr = eos%T_ref*H_LAYER
-         ms%tracers(ms%idx_salinity)%hTr = eos%S_ref*H_LAYER
+         ms%tracers(ms%idx_temperature)%c = eos%T_ref
+         ms%tracers(ms%idx_salinity)%c = eos%S_ref
 
          ! Seed scalar fill (non-zero so apply_tracers doesn't early-exit)
          ! then overwrite the east half with zero to create the split.
@@ -347,15 +347,15 @@ contains
          expected_dhT = DT*Q_HEATED/(sf%rho0*sf%cp)
 
          ! West half (i = 2): hT should have risen by expected_dhT
-         hT_ic_west = eos%T_ref*H_LAYER
-         hT_final_west = ms%tracers(ms%idx_temperature)%hTr(2, grid%ny_total/2, NZ)
-         call check(error, abs(hT_final_west - (hT_ic_west + expected_dhT)) < 1.0e-10_wp, &
+         hT_ic_west = eos%T_ref
+         hT_final_west = ms%tracers(ms%idx_temperature)%c(2, grid%ny_total/2, NZ)
+         call check(error, abs(hT_final_west - (hT_ic_west + expected_dhT/H_LAYER)) < 1.0e-10_wp, &
                     "nonuniform: heated west cell top layer must warm by expected amount")
          if (allocated(error)) exit checks
 
          ! East half (i_east): hT must be unchanged (zero Q_heat there)
-         hT_ic_east = eos%T_ref*H_LAYER
-         hT_final_east = ms%tracers(ms%idx_temperature)%hTr(i_east, grid%ny_total/2, NZ)
+         hT_ic_east = eos%T_ref
+         hT_final_east = ms%tracers(ms%idx_temperature)%c(i_east, grid%ny_total/2, NZ)
          call check(error, abs(hT_final_east - hT_ic_east) < 1.0e-14_wp, &
                     "nonuniform: unheated east cell must not warm")
 

@@ -375,8 +375,8 @@ contains
       ms%u_face_x_layer = 0.0_wp
       ms%v_face_y_layer = 0.0_wp
       ms%rho_layer = rho
-      ms%tracers(ms%idx_temperature)%hTr = temp*h_layer
-      ms%tracers(ms%idx_salinity)%hTr = salt*h_layer
+      ms%tracers(ms%idx_temperature)%c = temp
+      ms%tracers(ms%idx_salinity)%c = salt
       ms%p_top = 0.0_wp
    end subroutine build_column
 
@@ -400,8 +400,8 @@ contains
       ! `enter_data`; push them so the device reads the values this test
       ! set, not whatever the map left behind.
       !$acc update device(ms%p_top, ms%h_layer, ms%rho_layer)
-      !$acc update device(ms%tracers(ms%idx_temperature)%hTr)
-      !$acc update device(ms%tracers(ms%idx_salinity)%hTr)
+      !$acc update device(ms%tracers(ms%idx_temperature)%c)
+      !$acc update device(ms%tracers(ms%idx_salinity)%c)
       !$acc update device(sf%Q_heat, sf%Q_salt)
       call vmix_compute_pp81(grid, vmix, ms)
       call vmix_apply_kpp_overlay(grid, vmix, ms, ss, sf)
@@ -567,8 +567,8 @@ contains
       call ms%enter_data()
       call vmix%enter_data()
       !$acc update device(ms%p_top, ms%h_layer)
-      !$acc update device(ms%tracers(ms%idx_temperature)%hTr)
-      !$acc update device(ms%tracers(ms%idx_salinity)%hTr)
+      !$acc update device(ms%tracers(ms%idx_temperature)%c)
+      !$acc update device(ms%tracers(ms%idx_salinity)%c)
       !$acc update device(vmix%kt)
       call vmix_split_kd_heat_salt(grid, vmix, ms)
       !$acc update self(vmix%kt, vmix%ks)
@@ -597,8 +597,8 @@ contains
          ! k = 1 is the bed, k = nz the surface: warm/salty at the top.
          t_k = -1.0_wp + 0.45_wp*real(k - 1, wp)
          s_k = 34.0_wp + 0.06_wp*real(k - 1, wp)
-         ms%tracers(ms%idx_temperature)%hTr(:, :, k) = t_k*h_layer
-         ms%tracers(ms%idx_salinity)%hTr(:, :, k) = s_k*h_layer
+         ms%tracers(ms%idx_temperature)%c(:, :, k) = t_k
+         ms%tracers(ms%idx_salinity)%c(:, :, k) = s_k
       end do
       vmix%eos = make_eos(variant)
       vmix%rho0 = RHO0

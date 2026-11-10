@@ -164,8 +164,8 @@ contains
       call eos%init(grid)
       eos%variant = EOS_VARIANT_WRIGHT_97
       ms%h_layer = DZ_LAYER
-      ms%tracers(ms%idx_salinity)%hTr = S_UNI*DZ_LAYER
-      ms%tracers(ms%idx_temperature)%hTr = T_UNI*DZ_LAYER
+      ms%tracers(ms%idx_salinity)%c = S_UNI
+      ms%tracers(ms%idx_temperature)%c = T_UNI
    end subroutine build_uniform_column
 
    subroutine compute_density(ms, eos)
@@ -199,8 +199,8 @@ contains
       nx = grid%nx_total
       ny = grid%ny_total
       allocate (h_layer(nx, ny, NZ), source=DZ_LAYER)
-      allocate (hS(nx, ny, NZ), source=S_UNI*DZ_LAYER)
-      allocate (hT(nx, ny, NZ), source=T_UNI*DZ_LAYER)
+      allocate (hS(nx, ny, NZ), source=S_UNI)
+      allocate (hT(nx, ny, NZ), source=T_UNI)
       allocate (seed, source=rho_seed)
       allocate (p_top_fld(nx, ny), source=p_top_val)
       allocate (p_edge(nx, ny, NZ + 1), source=-1.0_wp)
@@ -550,8 +550,8 @@ contains
 
       ! Uniform (T, S) so the potential density has an exact closed form.
       ms%h_layer = H_TOTAL/real(NZ, wp)
-      ms%tracers(ms%idx_salinity)%hTr = S_UNI*ms%h_layer
-      ms%tracers(ms%idx_temperature)%hTr = T_UNI*ms%h_layer
+      ms%tracers(ms%idx_salinity)%c = S_UNI
+      ms%tracers(ms%idx_temperature)%c = T_UNI
 
       ! A real load on the assembled total, and the seam switched on so the
       ! OFF case is "the seam runs, the EOS does not see it" rather than

@@ -285,8 +285,8 @@ contains
                   do i = ng + 1, ng + nxl
                      ig = i - ng + io
                      jg = j - ng + jo
-                     ms%tracers(it)%hTr(i, j, k) = ms%tracers(it)%hTr(i, j, k)* &
-                                                   (1.0_wp + real(modulo(3*ig + jg + it, 7) - 3, wp)/1024.0_wp)
+                     ms%tracers(it)%c(i, j, k) = ms%tracers(it)%c(i, j, k)* &
+                                                 (1.0_wp + real(modulo(3*ig + jg + it, 7) - 3, wp)/1024.0_wp)
                   end do
                end do
             end do
@@ -315,7 +315,7 @@ contains
          if (after_steps) then
             !$acc update self(ms%h_layer, ms%u_face_x_layer, ms%v_face_y_layer)
             do it = 1, size(ms%tracers)
-               !$acc update self(ms%tracers(it)%hTr)
+               !$acc update self(ms%tracers(it)%c)
             end do
             !$acc update self(engine%state%dyn%bt_work%bt_eta_end)
          end if
@@ -325,7 +325,7 @@ contains
          nt = size(ms%tracers)
          allocate (s%tr(size(ms%h_layer, 1), size(ms%h_layer, 2), NZ, nt))
          do it = 1, nt
-            s%tr(:, :, :, it) = ms%tracers(it)%hTr
+            s%tr(:, :, :, it) = ms%tracers(it)%c
          end do
          if (after_steps) s%eta = engine%state%dyn%bt_work%bt_eta_end
          s%dxt = mt%dxT

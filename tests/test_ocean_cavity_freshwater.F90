@@ -51,7 +51,7 @@ module test_ocean_cavity_freshwater
    use rdb_ocean_engine, only: ocean_engine_t, engine_setup, engine_enter_data, &
                                engine_step, engine_step_ice, engine_step_finalize, &
                                engine_exit_data, engine_teardown
-   use rdb_ocean_console_stats, only: compute_total_h, compute_total_tracer, &
+   use rdb_ocean_console_stats, only: compute_total_h, compute_total_tracer, compute_total_content, &
                                       ocean_budget_src, ocean_budget_out, &
                                       ocean_budget_stage_weight, &
                                       ocean_salt_src_sum, ocean_heat_src_sum
@@ -60,7 +60,6 @@ module test_ocean_cavity_freshwater
    use rdb_comm_env, only: comm_env_init, comm_env_setup_roles
    use rdb_ocean_cavity_flux, only: cavity_mass_apply_impl, cavity_mass_salt_mirror_impl, &
                                     cavity_mass_totals_impl, cavity_comp_apply_impl, &
-                                    cavity_comp_scale_tracer_impl, &
                                     cavity_comp_withdrawal, cavity_mass_thin_is_fatal, &
                                     H_CAVITY_FLOOR
    use rdb_ocean_remap, only: ocean_remap_tracer_column
@@ -202,7 +201,7 @@ contains
    ! Single-column driving
    ! ======================================================================
 
-   subroutine column_step(h, hs, ht, hps, sb, hb, melt_val, do_mass, n_thin)
+   subroutine column_step(h, sc, tc, psc, sb, hb, melt_val, do_mass, n_thin)
       !! ONE outer step of the top layer of one column, exactly as the
       !! production stage runs it: the surface-flux stamp
       !! (`apply_surface_src_2d_impl`'s arithmetic, spelt out because the
@@ -213,9 +212,10 @@ contains
       !! step: the cost is irrelevant at this size and it keeps the
       !! `mem:separate` contract honest for a kernel the GPU build will
       !! run over a whole domain.
-      real(wp), intent(inout) :: h, hs, ht, hps, sb, hb
-         !! Top-layer thickness, `h*S`, `h*T`, `h*pseudo-salt`, and the
-         !! salt / heat surface budget contributors.
+      real(wp), intent(inout) :: h, sc, tc, psc, sb, hb
+         !! Top-layer thickness, the S / T / pseudo-salt CONCENTRATIONS,
+         !! and the salt / heat surface budget contributors (CONTENT:
+         !! `h*c` units).
       real(wp), intent(in) :: melt_val
          !! Melt mass flux (kg/m^2/s).
       logical, intent(in) :: do_mass
@@ -224,57 +224,61 @@ contains
          !! Clamped-withdrawal count this step.
 
       real(wp) :: a_h(1, 1), a_melt(1, 1), a_sfar(1, 1), a_tb(1, 1)
-      real(wp) :: a_hl(1, 1, 1), a_hs(1, 1, 1), a_ht(1, 1, 1), a_hps(1, 1, 1)
+      real(wp) :: a_hl(1, 1, 1), a_s(1, 1, 1), a_t(1, 1, 1), a_ps(1, 1, 1)
       real(wp) :: a_sb(1, 1, 1), a_hb(1, 1, 1)
       integer :: a_ktop(1, 1)
-      real(wp) :: salt_cav, stamp_s, stamp_t
+      real(wp) :: salt_cav, stamp_s, stamp_t, s_pre
 
       ! --- the virtual stamp, on the host, exactly as the assembler +
       ! apply pair would leave it on a fully covered column (open-water
       ! factor 0 annihilates every atmospheric band, so Q_salt IS
       ! salt_cavity and Q_heat IS -q_ocean).
-      salt_cav = -melt_val*(hs/h - 0.0_wp)
+      ! The stamps are CONTENT (what the budget contributors record);
+      ! a content deposit over a live layer of thickness `h` moves the
+      ! stored concentration by `stamp/h`.
+      s_pre = sc
+      salt_cav = -melt_val*(sc - 0.0_wp)
       stamp_s = (DTC/RHO0)*salt_cav
       stamp_t = (DTC/(RHO0*CP))*(-QOC)
-      hs = hs + stamp_s
+      sc = sc + stamp_s/h
       sb = sb + stamp_s
-      ht = ht + stamp_t
+      tc = tc + stamp_t/h
       hb = hb + stamp_t
-      hps = hps + stamp_s
+      psc = psc + stamp_s/h
       n_thin = 0
       if (.not. do_mass) return
 
       a_h(1, 1) = 1.0_wp
       a_melt(1, 1) = melt_val
-      a_sfar(1, 1) = (hs - stamp_s)/h
+      a_sfar(1, 1) = s_pre
       a_tb(1, 1) = TB
       a_hl(1, 1, 1) = h
-      a_hs(1, 1, 1) = hs
-      a_ht(1, 1, 1) = ht
-      a_hps(1, 1, 1) = hps
+      a_s(1, 1, 1) = sc
+      a_t(1, 1, 1) = tc
+      a_ps(1, 1, 1) = psc
       a_sb(1, 1, 1) = sb
       a_hb(1, 1, 1) = hb
       a_ktop(1, 1) = 1
 
-      !$acc enter data copyin(a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, &
-      !$acc&                  a_hps, a_sb, a_hb, a_ktop)
-      !$acc update device(a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, &
-      !$acc&              a_hps, a_sb, a_hb, a_ktop)
+      !$acc enter data copyin(a_h, a_melt, a_sfar, a_tb, a_hl, a_s, a_t, &
+      !$acc&                  a_ps, a_sb, a_hb, a_ktop)
+      !$acc update device(a_h, a_melt, a_sfar, a_tb, a_hl, a_s, a_t, &
+      !$acc&              a_ps, a_sb, a_hb, a_ktop)
       ! The mirror runs FIRST: it forms its own h_before -> h_after pair from the
       ! pre-source thickness, which the apply overwrites.
       call cavity_mass_salt_mirror_impl(1, 1, 1, DTC/RHO0, DTC/RHO0, 0.0_wp, &
-                                        a_h, a_melt, a_sfar, a_hl, a_hps, a_ktop)
+                                        a_h, a_melt, a_sfar, a_hl, a_ps, a_ktop)
       call cavity_mass_apply_impl(1, 1, 1, DTC/RHO0, DTC/RHO0, 0.0_wp, &
                                   a_h, a_melt, a_sfar, a_tb, &
-                                  a_hl, a_hs, a_ht, a_sb, a_hb, a_ktop, n_thin)
-      !$acc update self(a_hl, a_hs, a_ht, a_hps, a_sb, a_hb)
-      !$acc exit data delete(a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, &
-      !$acc&                 a_hps, a_sb, a_hb, a_ktop)
+                                  a_hl, a_s, a_t, a_sb, a_hb, a_ktop, n_thin)
+      !$acc update self(a_hl, a_s, a_t, a_ps, a_sb, a_hb)
+      !$acc exit data delete(a_h, a_melt, a_sfar, a_tb, a_hl, a_s, a_t, &
+      !$acc&                 a_ps, a_sb, a_hb, a_ktop)
 
       h = a_hl(1, 1, 1)
-      hs = a_hs(1, 1, 1)
-      ht = a_ht(1, 1, 1)
-      hps = a_hps(1, 1, 1)
+      sc = a_s(1, 1, 1)
+      tc = a_t(1, 1, 1)
+      psc = a_ps(1, 1, 1)
       sb = a_sb(1, 1, 1)
       hb = a_hb(1, 1, 1)
    end subroutine column_step
@@ -288,13 +292,13 @@ contains
       !! `N*m*dt/rho_0`.  "Exactly" to the accumulation bound: `N` adds,
       !! each rounding at `eps*h`.
       type(error_type), allocatable, intent(out) :: error
-      real(wp) :: h, hs, ht, hps, sb, hb, dh, tol
+      real(wp) :: h, sc, tc, psc, sb, hb, dh, tol
       integer :: n, n_thin
 
-      call seed(h, hs, ht, hps, sb, hb)
+      call seed(h, sc, tc, psc, sb, hb)
       dh = MELT*(DTC/RHO0)
       do n = 1, NSTEP_COL
-         call column_step(h, hs, ht, hps, sb, hb, MELT, .true., n_thin)
+         call column_step(h, sc, tc, psc, sb, hb, MELT, .true., n_thin)
       end do
       tol = 4.0_wp*real(NSTEP_COL, wp)*epsilon(1.0_wp)*(H0 + NSTEP_COL*dh)
       call check(error, abs(h - (H0 + real(NSTEP_COL, wp)*dh)) <= tol, &
@@ -309,19 +313,19 @@ contains
       !! virtual flux) halves the numerator's survival and misses this by
       !! ~`eps` of the signal, which the bound below cannot absorb.
       type(error_type), allocatable, intent(out) :: error
-      real(wp) :: h, hs, ht, hps, sb, hb, dh, s_exact, tol
+      real(wp) :: h, sc, tc, psc, sb, hb, dh, s_exact, tol
       integer :: n, n_thin
 
-      call seed(h, hs, ht, hps, sb, hb)
+      call seed(h, sc, tc, psc, sb, hb)
       dh = MELT*(DTC/RHO0)
       do n = 1, NSTEP_COL
-         call column_step(h, hs, ht, hps, sb, hb, MELT, .true., n_thin)
+         call column_step(h, sc, tc, psc, sb, hb, MELT, .true., n_thin)
       end do
       s_exact = S0*H0/(H0 + real(NSTEP_COL, wp)*dh)
-      ! The undo is the exact negation of the stamp, so `hs` only carries
-      ! `N` roundings of `(hs + X) - X`, each at `eps*|hs|`.
+      ! The undo is the exact negation of the stamp, so `sc` only carries
+      ! `N` roundings of `(sc + X) - X`, each at `eps*|sc|`.
       tol = 8.0_wp*real(NSTEP_COL, wp)*epsilon(1.0_wp)*S0
-      call check(error, abs(hs/h - s_exact) <= tol, "S follows the exact dilution law")
+      call check(error, abs(sc - s_exact) <= tol, "S follows the exact dilution law")
       if (allocated(error)) return
       call check(error, s_exact < S0 - 1.0e-4_wp, &
                  "and the dilution is a real, resolvable freshening")
@@ -334,23 +338,23 @@ contains
       !! statement that `h*T` grew by exactly `N*(A*h0_stamp + dh*T_b)`,
       !! where the stamp is the same every step because `Q_heat` is.
       type(error_type), allocatable, intent(out) :: error
-      real(wp) :: h, hs, ht, hps, sb, hb, dh, stamp_t, ht_exact, tol
+      real(wp) :: h, sc, tc, psc, sb, hb, dh, stamp_t, ht_exact, tol
       integer :: n, n_thin
 
-      call seed(h, hs, ht, hps, sb, hb)
+      call seed(h, sc, tc, psc, sb, hb)
       dh = MELT*(DTC/RHO0)
       stamp_t = (DTC/(RHO0*CP))*(-QOC)
       do n = 1, NSTEP_COL
-         call column_step(h, hs, ht, hps, sb, hb, MELT, .true., n_thin)
+         call column_step(h, sc, tc, psc, sb, hb, MELT, .true., n_thin)
       end do
       ht_exact = H0*T0 + real(NSTEP_COL, wp)*(stamp_t + dh*TB)
       tol = 8.0_wp*real(NSTEP_COL, wp)*epsilon(1.0_wp)*abs(H0*T0)
-      call check(error, abs(ht - ht_exact) <= tol, &
+      call check(error, abs(h*tc - ht_exact) <= tol, &
                  "h*T grew by the turbulent stamp plus the meltwater enthalpy dh*T_b")
       if (allocated(error)) return
       ! The meltwater arrives COLDER than the column, so the enthalpy
       ! term cools it on top of the turbulent loss — both signs negative.
-      call check(error, dh*TB < 0.0_wp .and. ht < H0*T0, &
+      call check(error, dh*TB < 0.0_wp .and. h*tc < H0*T0, &
                  "and the added water cools the column")
    end subroutine test_enthalpy_law
 
@@ -360,19 +364,19 @@ contains
       !! it is NOT zero.  Asserting only "they agree" would also pass on
       !! a double count, which agrees to leading order too.
       type(error_type), allocatable, intent(out) :: error
-      real(wp) :: hm, hsm, htm, hpsm, sbm, hbm
-      real(wp) :: hv, hsv, htv, hpsv, sbv, hbv
+      real(wp) :: hm, scm, tcm, pscm, sbm, hbm
+      real(wp) :: hv, scv, tcv, pscv, sbv, hbv
       real(wp) :: eps, ds_m, ds_v, diff, predicted
       integer :: n_thin
 
-      call seed(hm, hsm, htm, hpsm, sbm, hbm)
-      call seed(hv, hsv, htv, hpsv, sbv, hbv)
-      call column_step(hm, hsm, htm, hpsm, sbm, hbm, MELT, .true., n_thin)
-      call column_step(hv, hsv, htv, hpsv, sbv, hbv, MELT, .false., n_thin)
+      call seed(hm, scm, tcm, pscm, sbm, hbm)
+      call seed(hv, scv, tcv, pscv, sbv, hbv)
+      call column_step(hm, scm, tcm, pscm, sbm, hbm, MELT, .true., n_thin)
+      call column_step(hv, scv, tcv, pscv, sbv, hbv, MELT, .false., n_thin)
 
       eps = MELT*(DTC/RHO0)/H0
-      ds_m = hsm/hm - S0
-      ds_v = hsv/hv - S0
+      ds_m = scm - S0
+      ds_v = scv - S0
       diff = ds_m - ds_v
       predicted = (S0 - 0.0_wp)*eps*eps/(1.0_wp + eps)
       call check(error, abs(diff - predicted) <= 1.0e-9_wp*abs(predicted) + &
@@ -393,20 +397,20 @@ contains
       !! deliberately drops the `-m*c_w*(T_w - T_b)` dilution term — and
       !! the gate asserts the size, not that it vanishes.
       type(error_type), allocatable, intent(out) :: error
-      real(wp) :: hm, hsm, htm, hpsm, sbm, hbm
-      real(wp) :: hv, hsv, htv, hpsv, sbv, hbv
+      real(wp) :: hm, scm, tcm, pscm, sbm, hbm
+      real(wp) :: hv, scv, tcv, pscv, sbv, hbv
       real(wp) :: eps, a_term, dt_m, dt_v, diff, predicted
       integer :: n_thin
 
-      call seed(hm, hsm, htm, hpsm, sbm, hbm)
-      call seed(hv, hsv, htv, hpsv, sbv, hbv)
-      call column_step(hm, hsm, htm, hpsm, sbm, hbm, MELT, .true., n_thin)
-      call column_step(hv, hsv, htv, hpsv, sbv, hbv, MELT, .false., n_thin)
+      call seed(hm, scm, tcm, pscm, sbm, hbm)
+      call seed(hv, scv, tcv, pscv, sbv, hbv)
+      call column_step(hm, scm, tcm, pscm, sbm, hbm, MELT, .true., n_thin)
+      call column_step(hv, scv, tcv, pscv, sbv, hbv, MELT, .false., n_thin)
 
       eps = MELT*(DTC/RHO0)/H0
       a_term = -QOC*DTC/(RHO0*CP*H0)
-      dt_m = htm/hm - T0
-      dt_v = htv/hv - T0
+      dt_m = tcm - T0
+      dt_v = tcv - T0
       diff = dt_m - dt_v
       predicted = -eps*(a_term + T0 - TB)/(1.0_wp + eps)
       call check(error, abs(diff - predicted) <= 1.0e-9_wp*abs(predicted) + &
@@ -420,20 +424,20 @@ contains
       !! `m < 0` withdraws mass and CONCENTRATES the salt — the same
       !! closed form with a negative `dh`, so `S > S0`.
       type(error_type), allocatable, intent(out) :: error
-      real(wp) :: h, hs, ht, hps, sb, hb, dh, s_exact
+      real(wp) :: h, sc, tc, psc, sb, hb, dh, s_exact
       integer :: n, n_thin
 
-      call seed(h, hs, ht, hps, sb, hb)
+      call seed(h, sc, tc, psc, sb, hb)
       dh = (-MELT)*(DTC/RHO0)
       do n = 1, NSTEP_COL
-         call column_step(h, hs, ht, hps, sb, hb, -MELT, .true., n_thin)
+         call column_step(h, sc, tc, psc, sb, hb, -MELT, .true., n_thin)
          call check(error, n_thin == 0, "no clamping at this thickness")
          if (allocated(error)) return
       end do
       s_exact = S0*H0/(H0 + real(NSTEP_COL, wp)*dh)
       call check(error, h < H0 .and. s_exact > S0, "freezing thins and concentrates")
       if (allocated(error)) return
-      call check(error, abs(hs/h - s_exact) <= &
+      call check(error, abs(sc - s_exact) <= &
                  8.0_wp*real(NSTEP_COL, wp)*epsilon(1.0_wp)*S0, &
                  "and it follows the same closed form with dh < 0")
    end subroutine test_freezing
@@ -447,7 +451,7 @@ contains
       !! longer matches the tracked mass source.
       type(error_type), allocatable, intent(out) :: error
       real(wp) :: a_h(1, 1), a_melt(1, 1), a_sfar(1, 1), a_tb(1, 1)
-      real(wp) :: a_hl(1, 1, 1), a_hs(1, 1, 1), a_ht(1, 1, 1)
+      real(wp) :: a_hl(1, 1, 1), a_s(1, 1, 1), a_t(1, 1, 1)
       real(wp) :: a_sb(1, 1, 1), a_hb(1, 1, 1)
       real(wp) :: h_small, big_melt
       integer :: a_ktop(1, 1)
@@ -461,19 +465,19 @@ contains
       a_sfar(1, 1) = S0
       a_tb(1, 1) = TB
       a_hl(1, 1, 1) = h_small
-      a_hs(1, 1, 1) = h_small*S0
-      a_ht(1, 1, 1) = h_small*T0
+      a_s(1, 1, 1) = S0
+      a_t(1, 1, 1) = T0
       a_sb(1, 1, 1) = 0.0_wp
       a_hb(1, 1, 1) = 0.0_wp
       a_ktop(1, 1) = 1
 
-      !$acc enter data copyin(a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, a_sb, a_hb, a_ktop)
-      !$acc update device(a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, a_sb, a_hb, a_ktop)
+      !$acc enter data copyin(a_h, a_melt, a_sfar, a_tb, a_hl, a_s, a_t, a_sb, a_hb, a_ktop)
+      !$acc update device(a_h, a_melt, a_sfar, a_tb, a_hl, a_s, a_t, a_sb, a_hb, a_ktop)
       call cavity_mass_apply_impl(1, 1, 1, DTC/RHO0, DTC/RHO0, 0.0_wp, &
                                   a_h, a_melt, a_sfar, a_tb, &
-                                  a_hl, a_hs, a_ht, a_sb, a_hb, a_ktop, n_thin)
+                                  a_hl, a_s, a_t, a_sb, a_hb, a_ktop, n_thin)
       !$acc update self(a_hl)
-      !$acc exit data delete(a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, a_sb, a_hb, a_ktop)
+      !$acc exit data delete(a_h, a_melt, a_sfar, a_tb, a_hl, a_s, a_t, a_sb, a_hb, a_ktop)
 
       call check(error, n_thin == 1, "the starved column is counted")
       if (allocated(error)) return
@@ -496,21 +500,26 @@ contains
       !!
       !! The clamp fires, then the run aborts — but the abort happens
       !! AFTER the state is written, and the ALE remap runs on the same
-      !! thermo step.  `H_VANISHED` is the D4 skip/merge MARKER and
-      !! `ocean_remap_tracer_column` gates its `c = hTr/h` on a strict
-      !! `>`, so a layer left EXACTLY on the marker comes back with
-      !! `hTr = 0`: the heat and salt the clamp was protecting are
-      !! deleted, silently, by an IDENTITY remap.
+      !! thermo step.  `H_VANISHED` is the D4 skip/merge MARKER and every
+      !! gate tests it with a strict `>`: a layer left EXACTLY on the
+      !! marker is EMPTY, carries no content, and its (now meaningless)
+      !! concentration is just carried along stale — so the heat and salt
+      !! the clamp was protecting are silently dropped from the ledger by
+      !! the next step.
       !!
-      !! So: run the clamped apply, hand the resulting `(h, hTr)` to the
+      !! So: run the clamped apply, hand the resulting `(h, c)` to the
       !! production column remap with `h_new = h_old` (what a coordinate
-      !! at rest gives), and require the content back.  One ulp decides
-      !! this case, which is why it is worth its own gate.
+      !! at rest gives), and require (a) the layer to be LIVE and (b) the
+      !! concentration back exactly, i.e. its content `h*c` intact.  One
+      !! ulp decides (a), which is why it is worth its own gate.  (In the
+      !! old content storage the failure showed up as `hTr = 0`; with
+      !! concentration storage it shows up as a layer the remap treats as
+      !! empty, hence the explicit liveness assertion.)
       type(error_type), allocatable, intent(out) :: error
       real(wp) :: a_h(1, 1), a_melt(1, 1), a_sfar(1, 1), a_tb(1, 1)
-      real(wp) :: a_hl(1, 1, 1), a_hs(1, 1, 1), a_ht(1, 1, 1)
+      real(wp) :: a_hl(1, 1, 1), a_s(1, 1, 1), a_t(1, 1, 1)
       real(wp) :: a_sb(1, 1, 1), a_hb(1, 1, 1)
-      real(wp) :: h_col(1), hs_col(1), ht_col(1)
+      real(wp) :: h_col(1), s_col(1), t_col(1)
       real(wp) :: h_small, big_melt
       integer :: a_ktop(1, 1)
       integer :: n_thin
@@ -522,40 +531,39 @@ contains
       a_sfar(1, 1) = S0
       a_tb(1, 1) = TB
       a_hl(1, 1, 1) = h_small
-      a_hs(1, 1, 1) = h_small*S0
-      a_ht(1, 1, 1) = h_small*T0
+      a_s(1, 1, 1) = S0
+      a_t(1, 1, 1) = T0
       a_sb(1, 1, 1) = 0.0_wp
       a_hb(1, 1, 1) = 0.0_wp
       a_ktop(1, 1) = 1
 
-      !$acc enter data copyin(a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, a_sb, a_hb, a_ktop)
-      !$acc update device(a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, a_sb, a_hb, a_ktop)
+      !$acc enter data copyin(a_h, a_melt, a_sfar, a_tb, a_hl, a_s, a_t, a_sb, a_hb, a_ktop)
+      !$acc update device(a_h, a_melt, a_sfar, a_tb, a_hl, a_s, a_t, a_sb, a_hb, a_ktop)
       call cavity_mass_apply_impl(1, 1, 1, DTC/RHO0, DTC/RHO0, 0.0_wp, &
                                   a_h, a_melt, a_sfar, a_tb, &
-                                  a_hl, a_hs, a_ht, a_sb, a_hb, a_ktop, n_thin)
-      !$acc update self(a_hl, a_hs, a_ht)
-      !$acc exit data delete(a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, a_sb, a_hb, a_ktop)
+                                  a_hl, a_s, a_t, a_sb, a_hb, a_ktop, n_thin)
+      !$acc update self(a_hl, a_s, a_t)
+      !$acc exit data delete(a_h, a_melt, a_sfar, a_tb, a_hl, a_s, a_t, a_sb, a_hb, a_ktop)
 
       call check(error, n_thin == 1, "the fixture must actually clamp")
       if (allocated(error)) return
 
       h_col(1) = a_hl(1, 1, 1)
-      hs_col(1) = a_hs(1, 1, 1)
-      ht_col(1) = a_ht(1, 1, 1)
-      call check(error, abs(hs_col(1)) > 0.0_wp, &
-                 "the clamped layer must still carry salt content to lose")
+      s_col(1) = a_s(1, 1, 1)
+      t_col(1) = a_t(1, 1, 1)
+      call check(error, h_col(1) > H_VANISHED .and. abs(h_col(1)*s_col(1)) > 0.0_wp, &
+                 "the clamped layer must be LIVE and still carry salt content to lose")
       if (allocated(error)) return
 
-      call ocean_remap_tracer_column(1, h_col, h_col, hs_col, REMAP_PPM)
-      call ocean_remap_tracer_column(1, h_col, h_col, ht_col, REMAP_PPM)
+      call ocean_remap_tracer_column(1, h_col, h_col, s_col, REMAP_PPM)
+      call ocean_remap_tracer_column(1, h_col, h_col, t_col, REMAP_PPM)
 
-      call check(error, hs_col(1) == a_hs(1, 1, 1), &
+      call check(error, s_col(1) == a_s(1, 1, 1), &
                  "an IDENTITY remap of the clamped layer must return its salt "// &
-                 "content unchanged — a layer left ON the vanish marker has it "// &
-                 "DELETED instead")
+                 "concentration (hence content) unchanged")
       if (allocated(error)) return
-      call check(error, ht_col(1) == a_ht(1, 1, 1), &
-                 "and its heat content unchanged")
+      call check(error, t_col(1) == a_t(1, 1, 1), &
+                 "and its heat concentration (hence content) unchanged")
    end subroutine test_clamp_survives_remap
 
    subroutine test_clamp_ledger(error)
@@ -568,7 +576,7 @@ contains
       !! and the state it aborts on still has to be self-consistent.)
       type(error_type), allocatable, intent(out) :: error
       real(wp) :: a_h(1, 1), a_melt(1, 1), a_sfar(1, 1), a_tb(1, 1)
-      real(wp) :: a_hl(1, 1, 1), a_hs(1, 1, 1), a_ht(1, 1, 1)
+      real(wp) :: a_hl(1, 1, 1), a_s(1, 1, 1), a_t(1, 1, 1)
       real(wp) :: a_sb(1, 1, 1), a_hb(1, 1, 1)
       real(wp) :: h_small, big_melt, dh_applied, virt, undo
       real(wp) :: d_hs, d_ht, scale_s, scale_t
@@ -582,23 +590,24 @@ contains
       a_sfar(1, 1) = S0
       a_tb(1, 1) = TB
       a_hl(1, 1, 1) = h_small
-      a_hs(1, 1, 1) = h_small*S0
-      a_ht(1, 1, 1) = h_small*T0
+      a_s(1, 1, 1) = S0
+      a_t(1, 1, 1) = T0
       a_sb(1, 1, 1) = 0.0_wp
       a_hb(1, 1, 1) = 0.0_wp
       a_ktop(1, 1) = 1
 
-      !$acc enter data copyin(a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, a_sb, a_hb, a_ktop)
-      !$acc update device(a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, a_sb, a_hb, a_ktop)
+      !$acc enter data copyin(a_h, a_melt, a_sfar, a_tb, a_hl, a_s, a_t, a_sb, a_hb, a_ktop)
+      !$acc update device(a_h, a_melt, a_sfar, a_tb, a_hl, a_s, a_t, a_sb, a_hb, a_ktop)
       call cavity_mass_apply_impl(1, 1, 1, DTC/RHO0, DTC/RHO0, 0.0_wp, &
                                   a_h, a_melt, a_sfar, a_tb, &
-                                  a_hl, a_hs, a_ht, a_sb, a_hb, a_ktop, n_thin)
-      !$acc update self(a_hl, a_hs, a_ht, a_sb, a_hb)
-      !$acc exit data delete(a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, a_sb, a_hb, a_ktop)
+                                  a_hl, a_s, a_t, a_sb, a_hb, a_ktop, n_thin)
+      !$acc update self(a_hl, a_s, a_t, a_sb, a_hb)
+      !$acc exit data delete(a_h, a_melt, a_sfar, a_tb, a_hl, a_s, a_t, a_sb, a_hb, a_ktop)
 
       dh_applied = a_hl(1, 1, 1) - h_small
-      d_hs = a_hs(1, 1, 1) - h_small*S0
-      d_ht = a_ht(1, 1, 1) - h_small*T0
+      ! CONTENT changes (h*c), the quantity the budget contributors record.
+      d_hs = a_hl(1, 1, 1)*a_s(1, 1, 1) - h_small*S0
+      d_ht = a_hl(1, 1, 1)*a_t(1, 1, 1) - h_small*T0
       ! The kernel's salt increment is `-(dt/rho0)*virt + dh*s_ice`, and
       ! `s_ice = 0` here, so the salt leg is purely the exact negation of
       ! the virtual stamp.  The heat increment is `dh*T_b`, and it is the
@@ -622,10 +631,13 @@ contains
       call check(error, abs(d_hs - undo) <= 1.0e-13_wp*scale_s, &
                  "the salt increment must be the exact negation of the virtual stamp")
       if (allocated(error)) return
-      call check(error, a_sb(1, 1, 1) == d_hs, &
-                 "and the salt BUDGET contributor must equal it bit for bit")
+      ! Not bit-for-bit any more: the state is a concentration, so the
+      ! content it implies is `h_new*((c*h_old + src)/h_new)`, which
+      ! differs from `src` by a few ulps of `h*c`.
+      call check(error, abs(a_sb(1, 1, 1) - d_hs) <= 1.0e-13_wp*scale_s, &
+                 "and the salt BUDGET contributor must equal it to round-off")
       if (allocated(error)) return
-      call check(error, a_hb(1, 1, 1) == d_ht, &
+      call check(error, abs(a_hb(1, 1, 1) - d_ht) <= 1.0e-13_wp*scale_t, &
                  "same for heat — the ledger names every gram it moved")
    end subroutine test_clamp_ledger
 
@@ -637,7 +649,7 @@ contains
       !! floor prevents, and exactly what a bare `hn = floor` clamp does.
       type(error_type), allocatable, intent(out) :: error
       real(wp) :: a_h(1, 1), a_melt(1, 1), a_sfar(1, 1), a_tb(1, 1)
-      real(wp) :: a_hl(1, 1, 1), a_hs(1, 1, 1), a_ht(1, 1, 1)
+      real(wp) :: a_hl(1, 1, 1), a_s(1, 1, 1), a_t(1, 1, 1)
       real(wp) :: a_sb(1, 1, 1), a_hb(1, 1, 1)
       real(wp) :: h_tiny
       integer :: a_ktop(1, 1)
@@ -649,19 +661,19 @@ contains
       a_sfar(1, 1) = S0
       a_tb(1, 1) = TB
       a_hl(1, 1, 1) = h_tiny
-      a_hs(1, 1, 1) = h_tiny*S0
-      a_ht(1, 1, 1) = h_tiny*T0
+      a_s(1, 1, 1) = S0
+      a_t(1, 1, 1) = T0
       a_sb(1, 1, 1) = 0.0_wp
       a_hb(1, 1, 1) = 0.0_wp
       a_ktop(1, 1) = 1
 
-      !$acc enter data copyin(a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, a_sb, a_hb, a_ktop)
-      !$acc update device(a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, a_sb, a_hb, a_ktop)
+      !$acc enter data copyin(a_h, a_melt, a_sfar, a_tb, a_hl, a_s, a_t, a_sb, a_hb, a_ktop)
+      !$acc update device(a_h, a_melt, a_sfar, a_tb, a_hl, a_s, a_t, a_sb, a_hb, a_ktop)
       call cavity_mass_apply_impl(1, 1, 1, DTC/RHO0, DTC/RHO0, 0.0_wp, &
                                   a_h, a_melt, a_sfar, a_tb, &
-                                  a_hl, a_hs, a_ht, a_sb, a_hb, a_ktop, n_thin)
+                                  a_hl, a_s, a_t, a_sb, a_hb, a_ktop, n_thin)
       !$acc update self(a_hl, a_hb)
-      !$acc exit data delete(a_h, a_melt, a_sfar, a_tb, a_hl, a_hs, a_ht, a_sb, a_hb, a_ktop)
+      !$acc exit data delete(a_h, a_melt, a_sfar, a_tb, a_hl, a_s, a_t, a_sb, a_hb, a_ktop)
 
       call check(error, n_thin == 1, "the refusal is still counted (and so still fatal)")
       if (allocated(error)) return
@@ -680,7 +692,7 @@ contains
       !! Two columns — one deep enough to pay in full, one that cannot.
       type(error_type), allocatable, intent(out) :: error
       real(wp) :: wet(2, 1), cov(2, 1), scal(2, 1)
-      real(wp) :: hl(2, 1, 1), hs(2, 1, 1), ht(2, 1, 1)
+      real(wp) :: hl(2, 1, 1), sc(2, 1, 1), tc(2, 1, 1)
       real(wp) :: sb(2, 1, 1), hb(2, 1, 1)
       real(wp) :: dw, h_deep, h_thin
       integer :: n_thin
@@ -693,19 +705,19 @@ contains
       scal = 1.0_wp
       hl(1, 1, 1) = h_deep
       hl(2, 1, 1) = h_thin
-      hs(1, 1, 1) = h_deep*S0
-      hs(2, 1, 1) = h_thin*S0
-      ht(1, 1, 1) = h_deep*T0
-      ht(2, 1, 1) = h_thin*T0
+      sc(1, 1, 1) = S0
+      sc(2, 1, 1) = S0
+      tc(1, 1, 1) = T0
+      tc(2, 1, 1) = T0
       sb = 0.0_wp
       hb = 0.0_wp
 
-      !$acc enter data copyin(wet, cov, scal, hl, hs, ht, sb, hb)
-      !$acc update device(wet, cov, scal, hl, hs, ht, sb, hb)
-      call cavity_comp_apply_impl(2, 1, 1, dw, wet, cov, hl, hs, ht, sb, hb, &
+      !$acc enter data copyin(wet, cov, scal, hl, sc, tc, sb, hb)
+      !$acc update device(wet, cov, scal, hl, sc, tc, sb, hb)
+      call cavity_comp_apply_impl(2, 1, 1, dw, wet, cov, hl, sc, tc, sb, hb, &
                                   scal, n_thin)
-      !$acc update self(hl, hs, scal)
-      !$acc exit data delete(wet, cov, scal, hl, hs, ht, sb, hb)
+      !$acc update self(hl, sc, scal)
+      !$acc exit data delete(wet, cov, scal, hl, sc, tc, sb, hb)
 
       call check(error, n_thin == 1, "only the starved column is counted")
       if (allocated(error)) return
@@ -718,32 +730,96 @@ contains
       call check(error, hl(2, 1, 1) == H_CAVITY_FLOOR, "exactly on H_CAVITY_FLOOR")
       if (allocated(error)) return
       ! And the concentration is untouched, which is the sink's contract.
-      call check(error, abs(hs(2, 1, 1)/hl(2, 1, 1) - S0) < 1.0e-10_wp, &
+      call check(error, abs(sc(2, 1, 1) - S0) < 1.0e-10_wp, &
                  "a clamped sink still carries the column's own S out")
    end subroutine test_comp_clamp_floor
 
    subroutine test_passive_dilution(error)
-      !! A passive tracer with ZERO concentration in the meltwater needs
-      !! no kernel of its own: `h` grows, `h*C` does not, so `C` falls by
-      !! exactly the dilution factor.  The gate is that the mass kernel
-      !! leaves an untouched `h*C` alone — i.e. that nothing secretly
-      !! adds tracer with the volume.
+      !! A passive tracer with ZERO content in the meltwater: the layer
+      !! thickens, the tracer CONTENT `h*c` must not change, so the stored
+      !! concentration must fall by exactly the dilution factor
+      !! `c = c0*H0/(H0 + N*dh)`.  (With the old content storage this was
+      !! free -- `h` grew and `hTr` did not.  With concentration storage
+      !! the production driver `ocean_cavity_mass_step` has to do it: a
+      !! `c` left untouched while `h` grows CREATES tracer.)  Asserted
+      !! through the PRODUCTION driver on a small covered plane, as the
+      !! content `sum(h*c)` of the passive tracer (conserved, meltwater
+      !! carries none) and as the closed-form concentration.
+      use rdb_grid, only: hgrid_t
+      use rdb_multilayer_state, only: multilayer_state_t
+      use rdb_ocean_metrics, only: ocean_metrics_t
+      use ocean_test_metrics, only: make_cartesian_metrics, destroy_cartesian_metrics
+      use rdb_ocean_cavity_flux, only: ocean_cavity_flux_t, ocean_cavity_mass_step
       type(error_type), allocatable, intent(out) :: error
-      real(wp) :: h, hs, ht, hps, sb, hb, hc, dh, c_exact
-      integer :: n, n_thin
+      integer, parameter :: NXP = 4, NYP = 3, NGH = 2, NZP = 2
+      type(hgrid_t) :: grid
+      type(ocean_metrics_t) :: metrics
+      type(multilayer_state_t) :: ms
+      type(ocean_cavity_flux_t) :: cav
+      real(wp) :: dh, c_exact, content0, content1, c_got
+      integer :: idx_c, n, nx, ny
 
-      call seed(h, hs, ht, hps, sb, hb)
-      hc = H0*1.0_wp
-      dh = MELT*(DTC/RHO0)
-      do n = 1, NSTEP_COL
-         call column_step(h, hs, ht, hps, sb, hb, MELT, .true., n_thin)
-      end do
-      c_exact = 1.0_wp*H0/(H0 + real(NSTEP_COL, wp)*dh)
-      call check(error, abs(hc/h - c_exact) <= &
-                 8.0_wp*real(NSTEP_COL, wp)*epsilon(1.0_wp), &
-                 "an untouched h*C is diluted by exactly the added volume")
+      call ensure_comm()
+      call grid%init(NXP, NYP, NGH, 1000.0_wp, 1000.0_wp)
+      nx = grid%nx_total
+      ny = grid%ny_total
+      metrics%use_cavity = .true.
+      call make_cartesian_metrics(metrics, grid)
+      metrics%cover_frac = 1.0_wp
+      !$acc update device(metrics%cover_frac)
+
+      ms%nz_ml = NZP
+      call ms%init(grid)
+      call ms%register_passive_tracer(grid, "dye", "1", "passive dye", idx_c)
+      call check(error, idx_c > 0, "passive tracer registers")
       if (allocated(error)) return
-      call check(error, c_exact < 1.0_wp, "and the dilution is real")
+      ms%h_layer = H0
+      ms%tracers(ms%idx_temperature)%c = T0
+      ms%tracers(ms%idx_salinity)%c = S0
+      ms%tracers(idx_c)%c = 1.0_wp
+      ms%wet_mask = 1.0_wp
+      ms%k_top = NZP
+      ms%k_top_u = NZP
+      ms%k_top_v = NZP
+
+      cav%enable = .true.
+      call cav%init(grid)
+      cav%freshwater = CAVITY_FW_MASS
+      cav%volume_comp = CAVITY_VC_NONE
+      cav%rho0 = RHO0
+      cav%s_ice = 0.0_wp
+      cav%active = 1.0_wp
+      cav%melt = MELT
+      cav%s_far = S0
+      cav%t_b = TB
+
+      !$acc enter data copyin(ms, cav)
+      call ms%enter_data()
+      call cav%enter_data()
+      content0 = sum(ms%h_layer(:, :, NZP)*ms%tracers(idx_c)%c(:, :, NZP))
+      do n = 1, NSTEP_COL
+         call ocean_cavity_mass_step(grid, metrics, cav, ms, DTC, 1.0_wp)
+      end do
+      !$acc update self(ms%h_layer, ms%tracers(idx_c)%c)
+      call cav%exit_data()
+      call ms%exit_data()
+      !$acc exit data delete(ms, cav)
+
+      dh = MELT*(DTC/RHO0)
+      c_exact = H0/(H0 + real(NSTEP_COL, wp)*dh)
+      content1 = sum(ms%h_layer(:, :, NZP)*ms%tracers(idx_c)%c(:, :, NZP))
+      c_got = ms%tracers(idx_c)%c(NGH + 2, NGH + 2, NZP)
+      call check(error, ms%h_layer(NGH + 2, NGH + 2, NZP) > H0, "the column really thickened")
+      if (allocated(error)) return
+      call check(error, abs(content1 - content0) <= 1.0e-12_wp*content0, &
+                 "meltwater carries no passive tracer: the layer's passive content h*c "// &
+                 "must be unchanged")
+      if (allocated(error)) return
+      call check(error, abs(c_got - c_exact) <= 8.0_wp*real(NSTEP_COL, wp)*epsilon(1.0_wp), &
+                 "and the passive concentration is diluted by exactly the added volume")
+      call destroy_cartesian_metrics(metrics)
+      call cav%destroy()
+      call ms%destroy()
    end subroutine test_passive_dilution
 
    subroutine test_pseudo_salt_mirror(error)
@@ -754,14 +830,14 @@ contains
       !! the one thing it exists to isolate.  Seeded to `S`, it must stay
       !! bit-for-bit equal to it.
       type(error_type), allocatable, intent(out) :: error
-      real(wp) :: h, hs, ht, hps, sb, hb
+      real(wp) :: h, sc, tc, psc, sb, hb
       integer :: n, n_thin
 
-      call seed(h, hs, ht, hps, sb, hb)
+      call seed(h, sc, tc, psc, sb, hb)
       do n = 1, NSTEP_COL
-         call column_step(h, hs, ht, hps, sb, hb, MELT, .true., n_thin)
+         call column_step(h, sc, tc, psc, sb, hb, MELT, .true., n_thin)
       end do
-      call check(error, hps == hs, &
+      call check(error, psc == sc, &
                  "pseudo-salt tracks salinity bit-for-bit under the mass form")
    end subroutine test_pseudo_salt_mirror
 
@@ -786,7 +862,7 @@ contains
       type(error_type), allocatable, intent(out) :: error
       integer, parameter :: NX = 4, NY = 3
       real(wp) :: wet(NX, NY), cover(NX, NY), scale(NX, NY)
-      real(wp) :: hl(NX, NY, 1), hs(NX, NY, 1), ht(NX, NY, 1), hc(NX, NY, 1)
+      real(wp) :: hl(NX, NY, 1), sc(NX, NY, 1), tc(NX, NY, 1), cc(NX, NY, 1)
       real(wp) :: sb(NX, NY, 1), hb(NX, NY, 1)
       real(wp) :: dw, s_before, t_before, c_before
       integer :: i, j, n_thin
@@ -798,38 +874,37 @@ contains
       do j = 1, NY
          do i = 1, NX
             hl(i, j, 1) = 50.0_wp + real(i, wp)
-            hs(i, j, 1) = hl(i, j, 1)*S0
-            ht(i, j, 1) = hl(i, j, 1)*T0
-            hc(i, j, 1) = hl(i, j, 1)*7.0_wp
+            sc(i, j, 1) = S0
+            tc(i, j, 1) = T0
+            cc(i, j, 1) = 7.0_wp
          end do
       end do
       sb = 0.0_wp
       hb = 0.0_wp
       dw = 0.25_wp
-      s_before = hs(2, 2, 1)/hl(2, 2, 1)
-      t_before = ht(2, 2, 1)/hl(2, 2, 1)
-      c_before = hc(2, 2, 1)/hl(2, 2, 1)
+      s_before = sc(2, 2, 1)
+      t_before = tc(2, 2, 1)
+      c_before = cc(2, 2, 1)
 
-      !$acc enter data copyin(wet, cover, scale, hl, hs, ht, hc, sb, hb)
-      !$acc update device(wet, cover, hl, hs, ht, hc, sb, hb)
-      call cavity_comp_apply_impl(NX, NY, 1, dw, wet, cover, hl, hs, ht, sb, hb, &
+      !$acc enter data copyin(wet, cover, scale, hl, sc, tc, cc, sb, hb)
+      !$acc update device(wet, cover, hl, sc, tc, cc, sb, hb)
+      call cavity_comp_apply_impl(NX, NY, 1, dw, wet, cover, hl, sc, tc, sb, hb, &
                                   scale, n_thin)
-      call cavity_comp_scale_tracer_impl(NX, NY, 1, scale, hc)
-      !$acc update self(hl, hs, ht, hc, sb, hb, scale)
-      !$acc exit data delete(wet, cover, scale, hl, hs, ht, hc, sb, hb)
+      !$acc update self(hl, sc, tc, cc, sb, hb, scale)
+      !$acc exit data delete(wet, cover, scale, hl, sc, tc, cc, sb, hb)
 
       call check(error, n_thin == 0, "no clamping on a 50 m top layer")
       if (allocated(error)) return
       call check(error, abs(hl(2, 2, 1) - (52.0_wp - dw)) <= 1.0e-12_wp, &
                  "an open-ocean column loses exactly dw")
       if (allocated(error)) return
-      call check(error, abs(hs(2, 2, 1)/hl(2, 2, 1) - s_before) <= 1.0e-12_wp*S0, &
+      call check(error, abs(sc(2, 2, 1) - s_before) <= 1.0e-12_wp*S0, &
                  "its salinity is unchanged")
       if (allocated(error)) return
-      call check(error, abs(ht(2, 2, 1)/hl(2, 2, 1) - t_before) <= 1.0e-12_wp*abs(T0), &
+      call check(error, abs(tc(2, 2, 1) - t_before) <= 1.0e-12_wp*abs(T0), &
                  "its temperature is unchanged")
       if (allocated(error)) return
-      call check(error, abs(hc(2, 2, 1)/hl(2, 2, 1) - c_before) <= 1.0e-12_wp*c_before, &
+      call check(error, abs(cc(2, 2, 1) - c_before) <= 1.0e-12_wp*c_before, &
                  "and so is every passive tracer's concentration")
       if (allocated(error)) return
       call check(error, abs(sb(2, 2, 1) + dw*S0) <= 1.0e-9_wp, &
@@ -842,14 +917,15 @@ contains
                  scale(NX, 2) == 1.0_wp, "and so is a LAND column")
    end subroutine test_comp_concentrations
 
-   pure subroutine seed(h, hs, ht, hps, sb, hb)
+   pure subroutine seed(h, sc, tc, psc, sb, hb)
       !! The single-column initial state, in one place so the paired
       !! virtual/mass gates cannot start from different numbers.
-      real(wp), intent(out) :: h, hs, ht, hps, sb, hb
+      !! `sc`, `tc`, `psc` are CONCENTRATIONS.
+      real(wp), intent(out) :: h, sc, tc, psc, sb, hb
       h = H0
-      hs = H0*S0
-      ht = H0*T0
-      hps = H0*S0
+      sc = S0
+      tc = T0
+      psc = S0
       sb = 0.0_wp
       hb = 0.0_wp
    end subroutine seed
@@ -1006,28 +1082,28 @@ contains
                                            SPLIT_SCHEME_PRED_CORR)
          total_h = compute_total_h(ms%h_layer, mt%areaT, ng)
          total_mass = total_h*RHO_WATER
-         total_salt = compute_total_tracer(ms%tracers(ms%idx_salinity)%hTr, &
+         total_salt = compute_total_tracer(ms%tracers(ms%idx_salinity)%c, ms%h_layer, &
                                            mt%areaT, ng)*RHO_WATER
-         total_heat = compute_total_tracer(ms%tracers(ms%idx_temperature)%hTr, &
+         total_heat = compute_total_tracer(ms%tracers(ms%idx_temperature)%c, ms%h_layer, &
                                            mt%areaT, ng)*RHO_WATER
          src_salt = ocean_budget_src( &
                     ocean_salt_src_sum( &
-                    compute_total_tracer(ms%salt_budget_surface, mt%areaT, ng), &
-                    compute_total_tracer(ms%salt_budget_sponge, mt%areaT, ng)), &
+                    compute_total_content(ms%salt_budget_surface, mt%areaT, ng), &
+                    compute_total_content(ms%salt_budget_sponge, mt%areaT, ng)), &
                     stage_weight=bud_w)
          out_salt = ocean_budget_out( &
-                    compute_total_tracer(ms%salt_budget_horiz_adv, mt%areaT, ng), &
-                    compute_total_tracer(ms%salt_budget_hdiff, mt%areaT, ng), &
+                    compute_total_content(ms%salt_budget_horiz_adv, mt%areaT, ng), &
+                    compute_total_content(ms%salt_budget_hdiff, mt%areaT, ng), &
                     stage_weight=bud_w)
          src_heat = ocean_budget_src( &
                     ocean_heat_src_sum( &
-                    compute_total_tracer(ms%heat_budget_surface, mt%areaT, ng), &
-                    compute_total_tracer(ms%heat_budget_geothermal, mt%areaT, ng), &
-                    compute_total_tracer(ms%heat_budget_sponge, mt%areaT, ng)), &
+                    compute_total_content(ms%heat_budget_surface, mt%areaT, ng), &
+                    compute_total_content(ms%heat_budget_geothermal, mt%areaT, ng), &
+                    compute_total_content(ms%heat_budget_sponge, mt%areaT, ng)), &
                     stage_weight=bud_w)
          out_heat = ocean_budget_out( &
-                    compute_total_tracer(ms%heat_budget_horiz_adv, mt%areaT, ng), &
-                    compute_total_tracer(ms%heat_budget_hdiff, mt%areaT, ng), &
+                    compute_total_content(ms%heat_budget_horiz_adv, mt%areaT, ng), &
+                    compute_total_content(ms%heat_budget_hdiff, mt%areaT, ng), &
                     stage_weight=bud_w)
          mass_out = ms%mass_out
          mass_src = ms%mass_src
@@ -1263,7 +1339,7 @@ contains
       type(ocean_engine_t), intent(inout) :: engine
       real(wp), allocatable, intent(out) :: h(:, :, :), hs(:, :, :)
       associate (ms => engine%state%multilayer)
-         associate (hl => ms%h_layer, hsal => ms%tracers(ms%idx_salinity)%hTr)
+         associate (hl => ms%h_layer, hsal => ms%tracers(ms%idx_salinity)%c)
             !$acc update self(hl, hsal) if_present
             allocate (h, source=hl)
             allocate (hs, source=hsal)

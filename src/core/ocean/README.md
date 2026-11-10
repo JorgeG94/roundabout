@@ -102,8 +102,7 @@ sea-ice block writes surface-flux components that the finalize step assembles. T
 6. **After the stages**: GM bolus transports, velocity and CFL truncation, drain of the windowed tracer
    advection (if `dt_tracer_advect_ratio > 1`), deferred thermodynamics, then the **ALE remap** of
    layers, tracers and face velocities onto the target coordinate (on remap steps).
-7. **Clean-up**: ideal-age surface reset, then `enforce_vanished_content`, which keeps tracer content in
-   layers that have collapsed to the vanish threshold consistent.
+7. **Clean-up**: ideal-age surface reset.
 8. **Sea ice** (`engine_step_ice`, no-op if off): frazil, EVP dynamics and ice-ocean stress, and at thermo
    cadence ice transport and column thermodynamics.
 9. **Finalize** (`engine_step_finalize`): ice-shelf melt, assembly of the surface-flux components into

@@ -120,7 +120,7 @@ contains
             "&ocean_bdrag_nml form = 'quadratic', cd = 0.003, bg_vel = 0.05, hbbl = 10.0 /"//nl// &
             "&ocean_vmix_nml use_closure = .true., use_kpp = .true. /"//nl// &
             "&ocean_bt_nml auto_n_inner = .true., split_scheme = '"//scheme//"' /"//nl// &
-            "&vcoord_nml vcoord_type = 'lagrangian', check_vanished_content = .true. /"//nl// &
+            "&vcoord_nml vcoord_type = 'lagrangian' /"//nl// &
             "&ocean_diag_nml enabled = .false. /"//nl// &
             "&output_nml output_to_file = .false. /"//nl
    end function staircase_nml

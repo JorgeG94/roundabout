@@ -162,8 +162,8 @@ contains
       wet = 1.0_wp
       do k = 1, nz
          h3(1, 1, k) = h(k)
-         ht(1, 1, k) = h(k)*t(k)
-         hs(1, 1, k) = h(k)*s(k)
+         ht(1, 1, k) = t(k)
+         hs(1, 1, k) = s(k)
          uf(1, 1, k) = u_w(k)
          uf(2, 1, k) = u_e(k)
          vf(1, 1, k) = v_s(k)
@@ -213,8 +213,8 @@ contains
       ms%nz_ml = NZ
       call ms%init(grid)
       ms%h_layer = H0
-      ms%tracers(ms%idx_temperature)%hTr = t_val*H0
-      ms%tracers(ms%idx_salinity)%hTr = S_REF*H0
+      ms%tracers(ms%idx_temperature)%c = t_val
+      ms%tracers(ms%idx_salinity)%c = S_REF
       ms%u_face_x_layer = u_val
       ms%v_face_y_layer = 0.0_wp
       ms%wet_mask = 1.0_wp
@@ -433,8 +433,8 @@ contains
       cover = reshape([1.0_wp, 0.0_wp, 1.0_wp], [3, 1])
       wet = reshape([0.0_wp, 1.0_wp, 1.0_wp], [3, 1])
       h3 = reshape([0.5_wp*H_VANISHED, H0, H0], [3, 1, 1])
-      ht = h3*T_WARM
-      hs = h3*S_REF
+      ht = T_WARM
+      hs = S_REF
       uf = 0.0_wp
       vf = 0.0_wp
 
@@ -577,11 +577,11 @@ contains
       call ocean_surface_flux_apply_tracers(grid, sf, ms, 3600.0_wp)
 
       !$acc update self(sf%heat_cavity, sf%salt_cavity, sf%Q_heat, sf%Q_salt)
-      !$acc update self(ms%tracers(ms%idx_temperature)%hTr, &
-      !$acc&            ms%tracers(ms%idx_salinity)%hTr)
+      !$acc update self(ms%tracers(ms%idx_temperature)%c, &
+      !$acc&            ms%tracers(ms%idx_salinity)%c)
 
-      t_after = ms%tracers(ms%idx_temperature)%hTr(i, j, NZ)/H0
-      s_after = ms%tracers(ms%idx_salinity)%hTr(i, j, NZ)/H0
+      t_after = ms%tracers(ms%idx_temperature)%c(i, j, NZ)
+      s_after = ms%tracers(ms%idx_salinity)%c(i, j, NZ)
 
       call check(error, sf%heat_cavity(i, j) < 0.0_wp, &
                  "melting must take heat OUT of the ocean (heat_cavity < 0)")
@@ -669,10 +669,12 @@ contains
       ny = grid%ny_total
       scale = grid%dx*grid%dy*RHO_WATER
 
-      heat0 = sum(ms%tracers(ms%idx_temperature)%hTr(NGHOST + 1:nx - NGHOST, &
-                                                     NGHOST + 1:ny - NGHOST, :))*scale
-      salt0 = sum(ms%tracers(ms%idx_salinity)%hTr(NGHOST + 1:nx - NGHOST, &
-                                                  NGHOST + 1:ny - NGHOST, :))*scale
+      heat0 = sum(ms%h_layer(NGHOST + 1:nx - NGHOST, NGHOST + 1:ny - NGHOST, :)* &
+                  ms%tracers(ms%idx_temperature)%c(NGHOST + 1:nx - NGHOST, &
+                                                   NGHOST + 1:ny - NGHOST, :))*scale
+      salt0 = sum(ms%h_layer(NGHOST + 1:nx - NGHOST, NGHOST + 1:ny - NGHOST, :)* &
+                  ms%tracers(ms%idx_salinity)%c(NGHOST + 1:nx - NGHOST, &
+                                                NGHOST + 1:ny - NGHOST, :))*scale
 
       do step = 1, N_STEP
          call ocean_cavity_flux_step(grid, cav, metrics, ms, eos, sf)
@@ -680,14 +682,16 @@ contains
          call ocean_surface_flux_apply_tracers(grid, sf, ms, DT)
       end do
 
-      !$acc update self(ms%tracers(ms%idx_temperature)%hTr, &
-      !$acc&            ms%tracers(ms%idx_salinity)%hTr, &
+      !$acc update self(ms%tracers(ms%idx_temperature)%c, &
+      !$acc&            ms%tracers(ms%idx_salinity)%c, &
       !$acc&            ms%heat_budget_surface, ms%salt_budget_surface)
 
-      heat1 = sum(ms%tracers(ms%idx_temperature)%hTr(NGHOST + 1:nx - NGHOST, &
-                                                     NGHOST + 1:ny - NGHOST, :))*scale
-      salt1 = sum(ms%tracers(ms%idx_salinity)%hTr(NGHOST + 1:nx - NGHOST, &
-                                                  NGHOST + 1:ny - NGHOST, :))*scale
+      heat1 = sum(ms%h_layer(NGHOST + 1:nx - NGHOST, NGHOST + 1:ny - NGHOST, :)* &
+                  ms%tracers(ms%idx_temperature)%c(NGHOST + 1:nx - NGHOST, &
+                                                   NGHOST + 1:ny - NGHOST, :))*scale
+      salt1 = sum(ms%h_layer(NGHOST + 1:nx - NGHOST, NGHOST + 1:ny - NGHOST, :)* &
+                  ms%tracers(ms%idx_salinity)%c(NGHOST + 1:nx - NGHOST, &
+                                                NGHOST + 1:ny - NGHOST, :))*scale
       bud_h = sum(ms%heat_budget_surface(NGHOST + 1:nx - NGHOST, &
                                          NGHOST + 1:ny - NGHOST, :))*scale
       bud_s = sum(ms%salt_budget_surface(NGHOST + 1:nx - NGHOST, &
@@ -1250,26 +1254,26 @@ contains
       call sf%set_sw_penetration(0.5_wp, 0.58_wp, 0.35_wp, 23.0_wp)
       call sf%set_restore(.true., .false., 10.0_wp, 0.0_wp, -20.0_wp, 0.0_wp)
       !$acc update device(sf%Q_heat, sf%Q_salt)
-      !$acc update self(ms%tracers(ms%idx_temperature)%hTr)
-      t_before = ms%tracers(ms%idx_temperature)%hTr
+      !$acc update self(ms%tracers(ms%idx_temperature)%c)
+      t_before = ms%tracers(ms%idx_temperature)%c
 
       ! Reference pass with NO cover, on a scratch copy of the state.
       call ocean_surface_flux_apply_sw_penetration(grid, sf, ms, DT)
       call ocean_surface_restore_apply_tracers(grid, sf, ms, DT)
-      !$acc update self(ms%tracers(ms%idx_temperature)%hTr)
-      t_ref = ms%tracers(ms%idx_temperature)%hTr
+      !$acc update self(ms%tracers(ms%idx_temperature)%c)
+      t_ref = ms%tracers(ms%idx_temperature)%c
 
       ! Restore the pre-pass state and redo it WITH the cover.
-      ms%tracers(ms%idx_temperature)%hTr = t_before
-      !$acc update device(ms%tracers(ms%idx_temperature)%hTr)
+      ms%tracers(ms%idx_temperature)%c = t_before
+      !$acc update device(ms%tracers(ms%idx_temperature)%c)
       call ocean_surface_flux_apply_sw_penetration(grid, sf, ms, DT, &
                                                    cover_frac=metrics%cover_frac)
       call ocean_surface_restore_apply_tracers(grid, sf, ms, DT, &
                                                cover_frac=metrics%cover_frac)
-      !$acc update self(ms%tracers(ms%idx_temperature)%hTr)
+      !$acc update self(ms%tracers(ms%idx_temperature)%c)
 
       do k = 1, nzl
-         call check(error, ms%tracers(ms%idx_temperature)%hTr(i_ice, j, k) == &
+         call check(error, ms%tracers(ms%idx_temperature)%c(i_ice, j, k) == &
                     t_before(i_ice, j, k), &
                     "a covered column must take EXACTLY zero shortwave and zero "// &
                     "restoring, at every layer")
@@ -1279,7 +1283,7 @@ contains
                  "the unmasked reference must have moved the covered column, "// &
                  "else the assertion above is vacuous")
       if (allocated(error)) go to 900
-      call check(error, ms%tracers(ms%idx_temperature)%hTr(i_open, j, nzl) == &
+      call check(error, ms%tracers(ms%idx_temperature)%c(i_open, j, nzl) == &
                  t_ref(i_open, j, nzl), &
                  "an open column must get the no-cavity answer, bitwise (the "// &
                  "cover factor there is exactly 1)")
@@ -1320,10 +1324,12 @@ contains
       call sf%set_surface_flux_const(60.0_wp, 3.0e-5_wp)
       !$acc update device(sf%Q_heat, sf%Q_salt)
 
-      heat0 = sum(ms%tracers(ms%idx_temperature)%hTr(NGHOST + 1:nx - NGHOST, &
-                                                     NGHOST + 1:ny - NGHOST, :))*scale
-      salt0 = sum(ms%tracers(ms%idx_salinity)%hTr(NGHOST + 1:nx - NGHOST, &
-                                                  NGHOST + 1:ny - NGHOST, :))*scale
+      heat0 = sum(ms%h_layer(NGHOST + 1:nx - NGHOST, NGHOST + 1:ny - NGHOST, :)* &
+                  ms%tracers(ms%idx_temperature)%c(NGHOST + 1:nx - NGHOST, &
+                                                   NGHOST + 1:ny - NGHOST, :))*scale
+      salt0 = sum(ms%h_layer(NGHOST + 1:nx - NGHOST, NGHOST + 1:ny - NGHOST, :)* &
+                  ms%tracers(ms%idx_salinity)%c(NGHOST + 1:nx - NGHOST, &
+                                                NGHOST + 1:ny - NGHOST, :))*scale
 
       do step = 1, N_STEP
          call ocean_cavity_flux_step(grid, cav, metrics, ms, eos, sf)
@@ -1331,14 +1337,16 @@ contains
          call ocean_surface_flux_apply_tracers(grid, sf, ms, DT)
       end do
 
-      !$acc update self(ms%tracers(ms%idx_temperature)%hTr, &
-      !$acc&            ms%tracers(ms%idx_salinity)%hTr, &
+      !$acc update self(ms%tracers(ms%idx_temperature)%c, &
+      !$acc&            ms%tracers(ms%idx_salinity)%c, &
       !$acc&            ms%heat_budget_surface, ms%salt_budget_surface)
 
-      heat1 = sum(ms%tracers(ms%idx_temperature)%hTr(NGHOST + 1:nx - NGHOST, &
-                                                     NGHOST + 1:ny - NGHOST, :))*scale
-      salt1 = sum(ms%tracers(ms%idx_salinity)%hTr(NGHOST + 1:nx - NGHOST, &
-                                                  NGHOST + 1:ny - NGHOST, :))*scale
+      heat1 = sum(ms%h_layer(NGHOST + 1:nx - NGHOST, NGHOST + 1:ny - NGHOST, :)* &
+                  ms%tracers(ms%idx_temperature)%c(NGHOST + 1:nx - NGHOST, &
+                                                   NGHOST + 1:ny - NGHOST, :))*scale
+      salt1 = sum(ms%h_layer(NGHOST + 1:nx - NGHOST, NGHOST + 1:ny - NGHOST, :)* &
+                  ms%tracers(ms%idx_salinity)%c(NGHOST + 1:nx - NGHOST, &
+                                                NGHOST + 1:ny - NGHOST, :))*scale
       bud_h = sum(ms%heat_budget_surface(NGHOST + 1:nx - NGHOST, &
                                          NGHOST + 1:ny - NGHOST, :))*scale
       bud_s = sum(ms%salt_budget_surface(NGHOST + 1:nx - NGHOST, &

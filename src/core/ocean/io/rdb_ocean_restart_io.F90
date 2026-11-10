@@ -432,6 +432,18 @@ contains
       do e = 1, reg%n
          associate (en => reg%entries(e))
             status = nf90_inq_varid(ncid, trim(en%tag), varid)
+            if (status /= nf90_noerr .and. en%tag(1:9) == "tracer_c_") then
+               ! Legacy restart: tracers stored as content `h*c` under
+               ! `tracer_hTr_<n>`.  Read it into the concentration array and
+               ! flag the entry; the caller converts once `h_layer` is known.
+               status = nf90_inq_varid(ncid, "tracer_hTr_"//trim(en%tag(10:)), varid)
+               if (status == nf90_noerr) then
+                  en%legacy_content = .true.
+                  call logger%warning("Restart file holds legacy tracer content "// &
+                                      "(tracer_hTr_"//trim(en%tag(10:))// &
+                                      "); converting to concentration on read")
+               end if
+            end if
             if (status /= nf90_noerr) then
                if (en%optional) then
                   call logger%warning("Restart file lacks optional field "// &

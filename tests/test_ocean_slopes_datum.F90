@@ -182,28 +182,27 @@ contains
                   e_bot = e_bot + tgt(i, j, k)
                end if
                t_val = T0 + GZ*zc + gx*xc + gy*yc
-               ms%tracers(ms%idx_temperature)%hTr(i, j, k) = t_val*tgt(i, j, k)
-               ms%tracers(ms%idx_salinity)%hTr(i, j, k) = S0*tgt(i, j, k)
+               ms%tracers(ms%idx_temperature)%c(i, j, k) = t_val
+               ms%tracers(ms%idx_salinity)%c(i, j, k) = S0
             end do
          end do
       end do
       if (coord == COORD_ZFIXED) then
-         ! Each bed filler takes its donor's T before the I1' sweep, so the
-         ! sweep pools equal concentrations and leaves the donor's T
-         ! unshifted (as in test_ocean_gm_zfixed).
+         ! Each bed filler carries its donor's T (a concentration copy), so the
+         ! slope kernels see a layer-uniform T through the filler stack
+         ! (as in test_ocean_gm_zfixed).
          do j = 1, nj
             do i = 1, ni
                t_val = -huge(1.0_wp)
                do k = NZ, 1, -1
                   if (tgt(i, j, k) > H_VANISHED) then
-                     t_val = ms%tracers(ms%idx_temperature)%hTr(i, j, k)/tgt(i, j, k)
+                     t_val = ms%tracers(ms%idx_temperature)%c(i, j, k)
                   else if (t_val > -huge(1.0_wp)) then
-                     ms%tracers(ms%idx_temperature)%hTr(i, j, k) = t_val*tgt(i, j, k)
+                     ms%tracers(ms%idx_temperature)%c(i, j, k) = t_val
                   end if
                end do
             end do
          end do
-         call ms%enforce_vanished_content_host(ni, nj)
       end if
 
       call sl%init(grid, nz_ml=NZ)

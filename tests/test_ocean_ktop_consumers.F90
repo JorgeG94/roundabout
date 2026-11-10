@@ -28,9 +28,11 @@ module test_ocean_ktop_consumers
    use rdb_multilayer_state, only: multilayer_state_t
    use rdb_ocean_surface_flux, only: ocean_surface_flux_t, &
                                      ocean_surface_flux_apply_tracers, &
+                                     ocean_surface_flux_apply_sw_penetration, &
                                      SEAWATER_CP
    use rdb_ocean_cavity_flux, only: cavity_far_field_impl
    use rdb_ocean_top_drag, only: top_drag_tendencies_impl, TDRAG_LINEAR
+   use rdb_ocean_vmix, only: ocean_vmix_t, vmix_apply_nonlocal_tendencies
    implicit none
    private
 
@@ -62,7 +64,15 @@ contains
                   new_unittest("deposit_matches_the_sigma_column", test_deposit_matches), &
                   new_unittest("surface_budget_closes_from_step_zero", test_budget_closes), &
                   new_unittest("top_drag_spin_down_matches_no_filler", test_top_drag_spindown), &
-                  new_unittest("top_drag_fold_rate_is_on_the_live_row", test_fold_row) &
+                  new_unittest("top_drag_fold_rate_is_on_the_live_row", test_fold_row), &
+                  new_unittest("vanished_top_layer_refuses_the_deposit", test_refuse_vanished), &
+                  new_unittest("fully_dry_column_refuses_and_books_nothing", test_refuse_dry_column), &
+                  new_unittest("sw_lump_and_deposit_hit_the_same_layer", test_sw_same_layer), &
+                  new_unittest("sw_bed_residual_skips_a_vanished_bed", test_sw_vanished_bed), &
+                  new_unittest("sw_passes_through_a_vanished_interior_layer", test_sw_vanished_interior), &
+                  new_unittest("kpp_nonlocal_conserves_vanished_bed", test_nonlocal_vanished_bed), &
+                  new_unittest("kpp_nonlocal_conserves_vanished_interior", test_nonlocal_vanished_interior), &
+                  new_unittest("kpp_nonlocal_conserves_top_fillers", test_nonlocal_top_fillers) &
                   ]
    end subroutine collect_ocean_ktop_consumers_tests
 
@@ -73,9 +83,9 @@ contains
    subroutine build_state(ms, grid, nz, nfill)
       !! A 3x3(+ghost) plane of one repeated column: `nfill` fillers on
       !! top of `NLIVE` 50 m layers, uniform `T0`/`S0` in the live part
-      !! and EXACTLY ZERO tracer load in the fillers (which is what the
-      !! remap drain leaves there, and what makes a filler's implied
-      !! concentration meaningless).  `k_top` is set the way
+      !! and a stale concentration of EXACTLY ZERO in the fillers (a
+      !! sentinel: a filler carries no content, so any deposit that
+      !! lands there shows up as a non-zero `c`).  `k_top` is set the way
       !! `configure_ocean_k_top` sets it.
       type(multilayer_state_t), intent(out) :: ms
       type(hgrid_t), intent(out) :: grid
@@ -90,12 +100,12 @@ contains
       do k = 1, nz
          if (k > nz - nfill) then
             ms%h_layer(:, :, k) = H_FILL
-            ms%tracers(idx_t)%hTr(:, :, k) = 0.0_wp
-            ms%tracers(idx_s)%hTr(:, :, k) = 0.0_wp
+            ms%tracers(idx_t)%c(:, :, k) = 0.0_wp
+            ms%tracers(idx_s)%c(:, :, k) = 0.0_wp
          else
             ms%h_layer(:, :, k) = H_LIVE
-            ms%tracers(idx_t)%hTr(:, :, k) = H_LIVE*T0
-            ms%tracers(idx_s)%hTr(:, :, k) = H_LIVE*S0
+            ms%tracers(idx_t)%c(:, :, k) = T0
+            ms%tracers(idx_s)%c(:, :, k) = S0
          end if
       end do
       ms%k_top = nz - nfill
@@ -119,8 +129,8 @@ contains
       call ms%enter_data()
       call sf%enter_data()
       call ocean_surface_flux_apply_tracers(grid, sf, ms, DT_STEP)
-      associate (hT => ms%tracers(ms%idx_temperature)%hTr, &
-                 hS => ms%tracers(ms%idx_salinity)%hTr, &
+      associate (hT => ms%tracers(ms%idx_temperature)%c, &
+                 hS => ms%tracers(ms%idx_salinity)%c, &
                  bT => ms%heat_budget_surface, bS => ms%salt_budget_surface)
          !$acc update self(hT, hS, bT, bS)
       end associate
@@ -129,6 +139,115 @@ contains
       !$acc exit data delete(ms, sf)
       call sf%destroy()
    end subroutine apply_flux
+
+   subroutine apply_flux_sw(grid, ms, q_heat)
+      !! One thermo-step surface deposit followed by the two-band shortwave
+      !! redistribution, through the production path.
+      type(hgrid_t), intent(in) :: grid
+      type(multilayer_state_t), intent(inout) :: ms
+      real(wp), intent(in) :: q_heat
+      type(ocean_surface_flux_t) :: sf
+
+      call sf%init(grid)
+      sf%rho0 = RHO0
+      sf%cp = SEAWATER_CP
+      call sf%set_surface_flux_const(q_heat, 0.0_wp)
+      call sf%set_sw_penetration(0.5_wp, 0.58_wp, 0.35_wp, 23.0_wp)
+
+      !$acc enter data copyin(ms, sf)
+      call ms%enter_data()
+      call sf%enter_data()
+      call ocean_surface_flux_apply_tracers(grid, sf, ms, DT_STEP)
+      call ocean_surface_flux_apply_sw_penetration(grid, sf, ms, DT_STEP)
+      associate (hT => ms%tracers(ms%idx_temperature)%c, bT => ms%heat_budget_surface)
+         !$acc update self(hT, bT)
+      end associate
+      call sf%exit_data()
+      call ms%exit_data()
+      !$acc exit data delete(ms, sf)
+      call sf%destroy()
+   end subroutine apply_flux_sw
+
+   subroutine apply_nonlocal(grid, ms)
+      !! One KPP non-local step through the production kernel with an
+      !! analytical flux profile `F(k) = -A·G(σ)`, `G(σ) = σ(1-σ)²`,
+      !! `σ = (nz+1-k)/nz` the normalised depth of interface `k` (the
+      !! Large et al. 1994 shape: zero at the surface `k = nz+1` and at
+      !! the bed `k = 1`, non-zero at EVERY interior interface, including
+      !! those next to a vanished layer).  `gamma_s` gets the same shape
+      !! scaled for salinity.
+      type(hgrid_t), intent(in) :: grid
+      type(multilayer_state_t), intent(inout) :: ms
+      type(ocean_vmix_t) :: vmix
+      real(wp), parameter :: A_T = 4.0e-5_wp, A_S = 1.0e-6_wp
+      real(wp) :: sigma
+      integer :: k, nz
+
+      nz = ms%nz_ml
+      call vmix%init(grid, nz_ml=nz)
+      vmix%gamma_t = 0.0_wp
+      vmix%gamma_s = 0.0_wp
+      do k = 2, nz
+         sigma = real(nz + 1 - k, wp)/real(nz, wp)
+         vmix%gamma_t(:, :, k) = -A_T*sigma*(1.0_wp - sigma)**2
+         vmix%gamma_s(:, :, k) = A_S*sigma*(1.0_wp - sigma)**2
+      end do
+
+      !$acc enter data copyin(ms, vmix)
+      call ms%enter_data()
+      call vmix%enter_data()
+      call vmix_apply_nonlocal_tendencies(grid, vmix, ms, DT_STEP)
+      associate (hT => ms%tracers(ms%idx_temperature)%c, hS => ms%tracers(ms%idx_salinity)%c)
+         !$acc update self(hT, hS)
+      end associate
+      call vmix%exit_data()
+      call ms%exit_data()
+      !$acc exit data delete(ms, vmix)
+      call vmix%destroy()
+   end subroutine apply_nonlocal
+
+   subroutine check_nonlocal_conserves(error, ms, grid, kvan, label)
+      !! Surface cooling deposit + KPP non-local step on a column whose
+      !! layers `kvan(:)` are vanished (stale sentinel concentrations):
+      !! the column `Σ h·c` changes by EXACTLY the booked surface source
+      !! (the non-local term is an internal redistribution and books
+      !! nothing), and every vanished layer keeps its concentration.
+      type(error_type), allocatable, intent(out) :: error
+      type(multilayer_state_t), intent(inout) :: ms
+      type(hgrid_t), intent(in) :: grid
+      integer, intent(in) :: kvan(:)
+      character(len=*), intent(in) :: label
+      real(wp), parameter :: STALE_T = 7.25_wp, STALE_S = 30.5_wp
+      real(wp) :: t0s, t1s, s0s, s1s, scale_t, scale_s
+      integer :: n
+
+      do n = 1, size(kvan)
+         ms%h_layer(:, :, kvan(n)) = H_FILL
+         ms%tracers(ms%idx_temperature)%c(:, :, kvan(n)) = STALE_T
+         ms%tracers(ms%idx_salinity)%c(:, :, kvan(n)) = STALE_S
+      end do
+      t0s = sum(ms%h_layer*ms%tracers(ms%idx_temperature)%c)
+      s0s = sum(ms%h_layer*ms%tracers(ms%idx_salinity)%c)
+      call apply_flux(grid, ms, -300.0_wp, 2.0e-5_wp)
+      call apply_nonlocal(grid, ms)
+      t1s = sum(ms%h_layer*ms%tracers(ms%idx_temperature)%c)
+      s1s = sum(ms%h_layer*ms%tracers(ms%idx_salinity)%c)
+      scale_t = sum(abs(ms%h_layer*ms%tracers(ms%idx_temperature)%c))
+      scale_s = sum(abs(ms%h_layer*ms%tracers(ms%idx_salinity)%c))
+
+      call check(error, abs((t1s - t0s) - sum(ms%heat_budget_surface)) <= 1.0e-14_wp*scale_t, &
+                 label//": heat delta total = booked surface source")
+      if (allocated(error)) return
+      call check(error, abs((s1s - s0s) - sum(ms%salt_budget_surface)) <= 1.0e-14_wp*scale_s, &
+                 label//": salt delta total = booked surface source")
+      if (allocated(error)) return
+      do n = 1, size(kvan)
+         call check(error, all(ms%tracers(ms%idx_temperature)%c(:, :, kvan(n)) == STALE_T) .and. &
+                    all(ms%tracers(ms%idx_salinity)%c(:, :, kvan(n)) == STALE_S), &
+                    label//": a vanished layer keeps its concentration")
+         if (allocated(error)) return
+      end do
+   end subroutine check_nonlocal_conserves
 
    ! ------------------------------------------------------------------
    ! Cases
@@ -216,7 +335,7 @@ contains
 
       ok = .true.
       do k = kt + 1, NZ_Z
-         if (ms%tracers(idx_t)%hTr(2, 2, k) /= 0.0_wp) ok = .false.
+         if (ms%tracers(idx_t)%c(2, 2, k) /= 0.0_wp) ok = .false.
          if (ms%heat_budget_surface(2, 2, k) /= 0.0_wp) ok = .false.
       end do
       call check(error, ok, "no filler layer was written")
@@ -226,7 +345,7 @@ contains
                  "the budget mirror is on the live row")
       if (allocated(error)) return
 
-      t_top = ms%tracers(idx_t)%hTr(2, 2, kt)/ms%h_layer(2, 2, kt)
+      t_top = ms%tracers(idx_t)%c(2, 2, kt)
       call check(error, abs(t_top - T0) < 1.0e-3_wp, &
                  "and the live layer's temperature moved by a sane amount")
       if (allocated(error)) return
@@ -254,10 +373,10 @@ contains
       call build_state(m2, g2, NZ_Z, NFILL)
       call apply_flux(g2, m2, QH, QS)
 
-      d_heat_1 = m1%tracers(m1%idx_temperature)%hTr(2, 2, NLIVE) - H_LIVE*T0
-      d_heat_2 = m2%tracers(m2%idx_temperature)%hTr(2, 2, NLIVE) - H_LIVE*T0
-      d_salt_1 = m1%tracers(m1%idx_salinity)%hTr(2, 2, NLIVE) - H_LIVE*S0
-      d_salt_2 = m2%tracers(m2%idx_salinity)%hTr(2, 2, NLIVE) - H_LIVE*S0
+      d_heat_1 = m1%tracers(m1%idx_temperature)%c(2, 2, NLIVE) - T0
+      d_heat_2 = m2%tracers(m2%idx_temperature)%c(2, 2, NLIVE) - T0
+      d_salt_1 = m1%tracers(m1%idx_salinity)%c(2, 2, NLIVE) - S0
+      d_salt_2 = m2%tracers(m2%idx_salinity)%c(2, 2, NLIVE) - S0
 
       call check(error, d_heat_1 /= 0.0_wp, "the reference deposit is non-zero")
       if (allocated(error)) return
@@ -284,11 +403,11 @@ contains
       real(wp) :: src_h, src_s, scale
 
       call build_state(ms, grid, NZ_Z, NFILL)
-      total_h0 = sum(ms%tracers(ms%idx_temperature)%hTr)
-      total_s0 = sum(ms%tracers(ms%idx_salinity)%hTr)
+      total_h0 = sum(ms%h_layer*ms%tracers(ms%idx_temperature)%c)
+      total_s0 = sum(ms%h_layer*ms%tracers(ms%idx_salinity)%c)
       call apply_flux(grid, ms, QH, QS)
-      total_h1 = sum(ms%tracers(ms%idx_temperature)%hTr)
-      total_s1 = sum(ms%tracers(ms%idx_salinity)%hTr)
+      total_h1 = sum(ms%h_layer*ms%tracers(ms%idx_temperature)%c)
+      total_s1 = sum(ms%h_layer*ms%tracers(ms%idx_salinity)%c)
       src_h = sum(ms%heat_budget_surface)
       src_s = sum(ms%salt_budget_surface)
 
@@ -308,6 +427,193 @@ contains
                  "the tracked source is non-zero")
       call ms%destroy()
    end subroutine test_budget_closes
+
+   subroutine test_refuse_vanished(error)
+      !! Deposit rule: a top layer at or below `H_VANISHED` holds no water to
+      !! take a flux.  `k_top` is static, so a dynamically emptied top layer
+      !! is still `k_top`; dividing the flux by its 1e-4 m thickness would
+      !! make a ~218 degC concentration.  The deposit is REFUSED instead: `c`
+      !! keeps its (finite) stale value and the budget books nothing.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      real(wp), parameter :: STALE = 7.25_wp
+      real(wp) :: total_h0, total_h1
+
+      call build_state(ms, grid, NZ_S, 0)
+      ms%h_layer(:, :, NZ_S) = H_FILL
+      ms%tracers(ms%idx_temperature)%c(:, :, NZ_S) = STALE
+      total_h0 = sum(ms%h_layer*ms%tracers(ms%idx_temperature)%c)
+      call apply_flux(grid, ms, 100.0_wp, 5.0e-5_wp)
+      total_h1 = sum(ms%h_layer*ms%tracers(ms%idx_temperature)%c)
+
+      call check(error, ms%tracers(ms%idx_temperature)%c(2, 2, NZ_S) == STALE, &
+                 "the vanished top layer's heat concentration is unchanged")
+      if (allocated(error)) return
+      call check(error, ms%tracers(ms%idx_salinity)%c(2, 2, NZ_S) == S0, &
+                 "and so is its salinity concentration (no 1/h blow-up)")
+      if (allocated(error)) return
+      call check(error, ms%heat_budget_surface(2, 2, NZ_S) == 0.0_wp .and. &
+                 ms%salt_budget_surface(2, 2, NZ_S) == 0.0_wp, &
+                 "the refused deposit is not booked")
+      if (allocated(error)) return
+      call check(error, abs((total_h1 - total_h0) - sum(ms%heat_budget_surface)) &
+                 <= 1.0e-12_wp*abs(total_h0), "heat: delta total = booked source (zero)")
+      call ms%destroy()
+   end subroutine test_refuse_vanished
+
+   subroutine test_refuse_dry_column(error)
+      !! A fully dry column (every layer at the marker): the deposit is
+      !! refused, nothing is recorded, every concentration stays finite.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      real(wp) :: t_before(NZ_S)
+
+      call build_state(ms, grid, NZ_S, 0)
+      ms%h_layer(:, :, :) = H_FILL
+      t_before = ms%tracers(ms%idx_temperature)%c(2, 2, :)
+      call apply_flux_sw(grid, ms, 100.0_wp)
+
+      call check(error, all(ms%tracers(ms%idx_temperature)%c(2, 2, :) == t_before), &
+                 "a dry column's concentrations are untouched by surface flux + SW")
+      if (allocated(error)) return
+      call check(error, all(ms%heat_budget_surface(2, 2, :) == 0.0_wp), &
+                 "and nothing is recorded in the heat budget")
+      call ms%destroy()
+   end subroutine test_refuse_dry_column
+
+   subroutine test_sw_same_layer(error)
+      !! The SW kernel removes the legacy surface lump from `k_top`, the layer
+      !! the lump was deposited on.  With the static `k_top` = `NZ_Z - NFILL`
+      !! under three fillers, the column total changes by exactly the booked
+      !! source (the net flux), and the live layers stay at sane values; with
+      !! the removal left on `k = nz` (a filler) it would not.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      real(wp) :: total0, total1, src, scale
+
+      call build_state(ms, grid, NZ_Z, NFILL)
+      total0 = sum(ms%h_layer*ms%tracers(ms%idx_temperature)%c)
+      call apply_flux_sw(grid, ms, 100.0_wp)
+      total1 = sum(ms%h_layer*ms%tracers(ms%idx_temperature)%c)
+      src = sum(ms%heat_budget_surface)
+      scale = max(abs(total0), abs(src))
+
+      call check(error, abs((total1 - total0) - src) <= 1.0e-12_wp*scale, &
+                 "heat: delta total = booked source with fillers on top")
+      if (allocated(error)) return
+      call check(error, src > 0.0_wp, "the booked source is the (positive) net flux")
+      if (allocated(error)) return
+      call check(error, abs(ms%tracers(ms%idx_temperature)%c(2, 2, NLIVE) - T0) < 1.0e-2_wp .and. &
+                 all(ms%tracers(ms%idx_temperature)%c(2, 2, NLIVE + 1:NZ_Z) == 0.0_wp), &
+                 "live top layer moves by a sane amount; the fillers stay untouched")
+      call ms%destroy()
+   end subroutine test_sw_same_layer
+
+   subroutine test_nonlocal_vanished_bed(error)
+      !! KPP non-local transport over a vanished BED layer (a z* bed
+      !! filler): before the interface closure the divergence share of
+      !! the bed layer was refused and the column leaked heat each step.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+
+      call build_state(ms, grid, NZ_S, 0)
+      call check_nonlocal_conserves(error, ms, grid, [1], "vanished bed")
+      call ms%destroy()
+   end subroutine test_nonlocal_vanished_bed
+
+   subroutine test_nonlocal_vanished_interior(error)
+      !! Same, with a vanished INTERIOR layer (both its interfaces close)
+      !! and a vanished surface layer (`k_top = nz`, dynamically emptied).
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+
+      call build_state(ms, grid, NZ_S, 0)
+      call check_nonlocal_conserves(error, ms, grid, [4, NZ_S], "vanished interior + top")
+      call ms%destroy()
+   end subroutine test_nonlocal_vanished_interior
+
+   subroutine test_nonlocal_top_fillers(error)
+      !! Same, under `NFILL` inert top fillers (`z_fixed` beneath a shelf,
+      !! `k_top = NZ_Z - NFILL`) plus a vanished bed layer.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+
+      call build_state(ms, grid, NZ_Z, NFILL)
+      call check_nonlocal_conserves(error, ms, grid, [1, NZ_Z - 2, NZ_Z - 1, NZ_Z], "top fillers")
+      call ms%destroy()
+   end subroutine test_nonlocal_top_fillers
+
+   subroutine check_sw_absorbs_all(error, ms, grid, kvan, label)
+      !! Surface deposit + two-band SW on a column with vanished layers
+      !! `kvan(:)`: the column absorbs the FULL net flux (booked source =
+      !! `Q·dt/(ρ0·cp)` per wet column, nothing lost to a refused share),
+      !! the total changes by exactly the booked source and every vanished
+      !! layer keeps its concentration.
+      type(error_type), allocatable, intent(out) :: error
+      type(multilayer_state_t), intent(inout) :: ms
+      type(hgrid_t), intent(in) :: grid
+      integer, intent(in) :: kvan(:)
+      character(len=*), intent(in) :: label
+      real(wp), parameter :: STALE_T = 7.25_wp, Q = 100.0_wp
+      real(wp) :: t0s, t1s, scale_t, expect
+      integer :: n
+
+      do n = 1, size(kvan)
+         ms%h_layer(:, :, kvan(n)) = H_FILL
+         ms%tracers(ms%idx_temperature)%c(:, :, kvan(n)) = STALE_T
+      end do
+      t0s = sum(ms%h_layer*ms%tracers(ms%idx_temperature)%c)
+      call apply_flux_sw(grid, ms, Q)
+      t1s = sum(ms%h_layer*ms%tracers(ms%idx_temperature)%c)
+      scale_t = sum(abs(ms%h_layer*ms%tracers(ms%idx_temperature)%c))
+      expect = Q*DT_STEP/(RHO0*SEAWATER_CP)*ms%wet_mask(2, 2)
+
+      call check(error, abs(sum(ms%heat_budget_surface(2, 2, :)) - expect) <= 1.0e-13_wp*expect, &
+                 label//": the column absorbs the whole net flux")
+      if (allocated(error)) return
+      call check(error, abs((t1s - t0s) - sum(ms%heat_budget_surface)) <= 1.0e-14_wp*scale_t, &
+                 label//": heat delta total = booked surface source")
+      if (allocated(error)) return
+      do n = 1, size(kvan)
+         call check(error, all(ms%tracers(ms%idx_temperature)%c(:, :, kvan(n)) == STALE_T), &
+                    label//": a vanished layer keeps its concentration")
+         if (allocated(error)) return
+      end do
+   end subroutine check_sw_absorbs_all
+
+   subroutine test_sw_vanished_bed(error)
+      !! `k_bot = 1` off `z_fixed` even when the bed layer is a vanished z*
+      !! filler.  The opaque-bed residual (the light reaching the bed,
+      !! about a quarter of `I0` in this 14 m column) must land on the
+      !! deepest LIVE layer instead of being refused by the vanished one.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+
+      call build_state(ms, grid, NZ_S, 0)
+      ms%h_layer(:, :, 2:NZ_S) = 2.0_wp   ! shallow: plenty of light reaches the bed
+      call check_sw_absorbs_all(error, ms, grid, [1], "SW vanished bed")
+      call ms%destroy()
+   end subroutine test_sw_vanished_bed
+
+   subroutine test_sw_vanished_interior(error)
+      !! A vanished interior layer is transparent: the light it would have
+      !! absorbed passes to the live layer below.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+
+      call build_state(ms, grid, NZ_S, 0)
+      ms%h_layer(:, :, :) = 0.5_wp
+      call check_sw_absorbs_all(error, ms, grid, [1, 3, NZ_S - 1], "SW vanished interior")
+      call ms%destroy()
+   end subroutine test_sw_vanished_interior
 
    subroutine test_top_drag_spindown(error)
       !! LINEAR top drag, layer-only mode, under full ice cover: the

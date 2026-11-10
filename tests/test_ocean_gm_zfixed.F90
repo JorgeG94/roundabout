@@ -14,7 +14,7 @@
 !!     stratification over a staircase bed with partial bottom cells and
 !!     bed fillers: the slope is 0 at every interface and GM moves NOTHING
 !!     (to round-off: |S| <= 1e-14, |uhD| <= 1e-12·KhTh·dx, gm_src <=
-!!     1e-20 — the T = hTr/h recovery is exact only to an ulp on a partial
+!!     1e-20 — the slope pass is exact only to an ulp on a partial
 !!     cell carrying the fillers' h_min debt).  Fails on the pre-port
 !!     slopes, whose interface-tilt term differences the heights ABOVE THE
 !!     LOCAL BED and so reads the bathymetry step as an isopycnal slope.
@@ -22,7 +22,7 @@
 !!     staircase, NSTEP GM-operator steps: a closed face-layer carries
 !!     EXACTLY zero GM flux, every face's column-integrated transport is 0
 !!     to round-off, no field is non-finite, the fillers keep their
-!!     thickness exactly, I1′ holds after every step, and mass + T content
+!!     thickness exactly, fillers keep their stale concentration, and mass + T content
 !!     are conserved.  Fails on the pre-port GM (flux through closed
 !!     faces / into fillers via the full-column closure).
 !!  3. `ice_top_closure_in_open_column` — fillers ABOVE the open column
@@ -151,29 +151,26 @@ contains
             do i = 1, ni
                ip = min(max(i - NG, 1), NXP)
                t_val = T0 + GZ*zc + gx*real(ip, wp)*DX + gy*real(jp, wp)*DX
-               ms%tracers(ms%idx_temperature)%hTr(i, j, k) = t_val*tgt(i, j, k)
-               ms%tracers(ms%idx_salinity)%hTr(i, j, k) = S0*tgt(i, j, k)
+               ms%tracers(ms%idx_temperature)%c(i, j, k) = t_val
+               ms%tracers(ms%idx_salinity)%c(i, j, k) = S0
             end do
          end do
       end do
-      ! Hand each filler its donor's T BEFORE the I1' sweep, so the sweep's
-      ! pooling mixes equal concentrations and does not shift the donor
-      ! (a filler seeded at its own nominal-depth T would leak ~1e-4/h of
-      ! that difference into the bottom live layer — a real along-layer
-      ! gradient between columns with and without fillers).
+      ! Fillers (vanished layers) keep their stale concentration and carry
+      ! no content; hand each its donor's T so the along-layer T field has
+      ! no spurious gradient between columns with and without fillers.
       do j = 1, nj
          do i = 1, ni
-            t_val = -1.0_wp
+            t_val = -1.0e30_wp
             do k = NZ, 1, -1
                if (tgt(i, j, k) > H_VANISHED) then
-                  t_val = ms%tracers(ms%idx_temperature)%hTr(i, j, k)/tgt(i, j, k)
-               else if (t_val >= 0.0_wp) then
-                  ms%tracers(ms%idx_temperature)%hTr(i, j, k) = t_val*tgt(i, j, k)
+                  t_val = ms%tracers(ms%idx_temperature)%c(i, j, k)
+               else if (t_val > -1.0e29_wp) then
+                  ms%tracers(ms%idx_temperature)%c(i, j, k) = t_val
                end if
             end do
          end do
       end do
-      call ms%enforce_vanished_content_host(ni, nj)
 
       call sl%init(grid, nz_ml=NZ)
       ! Bed datum: the staircase bed depth (the column holds `bed - draft`).
@@ -225,8 +222,8 @@ contains
       !$acc update self(gm%uhD, gm%vhD, gm%gm_src)
       !$acc update self(sl%slope_x, sl%slope_y, sl%n2_u, sl%n2_v)
       !$acc update self(ms%h_layer)
-      !$acc update self(ms%tracers(ms%idx_temperature)%hTr)
-      !$acc update self(ms%tracers(ms%idx_salinity)%hTr)
+      !$acc update self(ms%tracers(ms%idx_temperature)%c)
+      !$acc update self(ms%tracers(ms%idx_salinity)%c)
    end subroutine pull_back
 
    subroutine map_out(ms, sl, gm, ct)
@@ -313,7 +310,7 @@ contains
    real(wp) function content_sum(ms, idx) result(s)
       type(multilayer_state_t), intent(in) :: ms
       integer, intent(in) :: idx
-      s = sum(ms%tracers(idx)%hTr)
+      s = sum(ms%h_layer*ms%tracers(idx)%c)
    end function content_sum
 
    ! ------------------------------------------------------------------
@@ -353,8 +350,8 @@ contains
          smax = max(maxval(abs(sl%slope_x)), maxval(abs(sl%slope_y)))
          fmax = max(maxval(abs(gm%uhD)), maxval(abs(gm%vhD)))
          write (msg, '(a,es10.3,a,es10.3)') "max|S| = ", smax, ", max|uhD,vhD| = ", fmax
-         ! Zero to ROUND-OFF, not bitwise: the slope pass recovers T as
-         ! hTr/h, which returns the seeded T only to an ulp when h is a
+         ! Zero to ROUND-OFF, not bitwise: the slope pass reads the seeded T, which differs by an ulp
+         ! only when h is a
          ! partial cell carrying the fillers' `h_min` debt, so two columns'
          ! T at one level can differ by ~1e-16 relative.  The bounds are
          ! ~12 decades below the pre-port answer (max|S| ~ 5e-2, the
@@ -393,6 +390,7 @@ contains
       real(wp), allocatable :: tgt(:, :, :), h_fill0(:, :, :)
       integer, parameter :: NSTEP = 12
       integer :: it, ni, nj, n_closed, n_bad, n_bad_max
+      real(wp), allocatable :: c_fill0(:, :, :)
       real(wp) :: worst_closed, worst_colsum, max_flux, worst_i1
       real(wp) :: wc_max, cs_rel_max, mf_max, m0, m1, t0s, t1s
       logical :: finite_all, fill_h_kept
@@ -404,6 +402,7 @@ contains
       nj = grid%ny_total
       call ct%init(grid, nz_ml=NZ)
       allocate (h_fill0, source=ms%h_layer)
+      allocate (c_fill0, source=ms%tracers(ms%idx_temperature)%c)
       m0 = sum(ms%h_layer)
       t0s = content_sum(ms, ms%idx_temperature)
 
@@ -419,10 +418,6 @@ contains
             call ocean_slopes_compute(grid, metrics, eos, sl, ms, DT)
             call gm_compute_transports(grid, metrics, gm, sl, ms, DT)
             call continuity_gm_apply(grid, metrics, ct, ms, gm, DT, 1.0_wp, TR_MODE_ADVECT)
-            ! The production step tail: restore I1′, then the tripwire scan.
-            call ms%enforce_vanished_content(ni, nj)
-            call ms%scan_vanished_content(ni, nj, n_bad, worst_i1)
-            n_bad_max = max(n_bad_max, n_bad)
             call pull_back(ms, sl, gm)
             call closed_face_census(metrics, ms, gm, ni, nj, n_closed, worst_closed, &
                                     worst_colsum, max_flux)
@@ -434,9 +429,12 @@ contains
                          all_finite_3d(sl%slope_x) .and. all_finite_3d(sl%slope_y) .and. &
                          all_finite_3d(sl%n2_u) .and. all_finite_3d(sl%n2_v) .and. &
                          all_finite_3d(ms%h_layer) .and. &
-                         all_finite_3d(ms%tracers(ms%idx_temperature)%hTr)
+                         all_finite_3d(ms%tracers(ms%idx_temperature)%c)
             fill_h_kept = fill_h_kept .and. &
                           all(merge(ms%h_layer == h_fill0, .true., h_fill0 <= H_VANISHED))
+            ! fillers carry no content and keep their stale concentration
+            n_bad_max = max(n_bad_max, count(h_fill0 <= H_VANISHED .and. &
+                                             ms%tracers(ms%idx_temperature)%c /= c_fill0))
          end do
          call map_out(ms, sl, gm, ct)
 
@@ -460,7 +458,7 @@ contains
          call check(error, fill_h_kept, &
                     "a filler's thickness must not change (no GM mass into or out of it)")
          if (allocated(error)) exit checks
-         call check(error, n_bad_max == 0, "I1' must hold after every step")
+         call check(error, n_bad_max == 0, "a filler's concentration must stay untouched")
          if (allocated(error)) exit checks
          m1 = sum(ms%h_layer)
          t1s = content_sum(ms, ms%idx_temperature)

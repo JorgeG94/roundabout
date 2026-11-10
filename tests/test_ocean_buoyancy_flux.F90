@@ -100,8 +100,8 @@ contains
       ms%v_face_y_layer = 0.0_wp
       do k = 1, nz
          ms%rho_layer(:, :, k) = rho_col
-         ms%tracers(ms%idx_temperature)%hTr(:, :, k) = t_col*dz
-         ms%tracers(ms%idx_salinity)%hTr(:, :, k) = 35.0_wp*dz
+         ms%tracers(ms%idx_temperature)%c(:, :, k) = t_col
+         ms%tracers(ms%idx_salinity)%c(:, :, k) = 35.0_wp
       end do
    end subroutine setup_column
 

@@ -201,13 +201,13 @@ contains
       is = engine%state%multilayer%idx_salinity
       it = engine%state%multilayer%idx_temperature
       !$acc update self(engine%state%multilayer%h_layer)
-      associate (hs => engine%state%multilayer%tracers(is)%hTr, &
-                 ht => engine%state%multilayer%tracers(it)%hTr)
+      associate (hs => engine%state%multilayer%tracers(is)%c, &
+                 ht => engine%state%multilayer%tracers(it)%c)
          !$acc update self(hs, ht)
       end associate
       h = engine%state%multilayer%h_layer
-      st = engine%state%multilayer%tracers(is)%hTr
-      tt = engine%state%multilayer%tracers(it)%hTr
+      st = engine%state%multilayer%tracers(is)%c
+      tt = engine%state%multilayer%tracers(it)%c
    end subroutine pull
 
    subroutine test_uniform(error)
@@ -246,8 +246,8 @@ contains
             do j = ng + 1, size(h, 2) - ng
                do i = ng + 1, size(h, 1) - ng
                   if (h(i, j, k) < 1.0e-2_wp) cycle   ! massless / land layers
-                  err_s = max(err_s, abs(hs(i, j, k)/h(i, j, k) - 35.0_wp))
-                  err_t = max(err_t, abs(ht(i, j, k)/h(i, j, k) - 12.0_wp))
+                  err_s = max(err_s, abs(hs(i, j, k) - 35.0_wp))
+                  err_t = max(err_t, abs(ht(i, j, k) - 12.0_wp))
                end do
             end do
          end do
@@ -273,8 +273,8 @@ contains
       ng = engine%grid%nghost
       nx = size(h, 1)
       ny = size(h, 2)
-      s = sum(hs(ng + 1:nx - ng, ng + 1:ny - ng, :))
-      t_ = sum(ht(ng + 1:nx - ng, ng + 1:ny - ng, :))
+      s = sum(h(ng + 1:nx - ng, ng + 1:ny - ng, :)*hs(ng + 1:nx - ng, ng + 1:ny - ng, :))
+      t_ = sum(h(ng + 1:nx - ng, ng + 1:ny - ng, :)*ht(ng + 1:nx - ng, ng + 1:ny - ng, :))
    end subroutine total_content
 
    subroutine test_conservation(error)
@@ -353,10 +353,10 @@ contains
             do j = ng + 1, size(h1, 2) - ng
                do i = ng + 1, size(h1, 1) - ng
                   if (h1(i, j, k) < 1.0e-2_wp .or. h4(i, j, k) < 1.0e-2_wp) cycle
-                  c1v = t1(i, j, k)/h1(i, j, k)
-                  c4v = t4(i, j, k)/h4(i, j, k)
+                  c1v = t1(i, j, k)
+                  c4v = t4(i, j, k)
                   dmax = max(dmax, abs(c1v - c4v))
-                  excur = max(excur, abs(c1v - t0a(i, j, k)/h0(i, j, k)))
+                  excur = max(excur, abs(c1v - t0a(i, j, k)))
                end do
             end do
          end do
@@ -825,10 +825,10 @@ contains
       real(wp), allocatable :: a(:, :, :)
       integer :: ng, nz, ia
       ia = engine%state%multilayer%idx_age
-      associate (ha => engine%state%multilayer%tracers(ia)%hTr)
+      associate (ha => engine%state%multilayer%tracers(ia)%c)
          !$acc update self(ha)
       end associate
-      a = engine%state%multilayer%tracers(ia)%hTr
+      a = engine%state%multilayer%tracers(ia)%c
       ng = engine%grid%nghost
       nz = size(a, 3)
       smax = maxval(abs(a(ng + 1:size(a, 1) - ng, ng + 1:size(a, 2) - ng, nz)))
@@ -875,19 +875,18 @@ contains
    end function flat_nml
 
    subroutine set_age_step(engine, i_step, a_left, a_right)
-      !! Overwrite the age content with a zonal step profile (concentration
-      !! `a_left` for i <= i_step, `a_right` beyond) times the layer
-      !! thickness, ghosts included, then push it to the device.
+      !! Overwrite the age concentration with a zonal step profile
+      !! (`a_left` for i <= i_step, `a_right` beyond), ghosts included, then push it to the device.
       type(ocean_engine_t), intent(inout), target :: engine
       integer, intent(in) :: i_step
       real(wp), intent(in) :: a_left, a_right
       integer :: ia, i
       ia = engine%state%multilayer%idx_age
       do i = 1, size(engine%state%multilayer%h_layer, 1)
-         engine%state%multilayer%tracers(ia)%hTr(i, :, :) = &
-            merge(a_left, a_right, i <= i_step)*engine%state%multilayer%h_layer(i, :, :)
+         engine%state%multilayer%tracers(ia)%c(i, :, :) = &
+            merge(a_left, a_right, i <= i_step)
       end do
-      associate (ha => engine%state%multilayer%tracers(ia)%hTr)
+      associate (ha => engine%state%multilayer%tracers(ia)%c)
          !$acc update device(ha)
       end associate
    end subroutine set_age_step
@@ -911,10 +910,10 @@ contains
       t = 0.0_wp
       call advance(e, c, t, nsteps, ok)
       ia = e%state%multilayer%idx_age
-      associate (ha => e%state%multilayer%tracers(ia)%hTr)
+      associate (ha => e%state%multilayer%tracers(ia)%c)
          !$acc update self(ha)
       end associate
-      hage = e%state%multilayer%tracers(ia)%hTr
+      hage = e%state%multilayer%tracers(ia)%c
       if (present(hlay)) then
          !$acc update self(e%state%multilayer%h_layer)
          hlay = e%state%multilayer%h_layer
@@ -929,7 +928,7 @@ contains
       !! of age content on a flat, motionless basin: the hdiff increment (run
       !! with `kappa_h` minus the identical run without) is zero after steps
       !! 1-3 and, after step 4, equals the analytic one-step explicit Laplacian
-      !! `D h (A(i+1) - 2 A(i) + A(i-1))`, `D = kappa_h dt_therm / dx^2`, in every
+      !! `D (A(i+1) - 2 A(i) + A(i-1))`, `D = kappa_h dt_therm / dx^2`, in every
       !! layer below the (reset) surface -- for tracer-advect ratio 4 and 1.
       !! Applying it twice, with dt instead of dt_therm, or not at all, fails.
       type(error_type), allocatable, intent(out) :: error
@@ -938,7 +937,7 @@ contains
       integer, parameter :: IC = 15
       real(wp), allocatable :: h0(:, :, :), hk(:, :, :), hz(:, :, :), hl(:, :, :)
       character(len=:), allocatable :: nk
-      real(wp) :: dmax, err, d_exp, hh
+      real(wp) :: dmax, err, d_exp
       integer :: r, nz, j, k, i
       logical :: ok
       nk = "&ocean_hdiff_nml kappa_h = 4166.6666666666667 /"
@@ -961,11 +960,10 @@ contains
          j = size(hk, 2)/2
          do k = 1, nz - 1
             do i = 3, size(hk, 1) - 2
-               hh = 0.5_wp*(hl(IC, j, k) + hl(IC + 1, j, k))   ! face-mean thickness
-               ! analytic increment of the content: D h (A(i+1) - 2A(i) + A(i-1))
+               ! analytic increment of the concentration: D (A(i+1) - 2A(i) + A(i-1))
                d_exp = 0.0_wp
-               if (i == IC) d_exp = 0.1_wp*hh*(AR - AL)
-               if (i == IC + 1) d_exp = 0.1_wp*hh*(AL - AR)
+               if (i == IC) d_exp = 0.1_wp*(AR - AL)
+               if (i == IC + 1) d_exp = 0.1_wp*(AL - AR)
                dmax = max(dmax, abs(d_exp))
                err = max(err, abs((hk(i, j, k) - hz(i, j, k)) - d_exp))
             end do

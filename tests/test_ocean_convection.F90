@@ -448,8 +448,8 @@ contains
             T0(k) = 1028.0_wp + 2.0_wp*real(k - 1, wp)/real(NZ_H - 1, wp)
             ms_on%rho_layer(:, :, k) = T0(k)
             ms_off%rho_layer(:, :, k) = T0(k)
-            ms_on%tracers(ms_on%idx_temperature)%hTr(:, :, k) = T0(k)*H_LAYER
-            ms_off%tracers(ms_off%idx_temperature)%hTr(:, :, k) = T0(k)*H_LAYER
+            ms_on%tracers(ms_on%idx_temperature)%c(:, :, k) = T0(k)
+            ms_off%tracers(ms_off%idx_temperature)%c(:, :, k) = T0(k)
          end do
          vmix_on%bl_depth = 0.0_wp
          vmix_off%bl_depth = 0.0_wp
@@ -465,7 +465,7 @@ contains
          do step = 1, NSTEPS
             call vdiff_apply_tracers(grid, vd_on, ms_on, DT, kt_source=vmix_on%kt)
          end do
-         !$acc update self(ms_on%tracers(ms_on%idx_temperature)%hTr)
+         !$acc update self(ms_on%tracers(ms_on%idx_temperature)%c)
          call vd_on%exit_data(); call vmix_on%exit_data(); call ms_on%exit_data()
          !$acc exit data delete(ms_on, vmix_on, vd_on)
 
@@ -475,16 +475,16 @@ contains
          do step = 1, NSTEPS
             call vdiff_apply_tracers(grid, vd_off, ms_off, DT, kt_source=vmix_off%kt)
          end do
-         !$acc update self(ms_off%tracers(ms_off%idx_temperature)%hTr)
+         !$acc update self(ms_off%tracers(ms_off%idx_temperature)%c)
          call vd_off%exit_data(); call vmix_off%exit_data(); call ms_off%exit_data()
          !$acc exit data delete(ms_off, vmix_off, vd_off)
 
          i_probe = nx/2; j_probe = ny/2
 
-         spread_on = maxval(ms_on%tracers(ms_on%idx_temperature)%hTr(i_probe, j_probe, :)/H_LAYER) - &
-                     minval(ms_on%tracers(ms_on%idx_temperature)%hTr(i_probe, j_probe, :)/H_LAYER)
-         spread_off = maxval(ms_off%tracers(ms_off%idx_temperature)%hTr(i_probe, j_probe, :)/H_LAYER) - &
-                      minval(ms_off%tracers(ms_off%idx_temperature)%hTr(i_probe, j_probe, :)/H_LAYER)
+         spread_on = maxval(ms_on%tracers(ms_on%idx_temperature)%c(i_probe, j_probe, :)) - &
+                     minval(ms_on%tracers(ms_on%idx_temperature)%c(i_probe, j_probe, :))
+         spread_off = maxval(ms_off%tracers(ms_off%idx_temperature)%c(i_probe, j_probe, :)) - &
+                      minval(ms_off%tracers(ms_off%idx_temperature)%c(i_probe, j_probe, :))
 
          ! (a) convection substantially removes the inversion.
          call check(error, spread_on < 0.6_wp, &
@@ -499,8 +499,8 @@ contains
          ! (b) column-integrated hT conserved (backward-Euler vdiff is
          ! conservative; convection must not create/destroy heat).
          total0 = sum(T0)*H_LAYER
-         total_on = sum(ms_on%tracers(ms_on%idx_temperature)%hTr(i_probe, j_probe, :))
-         total_off = sum(ms_off%tracers(ms_off%idx_temperature)%hTr(i_probe, j_probe, :))
+         total_on = sum(ms_on%tracers(ms_on%idx_temperature)%c(i_probe, j_probe, :))*H_LAYER
+         total_off = sum(ms_off%tracers(ms_off%idx_temperature)%c(i_probe, j_probe, :))*H_LAYER
 
          call check(error, abs(total_on - total0) < 1.0e-9_wp*abs(total0), &
                     "homogenises: conv-on hT not conserved")

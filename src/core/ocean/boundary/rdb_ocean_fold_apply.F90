@@ -64,7 +64,7 @@ contains
       n = 0
       if (.not. allocated(ms%tracers)) return
       do it = 1, size(ms%tracers)
-         if (allocated(ms%tracers(it)%hTr)) n = n + 1
+         if (allocated(ms%tracers(it)%c)) n = n + 1
       end do
    end function n_tracers
 
@@ -98,8 +98,8 @@ contains
          call ocean_fold_pack(ms%v_face_y_layer, nx, ny + 1, nz, FOLD_STAG_V, device_resident)
          if (allocated(ms%tracers)) then
             do it = 1, size(ms%tracers)
-               if (.not. allocated(ms%tracers(it)%hTr)) cycle
-               call ocean_fold_pack(ms%tracers(it)%hTr, nx, ny, nz, FOLD_STAG_T, device_resident)
+               if (.not. allocated(ms%tracers(it)%c)) cycle
+               call ocean_fold_pack(ms%tracers(it)%c, nx, ny, nz, FOLD_STAG_T, device_resident)
             end do
          end if
          call ocean_fold_exchange(device_resident)
@@ -110,8 +110,8 @@ contains
                                 device_resident)
          if (allocated(ms%tracers)) then
             do it = 1, size(ms%tracers)
-               if (.not. allocated(ms%tracers(it)%hTr)) cycle
-               call ocean_fold_unpack(ms%tracers(it)%hTr, nx, ny, nz, FOLD_STAG_T, .false., &
+               if (.not. allocated(ms%tracers(it)%c)) cycle
+               call ocean_fold_unpack(ms%tracers(it)%c, nx, ny, nz, FOLD_STAG_T, .false., &
                                       device_resident)
             end do
          end if
@@ -132,8 +132,8 @@ contains
       ! Per-tracer loop OUTSIDE the DC kernels (outer-shim for array-of-DTs).
       if (allocated(ms%tracers)) then
          do it = 1, size(ms%tracers)
-            if (.not. allocated(ms%tracers(it)%hTr)) cycle
-            call fold_north_centre(ms%tracers(it)%hTr, nx, ny, nz, &
+            if (.not. allocated(ms%tracers(it)%c)) cycle
+            call fold_north_centre(ms%tracers(it)%c, nx, ny, nz, &
                                    nx_phys, ny_phys, nghost)
          end do
       end if
@@ -167,16 +167,16 @@ contains
          call ocean_fold_pack(ms%h_layer, nx, ny, nz, FOLD_STAG_T, device_resident)
          if (allocated(ms%tracers)) then
             do it = 1, size(ms%tracers)
-               if (.not. allocated(ms%tracers(it)%hTr)) cycle
-               call ocean_fold_pack(ms%tracers(it)%hTr, nx, ny, nz, FOLD_STAG_T, device_resident)
+               if (.not. allocated(ms%tracers(it)%c)) cycle
+               call ocean_fold_pack(ms%tracers(it)%c, nx, ny, nz, FOLD_STAG_T, device_resident)
             end do
          end if
          call ocean_fold_exchange(device_resident)
          call ocean_fold_unpack(ms%h_layer, nx, ny, nz, FOLD_STAG_T, .false., device_resident)
          if (allocated(ms%tracers)) then
             do it = 1, size(ms%tracers)
-               if (.not. allocated(ms%tracers(it)%hTr)) cycle
-               call ocean_fold_unpack(ms%tracers(it)%hTr, nx, ny, nz, FOLD_STAG_T, .false., &
+               if (.not. allocated(ms%tracers(it)%c)) cycle
+               call ocean_fold_unpack(ms%tracers(it)%c, nx, ny, nz, FOLD_STAG_T, .false., &
                                       device_resident)
             end do
          end if
@@ -188,8 +188,8 @@ contains
                              nx_phys, ny_phys, nghost)
       if (allocated(ms%tracers)) then
          do it = 1, size(ms%tracers)
-            if (.not. allocated(ms%tracers(it)%hTr)) cycle
-            call fold_north_centre(ms%tracers(it)%hTr, nx, ny, nz, &
+            if (.not. allocated(ms%tracers(it)%c)) cycle
+            call fold_north_centre(ms%tracers(it)%c, nx, ny, nz, &
                                    nx_phys, ny_phys, nghost)
          end do
       end if

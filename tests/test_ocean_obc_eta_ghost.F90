@@ -254,8 +254,8 @@ contains
          dyn%bt_work%bt_ubt_end = 0.0_wp         ! anomaly scheme reads these
          dyn%bt_work%bt_vbt_end = 0.0_wp
          do k = 1, NZ
-            ms%tracers(ms%idx_temperature)%hTr(:, :, k) = 10.0_wp*ms%h_layer(:, :, k)
-            ms%tracers(ms%idx_salinity)%hTr(:, :, k) = eos%S_ref*ms%h_layer(:, :, k)
+            ms%tracers(ms%idx_temperature)%c(:, :, k) = 10.0_wp
+            ms%tracers(ms%idx_salinity)%c(:, :, k) = eos%S_ref
          end do
 
          ! Seed every face with the sentinel, then zero the PHYSICAL faces, so
@@ -349,8 +349,8 @@ contains
          dyn%bt_work%bt_ubt_end = 0.0_wp
          dyn%bt_work%bt_vbt_end = 0.0_wp
          do k = 1, NZ
-            ms%tracers(ms%idx_temperature)%hTr(:, :, k) = 10.0_wp*ms%h_layer(:, :, k)
-            ms%tracers(ms%idx_salinity)%hTr(:, :, k) = eos%S_ref*ms%h_layer(:, :, k)
+            ms%tracers(ms%idx_temperature)%c(:, :, k) = 10.0_wp
+            ms%tracers(ms%idx_salinity)%c(:, :, k) = eos%S_ref
          end do
          ! Seed ONLY the south ghost rows (incl. the wall-side corner columns)
          ! with the sentinel; the y-pass source row (first physical row) stays
@@ -445,9 +445,9 @@ contains
          ! overwrite the PHYSICAL interior with the real concentration, so only
          ! the ghosts (edges + corners) carry the sentinel.
          do k = 1, NZ
-            ms%tracers(it)%hTr(:, :, k) = SENTINEL*hlay
-            ms%tracers(it)%hTr(i0:i1, j0:j1, k) = S_INT*hlay
-            ms%tracers(ms%idx_temperature)%hTr(:, :, k) = 10.0_wp*hlay
+            ms%tracers(it)%c(:, :, k) = SENTINEL
+            ms%tracers(it)%c(i0:i1, j0:j1, k) = S_INT
+            ms%tracers(ms%idx_temperature)%c(:, :, k) = 10.0_wp
          end do
 
          call ocean_bc_state_init(bc, grid, nz_ml=NZ, n_tracers=2)
@@ -458,14 +458,14 @@ contains
 
          call map_in(grid, metrics, ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
          !$acc update device(ms%h_layer, ms%u_face_x_layer, ms%v_face_y_layer, &
-         !$acc&              ms%tracers(it)%hTr)
+         !$acc&              ms%tracers(it)%c)
          call ocean_obc_fill_ghosts(grid, bc, ms)
-         !$acc update self(ms%tracers(it)%hTr, ms%h_layer)
+         !$acc update self(ms%tracers(it)%c, ms%h_layer)
 
          ! Concentration (hTr/h) over the full array — corners included.  With
          ! the corner pre-fill every ghost reverts to ~S_INT; without it the
          ! ghost corners keep the sentinel concentration.
-         max_conc = maxval(ms%tracers(it)%hTr/ms%h_layer)
+         max_conc = maxval(ms%tracers(it)%c/ms%h_layer)
          call map_out(metrics, ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
 
          call check(error, max_conc < 100.0_wp, &
@@ -548,8 +548,8 @@ contains
          ! uniform layer split, tracer concentration C0.
          do k = 1, NZ
             ms%h_layer(:, :, k) = (dyn%bt_work%bt_H_ref + ETA0)/real(NZ, wp)
-            ms%tracers(it)%hTr(:, :, k) = C0*ms%h_layer(:, :, k)
-            ms%tracers(ms%idx_temperature)%hTr(:, :, k) = 10.0_wp*ms%h_layer(:, :, k)
+            ms%tracers(it)%c(:, :, k) = C0
+            ms%tracers(ms%idx_temperature)%c(:, :, k) = 10.0_wp
          end do
          ! Inject the drift sentinel into the OPEN-edge ghost regions only
          ! (W/E ghost columns over the full j extent, S ghost rows over the
@@ -557,9 +557,9 @@ contains
          ms%h_layer(1:ig, :, :) = DRIFT_H
          ms%h_layer(nxt - ig + 1:nxt, :, :) = DRIFT_H
          ms%h_layer(:, 1:ig, :) = DRIFT_H
-         ms%tracers(it)%hTr(1:ig, :, :) = 999.0_wp*DRIFT_H
-         ms%tracers(it)%hTr(nxt - ig + 1:nxt, :, :) = 999.0_wp*DRIFT_H
-         ms%tracers(it)%hTr(:, 1:ig, :) = 999.0_wp*DRIFT_H
+         ms%tracers(it)%c(1:ig, :, :) = 999.0_wp
+         ms%tracers(it)%c(nxt - ig + 1:nxt, :, :) = 999.0_wp
+         ms%tracers(it)%c(:, 1:ig, :) = 999.0_wp
 
          call ocean_bc_state_init(bc, grid, nz_ml=NZ, n_tracers=2)
          bc%west%bc_type = OBC_OPEN
@@ -568,12 +568,12 @@ contains
          bc%north%bc_type = OBC_WALL
 
          call map_in(grid, metrics, ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
-         !$acc update device(dyn%bt_work%bt_H_ref, ms%h_layer, ms%tracers(it)%hTr, &
-         !$acc&              ms%tracers(ms%idx_temperature)%hTr)
+         !$acc update device(dyn%bt_work%bt_H_ref, ms%h_layer, ms%tracers(it)%c, &
+         !$acc&              ms%tracers(ms%idx_temperature)%c)
 
          call ocean_obc_refill_ghost_ssh(grid, bc, ms, dyn%bt_work%bt_H_ref)
 
-         !$acc update self(ms%h_layer, ms%tracers(it)%hTr)
+         !$acc update self(ms%h_layer, ms%tracers(it)%c)
 
          ! Max |SSH − ETA0| over the W/E ghost columns (full j extent — the
          ! open×open SW/SE corner ghosts and the wall-side N corner ghosts
@@ -601,15 +601,15 @@ contains
          do k = 1, NZ
             do j = 1, nyt
                do i = 1, ig
-                  conc = ms%tracers(it)%hTr(i, j, k)/ms%h_layer(i, j, k)
+                  conc = ms%tracers(it)%c(i, j, k)
                   conc_err = max(conc_err, abs(conc - C0))
-                  conc = ms%tracers(it)%hTr(nxt - i + 1, j, k)/ms%h_layer(nxt - i + 1, j, k)
+                  conc = ms%tracers(it)%c(nxt - i + 1, j, k)
                   conc_err = max(conc_err, abs(conc - C0))
                end do
             end do
             do j = 1, ig
                do i = 1, nxt
-                  conc = ms%tracers(it)%hTr(i, j, k)/ms%h_layer(i, j, k)
+                  conc = ms%tracers(it)%c(i, j, k)
                   conc_err = max(conc_err, abs(conc - C0))
                end do
             end do
@@ -698,8 +698,8 @@ contains
          do k = 1, NZ
             frac = 2.0_wp*real(k, wp)/(real(NZ, wp)*real(NZ + 1, wp))
             ms%h_layer(:, :, k) = frac*(dyn%bt_work%bt_H_ref + ETA0)
-            ms%tracers(ms%idx_salinity)%hTr(:, :, k) = 35.0_wp*ms%h_layer(:, :, k)
-            ms%tracers(ms%idx_temperature)%hTr(:, :, k) = 10.0_wp*ms%h_layer(:, :, k)
+            ms%tracers(ms%idx_salinity)%c(:, :, k) = 35.0_wp
+            ms%tracers(ms%idx_temperature)%c(:, :, k) = 10.0_wp
          end do
          ! Drift sentinel in the open ghost regions.
          ms%h_layer(1:ig, :, :) = DRIFT_H
@@ -714,8 +714,8 @@ contains
 
          call map_in(grid, metrics, ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
          !$acc update device(dyn%bt_work%bt_H_ref, ms%h_layer, &
-         !$acc&              ms%tracers(ms%idx_salinity)%hTr, &
-         !$acc&              ms%tracers(ms%idx_temperature)%hTr)
+         !$acc&              ms%tracers(ms%idx_salinity)%c, &
+         !$acc&              ms%tracers(ms%idx_temperature)%c)
 
          call ocean_obc_refill_ghost_ssh(grid, bc, ms, dyn%bt_work%bt_H_ref)
 
@@ -797,8 +797,8 @@ contains
                   ms%h_layer(i, j, k) = 100.0_wp + real(i, wp) + 0.3_wp*real(j, wp) + 7.0_wp*real(k, wp)
                end do
             end do
-            ms%tracers(ms%idx_salinity)%hTr(:, :, k) = 35.0_wp*ms%h_layer(:, :, k)
-            ms%tracers(ms%idx_temperature)%hTr(:, :, k) = 10.0_wp*ms%h_layer(:, :, k)
+            ms%tracers(ms%idx_salinity)%c(:, :, k) = 35.0_wp
+            ms%tracers(ms%idx_temperature)%c(:, :, k) = 10.0_wp
          end do
          h_before = ms%h_layer
 

@@ -1944,7 +1944,7 @@ contains
       logical, intent(in)   :: thin
       integer :: i, j, k
       real(wp) :: e2, s2, h_t, h_q, huS, huN, hvW, hvE
-      real(wp), parameter :: H_NEGLECT = H_VANISHED   ! vanished-ok: additive denominator floor, same role as the Laplacian stress divergence
+      real(wp), parameter :: H_NEGLECT = H_VANISHED   ! additive denominator floor, same role as the Laplacian stress divergence
 
       do concurrent(k=1:nz, j=1:ny, i=1:nx) local(e2, h_t)
          e2 = dy_dxT(i, j)*(idyCu(i + 1, j)*lap_u(i + 1, j, k) - idyCu(i, j)*lap_u(i, j, k)) - &

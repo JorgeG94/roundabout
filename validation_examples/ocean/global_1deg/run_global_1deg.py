@@ -83,7 +83,6 @@ def build_config(data_dir, days, out_dir):
     cfg.vcoord.z_fixed_dz_top = 2.0
     cfg.vcoord.z_fixed_tanh_center = 0.5
     cfg.vcoord.z_fixed_tanh_width = 0.25
-    cfg.vcoord.check_vanished_content = True
 
     # Bathymetry (OM_1deg topog.nc, MINIMUM_DEPTH 9.5 m) + WOA13 January T/S.
     cfg.ocean_topo.topo_config = "file"
