@@ -6,18 +6,27 @@ module rdb_ocean_remap
    !! `rdb_remap_column` (shared with coastal); this module wires it across the
    !! registered tracer slot list plus the face-velocity pass.
    !!
-   !! Per-column conservation: sum_k(hTr) is preserved to machine precision.
-   !! The `c = hTr/h` ↔ `hTr = c·h` round trip is protected by a TWO-SIDED
-   !! vanishing-layer guard (`rdb_vl_merge_content`, invariant I1′) which
-   !! keeps the content of a sub-threshold layer in the column instead of
-   !! deleting it, and leaves every sub-threshold layer holding `h·c_live`,
-   !! the concentration of its donor live layer. See the header of
-   !! `rdb_vanished_layer.inc`.
+   !! Per-column conservation: sum_k(hTr) is preserved to round-off (the
+   !! content the bounding moves and the few-ulp sliver of a column-total
+   !! mismatch land in the remap budget slot, which is how they are measured).
+   !!
+   !! **The tracer remap computes on CONCENTRATION** (White & Adcroft 2008;
+   !! Griffies et al. 2020).  `c_old` is the I1′-aware column concentration
+   !! (`rdb_vl_column_conc`: `hTr/h` on a live layer, the donor's `c` on a
+   !! filler); the PPM reconstruction (Colella & Woodward 1984) and the
+   !! overlap integral run on `c`, giving `c_new` directly; the target is
+   !! bounded by the source cells that contributed and an empty target takes
+   !! the mean of the source cell containing its bottom interface.  The tracer
+   !! is still STORED as content, so the commit is `hTr = c_new·h_new`; there
+   !! are no read/write pool merges and no defect fold around the kernel.  The
+   !! tail `enforce_vanished_content` (I1′) is the only place fillers are
+   !! re-pooled.
 #ifdef LFORTRAN_PASSING
    use rdb_constants, only: wp, REMAP_PPM, H_VANISHED, H_DIV_EPS
 #else
    use rdb_constants, only: NZ_STACK_MAX, wp, REMAP_PPM, H_VANISHED, H_DIV_EPS
 #endif
+   use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    use rdb_grid, only: hgrid_t
    use rdb_remap_column, only: remap_column
    use rdb_multilayer_state, only: multilayer_state_t
@@ -36,7 +45,7 @@ module rdb_ocean_remap
    ! constant of record.
    !
    ! The per-LAYER tests it used to serve — `c = hTr/h` and the I1′ merge —
-   ! now go through `rdb_vl_column_conc` / `rdb_vl_merge_content`, the included
+   ! now go through `rdb_vl_column_conc` (and the tail sweep's `rdb_vl_merge_content`), the included
    ! single definition (`src/shared_module_utilities/rdb_vanished_layer.inc`).
    ! Every test of the marker is a STRICT `>`: a layer sitting exactly ON it
    ! reads as vanished, which is what the geometric vcoord families rely on
@@ -57,6 +66,9 @@ module rdb_ocean_remap
    public :: ocean_apply_ale_remap_faces
    public :: ocean_apply_ale_remap_step
    public :: ocean_remap_tracer_column   ! exposed for unit tests
+   public :: ocean_remap_tracer_field   ! reference kernel, exposed for the stream test
+   public :: ocean_remap_tracer_field_stream
+   public :: remap_use_stream
    public :: ocean_remap_merge_vanished_content   ! exposed for unit tests
 
 #ifdef LFORTRAN_PASSING
@@ -101,7 +113,7 @@ contains
 
       integer :: t, m, nx, ny, nz, i, j, k
       real(wp) :: wtd
-      logical :: do_tfilter
+      logical :: do_tfilter, use_stream
 
       ! Eulerian-z and Lagrangian/isopycnal both skip remap: the former
       ! holds h at H·dsig via vert-advection cancellation, the latter
@@ -165,24 +177,49 @@ contains
       end if
 
       ! --- 5. Remap every tracer ---
+      use_stream = remap_use_stream(vcoord, nz, m, vcoord%remap_boundary_extrap, &
+                                    vcoord%remap_nonuniform_weights)
       if (allocated(ms%tracers)) then
          do t = 1, size(ms%tracers)
             if (.not. allocated(ms%tracers(t)%hTr)) cycle
             select case (ms%tracers(t)%budget_id)
             case (TRACER_BUDGET_HEAT)
-               call ocean_remap_tracer_field( &
-                  nx, ny, nz, vcoord%remap_h_old, vcoord%target_h, ms%tracers(t)%hTr, m, &
-                  vcoord%remap_boundary_extrap, vcoord%remap_nonuniform_weights, &
-                  budget=ms%heat_budget_remap)
+               if (use_stream) then
+                  call ocean_remap_tracer_field_stream( &
+                     nx, ny, nz, vcoord%remap_h_old, vcoord%target_h, ms%tracers(t)%hTr, &
+                     vcoord%remap_c_old, vcoord%remap_z_old, vcoord%remap_z_new, &
+                     vcoord%remap_q_l, vcoord%remap_q_r, vcoord%remap_q_6, &
+                     budget=ms%heat_budget_remap)
+               else
+                  call ocean_remap_tracer_field( &
+                     nx, ny, nz, vcoord%remap_h_old, vcoord%target_h, ms%tracers(t)%hTr, m, &
+                     vcoord%remap_boundary_extrap, vcoord%remap_nonuniform_weights, &
+                     budget=ms%heat_budget_remap)
+               end if
             case (TRACER_BUDGET_SALT)
-               call ocean_remap_tracer_field( &
-                  nx, ny, nz, vcoord%remap_h_old, vcoord%target_h, ms%tracers(t)%hTr, m, &
-                  vcoord%remap_boundary_extrap, vcoord%remap_nonuniform_weights, &
-                  budget=ms%salt_budget_remap)
+               if (use_stream) then
+                  call ocean_remap_tracer_field_stream( &
+                     nx, ny, nz, vcoord%remap_h_old, vcoord%target_h, ms%tracers(t)%hTr, &
+                     vcoord%remap_c_old, vcoord%remap_z_old, vcoord%remap_z_new, &
+                     vcoord%remap_q_l, vcoord%remap_q_r, vcoord%remap_q_6, &
+                     budget=ms%salt_budget_remap)
+               else
+                  call ocean_remap_tracer_field( &
+                     nx, ny, nz, vcoord%remap_h_old, vcoord%target_h, ms%tracers(t)%hTr, m, &
+                     vcoord%remap_boundary_extrap, vcoord%remap_nonuniform_weights, &
+                     budget=ms%salt_budget_remap)
+               end if
             case default
-               call ocean_remap_tracer_field( &
-                  nx, ny, nz, vcoord%remap_h_old, vcoord%target_h, ms%tracers(t)%hTr, m, &
-                  vcoord%remap_boundary_extrap, vcoord%remap_nonuniform_weights)
+               if (use_stream) then
+                  call ocean_remap_tracer_field_stream( &
+                     nx, ny, nz, vcoord%remap_h_old, vcoord%target_h, ms%tracers(t)%hTr, &
+                     vcoord%remap_c_old, vcoord%remap_z_old, vcoord%remap_z_new, &
+                     vcoord%remap_q_l, vcoord%remap_q_r, vcoord%remap_q_6)
+               else
+                  call ocean_remap_tracer_field( &
+                     nx, ny, nz, vcoord%remap_h_old, vcoord%target_h, ms%tracers(t)%hTr, m, &
+                     vcoord%remap_boundary_extrap, vcoord%remap_nonuniform_weights)
+               end if
             end select
          end do
       end if
@@ -204,36 +241,32 @@ contains
    end subroutine ocean_apply_ale_remap_centres
 
    pure subroutine ocean_remap_tracer_field(nx, ny, nz, h_old, h_new, hTr, method, &
-                                            bnd_extrap, nonunif, budget)
-      !! Flat-impl tracer remap. Per (i,j) column: c = hTr/h (vanishing-layer-
-      !! guarded) → per-column remap kernel → hTr_new = c_new·h_new. Conservative.
-      !! `budget` (optional): when present, the per-cell hTr_new−hTr_old increment
-      !! is accumulated into the slot (heat/salt remap deltas) before overwriting.
+                                            bnd_extrap, nonunif, budget, c_new_out, clamp_out)
+      !! Flat-impl REFERENCE tracer remap, in concentration form. Per (i,j)
+      !! column: `c_old` (the I1′-aware column concentration, a filler reads
+      !! its donor's) → per-column remap kernel → bounding + empty-target
+      !! fallback (`remap_bound_column`) → `hTr_new = c_new·h_new`.
+      !! `budget` (optional): the per-cell `hTr_new − hTr_old` increment is
+      !! accumulated into the slot (heat/salt remap deltas) before overwriting.
       !! Flat-arg so GPU codegen doesn't chase the array-of-derived-types pointer.
       !!
-      !! **The vanishing-layer guard is two-sided** (`rdb_vl_merge_content`,
-      !! invariant I1′): on the READ side a SOURCE filler is pooled with its
-      !! donor live layer, and the reconstruction is handed the donor's
-      !! concentration for it (`rdb_vl_column_conc`) — never one recovered
-      !! from a near-zero divisor; on the WRITE side a TARGET filler is pooled
-      !! with ITS donor live target layer, so it receives `h_new·c_live`,
-      !! taken from that layer. Without the write half the remap parks
-      !! arbitrary content in a filler (the day-16 z_fixed salt/heat break,
-      !! when the read side then zeroed it); with a write half that ZEROES the
-      !! filler (the previous I1), a uniform tracer stops being uniform — the
-      !! thickness the continuity step later moves out of the filler arrives
-      !! in the live layers carrying no content.
+      !! **Concentration form** (White & Adcroft 2008; Griffies et al. 2020).
+      !! The reconstruction is built on `c_old` and integrated over the
+      !! overlap of old and new layers; a source filler is just a cell value in
+      !! the stencil (the limiter bounds it by its neighbours), so there is NO
+      !! read-side pool merge, NO write-side pool merge and NO defect fold
+      !! around the kernel.  The target concentration is bounded by the range
+      !! of the source cells that contributed to it, and a target with
+      !! `h_new <= 0` takes the mean of the source cell containing its bottom
+      !! interface; both are in `remap_bound_column`.  The content the bounding
+      !! moves, `h_new·(c_bounded − c_raw)`, is part of `hTr_new − hTr_old`
+      !! and so of `budget`: conservation is MEASURED by the slot, not assumed.
+      !! The tail `enforce_vanished_content` (I1′) still re-pools the fillers
+      !! after the remap until the tracer is stored as concentration.
       !!
       !! **The `(h_old, h_new)` pair is the call boundary**: every caller
       !! passes `vcoord%remap_h_old` and `vcoord%target_h` (the thickness the
-      !! regrid wrote into `ms%h_layer` right after), so the entry already
-      !! holds the one explicit h-pair this operator moves between.  The
-      !! concentration read here is `rdb_vl_column_conc` (I1′-aware, pooled
-      !! over filler runs), not the plain accessor; both go away together with
-      !! the merges when the prognostic becomes `c`.
-      !! Post-condition (I1′): `h_new <= H_VANISHED ⇒ hTr = h_new·c_live`,
-      !! column sum conserved to round-off, so `budget` still telescopes per
-      !! column.
+      !! regrid wrote into `ms%h_layer` right after).
       integer, intent(in) :: nx, ny, nz, method
       real(wp), intent(in) :: h_old(nx, ny, nz)
       real(wp), intent(in) :: h_new(nx, ny, nz)
@@ -241,53 +274,514 @@ contains
       logical, intent(in) :: bnd_extrap
          !! Linear-exact boundary-cell reconstruction in the column kernel
          !! (`&vcoord_nml remap_boundary_extrap`); `.false.` ⇒ the PCM
-         !! flatten, i.e. bit-identical to the pre-knob behaviour.
+         !! flatten.
       logical, intent(in) :: nonunif
          !! Non-uniform-grid PLM/PPM reconstruction weights in the column
          !! kernel (`&vcoord_nml remap_nonuniform_weights`); `.false.` ⇒ the
-         !! equal-thickness specialisations, i.e. bit-identical.
+         !! equal-thickness specialisations.
       real(wp), intent(inout), optional :: budget(nx, ny, nz)
+      real(wp), intent(inout), optional :: c_new_out(nx, ny, nz)
+         !! Diagnostic / test hook: the bounded target concentration.
+      real(wp), intent(inout), optional :: clamp_out(nx, ny, nz)
+         !! Diagnostic / test hook: the content the bounding moved,
+         !! `h_new·(c_bounded − c_raw)`.
       integer :: i, j, k
       real(wp) :: h_old_col(NZ_STACK_MAX), h_new_col(NZ_STACK_MAX)
       real(wp) :: c_old_col(NZ_STACK_MAX), c_new_col(NZ_STACK_MAX)
-      real(wp) :: hTr_col(NZ_STACK_MAX), hTr_new_col(NZ_STACK_MAX)
+      real(wp) :: hTr_col(NZ_STACK_MAX), clamp_col(NZ_STACK_MAX)
+      real(wp) :: hTr_new
 
       ! Gate the budget write INSIDE the one loop (as vdiff does); splitting
       ! present(budget) into two loops makes NVHPC compile the no-budget branch
-      ! ~25x slower. Bit-identical to the split form.
+      ! ~25x slower.
       do concurrent(j=1:ny, i=1:nx) &
-         local(k, h_old_col, h_new_col, c_old_col, c_new_col, hTr_col, hTr_new_col)
+         local(k, h_old_col, h_new_col, c_old_col, c_new_col, hTr_col, clamp_col, hTr_new)
          do k = 1, nz
             h_old_col(k) = h_old(i, j, k)
             h_new_col(k) = h_new(i, j, k)
             hTr_col(k) = hTr(i, j, k)
          end do
-         ! Read side. `hTr_col` is a LOCAL copy — the budget below still
-         ! differences against the original `hTr` array, so the merge is
-         ! invisible to the leak detector.
-         call rdb_vl_merge_content(nz, h_old_col, hTr_col)
          call rdb_vl_column_conc(nz, h_old_col, hTr_col, c_old_col)
          call remap_column(method, nz, &
                            h_old_col(1:nz), h_new_col(1:nz), &
                            c_old_col(1:nz), c_new_col(1:nz), bnd_extrap, nonunif)
-         ! Write side.
+         call remap_bound_column(nz, h_old_col, h_new_col, c_old_col, c_new_col, clamp_col, &
+                                 bnd_extrap)
          do k = 1, nz
-            hTr_new_col(k) = c_new_col(k)*h_new_col(k)
+            hTr_new = c_new_col(k)*h_new_col(k)
+            if (present(budget)) budget(i, j, k) = budget(i, j, k) + (hTr_new - hTr(i, j, k))
+            if (present(c_new_out)) c_new_out(i, j, k) = c_new_col(k)
+            if (present(clamp_out)) clamp_out(i, j, k) = clamp_col(k)
+            hTr(i, j, k) = hTr_new
          end do
-         call remap_fold_filler_defect(nz, h_old_col, h_new_col, hTr_col, hTr_new_col)
-         call rdb_vl_merge_content(nz, h_new_col, hTr_new_col)
-         if (present(budget)) then
+      end do
+   end subroutine ocean_remap_tracer_field
+
+   pure subroutine remap_bound_column(nz, h_old_col, h_new_col, c_old, c_new, clamp_amt, bnd_extrap)
+      !$acc routine seq
+      !! Concentration-form closure of one remapped column (reference path;
+      !! the stream kernel 3 does the same per cell).  For each target layer
+      !! `k`, with the source cells that CONTRIBUTE to it (`overlap > 0` and
+      !! `h_old > 0`, exactly the cells the overlap integral adds up):
+      !!  * `h_new(k) > 0` and at least one contributor: clamp `c_new(k)` to
+      !!    `[min, max]` of `c_old` over the contributors' reconstruction
+      !!    stencils (each contributor `ko` with `ko-1` and `ko+1`) — the
+      !!    bounding of White & Adcroft (2008) / Griffies et al. (2020).
+      !!    Analytically a no-op for a Colella & Woodward (1984) limited
+      !!    parabola, which cannot leave its stencil's range (bounding by the
+      !!    contributor MEANS alone would flatten every target inside one
+      !!    source cell to PCM); it removes the
+      !!    `O(eps·|c|·h_src/h_new)` overshoot a few-ulp-thin target can pick
+      !!    up in the quotient.  A non-finite raw value is left alone (an
+      !!    `if/else` clamp would launder it into a plausible `lo`/`hi`).
+      !!  * `h_new(k) <= 0`, or no contributor (a sliver above the source
+      !!    column): `c_new(k)` is the mean of the source cell containing the
+      !!    target's bottom interface (the topmost cell if it lies above the
+      !!    column) — the water that interface sits in, never a made-up `0`.
+      !! `clamp_amt(k) = h_new(k)·(c_new_final − c_new_raw)` is the content
+      !! the closure moves; it is part of `hTr_new − hTr_old`, hence of the
+      !! remap budget slot.
+      !!
+      !! **Boundary cells under `bnd_extrap`.**  The linear-exact boundary
+      !! closure (`boundary_half_jump` in `rdb_remap_column`) gives cells `1`
+      !! and `nz` the straight line `c ± d`, `|d| <= |c_nbr − c|`, whose OUTER
+      !! half lies outside `[c_nbr, c]` by construction — that is the point of
+      !! the closure (a profile linear in z is reproduced exactly).  Bounding
+      !! such a contributor by its neighbour means alone clamped every target
+      !! inside that outer half (a 20 m surface target under a 67 m source
+      !! cell: the whole linear-S column gained 1e-5 of its salt on the first
+      !! remap of the flat at-rest control, and the clamped bed/surface
+      !! density set rx0 slopes in motion).  Its range is therefore widened by
+      !! the mirror point `2c − c_nbr`, which contains the line for every
+      !! method that uses the closure (PLM/PPM/PPM_H4/PQM), so the bounding is
+      !! again a no-op on an exact reconstruction.
+      integer, intent(in) :: nz
+      real(wp), intent(in) :: h_old_col(NZ_STACK_MAX)
+      real(wp), intent(in) :: h_new_col(NZ_STACK_MAX)
+      real(wp), intent(in) :: c_old(NZ_STACK_MAX)
+         !! Source concentration (a filler reads its donor's).
+      real(wp), intent(inout) :: c_new(NZ_STACK_MAX)
+         !! Raw target concentration in, bounded concentration out.
+      real(wp), intent(out) :: clamp_amt(NZ_STACK_MAX)
+      logical, intent(in) :: bnd_extrap
+         !! The column kernel ran with the linear-exact boundary closure
+         !! (`&vcoord_nml remap_boundary_extrap`): widen the range of the two
+         !! boundary cells to the line they carry (see above).
+      real(wp) :: z_old(NZ_STACK_MAX), z_new(NZ_STACK_MAX)
+      real(wp) :: zacc_o, zacc_n, zn_lo, zn_hi, zo_lo, zo_hi, overlap
+      real(wp) :: c_lo, c_hi, c_raw, cs_lo, cs_hi
+      integer :: k, ko, ko0, n_hit
+
+      zacc_o = 0.0_wp
+      zacc_n = 0.0_wp
+      do k = 1, nz
+         zacc_o = zacc_o + h_old_col(k)
+         zacc_n = zacc_n + h_new_col(k)
+         z_old(k) = zacc_o
+         z_new(k) = zacc_n
+      end do
+
+      ko0 = 1
+      do k = 1, nz
+         zn_hi = z_new(k)
+         zn_lo = 0.0_wp
+         if (k > 1) zn_lo = z_new(k - 1)
+         ! First source cell whose top lies above the target's bottom (z_old
+         ! is non-decreasing, so the pointer only moves up with k).
+         do while (ko0 <= nz)
+            if (z_old(ko0) > zn_lo) exit
+            ko0 = ko0 + 1
+         end do
+         c_raw = c_new(k)
+         n_hit = 0
+         c_lo = 0.0_wp
+         c_hi = 0.0_wp
+         if (h_new_col(k) > 0.0_wp) then
+            ko = ko0
+            zo_lo = 0.0_wp
+            if (ko > 1 .and. ko <= nz) zo_lo = z_old(ko - 1)
+            do while (ko <= nz)
+               if (zo_lo >= zn_hi) exit
+               zo_hi = z_old(ko)
+               overlap = min(zn_hi, zo_hi) - max(zn_lo, zo_lo)
+               if (overlap > 0.0_wp .and. h_old_col(ko) > 0.0_wp) then
+                  ! Range of the contributor's reconstruction stencil
+                  ! (ko-1, ko, ko+1): the limited parabola cannot leave it.
+                  cs_lo = min(c_old(max(ko - 1, 1)), min(c_old(ko), c_old(min(ko + 1, nz))))
+                  cs_hi = max(c_old(max(ko - 1, 1)), max(c_old(ko), c_old(min(ko + 1, nz))))
+                  if (bnd_extrap .and. nz >= 2) then
+                     if (ko == 1) then
+                        cs_lo = min(cs_lo, 2.0_wp*c_old(1) - c_old(2))
+                        cs_hi = max(cs_hi, 2.0_wp*c_old(1) - c_old(2))
+                     else if (ko == nz) then
+                        cs_lo = min(cs_lo, 2.0_wp*c_old(nz) - c_old(nz - 1))
+                        cs_hi = max(cs_hi, 2.0_wp*c_old(nz) - c_old(nz - 1))
+                     end if
+                  end if
+                  if (n_hit == 0) then
+                     c_lo = cs_lo
+                     c_hi = cs_hi
+                  else
+                     c_lo = min(c_lo, cs_lo)
+                     c_hi = max(c_hi, cs_hi)
+                  end if
+                  n_hit = n_hit + 1
+               end if
+               zo_lo = zo_hi
+               ko = ko + 1
+            end do
+         end if
+         if (n_hit > 0) then
+            if (ieee_is_finite(c_raw)) c_new(k) = max(c_lo, min(c_hi, c_raw))
+         else
+            c_new(k) = c_old(min(ko0, nz))
+         end if
+         clamp_amt(k) = h_new_col(k)*(c_new(k) - c_raw)
+      end do
+   end subroutine remap_bound_column
+
+   pure function remap_use_stream(vcoord, nz, method, bnd_extrap, nonunif) result(use_stream)
+      !! Host-side dispatch of the tracer remap: `.true.` when the streaming
+      !! kernel (`ocean_remap_tracer_field_stream`) can and should run.  The
+      !! stream implements exactly the default PPM column (`REMAP_PPM`,
+      !! `nz >= 3`, uniform-weight edges, PCM boundary cells) and needs its
+      !! global scratch buffers; everything else (other methods,
+      !! `nz <= 2`, `remap_boundary_extrap`, `remap_nonuniform_weights`,
+      !! `&vcoord_nml remap_kernel = "reference"`) takes the stack-based
+      !! reference kernel.  The stream kernel itself contains no call into
+      !! stack-based code, hence the decision is taken here, not per column.
+      type(ocean_vcoord_t), intent(in) :: vcoord
+      integer, intent(in) :: nz, method
+      logical, intent(in) :: bnd_extrap, nonunif
+      logical :: use_stream
+      use_stream = vcoord%remap_stream .and. method == REMAP_PPM .and. nz >= 3 &
+                   .and. .not. bnd_extrap .and. .not. nonunif &
+                   .and. allocated(vcoord%remap_c_old) &
+                   .and. allocated(vcoord%remap_z_old) &
+                   .and. allocated(vcoord%remap_z_new) &
+                   .and. allocated(vcoord%remap_q_l) &
+                   .and. allocated(vcoord%remap_q_r) &
+                   .and. allocated(vcoord%remap_q_6)
+   end function remap_use_stream
+
+   pure function remap_ppm_edge(ko, nz, c_m1, c_0, c_p1, c_p2) result(e_hi)
+      !$acc routine seq
+      !! Raw (unlimited) PPM edge between source cells `ko` and `ko+1` from
+      !! the four-cell window `c(ko-1..ko+2)`: Colella & Woodward (1984) eq.
+      !! 1.9 for uniform cells, the two-point mean next to either boundary.
+      integer, intent(in) :: ko, nz
+      real(wp), intent(in) :: c_m1, c_0, c_p1, c_p2
+      real(wp) :: e_hi
+      if (ko == nz) then
+         e_hi = c_0
+      else if (ko == 1 .or. ko == nz - 1) then
+         e_hi = 0.5_wp*(c_0 + c_p1)
+      else
+         e_hi = (7.0_wp/12.0_wp)*(c_0 + c_p1) &
+                - (1.0_wp/12.0_wp)*(c_m1 + c_p2)
+      end if
+   end function remap_ppm_edge
+
+   pure function remap_c_at(nx, ny, nz, i, j, kk, c_old) result(c)
+      !$acc routine seq
+      !! Source concentration of layer `kk` of column `(i,j)`, `0` outside
+      !! `1..nz`.
+      integer, intent(in) :: nx, ny, nz, i, j, kk
+      real(wp), intent(in) :: c_old(nx, ny, nz)
+      real(wp) :: c
+      if (kk < 1 .or. kk > nz) then
+         c = 0.0_wp
+      else
+         c = c_old(i, j, kk)
+      end if
+   end function remap_c_at
+
+   pure subroutine remap_ppm_cell(ko, nz, c_m1, c_0, c_p1, c_p2, e_lo, e_hi, q_l, q_r, q_6)
+      !$acc routine seq
+      !! One source cell of the uniform-weight PPM column, from its window:
+      !! the RAW right edge `e_hi` shared with cell `ko+1`, and the Colella &
+      !! Woodward (1984) limited parabola `(q_l, q_r, q_6)` of cell `ko`.
+      !! Statement-for-statement the edge estimate + limiter of
+      !! `remap_column_ppm` (steps 1-2) for one `k`; `e_lo` is the RAW left
+      !! edge (`remap_ppm_edge` of cell `ko-1`; ignored for cell 1, whose left
+      !! edge is `c_0`), NOT the previous cell's limited right edge.
+      integer, intent(in) :: ko, nz
+      real(wp), intent(in) :: c_m1, c_0, c_p1, c_p2, e_lo
+      real(wp), intent(out) :: e_hi, q_l, q_r, q_6
+      real(wp) :: q_min, q_max, dq, dq_l, dq_r
+
+      e_hi = remap_ppm_edge(ko, nz, c_m1, c_0, c_p1, c_p2)
+
+      q_min = c_0
+      q_max = c_0
+      if (ko > 1) then
+         q_min = min(q_min, c_m1)
+         q_max = max(q_max, c_m1)
+      end if
+      if (ko < nz) then
+         q_min = min(q_min, c_p1)
+         q_max = max(q_max, c_p1)
+      end if
+      if (ko == 1) then
+         q_l = max(q_min, min(q_max, c_0))
+      else
+         q_l = max(q_min, min(q_max, e_lo))
+      end if
+      q_r = max(q_min, min(q_max, e_hi))
+      dq = q_r - q_l
+      dq_l = c_0 - q_l
+      dq_r = q_r - c_0
+      if (dq_l*dq_r <= 0.0_wp) then
+         q_l = c_0
+         q_r = c_0
+      else
+         q_6 = 6.0_wp*c_0 - 3.0_wp*(q_l + q_r)
+         if (abs(q_6) > abs(dq)) then
+            if (q_6*dq > 0.0_wp) then
+               q_l = 3.0_wp*c_0 - 2.0_wp*q_r
+            else
+               q_r = 3.0_wp*c_0 - 2.0_wp*q_l
+            end if
+         end if
+      end if
+      q_6 = 6.0_wp*c_0 - 3.0_wp*(q_l + q_r)
+   end subroutine remap_ppm_cell
+
+   pure subroutine ocean_remap_tracer_field_stream(nx, ny, nz, h_old, h_new, hTr, &
+                                                   c_old, z_old, z_new, &
+                                                   q_lft, q_rgt, q_six, budget, &
+                                                   c_new_out, clamp_out)
+      !! Parallel-in-`k` twin of `ocean_remap_tracer_field` for the default
+      !! PPM column (`REMAP_PPM`, `nz >= 3`, `bnd_extrap = nonunif = .false.`),
+      !! in concentration form: same bits as the reference on a filler-free
+      !! column, no `nz`-sized local array, and almost all the work spread
+      !! over one thread per CELL instead of one thread per column.  The
+      !! caller (`remap_use_stream`) guarantees the preconditions; nothing here
+      !! calls stack-based code.
+      !!
+      !! **Kernels** (all inside this routine; global scratch in between):
+      !!  1. `do concurrent(j,i)`, serial `k`: interface prefix sums
+      !!     `z_old(k) = z_old(k-1) + h_old(k)`, `z_new` likewise (from 0,
+      !!     increasing `k`, as `remap_column_ppm`) and the source
+      !!     concentration `c_old = hTr/h_old` per layer; a filler
+      !!     (`h_old <= H_VANISHED`) reads the concentration of its donor, the
+      !!     nearest live layer above it (the topmost live layer for fillers
+      !!     above the water), `0` on a column with no live layer: the
+      !!     I1′-aware `rdb_vl_column_conc`, on global scratch.  No pooling,
+      !!     no filler pre-scan: a filler is just a cell value.
+      !!  2. `do concurrent(k,j,i)`, one thread per SOURCE cell: raw edges
+      !!     from the window `c_old(k-2..k+2)`, Colella & Woodward (1984)
+      !!     limiter, the limited parabola stored in `q_lft`/`q_rgt`/`q_six`.
+      !!  3. `do concurrent(k,j,i)`, one thread per TARGET cell: the overlap
+      !!     integral (White & Adcroft 2008) over the contributing source
+      !!     cells, `c_new = integral/h_new`, bounded to the range of those
+      !!     cells' reconstruction stencils (an empty target, `h_new <= 0`, or one with no
+      !!     contributor takes the mean of the source cell containing its
+      !!     bottom interface), then the commit: `budget += c_new·h_new − hTr`
+      !!     and `hTr = c_new·h_new`.  Kernel 3 reads `hTr` of its OWN cell
+      !!     only (all neighbours' content went through `c_old` in kernel 1),
+      !!     so the commit needs no separate pass.
+      !!
+      !! **Why kernel 3 equals the reference walk.**  The reference computes
+      !! each target's `integral` as `0.0` plus, in increasing source index
+      !! `ko`, the contribution of every source cell it visits, where a visit
+      !! adds nothing unless `overlap = min(z_new(k), z_old(ko)) -
+      !! max(z_new(k-1), z_old(ko-1)) > 0` (and `dz_old(ko) > 0`), and its
+      !! `exit` / `ko_start` logic only skips cells that cannot overlap.  For
+      !! non-negative thicknesses (the remap's precondition, see
+      !! `ocean_remap_scan_preconditions`) `z_old` is non-decreasing, so the
+      !! cells with `overlap > 0` are a CONTIGUOUS range of `ko`: those with
+      !! `z_old(ko) > z_new(k-1)` (a suffix, whose first element
+      !! the gallop-and-bisect at the top of kernel 3 finds exactly; exact ties give `overlap <= 0`
+      !! and are skipped) and `z_old(ko-1) < z_new(k)` (a prefix, the loop
+      !! leaves at the first `z_old(ko-1) >= z_new(k)`).  Kernel 3 therefore
+      !! adds the same terms, from `0.0`, in the same increasing order, with
+      !! the same contribution expression, and the same contributor set
+      !! feeds the bounding as in `remap_bound_column`.  Only inputs
+      !! violating the preconditions (negative thickness) can differ.
+      integer, intent(in) :: nx, ny, nz
+      real(wp), intent(in) :: h_old(nx, ny, nz)
+      real(wp), intent(in) :: h_new(nx, ny, nz)
+      real(wp), intent(inout) :: hTr(nx, ny, nz)
+      real(wp), intent(inout) :: c_old(nx, ny, nz)
+         !! Scratch: source concentration of every layer (a filler reads its donor's).
+      real(wp), intent(inout) :: z_old(nx, ny, nz)
+         !! Scratch: source interface `z_old(k)` (top of layer `k`; the bed is 0).
+      real(wp), intent(inout) :: z_new(nx, ny, nz)
+         !! Scratch: target interface `z_new(k)`.
+      real(wp), intent(inout) :: q_lft(nx, ny, nz)
+         !! Scratch: limited left edge of each source cell.
+      real(wp), intent(inout) :: q_rgt(nx, ny, nz)
+         !! Scratch: limited right edge of each source cell.
+      real(wp), intent(inout) :: q_six(nx, ny, nz)
+         !! Scratch: parabola curvature `q6` of each source cell.
+      real(wp), intent(inout), optional :: budget(nx, ny, nz)
+      real(wp), intent(inout), optional :: c_new_out(nx, ny, nz)
+         !! Diagnostic / test hook: the bounded target concentration.
+      real(wp), intent(inout), optional :: clamp_out(nx, ny, nz)
+         !! Diagnostic / test hook: the content the bounding moved,
+         !! `h_new·(c_bounded − c_raw)`.
+      integer :: i, j, k, ko, lo, hi, mid, stp, k_top_old, k_fb, n_hit
+      real(wp) :: c_don, c_m2, c_m1, c_0, c_p1, c_p2, e_lo, e_hi, q_l, q_r, q_6
+      real(wp) :: zo_lo, zo_hi, dzo, zn_lo, zn_hi, dzn
+      real(wp) :: z_lo, z_hi, overlap, xi_lo, xi_hi, integral, c_raw, c_new, hTr_new
+      real(wp) :: c_lo, c_hi, cs_lo, cs_hi, zacc_o, zacc_n
+
+      ! ---- kernel 1: interfaces + source concentration (cheap serial k) ----
+      do concurrent(j=1:ny, i=1:nx) &
+         local(k, k_top_old, c_don, zacc_o, zacc_n)
+         k_top_old = 0
+         zacc_o = 0.0_wp
+         zacc_n = 0.0_wp
+         do k = 1, nz
+            zacc_o = zacc_o + h_old(i, j, k)
+            zacc_n = zacc_n + h_new(i, j, k)
+            z_old(i, j, k) = zacc_o
+            z_new(i, j, k) = zacc_n
+            if (h_old(i, j, k) > H_VANISHED) k_top_old = k
+         end do
+         if (k_top_old == 0) then
             do k = 1, nz
-               budget(i, j, k) = budget(i, j, k) + (hTr_new_col(k) - hTr(i, j, k))
-               hTr(i, j, k) = hTr_new_col(k)
+               c_old(i, j, k) = 0.0_wp
             end do
          else
-            do k = 1, nz
-               hTr(i, j, k) = hTr_new_col(k)
+            c_don = hTr(i, j, k_top_old)/h_old(i, j, k_top_old)
+            do k = nz, 1, -1
+               if (h_old(i, j, k) > H_VANISHED) c_don = hTr(i, j, k)/h_old(i, j, k)
+               c_old(i, j, k) = c_don
             end do
          end if
       end do
-   end subroutine ocean_remap_tracer_field
+
+      ! ---- kernel 2: limited parabola of every source cell ----
+      do concurrent(j=1:ny, k=1:nz, i=1:nx) &
+         local(c_m2, c_m1, c_0, c_p1, c_p2, e_lo, e_hi, q_l, q_r, q_6)
+         c_m2 = remap_c_at(nx, ny, nz, i, j, k - 2, c_old)
+         c_m1 = remap_c_at(nx, ny, nz, i, j, k - 1, c_old)
+         c_0 = remap_c_at(nx, ny, nz, i, j, k, c_old)
+         c_p1 = remap_c_at(nx, ny, nz, i, j, k + 1, c_old)
+         c_p2 = remap_c_at(nx, ny, nz, i, j, k + 2, c_old)
+         e_lo = 0.0_wp
+         if (k > 1) e_lo = remap_ppm_edge(k - 1, nz, c_m2, c_m1, c_0, c_p1)
+         call remap_ppm_cell(k, nz, c_m1, c_0, c_p1, c_p2, e_lo, e_hi, q_l, q_r, q_6)
+         q_lft(i, j, k) = q_l
+         q_rgt(i, j, k) = q_r
+         q_six(i, j, k) = q_6
+      end do
+
+      ! ---- kernel 3: overlap integral + bounding + commit, one thread per target cell ----
+      ! One loop for budget / no budget (splitting present(budget) makes NVHPC
+      ! compile the no-budget branch ~25x slower).
+      do concurrent(j=1:ny, k=1:nz, i=1:nx) &
+         local(ko, lo, hi, mid, stp, k_fb, n_hit, q_l, q_r, q_6, zo_lo, zo_hi, dzo, zn_lo, zn_hi, dzn, &
+               z_lo, z_hi, overlap, xi_lo, xi_hi, integral, c_raw, c_new, hTr_new, c_lo, c_hi, cs_lo, cs_hi)
+         dzn = h_new(i, j, k)
+         zn_hi = z_new(i, j, k)
+         zn_lo = 0.0_wp
+         if (k > 1) zn_lo = z_new(i, j, k - 1)
+         ! First source cell whose top lies above the target's bottom: the
+         ! smallest m with z_old(m) > zn_lo (z_old is non-decreasing;
+         ! m = nz+1 if none).  Gallop outward from the same index k --
+         ! neighbouring grids are close, so the lanes of a warp read the
+         ! same layer and stay coalesced -- then bisect.  The answer is
+         ! independent of the starting guess.
+         ko = min(k, nz)
+         if (z_old(i, j, ko) > zn_lo) then
+            hi = ko
+            lo = 0
+            stp = 1
+            do while (hi > 1)
+               mid = hi - stp
+               if (mid < 1) exit
+               if (z_old(i, j, mid) > zn_lo) then
+                  hi = mid
+                  stp = 2*stp
+               else
+                  lo = mid
+                  exit
+               end if
+            end do
+         else
+            lo = ko
+            hi = nz + 1
+            stp = 1
+            do while (lo < nz)
+               mid = lo + stp
+               if (mid > nz) exit
+               if (z_old(i, j, mid) > zn_lo) then
+                  hi = mid
+                  exit
+               end if
+               lo = mid
+               stp = 2*stp
+            end do
+         end if
+         do while (hi - lo > 1)
+            mid = (lo + hi)/2
+            if (z_old(i, j, mid) > zn_lo) then
+               hi = mid
+            else
+               lo = mid
+            end if
+         end do
+         ko = hi
+         k_fb = min(ko, nz)
+         c_raw = 0.0_wp
+         n_hit = 0
+         c_lo = 0.0_wp
+         c_hi = 0.0_wp
+         if (dzn > 0.0_wp) then
+            zo_lo = 0.0_wp
+            if (ko > 1 .and. ko <= nz) zo_lo = z_old(i, j, ko - 1)
+            integral = 0.0_wp
+            do while (ko <= nz)
+               if (zo_lo >= zn_hi) exit
+               zo_hi = z_old(i, j, ko)
+               z_lo = max(zn_lo, zo_lo)
+               z_hi = min(zn_hi, zo_hi)
+               overlap = z_hi - z_lo
+               dzo = h_old(i, j, ko)
+               if (overlap > 0.0_wp .and. dzo > 0.0_wp) then
+                  q_l = q_lft(i, j, ko)
+                  q_r = q_rgt(i, j, ko)
+                  q_6 = q_six(i, j, ko)
+                  xi_lo = (z_lo - zo_lo)/dzo
+                  xi_hi = (z_hi - zo_lo)/dzo
+                  integral = integral + dzo*( &
+                             (xi_hi - xi_lo)*q_l &
+                             + 0.5_wp*(xi_hi*xi_hi - xi_lo*xi_lo)*(q_r - q_l + q_6) &
+                             - (xi_hi*xi_hi*xi_hi - xi_lo*xi_lo*xi_lo)*q_6/3.0_wp)
+                  cs_lo = min(c_old(i, j, max(ko - 1, 1)), &
+                              min(c_old(i, j, ko), c_old(i, j, min(ko + 1, nz))))
+                  cs_hi = max(c_old(i, j, max(ko - 1, 1)), &
+                              max(c_old(i, j, ko), c_old(i, j, min(ko + 1, nz))))
+                  if (n_hit == 0) then
+                     c_lo = cs_lo
+                     c_hi = cs_hi
+                  else
+                     c_lo = min(c_lo, cs_lo)
+                     c_hi = max(c_hi, cs_hi)
+                  end if
+                  n_hit = n_hit + 1
+               end if
+               zo_lo = zo_hi
+               ko = ko + 1
+            end do
+            c_raw = integral/dzn
+         end if
+         c_new = c_raw
+         if (n_hit > 0) then
+            if (ieee_is_finite(c_raw)) c_new = max(c_lo, min(c_hi, c_raw))
+         else
+            c_new = c_old(i, j, k_fb)
+         end if
+         hTr_new = c_new*dzn
+         if (present(budget)) budget(i, j, k) = budget(i, j, k) + (hTr_new - hTr(i, j, k))
+         if (present(c_new_out)) c_new_out(i, j, k) = c_new
+         if (present(clamp_out)) clamp_out(i, j, k) = dzn*(c_new - c_raw)
+         hTr(i, j, k) = hTr_new
+      end do
+   end subroutine ocean_remap_tracer_field_stream
 
    subroutine ocean_apply_ale_remap_faces(grid, h_old, h_new, u_face_x, v_face_y, method, &
                                           conserve_ke, zlevel_faces, bnd_extrap, nonunif)
@@ -575,7 +1069,7 @@ contains
 
       integer :: t, m, nx, ny, nz, i, j, k
       real(wp) :: wtd
-      logical :: do_tfilter, conserve_ke, bnd_extrap, nonunif
+      logical :: do_tfilter, conserve_ke, bnd_extrap, nonunif, use_stream
 
       ! Eulerian-z and Lagrangian/isopycnal both skip remap: the former
       ! holds h at H·dsig via vert-advection cancellation, the latter
@@ -650,22 +1144,46 @@ contains
       ! remap_check_preconditions` and `rdb_ocean_dyn :: ocean_dyn_step_split`.
 
       ! 4. Tracer remap (centre cells)
+      use_stream = remap_use_stream(vcoord, nz, m, bnd_extrap, nonunif)
       if (allocated(ms%tracers)) then
          do t = 1, size(ms%tracers)
             if (.not. allocated(ms%tracers(t)%hTr)) cycle
             select case (ms%tracers(t)%budget_id)
             case (TRACER_BUDGET_HEAT)
-               call ocean_remap_tracer_field( &
-                  nx, ny, nz, vcoord%remap_h_old, vcoord%target_h, ms%tracers(t)%hTr, m, &
-                  bnd_extrap, nonunif, budget=ms%heat_budget_remap)
+               if (use_stream) then
+                  call ocean_remap_tracer_field_stream( &
+                     nx, ny, nz, vcoord%remap_h_old, vcoord%target_h, ms%tracers(t)%hTr, &
+                     vcoord%remap_c_old, vcoord%remap_z_old, vcoord%remap_z_new, &
+                     vcoord%remap_q_l, vcoord%remap_q_r, vcoord%remap_q_6, &
+                     budget=ms%heat_budget_remap)
+               else
+                  call ocean_remap_tracer_field( &
+                     nx, ny, nz, vcoord%remap_h_old, vcoord%target_h, ms%tracers(t)%hTr, m, &
+                     bnd_extrap, nonunif, budget=ms%heat_budget_remap)
+               end if
             case (TRACER_BUDGET_SALT)
-               call ocean_remap_tracer_field( &
-                  nx, ny, nz, vcoord%remap_h_old, vcoord%target_h, ms%tracers(t)%hTr, m, &
-                  bnd_extrap, nonunif, budget=ms%salt_budget_remap)
+               if (use_stream) then
+                  call ocean_remap_tracer_field_stream( &
+                     nx, ny, nz, vcoord%remap_h_old, vcoord%target_h, ms%tracers(t)%hTr, &
+                     vcoord%remap_c_old, vcoord%remap_z_old, vcoord%remap_z_new, &
+                     vcoord%remap_q_l, vcoord%remap_q_r, vcoord%remap_q_6, &
+                     budget=ms%salt_budget_remap)
+               else
+                  call ocean_remap_tracer_field( &
+                     nx, ny, nz, vcoord%remap_h_old, vcoord%target_h, ms%tracers(t)%hTr, m, &
+                     bnd_extrap, nonunif, budget=ms%salt_budget_remap)
+               end if
             case default
-               call ocean_remap_tracer_field( &
-                  nx, ny, nz, vcoord%remap_h_old, vcoord%target_h, ms%tracers(t)%hTr, m, &
-                  bnd_extrap, nonunif)
+               if (use_stream) then
+                  call ocean_remap_tracer_field_stream( &
+                     nx, ny, nz, vcoord%remap_h_old, vcoord%target_h, ms%tracers(t)%hTr, &
+                     vcoord%remap_c_old, vcoord%remap_z_old, vcoord%remap_z_new, &
+                     vcoord%remap_q_l, vcoord%remap_q_r, vcoord%remap_q_6)
+               else
+                  call ocean_remap_tracer_field( &
+                     nx, ny, nz, vcoord%remap_h_old, vcoord%target_h, ms%tracers(t)%hTr, m, &
+                     bnd_extrap, nonunif)
+               end if
             end select
          end do
       end if
@@ -776,87 +1294,37 @@ contains
       end do
    end subroutine build_ts_concentration
 
-   subroutine ocean_remap_tracer_column(nz, h_old, h_new, hTr_inout, method)
-      !! Single-column unit-test entry: wraps `remap_column` with the
-      !! c = hTr/h ↔ hTr_new = c_new·h_new pattern, including the SAME two-sided
-      !! vanishing-layer merge the production kernel runs
-      !! (`rdb_vl_merge_content` + `rdb_vl_column_conc`), so this entry cannot drift from
+   subroutine ocean_remap_tracer_column(nz, h_old, h_new, hTr_inout, method, c_new_out, clamp_out)
+      !! Single-column unit-test entry: wraps `remap_column` with the SAME
+      !! concentration-form pipeline the production reference kernel runs
+      !! (`rdb_vl_column_conc` → `remap_column` → `remap_bound_column` →
+      !! `hTr_new = c_new·h_new`), so this entry cannot drift from
       !! `ocean_remap_tracer_field`. Production callers go through that one.
       integer, intent(in) :: nz, method
       real(wp), intent(in) :: h_old(nz), h_new(nz)
       real(wp), intent(inout) :: hTr_inout(nz)
-      real(wp) :: c_old(NZ_STACK_MAX), c_new(NZ_STACK_MAX)
+      real(wp), intent(out), optional :: c_new_out(nz)
+         !! The bounded target concentration.
+      real(wp), intent(out), optional :: clamp_out(nz)
+         !! The content the bounding moved, `h_new·(c_bounded − c_raw)`.
+      real(wp) :: c_old(NZ_STACK_MAX), c_new(NZ_STACK_MAX), clamp_col(NZ_STACK_MAX)
       real(wp) :: h_old_col(NZ_STACK_MAX), h_new_col(NZ_STACK_MAX)
-      real(wp) :: hTr_col(NZ_STACK_MAX), hTr_src(NZ_STACK_MAX)
+      real(wp) :: hTr_col(NZ_STACK_MAX)
       integer :: k
       do k = 1, nz
          h_old_col(k) = h_old(k)
          h_new_col(k) = h_new(k)
          hTr_col(k) = hTr_inout(k)
       end do
-      call rdb_vl_merge_content(nz, h_old_col, hTr_col)
       call rdb_vl_column_conc(nz, h_old_col, hTr_col, c_old)
       call remap_column(method, nz, h_old, h_new, c_old(1:nz), c_new(1:nz))
+      call remap_bound_column(nz, h_old_col, h_new_col, c_old, c_new, clamp_col, .false.)
       do k = 1, nz
-         hTr_src(k) = hTr_col(k)
-         hTr_col(k) = c_new(k)*h_new(k)
+         hTr_inout(k) = c_new(k)*h_new(k)
       end do
-      call remap_fold_filler_defect(nz, h_old_col, h_new_col, hTr_src, hTr_col)
-      call rdb_vl_merge_content(nz, h_new_col, hTr_col)
-      do k = 1, nz
-         hTr_inout(k) = hTr_col(k)
-      end do
+      if (present(c_new_out)) c_new_out(1:nz) = c_new(1:nz)
+      if (present(clamp_out)) clamp_out(1:nz) = clamp_col(1:nz)
    end subroutine ocean_remap_tracer_column
-
-   pure subroutine remap_fold_filler_defect(nz, h_old_col, h_new_col, q_src, q_new)
-      !$acc routine seq
-      !! On a column that carries a vanished layer (source or target), make
-      !! the tracer remap conservative EXACTLY, not just on a matched column:
-      !! the content the remap failed to place, `Σ q_src − Σ q_new`, is
-      !! handed to the topmost live target layer (the donor of any fillers
-      !! above it, so the write-side pool that follows shares it with them).
-      !!
-      !! Why it is needed.  `remap_column` conserves only when `Σ h_old ==
-      !! Σ h_new`, and the target builders reach that sum by a different
-      !! arithmetic route than continuity does, so they differ by a few ulp
-      !! every step (`OCEAN_REMAP_PRECOND_RTOL`).  The unmatched sliver is at
-      !! the TOP of the column, and it goes with its content.  Under I1 that
-      !! sliver was an empty filler and the loss was invisible; under I1′ the
-      !! filler carries `c_live`, and on a quasi-steady column the sliver has
-      !! the same sign every step: `cavity_flat_lid_rest_zfixed.nml` AT REST
-      !! lost salt at `-1.2e-13`/day (the whole run's residual: `-3.2e-12` at
-      !! day 30, against `-1.4e-13` under I1) until this fold.
-      !!
-      !! **Bit-identity:** a column with no layer at or below `H_VANISHED`
-      !! on either grid returns before touching anything, so every family
-      !! without fillers (sigma, z*-lite, `eulerian_z`) is unchanged.  A
-      !! column with no live target layer is left to the pool (land: zero).
-      integer, intent(in) :: nz
-      real(wp), intent(in) :: h_old_col(NZ_STACK_MAX)
-      real(wp), intent(in) :: h_new_col(NZ_STACK_MAX)
-      real(wp), intent(in) :: q_src(NZ_STACK_MAX)
-         !! Source content the remap was handed (after the read-side pool).
-      real(wp), intent(inout) :: q_new(NZ_STACK_MAX)
-         !! Target content `c_new·h_new`, before the write-side pool.
-      integer :: k, k_top_live
-      logical :: has_filler
-      real(wp) :: defect
-
-      has_filler = .false.
-      k_top_live = 0
-      do k = 1, nz
-         if (.not. rdb_vl_is_live(h_old_col(k)) .or. .not. rdb_vl_is_live(h_new_col(k))) then
-            has_filler = .true.
-         end if
-         if (rdb_vl_is_live(h_new_col(k))) k_top_live = k
-      end do
-      if (.not. has_filler .or. k_top_live == 0) return
-      defect = 0.0_wp
-      do k = 1, nz
-         defect = defect + (q_src(k) - q_new(k))
-      end do
-      q_new(k_top_live) = q_new(k_top_live) + defect
-   end subroutine remap_fold_filler_defect
 
    pure subroutine ocean_remap_merge_vanished_content(nz, h_col, q_col)
       !! Public test shim over the included `rdb_vl_merge_content` — the ONE

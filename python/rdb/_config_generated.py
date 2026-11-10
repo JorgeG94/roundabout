@@ -352,6 +352,15 @@ class Vcoord(Group):
         default=False,
     )
 
+    remap_kernel = Enum(
+        'remap_kernel',
+        doc='ALE tracer-remap kernel: stream (k-parallel, no column stacks) or reference (stack oracle); same concentration-form semantics',
+        units='',
+        required=False,
+        default='stream',
+        allowed=('stream', 'reference'),
+    )
+
     remap_check_preconditions = Bool(
         'remap_check_preconditions',
         doc="ALE remap: fail loud when a column violates the overlap sweep's preconditions (non-negative thicknesses, matching column totals)",
@@ -7327,4 +7336,4 @@ GENERATED_GROUPS = {
 }
 
 N_GROUPS = 63
-N_KNOBS = 807
+N_KNOBS = 808

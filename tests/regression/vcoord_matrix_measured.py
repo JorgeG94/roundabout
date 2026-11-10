@@ -5,7 +5,7 @@ ENVELOPES and one record per failing cell (union of failing
 assertions over toolchains and tiers, every toolchain's number
 quoted).  Re-measure and regenerate; never hand-edit a number.
 
-Provenance: tier 1 = 30 simulated days (10 for the seamount and rx0 problems, T1_STEPS_SEAMOUNT), tier 2 = 3.33 days; gfortran 15.1.0 Release -march=x86-64-v3 (CPU) and nvfortran 26.5 (GPU, cc70, V100); RDB_ENABLE_MPI=OFF, single rank; main df34a995d (MPI bit-identity round) + the EFP non-finite propagation fix + the barotropic gravity fix (g_bt = GRAVITY under FV_MOM6); fix/lid-unstrat-blip 11c4ba94b; 2026-09-28; lagrangian family re-pinned 2026-10-04 on fix/lagrangian-growth (grounded-layer PGF gate requires a vanished side): gfortran 15.1.0 Release (CPU) and nvfortran 26.5 (GPU, cc70, V100), tier 1 + tier 2, the 20 lagrangian cells + 6 tier-2 twins only -- the gate applies under VCOORD_LAGRANGIAN alone, so every other family's records are unchanged; zstar family re-pinned 2026-10-07 on fix/zstar-matrix-repin (0d45057c9 redefined zstar as MOM6 z* = z_fixed's staircase dilated by (H+eta)/H; the 12 FAIL cells are the z_fixed_staircase boundary-reconstruction residual (remap_boundary_extrap), confirmed bounded (Leg 2: off pins S_min exactly, En +2.8%; Leg 3: saturates by day 10, flat through day 60, nz=30 overshoot ~half) -- gfortran 15.1.0 Release (CPU) only, tier 1 + tier 2, the 12 zstar cells + their tier-2 twins; nvfortran/GPU-side pin added 2026-10-11 on test/187-zstar-nvfortran-pins (#187): gfortran 15.1.0 Release (CPU) and nvfortran 26.5 (GPU, cc70, V100), tier 1 + tier 2, the same 12 zstar cells + their tier-2 twins only -- every number is identical to the gfortran-only pin to every printed digit (toolchain-independent, as Leg 1 of the 2026-10-07 re-pin already established), so only the `measured` dict's `nvfortran` key was added; every other family's records are unchanged
+Provenance: tier 1 = 30 simulated days (10 for the seamount and rx0 problems, T1_STEPS_SEAMOUNT), tier 2 = 3.33 days; gfortran 15.1.0 Release -march=x86-64-v3 (CPU) and nvfortran 26.5 (GPU, cc70, V100); RDB_ENABLE_MPI=OFF, single rank; main df34a995d (MPI bit-identity round) + the EFP non-finite propagation fix + the barotropic gravity fix (g_bt = GRAVITY under FV_MOM6); fix/lid-unstrat-blip 11c4ba94b; 2026-09-28; lagrangian family re-pinned 2026-10-04 on fix/lagrangian-growth (grounded-layer PGF gate requires a vanished side): gfortran 15.1.0 Release (CPU) and nvfortran 26.5 (GPU, cc70, V100), tier 1 + tier 2, the 20 lagrangian cells + 6 tier-2 twins only -- the gate applies under VCOORD_LAGRANGIAN alone, so every other family's records are unchanged; zstar family re-pinned 2026-10-07 on fix/zstar-matrix-repin (0d45057c9 redefined zstar as MOM6 z* = z_fixed's staircase dilated by (H+eta)/H; the 12 FAIL cells are the z_fixed_staircase boundary-reconstruction residual (remap_boundary_extrap), confirmed bounded (Leg 2: off pins S_min exactly, En +2.8%; Leg 3: saturates by day 10, flat through day 60, nz=30 overshoot ~half) -- gfortran 15.1.0 Release (CPU) only, tier 1 + tier 2, the 12 zstar cells + their tier-2 twins; nvfortran/GPU-side pin added 2026-10-11 on test/187-zstar-nvfortran-pins (#187): gfortran 15.1.0 Release (CPU) and nvfortran 26.5 (GPU, cc70, V100), tier 1 + tier 2, the same 12 zstar cells + their tier-2 twins only -- every number is identical to the gfortran-only pin to every printed digit (toolchain-independent, as Leg 1 of the 2026-10-07 re-pin already established), so only the `measured` dict's `nvfortran` key was added; every other family's records are unchanged; rx0_010/hycom re-pinned 2026-11-08 on feat/tracer-conc-remap e769b86c6 (concentration-form remap): chaotic inviscid cell, base and fix both fail energy:rest when the trajectory survives (perturbation ensemble 3/8 base vs 5/8 fix); gfortran 15.1.0 Release (CPU) and nvfortran 26.5 (GPU, cc70, V100), tier 1, this cell only -- every other record is unchanged
 """
 
 ENVELOPES = {
@@ -33,12 +33,12 @@ MEASURED = {
             },
         },
         'rx0_010/hycom': {
-            "assertions": ['completed', 'remap:preconditions'],
+            "assertions": ['completed', 'energy:rest', 'remap:preconditions'],
             "tiers": [1],
             "toolchain_dependent": False,
             "measured": {
-                'gfortran': 'tier 1: aborts day 9.2 on the remap guard (h -1.014e-05 m)',
-                'nvfortran': 'tier 1: aborts day 3.0 on the remap guard (h -0.0003083 m)',
+                'gfortran': 'tier 1: aborts day 8.5 on the remap guard (h -4.054e-06 m)',
+                'nvfortran': 'tier 1: peak En 0.0002151',
             },
         },
         'rx0_010/rho': {

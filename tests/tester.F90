@@ -192,6 +192,8 @@ program rdb_tests
    use test_ocean_remap, only: ocean_remap_collect => collect_ocean_remap_tests
    use test_ocean_remap_vanished, only: ocean_remap_vanished_collect => &
                                         collect_ocean_remap_vanished_tests
+   use test_ocean_remap_stream, only: ocean_remap_stream_collect => &
+                                      collect_ocean_remap_stream_tests
    use test_ocean_vanished_constancy, only: ocean_vanished_constancy_collect => &
                                             collect_ocean_vanished_constancy_tests
    use test_ocean_regrid_refine, only: ocean_regrid_refine_collect => collect_ocean_regrid_refine_tests
@@ -424,6 +426,7 @@ program rdb_tests
                 new_testsuite("ocean_bt_upstream_zfixed", ocean_bt_upstream_zfixed_collect), &
                 new_testsuite("ocean_remap", ocean_remap_collect), &
                 new_testsuite("ocean_remap_vanished", ocean_remap_vanished_collect), &
+                new_testsuite("ocean_remap_stream", ocean_remap_stream_collect), &
                 new_testsuite("ocean_vanished_constancy", ocean_vanished_constancy_collect), &
                 new_testsuite("ocean_regrid_refine", ocean_regrid_refine_collect), &
                 new_testsuite("ocean_remap_e2e", ocean_remap_e2e_collect), &
