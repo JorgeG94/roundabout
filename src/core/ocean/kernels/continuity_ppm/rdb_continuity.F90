@@ -2309,7 +2309,7 @@ contains
       call continuity_apply_meridional(grid, metrics, ms, dt)
    end subroutine continuity_step_split
 
-   pure subroutine tracer_advect_zonal(grid, metrics, this, ms, dt, h_before, h_after, bc)
+   pure subroutine tracer_advect_zonal(grid, metrics, this, ms, dt, h_before, h_after, bc, h_floor)
       !! Zonal half of the direction-split tracer advection.
       !! Mirrors `tracer_advect` but updates `c` using
       !! only the x-direction tracer mass flux.  Companion to
@@ -2332,11 +2332,19 @@ contains
       real(wp), intent(in) :: h_after(grid%nx_total, grid%ny_total, ms%nz_ml)
          !! Layer thickness continuity wrote for this direction (`h⁺`).
       type(ocean_bc_state_t), intent(in), optional :: bc
+      real(wp), intent(in), optional :: h_floor
+         !! Angstrom floor (m) the paired continuity applied (`max(h, h_floor)`).
+         !! > 0 makes the update divide by the floored `h⁺` (content kept, c
+         !! diluted); absent or 0 ⇒ bit-identical.
 
       integer :: it, i_w_ghost, i_e_ghost, i, j, k
+      real(wp) :: hf
       real(wp) :: clamped_tr
 
       if (.not. allocated(ms%tracers)) return
+
+      hf = 0.0_wp
+      if (present(h_floor)) hf = h_floor
 
       ! Set ALL ghost columns (i = 1..nghost) on the west side to the
       ! clamped value so the impl's hard-coded boundary-halo writes
@@ -2379,7 +2387,7 @@ contains
                ms%mass_flux_x_layer, &
                this%h_face_left_x%data, &
                this%h_face_right_x%data, &
-               budget_adv=ms%heat_budget_horiz_adv, h3=this%tracer_h3)
+               budget_adv=ms%heat_budget_horiz_adv, h3=this%tracer_h3, h_floor=hf)
          case (TRACER_BUDGET_SALT)
             call tracer_advect_zonal_one_impl( &
                grid%nx_total, grid%ny_total, ms%nz_ml, &
@@ -2389,7 +2397,7 @@ contains
                ms%mass_flux_x_layer, &
                this%h_face_left_x%data, &
                this%h_face_right_x%data, &
-               budget_adv=ms%salt_budget_horiz_adv, h3=this%tracer_h3)
+               budget_adv=ms%salt_budget_horiz_adv, h3=this%tracer_h3, h_floor=hf)
          case default
             call tracer_advect_zonal_one_impl( &
                grid%nx_total, grid%ny_total, ms%nz_ml, &
@@ -2398,12 +2406,12 @@ contains
                ms%tracers(it)%c, &
                ms%mass_flux_x_layer, &
                this%h_face_left_x%data, &
-               this%h_face_right_x%data, h3=this%tracer_h3)
+               this%h_face_right_x%data, h3=this%tracer_h3, h_floor=hf)
          end select
       end do
    end subroutine tracer_advect_zonal
 
-   pure subroutine tracer_advect_meridional(grid, metrics, this, ms, dt, h_before, h_after, bc)
+   pure subroutine tracer_advect_meridional(grid, metrics, this, ms, dt, h_before, h_after, bc, h_floor)
       !! Meridional half of the direction-split tracer advection.
       !! Reads the post-zonal `h_layer` (since
       !! `continuity_apply_zonal` has already updated h
@@ -2423,11 +2431,19 @@ contains
       real(wp), intent(in) :: h_after(grid%nx_total, grid%ny_total, ms%nz_ml)
          !! Layer thickness continuity wrote for this direction (`h⁺`).
       type(ocean_bc_state_t), intent(in), optional :: bc
+      real(wp), intent(in), optional :: h_floor
+         !! Angstrom floor (m) the paired continuity applied (`max(h, h_floor)`).
+         !! > 0 makes the update divide by the floored `h⁺` (content kept, c
+         !! diluted); absent or 0 ⇒ bit-identical.
 
       integer :: it, j_s_ghost, j_n_ghost, i, j, k
+      real(wp) :: hf
       real(wp) :: clamped_tr
 
       if (.not. allocated(ms%tracers)) return
+
+      hf = 0.0_wp
+      if (present(h_floor)) hf = h_floor
 
       j_s_ghost = grid%nghost
       j_n_ghost = grid%nghost + grid%ny_phys + 1
@@ -2466,7 +2482,7 @@ contains
                ms%mass_flux_y_layer, &
                this%h_face_left_y%data, &
                this%h_face_right_y%data, &
-               budget_adv=ms%heat_budget_horiz_adv, h3=this%tracer_h3)
+               budget_adv=ms%heat_budget_horiz_adv, h3=this%tracer_h3, h_floor=hf)
          case (TRACER_BUDGET_SALT)
             call tracer_advect_meridional_one_impl( &
                grid%nx_total, grid%ny_total, ms%nz_ml, &
@@ -2476,7 +2492,7 @@ contains
                ms%mass_flux_y_layer, &
                this%h_face_left_y%data, &
                this%h_face_right_y%data, &
-               budget_adv=ms%salt_budget_horiz_adv, h3=this%tracer_h3)
+               budget_adv=ms%salt_budget_horiz_adv, h3=this%tracer_h3, h_floor=hf)
          case default
             call tracer_advect_meridional_one_impl( &
                grid%nx_total, grid%ny_total, ms%nz_ml, &
@@ -2485,7 +2501,7 @@ contains
                ms%tracers(it)%c, &
                ms%mass_flux_y_layer, &
                this%h_face_left_y%data, &
-               this%h_face_right_y%data, h3=this%tracer_h3)
+               this%h_face_right_y%data, h3=this%tracer_h3, h_floor=hf)
          end select
       end do
    end subroutine tracer_advect_meridional
@@ -2727,9 +2743,11 @@ contains
       end if
       if (do_adv) then
          if (present(bc)) then
-            call tracer_advect_zonal(grid, metrics, this, ms, dt, this%h_pair_prev%data, ms%h_layer, bc=bc)
+            call tracer_advect_zonal(grid, metrics, this, ms, dt, this%h_pair_prev%data, ms%h_layer, bc=bc, &
+                                     h_floor=h_min_use)
          else
-            call tracer_advect_zonal(grid, metrics, this, ms, dt, this%h_pair_prev%data, ms%h_layer)
+            call tracer_advect_zonal(grid, metrics, this, ms, dt, this%h_pair_prev%data, ms%h_layer, &
+                                     h_floor=h_min_use)
          end if
       end if
 
@@ -2862,9 +2880,11 @@ contains
       end if
       if (do_adv) then
          if (present(bc)) then
-            call tracer_advect_meridional(grid, metrics, this, ms, dt, this%h_pair_prev%data, ms%h_layer, bc=bc)
+            call tracer_advect_meridional(grid, metrics, this, ms, dt, this%h_pair_prev%data, ms%h_layer, bc=bc, &
+                                          h_floor=h_min_use)
          else
-            call tracer_advect_meridional(grid, metrics, this, ms, dt, this%h_pair_prev%data, ms%h_layer)
+            call tracer_advect_meridional(grid, metrics, this, ms, dt, this%h_pair_prev%data, ms%h_layer, &
+                                          h_floor=h_min_use)
          end if
       end if
       ! Windowed-advect hold (step 2 of 2).  Both applies have advanced
@@ -3384,7 +3404,7 @@ contains
    pure subroutine tracer_advect_zonal_one_impl(nx, ny, nz, dt, iareaT, wet_T, h_before, h_after, c, &
                                                 mass_flux_x, &
                                                 Tr_face_left_x, Tr_face_right_x, &
-                                                budget_adv, budget_w, h3)
+                                                budget_adv, budget_w, h3, h_floor)
       !! Zonal half of `tracer_advect_one_impl`.  Same three-pass
       !! pattern (PPM reconstruction → upwind pick into tracer mass
       !! flux → forward-Euler update) but only the x-direction half.
@@ -3427,15 +3447,23 @@ contains
       logical, intent(in), optional :: h3
          !! `.true.` selects the `ppm_h3` flux (see `ppm_h3_face_flux`).
          !! Absent or `.false.` ⇒ the PPM path below, textually unchanged.
+      real(wp), intent(in), optional :: h_floor
+         !! Angstrom floor (m) the paired continuity stored as `max(h⁺, h_floor)`.
+         !! > 0 ⇒ where the floor binds the update divides by the floored
+         !! thickness and dilutes c, so Sum(h·c) is unchanged by the floor
+         !! (KEEP-CONTENT semantics; the injected water carries no tracer).
+         !! Absent or 0 ⇒ the loop below is textually unchanged.
 
       integer :: i, j, k
-      real(wp) :: div_m, div_f, h_new
+      real(wp) :: div_m, div_f, h_new, hf
       logical :: use_h3
       real(wp) :: Tr_m2, Tr_m1, Tr_0, Tr_p1, Tr_p2
       real(wp) :: dh_m1, dh_0, dh_p1, Tr_left, Tr_right
       real(wp) :: mass_x, Tr_face, dt_b, hc, wm
       integer :: ic
 
+      hf = 0.0_wp
+      if (present(h_floor)) hf = h_floor
       use_h3 = .false.
       if (present(h3)) use_h3 = h3
 
@@ -3530,10 +3558,19 @@ contains
       ! Adcroft & Hallberg 2006).  h+ is the UNFLOORED thickness continuity
       ! computes from the same fluxes, so a uniform c is reproduced to round-off
       ! whatever h does; a layer left empty (h+ <= H_DIV_EPS) keeps its c.
+      ! With an Angstrom floor (hf > 0) that binds, continuity STORES hf > h+:
+      ! c is then formed against the stored hf, (h- c - dt div F)/hf, so the
+      ! floor dilutes c and leaves the content h*c alone (no tracer is created
+      ! with the injected water).
       do concurrent(k=1:nz, j=1:ny, i=1:nx) local(div_m, div_f, h_new)
          div_m = (mass_flux_x(i + 1, j, k) - mass_flux_x(i, j, k))*iareaT(i, j)
          h_new = h_before(i, j, k) - dt*div_m
-         if (h_new > H_DIV_EPS) then
+         if (hf > 0.0_wp .and. h_new < hf) then
+            ! Angstrom floor binds: continuity stored hf, not h_new.  Divide by
+            ! the stored thickness so h*c is unchanged by the floor.
+            div_f = (Tr_face_left_x(i + 1, j, k) - Tr_face_left_x(i, j, k))*iareaT(i, j)
+            c(i, j, k) = c(i, j, k) + (c(i, j, k)*(h_before(i, j, k) - hf) - dt*div_f)/hf
+         else if (h_new > H_DIV_EPS) then
             div_f = (Tr_face_left_x(i + 1, j, k) - Tr_face_left_x(i, j, k))*iareaT(i, j)
             c(i, j, k) = c(i, j, k) + dt*(c(i, j, k)*div_m - div_f)/h_new
          end if
@@ -3556,7 +3593,7 @@ contains
    pure subroutine tracer_advect_meridional_one_impl(nx, ny, nz, dt, iareaT, wet_T, h_before, h_after, c, &
                                                      mass_flux_y, &
                                                      Tr_face_left_y, Tr_face_right_y, &
-                                                     budget_adv, budget_w, h3)
+                                                     budget_adv, budget_w, h3, h_floor)
       !! Meridional half of `tracer_advect_one_impl`.  Same shape
       !! as the zonal impl, applied to y.  In the split flow, `h`
       !! here is the post-zonal-apply thickness so the Tr = c/h
@@ -3593,15 +3630,23 @@ contains
       logical, intent(in), optional :: h3
          !! `.true.` selects the `ppm_h3` flux (see `ppm_h3_face_flux`).
          !! Absent or `.false.` ⇒ the PPM path below, textually unchanged.
+      real(wp), intent(in), optional :: h_floor
+         !! Angstrom floor (m) the paired continuity stored as `max(h⁺, h_floor)`.
+         !! > 0 ⇒ where the floor binds the update divides by the floored
+         !! thickness and dilutes c, so Sum(h·c) is unchanged by the floor
+         !! (KEEP-CONTENT semantics; the injected water carries no tracer).
+         !! Absent or 0 ⇒ the loop below is textually unchanged.
 
       integer :: i, j, k
-      real(wp) :: div_m, div_f, h_new
+      real(wp) :: div_m, div_f, h_new, hf
       logical :: use_h3
       real(wp) :: Tr_m2, Tr_m1, Tr_0, Tr_p1, Tr_p2
       real(wp) :: dh_m1, dh_0, dh_p1, Tr_left, Tr_right
       real(wp) :: mass_y, Tr_face, dt_b, hc, wm
       integer :: jc
 
+      hf = 0.0_wp
+      if (present(h_floor)) hf = h_floor
       use_h3 = .false.
       if (present(h3)) use_h3 = h3
 
@@ -3692,7 +3737,12 @@ contains
       do concurrent(k=1:nz, j=1:ny, i=1:nx) local(div_m, div_f, h_new)
          div_m = (mass_flux_y(i, j + 1, k) - mass_flux_y(i, j, k))*iareaT(i, j)
          h_new = h_before(i, j, k) - dt*div_m
-         if (h_new > H_DIV_EPS) then
+         if (hf > 0.0_wp .and. h_new < hf) then
+            ! Angstrom floor binds: continuity stored hf, not h_new.  Divide by
+            ! the stored thickness so h*c is unchanged by the floor.
+            div_f = (Tr_face_left_y(i, j + 1, k) - Tr_face_left_y(i, j, k))*iareaT(i, j)
+            c(i, j, k) = c(i, j, k) + (c(i, j, k)*(h_before(i, j, k) - hf) - dt*div_f)/hf
+         else if (h_new > H_DIV_EPS) then
             div_f = (Tr_face_left_y(i, j + 1, k) - Tr_face_left_y(i, j, k))*iareaT(i, j)
             c(i, j, k) = c(i, j, k) + dt*(c(i, j, k)*div_m - div_f)/h_new
          end if
