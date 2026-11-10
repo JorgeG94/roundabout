@@ -52,6 +52,7 @@ contains
                   new_unittest("ratio1_bit_identity", test_ratio1_identity), &
                   new_unittest("conservation_y_ratio_2_3_5", test_conservation_y), &
                   new_unittest("positivity_y_multipass", test_positivity_y), &
+                  new_unittest("pass_cap_conserves_content", test_pass_cap_content), &
                   new_unittest("conservation_diagonal_2d", test_conservation_2d), &
                   new_unittest("swept_flux_x_edge_faces_zero", test_swept_x_edge_faces), &
                   new_unittest("swept_flux_y_edge_faces_zero", test_swept_y_edge_faces) &
@@ -337,6 +338,88 @@ contains
          ! predecessors; nothing further required.
       end if
    end subroutine test_conservation
+
+   subroutine test_pass_cap_content(error)
+      !! The drain stores c against the sub-cycle's evolving thickness
+      !! `hprev_work`, which equals the model thickness `h_layer` only when
+      !! every face fully drains.  At ratio = 1 the pass budget is capped at
+      !! 2*ratio+1 = 3, so a window whose accumulated courant is ~4 cells with
+      !! a divergent transport leaves transport undrained: hprev_work /=
+      !! h_layer, and unless the drain rescales c by hprev/h_layer,
+      !! Sum(h_layer*c) is not the Sum(hprev*c) the drain started from.
+      !! Assert it is, to round-off, for salinity and temperature.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      type(continuity_t) :: ct
+      type(ocean_metrics_t) :: metrics
+      type(ocean_bc_state_t) :: bc
+      real(wp), parameter :: H0 = 5.0_wp, DX = 1.0_wp, DY = 1.0_wp
+      real(wp), parameter :: A0 = 20.0_wp
+      real(wp), parameter :: PI = acos(-1.0_wp)
+      integer :: nx, ny, i0, i1, j0, j1, i, j, k, nxp, it
+      real(wp) :: mass0(2), mass1(2), rel
+      integer :: tr(2)
+
+      call setup_periodic_blob(grid, metrics, ms, ct, bc, nx, ny, H0, DX, DY)
+      tr = [ms%idx_salinity, ms%idx_temperature]
+      i0 = NGHOST + 1
+      i1 = NGHOST + grid%nx_phys
+      j0 = NGHOST + 1
+      j1 = NGHOST + grid%ny_phys
+      nxp = grid%nx_phys
+      do k = 1, NZ
+         do j = 1, ny
+            do i = 1, nx
+               ms%tracers(tr(1))%c(i, j, k) = 2.0_wp + sin(2.0_wp*PI*real(i - i0, wp)/real(nxp, wp))
+               ms%tracers(tr(2))%c(i, j, k) = 10.0_wp + cos(4.0_wp*PI*real(i - i0, wp)/real(nxp, wp))
+            end do
+         end do
+      end do
+      ! Exactly periodic, divergent, rightward transport of ~4 cells of water.
+      ct%vhtr = 0.0_wp
+      do k = 1, NZ
+         do j = 1, ny
+            do i = 1, nx + 1
+               ct%uhtr(i, j, k) = A0*(1.0_wp + 0.3_wp*sin(2.0_wp*PI*real(i - i0, wp)/real(nxp, wp)))
+            end do
+         end do
+      end do
+      ! The drain's input c is the concentration against the WINDOW-START
+      ! thickness hprev = h_end + div(uhtr)/areaT, so that is the content.
+      do it = 1, 2
+         mass0(it) = 0.0_wp
+         do k = 1, NZ
+            do j = j0, j1
+               do i = i0, i1
+                  mass0(it) = mass0(it) + ms%tracers(tr(it))%c(i, j, k)* &
+                              (ms%h_layer(i, j, k) + (ct%uhtr(i + 1, j, k) - ct%uhtr(i, j, k)))
+               end do
+            end do
+         end do
+      end do
+
+      call map_in(ms, ct)
+      !$acc enter data copyin(metrics)
+      call metrics%enter_data()
+      !$acc enter data copyin(bc)
+      call drain(grid, metrics, ct, ms, 1, bc)
+      !$acc exit data delete(bc)
+      call metrics%exit_data()
+      !$acc exit data delete(metrics)
+      call map_out(ms, ct)
+
+      do it = 1, 2
+         mass1(it) = sum(ms%h_layer(i0:i1, j0:j1, :)*ms%tracers(tr(it))%c(i0:i1, j0:j1, :))
+         rel = abs(mass1(it) - mass0(it))/abs(mass0(it))
+         call check(error, rel < 1.0e-12_wp, &
+                    "capped-pass drain did not conserve Sum(h*c): c left against hprev, not h_layer")
+         if (allocated(error)) exit
+      end do
+      call ct%destroy()
+      call ms%destroy()
+      call destroy_cartesian_metrics(metrics)
+   end subroutine test_pass_cap_content
 
    subroutine test_uniform_preserved(error)
       !! Constancy / uniform-preservation: a horizontally UNIFORM tracer

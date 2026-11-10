@@ -4491,6 +4491,25 @@ contains
                                 per_x, per_y, fold_n)
       end do
 
+      ! ---- Re-weight c onto the model thickness ----
+      ! The sub-cycle keeps c as a concentration against its evolving
+      ! thickness `hprev_work`.  That reaches `h_layer` (the window-end
+      ! thickness every later kernel pairs with c) only if the drain emptied
+      ! all the remaining transport; the `2*ratio+1` pass cap and the
+      ! `max(0,vol)` / vanishing-layer hatch in `drain_reconstruct_hprev` can
+      ! leave a residual.  Then Sum(h_layer*c) differs from the content the
+      ! drain moved, so close it: c <- c*hprev/h_layer (content hprev*c kept,
+      ! re-expressed on h_layer; Griffies et al. 2020).  Skipped where the two
+      ! are EXACTLY equal (the fully drained case, so answers are unchanged),
+      ! and where either layer is vanished: h_layer <= H_VANISHED is skip-not-
+      ! clamp territory, and hprev <= H_DIV_EPS carries no content to scale.
+      ! `drain_rescale_conc` is a same-module flat kernel, like its siblings.
+      do it = 1, size(ms%tracers)
+         if (.not. allocated(ms%tracers(it)%c)) cycle
+         if (.not. ms%tracers(it)%do_horizontal_advection) cycle
+         call drain_rescale_conc(nx, ny, nz, this%hprev_work, ms%h_layer, ms%tracers(it)%c)
+      end do
+
       ! ---- Reset accumulators + clock for the next window ----
       call drain_zero_3d(nx + 1, ny, nz, this%uhtr)
       call drain_zero_3d(nx, ny + 1, nz, this%vhtr)
@@ -4581,6 +4600,26 @@ contains
    ! Transport (uhr/uhh) and the limiter work in area-weighted VOLUME
    ! (m^3); thickness `hprev_work` is m; `Vprev = areaT·hprev_work`.
    ! ====================================================================
+
+   pure subroutine drain_rescale_conc(nx, ny, nz, hprev, h_layer, c)
+      !! c <- c * hprev / h_layer wherever the two differ, so the content
+      !! `hprev*c` the sub-cycle left is carried onto the model thickness.
+      !! Cells with `hprev == h_layer` exactly (the fully drained case) are
+      !! untouched, hence bit-identical.  Vanished layers are skipped, not
+      !! clamped: `h_layer <= H_VANISHED` (dynamic-vanish) or
+      !! `hprev <= H_DIV_EPS` (no content to scale; pure 1/0 armour).
+      integer, intent(in) :: nx, ny, nz
+      real(wp), intent(in) :: hprev(nx, ny, nz)
+      real(wp), intent(in) :: h_layer(nx, ny, nz)
+      real(wp), intent(inout) :: c(nx, ny, nz)
+      integer :: i, j, k
+      do concurrent(k=1:nz, j=1:ny, i=1:nx)
+         if (hprev(i, j, k) /= h_layer(i, j, k) .and. &
+             h_layer(i, j, k) > H_VANISHED .and. hprev(i, j, k) > H_DIV_EPS) then
+            c(i, j, k) = c(i, j, k)*(hprev(i, j, k)/h_layer(i, j, k))
+         end if
+      end do
+   end subroutine drain_rescale_conc
 
    pure subroutine drain_reconstruct_hprev(nx, ny, nz, areaT, iareaT, h_end, &
                                            uhtr, vhtr, hprev)
