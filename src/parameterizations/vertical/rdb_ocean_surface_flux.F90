@@ -1029,11 +1029,12 @@ contains
       real(wp), intent(in)    :: Q_field(nx, ny)
       real(wp), intent(in)    :: inv_scale
       integer, intent(in)    :: k_top(nx, ny)
-         !! `ms%k_top` — the first LIVE layer counting down from the top.
+         !! `ms%k_top` — the START of the per-column scan for the first
+         !! LIVE layer (`rdb_vl_first_live`), which walks DOWN from it.
          !! `nz` on every column that has no top-side filler (which is
          !! every column on every coordinate but `z_fixed` under a rigid
-         !! top), so this reads the same memory as the literal `nz` it
-         !! replaced and the arithmetic is bit-identical.
+         !! top); a layer that is already live is returned after one
+         !! test, so the arithmetic is bit-identical.
       integer :: i, j, kt
       real(wp) :: cell
       do concurrent(j=1:ny, i=1:nx) local(cell, kt)
@@ -1616,14 +1617,16 @@ contains
       !! unchanged and adds no second device sync of `Q_*`.
       !!
       !! Bottom-up convention: surface = `k = nz`, bed = `k = 1`.  The
-      !! surface concentration is the stored `c(i,j,nz)`.  Per thermo
+      !! surface concentration is the stored `c` of the column's first
+      !! live layer (`rdb_vl_first_live`, scanned down from `k_top`;
+      !! `nz` when that layer is live).  Per thermo
       !! step, as content:
       !!   d(hT_top) = dt · p_T · (T_target - SST) · wet_mask   [K·m]
       !!   d(hS_top) = dt · p_S · (S_target - SSS) · wet_mask   [PSU·m]
       !! (The `rho0·cp` of the equivalent W/m^2 restoring heat flux
       !! cancels against the `dt/(rho0·cp)` apply scaling — see the spec.)
-      !! The same increment is mirrored into `heat_budget_surface(:,:,nz)`
-      !! / `salt_budget_surface(:,:,nz)` so the surface-budget diagnostics
+      !! The same increment is mirrored into `heat_budget_surface` /
+      !! `salt_budget_surface` at that layer so the surface-budget diagnostics
       !! see restoring as an explicit (non-conservative) source.
       !!
       !! Restoring is a relaxation forcing, NOT a conservative process:

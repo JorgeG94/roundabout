@@ -391,6 +391,10 @@ contains
             u_g = cosA*uas(ii, jj) + sinA*vas(ii, jj)
             v_g = -sinA*uas(ii, jj) + cosA*vas(ii, jj)
             if (wind_relative) then
+               ! Plain two-face mean: next to a closed face (velocity 0) the
+               ! centre current is biased low by half the open-face speed, so
+               ! the wind-relative stress is slightly overestimated there.
+               ! Kept as is (changing it would move answers).
                u_c = 0.5_wp*(u_face_x_layer(ii, jj, kt) + u_face_x_layer(ii + 1, jj, kt))
                v_c = 0.5_wp*(v_face_y_layer(ii, jj, kt) + v_face_y_layer(ii, jj + 1, kt))
             else

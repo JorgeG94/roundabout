@@ -1755,10 +1755,7 @@ contains
          call ocean_surface_flux_apply_tracers(grid, sf, ms, DT)
          call ocean_surface_flux_apply_sw_penetration(grid, sf, ms, DT)
          call pull_budgets(ms)
-         associate (cT => ms%tracers(ms%idx_temperature)%c, &
-                    cS => ms%tracers(ms%idx_salinity)%c)
-            !$acc update self(cT, cS)
-         end associate
+         !$acc update self(ms%tracers(ms%idx_temperature)%c, ms%tracers(ms%idx_salinity)%c)
          call sf%exit_data()
          call ms%exit_data()
          !$acc exit data delete(ms, sf)

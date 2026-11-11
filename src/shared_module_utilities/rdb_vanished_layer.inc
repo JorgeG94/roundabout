@@ -88,7 +88,7 @@
 
       rdb_vl_first_live = kstart
       do k_fl = kstart, 1, -1
-         if (h_layer(i, j, k_fl) > H_VANISHED) then
+         if (rdb_vl_is_live(h_layer(i, j, k_fl))) then
             rdb_vl_first_live = k_fl
             exit
          end if

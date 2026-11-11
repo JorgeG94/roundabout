@@ -31,7 +31,7 @@ module rdb_ice_basal_flux
    !! both fb and the column's ocean-side inputs, keeping them at the same
    !! one-step-lagged snapshot (physically consistent, PLAN_ICE_PR3c
    !! §"Ocean -> ice basal heat flux").
-   use rdb_constants, only: H_DIV_EPS, wp, RHO_WATER, H_VANISHED
+   use rdb_constants, only: H_DIV_EPS, wp, RHO_WATER, H_VANISHED, NZ_STACK_MAX
    use rdb_grid, only: hgrid_t
    use rdb_multilayer_state, only: multilayer_state_t
    use rdb_eos, only: eos_t, eos_freezing_point, TS_CONS_ABS
@@ -100,7 +100,7 @@ contains
       real(wp), intent(inout) :: tfw_seam(nx, ny)
       real(wp), intent(in) :: dt_therm
 
-      integer :: i, j, cat, i_lo, i_hi, j_lo, j_hi
+      integer :: i, j, k_sfc, cat, i_lo, i_hi, j_lo, j_hi
       real(wp) :: h, sst, s_surf, tfw, m_ice_tot, t_excess
       logical :: cons
 
@@ -111,15 +111,16 @@ contains
       j_lo = nghost + 1
       j_hi = ny - nghost
 
-      do concurrent(j=j_lo:j_hi, i=i_lo:i_hi) local(h, sst, s_surf, tfw, cat, m_ice_tot, t_excess)
+      do concurrent(j=j_lo:j_hi, i=i_lo:i_hi) local(k_sfc, h, sst, s_surf, tfw, cat, m_ice_tot, t_excess)
          fb(i, j) = 0.0_wp
          sst_seam(i, j) = 0.0_wp
          ssurf_seam(i, j) = 0.0_wp
          tfw_seam(i, j) = 0.0_wp
-         h = h_layer(i, j, nz)
-         if (wet_mask(i, j) > 0.5_wp .and. h > H_VANISHED) then
-            sst = c_T(i, j, nz)
-            s_surf = c_S(i, j, nz)
+         k_sfc = rdb_vl_first_live(nx, ny, nz, h_layer, i, j, nz)
+         h = h_layer(i, j, k_sfc)
+         if (wet_mask(i, j) > 0.5_wp .and. rdb_vl_is_live(h)) then
+            sst = c_T(i, j, k_sfc)
+            s_surf = c_S(i, j, k_sfc)
             tfw = eos_freezing_point(eos, s_surf, 0.0_wp)
             ! OCEAN-side available heat: model T, S, T_f (CT, SA, CT liquidus
             ! under cons_abs) -- formed BEFORE the ice-boundary conversion.
@@ -145,6 +146,8 @@ contains
          end if
       end do
    end subroutine ice_compute_basal_flux_impl
+
+#include "rdb_vanished_layer.inc"
 
 #include "rdb_tracer_conc.inc"
 

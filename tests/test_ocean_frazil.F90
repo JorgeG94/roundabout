@@ -67,7 +67,8 @@ contains
                   new_unittest("frazil_column_carry_up", test_col_carry_up), &
                   new_unittest("frazil_column_no_absorber_hands_off", test_col_no_absorber), &
                   new_unittest("frazil_column_reclaim_branches", test_col_reclaim), &
-                  new_unittest("frazil_bound_salinity", test_bound_salinity) &
+                  new_unittest("frazil_bound_salinity", test_bound_salinity), &
+                  new_unittest("frazil_top_vanished_first_live", test_top_vanished) &
                   ]
    end subroutine collect_ocean_frazil_tests
 
@@ -425,6 +426,47 @@ contains
       end block checks
       call teardown(ms, eos, ice)
    end subroutine test_cons_abs_onset
+
+   subroutine test_top_vanished(error)
+      !! The top layer collapsed at run time (`h <= H_VANISHED`) and the
+      !! first live layer below it (`NZ-1`) is supercooled: the surface
+      !! flux lands there, so frazil must form THERE -- same bank and
+      !! same clamp to T_f as the live-top case (`test_clamp`/`test_bank`)
+      !! with the water in `NZ-1` -- and the collapsed layer is untouched.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      type(eos_t) :: eos
+      type(ocean_sea_ice_t) :: ice
+      real(wp) :: t_f, expected
+      integer :: ip, jp
+      checks: block
+
+         call setup_state(grid, ms, eos, ice, T_WARM)
+         ms%h_layer(:, :, NZ) = 0.0_wp
+         ms%tracers(ms%idx_temperature)%c(:, :, NZ - 1) = T_COLD
+         t_f = eos_freezing_point(eos, S_INIT, 0.0_wp)
+         call run_frazil(grid, eos, ms, ice)
+
+         ip = grid%nx_total/2
+         jp = grid%ny_total/2
+         call check(error, abs(ms%tracers(ms%idx_temperature)%c(ip, jp, NZ - 1) - t_f) &
+                    < 1.0e-12_wp, "first live layer must be clamped exactly to T_f")
+         if (allocated(error)) exit checks
+         expected = RHO_WATER*SEAWATER_CP*H_LAYER*(t_f - T_COLD)
+         call check(error, abs(ice%frazil_heat(ip, jp) - expected) <= 1.0e-14_wp*expected, &
+                    "frazil_heat must equal rho*Cp*h*(T_f - T0) of the first live layer")
+         if (allocated(error)) exit checks
+         call check(error, abs(ice%heat_budget_frazil(ip, jp, 1) &
+                               - H_LAYER*(t_f - T_COLD)) < 1.0e-12_wp, &
+                    "budget accumulator must mirror h*(T_f - T0)")
+         if (allocated(error)) exit checks
+         call check(error, ms%tracers(ms%idx_temperature)%c(ip, jp, NZ) == T_WARM, &
+                    "the collapsed layer must be untouched")
+
+      end block checks
+      call teardown(ms, eos, ice)
+   end subroutine test_top_vanished
 
    subroutine run_column(grid, eos, ms, ice, pdep, reclaim)
       !! Device-wrapped `ice_frazil_accumulate_column` (same mapping as
