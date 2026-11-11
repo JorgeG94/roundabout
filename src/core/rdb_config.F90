@@ -3114,11 +3114,13 @@ module rdb_config
          !! H_DIV_EPS (too small to bound 1/h) and NOT hardwired H_VANISHED
          !! (that is the skip/merge marker). Recommended run value 1e-3..1e-2 m.
          !! NOT strictly conservative: injects <= angstrom_h*areaT per floored
-         !! layer-cell (zero on non-grounding steps). Thermo-on caveat (R7):
-         !! the floor lifts h at fixed c, which injects tracer content on a
-         !! floored layer — harmless for the adiabatic
-         !! (enable_thermodynamics=.false.) isopycnal config; thermo-on
-         !! isopycnal correctness is OUT OF SCOPE for v1.
+         !! layer-cell (zero on non-grounding steps). The tracer update divides
+         !! by the stored floored thickness, so tracer CONTENT is kept and c is
+         !! diluted; exception: an overdrawn cell (h_new <= H_DIV_EPS) keeps c,
+         !! so the floor creates at most angstrom_h*c there. NOT YET SUPPORTED
+         !! with `&ocean_vmix_nml dt_tracer_advect_ratio > 1` (the windowed
+         !! drain does not carry the added thickness): `validate_config`
+         !! refuses it unless `conservative_floor` is on. Temporary limit.
       logical :: reset_vanished_u = .false.
          !! Phase 2: zero the face velocity of a layer vanished on BOTH
          !! adjacent cells (a massless layer carries no independent momentum).

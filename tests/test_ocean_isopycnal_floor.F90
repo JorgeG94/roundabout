@@ -14,6 +14,9 @@
 !!     refilled to the floor by continuity, but the tracer update divides by
 !!     that stored thickness, so Sum(h*c) is unchanged (the floor dilutes c,
 !!     it does not create tracer).  Zonal and meridional halves.
+!!   * floor_overdrawn_cell_bounded    -- a layer OVERDRAWN past zero (h+ < 0)
+!!     with a tiny floor keeps its c (the keep-content form would give
+!!     c*h+/hf, ~ -1e8*c): every c stays within the initial min/max.
 module test_ocean_isopycnal_floor
    use testdrive, only: new_unittest, unittest_type, error_type, check
    use rdb_constants, only: wp
@@ -46,7 +49,8 @@ contains
                   new_unittest("floor_clamps_grounding_layer", test_floor_clamps_grounding), &
                   new_unittest("floor_bitident", test_floor_bitident), &
                   new_unittest("floor_leak_bound", test_floor_leak_bound), &
-                  new_unittest("floor_keeps_tracer_content", test_floor_keeps_content) &
+                  new_unittest("floor_keeps_tracer_content", test_floor_keeps_content), &
+                  new_unittest("floor_overdrawn_cell_bounded", test_floor_overdrawn_bounded) &
                   ]
    end subroutine collect_ocean_isopycnal_floor_tests
 
@@ -475,5 +479,90 @@ contains
       call ms%destroy()
       call destroy_cartesian_metrics(metrics)
    end subroutine test_floor_keeps_content
+
+   ! -----------------------------------------------------------------
+
+   subroutine test_floor_overdrawn_bounded(error)
+      !! As `floor_keeps_tracer_content`, but the face draws DQ > H_THIN so the
+      !! unfloored h+ = H_THIN - DQ < 0 (overdrawn) and the floor AH is tiny.
+      !! The overdrawn volume is not physical content: the keep-content form
+      !! (h-c - dt div F)/AH would give c ~ c*h+/AH ~ -1e8*c.  The update must
+      !! instead keep c, so every c stays within its initial [min, max].
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      type(continuity_t) :: ct
+      type(ocean_metrics_t) :: metrics
+      real(wp), parameter :: DT = 1.0_wp
+      real(wp), parameter :: H0 = 5.0_wp, H_THIN = 0.1_wp, AH = 1.0e-10_wp
+      real(wp), parameter :: DQ = 0.2_wp
+      integer, parameter :: KL = 2
+      integer :: nx, ny, ic, jc, i, j, k, idir, it
+      real(wp) :: lo(2), hi(2)
+      integer :: tr(2)
+      checks: block
+         call make_grid(grid, 12, 8, 1.0_wp, 1.0_wp)
+         call make_cartesian_metrics(metrics, grid)
+         nx = grid%nx_total
+         ny = grid%ny_total
+         ms%nz_ml = NZ
+         call ms%init(grid)
+         call ct%init(grid, nz_ml=NZ)
+         tr = [ms%idx_salinity, ms%idx_temperature]
+         ic = grid%nghost + 6
+         jc = grid%nghost + 4
+
+         do idir = 1, 2
+            ms%h_layer = H0
+            ms%h_layer(ic, jc, KL) = H_THIN
+            do k = 1, NZ
+               do j = 1, ny
+                  do i = 1, nx
+                     ms%tracers(tr(1))%c(i, j, k) = 35.0_wp + 0.1_wp*real(i, wp) + 0.05_wp*real(j, wp)
+                     ms%tracers(tr(2))%c(i, j, k) = 10.0_wp + 0.2_wp*real(k, wp) - 0.1_wp*real(i, wp)
+                  end do
+               end do
+            end do
+            ms%mass_flux_x_layer = 0.0_wp
+            ms%mass_flux_y_layer = 0.0_wp
+            ms%flux_h_layer = 0.0_wp
+            ms%mass_budget_continuity = 0.0_wp
+            if (idir == 1) then
+               ms%mass_flux_x_layer(ic + 1, jc, KL) = DQ
+            else
+               ms%mass_flux_y_layer(ic, jc + 1, KL) = DQ
+            end if
+            do it = 1, 2
+               lo(it) = minval(ms%tracers(tr(it))%c)
+               hi(it) = maxval(ms%tracers(tr(it))%c)
+            end do
+
+            call map_in_ms(ms, ct)
+            !$acc update device(ms%mass_flux_x_layer, ms%mass_flux_y_layer)
+            call continuity_save_h_pair(ct, ms)
+            if (idir == 1) then
+               call continuity_apply_zonal(grid, metrics, ms, DT, h_min=AH)
+               call tracer_advect_zonal(grid, metrics, ct, ms, DT, ct%h_pair_prev%data, ms%h_layer, h_floor=AH)
+            else
+               call continuity_apply_meridional(grid, metrics, ms, DT, h_min=AH)
+               call tracer_advect_meridional(grid, metrics, ct, ms, DT, ct%h_pair_prev%data, ms%h_layer, h_floor=AH)
+            end if
+            call map_out_ms(ms, ct)
+
+            call check(error, abs(ms%h_layer(ic, jc, KL) - AH) < 1.0e-14_wp, &
+                       "floor_overdrawn: the floor must have bound (h stored = angstrom_h)")
+            if (allocated(error)) exit checks
+            do it = 1, 2
+               call check(error, minval(ms%tracers(tr(it))%c) >= lo(it) - 1.0e-9_wp .and. &
+                          maxval(ms%tracers(tr(it))%c) <= hi(it) + 1.0e-9_wp, &
+                          "floor_overdrawn: c left its initial [min, max] on an overdrawn cell")
+               if (allocated(error)) exit checks
+            end do
+         end do
+      end block checks
+      call ct%destroy()
+      call ms%destroy()
+      call destroy_cartesian_metrics(metrics)
+   end subroutine test_floor_overdrawn_bounded
 
 end module test_ocean_isopycnal_floor

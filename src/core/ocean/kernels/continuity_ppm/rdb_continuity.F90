@@ -188,9 +188,12 @@ module rdb_continuity
          !! cfg%ocean%isopycnal%angstrom_h at setup, but only PASSED to the
          !! h-update kernels when the active vcoord is VCOORD_LAGRANGIAN
          !! (gated at the dyn call site). 0 ⇒ off ⇒ bit-identical.
-         !! R7: the floor lifts h at fixed c, which injects tracer content on a
-         !! floored layer. Harmless for the adiabatic isopycnal config; thermo-on
-         !! isopycnal correctness is OUT OF SCOPE for v1.
+         !! The floor injects VOLUME (<= angstrom_h*areaT per floored cell-step),
+         !! but the every-step tracer update divides by the stored floored
+         !! thickness, so tracer CONTENT is kept and c is diluted. Exception: an
+         !! overdrawn cell (h_new <= H_DIV_EPS) keeps c, so the floor creates at
+         !! most angstrom_h*c there. The windowed drain does not carry the added
+         !! thickness (refused with dt_tracer_advect_ratio > 1).
       logical :: conservative_floor = .false.
          !! When `.true.` (set from cfg%ocean%isopycnal%conservative_floor at
          !! setup; requires angstrom_h > 0 + VCOORD_LAGRANGIAN) the injecting
@@ -3561,13 +3564,18 @@ contains
       ! With an Angstrom floor (hf > 0) that binds, continuity STORES hf > h+:
       ! c is then formed against the stored hf, (h- c - dt div F)/hf, so the
       ! floor dilutes c and leaves the content h*c alone (no tracer is created
-      ! with the injected water).
+      ! with the injected water).  An overdrawn cell (h+ <= H_DIV_EPS) is not
+      ! physical content: it keeps c, so the floor creates at most hf*c there.
       do concurrent(k=1:nz, j=1:ny, i=1:nx) local(div_m, div_f, h_new)
          div_m = (mass_flux_x(i + 1, j, k) - mass_flux_x(i, j, k))*iareaT(i, j)
          h_new = h_before(i, j, k) - dt*div_m
-         if (hf > 0.0_wp .and. h_new < hf) then
+         if (hf > 0.0_wp .and. h_new > H_DIV_EPS .and. h_new < hf) then
             ! Angstrom floor binds: continuity stored hf, not h_new.  Divide by
-            ! the stored thickness so h*c is unchanged by the floor.
+            ! the stored thickness so h*c is unchanged by the floor.  Only for
+            ! H_DIV_EPS < h_new < hf: an overdrawn cell (h_new <= H_DIV_EPS)
+            ! is not physical content (c*h_new/hf would blow c up as h_new
+            ! goes negative), so it falls through, c is kept (bounded), and the
+            ! floor then creates at most hf*c per floored cell.
             div_f = (Tr_face_left_x(i + 1, j, k) - Tr_face_left_x(i, j, k))*iareaT(i, j)
             c(i, j, k) = c(i, j, k) + (c(i, j, k)*(h_before(i, j, k) - hf) - dt*div_f)/hf
          else if (h_new > H_DIV_EPS) then
@@ -3737,9 +3745,13 @@ contains
       do concurrent(k=1:nz, j=1:ny, i=1:nx) local(div_m, div_f, h_new)
          div_m = (mass_flux_y(i, j + 1, k) - mass_flux_y(i, j, k))*iareaT(i, j)
          h_new = h_before(i, j, k) - dt*div_m
-         if (hf > 0.0_wp .and. h_new < hf) then
+         if (hf > 0.0_wp .and. h_new > H_DIV_EPS .and. h_new < hf) then
             ! Angstrom floor binds: continuity stored hf, not h_new.  Divide by
-            ! the stored thickness so h*c is unchanged by the floor.
+            ! the stored thickness so h*c is unchanged by the floor.  Only for
+            ! H_DIV_EPS < h_new < hf: an overdrawn cell (h_new <= H_DIV_EPS)
+            ! is not physical content (c*h_new/hf would blow c up as h_new
+            ! goes negative), so it falls through, c is kept (bounded), and the
+            ! floor then creates at most hf*c per floored cell.
             div_f = (Tr_face_left_y(i, j + 1, k) - Tr_face_left_y(i, j, k))*iareaT(i, j)
             c(i, j, k) = c(i, j, k) + (c(i, j, k)*(h_before(i, j, k) - hf) - dt*div_f)/hf
          else if (h_new > H_DIV_EPS) then
