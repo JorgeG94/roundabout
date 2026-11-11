@@ -71,7 +71,9 @@ constants and the `ICE_RHO_*` constants are deliberately *not* copies of ρ₀.
 
 **Thin layers.** `H_VANISHED` (1.5e-4 m) is a skip/merge marker, never a positivity floor. `H_DIV_EPS`
 (1e-20) is pure 1/0 armour. The runtime `angstrom_h` floor (`&ocean_isopycnal_nml`, Lagrangian only) lifts
-`h` at fixed `c`, so it injects mass and tracer content, non-conservative by a bounded amount per floored cell.
+`h`, so it injects volume (non-conservative by a bounded amount per floored cell); the tracer update divides by the stored floored
+thickness, so tracer content is kept and `c` is diluted (an overdrawn cell keeps `c`). Not yet supported with
+`dt_tracer_advect_ratio > 1` (refused).
 
 **Tracer storage and vanished layers.** Tracers are stored as concentration `c`; the content `h*c` is formed
 only for budgets and console totals. A layer at or below `H_VANISHED` keeps its last `c`: deposits into it are

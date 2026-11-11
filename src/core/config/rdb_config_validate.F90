@@ -189,6 +189,28 @@ contains
          end if
       end if
 
+      ! Injecting Angstrom floor x windowed tracer advection: NOT YET
+      ! SUPPORTED.  The floor's added thickness lands in the window-end h, so
+      ! the drain reconstructs hprev = h_start + delta and delta*c of tracer
+      ! content appears; the every-step keep-content update does not cover the
+      ! window.  Temporary limitation (the combination is legal in the
+      ! reference model and is meant to work later).
+      if (trim(cfg%sim_type) == "ocean") then
+         if (cfg%ocean%isopycnal%angstrom_h > 0.0_wp .and. &
+             .not. cfg%ocean%isopycnal%conservative_floor .and. &
+             cfg%ocean%vmix%dt_tracer_advect_ratio > 1 .and. &
+             parse_vcoord_type(cfg%vcoord_type, VCOORD_EULERIAN_Z) == VCOORD_LAGRANGIAN) then
+            call logger%error("&ocean_isopycnal_nml angstrom_h > 0 (injecting floor, "// &
+                              "conservative_floor off) with &ocean_vmix_nml "// &
+                              "dt_tracer_advect_ratio > 1 is NOT YET SUPPORTED: the "// &
+                              "windowed tracer drain does not carry the thickness the "// &
+                              "floor adds, so tracer content is created.  Use "// &
+                              "dt_tracer_advect_ratio = 1, or conservative_floor = "// &
+                              ".true.  (temporary limitation)")
+            has_error = .true.
+         end if
+      end if
+
       ! Ocean windowed-drain tracer_recon guard (Q6).  A SEPARATE knob from
       ! the coastal tracer_recon above — it lives in `&ocean_vmix_nml` and
       ! only takes effect on sim_type='ocean' (ignored on coastal, like all

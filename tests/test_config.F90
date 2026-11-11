@@ -70,6 +70,7 @@ contains
                   new_unittest("pv_weno_nghost_gate_radius_plus_one", test_pv_weno_nghost_gate), &
                   new_unittest("implicit_drag_hbbl_needs_effective_glue", test_glue_hbbl_gate), &
                   new_unittest("varmix_res_fn_power_must_be_positive", test_varmix_resfn_power), &
+                  new_unittest("angstrom_floor_refused_with_windowed_advect", test_angstrom_window_gate), &
                   new_unittest("calendar_names_fit_and_validate", test_calendar_names), &
                   new_unittest("roquet_rho_insitu_pgf_accepted", test_roquet_rho_insitu_pgf_accepted), &
                   new_unittest("atm_forcing_prereq_codes", test_atm_forcing_prereq_codes), &
@@ -194,6 +195,50 @@ contains
       ierr = validate_resfn_power(3)
       call check(error, ierr == OCEAN_STATUS_OK, "kh_res_fn_power = 3 must be accepted")
    end subroutine test_varmix_resfn_power
+
+   subroutine test_angstrom_window_gate(error)
+      !! The injecting Angstrom floor with a windowed tracer drain
+      !! (`dt_tracer_advect_ratio > 1`) is refused (not yet supported); the
+      !! same floor at ratio 1, and the conservative floor at ratio 2, pass.
+      type(error_type), allocatable, intent(out) :: error
+      integer :: ierr
+
+      ierr = validate_angstrom(2, ".false.")
+      call check(error, ierr == OCEAN_STATUS_ERR_CONFIG_VALIDATE, &
+                 "injecting angstrom_h + dt_tracer_advect_ratio = 2 must be refused")
+      if (allocated(error)) return
+      ierr = validate_angstrom(1, ".false.")
+      call check(error, ierr == OCEAN_STATUS_OK, &
+                 "injecting angstrom_h + dt_tracer_advect_ratio = 1 must be accepted")
+      if (allocated(error)) return
+      ierr = validate_angstrom(2, ".true.")
+      call check(error, ierr == OCEAN_STATUS_OK, &
+                 "conservative_floor + dt_tracer_advect_ratio = 2 must be accepted")
+   end subroutine test_angstrom_window_gate
+
+   function validate_angstrom(ratio, cons) result(ierr)
+      !! `validate_config` status of a minimal Lagrangian ocean namelist with
+      !! an Angstrom floor, the given window ratio and `conservative_floor`.
+      integer, intent(in) :: ratio
+      character(len=*), intent(in) :: cons
+      integer :: ierr
+      type(config_t) :: cfg
+      character(len=8) :: sr
+
+      write (sr, '(i0)') ratio
+      ierr = -999
+      call read_config_from_string( &
+         "&sim_nml sim_type = 'ocean' /"//new_line('a')// &
+         "&grid_nml nx = 24, ny = 16, nghost = 3, dx = 20000.0, dy = 20000.0 /"// &
+         new_line('a')// &
+         "&vcoord_nml vcoord_type = 'lagrangian' /"//new_line('a')// &
+         "&ocean_isopycnal_nml angstrom_h = 1.0e-3, conservative_floor = "//cons//" /"// &
+         new_line('a')// &
+         "&ocean_vmix_nml dt_tracer_advect_ratio = "//trim(sr)//" /"//new_line('a'), &
+         cfg, ierr=ierr)
+      if (ierr /= OCEAN_STATUS_OK) return
+      call validate_config(cfg, ierr=ierr)
+   end function validate_angstrom
 
    function validate_resfn_power(p) result(ierr)
       !! `validate_config` status of a minimal ocean namelist with the given
