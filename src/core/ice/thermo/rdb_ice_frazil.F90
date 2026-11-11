@@ -106,7 +106,7 @@ contains
       real(wp), intent(inout) :: heat_budget_frazil(nx, ny, 1)
       type(eos_t), intent(in) :: eos
 
-      integer :: i, j, i_lo, i_hi, j_lo, j_hi
+      integer :: i, j, k_sfc, i_lo, i_hi, j_lo, j_hi
       real(wp) :: h, t_sfc, s_sfc, t_f, d_htr
 
       i_lo = nghost + 1
@@ -114,11 +114,12 @@ contains
       j_lo = nghost + 1
       j_hi = ny - nghost
 
-      do concurrent(j=j_lo:j_hi, i=i_lo:i_hi) local(h, t_sfc, s_sfc, t_f, d_htr)
-         h = h_layer(i, j, nz)
-         if (wet_mask(i, j) > 0.5_wp .and. h > H_VANISHED) then
-            t_sfc = c_T(i, j, nz)
-            s_sfc = c_S(i, j, nz)
+      do concurrent(j=j_lo:j_hi, i=i_lo:i_hi) local(k_sfc, h, t_sfc, s_sfc, t_f, d_htr)
+         k_sfc = rdb_vl_first_live(nx, ny, nz, h_layer, i, j, nz)
+         h = h_layer(i, j, k_sfc)
+         if (wet_mask(i, j) > 0.5_wp .and. rdb_vl_is_live(h)) then
+            t_sfc = c_T(i, j, k_sfc)
+            s_sfc = c_S(i, j, k_sfc)
             t_f = eos_freezing_point(eos, s_sfc, 0.0_wp)
             if (t_sfc < t_f) then
                d_htr = h*(t_f - t_sfc)
@@ -126,7 +127,7 @@ contains
                                    + RHO_WATER*eos%c_p*d_htr
                heat_budget_frazil(i, j, 1) = heat_budget_frazil(i, j, 1) + d_htr
                ! Exact clamp: T_after == T_f.
-               c_T(i, j, nz) = t_f
+               c_T(i, j, k_sfc) = t_f
             end if
          end if
       end do
@@ -217,7 +218,7 @@ contains
       type(eos_t), intent(in) :: eos
       logical, intent(in) :: pressure_dependent, reclaim
 
-      integer :: i, j, k, m, i_lo, i_hi, j_lo, j_hi
+      integer :: i, j, k, m, k_sfc, i_lo, i_hi, j_lo, j_hi
       real(wp) :: h, t_k, s_k, t_f, p_k, hc, c, f_bank, dsum, gr, new_t
 
       i_lo = nghost + 1
@@ -227,17 +228,18 @@ contains
       gr = GRAVITY*eos%rho0
 
       do concurrent(j=j_lo:j_hi, i=i_lo:i_hi) &
-         local(k, m, h, t_k, s_k, t_f, p_k, hc, c, f_bank, dsum, new_t)
-         if (wet_mask(i, j) > 0.5_wp .and. rdb_vl_is_live(h_layer(i, j, nz))) then
+         local(k, m, k_sfc, h, t_k, s_k, t_f, p_k, hc, c, f_bank, dsum, new_t)
+         k_sfc = rdb_vl_first_live(nx, ny, nz, h_layer, i, j, nz)
+         if (wet_mask(i, j) > 0.5_wp .and. rdb_vl_is_live(h_layer(i, j, k_sfc))) then
             c = 0.0_wp
             dsum = 0.0_wp
             f_bank = frazil_heat(i, j)
 
             ! ---- 1. reclaim on the surface layer ----
             if (reclaim .and. f_bank > 0.0_wp) then
-               h = h_layer(i, j, nz)
-               t_k = c_T(i, j, nz)
-               s_k = c_S(i, j, nz)
+               h = h_layer(i, j, k_sfc)
+               t_k = c_T(i, j, k_sfc)
+               s_k = c_S(i, j, k_sfc)
                p_k = 0.0_wp
                if (pressure_dependent) p_k = 0.5_wp*gr*h
                t_f = eos_freezing_point(eos, s_k, p_k)
@@ -251,7 +253,7 @@ contains
                      new_t = t_f
                   end if
                   dsum = dsum + h*(new_t - t_k)
-                  c_T(i, j, nz) = new_t
+                  c_T(i, j, k_sfc) = new_t
                end if
             end if
 

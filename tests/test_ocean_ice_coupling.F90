@@ -73,7 +73,8 @@ contains
                   new_unittest("uptake_skips_ghosts_dry_and_vanished", test_skip_gates), &
                   new_unittest("cons_abs_basal_seam_theta_sp", test_cons_abs_basal), &
                   new_unittest("cons_abs_uptake_theta_closure", test_cons_abs_uptake), &
-                  new_unittest("pot_prac_basal_seam_identity", test_pot_prac_basal) &
+                  new_unittest("pot_prac_basal_seam_identity", test_pot_prac_basal), &
+                  new_unittest("basal_and_uptake_first_live_layer", test_top_vanished) &
                   ]
    end subroutine collect_ocean_ice_coupling_tests
 
@@ -471,7 +472,9 @@ contains
 
          i_van = NGHOST + 3
          j_van = NGHOST + 3
-         ms%h_layer(i_van, j_van, NZ) = 0.5_wp*H_VANISHED
+         ! Every layer vanished: no live layer to freeze against.  (A column
+         ! with only the TOP layer collapsed is live -- see test_top_vanished.)
+         ms%h_layer(i_van, j_van, :) = 0.5_wp*H_VANISHED
 
          call run_uptake(grid, eos, ms, ice)
 
@@ -662,5 +665,53 @@ contains
       end block checks
       call teardown(ms, eos, ice, sf)
    end subroutine test_cons_abs_uptake
+
+   subroutine test_top_vanished(error)
+      !! The top layer collapsed at run time (`h <= H_VANISHED`), layer
+      !! `NZ-1` is the first live one.  (a) The basal flux and the ice
+      !! seam read it: same numbers as `test_pot_prac_basal` with the
+      !! water in `NZ-1`.  (b) The frazil uptake spends the bank against
+      !! it: ice forms (it would be skipped as "vanished surface" if the
+      !! kernel read `NZ`).
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      type(eos_t) :: eos
+      type(ocean_sea_ice_t) :: ice
+      type(ocean_surface_flux_t) :: sf
+      real(wp) :: t_f
+      integer :: ip, jp
+      checks: block
+         ! (a) basal flux / seam
+         call setup_state(grid, ms, eos, ice, sf, T_DEEP)
+         ms%h_layer(:, :, NZ) = 0.0_wp
+         ms%tracers(ms%idx_temperature)%c(:, :, NZ - 1) = T_WARM
+         ice%m_ice(:, :, 1) = 1.0_wp
+         t_f = eos_freezing_point(eos, S_INIT, 0.0_wp)
+         call run_basal(grid, eos, ms, ice)
+         ip = grid%nx_total/2
+         jp = grid%ny_total/2
+         call check(error, ice%sst_seam(ip, jp) == T_WARM .and. ice%tfw_seam(ip, jp) == t_f, &
+                    "seam must carry the first live layer's T and its T_f")
+         if (allocated(error)) exit checks
+         call check(error, ice%fb(ip, jp) == RHO_WATER*3992.0_wp*max(0.0_wp, T_WARM - t_f)*H_LAYER/DT_THERM, &
+                    "fb must be the first live layer's available heat")
+         if (allocated(error)) exit checks
+         call teardown(ms, eos, ice, sf)
+
+         ! (b) frazil uptake
+         call setup_state(grid, ms, eos, ice, sf, T_DEEP)
+         t_f = eos_freezing_point(eos, S_INIT, 0.0_wp)
+         ms%h_layer(:, :, NZ) = 0.0_wp
+         ms%tracers(ms%idx_temperature)%c(:, :, NZ - 1) = t_f
+         ice%frazil_heat = E_BANK
+         call run_uptake(grid, eos, ms, ice)
+         call check(error, ice%m_frozen_diag(ip, jp) > 0.0_wp, &
+                    "uptake must freeze the bank against the first live layer")
+         if (allocated(error)) exit checks
+         call check(error, ice%frazil_heat(ip, jp) == 0.0_wp, "bank must be spent")
+      end block checks
+      call teardown(ms, eos, ice, sf)
+   end subroutine test_top_vanished
 
 end module test_ocean_ice_coupling

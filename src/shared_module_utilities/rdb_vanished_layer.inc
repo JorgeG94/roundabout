@@ -63,6 +63,38 @@
       rdb_vl_is_live = h > H_VANISHED
    end function rdb_vl_is_live
 
+   pure integer function rdb_vl_first_live(nx, ny, nz, h_layer, i, j, kstart)
+      !$acc routine seq
+      !! The first LIVE layer counting DOWN from `kstart` in column `(i,j)`:
+      !! the layer a surface flux must land on, and the layer whose
+      !! concentration is the sea-surface value.  `kstart` is the static
+      !! first-live index `ms%k_top` (or `nz`); the scan only ever moves
+      !! DOWN from it, so a column whose layer `kstart` is live returns
+      !! `kstart` after one test and every existing configuration is
+      !! bit-identical.  A top layer that collapses at run time (rho or
+      !! Lagrangian coordinates, wet/dry, an outcrop) is skipped, so the
+      !! deposit is not refused by `rdb_conc_add_source` and booked as 0.
+      !! A column with NO live layer returns `kstart`, so the refusal and
+      !! the 0 booking of a fully dry column still hold.
+      integer, intent(in) :: nx, ny, nz
+         !! Array extents; `k = nz` is the surface.
+      real(wp), intent(in) :: h_layer(nx, ny, nz)
+         !! Layer thicknesses (m).
+      integer, intent(in) :: i, j
+         !! Column.
+      integer, intent(in) :: kstart
+         !! Layer to start the downward scan from.
+      integer :: k_fl
+
+      rdb_vl_first_live = kstart
+      do k_fl = kstart, 1, -1
+         if (rdb_vl_is_live(h_layer(i, j, k_fl))) then
+            rdb_vl_first_live = k_fl
+            exit
+         end if
+      end do
+   end function rdb_vl_first_live
+
    pure subroutine rdb_vl_column_conc(nz, h_col, c_in, c_col)
       !$acc routine seq
       !! DONOR-SUBSTITUTED concentration of every layer of a column: the

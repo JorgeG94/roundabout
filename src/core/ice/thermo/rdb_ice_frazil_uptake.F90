@@ -65,7 +65,7 @@ module rdb_ice_frazil_uptake
    !! Mirrors the outer-shim + flat-impl + `!$acc routine seq`
    !! column-worker structure of `rdb_ice_frazil` /
    !! `rdb_ice_column%ice_thermo_columns`.
-   use rdb_constants, only: H_DIV_EPS, wp, H_VANISHED
+   use rdb_constants, only: H_DIV_EPS, wp, H_VANISHED, NZ_STACK_MAX
    use rdb_grid, only: hgrid_t
    use rdb_multilayer_state, only: multilayer_state_t
    use rdb_eos, only: eos_t, eos_freezing_point, TS_CONS_ABS
@@ -176,6 +176,7 @@ contains
       real(wp), intent(in) :: dt_therm
 
       integer :: i, j, i_lo, i_hi, j_lo, j_hi
+      integer :: k_sfc
       real(wp) :: h, sst, s_surf, tfw
       logical :: cons
       real(wp) :: m_snow_pt, m_ice_pt, m_frozen_pt, salt_to_ice_pt
@@ -188,15 +189,16 @@ contains
       j_lo = nghost + 1
       j_hi = ny - nghost
 
-      do concurrent(j=j_lo:j_hi, i=i_lo:i_hi) local(h, sst, s_surf, tfw, &
+      do concurrent(j=j_lo:j_hi, i=i_lo:i_hi) local(k_sfc, h, sst, s_surf, tfw, &
                                                     m_snow_pt, m_ice_pt, m_frozen_pt, &
                                                     salt_to_ice_pt, enth_ice_col, sal_ice_col)
          m_frozen_diag(i, j) = 0.0_wp
          salt_flux_diag(i, j) = 0.0_wp
-         h = h_layer(i, j, nz)
-         if (wet_mask(i, j) > 0.5_wp .and. h > H_VANISHED .and. frazil_heat(i, j) > 0.0_wp) then
-            sst = c_T(i, j, nz)
-            s_surf = c_S(i, j, nz)
+         k_sfc = rdb_vl_first_live(nx, ny, nz, h_layer, i, j, nz)
+         h = h_layer(i, j, k_sfc)
+         if (wet_mask(i, j) > 0.5_wp .and. rdb_vl_is_live(h) .and. frazil_heat(i, j) > 0.0_wp) then
+            sst = c_T(i, j, k_sfc)
+            s_surf = c_S(i, j, k_sfc)
             tfw = eos_freezing_point(eos, s_surf, 0.0_wp)
             if (cons) then
                ! Ice-boundary conversion (IOC/SCOR/IAPSO 2010; McDougall &
@@ -283,6 +285,7 @@ contains
 
       integer :: i, j, i_lo, i_hi, j_lo, j_hi
       integer :: cat, k_merge
+      integer :: k_sfc
       real(wp) :: h, sst, s_surf, tfw, i_part
       logical :: cons
       real(wp) :: m_snow_pt, m_ice_pt, m_frozen_pt, salt_to_ice_pt, frazil_col
@@ -295,17 +298,18 @@ contains
       j_lo = nghost + 1
       j_hi = ny - nghost
 
-      do concurrent(j=j_lo:j_hi, i=i_lo:i_hi) local(h, sst, s_surf, tfw, i_part, &
+      do concurrent(j=j_lo:j_hi, i=i_lo:i_hi) local(k_sfc, h, sst, s_surf, tfw, i_part, &
                                                     cat, k_merge, &
                                                     m_snow_pt, m_ice_pt, m_frozen_pt, &
                                                     salt_to_ice_pt, frazil_col, &
                                                     enth_ice_col, sal_ice_col)
          m_frozen_diag(i, j) = 0.0_wp
          salt_flux_diag(i, j) = 0.0_wp
-         h = h_layer(i, j, nz)
-         if (wet_mask(i, j) > 0.5_wp .and. h > H_VANISHED .and. frazil_heat(i, j) > 0.0_wp) then
-            sst = c_T(i, j, nz)
-            s_surf = c_S(i, j, nz)
+         k_sfc = rdb_vl_first_live(nx, ny, nz, h_layer, i, j, nz)
+         h = h_layer(i, j, k_sfc)
+         if (wet_mask(i, j) > 0.5_wp .and. rdb_vl_is_live(h) .and. frazil_heat(i, j) > 0.0_wp) then
+            sst = c_T(i, j, k_sfc)
+            s_surf = c_S(i, j, k_sfc)
             tfw = eos_freezing_point(eos, s_surf, 0.0_wp)
             if (cons) then
                ! Ice-boundary conversion (IOC/SCOR/IAPSO 2010; McDougall &
@@ -458,6 +462,8 @@ contains
          sal_ice_bu(nk + 1 - k) = salin(k)
       end do
    end subroutine ice_frazil_uptake_column
+
+#include "rdb_vanished_layer.inc"
 
 #include "rdb_tracer_conc.inc"
 

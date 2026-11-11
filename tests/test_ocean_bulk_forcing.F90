@@ -77,6 +77,7 @@ contains
       testsuite = [ &
                   new_unittest("bulk_forcing_matches_column", test_matches_column), &
                   new_unittest("bulk_forcing_cons_abs_sst_is_theta", test_cons_abs_sst), &
+                  new_unittest("bulk_forcing_sst_first_live", test_sst_first_live), &
                   new_unittest("bulk_forcing_rotation_exact", test_rotation_exact), &
                   new_unittest("bulk_forcing_open_water_halves", test_open_water_halves), &
                   new_unittest("ice_atm_forcing_seb_linearization", test_ice_seb_linearization) &
@@ -258,6 +259,65 @@ contains
 
       call destroy_cartesian_metrics(metrics)
    end subroutine test_matches_column
+
+   subroutine test_sst_first_live(error)
+      !! The bulk SST is read from the first LIVE layer from the top.  Two
+      !! layers; the top one has collapsed (`h = 0`) and holds a stale
+      !! T = -40, the live one below holds `SST_DEGC`.  The sensible heat
+      !! and longwave must equal a direct `bulk_flux_column` /
+      !! `bulk_flux_longwave_up` at `SST_DEGC`, bit for bit.
+      type(error_type), allocatable, intent(out) :: error
+
+      type(hgrid_t) :: grid
+      type(ocean_metrics_t) :: metrics
+      type(ocean_bc_state_t) :: bc
+      type(multilayer_state_t) :: ms
+      type(ocean_sea_ice_t) :: ice
+      type(atm_state_t) :: atm
+      type(bulk_forcing_t) :: bf
+      type(ocean_surface_stress_t) :: ss
+      type(ocean_surface_flux_t) :: sf
+
+      real(wp) :: taux_ref, tauy_ref, sens_ref, lat_ref, evap_ref, cd, ch, ce, ustar
+      integer :: ip, jp
+
+      checks: block
+         call make_grid(grid)
+         call make_cartesian_metrics(metrics, grid)
+         call init_halo_single_rank(grid)
+         ip = grid%nghost + 2
+         jp = grid%nghost + 2
+
+         ms%nz_ml = 2
+         call ms%init(grid)
+         ms%h_layer = H0
+         ms%h_layer(:, :, 2) = 0.0_wp
+         ms%tracers(ms%idx_temperature)%c = SST_DEGC
+         ms%tracers(ms%idx_temperature)%c(:, :, 2) = -40.0_wp
+         ms%u_face_x_layer = 0.0_wp
+         ms%v_face_y_layer = 0.0_wp
+         call make_atm(grid, atm)
+         call make_bulk_forcing(grid, .true., bf)
+         call ss%init(grid)
+         call sf%init(grid)
+         call sf%set_components(grid, .true.)
+
+         call run_apply(grid, metrics, bc, atm, ms, ice, bf, ss, sf)
+
+         call bulk_flux_column(UAS, VAS, 0.0_wp, 0.0_wp, TAS, HUSS, PSL, SST_DEGC, &
+                               Z_WIND, Z_TA, N_ITER, &
+                               taux_ref, tauy_ref, sens_ref, lat_ref, evap_ref, cd, ch, ce, ustar)
+         call check(error, sf%q_sens(ip, jp), sens_ref, "q_sens must read SST from the first live layer", &
+                    thr=0.0_wp)
+         if (allocated(error)) exit checks
+         call check(error, sf%q_lw(ip, jp), &
+                    RLDS - bulk_flux_longwave_up(SST_DEGC + BULK_T0_KELVIN, EMISSIVITY), &
+                    "q_lw must read SST from the first live layer", thr=0.0_wp)
+         call ocean_halo_destroy()
+      end block checks
+
+      call destroy_cartesian_metrics(metrics)
+   end subroutine test_sst_first_live
 
    subroutine test_cons_abs_sst(error)
       !! Under `cons_abs` the model top-layer T is a Conservative
