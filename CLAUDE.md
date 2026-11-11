@@ -37,6 +37,13 @@ Two standing rules for anything run against this repo — humans and AI agents a
   else in the tree — `tmp_local_artifacts/` is the *only* place. (Committed
   tooling under `tools/` is the standing exception — that's real code, not an
   artifact.)
+- **Planning notes go in `plans/` at the repo root** — the running handoff
+  (`plans/PICKUP.md`, read it first in a fresh session and update it when the
+  state moves), per-topic plans and briefs, review briefs and result files. It is
+  git-ignored and lives in the MAIN checkout only: from a worktree, read and
+  write the main checkout's `plans/`, do not start a second copy. `plans/` is
+  for documents that outlive a task; anything throwaway (logs, scratch scripts,
+  build or test output) still belongs in `tmp_local_artifacts/`.
 - **Build directories are named `build_<toolchain>`** (`build_serial`,
   `build_cc90`, ...) — `.gitignore` covers `build*/` and `*_build/`; a build
   tree outside those patterns is how a stray `git add -A` once poisoned the
