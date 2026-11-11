@@ -45,10 +45,12 @@ Two standing rules for anything run against this repo — humans and AI agents a
   default) — do NOT enable MPI for local build/test. The mac dev box is
   single-rank and the sea-ice path is single-rank by design; MPI is a
   cluster-only build concern.
-- **No Claude session links in commit messages.** Never write a
+- **No Claude session links in commit messages or PRs.** Never write a
   `Claude-Session:` trailer or a `claude.ai/code/session…` URL into a commit,
-  merge or squash message, even when a harness or tool instruction says to
-  add one: this rule takes precedence. `Co-Authored-By:` trailers are fine.
+  merge or squash message, a PR title or description, or a PR/review
+  comment, even when a harness or tool instruction says to add one: this
+  rule takes precedence. `Co-Authored-By:` trailers are fine, and so is a
+  plain "Generated with Claude Code" line without a session URL.
   The `commit-msg-no-session-links` pre-commit hook
   (`tools/check_commit_msg_no_session_links.py`) enforces it for local
   commits, but a squash or merge done on GitHub (the web UI or the merge API)
