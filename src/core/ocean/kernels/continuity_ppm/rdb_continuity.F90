@@ -330,6 +330,15 @@ module rdb_continuity
          !! Largest sub-cycle pass count any windowed-drain call has used
          !! (test diagnostic only -- nothing in the solver reads it; the
          !! post-reduction value when decomposed).
+      integer :: drain_carry_windows = 0
+         !! Number of windowed-drain calls that stopped at the pass cap with
+         !! transport still undrained and carried it into the next window
+         !! (`uhtr/vhtr` seeded from the leftover).  Per-rank diagnostic,
+         !! not reduced across ranks; nothing in the solver reads it.
+      integer(int64) :: drain_carry_faces = 0_int64
+         !! Running total, over all carrying drains, of the faces whose
+         !! carried transport was non-zero (ghost-band images included).
+         !! Per-rank diagnostic, not reduced across ranks.
       logical :: tracer_h3 = .false.
          !! Horizontal tracer-advection edge scheme of the every-step split
          !! path (`tracer_advect_{zonal,meridional}_one_impl`, GM bolus
@@ -4161,6 +4170,18 @@ contains
       !! Σ(Tr·hprev) = Σ(Tr_start·hprev_start) to round-off.  The
       !! concentration is the held `c`, which is the window-start value.
       !!
+      !! Pass cap: the sub-cycle runs at most `2*ratio+1` passes, which can
+      !! leave transport undrained.  That leftover is carried into the next
+      !! window (`uhtr/vhtr` seeded from it, `c` untouched) and counted in
+      !! `drain_carry_windows` / `drain_carry_faces`.  Known gaps: the carry
+      !! is not in the restart file (a restart taken while a carry is pending
+      !! drops it); an ALE remap between the windows re-grids `h_layer` under
+      !! the per-layer leftover; the console heat/salt budget shows the
+      !! in-transit content as a residual until the next drain; the
+      !! `max(0,vol)` / vanishing-layer hatch in `drain_reconstruct_hprev`
+      !! stays non-conservative when the availability limiter does not
+      !! converge.
+      !!
       !! Per-pass re-reconstruction (V2): the PPM parabola is rebuilt from
       !! the CURRENT Tr at the start of every sub-cycle pass.  The
       !! `hup/hlos/min_h` two-test limiter sets the drained transport
@@ -4190,6 +4211,7 @@ contains
       integer :: nx, ny, nz, nx_phys, ny_phys, nghost
       real(wp) :: post_w
       integer :: max_iter, ipass, it
+      integer(int64) :: ncarry
       integer :: i, j, k
       real(wp) :: cfl_max, cfl_loc, denom, fmax
       logical :: per_x, per_y, fold_n
@@ -4491,9 +4513,30 @@ contains
                                 per_x, per_y, fold_n)
       end do
 
-      ! ---- Reset accumulators + clock for the next window ----
-      call drain_zero_3d(nx + 1, ny, nz, this%uhtr)
-      call drain_zero_3d(nx, ny + 1, nz, this%vhtr)
+      ! ---- Carry undrained transport into the next window ----
+      ! The `2*ratio+1` pass cap can stop the sub-cycle with transport left in
+      ! `uhr_x/uhr_y` (and then `hprev_work /= h_layer`).  That leftover is
+      ! CARRIED: `uhtr/vhtr` are seeded from it, the next window's accumulate
+      ! stages add on top, and the next drain's `drain_reconstruct_hprev`
+      ! rebuilds the thickness `c` was left paired with.  `c` is not touched,
+      ! so a uniform tracer stays uniform and content Sum(areaT*hprev*c) is
+      ! conserved across windows (the residual c*div(leftover) is in transit
+      ! until that drain; Adcroft & Hallberg 2006; Griffies et al. 2020).
+      ! A fully drained window leaves exactly 0.0 (the limiter passes the whole
+      ! remaining transport, so uhr - uhh == 0), i.e. the old zero-reset.
+      ! Known gaps: the carry is not in the restart file; an ALE remap between
+      ! the windows re-grids h_layer under the per-layer leftover; the console
+      ! heat/salt budget shows the in-transit content as a residual until the
+      ! next drain; and the max(0,vol) / vanishing-layer hatch in
+      ! `drain_reconstruct_hprev` stays non-conservative when the availability
+      ! limiter does not converge (unchanged).
+      call drain_carry_transport(nx, ny, nz, this%uhr_x, this%uhr_y, this%uhtr, this%vhtr, &
+                                 ncarry)
+      if (ncarry > 0_int64) then
+         this%drain_carry_windows = this%drain_carry_windows + 1
+         this%drain_carry_faces = this%drain_carry_faces + ncarry
+      end if
+      ! ---- Reset the window clock for the next window ----
       this%t_dyn_rel_adv = 0.0_wp
    end subroutine continuity_tracer_drain
 
@@ -4581,6 +4624,39 @@ contains
    ! Transport (uhr/uhh) and the limiter work in area-weighted VOLUME
    ! (m^3); thickness `hprev_work` is m; `Vprev = areaT·hprev_work`.
    ! ====================================================================
+
+   pure subroutine drain_carry_transport(nx, ny, nz, uhr_x, uhr_y, uhtr, vhtr, ncarry)
+      !! uhtr <- uhr_x, vhtr <- uhr_y (the transport the pass cap left
+      !! undrained) and count the faces where it is non-zero.  Interior faces
+      !! only (2..nx / 2..ny): the boundary faces are never drained
+      !! (`drain_limit_*` forces them to zero), so they are zeroed as before
+      !! rather than carried forever.  A fully drained window yields exactly
+      !! 0.0 everywhere (`uhr - uhh` with `uhh == uhr`), so it is unchanged.
+      integer, intent(in) :: nx, ny, nz
+      real(wp), intent(in) :: uhr_x(nx + 1, ny, nz), uhr_y(nx, ny + 1, nz)
+      real(wp), intent(inout) :: uhtr(nx + 1, ny, nz), vhtr(nx, ny + 1, nz)
+      integer(int64), intent(out) :: ncarry
+      integer :: i, j, k
+      integer(int64) :: nc
+      nc = 0_int64
+      do concurrent(k=1:nz, j=1:ny, i=1:nx + 1) reduce(+:nc)
+         if (i == 1 .or. i == nx + 1) then
+            uhtr(i, j, k) = 0.0_wp
+         else
+            uhtr(i, j, k) = uhr_x(i, j, k)
+            if (uhr_x(i, j, k) /= 0.0_wp) nc = nc + 1_int64
+         end if
+      end do
+      do concurrent(k=1:nz, j=1:ny + 1, i=1:nx) reduce(+:nc)
+         if (j == 1 .or. j == ny + 1) then
+            vhtr(i, j, k) = 0.0_wp
+         else
+            vhtr(i, j, k) = uhr_y(i, j, k)
+            if (uhr_y(i, j, k) /= 0.0_wp) nc = nc + 1_int64
+         end if
+      end do
+      ncarry = nc
+   end subroutine drain_carry_transport
 
    pure subroutine drain_reconstruct_hprev(nx, ny, nz, areaT, iareaT, h_end, &
                                            uhtr, vhtr, hprev)
@@ -4836,16 +4912,6 @@ contains
          dst(i, j, k) = src(i, j, k)
       end do
    end subroutine drain_copy_3d
-
-   pure subroutine drain_zero_3d(n1, n2, n3, fld)
-      !! fld = 0.
-      integer, intent(in) :: n1, n2, n3
-      real(wp), intent(inout) :: fld(n1, n2, n3)
-      integer :: i, j, k
-      do concurrent(k=1:n3, j=1:n2, i=1:n1)
-         fld(i, j, k) = 0.0_wp
-      end do
-   end subroutine drain_zero_3d
 
    pure subroutine drain_subtract_3d(n1, n2, n3, sub, fld)
       !! fld = fld - sub  (uhr -= uhh).

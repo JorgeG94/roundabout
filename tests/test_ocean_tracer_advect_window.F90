@@ -17,6 +17,7 @@
 !!     (NVHPC GPU under CUDA_VISIBLE_DEVICES=1).
 module test_ocean_tracer_advect_window
    use testdrive, only: new_unittest, unittest_type, error_type, check
+   use, intrinsic :: iso_fortran_env, only: int64
    use rdb_constants, only: wp
    use rdb_grid, only: hgrid_t
    use rdb_multilayer_state, only: multilayer_state_t
@@ -52,6 +53,8 @@ contains
                   new_unittest("ratio1_bit_identity", test_ratio1_identity), &
                   new_unittest("conservation_y_ratio_2_3_5", test_conservation_y), &
                   new_unittest("positivity_y_multipass", test_positivity_y), &
+                  new_unittest("pass_cap_carries_transport", test_pass_cap_carries), &
+                  new_unittest("pass_cap_conserves_across_windows", test_pass_cap_across), &
                   new_unittest("conservation_diagonal_2d", test_conservation_2d), &
                   new_unittest("swept_flux_x_edge_faces_zero", test_swept_x_edge_faces), &
                   new_unittest("swept_flux_y_edge_faces_zero", test_swept_y_edge_faces) &
@@ -320,12 +323,18 @@ contains
             !$acc exit data delete(bc)
             call metrics%exit_data()
             !$acc exit data delete(metrics)
+            !$acc update self(ct%uhtr, ct%vhtr)
             call map_out(ms, ct)
 
             mass1 = area*sum(ms%h_layer(i0:i1, j0:j1, :)*ms%tracers(ms%idx_salinity)%c(i0:i1, j0:j1, :))
             rel = abs(mass1 - mass0)/abs(mass0)
             call check(error, rel < 1.0e-12_wp, &
                        "windowed drain broke interior tracer conservation")
+            if (.not. allocated(error)) call check(error, &
+                                                   maxval(abs(ct%uhtr)) == 0.0_wp .and. maxval(abs(ct%vhtr)) == 0.0_wp, &
+                                                   "fully drained window left non-zero uhtr/vhtr")
+            if (.not. allocated(error)) call check(error, ct%drain_carry_windows == 0, &
+                                                   "fully drained window counted a carry")
             call ct%destroy()
             call ms%destroy()
             call destroy_cartesian_metrics(metrics)
@@ -337,6 +346,161 @@ contains
          ! predecessors; nothing further required.
       end if
    end subroutine test_conservation
+
+   subroutine setup_capped(grid, metrics, ms, ct, bc, nx, ny, uniform)
+      !! Periodic-x channel on a NON-power-of-two cell area (DX=3, DY=7) with a
+      !! divergent rightward transport of ~4 cells of water, so at ratio = 1
+      !! the 2*ratio+1 = 3 pass budget cannot empty it.  `uniform` selects a
+      !! constant S (35) / T (10) versus a sinusoidal S / cosine T.
+      type(hgrid_t), intent(out) :: grid
+      type(ocean_metrics_t), intent(out) :: metrics
+      type(multilayer_state_t), intent(out) :: ms
+      type(continuity_t), intent(out) :: ct
+      type(ocean_bc_state_t), intent(out) :: bc
+      integer, intent(out) :: nx, ny
+      logical, intent(in) :: uniform
+      real(wp), parameter :: H0 = 5.0_wp, DX = 3.0_wp, DY = 7.0_wp
+      real(wp), parameter :: A0 = 20.0_wp*DX*DY
+      real(wp), parameter :: PI = acos(-1.0_wp)
+      integer :: i, j, k, i0, nxp
+      call setup_periodic_blob(grid, metrics, ms, ct, bc, nx, ny, H0, DX, DY)
+      i0 = NGHOST + 1
+      nxp = grid%nx_phys
+      do k = 1, NZ
+         do j = 1, ny
+            do i = 1, nx
+               if (uniform) then
+                  ms%tracers(ms%idx_salinity)%c(i, j, k) = 35.0_wp
+                  ms%tracers(ms%idx_temperature)%c(i, j, k) = 10.0_wp
+               else
+                  ms%tracers(ms%idx_salinity)%c(i, j, k) = &
+                     2.0_wp + sin(2.0_wp*PI*real(i - i0, wp)/real(nxp, wp))
+                  ms%tracers(ms%idx_temperature)%c(i, j, k) = &
+                     10.0_wp + cos(4.0_wp*PI*real(i - i0, wp)/real(nxp, wp))
+               end if
+            end do
+         end do
+      end do
+      ct%vhtr = 0.0_wp
+      do k = 1, NZ
+         do j = 1, ny
+            do i = 1, nx + 1
+               ct%uhtr(i, j, k) = A0*(1.0_wp + 0.3_wp*sin(2.0_wp*PI*real(i - i0, wp)/real(nxp, wp)))
+            end do
+         end do
+      end do
+   end subroutine setup_capped
+
+   subroutine test_pass_cap_carries(error)
+      !! At ratio = 1 the pass cap leaves transport undrained.  It must be
+      !! CARRIED (uhtr/vhtr non-zero, counted once) and c must be left alone:
+      !! a uniform tracer stays uniform (a c *= hprev/h_layer rescale would not).
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      type(continuity_t) :: ct
+      type(ocean_metrics_t) :: metrics
+      type(ocean_bc_state_t) :: bc
+      integer :: nx, ny, i0, i1, j0, j1, it
+      integer :: tr(2)
+      real(wp) :: ref(2), dev
+
+      call setup_capped(grid, metrics, ms, ct, bc, nx, ny, .true.)
+      tr = [ms%idx_salinity, ms%idx_temperature]
+      ref = [35.0_wp, 10.0_wp]
+      i0 = NGHOST + 1
+      i1 = NGHOST + grid%nx_phys
+      j0 = NGHOST + 1
+      j1 = NGHOST + grid%ny_phys
+      call map_in(ms, ct)
+      !$acc enter data copyin(metrics)
+      call metrics%enter_data()
+      !$acc enter data copyin(bc)
+      call drain(grid, metrics, ct, ms, 1, bc)
+      !$acc exit data delete(bc)
+      call metrics%exit_data()
+      !$acc exit data delete(metrics)
+      !$acc update self(ct%uhtr, ct%vhtr)
+      call map_out(ms, ct)
+
+      call check(error, maxval(abs(ct%uhtr)) > 0.0_wp, "pass cap left no carried uhtr")
+      if (.not. allocated(error)) call check(error, ct%drain_carry_windows == 1, &
+                                             "carry not counted exactly once")
+      if (.not. allocated(error)) call check(error, ct%drain_carry_faces > 0_int64, &
+                                             "carried faces not counted")
+      do it = 1, 2
+         if (allocated(error)) exit
+         dev = maxval(abs(ms%tracers(tr(it))%c(i0:i1, j0:j1, :) - ref(it)))/ref(it)
+         call check(error, dev <= 1.0e-13_wp, "uniform tracer made non-uniform by the capped drain")
+      end do
+      call ct%destroy()
+      call ms%destroy()
+      call destroy_cartesian_metrics(metrics)
+   end subroutine test_pass_cap_carries
+
+   subroutine test_pass_cap_across(error)
+      !! Capped window, then further drains with no new transport: the carried
+      !! leftover empties, content Sum(h_layer*c) closes to the window-start
+      !! content and uhtr/vhtr end exactly 0.0.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      type(continuity_t) :: ct
+      type(ocean_metrics_t) :: metrics
+      type(ocean_bc_state_t) :: bc
+      integer :: nx, ny, i0, i1, j0, j1, i, j, k, it, iw
+      integer :: tr(2)
+      real(wp) :: mass0(2), mass1(2), rel
+
+      call setup_capped(grid, metrics, ms, ct, bc, nx, ny, .false.)
+      tr = [ms%idx_salinity, ms%idx_temperature]
+      i0 = NGHOST + 1
+      i1 = NGHOST + grid%nx_phys
+      j0 = NGHOST + 1
+      j1 = NGHOST + grid%ny_phys
+      ! Content against the WINDOW-START thickness hprev = h_end + div(uhtr)/area.
+      do it = 1, 2
+         mass0(it) = 0.0_wp
+         do k = 1, NZ
+            do j = j0, j1
+               do i = i0, i1
+                  mass0(it) = mass0(it) + ms%tracers(tr(it))%c(i, j, k)* &
+                              (ms%h_layer(i, j, k) + (ct%uhtr(i + 1, j, k) - ct%uhtr(i, j, k))/(3.0_wp*7.0_wp))
+               end do
+            end do
+         end do
+      end do
+
+      call map_in(ms, ct)
+      !$acc enter data copyin(metrics)
+      call metrics%enter_data()
+      !$acc enter data copyin(bc)
+      call drain(grid, metrics, ct, ms, 1, bc)
+      call check(error, ct%drain_carry_windows == 1, "window 1 did not carry (cap not forced)")
+      ! Further windows: no new transport, h_layer left at its window-end value.
+      do iw = 1, 12
+         call drain(grid, metrics, ct, ms, 1, bc)
+         !$acc update self(ct%uhtr, ct%vhtr)
+         if (maxval(abs(ct%uhtr)) == 0.0_wp .and. maxval(abs(ct%vhtr)) == 0.0_wp) exit
+      end do
+      !$acc exit data delete(bc)
+      call metrics%exit_data()
+      !$acc exit data delete(metrics)
+      call map_out(ms, ct)
+
+      if (.not. allocated(error)) call check(error, &
+                                             maxval(abs(ct%uhtr)) == 0.0_wp .and. maxval(abs(ct%vhtr)) == 0.0_wp, &
+                                             "carried transport did not empty to exactly 0.0")
+      do it = 1, 2
+         if (allocated(error)) exit
+         mass1(it) = sum(ms%h_layer(i0:i1, j0:j1, :)*ms%tracers(tr(it))%c(i0:i1, j0:j1, :))
+         rel = abs(mass1(it) - mass0(it))/abs(mass0(it))
+         call check(error, rel < 1.0e-12_wp, "content not conserved across the carried windows")
+      end do
+      call ct%destroy()
+      call ms%destroy()
+      call destroy_cartesian_metrics(metrics)
+   end subroutine test_pass_cap_across
 
    subroutine test_uniform_preserved(error)
       !! Constancy / uniform-preservation: a horizontally UNIFORM tracer
