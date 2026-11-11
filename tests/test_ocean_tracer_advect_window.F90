@@ -323,6 +323,7 @@ contains
             !$acc exit data delete(bc)
             call metrics%exit_data()
             !$acc exit data delete(metrics)
+            !$acc update self(ct%uhtr, ct%vhtr)
             call map_out(ms, ct)
 
             mass1 = area*sum(ms%h_layer(i0:i1, j0:j1, :)*ms%tracers(ms%idx_salinity)%c(i0:i1, j0:j1, :))
@@ -419,6 +420,7 @@ contains
       !$acc exit data delete(bc)
       call metrics%exit_data()
       !$acc exit data delete(metrics)
+      !$acc update self(ct%uhtr, ct%vhtr)
       call map_out(ms, ct)
 
       call check(error, maxval(abs(ct%uhtr)) > 0.0_wp, "pass cap left no carried uhtr")
