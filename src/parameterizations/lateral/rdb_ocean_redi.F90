@@ -1565,6 +1565,11 @@ contains
       call redi_tracer_column(kb, kt, hcR, trcR, TlR, TiR, aLR, aRR)
       do ks = 1, ns - 1
          if (hEff(fa, fb, ks) /= 0.0_wp) then
+            ! A filler layer (h <= H_VANISHED) refuses deposits (c storage), so a
+            ! flux paired with one on EITHER end is dropped on BOTH ends: each
+            ! cell takes the same decision and the live side cannot lose tracer.
+            if (.not. (rdb_vl_is_live(h_layer(iL, jL, nz + 1 - KoL(fa, fb, ks))) .and. &
+                       rdb_vl_is_live(h_layer(iR, jR, nz + 1 - KoR(fa, fb, ks))))) cycle
             dtdiff = redi_sublayer_dT(nk, KoL(fa, fb, ks) - koff, KoL(fa, fb, ks + 1) - koff, &
                                       KoR(fa, fb, ks) - koff, KoR(fa, fb, ks + 1) - koff, &
                                       PoL(fa, fb, ks), PoL(fa, fb, ks + 1), &
