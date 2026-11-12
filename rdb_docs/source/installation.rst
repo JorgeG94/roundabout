@@ -272,7 +272,7 @@ The options you are most likely to touch:
        via its serial backend.
    * - ``RDB_CUDA_AWARE_MPI``
      - ``ON`` with MPI + GPU, else ``OFF``
-     - Declares the MPI library CUDA-aware; an explicit value always wins. ``ON``
+     - Declares the MPI library CUDA-aware; an explicit value wins on a fresh build dir and whenever it differs from the auto default; in an existing dir a value equal to the previously auto-chosen one keeps following the default. ``ON``
        without MPI and GPU is a configure error. See the multi-GPU warning
        below.
    * - ``RDB_GPU_ARCH``
@@ -489,6 +489,18 @@ Other routes, if the script does not suit:
    * **NVHPC**, which bundles an HPC-X OpenMPI whose Fortran modules are
      nvfortran-built, so for the GPU toolchain the MPI comes with the
      compiler and there is nothing to match.
+
+.. note::
+
+   A foreign MPI visible in the environment can defeat the match even when the
+   right wrappers are passed: FindMPI may still resolve the library names to
+   that MPI's ``libmpi``, and the link fails with ``undefined reference to
+   _mpi_f08_types_8_``. Before configuring, unset ``MPI_ROOT`` and remove the
+   foreign MPI's directories from ``LIBRARY_PATH``, ``LD_LIBRARY_PATH``,
+   ``CPATH`` and ``PATH`` (environment modules for other libraries often add
+   them), pass ``-DMPI_Fortran_COMPILER=<mpi>/bin/mpif90
+   -DMPI_C_COMPILER=<mpi>/bin/mpicc`` explicitly, and check that
+   ``MPI_mpi_LIBRARY`` in ``CMakeCache.txt`` points into the intended MPI.
 
 There is also ``environments/roundabout_env_3.13.yml``, a conda environment for
 the Python post-processing and test tooling. It deliberately **excludes**

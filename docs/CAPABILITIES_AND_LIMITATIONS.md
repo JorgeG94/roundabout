@@ -482,7 +482,7 @@ Under `z_fixed` plus a cavity, melt and top drag are accepted, and `kappa_h /= 0
 | Per-rank restart | Shipped | – | Resumes only on the same decomposition. |
 | Restart on a different rank count | **Not implemented** | – | – |
 | Parallel (collective) NetCDF | **Not implemented** | – | Output is per rank, merged offline by `tools/merge_output.py`. |
-| CUDA-aware halo exchange | Shipped | `-DRDB_CUDA_AWARE_MPI=ON` | A multi-GPU run needs it, and `CUDA_VISIBLE_DEVICES` pinned per rank before `MPI_Init`. The driver refuses a host-staged multi-GPU build. |
+| CUDA-aware halo exchange | Shipped | `-DRDB_CUDA_AWARE_MPI=ON` | A multi-GPU run needs it, and `CUDA_VISIBLE_DEVICES` pinned per rank before `MPI_Init`. A GPU build always hands device buffers to MPI, so the driver refuses a multi-rank GPU build not declared CUDA-aware. |
 | Barotropic march-in (wide halo) | Opt-in, **not bit-identical** | `&ocean_bt_nml bt_halo > 0` | See the list below. The default (`-1`, auto) resolves to 0. |
 
 ### Refused at configure on more than one rank

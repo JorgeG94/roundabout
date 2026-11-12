@@ -255,9 +255,9 @@ contains
          " actual_dev=", actual_dev
       if (cached_rank == 0) then
 #ifdef RDB_CUDA_AWARE_MPI
-         write (output_unit, "(A)") "[gpu-bind] halo path: GPU-direct (CUDA-aware MPI)"
+         write (output_unit, "(A)") "[gpu-bind] halo path: device buffers, MPI declared CUDA-aware"
 #else
-         write (output_unit, "(A)") "[gpu-bind] halo path: HOST-STAGED (rebuild with -DRDB_CUDA_AWARE_MPI=ON for GPU-direct)"
+         write (output_unit, "(A)") "[gpu-bind] halo path: device buffers, MPI NOT declared CUDA-aware (-DRDB_CUDA_AWARE_MPI=ON)"
 #endif
       end if
       flush (output_unit)

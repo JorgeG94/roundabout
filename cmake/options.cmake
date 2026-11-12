@@ -31,18 +31,15 @@ option(
 # CUDA-aware MPI. DECLARES that the MPI library is CUDA-aware (a GPU build
 # always hands device buffers to MPI; without the declaration a multi-rank GPU
 # run is refused at startup). Default: ON exactly when MPI and GPU offload are
-# both requested on NVHPC (the only compiler with an OpenACC device-buffer path;
-# the compiler ID is already known here), OFF otherwise. Provenance:
-# RDB_CUDA_AWARE_MPI_AUTO (INTERNAL) holds the value this file auto-chose. While
-# the cache still equals it the value is re-derived on every configure (so
-# toggling MPI/GPU in the same build dir follows); any other value is explicit
-# and never touched. An explicit -D equal to the auto value is indistinguishable
-# and so keeps following the default -- identical behaviour for that value. ON
-# without MPI + GPU is a configure FATAL_ERROR, in the same fail-loud style as
-# RDB_ENABLE_GPU.
-if(RDB_ENABLE_MPI
-   AND RDB_ENABLE_GPU
-   AND CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
+# both requested (RDB_ENABLE_GPU=ON already fails loud on a compiler with no GPU
+# path), OFF otherwise. Provenance: RDB_CUDA_AWARE_MPI_AUTO (INTERNAL) holds the
+# value this file auto-chose. While the cache still equals it the value is
+# re-derived on every configure (so toggling MPI/GPU in the same build dir
+# follows); any other value is explicit and never touched. An explicit -D equal
+# to the previously auto-chosen value is indistinguishable and keeps following
+# the default; a re-derivation that changes the value is reported. ON without
+# MPI + GPU is a configure FATAL_ERROR, like RDB_ENABLE_GPU.
+if(RDB_ENABLE_MPI AND RDB_ENABLE_GPU)
   set(_rdb_cuda_aware_default ON)
 else()
   set(_rdb_cuda_aware_default OFF)
@@ -53,6 +50,14 @@ if(NOT DEFINED RDB_CUDA_AWARE_MPI)
       CACHE INTERNAL "")
 elseif(DEFINED RDB_CUDA_AWARE_MPI_AUTO AND "${RDB_CUDA_AWARE_MPI}" STREQUAL
                                            "${RDB_CUDA_AWARE_MPI_AUTO}")
+  if(NOT "${RDB_CUDA_AWARE_MPI}" STREQUAL "${_rdb_cuda_aware_default}")
+    message(
+      STATUS
+        "RDB_CUDA_AWARE_MPI: auto default re-derived ${RDB_CUDA_AWARE_MPI} -> "
+        "${_rdb_cuda_aware_default} (MPI/GPU changed); to pin a value use a "
+        "fresh build dir with -DRDB_CUDA_AWARE_MPI=<value>, or "
+        "-U RDB_CUDA_AWARE_MPI first, then -D...")
+  endif()
   set(RDB_CUDA_AWARE_MPI
       "${_rdb_cuda_aware_default}"
       CACHE BOOL "" FORCE)
@@ -64,7 +69,7 @@ else()
 endif()
 option(
   RDB_CUDA_AWARE_MPI
-  "Declare the MPI library CUDA-aware (device buffers go to MPI; required for multi-rank GPU runs). Default ON with MPI + GPU on NVHPC"
+  "Declare the MPI library CUDA-aware (device buffers go to MPI; required for multi-rank GPU runs). Default ON with MPI + GPU"
   ${_rdb_cuda_aware_default})
 if(RDB_CUDA_AWARE_MPI AND NOT (RDB_ENABLE_MPI AND RDB_ENABLE_GPU))
   message(
