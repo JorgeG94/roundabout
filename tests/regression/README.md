@@ -1452,9 +1452,13 @@ go through a stdlib classic-NetCDF writer — nothing to install):
   and `remap_check_preconditions`;
 * edge variants: `closed` (walls + island), `channel` (re-entrant in x, a
   north sponge band), `obc` (a Flather open east edge), and the single-rank
-  rows `tripolar` (the analytic tripolar generator: 15 x 1 degree from 59 N,
+  row `tripolar` (the analytic tripolar generator: 15 x 1 degree from 59 N,
   bipolar cap above 70 N, north fold, px = 1) and `cavity` (a flat 200 m ice
-  draft over the deep northern third); and `cliff` (walls + island, but the
+  draft over the deep northern third; it enables the cavity dynamics and the
+  draft only, NEITHER the basal melt NOR the top drag, so its PASS says nothing
+  about the melt path -- that is covered by the `cavity_*` cases of
+  `test_ocean_decomp_bitid_mpi`; the axis is not extended because the RESTART
+  leg would hit the known one-rank melt warm-restart defect); and `cliff` (walls + island, but the
   staircase replaced by a 10 m shelf dropping straight to 2000 m, rx0 ~ 0.99 —
   the 1-degree Southern Ocean's coastal cliffs; its own bathymetry file);
 * `grid`: Cartesian, or a 0.25 x 0.18 degree spherical sector at 40 N.

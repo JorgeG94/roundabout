@@ -150,7 +150,7 @@
 !!     BT-correction fold itself stays UNIFORM (D1 follow-up — MOM6 never
 !!     weights it).
 !!   * cavity_zfixed / cavity_sigma / cavity_sigma_ratio2 / cavity_periodic /
-!!     cavity_melt_only / cavity_gall — the ice-shelf cavity (dyn + virtual
+!!     cavity_melt_only / cavity_combo (EPBL + hj99 + implicit_top_drag + tracer ratio 2) / cavity_gall — the ice-shelf cavity (dyn + virtual
 !!     melt + quadratic top drag, `cavity_melt_only` without the drag) with a
 !!     grounded disc and an L-shaped calving front on the 2x2 seams
 !!     (`cavity_nml`).  On top of the registry fields the gate compares the
@@ -181,6 +181,7 @@ program test_ocean_decomp_bitid_mpi
    use rdb_constants, only: wp
    use rdb_config, only: config_t, read_config_from_string, validate_config
    use rdb_ocean_status, only: OCEAN_STATUS_OK
+   use rdb_error_ring, only: error_ring_clear, error_ring_count, error_ring_get
    use rdb_ocean_engine, only: ocean_engine_t, engine_setup, engine_enter_data, &
                                engine_step, engine_step_ice, engine_step_finalize, &
                                engine_exit_data, &
@@ -250,7 +251,7 @@ program test_ocean_decomp_bitid_mpi
       !! `RDB_BITID_CASES`: run only the cases whose name contains this substring.
    type(comm_t) :: comm
    character(len=16), parameter :: SCHEMES(2) = [character(len=16) :: "pred_corr", "ssp_rk2"]
-   character(len=24), parameter :: CASES(48) = [character(len=24) :: &
+   character(len=24), parameter :: CASES(49) = [character(len=24) :: &
                                                 "island_basin", "weno7_pv", &
                                                 "periodic_channel_zstar", &
                                                 "visc_rem_zstar", &
@@ -274,7 +275,8 @@ program test_ocean_decomp_bitid_mpi
                                                 "drain_ratio_weno9", "drain_ratio_fold", &
                                                 "drain_ratio_fold_h3", &
                                                 "cavity_zfixed", "cavity_sigma", &
-                                                "cavity_sigma_ratio2", "cavity_gall", "cavity_melt_only", "cavity_periodic"]
+                                                "cavity_sigma_ratio2", "cavity_gall", "cavity_melt_only", "cavity_periodic", &
+                                                "cavity_combo"]
 
    call comm_env_init()
    call comm_env_setup_roles(.false.)
@@ -911,6 +913,9 @@ contains
       !!   cavity_melt_only cavity_sigma with the top drag OFF (melt-only under-ice u*);
       !!   cavity_periodic cavity_sigma re-entrant in x (periodic west/east): the shelf
       !!                       box sits against the wrap and the face twins wrap;
+      !!   cavity_combo       cavity_sigma with the cheap composition knobs that have no case of
+      !!                       their own: EPBL (KPP off), the `hj99` exchange law, the vdiff
+      !!                       `implicit_top_drag` fold and `dt_tracer_advect_ratio = 2`;
       !!   cavity_gall         a flat bed under a deep sloping draft with no box
       !!                       limit: the west 14 of 26 columns are grounded
       !!                       (global 14/26 = 0.54), so a 4x1 west tile is 100 %
@@ -922,8 +927,11 @@ contains
       character(len=:), allocatable :: vc, nzl, cav, vm, topo, draft, tdrag
       character(len=24) :: sfrac
       character(len=8) :: xedge
+      character(len=48) :: vdf, xlaw
 
       vm = ""
+      vdf = ""
+      xlaw = "const_gamma"
       xedge = "wall"
       if (label == "cavity_periodic") xedge = "periodic"
       tdrag = "&ocean_tdrag_nml enable = .true., form = 'quadratic', cd = 2.5e-3 /"//NL
@@ -939,6 +947,12 @@ contains
          vc = "&vcoord_nml vcoord_type = 'sigma' /"//NL
          cav = ", h_min_cavity = 100.0 /"//NL
          if (label == "cavity_sigma_ratio2") vm = "&ocean_vmix_nml dt_therm_ratio = 2 /"//NL
+         if (label == "cavity_combo") then
+            vm = "&ocean_vmix_nml use_kpp = .false., dt_therm_ratio = 2, dt_tracer_advect_ratio = 2 /"//NL// &
+                 "&ocean_epbl_nml enable = .true. /"//NL
+            vdf = "&ocean_vdiff_nml implicit_top_drag = .true. /"//NL
+            xlaw = "hj99"
+         end if
       end if
       topo = "&ocean_topo_nml topo_config = 'seamount', max_depth = 1000.0, edge_depth = 400.0, "// &
              "slope_scale = 80000.0, wind_config = 'constant', taux_magnitude = 0.05 /"//NL
@@ -966,10 +980,10 @@ contains
             "&ocean_cavity_dyn_nml enable = .true., draft_config = 'linear', "// &
             draft//cav// &
             "&ocean_forcing_nml enable_components = .true. /"//NL// &
-            "&ocean_cavity_melt_nml enable = .true., exchange_law = 'const_gamma', "// &
+            "&ocean_cavity_melt_nml enable = .true., exchange_law = '"//trim(xlaw)//"', "// &
             "gamma_t = 2.2e-2, gamma_s = -1.0, cdrag_top = 2.5e-3, "// &
             "ice_conduction = 'insulating', s_ice = 0.0, far_field_depth = 10.0 /"//NL// &
-            tdrag// &
+            tdrag//vdf// &
             "&ocean_pgf_nml form = 'fv_mom6', p_top_in_bc = .true. /"//NL// &
             "&ocean_eos_nml eos = 'linear', tfreeze_set = 'isomip' /"//NL// &
             "&ocean_bc_nml west = '"//xedge//"', east = '"//xedge//"', south = 'wall', "// &
@@ -1489,7 +1503,11 @@ contains
             ! Windowed-drain cases: the sub-cycle must run >1 pass (else the
             ! pass-count reduction is never exercised) and every layout must
             ! have used the same count as the serial reference.
-            if (index(case_nml(label, scheme, 1, 1), "dt_tracer_advect_ratio") > 0) then
+            ! (`cavity_combo` is exempt from the >1-pass requirement: its quiescent
+            ! flow needs a single pass per window; it still runs the windowed
+            ! accumulation and the per-window drain, and is compared bitwise.)
+            if (index(case_nml(label, scheme, 1, 1), "dt_tracer_advect_ratio") > 0 .and. &
+                label /= "cavity_combo") then
                if (ref%drain_iter < 2 .or. dec%drain_iter /= ref%drain_iter) then
                   write (*, '(3a,i0,a,i0)') "FAIL ", trim(tag), ": drain passes ref=", &
                      ref%drain_iter, " dec=", dec%drain_iter
@@ -1624,8 +1642,8 @@ contains
       !! Before it was, each tile compared its own fraction, so one rank
       !! refused while the others carried on and the job hung.  The probe has
       !! global fraction 14/26 = 0.54 against a limit of 0.4 (the accepted
-      !! twin, `cavity_gall`, uses 0.6).  The run is guarded by the ctest
-      !! timeout: a hang is a failure.
+      !! twin, `cavity_gall`, uses 0.6).  The run is guarded by the
+      !! explicit ctest TIMEOUT on this test: a hang is a failure.
       type(ocean_engine_t) :: engine
       type(config_t) :: cfg
       character(len=:), allocatable :: nml
@@ -1885,10 +1903,23 @@ contains
                                                     "coriolis_scheme = 'planetary' /"//new_line("a")// &
                                                     "&ocean_bc_nml west = 'periodic', "// &
                                                     "east = 'periodic', north = 'tripolar_fold' /"]
+      ! One distinctive substring of the message each entry must produce, so a
+      ! fence that is deleted while a LATER, more generic refusal still fires
+      ! (the bulk-forcing one, the validate envelope) cannot pass unnoticed.
+      character(len=64), parameter :: WHY(8) = [character(len=64) :: &
+                                                "&ocean_wetdry_nml enable = .true. is single-rank", &
+                                                "'chapman' edges are single-rank", &
+                                                "freshwater = 'mass' with a cavity is unproven", &
+                                                "draft_config = 'file' is unproven", &
+                                                "enable with &ocean_bulk_flux_nml enable is unproven", &
+                                                "is not 'wall' or 'periodic'", &
+                                                "is not 'wall' or 'periodic'", &
+                                                "'tripolar_fold' is unproven"]
       type(ocean_engine_t) :: engine
       type(config_t) :: cfg
       character(len=:), allocatable :: nml
-      integer :: ik, ierr
+      integer :: ik, ierr, im
+      logical :: why_found, engine_ran
 
       do ik = 1, size(KNOBS)
          nml = "&sim_nml sim_type = 'ocean' /"//NL// &
@@ -1910,16 +1941,34 @@ contains
             n_fail = n_fail + 1
             cycle
          end if
+         call error_ring_clear()
+         engine_ran = ierr == OCEAN_STATUS_OK
          if (ierr == OCEAN_STATUS_OK) then
             call engine_setup(engine, cfg, ierr, compute_rank=rank, compute_size=nprocs)
             call engine_teardown(engine)
+         end if
+         why_found = .false.
+         do im = 0, error_ring_count() - 1
+            if (index(error_ring_get(im), trim(WHY(ik))) > 0) why_found = .true.
+         end do
+         ! Entries `validate_config` itself refuses (wet/dry) never reach the engine
+         ! fence: status-only, no reason to read.
+         if (engine_ran .and. ierr /= OCEAN_STATUS_OK .and. .not. why_found) then
+            if (error_ring_count() > 0) write (*, '(2a)') "  first ring message: ", &
+               trim(error_ring_get(0))
+            write (*, '(3a,i0)') "FAIL fence: '", trim(KNOBS(ik)), &
+               "' was refused, but NOT for the expected reason (no error-ring message "// &
+               "contains '"//trim(WHY(ik))//"'), rank ", rank
+            n_fail = n_fail + 1
+            cycle
          end if
          if (ierr == OCEAN_STATUS_OK) then
             write (*, '(3a,i0)') "FAIL fence: '", trim(KNOBS(ik)), &
                "' was ACCEPTED on multi-rank, rank ", rank
             n_fail = n_fail + 1
          else if (rank == 0) then
-            write (*, '(3a)') "case fence: '", trim(KNOBS(ik)), "' refused on multi-rank (ok)"
+            write (*, '(3a)') "case fence: '", trim(KNOBS(ik)), &
+               "' refused on multi-rank for the expected reason (ok)"
          end if
       end do
    end subroutine check_single_rank_fences

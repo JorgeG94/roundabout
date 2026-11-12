@@ -2127,7 +2127,11 @@ contains
                                   engine%state%metrics, engine%state%multilayer, &
                                   engine%state%eos, engine%state%surface_flux, &
                                   active=engine%state%dyn%enable_thermodynamics &
-                                  .and. engine%state%dyn%is_thermo_step())
+                                  .and. engine%state%dyn%is_thermo_step(), &
+                                  ierr=ierr)
+      if (present(ierr)) then
+         if (ierr /= OCEAN_STATUS_OK) return
+      end if
 
       ! Phase 4b — the MELT-ONLY fallback for the boundary-layer `u_*`.
       !
