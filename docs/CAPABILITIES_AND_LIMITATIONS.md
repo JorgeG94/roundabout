@@ -512,6 +512,12 @@ These are the only such paths found.
   open boundaries. It is therefore OPT-IN: the default (`bt_halo = -1`,
   AUTO) resolves to 0 on every rank count, and a multi-rank run that sets it
   explicitly logs a warning.
+- **Owned open-boundary tendencies read open-edge ghosts** that are refilled
+  once per stage (thickness and tracers only; ghost velocities never), so
+  bit-identity there relies on every kernel being position-independent --
+  which is why CPU builds compile with FMA contraction off (see
+  `cmake/compiler_flags.cmake`). The structural fix (refill at stage entry)
+  would change 1-rank answers and is deferred.
 
 ### Global 1-degree scaling
 

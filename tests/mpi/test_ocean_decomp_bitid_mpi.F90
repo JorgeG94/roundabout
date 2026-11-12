@@ -58,9 +58,13 @@
 !!   * obc_epbl — Flather east edge, sigma, EPBL, cooled surface, 24 x 16 at
 !!     nghost = 4 (the compat-matrix cell): at -np 4 the 4x1 east tile is 14
 !!     columns wide and the open-edge ghost columns it evolves sit in the
-!!     vector remainder of the continuity loops; without `-Mnofma` on
-!!     `rdb_continuity.F90` (nvfortran CPU build) their last-bit rounding
-!!     differed from the serial run and reached the boundary face;
+!!     vector remainder of the continuity loops; with FMA contraction on
+!!     their last-bit rounding differed from the serial run and reached the
+!!     owned boundary face through the horizontal viscosity (first owned
+!!     difference at step 12, 6.7e-16, 3.6e-13 by step 24).  CPU builds now
+!!     compile with contraction off (`cmake/compiler_flags.cmake`).  The
+!!     case depends on the tile width (14) relative to the vector width
+!!     (AVX2): on an AVX-512 target it may not catch a regression;
 !!   * spherical — lon-lat sector, planetary Coriolis, spoon basin, Wright
 !!     EOS, `2gyre` wind;
 !!   * obc_radiation_sponge — Orlanski-radiating open south edge with tracer
@@ -715,13 +719,17 @@ contains
                "west_tidal_omega = 1.4051890e-4 /"//NL
       case ("obc_epbl")
          ! Flather east edge, sigma, EPBL, cooled surface: the open-edge ghost
-         ! columns are evolved by the continuity chain and read back by the
-         ! boundary face's tendencies, so an FMA-contracted vector body vs a
-         ! differently-contracted remainder in `rdb_continuity` made a
-         ! ghost cell's rounding depend on its position in the TILE (nvfortran
-         ! CPU build, 4x1).  Caught by the compat matrix DECOMP leg.  Written
+         ! columns are evolved by the continuity chain and the owned boundary
+         ! face reads them through the horizontal viscosity, so with FMA
+         ! contraction on, a vector body vs a differently-contracted remainder
+         ! made a ghost cell's rounding depend on its position in the TILE
+         ! (nvfortran CPU, 4x1, AVX2; the mismatch list starts with
+         ! bt_visc_rem_u/v and epbl_kd_int only because it is alphabetical --
+         ! 56 fields differ).  Caught by the compat matrix DECOMP leg.  Written
          ! out in full (not on `common`): the rounding event needs this
-         ! stratification, forcing and tile width (24 x 16, nghost 4, 10 layers).
+         ! stratification, forcing and tile width (24 x 16, nghost 4, 10
+         ! layers); on AVX-512 the 14-wide tile may sit differently in the
+         ! vector width and this case may then not catch a regression.
          nml = "&sim_nml sim_type = 'ocean' /"//NL// &
                "&mpi_nml px = "//trim(spx)//", py = "//trim(spy)//" /"//NL// &
                "&time_nml t_end = 21600.0, dt_fixed = 900.0 /"//NL// &
