@@ -241,7 +241,7 @@ program test_ocean_decomp_bitid_mpi
       !! `RDB_BITID_CASES`: run only the cases whose name contains this substring.
    type(comm_t) :: comm
    character(len=16), parameter :: SCHEMES(2) = [character(len=16) :: "pred_corr", "ssp_rk2"]
-   character(len=24), parameter :: CASES(45) = [character(len=24) :: &
+   character(len=24), parameter :: CASES(49) = [character(len=24) :: &
                                                 "island_basin", "weno7_pv", &
                                                 "periodic_channel_zstar", &
                                                 "visc_rem_zstar", &
@@ -263,8 +263,9 @@ program test_ocean_decomp_bitid_mpi
                                                 "drain_ratio", "drain_ratio_h3", &
                                                 "drain_ratio_weno5", "drain_ratio_weno7", &
                                                 "drain_ratio_weno9", "drain_ratio_fold", &
-                                                "drain_ratio_fold_h3", "bulk_flux", "bulk_flux_ice", &
-                                                "bulk_flux_fold"]
+                                                "drain_ratio_fold_h3", "eulz", "eulz_periodic", &
+                                                "eulz_tripolar", "eulz_epbl_mle", "bulk_flux", &
+                                                "bulk_flux_ice", "bulk_flux_fold"]
 
    call comm_env_init()
    call comm_env_setup_roles(.false.)
@@ -292,7 +293,8 @@ program test_ocean_decomp_bitid_mpi
           index(trim(CASES(ic)), "bulk_flux") == 1 .or. &
           trim(CASES(ic)) == "file_readers_zstar") cycle
 #endif
-      call run_case(trim(CASES(ic)), trim(SCHEMES(1)))
+      ! eulerian_z is refused under pred_corr (validate_config): ssp_rk2 only.
+      if (CASES(ic) (1:4) /= "eulz") call run_case(trim(CASES(ic)), trim(SCHEMES(1)))
       ! diabatic_first = .false. is refused under ssp_rk2 (validate_config).
       ! (drain_ratio_h3 pins it too.)
       if (trim(CASES(ic)) == "diabatic_end" .or. trim(CASES(ic)) == "drain_ratio_h3" .or. &
@@ -497,6 +499,26 @@ contains
                "coriolis_beta = 2.0e-11 /"//NL// &
                "&ocean_coriolis_nml form = 'sadourny', pv_adv_scheme = 'weno7' /"//NL// &
                "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
+      case ("eulz", "eulz_periodic")
+         ! Plain eulerian_z (per-step vertical advection pins h to the
+         ! reference; no EPBL, no MLE): the vertical advection runs after the
+         ! post-continuity exchange, so a ghost column must be refreshed from
+         ! its owner afterwards.  "eulz" = closed seamount basin
+         ! (walls: seam ghosts only); "eulz_periodic" = the periodic channel
+         ! of periodic_channel_zstar (wrap ghosts, also on one rank).
+         nml = common// &
+               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
+               "dx = 20000.0, dy = 20000.0 /"//NL// &
+               "&physics_nml coriolis_f = -1.0e-4, wind_stress_x = 0.1 /"//NL// &
+               "&vcoord_nml vcoord_type = 'eulerian_z' /"//NL// &
+               "&ocean_topo_nml topo_config = 'seamount', max_depth = 2000.0, "// &
+               "edge_depth = 1500.0, slope_scale = 60000.0 /"//NL
+         if (label == "eulz_periodic") then
+            nml = nml//"&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
+                  "north = 'wall' /"//NL
+         else
+            nml = nml//"&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
+         end if
       case ("periodic_channel_zstar")
          ! Re-entrant channel over a seamount, z* (ALE remap every step).
          nml = common// &
@@ -596,7 +618,7 @@ contains
                "&ocean_bc_nml west = 'tidal', east = 'open', south = 'wall', north = 'wall', "// &
                "west_n_tidal = 1, west_tidal_amp = 0.5, west_tidal_phase = 0.0, "// &
                "west_tidal_omega = 1.4051890e-4 /"//NL
-      case ("tripolar", "redi_cfl_fold", "drain_ratio_fold", "drain_ratio_fold_h3")
+      case ("tripolar", "redi_cfl_fold", "drain_ratio_fold", "drain_ratio_fold_h3", "eulz_tripolar")
          ! Analytic tripolar cap (59N-83N, phi_join 74N) closed by the north
          ! fold, periodic in x, under a constant wind, with the double-Drake
          ! land walls reaching the fold line at asymmetric columns (1 and
@@ -611,7 +633,7 @@ contains
                "phi_join = 74.0, lon_pole = 0.0, rad_earth = "//trim(rad_earth_s)//", "// &
                "coriolis_scheme = 'planetary' /"//NL// &
                "&physics_nml wind_stress_x = "//trim(wind_s)//", wind_stress_y = "//trim(wind_y_s)//" /"//NL// &
-               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
+               "&vcoord_nml vcoord_type = '"//trim(merge("eulerian_z", "sigma     ", label == "eulz_tripolar"))//"' /"//NL// &
                "&ocean_topo_nml topo_config = 'double_drake', max_depth = 1000.0, "// &
                "slope_scale = 0.2 /"//NL// &
                "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
@@ -639,7 +661,7 @@ contains
       case ("spherical", "closures", "gm_ebt_struct", "gm_fgnv", "meke_gm_work", &
             "hvisc_om3_floors", "vmix_no_interior", "tidal_files", "tidal_polzin", &
             "bbl_lotw", "hvisc_kh_points", "diabatic_end", "hvisc_thin_layer", &
-            "hvisc_biharm_stress")
+            "hvisc_biharm_stress", "eulz_epbl_mle")
          ! Lon-lat sector, spoon basin, Wright EOS.  "closures" adds the
          ! lateral and vertical parameterisation set on top (EPBL instead of
          ! KPP, Fox-Kemper MLE, GM + MEKE, Redi, kappa-shear, tidal mixing,
@@ -651,7 +673,9 @@ contains
                "dx = 1.0, dy = 1.0 /"//NL// &
                "&ocean_grid_nml grid_config = 'spherical', lon_west = 0.0, lat_south = 20.0, "// &
                "rad_earth = 6.371e6, coriolis_scheme = 'planetary' /"//NL// &
-               "&vcoord_nml vcoord_type = '"//merge("zstar", "sigma", label == "diabatic_end")// &
+               "&vcoord_nml vcoord_type = '"// &
+               trim(merge("zstar     ", merge("eulerian_z", "sigma     ", label == "eulz_epbl_mle"), &
+                          label == "diabatic_end"))// &
                "' /"//NL// &
                "&ocean_eos_nml eos = 'wright' /"//NL// &
                "&ocean_topo_nml topo_config = 'spoon', max_depth = 3000.0, "// &
@@ -674,6 +698,16 @@ contains
                   "&ocean_hdiff_nml kappa_h = 100.0 /"//NL
          end if
          select case (label)
+         case ("eulz_epbl_mle")
+            ! eulerian_z (legacy per-stage vertical advection + h rescale)
+            ! with EPBL and Fox-Kemper MLE: the pair that once drifted at
+            ! round-off under ssp_rk2.
+            nml = nml// &
+                  "&ocean_vmix_nml use_kpp = .false. /"//NL// &
+                  "&ocean_epbl_nml enable = .true., mstar_scheme = 'om4', "// &
+                  "mld_use_prev_guess = .true. /"//NL// &
+                  "&ocean_foxkemper_nml enable = .true., use_mom_mixrate = .true., "// &
+                  "mld_decay_time = 86400.0 /"//NL
          case ("gm_ebt_struct")
             ! GM with the EBT vertical structure of KhTh (the structure is the
             ! wave-speed slot's `ebt_struct`, a per-cell field read at both
