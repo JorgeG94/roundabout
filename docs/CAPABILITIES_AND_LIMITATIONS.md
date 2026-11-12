@@ -474,7 +474,7 @@ Under `z_fixed` plus a cavity, melt and top drag are accepted, and `kappa_h /= 0
 | Feature | Status | Key knob | Limits |
 |---|---|---|---|
 | Rectangular domain decomposition | Shipped | `&mpi_nml px`, `py` | Left at `1 x 1` on several ranks, the engine picks the split. It is north-south under a tripolar fold. An explicit `px*py` that does not match the rank count is refused. |
-| Bit-identity with the serial run | Shipped | – | Checked on nineteen configurations and every `px x py` split of 1, 2 and 4 ranks, under both split schemes. |
+| Bit-identity with the serial run | Shipped | – | Checked on every case in the gate's `CASES` list and every `px x py` split of 1, 2 and 4 ranks, under both split schemes. |
 | Tripolar north fold | Shipped | `north = "tripolar_fold"` | East-west splits (`px > 1`) must be asked for explicitly. |
 | Per-rank file readers | Shipped | – | Supergrid, bathymetry, z-level T/S initial condition and `&ocean_dataovr_nml` forcing are windowed per rank. |
 | Console totals | Shipped | `&ocean_diag_nml reproducing_sums` (default on) | The status block prints the same digits on any rank count. |
@@ -483,7 +483,8 @@ Under `z_fixed` plus a cavity, melt and top drag are accepted, and `kappa_h /= 0
 | Restart on a different rank count | **Not implemented** | – | – |
 | Parallel (collective) NetCDF | **Not implemented** | – | Output is per rank, merged offline by `tools/merge_output.py`. |
 | CUDA-aware halo exchange | Shipped | `-DRDB_CUDA_AWARE_MPI=ON` | A multi-GPU run needs it, and `CUDA_VISIBLE_DEVICES` pinned per rank before `MPI_Init`. The driver refuses a host-staged multi-GPU build. |
-| Barotropic march-in (wide halo) | Opt-in, **not bit-identical** | `&ocean_bt_nml bt_halo > 0` | See the list below. The default (`-1`, auto) resolves to 0. |
+| Barotropic march-in (wide halo) | Opt-in, **not bit-identical** | `&ocean_bt_nml bt_halo > 0` | See the list below. The default (`-1`, auto) resolves to 0. Refused at engine setup together with `&ocean_bt_nml dtbt` + `dtbt_reset_period >= 0` (the re-derived `n_inner` does not resize the wide-halo clone). |
+| OM3-style barotropic step reset | Shipped | `&ocean_bt_nml dtbt`, `dtbt_reset_period >= 0` | Bit-identical on any split with `bt_halo = 0` (global min of `dt_max` over owned cells, h ghosts refreshed first); gate: `dtbt_reset*` cases of `test_ocean_decomp_bitid_mpi`. |
 
 ### Refused at configure on more than one rank
 
@@ -495,7 +496,6 @@ Each check is fail-loud on every rank and names the knob. The check keys on the 
 | `&ocean_wetdry_nml enable` | the wet-mask / outflow-limiter halo exchange is not implemented |
 | `&ocean_bc_nml` `'chapman'` edges | the edge-uniform eta target is a per-rank partial mean |
 | `&ocean_thermo_nml sw_scheme = "manizza05"` | the per-rank chlorophyll read fills the interior only (no ghosts) and the ghosts feed `sw_kappa`; no decomposition bit-identity case |
-| `&ocean_bt_nml dtbt` with `dtbt_reset_period >= 0` and `bt_halo > 0` | `n_inner` changes mid-run and does not resize the wide-halo BT clone (this refusal is not rank-count dependent); the init-only form (`dtbt_reset_period < 0`) is allowed |
 | `&ocean_bulk_flux_nml enable` (the atm-driven bulk forcing, OM3 C2c-3a) | its surface stress runs through the centre halo, the seam refresh and the tripolar fold, and it has no decomposition bit-identity case yet; the 1 vs 2x2 gate is part of C2c-3b |
 | tripolar fold with a north tile shorter than `nghost + 1` rows (`ny/py`), or tiles narrower than `nghost + 1` columns (`nx/px`, when `px > 1`) | the fold mirrors `nghost` rows below the fold line from the north tile itself; the width rule keeps every tile wider than its own ghost band |
 | in-memory geometry injection (the API's staged bathymetry / supergrid arrays) | they describe the whole grid, not a tile (the file readers are windowed) |

@@ -195,7 +195,7 @@ program test_ocean_decomp_bitid_mpi
    integer, parameter :: NX_G = 26
    integer, parameter :: NY_G = 18
    integer, parameter :: N_STEPS = 48
-   character(len=*), parameter :: DTBT_FRAC = "-0.887809"
+   character(len=*), parameter :: DTBT_FRAC = "-0.84678989"
       !! `dtbt` of the `dtbt_reset*` cases (fraction of the largest stable substep).
    integer, parameter :: N_CKPT = 25
       !! Checkpoint step of the write/resume leg: odd, so with
@@ -397,6 +397,12 @@ contains
          snx = "32"
          sny = "24"
       end if
+      ! Odd extents put the trench centre in the middle of a cell, so the CFL-controlling
+      ! (deepest) cell is unique and sits beside the 2-way seam on both axes.
+      if (index(label, "dtbt_reset") == 1) then
+         snx = "27"
+         sny = "19"
+      end if
       common = "&sim_nml sim_type = 'ocean' /"//NL// &
                "&mpi_nml px = "//trim(spx)//", py = "//trim(spy)//" /"//NL// &
                "&time_nml t_end = 86400.0, dt_fixed = 900.0 /"//NL// &
@@ -569,15 +575,17 @@ contains
                "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
                "north = 'wall' /"//NL
       case ("dtbt_reset", "dtbt_reset_period")
-         ! Re-entrant channel over a seamount whose deep flank is the CFL-controlling
-         ! face, strongly forced so the column depths (hence dt_max and n_inner) move.
+         ! Re-entrant channel with a Gaussian TRENCH (peak_depth > max_depth) at the
+         ! domain centre, which on the odd 27 x 19 grid is the middle of cell (14, 10):
+         ! the unique deepest, hence CFL-controlling, cell.  It is the first/last
+         ! column and row of a 2x1 / 1x2 tile, so its limit reads h across the seam.
          nml = common// &
                "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
                "dx = 20000.0, dy = 20000.0 /"//NL// &
                "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 0.2 /"//NL// &
                "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
                "&ocean_topo_nml topo_config = 'seamount', max_depth = 2000.0, "// &
-               "edge_depth = 1500.0, slope_scale = 60000.0 /"//NL// &
+               "edge_depth = 3000.0, slope_scale = 60000.0 /"//NL// &
                "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
                "north = 'wall' /"//NL
       case ("tracer_ppm_h3")
@@ -1359,7 +1367,7 @@ contains
             glob = [nbad, nfin, 0]
 #ifndef RDB_NO_NETCDF
             if ((label == "sea_ice" .or. label == "sea_ice_transport" .or. &
-                 is_ice_fold_case(label)) .and. &
+                 label == "dtbt_reset" .or. is_ice_fold_case(label)) .and. &
                 (nprocs/px == 1 .or. px == nprocs/px) .and. nprocs > 1) then
                ! 4x1 and 2x2 at np = 4 (and 2x1 at np = 2).
                call check_resume_leg(case_nml(label, scheme, px, nprocs/px), dec, &

@@ -97,15 +97,18 @@ module rdb_ocean_engine
    use rdb_ocean_halo, only: ocean_halo_init, ocean_halo_destroy, ocean_halo_reserve, &
                              ocean_halo_centre, &
                              ocean_halo_bt_group_2d, ocean_halo_face_x, &
-                             ocean_halo_bt_group_2d_wide, ocean_halo_is_decomposed
+                             ocean_halo_bt_group_2d_wide, ocean_halo_is_decomposed, &
+                             ocean_halo_is_decomposed_x, ocean_halo_is_decomposed_y
    use rdb_halo, only: halo_allreduce_sum_i8, halo_allreduce_min
    use rdb_barotropic_dtbt, only: bt_dtbt_dt_max, bt_dtbt_n_inner
    use rdb_ocean_halo_state, only: ocean_halo_exchange_ml_state, ocean_halo_exchange_ice_state, &
                                    ocean_halo_exchange_ice_fluxes
    use rdb_ocean_fold_exchange, only: ocean_fold_exchange_init, ocean_fold_exchange_reserve, &
                                       ocean_fold_exchange_destroy, ocean_fold_north_corner
-   use rdb_ocean_periodic, only: ocean_periodic_wrap_state, ocean_periodic_wrap_centre_2d
-   use rdb_ocean_fold_apply, only: ocean_fold_wrap_state, ocean_fold_wrap_eta_2d
+   use rdb_ocean_periodic, only: ocean_periodic_wrap_state, ocean_periodic_wrap_centre_2d, &
+                                 ocean_periodic_wrap_centre_3d
+   use rdb_ocean_fold_apply, only: ocean_fold_wrap_state, ocean_fold_wrap_eta_2d, &
+                                   ocean_fold_wrap_centre_3d_state
    use rdb_ocean_boundary_data, only: ocean_boundary_data_constant_t
    use rdb_ocean_boundary_types, only: ocean_bc_state_set_edges, ocean_bc_state_set_topology, &
                                        ocean_bc_type_from_string, OBC_PERIODIC, &
@@ -1667,10 +1670,24 @@ contains
       !! multiple of `P` (and at the first call).  `n_inner` is a pure
       !! function of the state (`h_layer`, `f`, metrics), so a restart that
       !! re-derives at its first step reproduces it for period 0.
+      !!
+      !! **Multi-rank invariant.**  The reduction runs over OWNED cells, but
+      !! each cell's limit reads `h_layer` at its four neighbours, so ghost
+      !! thickness enters through every seam face.  Those ghosts are only
+      !! valid here by induction over the previous step (nothing else reads
+      !! start-of-step ghost `h`: each stage opens with its own exchange), so
+      !! the routine refreshes them itself, on the steps where it runs, with
+      !! the stage-entry sequence for thickness: MPI exchange, periodic wrap
+      !! on an axis the exchange does not own, tripolar fold.  Collective
+      !! when decomposed; the schedule depends only on `t` and config, so
+      !! every rank calls it on the same steps.  The refresh only rewrites
+      !! ghosts that the stage entry overwrites anyway, so no owned answer
+      !! moves.  The `min` over ranks is exact, hence rank-count independent.
       type(ocean_engine_t), intent(inout) :: engine
       real(wp), intent(in) :: dt
       real(wp), intent(in) :: t
       integer :: ng, n_new
+      logical :: wrap_x, wrap_y
       real(wp) :: dt_loc, dt_glob
 
       if (engine%dtbt_reset_period > 0.0_wp) then
@@ -1679,6 +1696,17 @@ contains
                               engine%dtbt_reset_period
       end if
       ng = engine%grid%nghost
+      call ocean_halo_centre(engine%state%multilayer%h_layer, engine%state%multilayer%nz_ml)
+      wrap_x = engine%state%bc%periodic_x .and. .not. ocean_halo_is_decomposed_x()
+      wrap_y = engine%state%bc%periodic_y .and. .not. ocean_halo_is_decomposed_y()
+      if (wrap_x .or. wrap_y) then
+         call ocean_periodic_wrap_centre_3d(engine%state%multilayer%h_layer, &
+                                            engine%grid%nx_total, engine%grid%ny_total, &
+                                            engine%state%multilayer%nz_ml, &
+                                            engine%grid%nx_phys, engine%grid%ny_phys, ng, &
+                                            wrap_x, wrap_y)
+      end if
+      call ocean_fold_wrap_centre_3d_state(engine%grid, engine%state%bc, engine%state%multilayer)
       call bt_dtbt_dt_max(engine%grid%nx_total, engine%grid%ny_total, &
                           size(engine%state%multilayer%h_layer, 3), &
                           ng + 1, ng + engine%grid%nx_phys, ng + 1, ng + engine%grid%ny_phys, &
