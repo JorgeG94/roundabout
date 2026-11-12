@@ -82,14 +82,18 @@ module rdb_ocean_balance
    !! status).  The inputs are first made seam-valid (host exchange of `h`,
    !! tracers, and the prescribed `rho` when thermodynamics is off).  Output
    !! `u`, `v`, `hu`, `hv` ghosts are NOT exchanged (the one-sided edge average
-   !! at a tile edge differs from the neighbour's owned value); the rebaseline
-   !! tail of `ocean_balance_apply` and the first model step own them.  The
+   !! at a tile edge differs from the neighbour's owned value).  The rebaseline
+   !! tail of `ocean_balance_apply` refreshes only `h`, `u`, `v` and the tracer
+   !! seam ghosts (`refresh_seam_ghosts`) and then pushes the host `hu`/`hv`,
+   !! so the device `hu`/`hv` seam ghosts keep the balance's one-sided
+   !! tile-edge values until the first step recomputes them (nothing reads
+   !! them before that).  The
    !! decomposed branch is gated by the `balance_*` cases of
    !! `test_ocean_decomp_bitid_mpi`; its only source caller chain
    !! (`ocean_balance_apply` <- the C API) is single-rank, so it is reachable
    !! today only from that test.  On one rank the ghost-cell velocities come
    !! out of the same stencil on the ghost thickness/density.
-   use, intrinsic :: iso_fortran_env, only: int64
+   use, intrinsic :: iso_fortran_env, only: int64, real64
    use rdb_constants, only: wp, H_VANISHED
    use rdb_config, only: config_t
    use rdb_grid, only: hgrid_t
@@ -274,8 +278,9 @@ contains
 
    function refusals_clear(grid, cfg, state, fmin, ierr) result(ok)
       !! `.true.` when no unsupported feature is active and `|f| >= fmin` on every
-      !! open interior face; otherwise fails loud (status in `ierr`).  Pure
-      !! host reads: mutates nothing.
+      !! open interior face; otherwise fails loud (status in `ierr`).  Host
+      !! reads plus one collective (the `|f|` min on a decomposed run, so it
+      !! must be reached by every rank or none); mutates nothing.
       type(hgrid_t), intent(in) :: grid
       type(config_t), intent(in) :: cfg
       type(ocean_state_t), intent(in) :: state
@@ -503,8 +508,9 @@ contains
                ! Ghost columns count too (the one-rank run stretches them with
                ! the same formula), so the verdict is the same on every rank.
                if (.not. failed) then
-                  call fail("ocean_balance_velocity: bottom_rest sea level empties the column at ("// &
-                            to_string(i)//","//to_string(j)//"): b + eta = "// &
+                  call fail("ocean_balance_velocity: bottom_rest sea level empties the column at global ("// &
+                            to_string(i - ng + grid%i_offset_global)//","// &
+                            to_string(j - ng + grid%j_offset_global)//"): b + eta = "// &
                             to_string(state%barotropic%b(i, j) + eta)//" m", ierr, OCEAN_STATUS_ERR_IC_SEED)
                end if
                failed = .true.
@@ -574,11 +580,17 @@ contains
    end subroutine global_lower_median
 
    pure function ordered_key(x) result(key)
-      !! Monotone int64 image of a finite double (negative values flip).
+      !! Monotone int64 image of a finite working-precision value, via its
+      !! real64 image (negative values flip; -0.0 and +0.0 share key 0).
       real(wp), intent(in) :: x
       integer(int64) :: key
       integer(int64) :: b
-      b = transfer(x, b)
+      real(real64) :: xd
+      ! Keyed on the double: `transfer` of a 4-byte real into an int64 leaves
+      ! the top bytes processor-dependent, and real(sp) -> real64 is exact and
+      ! order-preserving, so a single-precision build orders correctly too.
+      xd = real(x, real64)
+      b = transfer(xd, b)
       if (b >= 0_int64) then
          key = b
       else
@@ -591,12 +603,14 @@ contains
       integer(int64), intent(in) :: key
       real(wp) :: x
       integer(int64) :: b
+      real(real64) :: xd
       if (key >= 0_int64) then
          b = key
       else
          b = ior(-key, -huge(b) - 1_int64)
       end if
-      x = transfer(b, x)
+      xd = transfer(b, xd)
+      x = real(xd, wp)   ! exact: the key came from a working-precision value
    end function key_value
 
    pure subroutine lower_median(a, n, m)

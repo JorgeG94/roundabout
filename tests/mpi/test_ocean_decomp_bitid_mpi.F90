@@ -84,7 +84,7 @@
 !!     seeded UNBALANCED (`vortex_balance = 'none'`: zero velocity), then
 !!     `ocean_balance_apply` (the API / reinit entry, geostrophic) with
 !!     `ref_level` bottom_rest (global per-layer median + column stretch) or
-!!     keep_h, after poisoning the u/v/hu/hv ghosts with rank-dependent garbage;
+!!     keep_h, after poisoning the WHOLE u/v/hu/hv arrays with rank-dependent garbage;
 !!     the `_t0` twins compare the balanced IC itself;
 !!   * drain_ratio / drain_ratio_h3 - windowed tracer drain (ratio 4, ppm / ppm_h3
 !!     + diabatic_first = .false.) on a periodic channel, >1 sub-cycle pass;
@@ -1584,33 +1584,60 @@ contains
    end subroutine check_periodic_sponge_serial_out
 
    subroutine check_balance_fold_refusal()
-      !! `ocean_balance_velocity` on a tripolar-fold configuration split north-
-      !! south (1 x nprocs, so only the north rank row holds the fold): every
-      !! rank must return the SAME refusal status and none may block in the
-      !! later collective (a rank-local early return would hang this test).
+      !! `ocean_balance_velocity` with the north fold TAG set, split north-south
+      !! (1 x nprocs, so only the north rank row holds the fold): every rank
+      !! must return the SAME refusal status, for the FOLD reason, and none may
+      !! block in the later collective (a rank-local early return, keyed on
+      !! `bc%north_fold`, would leave the south ranks in the `|f|` allreduce).
+      !! The grid is SPHERICAL with periodic x and `north = 'tripolar_fold'`:
+      !! `ocean_bc_validate_fold` only asks for periodic west/east, and the
+      !! "tripolar grid needs the fold" rule runs one way, so the grid-kind gate
+      !! passes and the fold-tag line is the one reached (on a tripolar grid
+      !! the grid-kind refusal fires first and would mask it).
+      use rdb_error_ring, only: error_ring_clear, error_ring_get
       type(ocean_engine_t) :: engine
       type(config_t) :: cfg
-      integer :: ierr, ierr_b, st(2)
+      integer :: ierr, ierr_b, st(2), ibc, nfold, nf(1)
+      character(len=:), allocatable :: nml
+      character(len=*), parameter :: WALLS = "north = 'wall'"
+      character(len=*), parameter :: FOLD = "north = 'tripolar_fold'"
+      character(len=*), parameter :: PERIODIC_X = "west = 'periodic', east = 'periodic'"
+      character(len=*), parameter :: ALL_WALLS = "west = 'wall', east = 'wall'"
 
       ierr_b = -1
-      call read_config_from_string(case_nml("tripolar", "pred_corr", 1, nprocs), cfg, ierr=ierr)
+      nfold = 0
+      nml = case_nml("spherical", "pred_corr", 1, nprocs)
+      ibc = index(nml, ALL_WALLS)
+      if (ibc > 0) nml = nml(:ibc - 1)//PERIODIC_X//nml(ibc + len(ALL_WALLS):)
+      ibc = index(nml, WALLS)
+      if (ibc > 0) nml = nml(:ibc - 1)//FOLD//nml(ibc + len(WALLS):)
+      call read_config_from_string(nml, cfg, ierr=ierr)
       if (ierr == OCEAN_STATUS_OK) call validate_config(cfg, ierr)
       if (ierr == OCEAN_STATUS_OK) call engine_setup(engine, cfg, ierr, compute_rank=rank, &
                                                      compute_size=nprocs)
       if (ierr == OCEAN_STATUS_OK) then
          call engine_enter_data(engine, cfg)
+         call error_ring_clear()
          call ocean_balance_velocity(engine%grid, cfg, engine%state, BALANCE_GEOSTROPHIC, ierr_b)
+         if (index(error_ring_get(0), "tripolar north fold") > 0) nfold = 1
          call engine_exit_data(engine)
          call engine_teardown(engine)
       end if
       st = [ierr_b, -ierr_b]
       call allreduce(comm, st, op=MPI_MAX)
-      if (ierr /= OCEAN_STATUS_OK .or. st(1) /= -st(2) .or. st(1) == OCEAN_STATUS_OK) then
-         write (*, '(a,3i0,a,i0)') "FAIL balance fold refusal: setup ierr=", ierr, st(1), -st(2), &
+      ! nfold: every rank must have seen the fold message (min over ranks).
+      nf = -nfold
+      call allreduce(comm, nf, op=MPI_MAX)
+      ibc = nf(1)
+      if (ierr /= OCEAN_STATUS_OK .or. st(1) /= -st(2) .or. st(1) == OCEAN_STATUS_OK &
+          .or. ibc /= -1) then
+         write (*, '(a,i0,a,i0,a,i0,a,i0,a,i0)') "FAIL balance fold refusal: setup ierr=", ierr, &
+            ", status max=", st(1), ", min=", -st(2), ", fold-message on all ranks (-1 = yes)=", ibc, &
             " rank ", rank
          n_fail = n_fail + 1
       else if (rank == 0) then
-         write (*, '(a,i0,a)') "case balance fold refusal: every rank refused (status ", st(1), ") (ok)"
+         write (*, '(a,i0,a)') "case balance fold refusal: every rank refused for the fold (status ", &
+            st(1), ") (ok)"
       end if
    end subroutine check_balance_fold_refusal
 
