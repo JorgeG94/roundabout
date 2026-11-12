@@ -1311,7 +1311,7 @@ contains
          end do
          if (n_intertidal > 0) then
             call logger%warning("Wet/dry: "//to_string(n_intertidal)// &
-                                " interior cell(s) have bed elevations in the "// &
+                                " interior cell(s) (this rank's tile) have bed elevations in the "// &
                                 "intertidal band [-land_margin, "// &
                                 "LAND_DEPTH_THRESHOLD) — under the wetdry-aware "// &
                                 "static seed (land iff b < -land_margin) these "// &

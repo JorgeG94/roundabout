@@ -446,17 +446,24 @@ contains
          ! an unset process grid (px = py = 1, auto-factored above) does
          ! not trip -- so this is the gate that always holds.  Every rank
          ! evaluates the same condition and fails together.
+         ! Dynamic wet/dry is decomposition-safe (seam refreshes of the mask,
+         ! the bed-blocking gate and the time-mean transport after the fast
+         ! loop), but those refreshes do not fold: across a tripolar north
+         ! fold the mirrored ghost rows of those three fields would stay
+         ! stale.  Refused on more than one rank only; one rank folds locally.
+         if (cfg%ocean%wetdry%enable .and. &
+             ocean_bc_type_from_string(cfg%ocean%bc%north) == OBC_TRIPOLAR_FOLD) then
+            call fail("&ocean_wetdry_nml enable = .true. with north = 'tripolar_fold' is "// &
+                      "single-rank ("//to_string(csize)//" ranks requested): the wet "// &
+                      "mask, bed-blocking gate and time-mean transport are not folded "// &
+                      "across the seam.  Run on 1 rank.", &
+                      ierr, OCEAN_STATUS_ERR_SETUP)
+            return
+         end if
          if (cfg%ocean%cavity_dyn%enable) then
             call fail("&ocean_cavity_dyn_nml enable = .true. is single-rank ("// &
                       to_string(csize)//" ranks requested): the grounding statistics "// &
                       "are global reductions the configure does not take.  Run on 1 rank.", &
-                      ierr, OCEAN_STATUS_ERR_SETUP)
-            return
-         end if
-         if (cfg%ocean%wetdry%enable) then
-            call fail("&ocean_wetdry_nml enable = .true. is single-rank ("// &
-                      to_string(csize)//" ranks requested): the wet-mask / outflow-"// &
-                      "limiter halo exchange is not implemented.  Run on 1 rank.", &
                       ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
@@ -1154,6 +1161,17 @@ contains
       end if
       if (cfg%ocean%bt%n_inner >= 1) then
          call ocean_halo_centre(engine%state%dyn%bt_work%bt_H_ref, device_resident=.false.)
+      end if
+      ! Dynamic wet/dry cold start: `wd_wet_dyn` was seeded over the whole
+      ! local array by `configure_ocean_wetdry`, BEFORE the bathymetry halo
+      ! fill above, so its seam ghosts hold the seed of whatever `b` the ghost
+      ! held then, not an image of the owner's.  The limiter's hysteresis reads
+      ! the innermost ghost layer's previous state (the first substep), so
+      ! refresh it from the owners.  Host data (pre-`enter_data`), hence
+      ! `device_resident=.false.`; collective on the rank-uniform switch; a warm
+      ! restart already carries the checkpointed ghosts.
+      if (cfg%ocean%wetdry%enable .and. .not. did_restart) then
+         call ocean_halo_centre(engine%state%dyn%bt_work%wd_wet_dyn, device_resident=.false.)
       end if
 
       ! px > 1 tripolar: refresh the static corner Coriolis array's x ghosts

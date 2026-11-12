@@ -5311,6 +5311,23 @@ contains
                                                     bc=bc, t=t, eta_forcing=eta_forcing)
       end if
       call profiler_stop("ocean_barotropic_solver")
+      ! Dynamic wet/dry: the limiter's radius-2 reach leaves the mask, the
+      ! bed-blocking gate and the time-mean transport exact on owned cells
+      ! (plus one ghost layer) but NOT as images of their owners in the rest
+      ! of the ghost band; later full-array kernels (`mask_layer_velocities`,
+      ! the surface-flux wet gate, the legacy continuity renorm) read those
+      ! ghosts.  Refresh them once per stage -- not per substep, so the fast
+      ! loop is untouched.  Device-resident data (default `device_resident`);
+      ! collective, gated only on the rank-uniform wet/dry switch and
+      ! unconditional w.r.t. the decomposition (a local wrap when periodic).
+      if (dyn%bt_work%wetdry_enable) then
+         call profiler_start("ocean_comms_bt")
+         call ocean_halo_bt_group_2d(dyn%bt_work%wd_wet_dyn, dyn%bt_work%wd_open_u, &
+                                     dyn%bt_work%wd_open_v)
+         call ocean_halo_face_x(dyn%bt_work%bt_uhbt)
+         call ocean_halo_face_y(dyn%bt_work%bt_vhbt)
+         call profiler_stop("ocean_comms_bt")
+      end if
       call probe_dS(grid, ms, "after barotropic substep", stage_id, step_id)
       ! BT in/out chksums at the substep exit: when the fold's loud count
       ! fires, these rows name which fold INPUT (ubt_end/ubt_at_n/F_bt)

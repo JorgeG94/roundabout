@@ -3130,14 +3130,6 @@ contains
                               "face thickness; composition deferred)")
             has_error = .true.
          end if
-         ! v1 single-rank: the theta/mask ghost exchange lands with the
-         ! C-grid MPI halo work.
-         if (cfg%px*cfg%py > 1) then
-            call logger%error("&ocean_wetdry_nml enable=.true. is single-rank in "// &
-                              "v1 (px*py = 1); the wet-mask/limiter halo exchange "// &
-                              "is deferred to the C-grid MPI work")
-            has_error = .true.
-         end if
          ! Wet/dry needs the split solver: the limiter lives in the BT substep.
          if (cfg%ocean%bt%n_inner < 1 .and. .not. bt_split_derived(cfg%ocean%bt)) then
             call logger%error("&ocean_wetdry_nml enable=.true. requires the "// &

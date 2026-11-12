@@ -220,6 +220,10 @@ program test_ocean_decomp_bitid_mpi
          !! Mid-run regrows of the fold-exchange buffers (must stay 0).
       integer :: drain_iter = 0
          !! Largest windowed-drain pass count used (0 when the drain never ran).
+      integer :: flips(6) = 0
+         !! Wet/dry runs: owned-cell flips of `wd_wet_dyn`, sampled once per outer
+         !! step, in the seam bands of the shoal -- (wet->dry, dry->wet) x
+         !! (i-line band, j-line band, corner box).  Zero on every other case.
       type(conservation_budget_t) :: bud
          !! Closed-budget mass/salt/heat out+src totals at the final step —
          !! EFP-reduced (`reproducing_sums`, default on), so these must be
@@ -234,7 +238,7 @@ program test_ocean_decomp_bitid_mpi
       !! `RDB_BITID_CASES`: run only the cases whose name contains this substring.
    type(comm_t) :: comm
    character(len=16), parameter :: SCHEMES(2) = [character(len=16) :: "pred_corr", "ssp_rk2"]
-   character(len=24), parameter :: CASES(42) = [character(len=24) :: &
+   character(len=24), parameter :: CASES(43) = [character(len=24) :: &
                                                 "island_basin", "weno7_pv", &
                                                 "periodic_channel_zstar", &
                                                 "visc_rem_zstar", &
@@ -256,7 +260,7 @@ program test_ocean_decomp_bitid_mpi
                                                 "drain_ratio", "drain_ratio_h3", &
                                                 "drain_ratio_weno5", "drain_ratio_weno7", &
                                                 "drain_ratio_weno9", "drain_ratio_fold", &
-                                                "drain_ratio_fold_h3"]
+                                                "drain_ratio_fold_h3", "wetdry_shoal"]
 
    call comm_env_init()
    call comm_env_setup_roles(.false.)
@@ -283,7 +287,8 @@ program test_ocean_decomp_bitid_mpi
           trim(CASES(ic)) == "tidal_polzin" .or. &
           trim(CASES(ic)) == "file_readers_zstar") cycle
 #endif
-      call run_case(trim(CASES(ic)), trim(SCHEMES(1)))
+      ! Dynamic wet/dry refuses pred_corr (validate_config): ssp_rk2 only.
+      if (trim(CASES(ic)) /= "wetdry_shoal") call run_case(trim(CASES(ic)), trim(SCHEMES(1)))
       ! diabatic_first = .false. is refused under ssp_rk2 (validate_config).
       ! (drain_ratio_h3 pins it too.)
       if (trim(CASES(ic)) == "diabatic_end" .or. trim(CASES(ic)) == "drain_ratio_h3" .or. &
@@ -558,6 +563,25 @@ contains
                ""//trim(drain_extra)//" /"//NL// &
                "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
                "north = 'wall' /"//NL
+      case ("wetdry_shoal")
+         ! Emergent shoal under dynamic wet/dry (`&ocean_wetdry_nml`): a seamount
+         ! whose summit sits exactly at rest level (4 central cells seed dry,
+         ! on all three seam crossings of the 2x1 / 1x2 / 2x2 splits), driven
+         ! by a constant wind so the front sloshes through a ~3-cell radius and
+         ! the wet/dry hysteresis flips both ways on both sides of each seam.
+         ! Same text as tests/test_ocean_wetdry_engine.F90 (which asserts the
+         ! flips on one rank).  ssp_rk2 only; `ppm_limit_pos` is the
+         ! positivity limiter the wet/dry continuity needs.
+         nml = common// &
+               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
+               "dx = 4000.0, dy = 4000.0 /"//NL// &
+               "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 0.05, wind_stress_y = 0.05 /"//NL// &
+               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
+               "&ocean_topo_nml topo_config = 'seamount', max_depth = 2.0, "// &
+               "edge_depth = 0.0, slope_scale = 28000.0, wind_config = 'constant' /"//NL// &
+               "&ocean_continuity_nml ppm_limit_pos = .true. /"//NL// &
+               "&ocean_wetdry_nml enable = .true. /"//NL// &
+               "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
       case ("tracer_ppm_h3")
          ! Re-entrant channel (periodic west/east) over a seamount, sigma, with
          ! the ppm_h3 horizontal tracer advection (Huynh edges + limiter, a
@@ -888,6 +912,7 @@ contains
       logical :: pushed_self_comm
       integer :: ierr, n
       real(wp) :: t
+      real(wp), allocatable :: wd_prev(:, :)
 
       ok = .false.
       call read_config_from_string(nml, cfg, ierr=ierr)
@@ -909,6 +934,8 @@ contains
          if (ierr /= OCEAN_STATUS_OK) exit
          call engine_step_finalize(engine, DT, t, ierr=ierr)
          if (ierr /= OCEAN_STATUS_OK) exit
+         if (allocated(engine%state%dyn%bt_work%wd_wet_dyn)) &
+            call count_wd_flips(engine, wd_prev, snap%flips)
          t = t + DT
       end do
       if (ierr == OCEAN_STATUS_OK) then
@@ -975,6 +1002,43 @@ contains
       call engine_teardown(engine)
    end subroutine run_one
 
+   subroutine count_wd_flips(engine, prev, flips)
+      !! Accumulate the wet<->dry flips of this rank's OWNED cells of
+      !! `wd_wet_dyn` since the previous call, in the shoal's three seam bands
+      !! (global physical indices, `NX_G` x `NY_G`): the i-line band
+      !! `nx/2-1 .. nx/2+2`, the j-line band `ny/2-1 .. ny/2+2`, and their
+      !! 4 x 4 corner box.  Sampled once per outer step, so a lower bound.
+      type(ocean_engine_t), intent(inout), target :: engine
+      real(wp), allocatable, intent(inout) :: prev(:, :)
+      integer, intent(inout) :: flips(6)
+      integer :: i, j, ig, jg, ng, nxo, nyo
+      logical :: in_i, in_j, was, now
+
+      !$acc update self(engine%state%dyn%bt_work%wd_wet_dyn)
+      ng = engine%grid%nghost
+      nxo = engine%grid%nx_phys
+      nyo = engine%grid%ny_phys
+      if (.not. allocated(prev)) then
+         prev = engine%state%dyn%bt_work%wd_wet_dyn
+         return
+      end if
+      do j = ng + 1, ng + nyo
+         do i = ng + 1, ng + nxo
+            ig = i - ng + engine%grid%i_offset_global
+            jg = j - ng + engine%grid%j_offset_global
+            in_i = ig >= NX_G/2 - 1 .and. ig <= NX_G/2 + 2
+            in_j = jg >= NY_G/2 - 1 .and. jg <= NY_G/2 + 2
+            was = prev(i, j) > 0.5_wp
+            now = engine%state%dyn%bt_work%wd_wet_dyn(i, j) > 0.5_wp
+            if (was .eqv. now) cycle
+            if (in_i) flips(merge(1, 2, was)) = flips(merge(1, 2, was)) + 1
+            if (in_j) flips(merge(3, 4, was)) = flips(merge(3, 4, was)) + 1
+            if (in_i .and. in_j) flips(merge(5, 6, was)) = flips(merge(5, 6, was)) + 1
+         end do
+      end do
+      prev = engine%state%dyn%bt_work%wd_wet_dyn
+   end subroutine count_wd_flips
+
    subroutine take_snapshot(engine, s)
       !! Host copy of every restart-registry field (device -> host first)
       !! plus the BT end-of-step eta.
@@ -1012,6 +1076,33 @@ contains
       allocate (s%f(s%n)%a(size(engine%state%dyn%bt_work%bt_eta_end, 1), &
                            size(engine%state%dyn%bt_work%bt_eta_end, 2), 1))
       s%f(s%n)%a(:, :, 1) = engine%state%dyn%bt_work%bt_eta_end
+      ! Dynamic wet/dry: the seam-refreshed transport / gate fields are not
+      ! restart state; snapshot them so `compare` (owned) and `compare_ghosts`
+      ! (seam ghost images) cover them.
+      if (allocated(engine%state%dyn%bt_work%wd_wet_dyn)) then
+         !$acc update self(engine%state%dyn%bt_work%wd_open_u, engine%state%dyn%bt_work%wd_open_v)
+         !$acc update self(engine%state%dyn%bt_work%bt_uhbt, engine%state%dyn%bt_work%bt_vhbt)
+         s%n = s%n + 1
+         s%f(s%n)%tag = "wd_open_u"
+         s%f(s%n)%a = reshape(engine%state%dyn%bt_work%wd_open_u, &
+                              [size(engine%state%dyn%bt_work%wd_open_u, 1), &
+                               size(engine%state%dyn%bt_work%wd_open_u, 2), 1])
+         s%n = s%n + 1
+         s%f(s%n)%tag = "wd_open_v"
+         s%f(s%n)%a = reshape(engine%state%dyn%bt_work%wd_open_v, &
+                              [size(engine%state%dyn%bt_work%wd_open_v, 1), &
+                               size(engine%state%dyn%bt_work%wd_open_v, 2), 1])
+         s%n = s%n + 1
+         s%f(s%n)%tag = "bt_uhbt"
+         s%f(s%n)%a = reshape(engine%state%dyn%bt_work%bt_uhbt, &
+                              [size(engine%state%dyn%bt_work%bt_uhbt, 1), &
+                               size(engine%state%dyn%bt_work%bt_uhbt, 2), 1])
+         s%n = s%n + 1
+         s%f(s%n)%tag = "bt_vhbt"
+         s%f(s%n)%a = reshape(engine%state%dyn%bt_work%bt_vhbt, &
+                              [size(engine%state%dyn%bt_work%bt_vhbt, 1), &
+                               size(engine%state%dyn%bt_work%bt_vhbt, 2), 1])
+      end if
       s%io = engine%grid%i_offset_global
       s%jo = engine%grid%j_offset_global
       s%nxl = engine%grid%nx_phys
@@ -1026,7 +1117,7 @@ contains
       !! N_CKPT to per-rank files (the driver's `<dir>/restart_rank_NNNNNN.nc`
       !! convention, through `ocean_state_restart_write`), torn down, and
       !! resumed through `engine_setup(restart_file=<dir>)` -- the warm
-      !! restart the driver runs -- for the remaining N_STEPS - N_CKPT
+      !! restart the driver runs -- for the remaining (steps - N_CKPT)
       !! steps.  Every registry field (and the BT end-of-step eta) must
       !! equal the STRAIGHT decomposed run's bitwise over the FULL local
       !! array, ghosts included.  Counts into `n_fail` (rank-summed).
@@ -1073,7 +1164,7 @@ contains
          if (ierr == OCEAN_STATUS_OK) then
             if (step0 == N_CKPT .and. engine%warm_restart) then
                call engine_enter_data(engine, cfg)
-               call advance(engine, cfg, t, N_STEPS - N_CKPT, ierr)
+               call advance(engine, cfg, t, n_steps_cur - N_CKPT, ierr)
                if (ierr == OCEAN_STATUS_OK) then
                   call take_snapshot(engine, res)
                   ok = .true.
@@ -1210,6 +1301,52 @@ contains
       end do
    end subroutine compare
 
+   subroutine compare_ghosts(dec, ref, nbad, report)
+      !! Seam-ghost IMAGE check (wet/dry case only): every ghost cell of the
+      !! listed fields whose global index lies inside the serial array must
+      !! equal the serial value at that global index, bitwise.  `compare`
+      !! looks at owned cells only; this is what notices a ghost band that
+      !! a full-array kernel later reads stale.
+      type(snap_t), intent(in) :: dec, ref
+      integer, intent(out) :: nbad
+      character(len=*), intent(in) :: report
+      character(len=16), parameter :: TAGS(7) = [character(len=16) :: "wd_wet_dyn", &
+                                                                                              "wd_open_u", "wd_open_v", "bt_uhbt", &
+                                                                                      "bt_vhbt", "u_face_x_layer", "v_face_y_layer"]
+      integer :: e, it, i, j, k, ex, ey, nb, ig, jg, nown
+      logical :: owned
+
+      nbad = 0
+      do e = 1, dec%n
+         if (dec%f(e)%tag /= ref%f(e)%tag) cycle
+         if (all(trim(dec%f(e)%tag) /= TAGS)) cycle
+         it = e
+         associate (a => dec%f(it)%a, b => ref%f(it)%a)
+            ex = size(a, 1) - (dec%nxl + 2*dec%ng)
+            ey = size(a, 2) - (dec%nyl + 2*dec%ng)
+            nb = 0
+            nown = 0
+            do k = 1, size(a, 3)
+               do j = 1, size(a, 2)
+                  do i = 1, size(a, 1)
+                     owned = i > dec%ng .and. i <= dec%ng + dec%nxl + ex .and. &
+                             j > dec%ng .and. j <= dec%ng + dec%nyl + ey
+                     if (owned) cycle
+                     ig = i + dec%io
+                     jg = j + dec%jo
+                     if (ig < 1 .or. ig > size(b, 1) .or. jg < 1 .or. jg > size(b, 2)) cycle
+                     nown = nown + 1
+                     if (transfer(a(i, j, k), 0_int64) /= transfer(b(ig, jg, k), 0_int64)) nb = nb + 1
+                  end do
+               end do
+            end do
+         end associate
+         if (nb > 0) write (*, '(a,i0,5a,i0,a,i0)') "  rank ", rank, " ", report, " GHOST ", &
+            trim(dec%f(e)%tag), ": mismatches=", nb, " of ", nown
+         nbad = nbad + nb
+      end do
+   end subroutine compare_ghosts
+
    pure logical function is_ice_fold_case(label)
       !! The sea-ice-on-the-tripolar-cap cases (A7).
       character(len=*), intent(in) :: label
@@ -1292,11 +1429,15 @@ contains
       character(len=*), intent(in) :: label, scheme
       type(snap_t) :: ref, dec
       logical :: ok_ref, ok_dec
-      integer :: px, nbad, nfin, glob(3), nbud
+      integer :: px, nbad, nfin, glob(3), nbud, nghost_bad
       character(len=96) :: tag
       type(conservation_budget_t) :: buds(8)
 
       n_steps_cur = N_STEPS
+      ! The emergent shoal needs twice the gate length: at 48 steps the
+      ! stale seam-ghost mask is still latched to the owner's value, by 96 the
+      ! front has moved a ghost cell of `wd_wet_dyn` (and `wd_open_*`) off it.
+      if (label == "wetdry_shoal") n_steps_cur = 2*N_STEPS
       if (len(label) > 3) then
          if (label(len(label) - 2:) == "_t0") n_steps_cur = 0
       end if
@@ -1308,6 +1449,16 @@ contains
       end if
 
       if (is_ice_fold_case(label)) call check_ice_seam(ref, trim(label)//"/"//scheme)
+      if (label == "wetdry_shoal") then
+         ! Non-vacuity: the front must cross every seam band in BOTH directions
+         ! in the serial reference (the decomposed runs are then compared to it).
+         if (any(ref%flips == 0)) then
+            write (*, '(3a,6(1x,i0))') "FAIL ", label, ": a seam band never flips in the reference:", ref%flips
+            n_fail = n_fail + 1
+         else if (rank == 0) then
+         write (*, '(3a,6(1x,i0))') "case ", label, ": reference seam-band flips (i w>d d>w, j w>d d>w, corner w>d d>w):", ref%flips
+         end if
+      end if
 
       nbud = 0
       do px = nprocs, 1, -1
@@ -1319,6 +1470,10 @@ contains
             glob = [1, 0, 1]
          else
             call compare(dec, ref, nbad, nfin, trim(tag))
+            if (label == "wetdry_shoal") then
+               call compare_ghosts(dec, ref, nghost_bad, trim(tag))
+               nbad = nbad + nghost_bad
+            end if
             ! Windowed-drain cases: the sub-cycle must run >1 pass (else the
             ! pass-count reduction is never exercised) and every layout must
             ! have used the same count as the serial reference.
@@ -1337,7 +1492,7 @@ contains
             glob = [nbad, nfin, 0]
 #ifndef RDB_NO_NETCDF
             if ((label == "sea_ice" .or. label == "sea_ice_transport" .or. &
-                 is_ice_fold_case(label)) .and. &
+                 label == "wetdry_shoal" .or. is_ice_fold_case(label)) .and. &
                 (nprocs/px == 1 .or. px == nprocs/px) .and. nprocs > 1) then
                ! 4x1 and 2x2 at np = 4 (and 2x1 at np = 2).
                call check_resume_leg(case_nml(label, scheme, px, nprocs/px), dec, &
@@ -1538,24 +1693,34 @@ contains
       !! the engine auto-factors and which `validate_config`'s px*py fences
       !! cannot see), so the engine-side gate is the one exercised.
       character(len=*), parameter :: NL = new_line("a")
-      character(len=160), parameter :: KNOBS(3) = [character(len=160) :: &
-                                                   "&ocean_wetdry_nml enable = .true. /", &
+      character(len=160), parameter :: KNOBS(2) = [character(len=160) :: &
                                                    "&ocean_cavity_dyn_nml enable = .true. /", &
                                                    "&ocean_bc_nml east = 'chapman' /"]
       type(ocean_engine_t) :: engine
       type(config_t) :: cfg
       character(len=:), allocatable :: nml
+      character(len=160) :: lab
       integer :: ik, ierr
 
-      do ik = 1, size(KNOBS)
-         nml = "&sim_nml sim_type = 'ocean' /"//NL// &
-               "&grid_nml nx = 26, ny = 18, nghost = 3, dx = 20000.0, dy = 20000.0 /"//NL// &
-               "&time_nml t_end = 86400.0, dt_fixed = 900.0 /"//NL// &
-               "&nonhydrostatic_nml nz_layers = 4 /"//NL// &
-               "&ocean_bt_nml auto_n_inner = .true., split_scheme = 'ssp_rk2' /"//NL// &
-               "&ocean_diag_nml enabled = .false. /"//NL// &
-               "&output_nml output_to_file = .false. /"//NL// &
-               trim(KNOBS(ik))//NL
+      do ik = 1, size(KNOBS) + 1
+         if (ik <= size(KNOBS)) then
+            lab = trim(KNOBS(ik))
+            nml = "&sim_nml sim_type = 'ocean' /"//NL// &
+                  "&grid_nml nx = 26, ny = 18, nghost = 3, dx = 20000.0, dy = 20000.0 /"//NL// &
+                  "&time_nml t_end = 86400.0, dt_fixed = 900.0 /"//NL// &
+                  "&nonhydrostatic_nml nz_layers = 4 /"//NL// &
+                  "&ocean_bt_nml auto_n_inner = .true., split_scheme = 'ssp_rk2' /"//NL// &
+                  "&ocean_diag_nml enabled = .false. /"//NL// &
+                  "&output_nml output_to_file = .false. /"//NL// &
+                  trim(KNOBS(ik))//NL
+         else
+            ! Wet/dry is decomposition-safe, but its seam refreshes do not
+            ! fold: the very tripolar-cap case that is accepted (and bit-
+            ! identical) above, plus wet/dry, must be refused on > 1 rank.
+            lab = "&ocean_wetdry_nml enable = .true. / on the tripolar-fold case"
+            nml = case_nml("tripolar", "ssp_rk2", 1, 1)//"&ocean_continuity_nml ppm_limit_pos = .true. /"//NL// &
+                  "&ocean_wetdry_nml enable = .true. /"//NL
+         end if
          call read_config_from_string(nml, cfg, ierr=ierr)
          if (ierr == OCEAN_STATUS_OK) call validate_config(cfg, ierr)
          if (ierr == OCEAN_STATUS_OK) then
@@ -1563,11 +1728,11 @@ contains
             call engine_teardown(engine)
          end if
          if (ierr == OCEAN_STATUS_OK) then
-            write (*, '(3a,i0)') "FAIL fence: '", trim(KNOBS(ik)), &
+            write (*, '(3a,i0)') "FAIL fence: '", trim(lab), &
                "' was ACCEPTED on multi-rank, rank ", rank
             n_fail = n_fail + 1
          else if (rank == 0) then
-            write (*, '(3a)') "case fence: '", trim(KNOBS(ik)), "' refused on multi-rank (ok)"
+            write (*, '(3a)') "case fence: '", trim(lab), "' refused on multi-rank (ok)"
          end if
       end do
    end subroutine check_single_rank_fences

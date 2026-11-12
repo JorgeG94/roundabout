@@ -1153,7 +1153,8 @@ module rdb_config
          !! face thickness + the positive-definite outflow limiter + the
          !! bed-blocking momentum gate; requires sigma / zstar(-lite)
          !! vertical coordinates, `&ocean_continuity_nml ppm_limit_pos`,
-         !! and single-rank (all fail-loud at configure).
+         !! (fail-loud at configure).  Multi-rank: bit-identical to one rank
+         !! (needs `nghost >= 3`); refused only with the tripolar fold.
       real(wp) :: dry_depth = 0.05_wp
          !! Total-depth dry threshold (m): a column with `D < dry_depth`
          !! is dynamically dry (masked).  Must be > 0.
