@@ -318,6 +318,8 @@ contains
       ! px-aware) and negate them -- the 180-degree rotation of the fold
       ! reverses both components.  The face average below then forms the
       ! fold-line `tau_y` face from the cell on each side of the fold.
+      ! (The zonal fold only touches ghost-row `taux_c`/`tau_x`, which the
+      ! seam refresh below rewrites, so it changes no output; kept for symmetry.)
       if (bc%north_fold) then
          call ocean_fold_wrap_centre_flat(grid, bc, this%taux_c, nx, ny, 1)
          call ocean_fold_wrap_centre_flat(grid, bc, this%tauy_c, nx, ny, 1)

@@ -624,7 +624,7 @@ contains
       call ss%init(grid)
       call sf%init(grid)
       call sf%set_components(grid, .true.)
-      !$acc update device(atm%uas, atm%vas)
+      ! uas/vas are host-set: run_apply's atm%enter_data() copies them in (no update before the map).
       call run_apply(grid, metrics, bc, atm, ms, ice, bf, ss, sf)
       do i = 1, ni
          tau_y_fold(i) = ss%tau_y(NGHOST + i, jf)
@@ -669,8 +669,8 @@ contains
    end subroutine test_stress_fold_line
 
    subroutine test_stress_no_fold_line(error)
-      !! Without a fold the last-row face stays the one-sided edge copy
-      !! `tau_y(i, ny+1-ng) = tauy_c(i, last)` -- unchanged by the fold fix.
+      !! Without a fold the last-row face is the one-sided edge average against the
+      !! zero ghost, `0.5*tauy_c(i, last)` -- unchanged by the fold fix.
       type(error_type), allocatable, intent(out) :: error
       integer, parameter :: NI = 6
       real(wp) :: tau_y(NI), tc(NI)
