@@ -52,9 +52,10 @@ module rdb_ocean_balance
    !! (the far-field background of a compact anomaly; a plain mean would add a
    !! uniform offset equal to the anomaly's area-mean, which leaves the
    !! velocities unchanged but shifts the absolute sea level).  Each column is
-   !! then stretched uniformly, `h_k <- h_k (b + eta)/sum h`, with every tracer's
-   !! `c` divided by the same factor so the content is kept (a sigma-like
-   !! choice, not an isopycnal one).
+   !! then stretched uniformly, `h_k <- h_k (b + eta)/sum h`.  Only `h_layer` is
+   !! scaled: tracers are stored as concentration `c`, so the content `h*c` scales
+   !! with `h` and `c` is left untouched (a sigma-like choice, not an isopycnal
+   !! one).
    !!
    !! **Residency (GPU `-gpu=mem:separate`).**  Must be called AFTER
    !! `ocean_state_enter_data` (`engine_enter_data`): the PGF and EOS kernels are
@@ -79,11 +80,15 @@ module rdb_ocean_balance
    !! quickselect returns), (ii) the `|f|` floor (global min) and (iii) the
    !! bottom-rest failure flag (global max, so every rank returns the same
    !! status).  The inputs are first made seam-valid (host exchange of `h`,
-   !! tracers, and the prescribed `rho` when thermodynamics is off), and the
-   !! produced `u`, `v`, `hu`, `hv` get a final host exchange, so a seam ghost
-   !! is the neighbour's owned value rather than the one-sided edge average.
-   !! On one rank the ghost-cell velocities come out of the same stencil on the
-   !! ghost thickness/density; the first model step's halo exchange owns them.
+   !! tracers, and the prescribed `rho` when thermodynamics is off).  Output
+   !! `u`, `v`, `hu`, `hv` ghosts are NOT exchanged (the one-sided edge average
+   !! at a tile edge differs from the neighbour's owned value); the rebaseline
+   !! tail of `ocean_balance_apply` and the first model step own them.  The
+   !! decomposed branch is gated by the `balance_*` cases of
+   !! `test_ocean_decomp_bitid_mpi`; its only source caller chain
+   !! (`ocean_balance_apply` <- the C API) is single-rank, so it is reachable
+   !! today only from that test.  On one rank the ghost-cell velocities come
+   !! out of the same stencil on the ghost thickness/density.
    use, intrinsic :: iso_fortran_env, only: int64
    use rdb_constants, only: wp, H_VANISHED
    use rdb_config, only: config_t
@@ -92,14 +97,13 @@ module rdb_ocean_balance
    use rdb_ocean_status, only: OCEAN_STATUS_OK, OCEAN_STATUS_ERR_IC_SEED, &
                                OCEAN_STATUS_ERR_NOT_INITIALISED
    use rdb_ocean_state, only: ocean_state_t
+   use rdb_ocean_boundary_types, only: OBC_TRIPOLAR_FOLD
    use rdb_ocean_metrics, only: parse_grid_config, GRID_CONFIG_CARTESIAN, &
                                 GRID_CONFIG_SPHERICAL
    use rdb_ocean_eos_compute, only: ocean_eos_compute
    use rdb_ocean_pressure_force, only: ocean_pressure_force_compute
    use rdb_barotropic_coupling, only: derive_bt_from_layers, pgf_free_surface_gravity
-   use rdb_ocean_halo, only: ocean_halo_is_decomposed, ocean_halo_centre, &
-                             ocean_halo_face_x, ocean_halo_face_y
-   use rdb_ocean_halo_state, only: ocean_halo_exchange_ml_state
+   use rdb_ocean_halo, only: ocean_halo_is_decomposed, ocean_halo_centre
    use rdb_halo, only: halo_allreduce_min, halo_allreduce_max, halo_allreduce_sum_i8
    use pic_logger, only: logger => global_logger
    use pic_strings, only: to_string
@@ -150,7 +154,7 @@ contains
       character(len=16) :: ref
       real(wp) :: fmin
       logical :: rest, rho_from_eos
-      integer :: nx, ny, nz
+      integer :: nx, ny, nz, it
       real(wp), allocatable :: scale_col(:, :), ax(:, :, :), ay(:, :, :)
       real(wp), allocatable :: u_new(:, :, :), v_new(:, :, :)
 
@@ -194,8 +198,23 @@ contains
                      state%multilayer%idx_salinity > 0 .and. state%multilayer%idx_temperature > 0
 
       ! ---- decomposed: seam-valid host inputs (no-op on one rank) ----
+      ! Only for a DIRECT caller of this routine: `ocean_balance_apply` has
+      ! already refreshed these seam ghosts (the exchange repeats it).  No test
+      ! proves it: every test goes through `ocean_balance_apply`.  The
+      ! condition is the rank-uniform process-grid fact, never a rank-local one.
+      ! On one rank the caller's own fill stands (that path stays bit-identical;
+      ! note the primitive would also wrap a periodic edge locally).
       if (ocean_halo_is_decomposed()) then
-         call ocean_halo_exchange_ml_state(state%multilayer, device_resident=.false.)
+         call ocean_halo_centre(state%multilayer%h_layer, nz, .false.)
+         if (allocated(state%multilayer%tracers)) then
+            do it = 1, size(state%multilayer%tracers)
+               if (allocated(state%multilayer%tracers(it)%c)) then
+                  call ocean_halo_centre(state%multilayer%tracers(it)%c, nz, .false.)
+               end if
+            end do
+         end if
+         ! Prescribed density (thermodynamics off): rho is an input, not an EOS
+         ! output.  Not covered by any test (the vortex uses the EOS).
          if (.not. rho_from_eos) call ocean_halo_centre(state%multilayer%rho_layer, nz, .false.)
       end if
 
@@ -236,12 +255,6 @@ contains
       state%multilayer%v_face_y_layer = v_new
       call mass_fluxes_impl(nx, ny, nz, u_new, v_new, state%multilayer%h_layer, &
                             state%multilayer%hu_face_x_layer, state%multilayer%hv_face_y_layer)
-      if (ocean_halo_is_decomposed()) then
-         call ocean_halo_face_x(state%multilayer%u_face_x_layer, nz, .false.)
-         call ocean_halo_face_y(state%multilayer%v_face_y_layer, nz, .false.)
-         call ocean_halo_face_x(state%multilayer%hu_face_x_layer, nz, .false.)
-         call ocean_halo_face_y(state%multilayer%hv_face_y_layer, nz, .false.)
-      end if
       if (allocated(state%barotropic%h)) call set_column_depth(state)
       call push_velocity(state)
       if (allocated(state%dyn%bt_work%bt_eta) .and. allocated(state%dyn%bt_work%bt_H_ref)) then
@@ -281,7 +294,10 @@ contains
                    "supergrid angle rotation are untested)", ierr, OCEAN_STATUS_ERR_IC_SEED)
          return
       end if
-      if (state%bc%north_fold) then
+      ! The configured north TAG (rank-uniform), not `bc%north_fold`, which is
+      ! true only on the north rank row: every rank must refuse together, before
+      ! the collective `|f|` reduction below.
+      if (state%bc%north%bc_type == OBC_TRIPOLAR_FOLD) then
          call fail("ocean_balance_velocity: the tripolar north fold is not supported", &
                    ierr, OCEAN_STATUS_ERR_IC_SEED)
          return
@@ -514,7 +530,10 @@ contains
       !! `x` with `count(a <= x) >= (N + 1)/2`, found by bisection on the
       !! monotone int64 image of the IEEE bit pattern.  Counts ride the exact
       !! real64 allreduce (`halo_allreduce_sum_i8`).  `n_global = N`; `m` is
-      !! untouched when `N = 0`.  Non-finite entries are not supported.
+      !! untouched when `N = 0`.  Returns the k-th order statistic, k =
+      !! (N + 1)/2, with bits identical to the one-rank selection, except that
+      !! -0.0 and +0.0 share a key and come back as +0.0.  Non-finite input is
+      !! not guarded (densities are full rho).
       integer, intent(in) :: n
       real(wp), intent(in) :: a(:)
       real(wp), intent(out) :: m

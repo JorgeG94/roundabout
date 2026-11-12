@@ -2086,9 +2086,9 @@ contains
       status = resolve_ocean(c_handle, h)
       if (status /= OCEAN_STATUS_OK) return
       if (ocean_halo_is_decomposed()) then
-         call fail("rdb_ocean_rebaseline: single-rank only; the ghost fill and the "// &
-                   "land/pseudo-salt/sponge re-derivation read the whole interior, "// &
-                   "not a per-rank tile", ierr_local, OCEAN_STATUS_ERR_SETUP)
+         call fail("rdb_ocean_rebaseline: single-rank only; the API handle is "// &
+                   "single-rank by construction (the rebaseline tail itself is "// &
+                   "decomposition-safe, see ocean_rebaseline_apply)", ierr_local, OCEAN_STATUS_ERR_SETUP)
          status = int(ierr_local, c_int)
          return
       end if

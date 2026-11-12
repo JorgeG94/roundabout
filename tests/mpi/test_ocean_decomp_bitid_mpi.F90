@@ -183,11 +183,11 @@ program test_ocean_decomp_bitid_mpi
    use rdb_comm_env, only: comm_env_init, comm_env_setup_roles, comm_env_finalize, &
                            comm_env_rank, comm_env_size, comm_env_compute_comm, &
                            comm_env_push_compute_comm, comm_env_pop_compute_comm
-   use pic_mpi_lib, only: comm_t, allreduce, MPI_SUM
+   use pic_mpi_lib, only: comm_t, allreduce, MPI_SUM, MPI_MAX
    use rdb_console_stats, only: console_stats_t, conservation_budget_t
    use rdb_ocean_console_stats, only: ocean_console_stats_report, ocean_budget_stage_weight
    use rdb_ocean_dyn, only: SPLIT_SCHEME_PRED_CORR
-   use rdb_ocean_balance, only: BALANCE_GEOSTROPHIC
+   use rdb_ocean_balance, only: BALANCE_GEOSTROPHIC, ocean_balance_velocity
    use rdb_ocean_reinit, only: ocean_balance_apply
    use rdb_ocean_fold_exchange, only: ocean_fold_exchange_grow_count
 #ifndef RDB_NO_NETCDF
@@ -305,6 +305,7 @@ program test_ocean_decomp_bitid_mpi
    end do
 
    if (nprocs >= 2) call check_single_rank_fences()
+   if (nprocs >= 2) call check_balance_fold_refusal()
 
    call comm%barrier()
    total_fail = n_fail
@@ -1581,6 +1582,37 @@ contains
             " serial-out: reference budget bit-identical to every decomposed factorization"
       end if
    end subroutine check_periodic_sponge_serial_out
+
+   subroutine check_balance_fold_refusal()
+      !! `ocean_balance_velocity` on a tripolar-fold configuration split north-
+      !! south (1 x nprocs, so only the north rank row holds the fold): every
+      !! rank must return the SAME refusal status and none may block in the
+      !! later collective (a rank-local early return would hang this test).
+      type(ocean_engine_t) :: engine
+      type(config_t) :: cfg
+      integer :: ierr, ierr_b, st(2)
+
+      ierr_b = -1
+      call read_config_from_string(case_nml("tripolar", "pred_corr", 1, nprocs), cfg, ierr=ierr)
+      if (ierr == OCEAN_STATUS_OK) call validate_config(cfg, ierr)
+      if (ierr == OCEAN_STATUS_OK) call engine_setup(engine, cfg, ierr, compute_rank=rank, &
+                                                     compute_size=nprocs)
+      if (ierr == OCEAN_STATUS_OK) then
+         call engine_enter_data(engine, cfg)
+         call ocean_balance_velocity(engine%grid, cfg, engine%state, BALANCE_GEOSTROPHIC, ierr_b)
+         call engine_exit_data(engine)
+         call engine_teardown(engine)
+      end if
+      st = [ierr_b, -ierr_b]
+      call allreduce(comm, st, op=MPI_MAX)
+      if (ierr /= OCEAN_STATUS_OK .or. st(1) /= -st(2) .or. st(1) == OCEAN_STATUS_OK) then
+         write (*, '(a,3i0,a,i0)') "FAIL balance fold refusal: setup ierr=", ierr, st(1), -st(2), &
+            " rank ", rank
+         n_fail = n_fail + 1
+      else if (rank == 0) then
+         write (*, '(a,i0,a)') "case balance fold refusal: every rank refused (status ", st(1), ") (ok)"
+      end if
+   end subroutine check_balance_fold_refusal
 
    subroutine check_single_rank_fences()
       !! The single-rank features must be REFUSED at configure on more than
