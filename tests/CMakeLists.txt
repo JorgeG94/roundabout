@@ -361,6 +361,7 @@ set(RDB_TESTS
     "test_ocean_wave_drag|test_ocean_wave_drag|collect_ocean_wave_drag_tests|ocean_wave_drag|ocean"
     "test_ocean_wetdry|test_ocean_wetdry|collect_ocean_wetdry_tests|ocean_wetdry|ocean"
     "test_ocean_wetdry_driver|test_ocean_wetdry_driver|collect_ocean_wetdry_driver_tests|ocean_wetdry_driver|ocean"
+    "test_ocean_wetdry_engine|test_ocean_wetdry_engine|collect_ocean_wetdry_engine_tests|ocean_wetdry_engine|ocean"
     "test_ocean_surface_stress|test_ocean_surface_stress|collect_ocean_surface_stress_tests|ocean_surface_stress|ocean"
     "test_coriolis_inertial|test_coriolis_inertial|collect_coriolis_inertial_tests|coriolis_inertial|ocean"
     "test_coriolis_multilayer|test_coriolis_multilayer|collect_coriolis_multilayer_tests|coriolis_multilayer|ocean"
