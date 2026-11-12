@@ -871,7 +871,7 @@ contains
          ! the tripolar cap, so the stress crosses the north fold.
          nml = "&sim_nml sim_type = 'ocean' /"//NL// &
                "&mpi_nml px = "//trim(spx)//", py = "//trim(spy)//" /"//NL// &
-               "&time_nml t_end = 86400.0, dt_fixed = 900.0, start_date = '2000-01-01' /"//NL// &
+               "&time_nml t_end = 86400.0, dt_fixed = 900.0, start_date = '2000-06-21' /"//NL// &
                "&nonhydrostatic_nml nz_layers = 4 /"//NL// &
                "&ocean_bt_nml auto_n_inner = .true., split_scheme = '"//scheme//"' /"//NL// &
                "&ocean_hvisc_nml nu_h = 200.0, lateral_closure = 'smagorinsky', "// &
@@ -912,9 +912,14 @@ contains
                   "', filelist_prsn = '"//trim(wl)//"' /"//NL
          end if
          if (label == "bulk_flux_fold") then
-            ! Bilinear flux regrid: the conservative weights are not built
-            ! on the tripolar cap even on one rank (a serial limitation,
-            ! unrelated to the decomposition).
+            ! Coarse (30 x 10 degree) atmosphere source.  The default
+            ! conservative flux regrid (`fluxes_regrid` is not set) overflows
+            ! its per-target-cell candidate cap (`REGRID_NMAX_CAP`) on the
+            ! tripolar cap with a fine (5-degree) source, even on one rank:
+            ! a serial limitation independent of the decomposition.  The
+            ! 10-degree latitude spacing keeps a source centre (85N) poleward
+            ! of `phi_join`, so the bilinear state regrid has a meridional
+            ! gradient over the whole cap, not only in longitude.
             nml = nml// &
                   "&grid_nml nx = 30, ny = 24, nghost = 3, dx = 12.0, dy = 1.0 /"//NL// &
                   "&ocean_grid_nml grid_config = 'tripolar', lon_west = 0.0, "// &
@@ -1432,7 +1437,7 @@ contains
             glob = [nbad, nfin, 0]
 #ifndef RDB_NO_NETCDF
             if ((label == "sea_ice" .or. label == "sea_ice_transport" .or. &
-                 is_ice_fold_case(label)) .and. &
+                 label == "bulk_flux_ice" .or. is_ice_fold_case(label)) .and. &
                 (nprocs/px == 1 .or. px == nprocs/px) .and. nprocs > 1) then
                ! 4x1 and 2x2 at np = 4 (and 2x1 at np = 2).
                call check_resume_leg(case_nml(label, scheme, px, nprocs/px), dec, &
@@ -1819,9 +1824,8 @@ contains
       call nc_close(ncid)
       call write_atm_file(ATM_WARM, ATM_WARM_LIST, 288.0_wp, 4.0e-3_wp, 72, 36)
       call write_atm_file(ATM_COLD, ATM_COLD_LIST, 255.0_wp, 6.0e-4_wp, 72, 36)
-      ! 30-degree source for the tripolar cap, whose pole-ward cells are wide
-      ! enough that a 5-degree source overflows the conservative-weight cap.
-      call write_atm_file(ATM_CRSE, ATM_CRSE_LIST, 288.0_wp, 4.0e-3_wp, 12, 6)
+      ! 30 x 10 degree source for the tripolar cap (see the bulk_flux_fold case).
+      call write_atm_file(ATM_CRSE, ATM_CRSE_LIST, 288.0_wp, 4.0e-3_wp, 12, 18)
    end subroutine write_input_files
 
    subroutine write_atm_file(path, listname, tas0, huss0, nlon, nlat)
@@ -1863,7 +1867,7 @@ contains
       call nc_def_var_2d(ncid, "lon_bnds", [dbnd, dlon_], vlonb)
       call nc_def_var_2d(ncid, "lat_bnds", [dbnd, dlat_], vlatb)
       call rdb_def_var_1d(ncid, "time", dtim, vtim)
-      call nc_put_att(ncid, vtim, "units", "days since 2000-01-01 00:00:00")
+      call nc_put_att(ncid, vtim, "units", "days since 2000-06-20 00:00:00")
       do v = 1, 9
          call nc_def_var_3d(ncid, trim(VN(v)), [dlon_, dlat_, dtim], vf(v))
       end do

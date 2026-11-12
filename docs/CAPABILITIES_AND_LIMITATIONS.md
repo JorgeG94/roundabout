@@ -474,7 +474,7 @@ Under `z_fixed` plus a cavity, melt and top drag are accepted, and `kappa_h /= 0
 | Feature | Status | Key knob | Limits |
 |---|---|---|---|
 | Rectangular domain decomposition | Shipped | `&mpi_nml px`, `py` | Left at `1 x 1` on several ranks, the engine picks the split. It is north-south under a tripolar fold. An explicit `px*py` that does not match the rank count is refused. |
-| Bit-identity with the serial run | Shipped | – | Checked on twenty-two configurations and every `px x py` split of 1, 2 and 4 ranks, under both split schemes. |
+| Bit-identity with the serial run | Shipped | – | Checked on every case in the gate's `CASES` list and every `px x py` split of 1, 2 and 4 ranks, under both split schemes. |
 | Tripolar north fold | Shipped | `north = "tripolar_fold"` | East-west splits (`px > 1`) must be asked for explicitly. |
 | Per-rank file readers | Shipped | – | Supergrid, bathymetry, z-level T/S initial condition and `&ocean_dataovr_nml` forcing are windowed per rank. |
 | Console totals | Shipped | `&ocean_diag_nml reproducing_sums` (default on) | The status block prints the same digits on any rank count. |
