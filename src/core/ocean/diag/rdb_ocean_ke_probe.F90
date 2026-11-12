@@ -8,19 +8,33 @@ module rdb_ocean_ke_probe
    !! energy injected/removed by the segment just executed, so one
    !! instrumented run names the anti-damping term directly.
    !!
-   !! Three regions per sample, one device pass (three `reduction(+:)`
-   !! accumulators):
+   !! Three regions per sample, one small device pass each:
    !!   full — all physical cells;
-   !!   rim  — cells within `rim_band` of any physical wall (the slow
+   !!   rim  — cells within `rim_band` of any GLOBAL domain wall (the slow
    !!          exponential is rim-trapped);
-   !!   east — cells within `east_band` of the east wall (the mode-1
+   !!   east — cells within `east_band` of the GLOBAL east wall (the mode-1
    !!          internal Kelvin wave is wall-trapped there).
+   !!
+   !! Multi-rank: every region is defined in GLOBAL cell indices
+   !! (`i_offset_global`/`nx_global`), each owned cell (and each interior
+   !! face, owned by the cell on its east/north side) is counted by
+   !! exactly one rank, the per-cell value is summed with the
+   !! reproducing EFP sums, combined with `halo_allreduce_efp_list`
+   !! (collective: all ranks call whenever the step-window gate is open)
+   !! and printed once by rank 0, so the digits are identical on any
+   !! rank count.  Ghost cells are read as they stand (last halo
+   !! exchange), exactly as on one rank.
    !!
    !! Gated by `&ocean_bt_nml debug_ke_attr` with an optional
    !! `[ke_attr_start_step, ke_attr_end_step]` outer-step window.
-   !! Default off ⇒ bit-identical (untaken branches only).  Single-rank
-   !! debug tool: no halo reduction — multi-rank sums are per-rank.
+   !! Default off ⇒ bit-identical (untaken branches only); model state is
+   !! never written.
+   use, intrinsic :: iso_fortran_env, only: int64, real64
    use rdb_constants, only: wp
+   use rdb_efp, only: efp_t, efp_carry, efp_to_real, EFP_DIGITS
+   use rdb_halo, only: halo_allreduce_efp_list
+   use rdb_comm_env, only: comm_env_rank
+   use rdb_ocean_console_stats, only: efp_decompose_impl
    use rdb_grid, only: hgrid_t
    use rdb_multilayer_state, only: multilayer_state_t
    use rdb_ocean_metrics, only: ocean_metrics_t
@@ -30,6 +44,12 @@ module rdb_ocean_ke_probe
 
    public :: ke_probe_t, ke_probe_sample, ke_probe_active
    public :: ke_probe_coradv_split
+   public :: ke_regions_efp_local, coradv_split_efp_local, N_KE, N_SPLIT
+
+   integer, parameter :: N_KE = 3
+      !! Regions per KE sample: full, rim, east.
+   integer, parameter :: N_SPLIT = 6
+      !! PV/KE-work split values: (PV, KE) x (full, rim, east).
 
    type :: ke_probe_t
       !! Config + running state for the KE attribution meter.  Lives on
@@ -82,15 +102,21 @@ contains
 
       real(wp) :: ke_full, ke_rim, ke_east
       real(wp) :: d_full, d_rim, d_east
+      type(efp_t) :: loc(N_KE), glob(N_KE)
 
       if (.not. ke_probe_active(probe, step)) return
 
       !$acc wait
-      call ke_regions_impl(ms%h_layer, ms%u_face_x_layer, ms%v_face_y_layer, &
-                           grid%nx_total, grid%ny_total, ms%nz_ml, &
-                           grid%nghost, grid%nx_phys, grid%ny_phys, &
-                           probe%rim_band, probe%east_band, &
-                           ke_full, ke_rim, ke_east)
+      call ke_regions_efp_local(ms%h_layer, ms%u_face_x_layer, ms%v_face_y_layer, &
+                                grid%nx_total, grid%ny_total, ms%nz_ml, &
+                                grid%nghost, grid%nx_phys, grid%ny_phys, &
+                                grid%i_offset_global, grid%j_offset_global, &
+                                grid%nx_global, grid%ny_global, &
+                                probe%rim_band, probe%east_band, loc)
+      call halo_allreduce_efp_list(loc, glob, N_KE)
+      ke_full = real(efp_to_real(glob(1)), wp)
+      ke_rim = real(efp_to_real(glob(2)), wp)
+      ke_east = real(efp_to_real(glob(3)), wp)
 
       if (probe%have_prev) then
          d_full = ke_full - probe%prev_full
@@ -102,15 +128,17 @@ contains
          d_east = ke_east
       end if
 
-      if (.not. probe%header_done) then
-         write (*, "(a)") "# KE_ATTR columns: step stage segment "// &
-            "dKE_full KE_full dKE_rim KE_rim dKE_east KE_east   [m3/s2]"
-         write (*, "(a)") "# dKE = energy injected (+) / removed (-) by the segment just run"
-         probe%header_done = .true.
+      if (comm_env_rank() == 0) then
+         if (.not. probe%header_done) then
+            write (*, "(a)") "# KE_ATTR columns: step stage segment "// &
+               "dKE_full KE_full dKE_rim KE_rim dKE_east KE_east   [m3/s2]"
+            write (*, "(a)") "# dKE = energy injected (+) / removed (-) by the segment just run"
+            probe%header_done = .true.
+         end if
+         write (*, "(a,1x,i6,1x,a,i1,1x,a16,6(1x,es13.5))") &
+            "KE_ATTR", step, "s", stage, adjustl(label), &
+            d_full, ke_full, d_rim, ke_rim, d_east, ke_east
       end if
-      write (*, "(a,1x,i6,1x,a,i1,1x,a16,6(1x,es13.5))") &
-         "KE_ATTR", step, "s", stage, adjustl(label), &
-         d_full, ke_full, d_rim, ke_rim, d_east, ke_east
 
       probe%prev_full = ke_full
       probe%prev_rim = ke_rim
@@ -142,35 +170,138 @@ contains
       integer, intent(in) :: stage, step
       real(wp), intent(in) :: dt
 
-      real(wp) :: wpv_full, wpv_rim, wpv_east
-      real(wp) :: wke_full, wke_rim, wke_east
+      type(efp_t) :: loc(N_SPLIT), glob(N_SPLIT)
 
       if (.not. ke_probe_active(probe, step)) return
 
       !$acc wait
-      call coradv_split_impl(ms%h_layer, ms%u_face_x_layer, ms%v_face_y_layer, &
-                             cor%pv_flux_x%data, cor%pv_flux_y%data, &
-                             cor%ke_centre%data, metrics%idxCu, metrics%idyCv, &
-                             grid%nx_total, grid%ny_total, ms%nz_ml, &
-                             grid%nghost, grid%nx_phys, grid%ny_phys, &
-                             probe%rim_band, probe%east_band, dt, &
-                             wpv_full, wpv_rim, wpv_east, &
-                             wke_full, wke_rim, wke_east)
+      call coradv_split_efp_local(ms%h_layer, ms%u_face_x_layer, ms%v_face_y_layer, &
+                                  cor%pv_flux_x%data, cor%pv_flux_y%data, &
+                                  cor%ke_centre%data, metrics%idxCu, metrics%idyCv, &
+                                  grid%nx_total, grid%ny_total, ms%nz_ml, &
+                                  grid%nghost, grid%nx_phys, grid%ny_phys, &
+                                  grid%i_offset_global, grid%j_offset_global, &
+                                  grid%nx_global, grid%ny_global, &
+                                  probe%rim_band, probe%east_band, dt, loc)
+      call halo_allreduce_efp_list(loc, glob, N_SPLIT)
 
-      write (*, "(a,1x,i6,1x,a,i1,6(1x,es13.5))") &
-         "KE_ATTR_PV", step, "s", stage, &
-         wpv_full, wke_full, wpv_rim, wke_rim, wpv_east, wke_east
+      if (comm_env_rank() == 0) then
+         write (*, "(a,1x,i6,1x,a,i1,6(1x,es13.5))") &
+            "KE_ATTR_PV", step, "s", stage, &
+            real(efp_to_real(glob(1)), wp), real(efp_to_real(glob(4)), wp), &
+            real(efp_to_real(glob(2)), wp), real(efp_to_real(glob(5)), wp), &
+            real(efp_to_real(glob(3)), wp), real(efp_to_real(glob(6)), wp)
+      end if
    end subroutine ke_probe_coradv_split
 
-   subroutine coradv_split_impl(h, u, v, fx, fy, kec, idxCu, idyCv, &
-                                nx, ny, nz, nghost, nx_phys, ny_phys, &
-                                rim_w, east_w, dt, &
-                                wpv_full, wpv_rim, wpv_east, &
-                                wke_full, wke_rim, wke_east)
-      !! Device pass: per-face PV/∇KE work split, three regions.
-      !! Faces attributed to their west/south cell's region mask.
+   subroutine ke_regions_efp_local(h, u, v, nx, ny, nz, nghost, nx_phys, ny_phys, &
+                                   i_off, j_off, nx_g, ny_g, rim_w, east_w, tot)
+      !! RANK-LOCAL EFP partial sums of the h-weighted layer KE over the
+      !! three regions (`tot(1:3)` = full, rim, east); the caller combines
+      !! them across ranks.  Per cell: KE = ¼(h_W·u_W² + h_E·u_E²) +
+      !! ¼(h_S·v_S² + h_N·v_N²) with h_face the centred face thickness
+      !! (area factor dropped; attribution only needs a consistent
+      !! measure).  Regions are tested on GLOBAL cell indices
+      !! (`i_off`/`j_off` = the tile's global offsets, `nx_g`/`ny_g` the
+      !! global extents), so they are decomposition-independent.
       integer, intent(in) :: nx, ny, nz, nghost, nx_phys, ny_phys
-      integer, intent(in) :: rim_w, east_w
+      integer, intent(in) :: i_off, j_off, nx_g, ny_g, rim_w, east_w
+      real(wp), intent(in) :: h(nx, ny, nz)
+      real(wp), intent(in) :: u(nx + 1, ny, nz)
+      real(wp), intent(in) :: v(nx, ny + 1, nz)
+      type(efp_t), intent(out) :: tot(N_KE)
+
+      integer :: r
+      do r = 1, N_KE
+         call ke_region_one(h, u, v, nx, ny, nz, nghost, nx_phys, ny_phys, &
+                            i_off, j_off, nx_g, ny_g, rim_w, east_w, r, tot(r))
+      end do
+   end subroutine ke_regions_efp_local
+
+   subroutine ke_region_one(h, u, v, nx, ny, nz, nghost, nx_phys, ny_phys, &
+                            i_off, j_off, nx_g, ny_g, rim_w, east_w, region, total)
+      !! One region (1 full, 2 rim, 3 east) of `ke_regions_efp_local`:
+      !! one k-slab at a time, seven EFP accumulators (the footprint of
+      !! `compute_total_ke_efp`), carried between slabs.
+      integer, intent(in) :: nx, ny, nz, nghost, nx_phys, ny_phys
+      integer, intent(in) :: i_off, j_off, nx_g, ny_g, rim_w, east_w, region
+      real(wp), intent(in) :: h(nx, ny, nz)
+      real(wp), intent(in) :: u(nx + 1, ny, nz)
+      real(wp), intent(in) :: v(nx, ny + 1, nz)
+      type(efp_t), intent(out) :: total
+
+      integer :: i, j, k, ig, jg
+      integer(int64) :: e1, e2, e3, e4, e5, e6, epoison
+      integer(int64) :: d1, d2, d3, d4, d5, d6, dpoison
+      integer(int64) :: slab_e(EFP_DIGITS)
+      real(real64) :: val
+      real(wp) :: h_w, h_e, h_s, h_n
+      logical :: in_reg
+
+      total%v = 0_int64
+      total%poison = 0_int64
+      do k = 1, nz
+         e1 = 0_int64
+         e2 = 0_int64
+         e3 = 0_int64
+         e4 = 0_int64
+         e5 = 0_int64
+         e6 = 0_int64
+         epoison = 0_int64
+         !$acc parallel loop collapse(2) reduction(+:e1,e2,e3,e4,e5,e6,epoison) &
+         !$acc&         private(val, h_w, h_e, h_s, h_n, ig, jg, in_reg, d1, d2, d3, d4, d5, d6, dpoison) &
+         !$acc&         present(h, u, v)
+         do j = nghost + 1, nghost + ny_phys
+            do i = nghost + 1, nghost + nx_phys
+               ig = i - nghost + i_off
+               jg = j - nghost + j_off
+               in_reg = .true.
+               if (region == 2) then
+                  in_reg = (ig - 1 < rim_w .or. nx_g - ig < rim_w .or. &
+                            jg - 1 < rim_w .or. ny_g - jg < rim_w)
+               else if (region == 3) then
+                  in_reg = (nx_g - ig < east_w)
+               end if
+               val = 0.0_real64
+               if (in_reg) then
+                  h_w = 0.5_wp*(h(i - 1, j, k) + h(i, j, k))
+                  h_e = 0.5_wp*(h(i, j, k) + h(i + 1, j, k))
+                  h_s = 0.5_wp*(h(i, j - 1, k) + h(i, j, k))
+                  h_n = 0.5_wp*(h(i, j, k) + h(i, j + 1, k))
+                  val = real(0.25_wp*(h_w*u(i, j, k)*u(i, j, k) + &
+                                      h_e*u(i + 1, j, k)*u(i + 1, j, k)) + &
+                             0.25_wp*(h_s*v(i, j, k)*v(i, j, k) + &
+                                      h_n*v(i, j + 1, k)*v(i, j + 1, k)), real64)
+               end if
+               call efp_decompose_impl(val, d1, d2, d3, d4, d5, d6, dpoison)
+               e1 = e1 + d1
+               e2 = e2 + d2
+               e3 = e3 + d3
+               e4 = e4 + d4
+               e5 = e5 + d5
+               e6 = e6 + d6
+               epoison = epoison + dpoison
+            end do
+         end do
+         slab_e = [e1, e2, e3, e4, e5, e6]
+         call efp_carry(slab_e)
+         total%v = total%v + slab_e
+         total%poison = total%poison + epoison
+         call efp_carry(total%v)
+      end do
+   end subroutine ke_region_one
+
+   subroutine coradv_split_efp_local(h, u, v, fx, fy, kec, idxCu, idyCv, &
+                                     nx, ny, nz, nghost, nx_phys, ny_phys, &
+                                     i_off, j_off, nx_g, ny_g, rim_w, east_w, dt, tot)
+      !! RANK-LOCAL EFP partials of the per-face PV / -grad(KE) work
+      !! split: `tot(1:3)` = PV work (full, rim, east), `tot(4:6)` = KE
+      !! work (full, rim, east).  Faces are attributed to their west/south
+      !! cell's region (global indices) and owned by the cell on their
+      !! east/north side; the global west/south wall faces are excluded,
+      !! so a face is counted once on any decomposition.
+      integer, intent(in) :: nx, ny, nz, nghost, nx_phys, ny_phys
+      integer, intent(in) :: i_off, j_off, nx_g, ny_g, rim_w, east_w
       real(wp), intent(in) :: h(nx, ny, nz)
       real(wp), intent(in) :: u(nx + 1, ny, nz)
       real(wp), intent(in) :: v(nx, ny + 1, nz)
@@ -179,122 +310,126 @@ contains
       real(wp), intent(in) :: kec(nx, ny, nz)
       real(wp), intent(in) :: idxCu(nx + 1, ny), idyCv(nx, ny + 1)
       real(wp), intent(in) :: dt
-      real(wp), intent(out) :: wpv_full, wpv_rim, wpv_east
-      real(wp), intent(out) :: wke_full, wke_rim, wke_east
+      type(efp_t), intent(out) :: tot(N_SPLIT)
 
-      integer :: i, j, k, i_lo, i_hi, j_lo, j_hi
-      real(wp) :: h_face, f_tot, f_ke, f_pv, u_mid, w_pv, w_ke
-      logical :: in_rim, in_east
-
-      i_lo = nghost + 1
-      i_hi = nghost + nx_phys
-      j_lo = nghost + 1
-      j_hi = nghost + ny_phys
-
-      wpv_full = 0.0_wp
-      wpv_rim = 0.0_wp
-      wpv_east = 0.0_wp
-      wke_full = 0.0_wp
-      wke_rim = 0.0_wp
-      wke_east = 0.0_wp
-
-      ! u-faces: interior faces i in [i_lo+1, i_hi]; region from the
-      ! west cell (i-1 ≥ i_lo).
-      do concurrent(k=1:nz, j=j_lo:j_hi, i=i_lo + 1:i_hi) &
-         reduce(+:wpv_full, wpv_rim, wpv_east, wke_full, wke_rim, wke_east)
-         h_face = 0.5_wp*(h(i - 1, j, k) + h(i, j, k))
-         f_tot = fx(i, j, k)
-         f_ke = -(kec(i, j, k) - kec(i - 1, j, k))*idxCu(i, j)
-         f_pv = f_tot - f_ke
-         u_mid = u(i, j, k) - 0.5_wp*dt*f_tot
-         w_pv = h_face*u_mid*dt*f_pv
-         w_ke = h_face*u_mid*dt*f_ke
-         wpv_full = wpv_full + w_pv
-         wke_full = wke_full + w_ke
-         in_rim = (i - 1 - i_lo < rim_w .or. i_hi - (i - 1) < rim_w .or. &
-                   j - j_lo < rim_w .or. j_hi - j < rim_w)
-         in_east = (i_hi - (i - 1) < east_w)
-         if (in_rim) then
-            wpv_rim = wpv_rim + w_pv
-            wke_rim = wke_rim + w_ke
-         end if
-         if (in_east) then
-            wpv_east = wpv_east + w_pv
-            wke_east = wke_east + w_ke
-         end if
+      integer :: part, region
+      do part = 1, 2
+         do region = 1, N_KE
+            call coradv_one(h, u, v, fx, fy, kec, idxCu, idyCv, nx, ny, nz, &
+                            nghost, nx_phys, ny_phys, i_off, j_off, nx_g, ny_g, &
+                            rim_w, east_w, dt, part, region, tot(N_KE*(part - 1) + region))
+         end do
       end do
+   end subroutine coradv_split_efp_local
 
-      ! v-faces: interior faces j in [j_lo+1, j_hi]; region from the
-      ! south cell.
-      do concurrent(k=1:nz, j=j_lo + 1:j_hi, i=i_lo:i_hi) &
-         reduce(+:wpv_full, wpv_rim, wpv_east, wke_full, wke_rim, wke_east)
-         h_face = 0.5_wp*(h(i, j - 1, k) + h(i, j, k))
-         f_tot = fy(i, j, k)
-         f_ke = -(kec(i, j, k) - kec(i, j - 1, k))*idyCv(i, j)
-         f_pv = f_tot - f_ke
-         u_mid = v(i, j, k) - 0.5_wp*dt*f_tot
-         w_pv = h_face*u_mid*dt*f_pv
-         w_ke = h_face*u_mid*dt*f_ke
-         wpv_full = wpv_full + w_pv
-         wke_full = wke_full + w_ke
-         in_rim = (i - i_lo < rim_w .or. i_hi - i < rim_w .or. &
-                   j - 1 - j_lo < rim_w .or. j_hi - (j - 1) < rim_w)
-         in_east = (i_hi - i < east_w)
-         if (in_rim) then
-            wpv_rim = wpv_rim + w_pv
-            wke_rim = wke_rim + w_ke
-         end if
-         if (in_east) then
-            wpv_east = wpv_east + w_pv
-            wke_east = wke_east + w_ke
-         end if
-      end do
-   end subroutine coradv_split_impl
-
-   subroutine ke_regions_impl(h, u, v, nx, ny, nz, nghost, nx_phys, ny_phys, &
-                              rim_w, east_w, ke_full, ke_rim, ke_east)
-      !! h-weighted layer KE over the three regions, one device pass.
-      !! Per cell: KE = Σ_k [ ¼(h_W·u_W² + h_E·u_E²) + ¼(h_S·v_S² + h_N·v_N²) ]
-      !! with h_face the centred face thickness (m³/s² per unit area;
-      !! uniform-Δx Cartesian, so the area factor is a constant and is
-      !! dropped — attribution only needs a consistent measure).
-      !! Explicit OpenACC reduction — a `sum()` intrinsic on a
-      !! present-mapped array silently runs host-side under NVHPC
-      !! non-managed mode and returns the stale host shadow.
+   subroutine coradv_one(h, u, v, fx, fy, kec, idxCu, idyCv, nx, ny, nz, &
+                         nghost, nx_phys, ny_phys, i_off, j_off, nx_g, ny_g, &
+                         rim_w, east_w, dt, part, region, total)
+      !! One (part: 1 PV / 2 KE, region: 1 full / 2 rim / 3 east) EFP sum
+      !! of `coradv_split_efp_local`; seven accumulators per k-slab.
       integer, intent(in) :: nx, ny, nz, nghost, nx_phys, ny_phys
-      integer, intent(in) :: rim_w, east_w
+      integer, intent(in) :: i_off, j_off, nx_g, ny_g, rim_w, east_w, part, region
       real(wp), intent(in) :: h(nx, ny, nz)
       real(wp), intent(in) :: u(nx + 1, ny, nz)
       real(wp), intent(in) :: v(nx, ny + 1, nz)
-      real(wp), intent(out) :: ke_full, ke_rim, ke_east
+      real(wp), intent(in) :: fx(nx + 1, ny, nz)
+      real(wp), intent(in) :: fy(nx, ny + 1, nz)
+      real(wp), intent(in) :: kec(nx, ny, nz)
+      real(wp), intent(in) :: idxCu(nx + 1, ny), idyCv(nx, ny + 1)
+      real(wp), intent(in) :: dt
+      type(efp_t), intent(out) :: total
 
-      integer :: i, j, k, i_lo, i_hi, j_lo, j_hi
-      real(wp) :: h_w, h_e, h_s, h_n, ke_cell
+      integer :: i, j, k, ig, jg
+      integer(int64) :: e1, e2, e3, e4, e5, e6, epoison
+      integer(int64) :: d1, d2, d3, d4, d5, d6, dpoison
+      integer(int64) :: slab_e(EFP_DIGITS)
+      real(real64) :: val
+      real(wp) :: h_face, f_tot, f_ke, f_pv, u_mid, w
+      logical :: in_reg
 
-      i_lo = nghost + 1
-      i_hi = nghost + nx_phys
-      j_lo = nghost + 1
-      j_hi = nghost + ny_phys
-
-      ke_full = 0.0_wp
-      ke_rim = 0.0_wp
-      ke_east = 0.0_wp
-      do concurrent(k=1:nz, j=j_lo:j_hi, i=i_lo:i_hi) reduce(+:ke_full, ke_rim, ke_east)
-         h_w = 0.5_wp*(h(i - 1, j, k) + h(i, j, k))
-         h_e = 0.5_wp*(h(i, j, k) + h(i + 1, j, k))
-         h_s = 0.5_wp*(h(i, j - 1, k) + h(i, j, k))
-         h_n = 0.5_wp*(h(i, j, k) + h(i, j + 1, k))
-         ke_cell = 0.25_wp*(h_w*u(i, j, k)*u(i, j, k) + &
-                            h_e*u(i + 1, j, k)*u(i + 1, j, k)) + &
-                   0.25_wp*(h_s*v(i, j, k)*v(i, j, k) + &
-                            h_n*v(i, j + 1, k)*v(i, j + 1, k))
-         ke_full = ke_full + ke_cell
-         if (i - i_lo < rim_w .or. i_hi - i < rim_w .or. &
-             j - j_lo < rim_w .or. j_hi - j < rim_w) then
-            ke_rim = ke_rim + ke_cell
-         end if
-         if (i_hi - i < east_w) ke_east = ke_east + ke_cell
+      total%v = 0_int64
+      total%poison = 0_int64
+      do k = 1, nz
+         e1 = 0_int64
+         e2 = 0_int64
+         e3 = 0_int64
+         e4 = 0_int64
+         e5 = 0_int64
+         e6 = 0_int64
+         epoison = 0_int64
+         !$acc parallel loop collapse(2) reduction(+:e1,e2,e3,e4,e5,e6,epoison) &
+         !$acc&         private(val, h_face, f_tot, f_ke, f_pv, u_mid, w, ig, jg, in_reg, d1, d2, d3, d4, d5, d6, dpoison) &
+         !$acc&         present(h, u, v, fx, fy, kec, idxCu, idyCv)
+         do j = nghost + 1, nghost + ny_phys
+            do i = nghost + 1, nghost + nx_phys
+               ig = i - nghost + i_off
+               jg = j - nghost + j_off
+               ! u-face (west face of this cell); region from the west cell ig-1.
+               val = 0.0_real64
+               if (ig > 1) then
+                  in_reg = .true.
+                  if (region == 2) then
+                     in_reg = (ig - 2 < rim_w .or. nx_g - (ig - 1) < rim_w .or. &
+                               jg - 1 < rim_w .or. ny_g - jg < rim_w)
+                  else if (region == 3) then
+                     in_reg = (nx_g - (ig - 1) < east_w)
+                  end if
+                  if (in_reg) then
+                     h_face = 0.5_wp*(h(i - 1, j, k) + h(i, j, k))
+                     f_tot = fx(i, j, k)
+                     f_ke = -(kec(i, j, k) - kec(i - 1, j, k))*idxCu(i, j)
+                     f_pv = f_tot - f_ke
+                     u_mid = u(i, j, k) - 0.5_wp*dt*f_tot
+                     w = h_face*u_mid*dt*f_pv
+                     if (part == 2) w = h_face*u_mid*dt*f_ke
+                     val = real(w, real64)
+                  end if
+               end if
+               call efp_decompose_impl(val, d1, d2, d3, d4, d5, d6, dpoison)
+               e1 = e1 + d1
+               e2 = e2 + d2
+               e3 = e3 + d3
+               e4 = e4 + d4
+               e5 = e5 + d5
+               e6 = e6 + d6
+               epoison = epoison + dpoison
+               ! v-face (south face of this cell); region from the south cell jg-1.
+               val = 0.0_real64
+               if (jg > 1) then
+                  in_reg = .true.
+                  if (region == 2) then
+                     in_reg = (ig - 1 < rim_w .or. nx_g - ig < rim_w .or. &
+                               jg - 2 < rim_w .or. ny_g - (jg - 1) < rim_w)
+                  else if (region == 3) then
+                     in_reg = (nx_g - ig < east_w)
+                  end if
+                  if (in_reg) then
+                     h_face = 0.5_wp*(h(i, j - 1, k) + h(i, j, k))
+                     f_tot = fy(i, j, k)
+                     f_ke = -(kec(i, j, k) - kec(i, j - 1, k))*idyCv(i, j)
+                     f_pv = f_tot - f_ke
+                     u_mid = v(i, j, k) - 0.5_wp*dt*f_tot
+                     w = h_face*u_mid*dt*f_pv
+                     if (part == 2) w = h_face*u_mid*dt*f_ke
+                     val = real(w, real64)
+                  end if
+               end if
+               call efp_decompose_impl(val, d1, d2, d3, d4, d5, d6, dpoison)
+               e1 = e1 + d1
+               e2 = e2 + d2
+               e3 = e3 + d3
+               e4 = e4 + d4
+               e5 = e5 + d5
+               e6 = e6 + d6
+               epoison = epoison + dpoison
+            end do
+         end do
+         slab_e = [e1, e2, e3, e4, e5, e6]
+         call efp_carry(slab_e)
+         total%v = total%v + slab_e
+         total%poison = total%poison + epoison
+         call efp_carry(total%v)
       end do
-   end subroutine ke_regions_impl
+   end subroutine coradv_one
 
 end module rdb_ocean_ke_probe
