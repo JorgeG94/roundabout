@@ -93,7 +93,9 @@ https://jorgeg94.github.io/roundabout/
    pressure_gradient
    parameterizations
    grids_and_boundaries
+   sea_ice
    running_simulations
+   diagnostics
    python_interface
    validation
    references
