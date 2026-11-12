@@ -18,9 +18,21 @@ module rdb_ocean_ke_probe
    !! Multi-rank: every region is defined in GLOBAL cell indices
    !! (`i_offset_global`/`nx_global`).  The KE is summed PER OWNED FACE
    !! (see `ke_region_one`): each u/v face is read by exactly one rank, so
-   !! NO u/v ghost is ever read.  The only ghosts the probe relies on are
-   !! those of `h_layer` (the face thickness straddles a seam), which are
-   !! current at both sample points.  Sums are reproducing EFP sums,
+   !! NO u/v ghost is ever read -- on a PERIODIC axis the east (north) wrap
+   !! slot is a copy of face 1 that the full-range applies advance on their
+   !! own, so it is not read either; face 1 then also belongs to cell
+   !! `nx_g` (`ny_g`) through the wrap.  The only ghosts the probe relies on
+   !! are those of `h_layer` (the face thickness straddles a seam, and at a
+   !! periodic face 1 it needs cell `nx_g`), current at both sample points
+   !! (the entry sample follows the stage-entry exchange; at stage close
+   !! `h_layer` was last set by the continuity chain, which ends in a halo
+   !! exchange and periodic wrap).  Caveat: under `eulerian_z` + `ssp_rk2`
+   !! the vertical advection updates ghost thickness locally AFTER that
+   !! exchange, so the seam-face thickness at the stage-close sample is
+   !! layout-dependent there (known defect, fixed separately).  Tripolar
+   !! fold: the v row at `jg = ny_g+1` (the fold line, owned by the north
+   !! rank row) is read AS STORED, like the one-rank run; whether it is
+   !! refreshed before the stage-close sample is not verified.  Sums are reproducing EFP sums,
    !! combined with `halo_allreduce_efp_list` (collective: all ranks call
    !! whenever the step-window gate is open) and printed once by rank 0,
    !! so the digits are identical on any rank count.
@@ -58,7 +70,7 @@ module rdb_ocean_ke_probe
       !! Config + running state for the KE attribution meter.  Lives on
       !! `ocean_dyn_t`; host-only (never device-mapped).
       logical :: enable = .false.
-         !! Master gate — `&ocean_bt_nml debug_ke_attr`.
+         !! Master gate — `&ocean_debug_nml ke_attr`.
       integer :: start_step = 0
          !! First outer step to sample (0 = from the start).
       integer :: end_step = 0
@@ -90,7 +102,7 @@ contains
       if (active .and. probe%end_step > 0) active = step <= probe%end_step
    end function ke_probe_active
 
-   subroutine ke_probe_sample(grid, ms, probe, label, stage, step)
+   subroutine ke_probe_sample(grid, ms, probe, label, stage, step, periodic_x, periodic_y)
       !! Sample the three-region layer KE and print the attribution row.
       !! Call AFTER the segment being attributed; the printed dKE is
       !! "this sample minus the previous one" — i.e. the segment's
@@ -102,6 +114,8 @@ contains
       character(len=*), intent(in) :: label
          !! Segment tag, e.g. "coriolis_adv", "bt_correction".
       integer, intent(in) :: stage, step
+      logical, intent(in) :: periodic_x, periodic_y
+         !! GLOBAL periodic-axis flags (bc state tags, rank-uniform; not `has_*`).
 
       real(wp) :: ke_full, ke_rim, ke_east
       real(wp) :: d_full, d_rim, d_east
@@ -115,7 +129,7 @@ contains
                                 grid%nghost, grid%nx_phys, grid%ny_phys, &
                                 grid%i_offset_global, grid%j_offset_global, &
                                 grid%nx_global, grid%ny_global, &
-                                probe%rim_band, probe%east_band, loc)
+                                probe%rim_band, probe%east_band, periodic_x, periodic_y, loc)
       call halo_allreduce_efp_list(loc, glob, N_KE)
       ke_full = real(efp_to_real(glob(1)), wp)
       ke_rim = real(efp_to_real(glob(2)), wp)
@@ -149,7 +163,7 @@ contains
       probe%have_prev = .true.
    end subroutine ke_probe_sample
 
-   subroutine ke_probe_coradv_split(grid, metrics, ms, cor, probe, stage, step, dt)
+   subroutine ke_probe_coradv_split(grid, metrics, ms, cor, probe, stage, step, dt, periodic_x, periodic_y)
       !! Sub-attribute the coriolis_adv segment: split the just-applied
       !! tendency into its PV-flux part and its −∇KE part and print each
       !! part's work integral per region (`KE_ATTR_PV` rows).  Call
@@ -172,6 +186,8 @@ contains
       type(ke_probe_t), intent(inout) :: probe
       integer, intent(in) :: stage, step
       real(wp), intent(in) :: dt
+      logical, intent(in) :: periodic_x, periodic_y
+         !! GLOBAL periodic-axis flags (bc state tags).
 
       type(efp_t) :: loc(N_SPLIT), glob(N_SPLIT)
 
@@ -185,7 +201,7 @@ contains
                                   grid%nghost, grid%nx_phys, grid%ny_phys, &
                                   grid%i_offset_global, grid%j_offset_global, &
                                   grid%nx_global, grid%ny_global, &
-                                  probe%rim_band, probe%east_band, dt, loc)
+                                  probe%rim_band, probe%east_band, dt, periodic_x, periodic_y, loc)
       call halo_allreduce_efp_list(loc, glob, N_SPLIT)
 
       if (comm_env_rank() == 0) then
@@ -198,7 +214,8 @@ contains
    end subroutine ke_probe_coradv_split
 
    subroutine ke_regions_efp_local(h, u, v, nx, ny, nz, nghost, nx_phys, ny_phys, &
-                                   i_off, j_off, nx_g, ny_g, rim_w, east_w, tot)
+                                   i_off, j_off, nx_g, ny_g, rim_w, east_w, &
+                                   periodic_x, periodic_y, tot)
       !! RANK-LOCAL EFP partial sums of the h-weighted layer KE over the
       !! three regions (`tot(1:3)` = full, rim, east); the caller combines
       !! them across ranks.  Per cell: KE = ¼(h_W·u_W² + h_E·u_E²) +
@@ -209,6 +226,7 @@ contains
       !! global extents), so they are decomposition-independent.
       integer, intent(in) :: nx, ny, nz, nghost, nx_phys, ny_phys
       integer, intent(in) :: i_off, j_off, nx_g, ny_g, rim_w, east_w
+      logical, intent(in) :: periodic_x, periodic_y
       real(wp), intent(in) :: h(nx, ny, nz)
       real(wp), intent(in) :: u(nx + 1, ny, nz)
       real(wp), intent(in) :: v(nx, ny + 1, nz)
@@ -217,7 +235,7 @@ contains
       integer :: r
       do r = 1, N_KE
          call ke_region_one(h, u, v, nx, ny, nz, nghost, nx_phys, ny_phys, &
-                            i_off, j_off, nx_g, ny_g, rim_w, east_w, r, tot(r))
+                            i_off, j_off, nx_g, ny_g, rim_w, east_w, periodic_x, periodic_y, r, tot(r))
       end do
    end subroutine ke_regions_efp_local
 
@@ -236,7 +254,8 @@ contains
    end function in_region
 
    subroutine ke_region_one(h, u, v, nx, ny, nz, nghost, nx_phys, ny_phys, &
-                            i_off, j_off, nx_g, ny_g, rim_w, east_w, region, total)
+                            i_off, j_off, nx_g, ny_g, rim_w, east_w, &
+                            periodic_x, periodic_y, region, total)
       !! One region (1 full, 2 rim, 3 east) of `ke_regions_efp_local`,
       !! summed PER OWNED FACE.  The per-cell KE
       !! `¼(h_W u_W² + h_E u_E²) + ¼(h_S v_S² + h_N v_N²)` is regrouped as
@@ -247,23 +266,36 @@ contains
       !! the global east boundary face (`ig = nx_g+1`) on the east-most
       !! rank; v likewise with south faces / the global north face.  No u/v
       !! GHOST is ever read (they are stale at the stage-close sample).
-      !! `h` ghosts are read (the face thickness straddles a seam): `h` is
-      !! current at both sample points -- the stage-entry sample follows
-      !! the stage-entry exchange, and at stage close `h_layer` was last
-      !! updated by the continuity chain, which ends in a halo exchange
+      !! PERIODIC axis (`periodic_x`/`periodic_y`, the GLOBAL edge tags): the
+      !! east (north) boundary face slot is a wrap copy of face 1, advanced
+      !! on its own between exchanges, so it is NOT read; face 1 is the
+      !! east face of cell `nx_g` (`ny_g`), so the region test wraps the
+      !! non-existent cell 0 to `nx_g` and face 1 gets its weight from
+      !! cells `nx_g` and 1.  Only owned prognostic faces are read.
+      !! `h` ghosts are read (the face thickness straddles a seam; at a
+      !! periodic face 1 it needs the h of cell `nx_g`, the west-most
+      !! rank's west ghost, a wrap/halo copy that is current for the same
+      !! reason as every other h ghost): `h` is current at both sample
+      !! points -- the stage-entry sample follows the stage-entry
+      !! exchange, and at stage close `h_layer` was last updated by the
+      !! continuity chain, which ends in a halo exchange + periodic wrap
       !! (`ssp_rk2`), or not at all before the sample (`pred_corr` runs
-      !! continuity after it).  Periodic / tripolar-fold edges: the global
-      !! boundary face is read from the same storage slot the one-rank
-      !! run reads, so they match the one-rank result by construction.
+      !! continuity after it).  Not so under `eulerian_z` + `ssp_rk2`: the
+      !! vertical advection then updates ghost thickness locally after
+      !! that exchange, so the seam-face thickness is layout-dependent
+      !! there (known defect, fixed separately).  Tripolar fold: the v row
+      !! `jg = ny_g+1` is the fold line, read as stored (refresh before the
+      !! stage-close sample not verified).
       !! One k-slab at a time, seven EFP accumulators, carried between slabs.
       integer, intent(in) :: nx, ny, nz, nghost, nx_phys, ny_phys
       integer, intent(in) :: i_off, j_off, nx_g, ny_g, rim_w, east_w, region
+      logical, intent(in) :: periodic_x, periodic_y
       real(wp), intent(in) :: h(nx, ny, nz)
       real(wp), intent(in) :: u(nx + 1, ny, nz)
       real(wp), intent(in) :: v(nx, ny + 1, nz)
       type(efp_t), intent(out) :: total
 
-      integer :: i, j, k, ig, jg, nw
+      integer :: i, j, k, ig, jg, nw, icw, jcs
       integer(int64) :: e1, e2, e3, e4, e5, e6, epoison
       integer(int64) :: d1, d2, d3, d4, d5, d6, dpoison
       integer(int64) :: slab_e(EFP_DIGITS)
@@ -282,7 +314,7 @@ contains
          e6 = 0_int64
          epoison = 0_int64
          !$acc parallel loop collapse(2) reduction(+:e1,e2,e3,e4,e5,e6,epoison) &
-         !$acc&         private(val, hfc, ig, jg, nw, d1, d2, d3, d4, d5, d6, dpoison) &
+         !$acc&         private(val, hfc, ig, jg, nw, icw, jcs, d1, d2, d3, d4, d5, d6, dpoison) &
          !$acc&         present(h, u, v)
          do j = nghost + 1, nghost + ny_phys + 1
             do i = nghost + 1, nghost + nx_phys + 1
@@ -290,9 +322,12 @@ contains
                jg = j - nghost + j_off
                ! u face (west face of cell ig): owned rows only.
                val = 0.0_real64
-               if (j <= nghost + ny_phys .and. (i <= nghost + nx_phys .or. ig == nx_g + 1)) then
+               if (j <= nghost + ny_phys .and. &
+                   (i <= nghost + nx_phys .or. (ig == nx_g + 1 .and. .not. periodic_x))) then
                   nw = 0
-                  if (in_region(region, ig - 1, jg, nx_g, ny_g, rim_w, east_w)) nw = nw + 1
+                  icw = ig - 1
+                  if (periodic_x .and. icw < 1) icw = nx_g
+                  if (in_region(region, icw, jg, nx_g, ny_g, rim_w, east_w)) nw = nw + 1
                   if (in_region(region, ig, jg, nx_g, ny_g, rim_w, east_w)) nw = nw + 1
                   if (nw > 0) then
                      hfc = 0.5_wp*(h(i - 1, j, k) + h(i, j, k))
@@ -309,9 +344,12 @@ contains
                epoison = epoison + dpoison
                ! v face (south face of cell jg): owned columns only.
                val = 0.0_real64
-               if (i <= nghost + nx_phys .and. (j <= nghost + ny_phys .or. jg == ny_g + 1)) then
+               if (i <= nghost + nx_phys .and. &
+                   (j <= nghost + ny_phys .or. (jg == ny_g + 1 .and. .not. periodic_y))) then
                   nw = 0
-                  if (in_region(region, ig, jg - 1, nx_g, ny_g, rim_w, east_w)) nw = nw + 1
+                  jcs = jg - 1
+                  if (periodic_y .and. jcs < 1) jcs = ny_g
+                  if (in_region(region, ig, jcs, nx_g, ny_g, rim_w, east_w)) nw = nw + 1
                   if (in_region(region, ig, jg, nx_g, ny_g, rim_w, east_w)) nw = nw + 1
                   if (nw > 0) then
                      hfc = 0.5_wp*(h(i, j - 1, k) + h(i, j, k))
@@ -338,13 +376,15 @@ contains
 
    subroutine coradv_split_efp_local(h, u, v, fx, fy, kec, idxCu, idyCv, &
                                      nx, ny, nz, nghost, nx_phys, ny_phys, &
-                                     i_off, j_off, nx_g, ny_g, rim_w, east_w, dt, tot)
+                                     i_off, j_off, nx_g, ny_g, rim_w, east_w, dt, periodic_x, periodic_y, tot)
       !! RANK-LOCAL EFP partials of the per-face PV / -grad(KE) work
       !! split: `tot(1:3)` = PV work (full, rim, east), `tot(4:6)` = KE
       !! work (full, rim, east).  Faces are attributed to their west/south
       !! cell's region (global indices) and owned by the cell on their
-      !! east/north side; the global west/south wall faces are excluded,
-      !! so a face is counted once on any decomposition.
+      !! east/north side; the global west/south wall faces are excluded
+      !! (on a periodic axis they are face 1 of the wrap: included, with
+      !! the region taken from cell `nx_g` / `ny_g`), so a face is counted
+      !! once on any decomposition.
       integer, intent(in) :: nx, ny, nz, nghost, nx_phys, ny_phys
       integer, intent(in) :: i_off, j_off, nx_g, ny_g, rim_w, east_w
       real(wp), intent(in) :: h(nx, ny, nz)
@@ -355,6 +395,7 @@ contains
       real(wp), intent(in) :: kec(nx, ny, nz)
       real(wp), intent(in) :: idxCu(nx + 1, ny), idyCv(nx, ny + 1)
       real(wp), intent(in) :: dt
+      logical, intent(in) :: periodic_x, periodic_y
       type(efp_t), intent(out) :: tot(N_SPLIT)
 
       integer :: part, region
@@ -362,18 +403,19 @@ contains
          do region = 1, N_KE
             call coradv_one(h, u, v, fx, fy, kec, idxCu, idyCv, nx, ny, nz, &
                             nghost, nx_phys, ny_phys, i_off, j_off, nx_g, ny_g, &
-                            rim_w, east_w, dt, part, region, tot(N_KE*(part - 1) + region))
+                            rim_w, east_w, dt, periodic_x, periodic_y, part, region, tot(N_KE*(part - 1) + region))
          end do
       end do
    end subroutine coradv_split_efp_local
 
    subroutine coradv_one(h, u, v, fx, fy, kec, idxCu, idyCv, nx, ny, nz, &
                          nghost, nx_phys, ny_phys, i_off, j_off, nx_g, ny_g, &
-                         rim_w, east_w, dt, part, region, total)
+                         rim_w, east_w, dt, periodic_x, periodic_y, part, region, total)
       !! One (part: 1 PV / 2 KE, region: 1 full / 2 rim / 3 east) EFP sum
       !! of `coradv_split_efp_local`; seven accumulators per k-slab.
       !! Reads only OWNED faces (u west faces ig=2..nx_g of its cells, v
-      !! south faces jg=2..ny_g) and, at a seam, the `h` and `ke_centre`
+      !! south faces jg=2..ny_g; ig=1 / jg=1 too on a periodic axis, with the
+      !! region from the wrapped cell nx_g / ny_g) and, at a seam, the `h` and `ke_centre`
       !! ghost of the neighbouring cell -- `kec` is the Coriolis kernel's
       !! scratch, current only if the caller samples right after it
       !! (this routine has no caller in the stepping loop today).
@@ -387,9 +429,10 @@ contains
       real(wp), intent(in) :: kec(nx, ny, nz)
       real(wp), intent(in) :: idxCu(nx + 1, ny), idyCv(nx, ny + 1)
       real(wp), intent(in) :: dt
+      logical, intent(in) :: periodic_x, periodic_y
       type(efp_t), intent(out) :: total
 
-      integer :: i, j, k, ig, jg
+      integer :: i, j, k, ig, jg, icw, jcs
       integer(int64) :: e1, e2, e3, e4, e5, e6, epoison
       integer(int64) :: d1, d2, d3, d4, d5, d6, dpoison
       integer(int64) :: slab_e(EFP_DIGITS)
@@ -409,7 +452,7 @@ contains
          e6 = 0_int64
          epoison = 0_int64
          !$acc parallel loop collapse(2) reduction(+:e1,e2,e3,e4,e5,e6,epoison) &
-         !$acc&         private(val, h_face, f_tot, f_ke, f_pv, u_mid, w, ig, jg, in_reg, d1, d2, d3, d4, d5, d6, dpoison) &
+         !$acc&         private(val, h_face, f_tot, f_ke, f_pv, u_mid, w, ig, jg, icw, jcs, in_reg, d1, d2, d3, d4, d5, d6, dpoison) &
          !$acc&         present(h, u, v, fx, fy, kec, idxCu, idyCv)
          do j = nghost + 1, nghost + ny_phys
             do i = nghost + 1, nghost + nx_phys
@@ -417,13 +460,15 @@ contains
                jg = j - nghost + j_off
                ! u-face (west face of this cell); region from the west cell ig-1.
                val = 0.0_real64
-               if (ig > 1) then
+               if (ig > 1 .or. periodic_x) then
+                  icw = ig - 1
+                  if (icw < 1) icw = nx_g
                   in_reg = .true.
                   if (region == 2) then
-                     in_reg = (ig - 2 < rim_w .or. nx_g - (ig - 1) < rim_w .or. &
+                     in_reg = (icw - 1 < rim_w .or. nx_g - icw < rim_w .or. &
                                jg - 1 < rim_w .or. ny_g - jg < rim_w)
                   else if (region == 3) then
-                     in_reg = (nx_g - (ig - 1) < east_w)
+                     in_reg = (nx_g - icw < east_w)
                   end if
                   if (in_reg) then
                      h_face = 0.5_wp*(h(i - 1, j, k) + h(i, j, k))
@@ -446,11 +491,13 @@ contains
                epoison = epoison + dpoison
                ! v-face (south face of this cell); region from the south cell jg-1.
                val = 0.0_real64
-               if (jg > 1) then
+               if (jg > 1 .or. periodic_y) then
+                  jcs = jg - 1
+                  if (jcs < 1) jcs = ny_g
                   in_reg = .true.
                   if (region == 2) then
                      in_reg = (ig - 1 < rim_w .or. nx_g - ig < rim_w .or. &
-                               jg - 2 < rim_w .or. ny_g - (jg - 1) < rim_w)
+                               jcs - 1 < rim_w .or. ny_g - jcs < rim_w)
                   else if (region == 3) then
                      in_reg = (nx_g - ig < east_w)
                   end if

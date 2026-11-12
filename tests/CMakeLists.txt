@@ -703,11 +703,11 @@ if(RDB_ENABLE_MPI)
   # The KE probe reduction must give the same digits on any rank count: the
   # registered 4-rank run covers 4x1/1x4/2x2; add the 1- and 2-rank runs.
   foreach(np 1 2)
-    add_test(NAME rdb_test_ocean_ke_probe_mpi_np${np}
+    add_test(NAME rdb_test_ocean_ke_probe_mpi_${np}rank
              COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${np}
                      $<TARGET_FILE:test_ocean_ke_probe_mpi>)
-    set_tests_properties(rdb_test_ocean_ke_probe_mpi_np${np} PROPERTIES LABELS
-                                                                        "ocean")
+    set_tests_properties(rdb_test_ocean_ke_probe_mpi_${np}rank
+                         PROPERTIES LABELS "ocean")
   endforeach()
   # test_ocean_dyn_mpi uses ocean_test_metrics from rdb_analytical.
   target_link_libraries(test_ocean_dyn_mpi PRIVATE rdb_analytical)
