@@ -664,7 +664,7 @@ contains
                "&ocean_grid_nml grid_config = 'spherical', lon_west = 0.0, lat_south = 20.0, "// &
                "rad_earth = 6.371e6, coriolis_scheme = 'planetary' /"//NL// &
                "&vcoord_nml vcoord_type = '"// &
-               trim(merge("zstar      ", merge("eulerian_z", "sigma     ", label == "eulz_epbl_mle"), &
+               trim(merge("zstar     ", merge("eulerian_z", "sigma     ", label == "eulz_epbl_mle"), &
                           label == "diabatic_end"))// &
                "' /"//NL// &
                "&ocean_eos_nml eos = 'wright' /"//NL// &
