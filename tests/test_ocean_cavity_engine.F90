@@ -242,19 +242,16 @@ contains
       integer :: it
 
       fin = .true.
-      associate (ms => engine%state%multilayer)
-         associate (hl => ms%h_layer, uf => ms%u_face_x_layer, vf => ms%v_face_y_layer)
-            !$acc update self(hl, uf, vf) if_present
-            fin = fin .and. all(ieee_is_finite(hl)) .and. all(ieee_is_finite(uf)) &
-                  .and. all(ieee_is_finite(vf))
-         end associate
-         do it = 1, size(ms%tracers)
-            associate (c => ms%tracers(it)%c)
-               !$acc update self(c) if_present
-               fin = fin .and. all(ieee_is_finite(c))
-            end associate
-         end do
-      end associate
+      !$acc update self(engine%state%multilayer%h_layer)
+      !$acc update self(engine%state%multilayer%u_face_x_layer)
+      !$acc update self(engine%state%multilayer%v_face_y_layer)
+      fin = fin .and. all(ieee_is_finite(engine%state%multilayer%h_layer)) &
+            .and. all(ieee_is_finite(engine%state%multilayer%u_face_x_layer)) &
+            .and. all(ieee_is_finite(engine%state%multilayer%v_face_y_layer))
+      do it = 1, size(engine%state%multilayer%tracers)
+         !$acc update self(engine%state%multilayer%tracers(it)%c)
+         fin = fin .and. all(ieee_is_finite(engine%state%multilayer%tracers(it)%c))
+      end do
    end function state_is_finite
 
    subroutine count_bands(engine, zfixed, counts)
@@ -270,10 +267,13 @@ contains
 
       ng = engine%grid%nghost
       nz = engine%state%multilayer%nz_ml
+      ! The test always runs melt and top drag, so all three arrays are mapped.
+      !$acc update self(engine%state%multilayer%wet_mask)
+      !$acc update self(engine%state%cavity_flux%melt)
+      !$acc update self(engine%state%tdrag%stress_top)
       associate (ms => engine%state%multilayer, mt => engine%state%metrics, &
                  cf => engine%state%cavity_flux, td => engine%state%tdrag)
          associate (wm => ms%wet_mask, melt => cf%melt, st => td%stress_top)
-            !$acc update self(wm, melt, st) if_present
             do ib = 1, 4
                select case (ib)
                case (1)
