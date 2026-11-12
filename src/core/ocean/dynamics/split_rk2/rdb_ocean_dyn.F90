@@ -5488,6 +5488,16 @@ contains
          call ocean_halo_face_x(ms%u_face_x_layer, ms%nz_ml)
          call ocean_halo_face_y(ms%v_face_y_layer, ms%nz_ml)
       end if
+      ! The Eulerian-z h-rescale (and its tracer twin) ran over the whole
+      ! array, ghosts included, on the tile's own `bt_eta_end` / `bt_H_ref`
+      ! ghost values: a last-bit different thickness than the owner's, which
+      ! the vertical mixing reads at a seam face.  Refresh both from the
+      ! owners.  Gated on decomposition so the undecomposed answer is the
+      ! untouched one; the gate is rank-uniform.
+      if (.not. is_lagrangian .and. (ocean_halo_is_decomposed_x() .or. ocean_halo_is_decomposed_y())) then
+         call ocean_halo_centre(ms%h_layer, ms%nz_ml)
+         call refresh_tracer_ghosts(grid, ms, bc=bc)
+      end if
       call chksum_state(grid, ms, dyn%chksum_probe, "post_bt_fold", stage_id, step_id)
       ! Land-face velocity reset (C4 / R4b.2): zero re-ingested land-face
       ! layer velocity after the BT correction.  No-op for all-wet.

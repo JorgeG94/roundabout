@@ -493,17 +493,11 @@ ROWS = [
     # `decomp_hycom_visc_rem` DELETED (PR-4, the flip): its witness
     # (hycom + bt=visc_rem) now decomposes bitwise -- the visc_rem halo
     # refresh (PR-1 of the plan) already closes it on this base.
-    _gap("decomp_eulerian_z_ssp_rk2", "runtime", ("vc_eulerian_z", "ssp_rk2", "epbl", "mle"),
-         "eulerian_z under ssp_rk2 (its legacy per-stage vertical-advection + h-rescale path) "
-         "with EPBL + Fox-Kemper MLE is not decomposition-invariant: last-bit differences in "
-         "every owned cell on 2x2 and 4x1 (max|diff|/max|field| 3e-11 after 24 steps); "
-         "EPBL alone, and the same pair on z_fixed / sigma or under pred_corr, are bitwise.  "
-         "(Its visc_rem half was the visc_rem-weighted BT fold leaving non-image ghost "
-         "velocities; fixed by the post-fold face refresh in `run_stage_split`.)",
-         "NOT TRACKED (found by this matrix, 2026-10-04)", expect=("DECOMP",),
-         message=r"\dx\d: \d+ field mismatch", scope="any",
-         # re-minimised 2026-10-05 (greedy, every other axis at base)
-         witness={"vcoord": "eulerian_z", "split": "ssp_rk2", "vmix_bl": "epbl", "eddy": "mle"}),
+    # `decomp_eulerian_z_ssp_rk2` DELETED (fix/eulerian-z-epbl-mle-decomp): not an
+    # EPBL / MLE defect at all -- eulerian_z's h-rescale in `apply_bt_correction`
+    # rewrote the ghost thicknesses (and tracers) from the tile's own ghost
+    # eta, a last bit off the owner's; they are now refreshed from the owners
+    # (gate: `eulz_epbl_mle` in test_ocean_decomp_bitid_mpi).
 
     # ===================================================================
     # KNOWN_GAP -- the GPU leg (nvfortran cc70) only.
