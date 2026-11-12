@@ -489,10 +489,10 @@ sea-ice dynamical core and column model, not yet a full sea-ice model. Rows
 marked `—` are documented absences. The authoritative knob set is the
 `ocean_ice_config_t` block of `src/core/rdb_config.F90`.
 
-Envelope: the slot runs on the ocean decomposition, bit-identical to one rank.
-The exception is a tripolar fold on more than one rank, which is refused.
+Envelope: the slot runs on the ocean decomposition, bit-identical to one rank
+on every split, including under a tripolar fold with `px > 1`.
 `transport` runs across periodic edges and MPI seams. EVP `dynamics` allows
-wall or periodic edges, or a tripolar fold on one rank (needs `nghost >= 2`),
+wall or periodic edges, or a tripolar fold on any rank count (needs `nghost >= 2`),
 and no open, tidal, sponge, clamped or Chapman edge.
 
 | Capability | Status | Knob (default) | What it does | Tests |
@@ -509,7 +509,7 @@ and no open, tidal, sponge, clamped or Chapman edge.
 | CICE-named diagnostics | with `enable` | `&ocean_diag_nml diags` | Window masses from the column outputs (`congel`, `meltt`/`meltb` ice-only, `snoice`, `frazil`); rates in cm/day. `dvidtt` closes against the actual volume change. `meltl` is a structural zero. | `test_ocean_ice_driver_column` (`window_mass_closure_*`), `test_ocean_ice_diags` |
 | Frazil | with `enable`; **default** surface-layer clamp at p = 0 | `&ocean_ice_nml frazil_column`, `pressure_dependent_frazil`, `reclaim_frazil` | `frazil_column` is OM3 `FRAZIL`: a bottom-up sweep with a rising heat carry (cold deep layers freeze, warmer layers above re-melt it, only the surviving carry reaches the bank). `pressure_dependent_frazil` evaluates T_f at the layer-centre pressure g rho0 z. `reclaim_frazil` (default true, used only with `frazil_column`) spends the standing bank on a warm surface first. Virtual salt flux. | `test_ocean_frazil`, `test_ocean_ice_coupling` |
 | Salinity floor | **default** off | `&ocean_ice_nml bound_salinity`, `min_salinity` | OM3 `BOUND_SALINITY`: after the surface salt flux, `S = max(S, min_salinity)` in the top layer. Non-conserving (the created salt is not in the salt budget). | `test_ocean_frazil` |
-| Atmospheric forcing | v1 stub | `air_temp`, `restore_lambda`, `sw_down` (all `0.0`) | Scalar, uniform, slab-restoring. No bulk formulae, fields, files or time dependence. | `test_ocean_ice_driver_column` |
+| Atmospheric forcing | **default** scalar restoring; LY09 bulk with the prescribed atmosphere | `air_temp`, `restore_lambda`, `sw_down` (all `0.0`); `&ocean_atm_forcing_nml enable` | Default: scalar, uniform, slab-restoring. With `&ocean_atm_forcing_nml enable` the seam comes from the JRA55-do fields through the LY09 over-ice bulk linearisation (`ice_atm_forcing_from_atm`, constant transfer coefficients, no atm-ice stress term). | `test_ocean_ice_driver_column` |
 | Ice to ocean coupling | with `enable` | none | Salt closed (virtual). Heat closed, including transmitted shortwave. Momentum **not conserved** at fractional cover. Freshwater and mass **not coupled**. | `test_ocean_ice_coupling`, `test_ocean_ice_driver_column` |
 | Ice initial condition | **default** `"zero"` | `&ocean_ice_ic_nml conc_config` (`"zero"`, `"uniform"`, `"latitudes"`) | Analytic seeding of a live pack before step one. File-backed ICs are deferred. | `test_ocean_ice_init` |
 
