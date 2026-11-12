@@ -80,6 +80,12 @@
 !!     vortex IC (`ic_config = 'balanced_vortex'`) on a closed beta-plane, centred
 !!     on the 2x1/1x2 seams and the 2x2 corner; `_t0` takes zero steps so the
 !!     seeded state itself (incl. ghosts) is compared;
+!!   * balance_rest / balance_rest_t0 / balance_keep_t0 - the same vortex density
+!!     seeded UNBALANCED (`vortex_balance = 'none'`: zero velocity), then
+!!     `ocean_balance_apply` (the API / reinit entry, geostrophic) with
+!!     `ref_level` bottom_rest (global per-layer median + column stretch) or
+!!     keep_h, after poisoning the u/v/hu/hv ghosts with rank-dependent garbage;
+!!     the `_t0` twins compare the balanced IC itself;
 !!   * drain_ratio / drain_ratio_h3 - windowed tracer drain (ratio 4, ppm / ppm_h3
 !!     + diabatic_first = .false.) on a periodic channel, >1 sub-cycle pass;
 !!   * drain_ratio_weno5 / _weno7 / _weno9 - the same drain with the WENO swept
@@ -181,6 +187,8 @@ program test_ocean_decomp_bitid_mpi
    use rdb_console_stats, only: console_stats_t, conservation_budget_t
    use rdb_ocean_console_stats, only: ocean_console_stats_report, ocean_budget_stage_weight
    use rdb_ocean_dyn, only: SPLIT_SCHEME_PRED_CORR
+   use rdb_ocean_balance, only: BALANCE_GEOSTROPHIC
+   use rdb_ocean_reinit, only: ocean_balance_apply
    use rdb_ocean_fold_exchange, only: ocean_fold_exchange_grow_count
 #ifndef RDB_NO_NETCDF
    use rdb_io_netcdf, only: nc_create_file, nc_close, nc_def_dim, nc_def_var_2d, &
@@ -229,12 +237,15 @@ program test_ocean_decomp_bitid_mpi
 
    integer :: rank, nprocs, n_fail, total_fail, ic
    integer :: n_steps_cur = N_STEPS
+   character(len=16) :: balance_ref = ""
+      !! Non-empty: `run_one` calls `ocean_balance_apply` with this `ref_level`
+      !! after `engine_enter_data` (the `balance_*` cases).
       !! Steps `run_one` takes; 0 for the `*_t0` labels (compare the seeded IC itself).
    character(len=256) :: case_filter = ""
       !! `RDB_BITID_CASES`: run only the cases whose name contains this substring.
    type(comm_t) :: comm
    character(len=16), parameter :: SCHEMES(2) = [character(len=16) :: "pred_corr", "ssp_rk2"]
-   character(len=24), parameter :: CASES(42) = [character(len=24) :: &
+   character(len=24), parameter :: CASES(45) = [character(len=24) :: &
                                                 "island_basin", "weno7_pv", &
                                                 "periodic_channel_zstar", &
                                                 "visc_rem_zstar", &
@@ -253,6 +264,8 @@ program test_ocean_decomp_bitid_mpi
                                                 "hvisc_kh_points", "diabatic_end", &
                                                 "hvisc_thin_layer", "hvisc_biharm_stress", &
                                                 "balanced_vortex_t0", "balanced_vortex", &
+                                                "balance_rest_t0", "balance_keep_t0", &
+                                                "balance_rest", &
                                                 "drain_ratio", "drain_ratio_h3", &
                                                 "drain_ratio_weno5", "drain_ratio_weno7", &
                                                 "drain_ratio_weno9", "drain_ratio_fold", &
@@ -319,6 +332,7 @@ contains
       character(len=16) :: spx, spy, snx, sny, sng
       character(len=:), allocatable :: common, bt_extra, ice_dyn, hv_extra, drain_extra
       character(len=16) :: rad_earth_s, wind_s, wind_y_s
+      character(len=40) :: vortex_balance
 
       ! The visc_rem chain rides on the common &ocean_bt_nml group (one
       ! group per namelist).  D1 follow-up (2026-10): the weighted
@@ -327,6 +341,8 @@ contains
       ! z* open-step case under bbl_glue -- so both cases below now
       ! exercise `visc_rem_chain` (producer + bt_rem_from_av_rem + wt_u
       ! forcing + renorm_visc_rem, UNIFORM BT-correction fold) instead.
+      vortex_balance = "vortex_balance = 'geostrophic'"
+      if (index(label, "balance_") == 1) vortex_balance = "vortex_balance = 'none'"
       ice_dyn = "dynamics = .true., evp_sub_steps = 30, cfl_trunc = 0.01, "// &
                 "project_ci = .true., "
       if (label == "sea_ice_fold_nodyn") ice_dyn = "dynamics = .false., "
@@ -448,7 +464,8 @@ contains
                "coriolis_beta = 2.0e-11 /"//NL// &
                "&ocean_vdiff_nml hvel_mom6 = .true., bbl_glue = .true. /"//NL// &
                "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
-      case ("balanced_vortex", "balanced_vortex_t0")
+      case ("balanced_vortex", "balanced_vortex_t0", "balance_rest", "balance_rest_t0", &
+            "balance_keep_t0")
          ! Isolated balanced cold-core vortex (ic_config = 'balanced_vortex') on a
          ! closed beta-plane, centred on the 2x1/1x2 seams and the 2x2 four-way
          ! corner (x0 = 13 dx, y0 = 9 dx), R = 3 dx so the core also straddles the
@@ -467,7 +484,8 @@ contains
                "&ocean_ic_nml ic_config = 'balanced_vortex', alpha_T = 0.17, "// &
                "rho_0 = 1035.0, vortex_x0 = 260000.0, vortex_y0 = 180000.0, "// &
                "vortex_radius = 60000.0, vortex_hv = 300.0, vortex_dT = -2.0, "// &
-               "vortex_T_surf = 20.0, vortex_dT_dz = 1.5e-2 /"//NL// &
+               "vortex_T_surf = 20.0, vortex_dT_dz = 1.5e-2, "// &
+               trim(vortex_balance)//" /"//NL// &
                "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
       case ("weno7_pv")
          ! The island basin on the Sadourny enstrophy path with the weno7 PV
@@ -898,6 +916,15 @@ contains
       if (ierr /= OCEAN_STATUS_OK) return
 
       call engine_enter_data(engine, cfg)
+      if (len_trim(balance_ref) > 0) then
+         call poison_velocity_ghosts(engine, crank)
+         call ocean_balance_apply(engine%state, engine%grid, cfg, BALANCE_GEOSTROPHIC, &
+                                  trim(balance_ref), .true., .false., ierr)
+         if (ierr /= OCEAN_STATUS_OK) then
+            write (*, '(a,i0,a,i0)') "FAIL balance: ocean_balance_apply ierr=", ierr, " rank ", rank
+            return
+         end if
+      end if
       t = 0.0_wp
       ierr = OCEAN_STATUS_OK
       do n = 1, n_steps_cur
@@ -974,6 +1001,26 @@ contains
       call engine_exit_data(engine)
       call engine_teardown(engine)
    end subroutine run_one
+
+   subroutine poison_velocity_ghosts(engine, crank)
+      !! Host u/v/hu/hv := rank-dependent garbage in the WHOLE array (the
+      !! balance must overwrite every owned face and refresh the seam ghosts),
+      !! pushed to the device so host and device agree.
+      type(ocean_engine_t), intent(inout) :: engine
+      integer, intent(in) :: crank
+      real(wp) :: g
+      g = 7.0e3_wp*real(crank + 1, wp)
+      engine%state%multilayer%u_face_x_layer = g
+      engine%state%multilayer%v_face_y_layer = -g
+      engine%state%multilayer%hu_face_x_layer = 2.0_wp*g
+      engine%state%multilayer%hv_face_y_layer = -2.0_wp*g
+      associate (uf => engine%state%multilayer%u_face_x_layer, &
+                 vf => engine%state%multilayer%v_face_y_layer, &
+                 huf => engine%state%multilayer%hu_face_x_layer, &
+                 hvf => engine%state%multilayer%hv_face_y_layer)
+         !$acc update device(uf, vf, huf, hvf)
+      end associate
+   end subroutine poison_velocity_ghosts
 
    subroutine take_snapshot(engine, s)
       !! Host copy of every restart-registry field (device -> host first)
@@ -1297,6 +1344,9 @@ contains
       type(conservation_budget_t) :: buds(8)
 
       n_steps_cur = N_STEPS
+      balance_ref = ""
+      if (index(label, "balance_rest") == 1) balance_ref = "bottom_rest"
+      if (index(label, "balance_keep") == 1) balance_ref = "keep_h"
       if (len(label) > 3) then
          if (label(len(label) - 2:) == "_t0") n_steps_cur = 0
       end if
