@@ -336,7 +336,8 @@ need, is on :doc:`diagnostics`; the sea-ice fields are also described on
 
 ``vgrid`` sets the default output vertical grid for the whole stream —
 ``layer`` (the default, native model layers), ``z_fixed``, ``sigma``,
-``zstar`` or ``density``. Remapping happens at write time; the model always
+``zstar`` or ``density``. Remapping is done only for the output (for a time
+mean or extremum, every step as the field is accumulated); the model always
 computes on its own coordinate.
 
 Cadence and cost
