@@ -272,7 +272,7 @@ The options you are most likely to touch:
        via its serial backend.
    * - ``RDB_CUDA_AWARE_MPI``
      - ``ON`` with MPI + GPU, else ``OFF``
-     - GPU-direct halo exchange; an explicit value always wins. ``ON``
+     - Declares the MPI library CUDA-aware; an explicit value always wins. ``ON``
        without MPI and GPU is a configure error. See the multi-GPU warning
        below.
    * - ``RDB_GPU_ARCH``
@@ -524,7 +524,7 @@ runs the project's own suite and skips the dependency self-tests that
 Multi-GPU on one node
 =====================
 
-If you build with ``RDB_CUDA_AWARE_MPI=ON`` and run several ranks on one
+In an MPI + GPU build (CUDA-aware by default) running several ranks on one
 node, **each rank must see only its own GPU, and that must be arranged
 before ``MPI_Init``**.
 
@@ -543,5 +543,7 @@ variable before the first CUDA call:
 
 With that pinning, the solver's ``mod(node_rank, n_devices)`` clamp binds
 the single visible device and a plain ``mpirun -np N ./rdb run.nml``
-works. Host-staged MPI (``RDB_CUDA_AWARE_MPI=OFF``) never touches CUDA
-during ``MPI_Init`` and does not hit this.
+works. ``RDB_CUDA_AWARE_MPI`` only declares that the MPI library is
+CUDA-aware: a GPU build always passes device buffers to MPI, a multi-rank GPU
+run without the declaration is refused at startup, and nothing checks at run
+time that the library really is CUDA-aware.

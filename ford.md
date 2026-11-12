@@ -54,7 +54,7 @@ Key CMake options:
 |------------------------------|---------|------------------------------------------------|
 | `RDB_ENABLE_GPU`          | `OFF`   | OpenACC GPU offload via NVHPC (opt-in)         |
 | `RDB_ENABLE_MPI`          | `OFF`   | MPI multi-rank support                         |
-| `RDB_CUDA_AWARE_MPI`      | `ON` with MPI + GPU, else `OFF` | GPU-direct halo exchange (requires CUDA-aware MPI) |
+| `RDB_CUDA_AWARE_MPI`      | `ON` with MPI + GPU, else `OFF` | Declares the MPI library CUDA-aware (required for multi-rank GPU runs) |
 | `RDB_GPU_ARCH`            | `cc70`  | Target GPU compute capability (cc70/80/90)     |
 | `RDB_ENABLE_DOUBLE`       | `ON`    | Double-precision working precision             |
 

@@ -43,10 +43,14 @@ Two standing rules for anything run against this repo — humans and AI agents a
   object store.  Never name a build dir anything else.
 - **Local MPI builds are allowed.** Use the MPI bundled with the NVHPC module
   (`module load nvhpc`; wrappers under `$NVHPC_ROOT/comm_libs/mpi/bin`). The CPU
-  MPI leg is nvfortran with `RDB_ENABLE_GPU=OFF`. `MPI_ROOT` in the environment
-  can make CMake's FindMPI pick a different (gcc) OpenMPI, so pass
-  `-DMPI_Fortran_COMPILER=.../mpif90 -DMPI_C_COMPILER=.../mpicc` explicitly.
-  `ctest` on a GPU build is still never run with `-j`.
+  MPI leg is nvfortran with `RDB_ENABLE_GPU=OFF`. The environment must not
+  expose another MPI: unset `MPI_ROOT` and drop its lib dir from
+  `LIBRARY_PATH`/`LD_LIBRARY_PATH`/`CPATH`/`PATH` (the dev box's netcdf modules
+  pull in a gcc OpenMPI), AND pass `-DMPI_Fortran_COMPILER=.../mpif90
+  -DMPI_C_COMPILER=.../mpicc`. Wrappers alone are not enough: FindMPI still
+  resolves the foreign `libmpi` and the link dies with `undefined reference to
+  _mpi_f08_types_8_`. Check `MPI_mpi_LIBRARY` in `CMakeCache.txt` points under
+  the NVHPC tree. `ctest` on a GPU build is still never run with `-j`.
 - **No Claude session links in commit messages or PRs.** Never write a
   `Claude-Session:` trailer or a `claude.ai/code/session…` URL into a commit,
   merge or squash message, a PR title or description, or a PR/review
@@ -361,7 +365,7 @@ See the "Boundaries" bullet of the Ocean dyn-core section — `&ocean_bc_nml` se
 
 `rdb_decomp` splits the domain into rectangular subdomains. Halos via `mpi_f08` Isend/Irecv on `compute_comm`. Two-phase comm_env init: `comm_env_init()` → read config → `comm_env_setup_roles(.false.)` (there is no dedicated I/O-server rank any more — that was a coastal-path feature). Each GPU rank binds via `acc_set_device_num(gpu_rank = mod(node_rank, n_devices))`.
 
-**Multi-GPU one node: pin `CUDA_VISIBLE_DEVICES` per rank BEFORE `MPI_Init`.** With `RDB_CUDA_AWARE_MPI=ON` (GPU-direct halo; the default for an MPI + GPU build), UCX/hpcx creates a CUDA primary context at `MPI_Init` — which runs *before* `acc_set_device_num` — so with all GPUs visible every rank also lands a context on device 0 (`{0},{0,1},{0,2},{0,3}` in `nvidia-smi`, binding diagnostic still looks correct). Fix: each rank must see only its own GPU. The launcher (or the script, before the first CUDA call) sets `CUDA_VISIBLE_DEVICES` from the local-rank env var (`OMPI_COMM_WORLD_LOCAL_RANK`, …); the `mod(node_rank, n_devices)` clamp then binds the single visible device 0. With pinning, plain `mpirun -np N ./rdb …` works — no `bash -c` wrapper. Host-staged MPI (`RDB_CUDA_AWARE_MPI=OFF`) doesn't hit this (UCX never touches CUDA).
+**Multi-GPU one node: pin `CUDA_VISIBLE_DEVICES` per rank BEFORE `MPI_Init`.** In an MPI + GPU build (`RDB_CUDA_AWARE_MPI=ON`, the default), UCX/hpcx creates a CUDA primary context at `MPI_Init` — which runs *before* `acc_set_device_num` — so with all GPUs visible every rank also lands a context on device 0 (`{0},{0,1},{0,2},{0,3}` in `nvidia-smi`, binding diagnostic still looks correct). Fix: each rank must see only its own GPU. The launcher (or the script, before the first CUDA call) sets `CUDA_VISIBLE_DEVICES` from the local-rank env var (`OMPI_COMM_WORLD_LOCAL_RANK`, …); the `mod(node_rank, n_devices)` clamp then binds the single visible device 0. With pinning, plain `mpirun -np N ./rdb …` works — no `bash -c` wrapper. `RDB_CUDA_AWARE_MPI` only DECLARES that the MPI library is CUDA-aware: a GPU build always hands device buffers to MPI (`host_data use_device` in the halo and fold exchange), and a multi-rank GPU run without the declaration is refused at startup. Nothing checks at run time that the library really is CUDA-aware, so use one that is.
 
 Halo coverage: `rdb_ocean_halo` + `ocean_halo_exchange_ml_state`. Tracer halo uses the outer-shim + flat-impl pattern. Sea ice rides the ocean's decomposition and `nghost`: `ocean_halo_exchange_ice_state` (category state, end of every thermo block + cold start), `ui`/`vi` face exchanges every EVP subcycle and once after the loop, the transport's CAS masses + riding tracers at the top of every advective substep (`ocean_halo_exchange_ice_transport`, with rank-uniform early-exit / abort flags), and the blended `tau` through `ocean_seam_refresh_surface_stress`; the EVP stresses are recomputed redundantly in the halo, never exchanged (see `rdb_ice_evp` D6).
 

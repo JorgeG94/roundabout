@@ -193,7 +193,7 @@ cmake -B build -S . -DRDB_ENABLE_NETCDF=OFF && cmake --build build
 | `RDB_ENABLE_GPU` | `OFF` | GPU offloading (`-stdpar=gpu -acc=gpu`); opt-in on the NVHPC toolchain. Explicit `ON` with a compiler that has no GPU path is a configure-time error (no silent CPU downgrade); the value prints on the `GPU offload:` configure line. Sets `RDB_GPU_OFFLOAD` preprocessor define (used only for the CUDA-aware MPI selection and the multi-GPU build-config FATAL guard) |
 | `RDB_ENABLE_THREADS` | `OFF` | Multicore threading (`-stdpar=multicore -acc=multicore` for NVHPC; `-ftree-parallelize-loops=N` for GCC). Ignored when `RDB_ENABLE_GPU=ON` |
 | `RDB_ENABLE_MPI` | `OFF` | Multi-rank: link an MPI library and build pic-mpi against it. `OFF` still uses pic-mpi — its serial backend — and builds single-rank |
-| `RDB_CUDA_AWARE_MPI` | `ON` when `RDB_ENABLE_MPI` and `RDB_ENABLE_GPU` are both ON, else `OFF` | Use GPU-direct MPI for halo exchange; an explicit value always wins, and `ON` without MPI + GPU is a configure-time error |
+| `RDB_CUDA_AWARE_MPI` | `ON` when `RDB_ENABLE_MPI` and `RDB_ENABLE_GPU` are both ON, else `OFF` | Declares the MPI library CUDA-aware (GPU builds always pass device buffers; multi-rank GPU runs are refused without it); an explicit value always wins, and `ON` without MPI + GPU is a configure-time error |
 | `RDB_ENABLE_DOUBLE` | `ON` | Double precision (`real64`) |
 | `RDB_GPU_ARCH` | `cc70` | GPU compute capability (e.g. `cc70`, `cc80`, `cc90`) |
 | `RDB_ENABLE_NETCDF` | `ON` | Build the NetCDF-backed I/O subsystem (driver, diagnostics, restart, forcing, main executable). Disable for portability testing on platforms where NetCDF is inconvenient — kernels and benchmarks still build |
