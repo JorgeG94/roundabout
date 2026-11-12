@@ -322,7 +322,7 @@ contains
       integer, intent(in) :: px, py
       character(len=:), allocatable :: nml
       character(len=*), parameter :: NL = new_line("a")
-      character(len=16) :: spx, spy, snx, sny, sng
+      character(len=16) :: spx, spy, snx, sny, sng, snz
       character(len=:), allocatable :: common, bt_extra, ice_dyn, hv_extra, drain_extra
       character(len=16) :: rad_earth_s, wind_s, wind_y_s
 
@@ -387,6 +387,8 @@ contains
       write (spy, '(i0)') py
       write (snx, '(i0)') NX_G
       write (sny, '(i0)') NY_G
+      snz = "4"
+      if (label == "manizza") snz = "8"
       ! weno9 needs nghost = 5: widen the grid so the np = 4 layouts (1x4 ->
       ! ny/4 rows, 4x1 -> nx/4 columns) stay at least nghost wide.
       if (label == "drain_ratio_weno9") then
@@ -396,7 +398,7 @@ contains
       common = "&sim_nml sim_type = 'ocean' /"//NL// &
                "&mpi_nml px = "//trim(spx)//", py = "//trim(spy)//" /"//NL// &
                "&time_nml t_end = 86400.0, dt_fixed = 900.0 /"//NL// &
-               "&nonhydrostatic_nml nz_layers = 4 /"//NL// &
+               "&nonhydrostatic_nml nz_layers = "//trim(snz)//" /"//NL// &
                "&tracer_nml initial_temperature = 12.0, initial_salinity = 35.0, "// &
                "T_init_surface = 20.0, T_init_bottom = 4.0 /"//NL// &
                "&ocean_bt_nml auto_n_inner = .true., split_scheme = '"//scheme//"'"// &
@@ -443,12 +445,15 @@ contains
          ! non-symmetric chlorophyll climatology, its seam-ghost exchange, and
          ! the per-band opacities feeding the deposition kernel and the KPP
          ! B_0 coupling.  A wrong window or a stale ghost changes the heating.
+         ! Shallow (100 m) and 8 layers deep so the blue AND red bands cross
+         ! several interfaces: the opacities, not just the surface layer, drive
+         ! the heating.
          nml = common// &
                "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
                "dx = 20000.0, dy = 20000.0 /"//NL// &
                "&physics_nml coriolis_f = 1.0e-4 /"//NL// &
                "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
-               "&ocean_topo_nml topo_config = 'island', max_depth = 1000.0, "// &
+               "&ocean_topo_nml topo_config = 'island', max_depth = 100.0, "// &
                "slope_scale = 0.15, wind_config = '2gyre', taux_magnitude = 0.1, "// &
                "coriolis_beta = 2.0e-11 /"//NL// &
                "&ocean_thermo_nml enable_thermodynamics = .true., q_heat = 400.0, "// &
@@ -1756,9 +1761,9 @@ contains
          do i = 1, NX_G
             x = real(i, wp)/real(NX_G, wp)
             y = real(j, wp)/real(NY_G, wp)
-            tt(i, j, 1) = 0.03_wp + 2.0_wp*x**2*(1.0_wp - 0.7_wp*y) + &
-                          0.4_wp*abs(sin(9.0_wp*x + 4.0_wp*y))
-            tt(i, j, 2) = 1.5_wp*tt(i, j, 1) + 0.2_wp*y
+            tt(i, j, 1) = 0.01_wp + 0.25_wp*x**2*(1.0_wp - 0.7_wp*y) + &
+                          0.12_wp*abs(sin(9.0_wp*x + 4.0_wp*y))
+            tt(i, j, 2) = 1.5_wp*tt(i, j, 1) + 0.03_wp*y
          end do
       end do
       call nc_create_file(CHL_FILE, ncid)
