@@ -15,6 +15,7 @@ module rdb_ocean_state
    use rdb_error_ring, only: fail
    use pic_strings, only: to_string
    use rdb_comm_env, only: comm_env_rank
+   use rdb_grid_reduce, only: grid_allreduce_max, grid_allreduce_min, grid_allreduce_sum_i8
    use rdb_barotropic_state, only: barotropic_state_t
    use rdb_multilayer_state, only: multilayer_state_t
    use rdb_ocean_pseudo_salt, only: ocean_pseudo_salt_register, ocean_pseudo_salt_seed

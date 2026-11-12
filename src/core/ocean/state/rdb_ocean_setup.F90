@@ -105,7 +105,9 @@ module rdb_ocean_setup
    use rdb_ocean_dyn, only: ocean_dt_tracer_advect_ratios_ok, &
                             SPLIT_SCHEME_SSP_RK2, SPLIT_SCHEME_PRED_CORR
    use rdb_recon_weno, only: parse_tracer_recon, TRACER_RECON_PPM
+   use, intrinsic :: iso_fortran_env, only: int64
    use rdb_halo, only: halo_allreduce_min, halo_allreduce_sum
+   use rdb_grid_reduce, only: grid_allreduce_max, grid_allreduce_sum_i8
    use rdb_barotropic_dtbt, only: bt_dtbt_dt_max, bt_dtbt_n_inner
    use rdb_ocean_status, only: OCEAN_STATUS_OK, OCEAN_STATUS_ERR_SETUP
    use rdb_error_ring, only: fail

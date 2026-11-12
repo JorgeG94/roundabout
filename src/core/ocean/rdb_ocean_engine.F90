@@ -108,7 +108,7 @@ module rdb_ocean_engine
    use rdb_ocean_fold_apply, only: ocean_fold_wrap_state, ocean_fold_wrap_eta_2d
    use rdb_ocean_boundary_data, only: ocean_boundary_data_constant_t
    use rdb_ocean_boundary_types, only: ocean_bc_state_set_edges, ocean_bc_state_set_topology, &
-                                       ocean_bc_type_from_string, OBC_PERIODIC, &
+                                       ocean_bc_type_from_string, OBC_PERIODIC, OBC_WALL, &
                                        OBC_TRIPOLAR_FOLD, OBC_CHAPMAN
    use rdb_ocean_metrics, only: metrics_assemble_from_supergrid_arrays, metrics_finalize, &
                                 metrics_fold_periodic_ghosts
@@ -118,6 +118,7 @@ module rdb_ocean_engine
    use rdb_ocean_surface_flux, only: ocean_surface_flux_assemble
    use rdb_ocean_surface_stress, only: ocean_surface_stress_set_shelf_from_ustar
    use rdb_ocean_cavity_flux, only: ocean_cavity_flux_step
+   use rdb_ocean_cavity_melt, only: parse_cavity_freshwater, CAVITY_FW_MASS
    use rdb_ocean_vcoord, only: parse_ocean_vcoord_type, VCOORD_LAGRANGIAN
    use rdb_ocean_setup, only: configure_ocean_metrics, configure_ocean_land_mask, &
                               configure_ocean_forcing, &
@@ -345,6 +346,7 @@ contains
          !! Default `.false.`.
 
       integer :: rank, csize, mrank, sss_net_mode
+      integer :: cav_edges(4)
       logical :: no_output, sss_conv_sp
       character(len=512) :: restart_filename
       real(wp) :: t_restart_local
@@ -446,12 +448,58 @@ contains
          ! an unset process grid (px = py = 1, auto-factored above) does
          ! not trip -- so this is the gate that always holds.  Every rank
          ! evaluates the same condition and fails together.
+         ! Ice-shelf cavity (dyn + virtual melt + top drag) runs decomposed,
+         ! bitwise (`cavity_*` cases of `test_ocean_decomp_bitid_mpi`).  The
+         ! combinations below have NO case yet; each is refused narrowly,
+         ! keyed on the rank count and on rank-uniform config, so every rank
+         ! fails together.
          if (cfg%ocean%cavity_dyn%enable) then
-            call fail("&ocean_cavity_dyn_nml enable = .true. is single-rank ("// &
-                      to_string(csize)//" ranks requested): the grounding statistics "// &
-                      "are global reductions the configure does not take.  Run on 1 rank.", &
-                      ierr, OCEAN_STATUS_ERR_SETUP)
-            return
+            if (cfg%ocean%cavity_melt%enable .and. &
+                parse_cavity_freshwater(cfg%ocean%cavity_melt%freshwater) == CAVITY_FW_MASS) then
+               call fail("&ocean_cavity_melt_nml freshwater = 'mass' with a cavity is "// &
+                         "unproven on a decomposed domain ("//to_string(csize)// &
+                         " ranks requested): the melt volume and open area are "// &
+                         "global floating-point sums whose order depends on the "// &
+                         "layout.  Use freshwater = 'virtual' or run on 1 rank.", &
+                         ierr, OCEAN_STATUS_ERR_SETUP)
+               return
+            end if
+            if (trim(cfg%ocean%cavity_dyn%draft_config) == "file") then
+               call fail("&ocean_cavity_dyn_nml draft_config = 'file' is unproven on a "// &
+                         "decomposed domain ("//to_string(csize)//" ranks requested): "// &
+                         "the windowed draft reader has no multi-rank bit-identity "// &
+                         "case.  Use an analytic draft or run on 1 rank.", &
+                         ierr, OCEAN_STATUS_ERR_SETUP)
+               return
+            end if
+            if (ocean_bc_type_from_string(cfg%ocean%bc%north) == OBC_TRIPOLAR_FOLD) then
+               call fail("&ocean_cavity_dyn_nml enable with &ocean_bc_nml north = "// &
+                         "'tripolar_fold' is unproven on a decomposed domain ("// &
+                         to_string(csize)//" ranks requested): the cavity face "// &
+                         "twins are never folded and no case covers it.  Run on 1 rank.", &
+                         ierr, OCEAN_STATUS_ERR_SETUP)
+               return
+            end if
+            if (cfg%ocean%bulk_flux%enable) then
+               call fail("&ocean_cavity_dyn_nml enable with &ocean_bulk_flux_nml enable "// &
+                         "is unproven on a decomposed domain ("//to_string(csize)// &
+                         " ranks requested): the bulk stress carries no ice-cover "// &
+                         "mask and has no cavity case.  Run on 1 rank.", &
+                         ierr, OCEAN_STATUS_ERR_SETUP)
+               return
+            end if
+            cav_edges = [ocean_bc_type_from_string(cfg%ocean%bc%west), &
+                         ocean_bc_type_from_string(cfg%ocean%bc%east), &
+                         ocean_bc_type_from_string(cfg%ocean%bc%south), &
+                         ocean_bc_type_from_string(cfg%ocean%bc%north)]
+            if (any(cav_edges /= OBC_WALL .and. cav_edges /= OBC_PERIODIC)) then
+               call fail("&ocean_cavity_dyn_nml enable with an &ocean_bc_nml edge that "// &
+                         "is not 'wall' or 'periodic' (open / tidal / clamped / chapman "// &
+                         "/ sponge) is unproven on a decomposed domain ("// &
+                         to_string(csize)//" ranks requested).  Run on 1 rank.", &
+                         ierr, OCEAN_STATUS_ERR_SETUP)
+               return
+            end if
          end if
          if (cfg%ocean%wetdry%enable) then
             call fail("&ocean_wetdry_nml enable = .true. is single-rank ("// &
