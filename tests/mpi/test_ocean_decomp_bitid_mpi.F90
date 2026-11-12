@@ -85,7 +85,7 @@
 !!   * drain_ratio_weno5 / _weno7 / _weno9 - the same drain with the WENO swept
 !!     reconstruction at nghost 3 / 4 / 5 (rung ladder keyed on global edges);
 !!   * dtbt_reset / dtbt_reset_period - `&ocean_bt_nml dtbt` re-derived every step / hourly;
-!!     `dtbt` sits at an n_inner threshold so n_inner flips 11 -> 12 mid-run
+!!     `dtbt` sits at an n_inner threshold so n_inner flips 14 <-> 15 mid-run (27x19 trench)
 !!   * drain_ratio_fold / drain_ratio_fold_h3 - the same drain across the tripolar fold
 !!     (distributed fold exchange for px > 1);
 !!   * tracer_ppm_h3 - re-entrant channel (periodic x) with
