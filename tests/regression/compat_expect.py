@@ -526,11 +526,6 @@ ROWS = [
     # KNOWN_GAP -- single-rank features: the DECOMP leg's configure-time
     # refusal on more than one rank.
     # ===================================================================
-    _single_rank("cavity_single_rank", ("cavity",),
-                 "The ice-shelf cavity is single-rank in v1: the grounding statistics are "
-                 "global reductions its configure does not take.",
-                 "'Single-rank-only features to lift: ... cavity'",
-                 message=r"&ocean_cavity_dyn_nml enable=\.true\. is single-rank in v1"),
 ]
 
 
@@ -605,6 +600,7 @@ VALUE_PATHS.update({
     ("geometry", "tripolar"): ["src/core/ocean/boundary/rdb_ocean_fold*.F90",
                                "src/core/ocean/state/rdb_ocean_bipolar.F90"],
     ("geometry", "cavity"): ["src/core/ocean/state/rdb_ocean_cavity.F90",
+                             "src/core/ocean/state/setup/rdb_ocean_setup_cavity.F90",
                              _P + "vertical/rdb_ocean_cavity_*.F90",
                              _P + "vertical/rdb_ocean_top_drag.F90"],
     ("forcing", "cool"): [_P + "vertical/rdb_ocean_surface_flux.F90"],

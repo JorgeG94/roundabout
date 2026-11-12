@@ -88,7 +88,7 @@ More acronyms (CWC, PGF, PP81, ALE, EPBL, MEKE) and concept definitions (vanishi
 | Run a global 1-degree ocean on a tripolar grid | Yes | `validation_examples/ocean/global_1deg/` runs on 1, 2 and 4 ranks with identical state. |
 | Run on NVIDIA GPUs | Yes | NVHPC is the primary target. GPU tests run locally, because CI has no GPU runner (see [section 12](#12-gpu-compilers-and-performance)). |
 | Run on AMD or Intel GPUs | Not supported | Not a supported or CI-tested target. GPU offload goes through NVHPC (`-stdpar=gpu` plus OpenACC), and there is no HIP or SYCL backend. The code is also built with Intel and AMD toolchains to find compiler bugs, but that is not a GPU port. |
-| Study an ice-shelf cavity with basal melt | Partly | Single rank only. The ISOMIP+ files are configuration deliverables, not validated results. See [section 10](#10-ice-shelf-cavities). |
+| Study an ice-shelf cavity with basal melt | Partly | Runs on 1, 2 and 4 ranks with virtual freshwater (bitwise identical to one rank on the analytic-draft box configuration). The ISOMIP+ files are configuration deliverables, not validated results. See [section 10](#10-ice-shelf-cavities). |
 | Include sea ice | Partly | A dynamical core and column model. No ridging, melt ponds or lateral melt. See [section 9](#9-sea-ice). |
 | Run an ice-coupled global climate model | No | The Hollingsworth-Källén Coriolis correction is not implemented. |
 | Study coastal flooding, dam breaks, bores, estuaries | No | That work lives in the separate coastal repository. |
@@ -409,7 +409,7 @@ Other boundary facts:
 
 ## 10. Ice-shelf cavities
 
-An ice-shelf cavity is a **static, prescribed ice draft** over the ocean. The model treats the ice as a lid with a pressure load, a basal melt flux and an optional drag. Everything here is default off and byte-identical when off. All of it is **single rank** and runs only with the split solver.
+An ice-shelf cavity is a **static, prescribed ice draft** over the ocean. The model treats the ice as a lid with a pressure load, a basal melt flux and an optional drag. Everything here is default off and byte-identical when off. It runs on more than one rank, bitwise identical to one rank, for the virtual-freshwater melt, the top drag and the analytic draft between wall or periodic edges; the combinations in [the refusal table](#refused-at-configure-on-more-than-one-rank) are refused on more than one rank. It runs only with the split solver.
 
 **Status in one line.** The pieces ship and have analytical tests. The ISOMIP+ Ocean0/1/2 files in `validation_examples/ocean/isomip_plus/` are *configuration deliverables, not validated results*. They pass `validate_config` and run. Nothing is tuned to a melt rate. A quiescent sloping-lid cavity is not yet at rest.
 
@@ -432,7 +432,7 @@ An ice-shelf cavity is a **static, prescribed ice draft** over the ocean. The mo
 | Vertical coordinates | `sigma` and `z_fixed` only | `&vcoord_nml vcoord_type` | `zstar` is refused. Others are refused. `thickness_config` must not be `"uniform_z"`. |
 | True isostatic load | **Not implemented** | `draft_source = "in_situ"` | Fails loud. |
 | Fractional (area-blended) calving front | **Not implemented** | – | No producer for a fractional cover. |
-| Multi-rank cavity | **Refused** | – | Grounding statistics are single-rank reductions. |
+| Multi-rank cavity | Shipped (virtual freshwater) | – | The grounded-fraction check is taken on the global integer count, so every rank gives the same verdict. `freshwater = "mass"`, `draft_config = "file"`, the tripolar fold, bulk forcing and open / tidal / clamped / Chapman / sponge edges are refused on more than one rank. |
 
 ### Envelope: what the cavity refuses
 
@@ -451,6 +451,7 @@ Under `z_fixed` plus a cavity, melt and top drag are accepted, and `kappa_h /= 0
 ### Caveats to read before quoting a number
 
 - **Meltwater is virtual by default.** It adds no volume and no direct buoyancy, only the salinity signature of dilution. For a cavity the meltwater buoyancy *is* the circulation. This is a first-order limit of the default, and configure warns on every virtual run. `freshwater = "mass"` removes it. In a closed box real mass raises sea level, so also set `volume_compensation`.
+- **A warm restart with cavity melt is not bit-identical at `dt_therm_ratio = 1`.** Measured on one rank (so not a decomposition effect): resuming at step 25 of 48, tracers differ by up to 2e-3, the face velocities by 3e-8 and `heat_cavity` by 9e-2 W/m² from the straight run, with or without the top drag, in `z_fixed` and sigma. The same namelist without melt resumes bit-identically, and so does the `dt_therm_ratio = 2` twin (checkpoint mid thermo window). The melt slot's own arrays (`melt`, `u*`, `t_b`) are not restart state. Open.
 - **A resting loaded cavity is not exactly at rest.** Under sigma with a sloping draft, the leftover force is the sigma-coordinate PGF truncation. It grows as the cube of the draft slope. A grounding-line cell is decades worse. Measured at `max|u| = 7.08e-8 m/s` over 12 000 s on the small test case.
 - **Resolved beds are far worse under sigma.** The ISOMIP+ channel wall gives `rx0 = 0.726`, which is 3.6 times the classical 0.2 bound. `ocean0_idealised_draft.nml` runs three days and then goes negative in thickness. No knob fixes this. Sloping-coordinate PGF corrections are a later phase. `ocean_stability_audit` warns at configure with the computed `rx0`.
 - **`z_fixed` is the alternative, and it works with closed faces.** `ocean0_idealised_zfixed.nml` runs the full 30 days with melt and top drag on. The sigma twin blows up on day 15.9. Even so, `z_fixed` is not at rest on a sloping draft. See the archive entries for this section for the numbers, the energy plateau and the open budget question after day 15.
@@ -474,7 +475,7 @@ Under `z_fixed` plus a cavity, melt and top drag are accepted, and `kappa_h /= 0
 | Feature | Status | Key knob | Limits |
 |---|---|---|---|
 | Rectangular domain decomposition | Shipped | `&mpi_nml px`, `py` | Left at `1 x 1` on several ranks, the engine picks the split. It is north-south under a tripolar fold. An explicit `px*py` that does not match the rank count is refused. |
-| Bit-identity with the serial run | Shipped | – | Checked on nineteen configurations and every `px x py` split of 1, 2 and 4 ranks, under both split schemes. |
+| Bit-identity with the serial run | Shipped | – | Checked on every case in the gate's `CASES` list and every `px x py` split of 1, 2 and 4 ranks, under both split schemes. |
 | Tripolar north fold | Shipped | `north = "tripolar_fold"` | East-west splits (`px > 1`) must be asked for explicitly. |
 | Per-rank file readers | Shipped | – | Supergrid, bathymetry, z-level T/S initial condition and `&ocean_dataovr_nml` forcing are windowed per rank. |
 | Console totals | Shipped | `&ocean_diag_nml reproducing_sums` (default on) | The status block prints the same digits on any rank count. |
@@ -491,7 +492,9 @@ Each check is fail-loud on every rank and names the knob. The check keys on the 
 
 | Feature | Why |
 |---|---|
-| `&ocean_cavity_dyn_nml enable` (and the melt / top-drag paths that require it) | the grounding statistics are global reductions the configure does not take; `draft_config="file"` has no windowed reader |
+| `&ocean_cavity_melt_nml freshwater = "mass"` with a cavity | the melt volume and open area are global floating-point sums whose order depends on the layout; unproven on a decomposed domain |
+| `&ocean_cavity_dyn_nml draft_config = "file"` | the windowed draft read has no multi-rank bit-identity case; unproven on a decomposed domain |
+| A cavity with `north = "tripolar_fold"`, with `&ocean_bulk_flux_nml enable`, or with any `&ocean_bc_nml` edge other than `wall` / `periodic` | no decomposition case; unproven on a decomposed domain (the bulk stress also carries no ice-cover mask) |
 | `&ocean_wetdry_nml enable` | the wet-mask / outflow-limiter halo exchange is not implemented |
 | `&ocean_bc_nml` `'chapman'` edges | the edge-uniform eta target is a per-rank partial mean |
 | `&ocean_thermo_nml sw_scheme = "manizza05"` | the per-rank chlorophyll read fills the interior only (no ghosts) and the ghosts feed `sw_kappa`; no decomposition bit-identity case |
