@@ -383,7 +383,7 @@ Other boundary facts:
 | Multi-category ice thickness distribution (ITD) restore | Shipped | `ncat > 1` | Whole-category shift, not a Lipscomb (2001) remap. SIS2 does not ship one either. |
 | Category ice and snow transport | Shipped | `&ocean_ice_nml transport` | `compress_ice` is not a ridging scheme. |
 | C-grid EVP rheology | Shipped | `&ocean_ice_nml dynamics` | Refused with any open, tidal, sponge, clamped or Chapman edge. Runs across a tripolar fold on any `px` (A6, #164; A7, #143; needs `nghost >= 2`). |
-| Frazil bank and uptake | Shipped | `&ocean_ice_nml frazil_column`, `pressure_dependent_frazil`, `reclaim_frazil` | Default checks only the top layer (`k = nz`) at p = 0. `frazil_column` sweeps the whole column bottom-up with a rising carry; `pressure_dependent_frazil` uses the hydrostatic layer-centre pressure (surface pressure ignored). OM3 `HFREEZE` (melt-potential depth) is not implemented. |
+| Frazil bank and uptake | Shipped | `&ocean_ice_nml frazil_column`, `pressure_dependent_frazil`, `reclaim_frazil` | Default checks only the surface layer (the first live layer, `rdb_vl_first_live`) at p = 0. `frazil_column` sweeps the whole column bottom-up with a rising carry; `pressure_dependent_frazil` uses the hydrostatic layer-centre pressure (surface pressure ignored). OM3 `HFREEZE` (melt-potential depth) is not implemented. |
 | Salinity floor | Shipped, opt-in | `&ocean_ice_nml bound_salinity`, `min_salinity` | Top layer only, non-conserving. |
 | Ice-to-ocean coupling | Shipped, partial | – | Salt is closed (virtual). Heat is closed, including transmitted shortwave. No freshwater or mass coupling. Ice applies no sea-surface loading. |
 | Momentum conserved at fractional cover | Shipped, opt-in | `&ocean_ice_nml a_face_stress` | The default legacy form leaks `(1-a)(tau_a-fxoc)` per face. |
@@ -393,7 +393,7 @@ Other boundary facts:
 | Ridging | **Not implemented** | – | `compress_ice` thickens ice in its own category, as SIS2 does with `DO_RIDGING=.false.`. |
 | Melt ponds | **Not implemented** | – | Summer melt is biased low and the melt-albedo feedback is absent. |
 | Lateral melt, floe-size effects | **Not implemented** | – | Marginal-ice-zone retreat is biased. |
-| MPI decomposition | Shipped | – | Bit-identical to one rank. Refused on more than one rank under a tripolar north fold. |
+| MPI decomposition | Shipped | – | Bit-identical to one rank on every split, including under a tripolar north fold with `px > 1` (the `sea_ice_fold` cases of `test_ocean_decomp_bitid_mpi`). |
 | Restart | Shipped | – | Bitwise through the production engine path, on one rank and decomposed. |
 
 ### Why the missing pieces matter

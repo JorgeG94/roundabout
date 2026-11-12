@@ -28,11 +28,9 @@ ice, and gives byte-identical results.
 .. warning::
 
    The sea ice is tuned for global, ice-covered configurations and is
-   **not** performance-tuned. It runs on every outer step, and the EVP
-   dynamics subcycles hundreds of times per step. Expect a large
-   throughput hit, and a very slow run on a regional or coastal domain
-   where most of the grid is ice-free. The model prints a warning saying
-   so whenever the ice is enabled.
+   **not** performance-tuned: it runs every outer step, and EVP subcycles
+   hundreds of times per step. Expect it to be very slow on a regional or
+   coastal domain that is mostly ice-free. The model warns at configure.
 
 
 What the model carries
@@ -155,80 +153,62 @@ Frazil
 ------
 
 After each outer step, wherever the surface layer is colder than its
-freezing point :math:`T_f(S)`, the layer is raised back to :math:`T_f` and
-the heat spent is added to a per-column frazil bank,
+freezing point :math:`T_f(S)`, it is raised back to :math:`T_f` and the
+heat spent is banked for the ice,
 
 .. math::
 
    \Delta E \;=\; \rho\, c_p\, h_{\mathrm{sfc}}\,
-     \bigl(T_f - T\bigr)^{+} \qquad [\mathrm{J\,m^{-2}}] ,
+     \bigl(T_f - T\bigr)^{+} \qquad [\mathrm{J\,m^{-2}}] .
 
-which the ice model later spends as latent heat of new ice. Energy is
-banked, never discarded, and the ocean heat budget includes the bank so it
-still closes with ice on. The freezing point is the ocean equation of
-state's (``&ocean_eos_nml tfreeze_set`` / ``tfreeze_form``), evaluated at
-zero pressure by default.
+The bank is spent as latent heat of new ice on the next thermodynamic step,
+in the thinnest category (annexing open water if needed), so energy is
+banked, never discarded; the ocean heat budget includes it. :math:`T_f` is
+the equation of state's freezing point (``&ocean_eos_nml tfreeze_set`` /
+``tfreeze_form``) at zero pressure.
 
-The "surface layer" here is the **first live layer** counting down from
-the top, not literally ``k = nz``: if the top layer has collapsed to a
-vanished thickness at run time, frazil (and the frazil uptake and basal
-flux below) read and write the first layer that still holds water.
+The "surface layer" is the **first live layer** from the top, not literally
+``k = nz``: if the top layer has collapsed at run time, frazil, frazil
+uptake and the basal flux use the first layer that still holds water.
 
-Three knobs change the frazil scheme, following ACCESS-OM3:
-
-* ``frazil_column`` sweeps the whole column from the bed upward with a
-  rising heat carry instead of clamping the surface only. Cold deep layers
-  freeze, warmer layers above re-melt the carry, and only what survives to
-  the top reaches the bank.
-* ``pressure_dependent_frazil`` evaluates :math:`T_f` at each layer's
-  hydrostatic centre pressure :math:`g \rho_0 z`. It needs
-  ``frazil_column``.
-* ``reclaim_frazil`` (default ``.true.``, used only with
-  ``frazil_column``) spends the standing bank on a warm surface layer
-  before the sweep.
-
-On thermodynamic steps the bank is spent as new ice in the thinnest
-category, annexing open water if needed. The salt the ice does not keep is
-rejected to the ocean as brine (see `Coupling to the ocean`_).
+Three knobs follow ACCESS-OM3. ``frazil_column`` sweeps the whole column
+from the bed upward with a rising heat carry (cold deep layers freeze,
+warmer layers above re-melt the carry, and only what survives reaches the
+bank). ``pressure_dependent_frazil`` evaluates :math:`T_f` at each layer's
+hydrostatic centre pressure :math:`g \rho_0 z`. ``reclaim_frazil``
+(default ``.true.``) spends the standing bank on a warm surface layer
+first. The last two act only with ``frazil_column``.
 
 Column thermodynamics
 ---------------------
 
 Each category with ice runs a one-dimensional conduction and resize step
-ported from SIS2: the **Winton (2000)** two-layer formulation, with
-enthalpy as the prognostic. It uses one simplification, a brine heat
-capacity equal to the ice heat capacity, which turns every
-temperature–enthalpy inversion into an exact closed-form quadratic with no
-iteration. The Stefan melt problem is reproduced to under 1 %.
+ported from SIS2: the **Winton (2000)** two-layer column, with enthalpy as
+the prognostic. One simplification, a brine heat capacity equal to the ice
+heat capacity, makes every temperature–enthalpy inversion an exact
+closed-form quadratic. The Stefan melt problem is reproduced to under 1 %.
+Shortwave is absorbed with SIS2's **CSIM4** optics (snow and ice albedo
+with a melting reduction, Beer's-law penetration; delta-Eddington is not
+ported); conduction is solved against the surface energy balance; ice then
+grows or melts at the top and base and the layers are rebalanced.
 
-The column step absorbs shortwave with the SIS2 **CSIM4** optics (snow and
-ice albedo with a melting reduction, and Beer's-law penetration into the
-ice and through to the ocean; the delta-Eddington branch is not ported),
-solves conduction against the surface energy balance, then grows or melts
-ice at the top and base and rebalances the layers to equal mass.
-
-The ocean warms the ice from below through the **basal heat flux**,
+The ocean warms the ice from below through the **basal heat flux**, the
+full heat above freezing in the surface layer, uncapped and zero on
+ice-free columns:
 
 .. math::
 
    F_b \;=\; \rho\, c_p\, \max\!\bigl(0,\; T_{\mathrm{sfc}} - T_f\bigr)\,
-     \frac{h_{\mathrm{sfc}}}{\Delta t_{\mathrm{therm}}} ,
+     \frac{h_{\mathrm{sfc}}}{\Delta t_{\mathrm{therm}}} .
 
-the full heat available above freezing in the surface layer, with no cap
-(the column's melt is self-limiting and spills any excess back to the
-ocean). It is zero on ice-free columns.
-
-**Snow.** ``snowfall`` (kg/m²/s) is a uniform frozen-precipitation rate.
-On ice it accumulates as snow. The share that falls on open water melts on
-contact: its latent heat and its freshening are delivered to the ocean.
-New snow is added after the optics and conduction of the same window, so
-its albedo and insulation take effect on the next window.
-
-**Snow-ice flooding** (``snow_ice``) converts snow to ice when its weight
-pushes the snow–ice interface below the waterline (an Archimedes
-freeboard step, SIS2's ``SN2IC``). It exchanges nothing with the ocean.
-The converted ice keeps the snow's enthalpy and zero salinity, so it is
-somewhat too cold and too fresh.
+**Snow.** ``snowfall`` (kg/m²/s) accumulates as snow on ice; the share
+falling on open water melts on contact and its latent heat and freshening
+go to the ocean. New snow is added after the window's optics and
+conduction, so its albedo and insulation act from the next window.
+**Snow-ice flooding** (``snow_ice``, SIS2 ``SN2IC``) turns snow into ice
+when its weight pushes the snow–ice interface below the waterline. It
+exchanges nothing with the ocean, and the new ice keeps the snow's enthalpy
+and zero salinity, so it is somewhat too cold and too fresh.
 
 Ice-thickness distribution
 --------------------------
@@ -269,91 +249,69 @@ EVP dynamics
 ------------
 
 ``dynamics = .true.`` turns on the C-grid **elastic-viscous-plastic (EVP)**
-rheology of Hunke and Dukowicz (1997), ported from SIS2's C-grid solver,
-with the Hibler (1979) ice strength and elliptical yield curve. It runs on
-every outer step, independently of the thermodynamic cadence, in
-``evp_sub_steps`` subcycles. The ice feels the wind stress, Coriolis, its
-internal stress and a quadratic ice-ocean drag against the ocean's
-**top-layer** (``k = nz``) velocity.
+rheology of Hunke and Dukowicz (1997), ported from SIS2, with the Hibler
+(1979) ice strength and elliptical yield curve. It runs on every outer step,
+independently of the thermodynamic cadence, in ``evp_sub_steps``
+subcycles. The ice feels the wind stress, Coriolis, its internal stress and
+a quadratic drag against the ocean's **top-layer** (``k = nz``) velocity.
+An ice-free cell simply has zero strength. There is no sea-surface-tilt
+term (the ice sees a flat sea surface), and landfast ice is not ported.
 
-The strength and rheology knobs are SIS2's: ``p0`` (ice-strength
-:math:`P^*`), ``c0`` (:math:`C^*`), ``ec`` (yield-curve axis ratio, 0 for a
-cavitating fluid), ``cdw`` and ``rho_ocean`` (the drag), ``del_sh_min_scale``
-(the viscosity floor) and ``tdamp`` (elastic damping time: positive in
-seconds, 0 for :math:`0.2\,\Delta t`, negative as a fraction of the outer
-step). An ice-free cell simply has zero strength; there is no ice-edge
-special case.
-
-Three options default **off** in Roundabout to keep earlier results
-bit-identical, although SIS2 turns the first two on:
+The rheology knobs are SIS2's: ``p0`` and ``c0`` (strength :math:`P^*`,
+:math:`C^*`), ``ec`` (yield-curve axis ratio), ``cdw`` and ``rho_ocean``
+(drag), ``del_sh_min_scale`` (viscosity floor) and ``tdamp`` (elastic
+damping time). Three options default **off** to keep earlier results
+bit-identical; SIS2 turns the first two on:
 
 * ``cfl_trunc`` clips the final ice velocity to a transport CFL bound
-  (SIS2 ``CFL_TRUNCATE``, 0.5 there). Each clip is counted and logged as a
-  warning, never an abort. ``cfl_trunc_dyn_its`` also clips on every
-  subcycle.
-* ``project_ci`` projects the ice concentration forward within the
-  subcycle loop and recomputes the strength (SIS2
-  ``PROJECT_ICE_CONCENTRATION``).
-* ``a_face_stress`` weights both the wind stress and the ice-ocean drag in
-  the ice momentum balance by the face ice concentration. This makes the
-  ice–ocean momentum budget close at every fractional cover. Without it,
-  the default form leaks :math:`(1-a)(\tau_a - \tau_{io})` per face during
-  transients at partial cover. SIS2 itself weights neither term.
+  (SIS2 ``CFL_TRUNCATE``, 0.5 there); clips are logged as a warning, never
+  an abort. ``cfl_trunc_dyn_its`` clips on every subcycle too.
+* ``project_ci`` projects the concentration forward within the subcycles
+  and recomputes the strength (SIS2 ``PROJECT_ICE_CONCENTRATION``).
+* ``a_face_stress`` weights both the wind and the ice-ocean drag by the
+  face concentration, so the ice–ocean momentum budget closes at every
+  partial cover. The default form leaks :math:`(1-a)(\tau_a - \tau_{io})`
+  per face in transients. SIS2 weights neither term.
 
-Running ``dynamics`` without ``transport`` is accepted with a warning: the
-velocity has no CFL backstop in that mode, and it is unvalidated.
-
-The EVP solver has no sea-surface-tilt term (the ice assumes a flat sea
-surface), and landfast ice is not ported.
+``dynamics`` without ``transport`` is accepted with a warning: the velocity
+then has no CFL backstop, and the mode is unvalidated.
 
 
 Atmospheric forcing
 ===================
 
 The ice surface sees the atmosphere through a linearised surface energy
-balance, :math:`SF(T) = sf_0 + \tfrac{\partial SF}{\partial T}\,T` (upward
-positive), plus a downwelling shortwave and a snowfall rate. Two fillers
-supply it.
+balance :math:`SF(T) = sf_0 + (\partial SF/\partial T)\,T` (upward
+positive), a downwelling shortwave and a snowfall rate. Two fillers supply
+them.
 
-**Scalar restoring (the default).** A uniform, time-invariant slab
-atmosphere:
-
-.. math::
-
-   SF(T) \;=\; \lambda\,\bigl(T - T_{\mathrm{air}}\bigr) ,
-
-with :math:`\lambda` = ``restore_lambda`` (W/m²/K) and
-:math:`T_{\mathrm{air}}` = ``air_temp`` (°C); ``sw_down`` and ``snowfall``
-are spread uniformly. With ``restore_lambda = 0`` (the default) the column
-feels only shortwave and the basal flux. A uniform, constant forcing cannot
+**Scalar restoring (the default)** is a uniform, constant slab atmosphere,
+:math:`SF(T) = \lambda\,(T - T_{\mathrm{air}})` with :math:`\lambda` =
+``restore_lambda`` and :math:`T_{\mathrm{air}}` = ``air_temp``, plus
+uniform ``sw_down`` and ``snowfall``. With ``restore_lambda = 0`` (the
+default) the column feels only shortwave and the basal flux. It cannot
 produce a seasonal cycle.
 
-**A prescribed atmosphere.** When ``&ocean_atm_forcing_nml enable`` is on
-(together with ``&ocean_bulk_flux_nml enable``), the ice seam is filled
-from the JRA55-do fields instead, and the four scalar knobs above are not
-used. The surface energy balance is linearised at 0 °C with the Large and
-Yeager (2004, 2009) constant over-ice transfer coefficients
-(:math:`C_D = C_H = C_E = 1.63\times10^{-3}`, no stability iteration);
-the shortwave and snowfall are the ``rsds`` and ``prsn`` fields, and the
-longwave emissivity is ``&ocean_bulk_flux_nml emissivity``. The ocean's own
-bulk fluxes are then weighted by the open-water fraction. This path needs a
-non-cartesian grid and is single-rank for now.
+**A prescribed atmosphere** replaces it whenever
+``&ocean_atm_forcing_nml enable`` is on (with ``&ocean_bulk_flux_nml
+enable``; non-cartesian grid, single rank for now). The balance is
+linearised at 0 °C with the Large and Yeager (2004, 2009) constant over-ice
+transfer coefficients (:math:`C_D = C_H = C_E = 1.63\times10^{-3}`, no
+stability iteration), the shortwave and snowfall are the JRA55-do ``rsds``
+and ``prsn`` fields, and the ocean's own bulk fluxes are weighted by the
+open-water fraction.
 
-**Wind stress.** In either case the ice feels a snapshot of the ocean's
-wind stress taken once at configure. It does not follow a time-varying
-wind, and there is no ice-specific bulk drag law.
+In either case the **wind stress** the ice feels is a snapshot of the
+ocean's wind stress taken once at configure: it does not follow a
+time-varying wind, and there is no ice-specific drag law.
 
 
 Coupling to the ocean
 =====================
 
-The ice changes the ocean surface fluxes; the ocean's own interior
-equations are untouched.
-
 **Salt.** Freezing seawater of salinity :math:`S` into ice that keeps a
 bulk salinity of 4 psu rejects the difference as brine; melting reverses
-it. The rate is applied as a virtual salt flux on the surface
-layer,
+it. It reaches the surface layer as a virtual salt flux,
 
 .. math::
 
@@ -362,44 +320,34 @@ layer,
                 {\Delta t_{\mathrm{therm}}} ,
 
 with :math:`m_{\mathrm{net}}` the net mass frozen (positive) or melted. The
-ocean's water mass is not changed: like MOM6 and SIS2's default, the ocean
-is volume-conserving with a virtual salt flux.
+ocean's volume is unchanged (a virtual-salt-flux ocean, the MOM6/SIS2
+default).
 
 **Heat.** The column's growth and melt exchange, net of the basal flux, is
-added to the surface heat flux, and the shortwave transmitted through the
-ice is added once on top. The frazil latent heat is not added here: the
-frazil clamp already credited it to the ocean.
+added to the surface heat flux, then the shortwave transmitted through the
+ice, once. The frazil latent heat is not added again: the frazil clamp
+already credited it.
 
-**Momentum** (only with ``dynamics = .true.``). On each face the ocean sees
-a blend of the wind and the ice drag, weighted by the face ice
-concentration :math:`a`:
+**Momentum** (only with ``dynamics``). Each face sees the wind and the ice
+drag blended by the face concentration, and KPP and EPBL take their
+friction velocity from the result:
 
 .. math::
 
    \tau \;=\; (1 - a)\,\tau_a \;+\; a\,\tau_{io},
-   \qquad a_u = \tfrac12\bigl(c_{i-1,j} + c_{i,j}\bigr) ,
+   \qquad a_u = \tfrac12\bigl(c_{i-1,j} + c_{i,j}\bigr) .
 
-and the KPP and EPBL friction velocity is re-derived from this blended
-stress. Without ``dynamics`` the ocean sees the unmodified wind stress.
+Without ``dynamics`` the ocean sees the unmodified wind stress.
 
-The constant ``&ocean_thermo_nml`` surface fluxes remain in
-:math:`Q_{\mathrm{heat}}` and :math:`Q_{\mathrm{salt}}`; the ice terms are
-added to them and are not weighted by ice cover. With
-``&ocean_forcing_nml enable_components = .true.`` the same numbers arrive
-through the surface-flux component set instead.
-
-**Which layer.** The frazil, frazil-uptake and basal-flux kernels, and the
-surface flux deposits, use the first live layer from the top. The ocean
-velocity the ice drag and the transport sampler read is still the
-``k = nz`` slice, a known gap on columns whose top layer has collapsed.
-
-``bound_salinity`` (off by default) floors the top-layer salinity at
-``min_salinity`` after the ice salt exchange. It is **non-conserving**: the
-salt it creates is not in the salt budget.
-
-Under ``&ocean_eos_nml ts_convention = "cons_abs"`` the ice keeps
-potential temperature and practical salinity internally and the
-conversion is made once at the coupler boundary.
+The constant ``&ocean_thermo_nml`` surface fluxes stay in
+:math:`Q_{\mathrm{heat}}`/:math:`Q_{\mathrm{salt}}`; the ice terms are added
+to them, not weighted by ice cover. With ``&ocean_forcing_nml
+enable_components`` the same numbers arrive through the component set.
+Under ``&ocean_eos_nml ts_convention = "cons_abs"`` the ice keeps potential
+temperature and practical salinity and the conversion happens once at the
+coupler. ``bound_salinity`` floors the top-layer salinity at
+``min_salinity`` after the exchange; it is **non-conserving** (the salt it
+creates is not in the budget).
 
 
 Initial conditions
@@ -552,10 +500,10 @@ Name           Units   Registered    Meaning
 
 "ice" means registered by default whenever ``&ocean_ice_nml enable`` is
 on; "ice + thermo" also needs ``&ocean_thermo_nml enable_thermodynamics``;
-"opt-in" fields appear only when named in ``diags``. All are 2-D. The rates are the masses
-formed or lost over each thermodynamic window divided by the window length
-and the ice density, then averaged over the output interval. The
-dynamical volume tendency (CICE ``dvidtd``) is not provided.
+"opt-in" fields appear only when named in ``diags``. All are 2-D. The
+rates are the masses formed or lost over each thermodynamic window divided
+by the window length and the ice density, then averaged over the output
+interval. The dynamical volume tendency (CICE ``dvidtd``) is not provided.
 
 .. note::
 
@@ -574,26 +522,21 @@ concentration and thickness, for example:
 Limitations
 ===========
 
-* **No ridging.** Under convergence ``compress_ice`` thickens ice within
-  its own category (SIS2 with ``DO_RIDGING = .false.``), so the thickness
-  distribution and the EVP strength are biased in convergent regimes.
-* **No melt ponds.** The CSIM4 melting-albedo ramp stands in, so summer
-  melt is biased low and the pond albedo feedback is absent.
-* **No lateral melt or floe-size effects.** Marginal-ice-zone retreat is
-  biased.
-* **No freshwater or mass exchange.** Salt is exchanged as a virtual flux;
-  the ice puts no load on the sea surface.
-* **Simple forcing.** Without a prescribed atmosphere the forcing is a
-  uniform, constant slab. The wind stress the ice feels is a configure-time
-  snapshot in every case.
+* **No ridging**: ``compress_ice`` thickens ice within its own category
+  (SIS2 with ``DO_RIDGING = .false.``), so the thickness distribution and
+  the EVP strength are biased under convergence.
+* **No melt ponds** (summer melt biased low), **no lateral melt or
+  floe-size effects** (marginal-ice-zone retreat biased).
+* **No freshwater or mass exchange**, and no ice load on the sea surface.
+* **Simple forcing**: a uniform slab unless a prescribed atmosphere is on,
+  and a configure-time wind snapshot in every case.
 * **Momentum leak at partial cover** unless ``a_face_stress`` is on.
-* **The ice drag reads the ocean's top-layer velocity** (``k = nz``)
-  even when that layer has collapsed.
-* **Analytic initial conditions only.**
+* The ice drag and the transport sampler read the ocean's ``k = nz``
+  velocity even when that layer has collapsed.
 
-``docs/CAPABILITIES_AND_LIMITATIONS.md`` (section "Sea ice") and
-``docs/CLOSURE_MATRIX.md`` (section "Sea ice") carry the per-feature status
-and the tests behind each piece.
+``docs/CAPABILITIES_AND_LIMITATIONS.md`` and ``docs/CLOSURE_MATRIX.md``
+(sections "Sea ice") carry the per-feature status and the tests behind each
+piece.
 
 
 Provenance and references
