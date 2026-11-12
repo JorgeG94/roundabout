@@ -530,15 +530,17 @@ contains
       call bt_halo_auto_exclusion(cfg, bt_excluded, bt_excl_reason)
       bt_halo_res = resolve_bt_halo(bt_halo_req, csize, bt_excluded)
       cfg%ocean%bt%bt_halo = bt_halo_res
-      ! `dtbt_reset_period >= 0` re-derives `n_inner` mid-run: the new count
-      ! is not agreed across ranks and does not resize the wide-halo BT clone.
-      ! The init-only form (`dtbt_reset_period < 0`) is allowed everywhere.
+      ! `dtbt_reset_period >= 0` re-derives `n_inner` mid-run.  Across ranks that
+      ! is exact (the domain minimum of dt_max is reduced with an order-independent
+      ! min), but the new count does not resize the wide-halo BT clone, so the
+      ! wide-halo march-in (`bt_halo > 0`) stays refused.  The init-only form
+      ! (`dtbt_reset_period < 0`) is allowed everywhere.
       if (bt_dtbt_is_set(cfg%ocean%bt) .and. cfg%ocean%bt%dtbt_reset_period >= 0.0_wp .and. &
-          (csize > 1 .or. bt_halo_res > 0)) then
-         call fail("&ocean_bt_nml dtbt_reset_period >= 0 is single-rank with bt_halo = 0 ("// &
-                   to_string(csize)//" ranks, bt_halo = "//to_string(bt_halo_res)// &
-                   "): n_inner changes mid-run.  Use dtbt_reset_period < 0 (init-only), "// &
-                   "or run on 1 rank with bt_halo = 0.", &
+          bt_halo_res > 0) then
+         call fail("&ocean_bt_nml dtbt_reset_period >= 0 is not supported with the "// &
+                   "wide-halo barotropic march-in (bt_halo = "//to_string(bt_halo_res)// &
+                   "): n_inner changes mid-run and does not resize the wide-halo BT "// &
+                   "clone.  Use dtbt_reset_period < 0 (init-only), or bt_halo = 0.", &
                    ierr, OCEAN_STATUS_ERR_SETUP)
          return
       end if
