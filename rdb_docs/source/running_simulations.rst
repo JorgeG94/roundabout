@@ -330,6 +330,9 @@ Selecting fields
 token may carry suffixes selecting a time operation and an output vertical
 grid, so a single knob covers instantaneous values, time means, extrema and
 integrals, on layers or remapped to :math:`z`, sigma, z\* or density bins.
+The full list of fields you can name, with units and the knobs some of them
+need, is on :doc:`diagnostics`; the sea-ice fields are also described on
+:doc:`sea_ice`.
 
 ``vgrid`` sets the default output vertical grid for the whole stream —
 ``layer`` (the default, native model layers), ``z_fixed``, ``sigma``,
