@@ -17,7 +17,7 @@ cmake -B build -S . && cmake --build build
 cd build && ctest --output-on-failure
 ```
 
-Key CMake options: `RDB_ENABLE_GPU` (default **OFF** — opt-in; enable with `-DRDB_ENABLE_GPU=ON` on the NVHPC toolchain. An explicit ON with a compiler lacking a GPU path is a configure-time error, never a silent CPU downgrade; the value prints on the `GPU offload:` configure line), `RDB_ENABLE_MPI` (default OFF), `RDB_CUDA_AWARE_MPI`, `RDB_GPU_ARCH` (cc70/80/90), `RDB_ENABLE_DOUBLE` (default ON). Full table in `cmake/options.cmake`.
+Key CMake options: `RDB_ENABLE_GPU` (default **OFF** — opt-in; enable with `-DRDB_ENABLE_GPU=ON` on the NVHPC toolchain. An explicit ON with a compiler lacking a GPU path is a configure-time error, never a silent CPU downgrade; the value prints on the `GPU offload:` configure line), `RDB_ENABLE_MPI` (default OFF), `RDB_CUDA_AWARE_MPI` (default **ON** when `RDB_ENABLE_MPI` and `RDB_ENABLE_GPU` are both ON, else OFF; an explicit value always wins, and ON without MPI + GPU is a configure-time error; resolved value on the `CUDA-aware MPI:` configure line), `RDB_GPU_ARCH` (cc70/80/90), `RDB_ENABLE_DOUBLE` (default ON). Full table in `cmake/options.cmake`.
 
 `./rdb --validate-only case.nml` runs every configure-time check — `validate_config` (all failures, not just the first) and the whole `engine_setup` sequence — and exits **0** (accepted) or **3** (refused, each reason logged) without mapping the device, stepping or writing anything. It is how the compatibility matrix (`tests/regression/compat_matrix.py`) asks the model what it refuses.
 
@@ -41,10 +41,12 @@ Two standing rules for anything run against this repo — humans and AI agents a
   `build_cc90`, ...) — `.gitignore` covers `build*/` and `*_build/`; a build
   tree outside those patterns is how a stray `git add -A` once poisoned the
   object store.  Never name a build dir anything else.
-- **Local builds are non-MPI.** Configure with `RDB_ENABLE_MPI=OFF` (the
-  default) — do NOT enable MPI for local build/test. The mac dev box is
-  single-rank and the sea-ice path is single-rank by design; MPI is a
-  cluster-only build concern.
+- **Local MPI builds are allowed.** Use the MPI bundled with the NVHPC module
+  (`module load nvhpc`; wrappers under `$NVHPC_ROOT/comm_libs/mpi/bin`). The CPU
+  MPI leg is nvfortran with `RDB_ENABLE_GPU=OFF`. `MPI_ROOT` in the environment
+  can make CMake's FindMPI pick a different (gcc) OpenMPI, so pass
+  `-DMPI_Fortran_COMPILER=.../mpif90 -DMPI_C_COMPILER=.../mpicc` explicitly.
+  `ctest` on a GPU build is still never run with `-j`.
 - **No Claude session links in commit messages or PRs.** Never write a
   `Claude-Session:` trailer or a `claude.ai/code/session…` URL into a commit,
   merge or squash message, a PR title or description, or a PR/review
@@ -359,7 +361,7 @@ See the "Boundaries" bullet of the Ocean dyn-core section — `&ocean_bc_nml` se
 
 `rdb_decomp` splits the domain into rectangular subdomains. Halos via `mpi_f08` Isend/Irecv on `compute_comm`. Two-phase comm_env init: `comm_env_init()` → read config → `comm_env_setup_roles(.false.)` (there is no dedicated I/O-server rank any more — that was a coastal-path feature). Each GPU rank binds via `acc_set_device_num(gpu_rank = mod(node_rank, n_devices))`.
 
-**Multi-GPU one node: pin `CUDA_VISIBLE_DEVICES` per rank BEFORE `MPI_Init`.** With `RDB_CUDA_AWARE_MPI=ON` (GPU-direct halo), UCX/hpcx creates a CUDA primary context at `MPI_Init` — which runs *before* `acc_set_device_num` — so with all GPUs visible every rank also lands a context on device 0 (`{0},{0,1},{0,2},{0,3}` in `nvidia-smi`, binding diagnostic still looks correct). Fix: each rank must see only its own GPU. The launcher (or the script, before the first CUDA call) sets `CUDA_VISIBLE_DEVICES` from the local-rank env var (`OMPI_COMM_WORLD_LOCAL_RANK`, …); the `mod(node_rank, n_devices)` clamp then binds the single visible device 0. With pinning, plain `mpirun -np N ./rdb …` works — no `bash -c` wrapper. Host-staged MPI (`RDB_CUDA_AWARE_MPI=OFF`) doesn't hit this (UCX never touches CUDA).
+**Multi-GPU one node: pin `CUDA_VISIBLE_DEVICES` per rank BEFORE `MPI_Init`.** With `RDB_CUDA_AWARE_MPI=ON` (GPU-direct halo; the default for an MPI + GPU build), UCX/hpcx creates a CUDA primary context at `MPI_Init` — which runs *before* `acc_set_device_num` — so with all GPUs visible every rank also lands a context on device 0 (`{0},{0,1},{0,2},{0,3}` in `nvidia-smi`, binding diagnostic still looks correct). Fix: each rank must see only its own GPU. The launcher (or the script, before the first CUDA call) sets `CUDA_VISIBLE_DEVICES` from the local-rank env var (`OMPI_COMM_WORLD_LOCAL_RANK`, …); the `mod(node_rank, n_devices)` clamp then binds the single visible device 0. With pinning, plain `mpirun -np N ./rdb …` works — no `bash -c` wrapper. Host-staged MPI (`RDB_CUDA_AWARE_MPI=OFF`) doesn't hit this (UCX never touches CUDA).
 
 Halo coverage: `rdb_ocean_halo` + `ocean_halo_exchange_ml_state`. Tracer halo uses the outer-shim + flat-impl pattern. Sea ice rides the ocean's decomposition and `nghost`: `ocean_halo_exchange_ice_state` (category state, end of every thermo block + cold start), `ui`/`vi` face exchanges every EVP subcycle and once after the loop, the transport's CAS masses + riding tracers at the top of every advective substep (`ocean_halo_exchange_ice_transport`, with rank-uniform early-exit / abort flags), and the blended `tau` through `ocean_seam_refresh_surface_stress`; the EVP stresses are recomputed redundantly in the halo, never exchanged (see `rdb_ice_evp` D6).
 

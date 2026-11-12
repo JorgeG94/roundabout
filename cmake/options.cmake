@@ -28,7 +28,36 @@ option(
   RDB_ENABLE_MPI
   "Build multi-rank: link an MPI library and build pic-mpi against it.\nOFF still uses pic-mpi -- its serial backend -- and builds single-rank."
   OFF)
-option(RDB_CUDA_AWARE_MPI "Use CUDA-aware MPI for GPU-direct halo exchange" OFF)
+# CUDA-aware MPI (GPU-direct halo exchange) defaults ON exactly when both MPI
+# and GPU offload are requested, OFF otherwise. The default is only chosen when
+# the user has not set the cache variable, so an explicit
+# -DRDB_CUDA_AWARE_MPI=ON|OFF always wins (and a cached value is stable across
+# re-configures). ON without MPI or without GPU offload is meaningless and is a
+# configure-time FATAL_ERROR, in the same fail-loud style as RDB_ENABLE_GPU.
+if(NOT DEFINED RDB_CUDA_AWARE_MPI)
+  if(RDB_ENABLE_MPI AND RDB_ENABLE_GPU)
+    set(_rdb_cuda_aware_default ON)
+    set(RDB_CUDA_AWARE_MPI_DEFAULTED
+        "default for MPI + GPU"
+        CACHE INTERNAL "")
+  else()
+    set(_rdb_cuda_aware_default OFF)
+    unset(RDB_CUDA_AWARE_MPI_DEFAULTED CACHE)
+  endif()
+else()
+  set(_rdb_cuda_aware_default OFF)
+endif()
+option(
+  RDB_CUDA_AWARE_MPI
+  "Use CUDA-aware MPI for GPU-direct halo exchange (default ON with MPI + GPU)"
+  ${_rdb_cuda_aware_default})
+if(RDB_CUDA_AWARE_MPI AND NOT (RDB_ENABLE_MPI AND RDB_ENABLE_GPU))
+  message(
+    FATAL_ERROR
+      "RDB_CUDA_AWARE_MPI=ON requires both RDB_ENABLE_MPI=ON and "
+      "RDB_ENABLE_GPU=ON (got MPI=${RDB_ENABLE_MPI}, GPU=${RDB_ENABLE_GPU}). "
+      "Drop -DRDB_CUDA_AWARE_MPI=ON, or enable both.")
+endif()
 option(
   RDB_ENABLE_LEGACY_MPI
   "Use legacy 'use mpi' instead of 'use mpi_f08' (must match pic-mpi build)"

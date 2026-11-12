@@ -271,8 +271,10 @@ The options you are most likely to touch:
      - Link a real MPI and build multi-rank. ``OFF`` still uses pic-mpi,
        via its serial backend.
    * - ``RDB_CUDA_AWARE_MPI``
-     - ``OFF``
-     - GPU-direct halo exchange. See the multi-GPU warning below.
+     - ``ON`` with MPI + GPU, else ``OFF``
+     - GPU-direct halo exchange; an explicit value always wins. ``ON``
+       without MPI and GPU is a configure error. See the multi-GPU warning
+       below.
    * - ``RDB_GPU_ARCH``
      - ``cc70``
      - NVIDIA ``ccNN`` under NVHPC. (Under LLVM flang it defaults to
