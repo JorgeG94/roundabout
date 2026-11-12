@@ -1152,8 +1152,8 @@ module rdb_config
          !! Master switch.  When `.true.` the BT substep switches to upwind
          !! face thickness + the positive-definite outflow limiter + the
          !! bed-blocking momentum gate; requires the sigma
-         !! vertical coordinate, `&ocean_continuity_nml ppm_limit_pos`,
-         !! (fail-loud at configure).  Multi-rank: bit-identical to one rank
+         !! vertical coordinate, `&ocean_continuity_nml ppm_limit_pos`
+         !! and `&ocean_bt_nml split_scheme = "ssp_rk2"` (fail-loud at configure).  Multi-rank: bit-identical to one rank
          !! (needs `nghost >= 3`); refused on >1 rank with the tripolar fold
          !! or any non-wall, non-periodic edge (unproven).
       real(wp) :: dry_depth = 0.05_wp

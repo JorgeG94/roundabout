@@ -173,6 +173,7 @@ program test_ocean_decomp_bitid_mpi
    use rdb_constants, only: wp
    use rdb_config, only: config_t, read_config_from_string, validate_config
    use rdb_ocean_status, only: OCEAN_STATUS_OK
+   use rdb_error_ring, only: error_ring_clear, error_ring_get, ERROR_RING_MSG_LEN
    use rdb_ocean_engine, only: ocean_engine_t, engine_setup, engine_enter_data, &
                                engine_step, engine_step_ice, engine_step_finalize, &
                                engine_exit_data, &
@@ -1114,6 +1115,7 @@ contains
       end do
       !$acc update self(engine%state%dyn%bt_work%bt_eta_end)
       s%n = s%n + 1
+      if (s%n > MAXF) error stop "test_ocean_decomp_bitid_mpi: raise MAXF"
       s%f(s%n)%tag = "bt_eta_end"
       allocate (s%f(s%n)%a(size(engine%state%dyn%bt_work%bt_eta_end, 1), &
                            size(engine%state%dyn%bt_work%bt_eta_end, 2), 1))
@@ -1125,21 +1127,25 @@ contains
          !$acc update self(engine%state%dyn%bt_work%wd_open_u, engine%state%dyn%bt_work%wd_open_v)
          !$acc update self(engine%state%dyn%bt_work%bt_uhbt, engine%state%dyn%bt_work%bt_vhbt)
          s%n = s%n + 1
+         if (s%n > MAXF) error stop "test_ocean_decomp_bitid_mpi: raise MAXF"
          s%f(s%n)%tag = "wd_open_u"
          s%f(s%n)%a = reshape(engine%state%dyn%bt_work%wd_open_u, &
                               [size(engine%state%dyn%bt_work%wd_open_u, 1), &
                                size(engine%state%dyn%bt_work%wd_open_u, 2), 1])
          s%n = s%n + 1
+         if (s%n > MAXF) error stop "test_ocean_decomp_bitid_mpi: raise MAXF"
          s%f(s%n)%tag = "wd_open_v"
          s%f(s%n)%a = reshape(engine%state%dyn%bt_work%wd_open_v, &
                               [size(engine%state%dyn%bt_work%wd_open_v, 1), &
                                size(engine%state%dyn%bt_work%wd_open_v, 2), 1])
          s%n = s%n + 1
+         if (s%n > MAXF) error stop "test_ocean_decomp_bitid_mpi: raise MAXF"
          s%f(s%n)%tag = "bt_uhbt"
          s%f(s%n)%a = reshape(engine%state%dyn%bt_work%bt_uhbt, &
                               [size(engine%state%dyn%bt_work%bt_uhbt, 1), &
                                size(engine%state%dyn%bt_work%bt_uhbt, 2), 1])
          s%n = s%n + 1
+         if (s%n > MAXF) error stop "test_ocean_decomp_bitid_mpi: raise MAXF"
          s%f(s%n)%tag = "bt_vhbt"
          s%f(s%n)%a = reshape(engine%state%dyn%bt_work%bt_vhbt, &
                               [size(engine%state%dyn%bt_work%bt_vhbt, 1), &
@@ -1352,13 +1358,30 @@ contains
       type(snap_t), intent(in) :: dec, ref
       integer, intent(out) :: nbad
       character(len=*), intent(in) :: report
-      character(len=16), parameter :: TAGS(7) = [character(len=16) :: "wd_wet_dyn", &
-                                                                                              "wd_open_u", "wd_open_v", "bt_uhbt", &
-                                                                                      "bt_vhbt", "u_face_x_layer", "v_face_y_layer"]
-      integer :: e, it, i, j, k, ex, ey, nb, ig, jg, nown
+      ! The layer velocities (`ml_u_face_x_layer`, `ml_v_face_y_layer`) are
+      ! deliberately NOT in this list: their ghosts are refreshed at the next
+      ! stage entry, and the last writer of a step (the vertical-diffusion
+      ! momentum solve) is not followed by an exchange, so at snapshot time they
+      ! are not images of the serial array.  Measured with this check enabled on
+      ! the non-wet/dry `island_basin` case: 42 of 912 u-ghost cells differ at
+      ! np 2, exactly as in the wet/dry cases.  Owned cells are compared by
+      ! `compare`.
+      character(len=20), parameter :: TAGS(5) = [character(len=20) :: "wd_wet_dyn", &
+                                                                                     "wd_open_u", "wd_open_v", "bt_uhbt", "bt_vhbt"]
+      integer :: e, it, i, j, k, ex, ey, nb, ig, jg, nown, itag, nmatch(size(TAGS))
       logical :: owned
 
       nbad = 0
+      ! A TAGS entry that matches no snapshot field means a rename silently
+      ! shrank this check: count it as a failure.
+      do itag = 1, size(TAGS)
+         nmatch(itag) = count([(trim(dec%f(e)%tag) == trim(TAGS(itag)), e=1, dec%n)])
+         if (nmatch(itag) == 0) then
+            write (*, '(a,i0,5a)') "  rank ", rank, " ", report, " GHOST CHECK: tag '", &
+               trim(TAGS(itag)), "' matches no snapshot field"
+            nbad = nbad + 1
+         end if
+      end do
       do e = 1, dec%n
          if (dec%f(e)%tag /= ref%f(e)%tag) cycle
          if (all(trim(dec%f(e)%tag) /= TAGS)) cycle
@@ -1741,18 +1764,25 @@ contains
       !! the engine auto-factors and which `validate_config`'s px*py fences
       !! cannot see), so the engine-side gate is the one exercised.
       character(len=*), parameter :: NL = new_line("a")
-      character(len=160), parameter :: KNOBS(2) = [character(len=160) :: &
-                                                   "&ocean_cavity_dyn_nml enable = .true. /", &
+      character(len=200), parameter :: KNOBS(2) = [character(len=200) :: &
+                                        "&ocean_cavity_dyn_nml enable = .true., draft_config = 'flat', draft_depth = 50.0 /"//NL// &
+                                                   "&ocean_pgf_nml form = 'fv_mom6' /", &
                                                    "&ocean_bc_nml east = 'chapman' /"]
+      character(len=60), parameter :: WANTS(2) = [character(len=60) :: &
+                                                  "cavity_dyn_nml enable = .true. is single-rank", &
+                                                  "chapman' edges are single-rank"]
       type(ocean_engine_t) :: engine
       type(config_t) :: cfg
       character(len=:), allocatable :: nml
-      character(len=160) :: lab
-      integer :: ik, ierr, ie
+      character(len=200) :: lab
+      integer :: ik, ierr, ie, ierr0
+      character(len=160) :: want
+      character(len=ERROR_RING_MSG_LEN) :: got
 
       do ik = 1, size(KNOBS) + 2
          if (ik <= size(KNOBS)) then
             lab = trim(KNOBS(ik))
+            want = trim(WANTS(ik))
             nml = "&sim_nml sim_type = 'ocean' /"//NL// &
                   "&grid_nml nx = 26, ny = 18, nghost = 3, dx = 20000.0, dy = 20000.0 /"//NL// &
                   "&time_nml t_end = 86400.0, dt_fixed = 900.0 /"//NL// &
@@ -1768,28 +1798,48 @@ contains
             ! refused on > 1 rank by the ENGINE gate (not validate_config: the
             ! positivity limiter is supplied, so the config is valid).
             lab = "&ocean_wetdry_nml enable = .true. / on the tripolar-fold case"
+            want = "with north = 'tripolar_fold' is unproven"
             nml = case_nml("tripolar", "ssp_rk2", 1, 1)//"&ocean_continuity_nml ppm_limit_pos = .true. /"//NL// &
                   "&ocean_wetdry_nml enable = .true. /"//NL
          else
             ! The shoal (valid under validate_config) with an OPEN east edge: the
             ! limiter at a boundary face reads fluxes outside the domain.
             lab = "&ocean_wetdry_nml enable = .true. / with an open east edge"
+            want = "neither wall nor periodic"
             nml = case_nml("wetdry_shoal", "ssp_rk2", 1, 1)
             ie = index(nml, "east = 'wall'")
+            if (ie < 1) then
+               write (*, '(3a,i0)') "FAIL fence: '", trim(lab), "' substitution found no east = 'wall', rank ", rank
+               n_fail = n_fail + 1
+               cycle
+            end if
             nml = nml(1:ie - 1)//"east = 'open'"//nml(ie + len("east = 'wall'"):)
          end if
+         call error_ring_clear()
          call read_config_from_string(nml, cfg, ierr=ierr)
          if (ierr == OCEAN_STATUS_OK) call validate_config(cfg, ierr)
-         if (ierr == OCEAN_STATUS_OK) then
-            call engine_setup(engine, cfg, ierr, compute_rank=rank, compute_size=nprocs)
-            call engine_teardown(engine)
+         if (ierr /= OCEAN_STATUS_OK) then
+            ! The fence must be reached through the ENGINE gate: a config the
+            ! earlier checks already refuse proves nothing about it.
+            write (*, '(3a,i0)') "FAIL fence: '", trim(lab), &
+               "' did not pass read_config/validate_config, rank ", rank
+            n_fail = n_fail + 1
+            cycle
          end if
-         if (ierr == OCEAN_STATUS_OK) then
+         call engine_setup(engine, cfg, ierr, compute_rank=rank, compute_size=nprocs)
+         call engine_teardown(engine)
+         ierr0 = ierr
+         got = error_ring_get(0)
+         if (ierr0 == OCEAN_STATUS_OK) then
             write (*, '(3a,i0)') "FAIL fence: '", trim(lab), &
                "' was ACCEPTED on multi-rank, rank ", rank
             n_fail = n_fail + 1
+         else if (index(got, trim(want)) == 0) then
+            write (*, '(5a,i0,2a)') "FAIL fence: '", trim(lab), "' refused with the wrong message (expected '", &
+               trim(want), "'), rank ", rank, ": ", trim(got(1:min(len_trim(got), 160)))
+            n_fail = n_fail + 1
          else if (rank == 0) then
-            write (*, '(3a)') "case fence: '", trim(lab), "' refused on multi-rank (ok)"
+            write (*, '(3a)') "case fence: '", trim(lab), "' refused by engine_setup (ok)"
          end if
       end do
    end subroutine check_single_rank_fences
