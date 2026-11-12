@@ -56,7 +56,9 @@ module rdb_barotropic_substep
    use rdb_ocean_halo, only: ocean_halo_bt_group_2d, ocean_halo_face_x, &
                              ocean_halo_bt_group_2d_wide, &
                              ocean_halo_is_decomposed, &
-                             ocean_halo_is_decomposed_x, ocean_halo_is_decomposed_y
+                             ocean_halo_is_decomposed_x, ocean_halo_is_decomposed_y, &
+                             ocean_halo_global_extent
+   use rdb_halo, only: halo_allreduce_sum_vec
    use rdb_ocean_halo_counters, only: oh_count_bt_u_mid, &
                                       oh_count_suppress_on, oh_count_suppress_off
    use rdb_profiler, only: profiler_start, profiler_stop
@@ -72,6 +74,54 @@ module rdb_barotropic_substep
    public :: barotropic_substep_nonlinear_interior
 
 contains
+
+   subroutine chapman_edge_mean(line, nloc, ng, off, contrib, mean)
+      !! Global edge-line mean of a Chapman edge that the decomposition
+      !! splits.  Each owned entry lands at its GLOBAL index in a zeroed
+      !! buffer (only the rank holding the physical edge contributes; every
+      !! other rank adds +0), ONE collective sums it (exact: one nonzero
+      !! addend per slot), and every rank then sums the contiguous global
+      !! line in index order -- the same expression the 1-rank run
+      !! evaluates, so the mean is independent of the split.
+      !! COLLECTIVE: all ranks must call it, in the same order.
+      integer, intent(in) :: nloc, ng, off
+      real(wp), intent(in) :: line(nloc)
+      logical, intent(in) :: contrib
+      real(wp), intent(out) :: mean
+      real(wp) :: buf(ng), gbuf(ng)
+
+      buf = 0.0_wp
+      if (contrib) buf(off + 1:off + nloc) = line
+      call halo_allreduce_sum_vec(buf, gbuf, ng)
+      mean = sum(gbuf)/real(ng, wp)
+   end subroutine chapman_edge_mean
+
+   subroutine chapman_corner_scales(grid, bt_H_ref, idx_cu, h_corner, idx_corner)
+      !! `bt_H_ref` and `idx_cu` at the GLOBAL south-west corner cell
+      !! (the Chapman phase-speed scale), delivered to every rank from the
+      !! rank that owns it (all other ranks add +0).  On one rank this is
+      !! just the tile's own corner.  COLLECTIVE when decomposed.
+      type(hgrid_t), intent(in) :: grid
+      real(wp), intent(in) :: bt_H_ref(:, :), idx_cu(:, :)
+      real(wp), intent(out) :: h_corner, idx_corner
+      integer :: i0, j0, nxg, nyg
+      real(wp) :: l(2), g(2)
+
+      if (.not. ocean_halo_is_decomposed()) then
+         h_corner = bt_H_ref(grid%nghost + 1, grid%nghost + 1)
+         idx_corner = idx_cu(grid%nghost + 1, grid%nghost + 1)
+         return
+      end if
+      call ocean_halo_global_extent(i0, j0, nxg, nyg)
+      l = 0.0_wp
+      if (i0 == 1 .and. j0 == 1) then
+         l(1) = bt_H_ref(grid%nghost + 1, grid%nghost + 1)
+         l(2) = idx_cu(grid%nghost + 1, grid%nghost + 1)
+      end if
+      call halo_allreduce_sum_vec(l, g, 2)
+      h_corner = g(1)
+      idx_corner = g(2)
+   end subroutine chapman_corner_scales
 
    pure subroutine barotropic_substep_linear(grid, metrics, bt_work, force_u, force_v, n_steps, dt_inner, &
                                              eta_forcing)
@@ -478,7 +528,9 @@ contains
       real(wp) :: t_now
       integer :: nc
       real(wp) :: eta_int_mean_w, eta_int_mean_e, eta_int_mean_s, eta_int_mean_n
-      real(wp) :: chapman_alpha
+      real(wp) :: chapman_alpha, h_corner, idx_corner
+      integer :: gi0, gj0, gnx, gny
+         !! Chapman: global offset + extent of the decomposed domain.
       ! Full-Flather (§4, v2): pre-cached scalars for the interior DC.
       logical  :: use_ff       !! .true. = full-Flather form, .false. = legacy.
       real(wp) :: ext_u_w, ext_u_e, ext_v_s, ext_v_n  !! Exterior velocities.
@@ -714,34 +766,60 @@ contains
          ! (perfect outflow), α = 0 ⇒ wall holds eta_old (closed-ish).
          if (bc_w == OBC_CHAPMAN .or. bc_e == OBC_CHAPMAN .or. &
              bc_s == OBC_CHAPMAN .or. bc_n == OBC_CHAPMAN) then
+            call chapman_corner_scales(grid, bt_H_ref, idx_cu, h_corner, idx_corner)
             chapman_alpha = min(1.0_wp, &
-                                sqrt(G*max(bt_H_ref(grid%nghost + 1, grid%nghost + 1), 1.0e-6_wp))* &
-                                real(n_steps, wp)*dt_inner*idx_cu(grid%nghost + 1, grid%nghost + 1))
+                                sqrt(G*max(h_corner, 1.0e-6_wp))* &
+                                real(n_steps, wp)*dt_inner*idx_corner)
+            call ocean_halo_global_extent(gi0, gj0, gnx, gny)
             if (bc_w == OBC_CHAPMAN) then
-               eta_int_mean_w = sum(bt_eta(i_w_int, &
-                                           grid%nghost + 1:grid%nghost + grid%ny_phys))/ &
-                                real(grid%ny_phys, wp)
+               if (ocean_halo_is_decomposed_y()) then
+                  !$acc update self(bt_eta(i_w_int, grid%nghost + 1:grid%nghost + grid%ny_phys))
+                  call chapman_edge_mean(bt_eta(i_w_int, grid%nghost + 1:grid%nghost + grid%ny_phys), &
+                                         grid%ny_phys, gny, gj0 - 1, has_w, eta_int_mean_w)
+               else
+                  eta_int_mean_w = sum(bt_eta(i_w_int, &
+                                              grid%nghost + 1:grid%nghost + grid%ny_phys))/ &
+                                   real(grid%ny_phys, wp)
+               end if
                eta_target_w = bc%eta_old_chapman_w + &
                               chapman_alpha*(eta_int_mean_w - bc%eta_old_chapman_w)
             end if
             if (bc_e == OBC_CHAPMAN) then
-               eta_int_mean_e = sum(bt_eta(i_e_int, &
-                                           grid%nghost + 1:grid%nghost + grid%ny_phys))/ &
-                                real(grid%ny_phys, wp)
+               if (ocean_halo_is_decomposed_y()) then
+                  !$acc update self(bt_eta(i_e_int, grid%nghost + 1:grid%nghost + grid%ny_phys))
+                  call chapman_edge_mean(bt_eta(i_e_int, grid%nghost + 1:grid%nghost + grid%ny_phys), &
+                                         grid%ny_phys, gny, gj0 - 1, has_e, eta_int_mean_e)
+               else
+                  eta_int_mean_e = sum(bt_eta(i_e_int, &
+                                              grid%nghost + 1:grid%nghost + grid%ny_phys))/ &
+                                   real(grid%ny_phys, wp)
+               end if
                eta_target_e = bc%eta_old_chapman_e + &
                               chapman_alpha*(eta_int_mean_e - bc%eta_old_chapman_e)
             end if
             if (bc_s == OBC_CHAPMAN) then
-               eta_int_mean_s = sum(bt_eta(grid%nghost + 1:grid%nghost + grid%nx_phys, &
-                                           j_s_int))/ &
-                                real(grid%nx_phys, wp)
+               if (ocean_halo_is_decomposed_x()) then
+                  !$acc update self(bt_eta(grid%nghost + 1:grid%nghost + grid%nx_phys, j_s_int))
+                  call chapman_edge_mean(bt_eta(grid%nghost + 1:grid%nghost + grid%nx_phys, j_s_int), &
+                                         grid%nx_phys, gnx, gi0 - 1, has_s, eta_int_mean_s)
+               else
+                  eta_int_mean_s = sum(bt_eta(grid%nghost + 1:grid%nghost + grid%nx_phys, &
+                                              j_s_int))/ &
+                                   real(grid%nx_phys, wp)
+               end if
                eta_target_s = bc%eta_old_chapman_s + &
                               chapman_alpha*(eta_int_mean_s - bc%eta_old_chapman_s)
             end if
             if (bc_n == OBC_CHAPMAN) then
-               eta_int_mean_n = sum(bt_eta(grid%nghost + 1:grid%nghost + grid%nx_phys, &
-                                           j_n_int))/ &
-                                real(grid%nx_phys, wp)
+               if (ocean_halo_is_decomposed_x()) then
+                  !$acc update self(bt_eta(grid%nghost + 1:grid%nghost + grid%nx_phys, j_n_int))
+                  call chapman_edge_mean(bt_eta(grid%nghost + 1:grid%nghost + grid%nx_phys, j_n_int), &
+                                         grid%nx_phys, gnx, gi0 - 1, has_n, eta_int_mean_n)
+               else
+                  eta_int_mean_n = sum(bt_eta(grid%nghost + 1:grid%nghost + grid%nx_phys, &
+                                              j_n_int))/ &
+                                   real(grid%nx_phys, wp)
+               end if
                eta_target_n = bc%eta_old_chapman_n + &
                               chapman_alpha*(eta_int_mean_n - bc%eta_old_chapman_n)
             end if
@@ -1786,25 +1864,46 @@ contains
          if (bc_w == OBC_CHAPMAN .or. bc_e == OBC_CHAPMAN .or. &
              bc_s == OBC_CHAPMAN .or. bc_n == OBC_CHAPMAN) then
             !$acc update self(bt_eta_end)
+            call ocean_halo_global_extent(gi0, gj0, gnx, gny)
             if (bc_w == OBC_CHAPMAN) then
-               bc%eta_old_chapman_w = sum(bt_eta_end(i_w_int, &
-                                                     grid%nghost + 1:grid%nghost + grid%ny_phys))/ &
-                                      real(grid%ny_phys, wp)
+               if (ocean_halo_is_decomposed_y()) then
+                  call chapman_edge_mean(bt_eta_end(i_w_int, grid%nghost + 1:grid%nghost + grid%ny_phys), &
+                                         grid%ny_phys, gny, gj0 - 1, has_w, bc%eta_old_chapman_w)
+               else
+                  bc%eta_old_chapman_w = sum(bt_eta_end(i_w_int, &
+                                                        grid%nghost + 1:grid%nghost + grid%ny_phys))/ &
+                                         real(grid%ny_phys, wp)
+               end if
             end if
             if (bc_e == OBC_CHAPMAN) then
-               bc%eta_old_chapman_e = sum(bt_eta_end(i_e_int, &
-                                                     grid%nghost + 1:grid%nghost + grid%ny_phys))/ &
-                                      real(grid%ny_phys, wp)
+               if (ocean_halo_is_decomposed_y()) then
+                  call chapman_edge_mean(bt_eta_end(i_e_int, grid%nghost + 1:grid%nghost + grid%ny_phys), &
+                                         grid%ny_phys, gny, gj0 - 1, has_e, bc%eta_old_chapman_e)
+               else
+                  bc%eta_old_chapman_e = sum(bt_eta_end(i_e_int, &
+                                                        grid%nghost + 1:grid%nghost + grid%ny_phys))/ &
+                                         real(grid%ny_phys, wp)
+               end if
             end if
             if (bc_s == OBC_CHAPMAN) then
-               bc%eta_old_chapman_s = sum(bt_eta_end(grid%nghost + 1:grid%nghost + grid%nx_phys, &
-                                                     j_s_int))/ &
-                                      real(grid%nx_phys, wp)
+               if (ocean_halo_is_decomposed_x()) then
+                  call chapman_edge_mean(bt_eta_end(grid%nghost + 1:grid%nghost + grid%nx_phys, j_s_int), &
+                                         grid%nx_phys, gnx, gi0 - 1, has_s, bc%eta_old_chapman_s)
+               else
+                  bc%eta_old_chapman_s = sum(bt_eta_end(grid%nghost + 1:grid%nghost + grid%nx_phys, &
+                                                        j_s_int))/ &
+                                         real(grid%nx_phys, wp)
+               end if
             end if
             if (bc_n == OBC_CHAPMAN) then
-               bc%eta_old_chapman_n = sum(bt_eta_end(grid%nghost + 1:grid%nghost + grid%nx_phys, &
-                                                     j_n_int))/ &
-                                      real(grid%nx_phys, wp)
+               if (ocean_halo_is_decomposed_x()) then
+                  call chapman_edge_mean(bt_eta_end(grid%nghost + 1:grid%nghost + grid%nx_phys, j_n_int), &
+                                         grid%nx_phys, gnx, gi0 - 1, has_n, bc%eta_old_chapman_n)
+               else
+                  bc%eta_old_chapman_n = sum(bt_eta_end(grid%nghost + 1:grid%nghost + grid%nx_phys, &
+                                                        j_n_int))/ &
+                                         real(grid%nx_phys, wp)
+               end if
             end if
          end if
       end if

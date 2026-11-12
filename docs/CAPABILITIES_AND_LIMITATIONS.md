@@ -312,7 +312,7 @@ Choose per edge with `&ocean_bc_nml`.
 | Open (Flather) | Shipped | `flather_form`, per-edge `*_ext_u/v` | Barotropic Flather plus a per-layer zero-gradient baroclinic anomaly. The `"full"` form supports an exterior velocity. |
 | Tidal | Shipped | `obc_tidal_nodal` | Multi-constituent `eta`. |
 | Clamped | Shipped | – | Dirichlet `eta`, `u`, `v` and per-tracer inflow values. |
-| Chapman | Shipped | – | **Refused on more than one rank.** |
+| Chapman | Shipped | – | Bit-identical on every split: the edge-mean `eta` target, its persistent `eta_old` and the south-west-corner phase-speed scale are global quantities (one gathered line per edge, summed in global index order; `chapman_obc` decomposition case). |
 | Sponge | Shipped | `sponge_relax_tracers`, `&ocean_sponge_nml` | A closed wall at the outer face plus an interior band of momentum decay and optional tracer relaxation. |
 | Periodic | Shipped | – | Needs `nghost >= 3` and paired edges. The seam is bit-exact. |
 | Radiation and nudging | Shipped, opt-in | `radiation_scheme = "orlanski"`, `nudge_tau_in/out`, `res_lscale_in/out` | Per-layer implicit-upwind Orlanski radiation on the normal velocity, with a running-mean phase speed and an `rx_max` clip. The default `radiation_scheme = "anomaly"` is the Flather mean plus a zero-gradient baroclinic anomaly. `rx` and `u_prev` are not restart state, so a restart starts the scheme cold. |
@@ -474,7 +474,7 @@ Under `z_fixed` plus a cavity, melt and top drag are accepted, and `kappa_h /= 0
 | Feature | Status | Key knob | Limits |
 |---|---|---|---|
 | Rectangular domain decomposition | Shipped | `&mpi_nml px`, `py` | Left at `1 x 1` on several ranks, the engine picks the split. It is north-south under a tripolar fold. An explicit `px*py` that does not match the rank count is refused. |
-| Bit-identity with the serial run | Shipped | – | Checked on nineteen configurations and every `px x py` split of 1, 2 and 4 ranks, under both split schemes. |
+| Bit-identity with the serial run | Shipped | – | Checked on forty-three configurations and every `px x py` split of 1, 2 and 4 ranks, under both split schemes. |
 | Tripolar north fold | Shipped | `north = "tripolar_fold"` | East-west splits (`px > 1`) must be asked for explicitly. |
 | Per-rank file readers | Shipped | – | Supergrid, bathymetry, z-level T/S initial condition and `&ocean_dataovr_nml` forcing are windowed per rank. |
 | Console totals | Shipped | `&ocean_diag_nml reproducing_sums` (default on) | The status block prints the same digits on any rank count. |
@@ -493,7 +493,6 @@ Each check is fail-loud on every rank and names the knob. The check keys on the 
 |---|---|
 | `&ocean_cavity_dyn_nml enable` (and the melt / top-drag paths that require it) | the grounding statistics are global reductions the configure does not take; `draft_config="file"` has no windowed reader |
 | `&ocean_wetdry_nml enable` | the wet-mask / outflow-limiter halo exchange is not implemented |
-| `&ocean_bc_nml` `'chapman'` edges | the edge-uniform eta target is a per-rank partial mean |
 | `&ocean_thermo_nml sw_scheme = "manizza05"` | the per-rank chlorophyll read fills the interior only (no ghosts) and the ghosts feed `sw_kappa`; no decomposition bit-identity case |
 | `&ocean_bt_nml dtbt` with `dtbt_reset_period >= 0` (or with `bt_halo > 0`) | `n_inner` changes mid-run, which is not agreed across ranks and does not resize the wide-halo BT clone; the init-only form (`dtbt_reset_period < 0`) is allowed |
 | `&ocean_bulk_flux_nml enable` (the atm-driven bulk forcing, OM3 C2c-3a) | its surface stress runs through the centre halo, the seam refresh and the tripolar fold, and it has no decomposition bit-identity case yet; the 1 vs 2x2 gate is part of C2c-3b |

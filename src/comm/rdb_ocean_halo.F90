@@ -134,6 +134,7 @@ module rdb_ocean_halo
    public :: ocean_halo_is_decomposed
    public :: ocean_halo_is_decomposed_x
    public :: ocean_halo_is_decomposed_y
+   public :: ocean_halo_global_extent
    public :: ocean_halo_centre
    public :: ocean_halo_face_x
    public :: ocean_halo_face_y
@@ -527,6 +528,16 @@ contains
       logical :: flag
       flag = oh_initialised .and. (oh_decomp%px > 1 .or. oh_decomp%py > 1)
    end function ocean_halo_is_decomposed
+
+   pure subroutine ocean_halo_global_extent(i_start, j_start, nx_global, ny_global)
+      !! Global physical extent and this rank's 1-based global offset
+      !! (first owned cell).  `(1, 1, 0, 0)`-style defaults before init.
+      integer, intent(out) :: i_start, j_start, nx_global, ny_global
+      i_start = oh_decomp%i_start
+      j_start = oh_decomp%j_start
+      nx_global = oh_decomp%nx_global
+      ny_global = oh_decomp%ny_global
+   end subroutine ocean_halo_global_extent
 
    pure function ocean_halo_is_decomposed_x() result(flag)
       !! True iff the X axis is split across ranks (px>1); skip the local x wrap.

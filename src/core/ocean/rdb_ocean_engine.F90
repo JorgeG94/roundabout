@@ -481,20 +481,6 @@ contains
                       ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
-         ! Chapman radiation keeps ONE edge-uniform eta target per edge,
-         ! computed from the tile's own stretch of the edge (and a corner
-         ! depth): split along a Chapman edge, every rank radiates toward a
-         ! different target.
-         if (any([ocean_bc_type_from_string(cfg%ocean%bc%west), &
-                  ocean_bc_type_from_string(cfg%ocean%bc%east), &
-                  ocean_bc_type_from_string(cfg%ocean%bc%south), &
-                  ocean_bc_type_from_string(cfg%ocean%bc%north)] == OBC_CHAPMAN)) then
-            call fail("&ocean_bc_nml 'chapman' edges are single-rank ("// &
-                      to_string(csize)//" ranks requested): the edge-mean eta target "// &
-                      "is a per-rank partial mean.  Use 'open' (Flather) or run on 1 rank.", &
-                      ierr, OCEAN_STATUS_ERR_SETUP)
-            return
-         end if
          ! Manizza chlorophyll shortwave: the per-rank windowed chlorophyll read
          ! fills the interior only (no halo exchange, ghosts stay at the
          ! floor), and the ghosts feed `sw_kappa`; there is no multi-rank

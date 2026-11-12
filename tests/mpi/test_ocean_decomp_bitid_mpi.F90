@@ -234,7 +234,7 @@ program test_ocean_decomp_bitid_mpi
       !! `RDB_BITID_CASES`: run only the cases whose name contains this substring.
    type(comm_t) :: comm
    character(len=16), parameter :: SCHEMES(2) = [character(len=16) :: "pred_corr", "ssp_rk2"]
-   character(len=24), parameter :: CASES(42) = [character(len=24) :: &
+   character(len=24), parameter :: CASES(43) = [character(len=24) :: &
                                                 "island_basin", "weno7_pv", &
                                                 "periodic_channel_zstar", &
                                                 "visc_rem_zstar", &
@@ -256,7 +256,7 @@ program test_ocean_decomp_bitid_mpi
                                                 "drain_ratio", "drain_ratio_h3", &
                                                 "drain_ratio_weno5", "drain_ratio_weno7", &
                                                 "drain_ratio_weno9", "drain_ratio_fold", &
-                                                "drain_ratio_fold_h3"]
+                                                "drain_ratio_fold_h3", "chapman_obc"]
 
    call comm_env_init()
    call comm_env_setup_roles(.false.)
@@ -584,6 +584,23 @@ contains
                "&ocean_topo_nml topo_config = 'seamount', max_depth = 2000.0, "// &
                "edge_depth = 200.0, slope_scale = 40000.0 /"//NL// &
                "&ocean_bc_nml west = 'tidal', east = 'open', south = 'wall', north = 'wall', "// &
+               "west_n_tidal = 1, west_tidal_amp = 0.5, west_tidal_phase = 0.0, "// &
+               "west_tidal_omega = 1.4051890e-4 /"//NL
+      case ("chapman_obc")
+         ! Chapman radiation on the east AND north edges (both split by the
+         ! decomposition: py > 1 splits the east line, px > 1 the north one)
+         ! over a seamount, driven by a tidal west edge and an asymmetric
+         ! wind so the wave reaches both Chapman edges inside the run.  The
+         ! edge-mean eta target and the SW-corner phase-speed scale are
+         ! global quantities; a per-rank partial mean breaks the compare.
+         nml = common// &
+               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
+               "dx = 10000.0, dy = 10000.0 /"//NL// &
+               "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 0.05, wind_stress_y = 0.02 /"//NL// &
+               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
+               "&ocean_topo_nml topo_config = 'seamount', max_depth = 2000.0, "// &
+               "edge_depth = 500.0, slope_scale = 40000.0 /"//NL// &
+               "&ocean_bc_nml west = 'tidal', east = 'chapman', south = 'wall', north = 'chapman', "// &
                "west_n_tidal = 1, west_tidal_amp = 0.5, west_tidal_phase = 0.0, "// &
                "west_tidal_omega = 1.4051890e-4 /"//NL
       case ("tripolar", "redi_cfl_fold", "drain_ratio_fold", "drain_ratio_fold_h3")
@@ -1538,10 +1555,9 @@ contains
       !! the engine auto-factors and which `validate_config`'s px*py fences
       !! cannot see), so the engine-side gate is the one exercised.
       character(len=*), parameter :: NL = new_line("a")
-      character(len=160), parameter :: KNOBS(3) = [character(len=160) :: &
+      character(len=160), parameter :: KNOBS(2) = [character(len=160) :: &
                                                    "&ocean_wetdry_nml enable = .true. /", &
-                                                   "&ocean_cavity_dyn_nml enable = .true. /", &
-                                                   "&ocean_bc_nml east = 'chapman' /"]
+                                                   "&ocean_cavity_dyn_nml enable = .true. /"]
       type(ocean_engine_t) :: engine
       type(config_t) :: cfg
       character(len=:), allocatable :: nml
