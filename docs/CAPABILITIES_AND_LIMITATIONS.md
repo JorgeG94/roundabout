@@ -312,7 +312,7 @@ Choose per edge with `&ocean_bc_nml`.
 | Open (Flather) | Shipped | `flather_form`, per-edge `*_ext_u/v` | Barotropic Flather plus a per-layer zero-gradient baroclinic anomaly. The `"full"` form supports an exterior velocity. |
 | Tidal | Shipped | `obc_tidal_nodal` | Multi-constituent `eta`. |
 | Clamped | Shipped | – | Dirichlet `eta`, `u`, `v` and per-tracer inflow values. |
-| Chapman | Shipped | – | Bit-identical on every split: the edge-mean `eta` target, its persistent `eta_old` and the south-west-corner phase-speed scale are global quantities (one gathered line per edge, summed in global index order; `chapman_obc` decomposition case). |
+| Chapman | Shipped | – | Bit-identical on every split: the edge-mean `eta` target, its persistent `eta_old` and the south-west-corner phase-speed scale are global quantities (one gathered line per edge, summed in global index order; `chapman_obc` decomposition case). Refused with an explicit `&ocean_bt_nml bt_halo > 0` (AUTO resolves to 0). GPU: the 1-rank target used to be read from stale host memory (`bt_eta` is device-only); it is now pulled from the device, so 1-rank GPU Chapman answers changed. |
 | Sponge | Shipped | `sponge_relax_tracers`, `&ocean_sponge_nml` | A closed wall at the outer face plus an interior band of momentum decay and optional tracer relaxation. |
 | Periodic | Shipped | – | Needs `nghost >= 3` and paired edges. The seam is bit-exact. |
 | Radiation and nudging | Shipped, opt-in | `radiation_scheme = "orlanski"`, `nudge_tau_in/out`, `res_lscale_in/out` | Per-layer implicit-upwind Orlanski radiation on the normal velocity, with a running-mean phase speed and an `rx_max` clip. The default `radiation_scheme = "anomaly"` is the Flather mean plus a zero-gradient baroclinic anomaly. `rx` and `u_prev` are not restart state, so a restart starts the scheme cold. |
@@ -474,7 +474,7 @@ Under `z_fixed` plus a cavity, melt and top drag are accepted, and `kappa_h /= 0
 | Feature | Status | Key knob | Limits |
 |---|---|---|---|
 | Rectangular domain decomposition | Shipped | `&mpi_nml px`, `py` | Left at `1 x 1` on several ranks, the engine picks the split. It is north-south under a tripolar fold. An explicit `px*py` that does not match the rank count is refused. |
-| Bit-identity with the serial run | Shipped | – | Checked on forty-three configurations and every `px x py` split of 1, 2 and 4 ranks, under both split schemes. |
+| Bit-identity with the serial run | Shipped | – | Checked on every case in the gate's `CASES` list and every `px x py` split of 1, 2 and 4 ranks, under both split schemes. |
 | Tripolar north fold | Shipped | `north = "tripolar_fold"` | East-west splits (`px > 1`) must be asked for explicitly. |
 | Per-rank file readers | Shipped | – | Supergrid, bathymetry, z-level T/S initial condition and `&ocean_dataovr_nml` forcing are windowed per rank. |
 | Console totals | Shipped | `&ocean_diag_nml reproducing_sums` (default on) | The status block prints the same digits on any rank count. |

@@ -107,6 +107,7 @@ module rdb_ocean_engine
    use rdb_ocean_periodic, only: ocean_periodic_wrap_state, ocean_periodic_wrap_centre_2d
    use rdb_ocean_fold_apply, only: ocean_fold_wrap_state, ocean_fold_wrap_eta_2d
    use rdb_ocean_boundary_data, only: ocean_boundary_data_constant_t
+   use rdb_barotropic_substep, only: chapman_setup_corner, chapman_workspace_cleanup
    use rdb_ocean_boundary_types, only: ocean_bc_state_set_edges, ocean_bc_state_set_topology, &
                                        ocean_bc_type_from_string, OBC_PERIODIC, &
                                        OBC_TRIPOLAR_FOLD, OBC_CHAPMAN
@@ -1141,6 +1142,12 @@ contains
       if (cfg%ocean%bt%n_inner >= 1) then
          call ocean_halo_centre(engine%state%dyn%bt_work%bt_H_ref, device_resident=.false.)
       end if
+      ! Chapman phase-speed scale: global south-west corner `bt_H_ref` and
+      ! `idx_cu`, latched once (static data; collective, all ranks call it).
+      if (cfg%ocean%bt%n_inner >= 1) then
+         call chapman_setup_corner(engine%grid, engine%state%dyn%bt_work%bt_H_ref, &
+                                   engine%state%metrics%idxCu, engine%state%bc)
+      end if
 
       ! px > 1 tripolar: refresh the static corner Coriolis array's x ghosts
       ! from their OWNERS before it is folded.  The analytic generator
@@ -2165,6 +2172,7 @@ contains
 #ifndef RDB_NO_NETCDF
       if (engine%diag_enabled) call close_stream(engine%state%diag)
 #endif
+      call chapman_workspace_cleanup()
       call ocean_halo_destroy()
       call ocean_fold_exchange_destroy()
       call engine%geo%destroy()
