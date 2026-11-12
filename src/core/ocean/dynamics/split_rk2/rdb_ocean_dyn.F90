@@ -4122,6 +4122,25 @@ contains
          call tracer_advect_vertical(grid, va, ms, therm_dt, active=therm_active)
          call probe_dS(grid, ms, "after tracer_advect_vertical", stage_id, step_id)
          call profiler_stop("ocean_vertical_advect")
+         ! The two column-local kernels above ran AFTER the post-continuity
+         ! exchange and advanced the ghost columns of h_layer and the tracers
+         ! with the tile's OWN `flux_h_layer`, which is never exchanged (its
+         ! outermost ghost face carries no flux).  A ghost column therefore
+         ! ends the step different from its owner, and the next reader of a
+         ! seam / wrap / fold ghost sees a tile-dependent value.  Refresh h and
+         ! the tracers from their owners (exchange, periodic wrap, tripolar
+         ! fold; on-device data, as the post-continuity refresh above).
+         ! Unconditional on decomposition: a periodic or folded axis on ONE
+         ! rank has the same defect as a seam.  (`run_gm_step` does the same
+         ! for the bolus path.)  The block cannot simply move before the
+         ! post-continuity refresh: tracer_hdiff / Redi sit in between and
+         ! would then act on post-vertical-advection tracers.
+         call ocean_halo_exchange_ml_state(ms)
+         if (present(bc)) then
+            call ocean_periodic_wrap_state(grid, bc, ms, skip_x=ocean_halo_is_decomposed_x(), &
+                                           skip_y=ocean_halo_is_decomposed_y())
+            call ocean_fold_wrap_state(grid, bc, ms)
+         end if
       end if
    end subroutine run_continuity_chain
 
@@ -5487,16 +5506,6 @@ contains
       if (dyn%bt_work%bt_correction_visc_rem) then
          call ocean_halo_face_x(ms%u_face_x_layer, ms%nz_ml)
          call ocean_halo_face_y(ms%v_face_y_layer, ms%nz_ml)
-      end if
-      ! The Eulerian-z h-rescale (and its tracer twin) ran over the whole
-      ! array, ghosts included, on the tile's own `bt_eta_end` / `bt_H_ref`
-      ! ghost values: a last-bit different thickness than the owner's, which
-      ! the vertical mixing reads at a seam face.  Refresh both from the
-      ! owners.  Gated on decomposition so the undecomposed answer is the
-      ! untouched one; the gate is rank-uniform.
-      if (.not. is_lagrangian .and. (ocean_halo_is_decomposed_x() .or. ocean_halo_is_decomposed_y())) then
-         call ocean_halo_centre(ms%h_layer, ms%nz_ml)
-         call refresh_tracer_ghosts(grid, ms, bc=bc)
       end if
       call chksum_state(grid, ms, dyn%chksum_probe, "post_bt_fold", stage_id, step_id)
       ! Land-face velocity reset (C4 / R4b.2): zero re-ingested land-face

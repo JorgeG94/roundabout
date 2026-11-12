@@ -1793,7 +1793,7 @@ stack (CPU + MPI, restart and decomp legs): 25 PASS, 11 REFUSED_PHYSICAL,
 | ~~`restart_meke_gm_src_lag`~~ | RESTART | MEKE reads the previous step's `gm%gm_src`, which was not checkpointed (3 % off at step 24). Retired 2026-10-05: `gm_src` (and the slopes / VarMix KhTh the GM operator reads between thermo refreshes) are restart-registered |
 | `restart_mle_mld_filter` | RESTART | MLE's running-mean `mld_filtered` (mld_decay_time > 0) is persistent state outside the registry |
 | `cavity_single_rank` | DECOMP (multirank) | the configure refusal on > 1 rank (the tripolar fold row `tripolar_fold_px1` was retired when the distributed fold lifted the `px > 1` refusal) |
-| `gpu_eulerian_z_epbl_mle_drift` | GPU | eulerian_z + ssp_rk2 + EPBL + MLE ends 1.6e-7 from gfortran, 3000x the population spread (the same combination is decomposition-sensitive) |
+| `gpu_eulerian_z_epbl_mle_drift` | GPU | eulerian_z + ssp_rk2 + EPBL + MLE ends 1.6e-7 from gfortran, 3000x the population spread (an order-sensitive amplification; per-tile ghost h / tracers may have fed it: re-test on a GPU leg) |
 
 Closed since: `decomp_weno_pv` (WENO PV interpolation at the smallest halo its gate
 accepted -- weno7 at `nghost = 4`, weno5 at 3 -- drifted at the last bit on 2x2 / 4x1).
