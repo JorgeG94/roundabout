@@ -5311,10 +5311,13 @@ contains
                                                     bc=bc, t=t, eta_forcing=eta_forcing)
       end if
       call profiler_stop("ocean_barotropic_solver")
-      ! Dynamic wet/dry: the limiter's radius-2 reach leaves the mask, the
-      ! bed-blocking gate and the time-mean transport exact on owned cells
-      ! (plus one ghost layer) but NOT as images of their owners in the rest
-      ! of the ghost band; later full-array kernels (`mask_layer_velocities`,
+      ! Dynamic wet/dry: owned-cell bit-identity does NOT come from this
+      ! refresh.  With nghost >= 3 the fast loop keeps the owned cells plus the
+      ! innermost ghost layer exact by induction (eta/ubt/vbt are images at every
+      ! substep start; the hysteresis mask updates each cell from its own exact
+      ! depth and history), provided the mask ENTERS exact (the cold-start image
+      ! or a restart carrying ghosts).  The outer ghosts are NOT images of their
+      ! owners after the loop; later full-array kernels (`mask_layer_velocities`,
       ! the surface-flux wet gate, the legacy continuity renorm) read those
       ! ghosts.  Refresh them once per stage -- not per substep, so the fast
       ! loop is untouched.  Device-resident data (default `device_resident`);

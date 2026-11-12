@@ -1151,10 +1151,11 @@ module rdb_config
       logical :: enable = .false.
          !! Master switch.  When `.true.` the BT substep switches to upwind
          !! face thickness + the positive-definite outflow limiter + the
-         !! bed-blocking momentum gate; requires sigma / zstar(-lite)
-         !! vertical coordinates, `&ocean_continuity_nml ppm_limit_pos`,
+         !! bed-blocking momentum gate; requires the sigma
+         !! vertical coordinate, `&ocean_continuity_nml ppm_limit_pos`,
          !! (fail-loud at configure).  Multi-rank: bit-identical to one rank
-         !! (needs `nghost >= 3`); refused only with the tripolar fold.
+         !! (needs `nghost >= 3`); refused on >1 rank with the tripolar fold
+         !! or any non-wall, non-periodic edge (unproven).
       real(wp) :: dry_depth = 0.05_wp
          !! Total-depth dry threshold (m): a column with `D < dry_depth`
          !! is dynamically dry (masked).  Must be > 0.

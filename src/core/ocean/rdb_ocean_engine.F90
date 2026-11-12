@@ -108,7 +108,7 @@ module rdb_ocean_engine
    use rdb_ocean_fold_apply, only: ocean_fold_wrap_state, ocean_fold_wrap_eta_2d
    use rdb_ocean_boundary_data, only: ocean_boundary_data_constant_t
    use rdb_ocean_boundary_types, only: ocean_bc_state_set_edges, ocean_bc_state_set_topology, &
-                                       ocean_bc_type_from_string, OBC_PERIODIC, &
+                                       ocean_bc_type_from_string, OBC_PERIODIC, OBC_WALL, &
                                        OBC_TRIPOLAR_FOLD, OBC_CHAPMAN
    use rdb_ocean_metrics, only: metrics_assemble_from_supergrid_arrays, metrics_finalize, &
                                 metrics_fold_periodic_ghosts
@@ -446,17 +446,35 @@ contains
          ! an unset process grid (px = py = 1, auto-factored above) does
          ! not trip -- so this is the gate that always holds.  Every rank
          ! evaluates the same condition and fails together.
-         ! Dynamic wet/dry is decomposition-safe (seam refreshes of the mask,
-         ! the bed-blocking gate and the time-mean transport after the fast
-         ! loop), but those refreshes do not fold: across a tripolar north
-         ! fold the mirrored ghost rows of those three fields would stay
-         ! stale.  Refused on more than one rank only; one rank folds locally.
+         ! Dynamic wet/dry is decomposition-safe on a wall / periodic domain
+         ! (nghost >= 3 keeps the owned cells and the innermost ghost layer
+         ! exact through the fast loop by induction; three once-per-stage
+         ! refreshes keep the outer ghosts as images).  Two things are UNPROVEN
+         ! on a decomposed domain and refused here:
+         !  * the tripolar fold: the wd_* masks and the limiter fluxes are
+         !    never folded, on any rank count;
+         !  * any edge that is not WALL or PERIODIC: the limiter adds
+         !    min(theta(ng), theta(ng+1)) at the boundary face, and theta(ng)
+         !    reads fluxes at faces OUTSIDE the domain, which at a seam
+         !    crossing the open edge come from corner ghosts / the
+         !    zero-gradient fill, a radius no OBC decomposition case reads.
          if (cfg%ocean%wetdry%enable .and. &
              ocean_bc_type_from_string(cfg%ocean%bc%north) == OBC_TRIPOLAR_FOLD) then
             call fail("&ocean_wetdry_nml enable = .true. with north = 'tripolar_fold' is "// &
-                      "single-rank ("//to_string(csize)//" ranks requested): the wet "// &
-                      "mask, bed-blocking gate and time-mean transport are not folded "// &
-                      "across the seam.  Run on 1 rank.", &
+                      "unproven on more than one rank ("//to_string(csize)//" ranks "// &
+                      "requested): the wet/dry masks and limiter fluxes are not folded.  "// &
+                      "Run on 1 rank.", &
+                      ierr, OCEAN_STATUS_ERR_SETUP)
+            return
+         end if
+         if (cfg%ocean%wetdry%enable .and. ( &
+             wetdry_edge_is_open(cfg%ocean%bc%west) .or. wetdry_edge_is_open(cfg%ocean%bc%east) .or. &
+             wetdry_edge_is_open(cfg%ocean%bc%south) .or. wetdry_edge_is_open(cfg%ocean%bc%north))) then
+            call fail("&ocean_wetdry_nml enable = .true. with an &ocean_bc_nml edge that is "// &
+                      "neither wall nor periodic (open / tidal / clamped / chapman / sponge / "// &
+                      "...) is unproven on more than one rank ("//to_string(csize)// &
+                      " ranks requested): the limiter at the boundary face reads fluxes "// &
+                      "outside the domain that are not decomposition-checked.  Run on 1 rank.", &
                       ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
@@ -1165,10 +1183,16 @@ contains
       ! Dynamic wet/dry cold start: `wd_wet_dyn` was seeded over the whole
       ! local array by `configure_ocean_wetdry`, BEFORE the bathymetry halo
       ! fill above, so its seam ghosts hold the seed of whatever `b` the ghost
-      ! held then, not an image of the owner's.  The limiter's hysteresis reads
-      ! the innermost ghost layer's previous state (the first substep), so
-      ! refresh it from the owners.  Host data (pre-`enter_data`), hence
-      ! `device_resident=.false.`; collective on the rank-uniform switch; a warm
+      ! held then.  An owner cell in the hysteresis band would keep a wrong
+      ! innermost-ghost mask and the seam-face gate would differ, so the seed
+      ! must be an image.  Measured: the formula bathymetry setters and the
+      ! windowed file reader (full-width band of rows +- nghost, read from the
+      ! file) already hand the seed the owner's seam-ghost values, so removing
+      ! this exchange changes no case (`wetdry_shoal`, `wetdry_file`); what it
+      ! still repairs is a ghost the reader EXTRAPOLATES (a global periodic
+      ! edge: the halo fill wraps it later, the seed saw the extrapolation).
+      ! Kept as the ordering guarantee; no case proves it.  Host data
+      ! (pre-`enter_data`), hence `device_resident=.false.`; collective on the rank-uniform switch; a warm
       ! restart already carries the checkpointed ghosts.
       if (cfg%ocean%wetdry%enable .and. .not. did_restart) then
          call ocean_halo_centre(engine%state%dyn%bt_work%wd_wet_dyn, device_resident=.false.)
@@ -1448,6 +1472,17 @@ contains
       if (allocated(engine%staged_v)) deallocate (engine%staged_v)
       if (allocated(engine%staged_tracers)) deallocate (engine%staged_tracers)
    end subroutine engine_apply_staged_ic
+
+   pure function wetdry_edge_is_open(edge_name) result(is_open)
+      !! `.true.` iff the edge string parses to anything but WALL or PERIODIC
+      !! (open, tidal, clamped, chapman, sponge, an unparsable name, ...): the
+      !! edge types the multi-rank wet/dry gate has no decomposition case for.
+      character(len=*), intent(in) :: edge_name
+      logical :: is_open
+      integer :: t
+      t = ocean_bc_type_from_string(edge_name)
+      is_open = (t /= OBC_WALL .and. t /= OBC_PERIODIC)
+   end function wetdry_edge_is_open
 
    pure function setup_failed(ierr) result(bad)
       !! `.true.` iff `ierr` is present and non-OK — the "shall I

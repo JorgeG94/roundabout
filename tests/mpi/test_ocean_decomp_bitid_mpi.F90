@@ -73,6 +73,11 @@
 !!     no flux); with two coordinate twins on the same files:
 !!     `file_readers_zstar_full` and `file_readers_zstar` (MOM6 z* + closed
 !!     faces — the z_fixed staircase dilated per column every regrid);
+!!   * wetdry_shoal / wetdry_periodic / wetdry_file - dynamic wet/dry (ssp_rk2
+!!     only): an emergent shoal whose front crosses every seam, on closed walls,
+!!     with periodic west/east, and with the bathymetry read from a file; the
+!!     refreshed ghosts are compared too, and the shoal is checkpointed and
+!!     resumed.  Wet/dry with the tripolar fold or an open-type edge is a fence;
 !!   * sss_restore - the island basin with FILE sea-surface-salinity restoring
 !!     (per-rank windowed two-record target, halo-exchanged, piston salt flux,
 !!     net-zero shift through the EFP allreduce); needs NetCDF;
@@ -201,6 +206,8 @@ program test_ocean_decomp_bitid_mpi
    integer, parameter :: MAXF = 128
    character(len=*), parameter :: SG_FILE = "bitid_supergrid.nc"
    character(len=*), parameter :: BATHY_FILE = "bitid_bathy.nc"
+   character(len=*), parameter :: WD_BATHY_FILE = "bitid_wd_bathy.nc"
+      !! The `wetdry_file` case's emergent-shoal bathymetry (written by rank 0).
    character(len=*), parameter :: ZINIT_FILE = "bitid_zinit.nc"
    character(len=*), parameter :: SSS_FILE = "bitid_sss.nc"
    character(len=*), parameter :: TIDE_FILE = "bitid_tide.nc"
@@ -238,7 +245,7 @@ program test_ocean_decomp_bitid_mpi
       !! `RDB_BITID_CASES`: run only the cases whose name contains this substring.
    type(comm_t) :: comm
    character(len=16), parameter :: SCHEMES(2) = [character(len=16) :: "pred_corr", "ssp_rk2"]
-   character(len=24), parameter :: CASES(43) = [character(len=24) :: &
+   character(len=24), parameter :: CASES(45) = [character(len=24) :: &
                                                 "island_basin", "weno7_pv", &
                                                 "periodic_channel_zstar", &
                                                 "visc_rem_zstar", &
@@ -260,7 +267,8 @@ program test_ocean_decomp_bitid_mpi
                                                 "drain_ratio", "drain_ratio_h3", &
                                                 "drain_ratio_weno5", "drain_ratio_weno7", &
                                                 "drain_ratio_weno9", "drain_ratio_fold", &
-                                                "drain_ratio_fold_h3", "wetdry_shoal"]
+                                                "drain_ratio_fold_h3", "wetdry_shoal", &
+                                                "wetdry_periodic", "wetdry_file"]
 
    call comm_env_init()
    call comm_env_setup_roles(.false.)
@@ -283,12 +291,13 @@ program test_ocean_decomp_bitid_mpi
       if (trim(CASES(ic)) == "file_readers" .or. &
           trim(CASES(ic)) == "file_readers_zstar_full" .or. &
           trim(CASES(ic)) == "sss_restore" .or. &
+          trim(CASES(ic)) == "wetdry_file" .or. &
           trim(CASES(ic)) == "tidal_files" .or. &
           trim(CASES(ic)) == "tidal_polzin" .or. &
           trim(CASES(ic)) == "file_readers_zstar") cycle
 #endif
       ! Dynamic wet/dry refuses pred_corr (validate_config): ssp_rk2 only.
-      if (trim(CASES(ic)) /= "wetdry_shoal") call run_case(trim(CASES(ic)), trim(SCHEMES(1)))
+      if (.not. is_wetdry_case(trim(CASES(ic)))) call run_case(trim(CASES(ic)), trim(SCHEMES(1)))
       ! diabatic_first = .false. is refused under ssp_rk2 (validate_config).
       ! (drain_ratio_h3 pins it too.)
       if (trim(CASES(ic)) == "diabatic_end" .or. trim(CASES(ic)) == "drain_ratio_h3" .or. &
@@ -579,6 +588,39 @@ contains
                "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
                "&ocean_topo_nml topo_config = 'seamount', max_depth = 2.0, "// &
                "edge_depth = 0.0, slope_scale = 28000.0, wind_config = 'constant' /"//NL// &
+               "&ocean_continuity_nml ppm_limit_pos = .true. /"//NL// &
+               "&ocean_wetdry_nml enable = .true. /"//NL// &
+               "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
+      case ("wetdry_periodic")
+         ! The shoal with periodic west/east: px = 1 wraps locally every
+         ! substep, px > 1 turns the wrap into a seam.  Meridional wind only:
+         ! a zonal wind on a periodic channel has no wall to stop it and the
+         ! reference itself runs away (CFL panic) by step 96.
+         nml = common// &
+               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
+               "dx = 4000.0, dy = 4000.0 /"//NL// &
+               "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 0.0, wind_stress_y = 0.02 /"//NL// &
+               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
+               "&ocean_topo_nml topo_config = 'seamount', max_depth = 2.0, "// &
+               "edge_depth = 0.0, slope_scale = 28000.0, wind_config = 'constant' /"//NL// &
+               "&ocean_continuity_nml ppm_limit_pos = .true. /"//NL// &
+               "&ocean_wetdry_nml enable = .true. /"//NL// &
+               "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
+               "north = 'wall' /"//NL
+      case ("wetdry_file")
+         ! An emergent shoal whose bathymetry is READ from a file (the windowed
+         ! per-rank reader): a plateau at 0.07 m, inside the hysteresis band
+         ! [dry_depth, rewet_depth) = [0.05, 0.10), straddles the seams, so the
+         ! seed of every seam ghost matters.  (Measured: the reader already fills
+         ! seam ghosts from the file, so `engine_setup`'s cold-start exchange of
+         ! `wd_wet_dyn` is not what this case exercises.)
+         nml = common// &
+               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
+               "dx = 4000.0, dy = 4000.0 /"//NL// &
+               "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 0.02, wind_stress_y = 0.02 /"//NL// &
+               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
+               "&ocean_topo_nml topo_config = 'file', max_depth = 0.4, wind_config = 'constant' /"//NL// &
+               "&output_nml bathymetry_file = '"//WD_BATHY_FILE//"', output_to_file = .false. /"//NL// &
                "&ocean_continuity_nml ppm_limit_pos = .true. /"//NL// &
                "&ocean_wetdry_nml enable = .true. /"//NL// &
                "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
@@ -894,7 +936,7 @@ contains
          nml = nml//"&vcoord_nml vcoord_type = 'zstar', zfixed_closed_faces = .true. /"//NL
       end if
       if (label /= "file_readers" .and. label /= "file_readers_zstar_full" .and. &
-          label /= "file_readers_zstar") then
+          label /= "file_readers_zstar" .and. label /= "wetdry_file") then
          nml = nml//"&output_nml output_to_file = .false. /"//NL
       end if
    end function case_nml
@@ -1347,6 +1389,12 @@ contains
       end do
    end subroutine compare_ghosts
 
+   pure logical function is_wetdry_case(label)
+      !! The dynamic wet/dry cases (`wetdry_shoal`, `wetdry_periodic`, `wetdry_file`).
+      character(len=*), intent(in) :: label
+      is_wetdry_case = index(label, "wetdry_") == 1
+   end function is_wetdry_case
+
    pure logical function is_ice_fold_case(label)
       !! The sea-ice-on-the-tripolar-cap cases (A7).
       character(len=*), intent(in) :: label
@@ -1437,7 +1485,7 @@ contains
       ! The emergent shoal needs twice the gate length: at 48 steps the
       ! stale seam-ghost mask is still latched to the owner's value, by 96 the
       ! front has moved a ghost cell of `wd_wet_dyn` (and `wd_open_*`) off it.
-      if (label == "wetdry_shoal") n_steps_cur = 2*N_STEPS
+      if (is_wetdry_case(label)) n_steps_cur = 2*N_STEPS
       if (len(label) > 3) then
          if (label(len(label) - 2:) == "_t0") n_steps_cur = 0
       end if
@@ -1449,7 +1497,7 @@ contains
       end if
 
       if (is_ice_fold_case(label)) call check_ice_seam(ref, trim(label)//"/"//scheme)
-      if (label == "wetdry_shoal") then
+      if (is_wetdry_case(label)) then
          ! Non-vacuity: the front must cross every seam band in BOTH directions
          ! in the serial reference (the decomposed runs are then compared to it).
          if (any(ref%flips == 0)) then
@@ -1470,7 +1518,7 @@ contains
             glob = [1, 0, 1]
          else
             call compare(dec, ref, nbad, nfin, trim(tag))
-            if (label == "wetdry_shoal") then
+            if (is_wetdry_case(label)) then
                call compare_ghosts(dec, ref, nghost_bad, trim(tag))
                nbad = nbad + nghost_bad
             end if
@@ -1492,7 +1540,7 @@ contains
             glob = [nbad, nfin, 0]
 #ifndef RDB_NO_NETCDF
             if ((label == "sea_ice" .or. label == "sea_ice_transport" .or. &
-                 label == "wetdry_shoal" .or. is_ice_fold_case(label)) .and. &
+                 is_wetdry_case(label) .or. is_ice_fold_case(label)) .and. &
                 (nprocs/px == 1 .or. px == nprocs/px) .and. nprocs > 1) then
                ! 4x1 and 2x2 at np = 4 (and 2x1 at np = 2).
                call check_resume_leg(case_nml(label, scheme, px, nprocs/px), dec, &
@@ -1700,9 +1748,9 @@ contains
       type(config_t) :: cfg
       character(len=:), allocatable :: nml
       character(len=160) :: lab
-      integer :: ik, ierr
+      integer :: ik, ierr, ie
 
-      do ik = 1, size(KNOBS) + 1
+      do ik = 1, size(KNOBS) + 2
          if (ik <= size(KNOBS)) then
             lab = trim(KNOBS(ik))
             nml = "&sim_nml sim_type = 'ocean' /"//NL// &
@@ -1713,13 +1761,22 @@ contains
                   "&ocean_diag_nml enabled = .false. /"//NL// &
                   "&output_nml output_to_file = .false. /"//NL// &
                   trim(KNOBS(ik))//NL
-         else
-            ! Wet/dry is decomposition-safe, but its seam refreshes do not
-            ! fold: the very tripolar-cap case that is accepted (and bit-
-            ! identical) above, plus wet/dry, must be refused on > 1 rank.
+         else if (ik == size(KNOBS) + 1) then
+            ! Wet/dry is decomposition-safe on a wall / periodic domain, but its
+            ! masks and limiter fluxes are not folded: the very tripolar-cap case
+            ! that is accepted (and bit-identical) above, plus wet/dry, must be
+            ! refused on > 1 rank by the ENGINE gate (not validate_config: the
+            ! positivity limiter is supplied, so the config is valid).
             lab = "&ocean_wetdry_nml enable = .true. / on the tripolar-fold case"
             nml = case_nml("tripolar", "ssp_rk2", 1, 1)//"&ocean_continuity_nml ppm_limit_pos = .true. /"//NL// &
                   "&ocean_wetdry_nml enable = .true. /"//NL
+         else
+            ! The shoal (valid under validate_config) with an OPEN east edge: the
+            ! limiter at a boundary face reads fluxes outside the domain.
+            lab = "&ocean_wetdry_nml enable = .true. / with an open east edge"
+            nml = case_nml("wetdry_shoal", "ssp_rk2", 1, 1)
+            ie = index(nml, "east = 'wall'")
+            nml = nml(1:ie - 1)//"east = 'open'"//nml(ie + len("east = 'wall'"):)
          end if
          call read_config_from_string(nml, cfg, ierr=ierr)
          if (ierr == OCEAN_STATUS_OK) call validate_config(cfg, ierr)
@@ -1806,6 +1863,24 @@ contains
          end do
       end do
       call nc_create_file(BATHY_FILE, ncid)
+      call nc_def_dim(ncid, "y", NY_G, dy_)
+      call nc_def_dim(ncid, "x", NX_G, dx_)
+      call nc_def_var_2d(ncid, "depth", [dy_, dx_], v1)
+      call nc_enddef(ncid)
+      call nc_put_var_2d(ncid, v1, byx)
+      call nc_close(ncid)
+
+      ! `wetdry_file` bathymetry (C-order (y, x)): a 0.07 m plateau (inside the
+      ! wet/dry hysteresis band [0.05, 0.10)) of radius 2.5 cells about the
+      ! domain centre, rising quadratically to 0.4 m: the cells beside every
+      ! seam crossing seed WET with the depth in the band.
+      do i = 1, NX_G
+         do j = 1, NY_G
+            x = sqrt((real(i, wp) - 13.5_wp)**2 + (real(j, wp) - 9.5_wp)**2)
+            byx(j, i) = min(0.4_wp, 0.07_wp + 0.1_wp*max(0.0_wp, x - 2.5_wp)**2)
+         end do
+      end do
+      call nc_create_file(WD_BATHY_FILE, ncid)
       call nc_def_dim(ncid, "y", NY_G, dy_)
       call nc_def_dim(ncid, "x", NX_G, dx_)
       call nc_def_var_2d(ncid, "depth", [dy_, dx_], v1)
