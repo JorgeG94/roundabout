@@ -653,7 +653,8 @@ if(RDB_ENABLE_MPI)
       test_ocean_tripolar_fold_mpi
       test_ocean_fold_exchange_mpi
       test_ocean_fold_sites_mpi
-      test_ocean_decomp_bitid_mpi)
+      test_ocean_decomp_bitid_mpi
+      test_ocean_ke_probe_mpi)
   set(MPI_TEST_NPROCS_test_halo_mpi 4)
   set(MPI_TEST_NPROCS_test_halo_ocean_mpi 4)
   set(MPI_TEST_NPROCS_test_ocean_dyn_mpi 2)
@@ -663,6 +664,7 @@ if(RDB_ENABLE_MPI)
   set(MPI_TEST_NPROCS_test_ocean_fold_exchange_mpi 2)
   set(MPI_TEST_NPROCS_test_ocean_fold_sites_mpi 2)
   set(MPI_TEST_NPROCS_test_ocean_decomp_bitid_mpi 2)
+  set(MPI_TEST_NPROCS_test_ocean_ke_probe_mpi 4)
   # Per-test regime label (same values as the RDB_TESTS 5th field;
   # classification is by the source path of the modules each test imports).
   set(MPI_TEST_REGIME_test_halo_mpi core)
@@ -674,6 +676,7 @@ if(RDB_ENABLE_MPI)
   set(MPI_TEST_REGIME_test_ocean_fold_exchange_mpi ocean)
   set(MPI_TEST_REGIME_test_ocean_fold_sites_mpi ocean)
   set(MPI_TEST_REGIME_test_ocean_decomp_bitid_mpi ocean)
+  set(MPI_TEST_REGIME_test_ocean_ke_probe_mpi ocean)
   # Writes + reads NetCDF inputs (the per-rank windowed readers).
   set(MPI_NETCDF_TESTS test_ocean_decomp_bitid_mpi)
   foreach(test ${MPI_TESTS})
@@ -696,6 +699,15 @@ if(RDB_ENABLE_MPI)
       set_tests_properties(rdb_${test} PROPERTIES ENVIRONMENT
                                                   "OMP_NUM_THREADS=1")
     endif()
+  endforeach()
+  # The KE probe reduction must give the same digits on any rank count: the
+  # registered 4-rank run covers 4x1/1x4/2x2; add the 1- and 2-rank runs.
+  foreach(np 1 2)
+    add_test(NAME rdb_test_ocean_ke_probe_mpi_${np}rank
+             COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${np}
+                     $<TARGET_FILE:test_ocean_ke_probe_mpi>)
+    set_tests_properties(rdb_test_ocean_ke_probe_mpi_${np}rank
+                         PROPERTIES LABELS "ocean")
   endforeach()
   # test_ocean_dyn_mpi uses ocean_test_metrics from rdb_analytical.
   target_link_libraries(test_ocean_dyn_mpi PRIVATE rdb_analytical)
