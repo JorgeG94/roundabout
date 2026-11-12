@@ -353,6 +353,7 @@ contains
       oh_ny_total = 0
       oh_periodic_x = .false.
       oh_periodic_y = .false.
+      oh_decomp = decomp_t()
       oh_initialised = .false.
 
    end subroutine ocean_halo_destroy
@@ -531,8 +532,17 @@ contains
 
    pure subroutine ocean_halo_global_extent(i_start, j_start, nx_global, ny_global)
       !! Global physical extent and this rank's 1-based global offset
-      !! (first owned cell).  `(1, 1, 0, 0)`-style defaults before init.
+      !! (first owned cell).  Returns `(1, 1, 0, 0)` ("not available") unless
+      !! the halo layer is currently initialised, so a stale decomposition
+      !! from a destroyed engine is never reported.
       integer, intent(out) :: i_start, j_start, nx_global, ny_global
+      if (.not. oh_initialised) then
+         i_start = 1
+         j_start = 1
+         nx_global = 0
+         ny_global = 0
+         return
+      end if
       i_start = oh_decomp%i_start
       j_start = oh_decomp%j_start
       nx_global = oh_decomp%nx_global

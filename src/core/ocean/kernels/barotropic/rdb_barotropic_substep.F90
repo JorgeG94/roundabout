@@ -107,7 +107,7 @@ contains
       if (allocated(ch_gbuf)) deallocate (ch_gbuf)
    end subroutine chapman_workspace_cleanup
 
-   function chapman_line_sum(x, n) result(s)
+   pure function chapman_line_sum(x, n) result(s)
       !! Sequential, in-index-order sum of the global edge line.  ONE
       !! non-inlined instance serves every Chapman edge and the end-of-call
       !! refresh, so the summation order is a single compiled order that
@@ -119,7 +119,15 @@ contains
       !dir$ noinline
       !gcc$ attributes noinline :: chapman_line_sum
       s = 0.0_wp
-      !dir$ nosimd
+      ! No vectorisation (no reassociated partial sums).  Per compiler, since
+      ! nvfortran reads a preceding `dir$ novector` as cancelling its own
+      ! `pgi$l novector`: gfortran needs none (no FP reassociation without
+      ! fast-math).
+#ifdef __NVCOMPILER
+      !pgi$l novector
+#elif defined(__INTEL_LLVM_COMPILER) || defined(__INTEL_COMPILER)
+      !dir$ novector
+#endif
       do i = 1, n
          s = s + x(i)
       end do
@@ -1926,11 +1934,13 @@ contains
 
       ! Refresh the persistent Chapman state from the end-of-step η.
       ! Next outer-step's substep block reads this as `eta_old` when
-      ! computing the radiation target.  All host-side: the scalar
-      ! `bc%eta_old_chapman_*` is consumed by host code at the top of
-      ! the next substep-block call and never read from inside a `do
-      ! concurrent` (where it would need a device copy).  Pull
-      ! `bt_eta_end` to host so the reduction reads fresh values.
+      ! computing the radiation target.  For each Chapman edge a device
+      ! kernel writes the edge's η line at its GLOBAL index into the
+      ! persistent line buffer `ch_lbuf` (this rank's owned cells only, +0
+      ! elsewhere), `chapman_edge_mean` pulls that line (`update self`),
+      ! sums it across ranks when decomposed, and takes the in-order mean.
+      ! The scalar `bc%eta_old_chapman_*` is host state, never read inside
+      ! a `do concurrent`.
       if (present(bc)) then
          if (bc_w == OBC_CHAPMAN .or. bc_e == OBC_CHAPMAN .or. &
              bc_s == OBC_CHAPMAN .or. bc_n == OBC_CHAPMAN) then

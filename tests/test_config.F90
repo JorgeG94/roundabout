@@ -433,12 +433,25 @@ contains
          "&grid_nml nx = 24, ny = 16, nghost = 3, dx = 20000.0, dy = 20000.0 /"// &
          new_line('a')// &
          "&ocean_bc_nml east = 'chapman' /"//new_line('a')// &
-         "&ocean_bt_nml bt_halo = 4 /"//new_line('a'), cfg, ierr=ierr)
+         "&ocean_bt_nml bt_halo = 4, visc_rem_chain = .false. /"//new_line('a'), cfg, ierr=ierr)
       call check(error, ierr == OCEAN_STATUS_OK, "chapman + bt_halo namelist must parse")
       if (allocated(error)) return
       call validate_config(cfg, ierr=ierr)
       call check(error, ierr /= OCEAN_STATUS_OK, &
                  "chapman edge with explicit bt_halo > 0 must be refused")
+      if (allocated(error)) return
+
+      ! CONTROL: the same namelist WITHOUT the chapman edge must be accepted,
+      ! so the refusal above is the Chapman rule and nothing else (the
+      ! `visc_rem_chain` default alone refuses any bt_halo > 0).
+      call read_config_from_string( &
+         "&sim_nml sim_type = 'ocean' /"//new_line('a')// &
+         "&grid_nml nx = 24, ny = 16, nghost = 3, dx = 20000.0, dy = 20000.0 /"// &
+         new_line('a')// &
+         "&ocean_bt_nml bt_halo = 4, visc_rem_chain = .false. /"//new_line('a'), cfg, ierr=ierr)
+      call validate_config(cfg, ierr=ierr)
+      call check(error, ierr == OCEAN_STATUS_OK, &
+                 "control (no chapman edge) with bt_halo = 4 must be accepted")
       if (allocated(error)) return
 
       call read_config_from_string( &
