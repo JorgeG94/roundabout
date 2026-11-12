@@ -123,6 +123,18 @@ if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
     set_source_files_properties(
       ${PROJECT_SOURCE_DIR}/src/ALE/rdb_remap_column.F90
       PROPERTIES COMPILE_OPTIONS "-Mnofma")
+    # Fourth file, same class (2026-11): continuity-PPM.  With a Flather east
+    # edge the ghost columns beyond the open face are evolved by the continuity
+    # chain and read back by the boundary face's tendencies (hvisc, PGF), so a
+    # ghost cell's last-bit rounding -- FMA-contracted vector body vs scalar
+    # remainder -- reached the owned boundary face.  4x1 tile (24 columns, 6
+    # owned + 8 ghost = 14 wide): `bt_visc_rem_u/v`, `epbl_kd_int` then
+    # `u/v/h/T/S` drifted ~1e-13 within 12 steps under `vcoord=sigma
+    # split=ssp_rk2 vmix_bl=epbl geometry=obc` (compat matrix DECOMP leg; gate:
+    # test_ocean_decomp_bitid_mpi `obc_epbl`, np = 4).
+    set_source_files_properties(
+      ${PROJECT_SOURCE_DIR}/src/core/ocean/kernels/continuity_ppm/rdb_continuity.F90
+      PROPERTIES COMPILE_OPTIONS "-Mnofma")
   endif()
 
 elseif(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")

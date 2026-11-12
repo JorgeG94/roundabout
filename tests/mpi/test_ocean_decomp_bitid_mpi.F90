@@ -55,6 +55,12 @@
 !!     docstring);
 !!   * open_obc — tidal west edge (eta target) + Flather east edge,
 !!     zstar_sigma, over a seamount;
+!!   * obc_epbl — Flather east edge, sigma, EPBL, cooled surface, 24 x 16 at
+!!     nghost = 4 (the compat-matrix cell): at -np 4 the 4x1 east tile is 14
+!!     columns wide and the open-edge ghost columns it evolves sit in the
+!!     vector remainder of the continuity loops; without `-Mnofma` on
+!!     `rdb_continuity.F90` (nvfortran CPU build) their last-bit rounding
+!!     differed from the serial run and reached the boundary face;
 !!   * spherical — lon-lat sector, planetary Coriolis, spoon basin, Wright
 !!     EOS, `2gyre` wind;
 !!   * obc_radiation_sponge — Orlanski-radiating open south edge with tracer
@@ -269,7 +275,7 @@ program test_ocean_decomp_bitid_mpi
       !! `RDB_BITID_CASES`: run only the cases whose name contains this substring.
    type(comm_t) :: comm
    character(len=16), parameter :: SCHEMES(2) = [character(len=16) :: "pred_corr", "ssp_rk2"]
-   character(len=24), parameter :: CASES(60) = [character(len=24) :: &
+   character(len=24), parameter :: CASES(61) = [character(len=24) :: &
                                                 "island_basin", "weno7_pv", &
                                                 "periodic_channel_zstar", &
                                                 "visc_rem_zstar", &
@@ -297,7 +303,7 @@ program test_ocean_decomp_bitid_mpi
                                                 "dtbt_reset_period", &
                                                 "cavity_zfixed", "cavity_sigma", &
                                                 "cavity_sigma_ratio2", "cavity_gall", "cavity_melt_only", "cavity_periodic", &
-                                                "cavity_combo"]
+                                                "cavity_combo", "obc_epbl"]
 
    call comm_env_init()
    call comm_env_setup_roles(.false.)
@@ -707,6 +713,41 @@ contains
                "&ocean_bc_nml west = 'tidal', east = 'open', south = 'wall', north = 'wall', "// &
                "west_n_tidal = 1, west_tidal_amp = 0.5, west_tidal_phase = 0.0, "// &
                "west_tidal_omega = 1.4051890e-4 /"//NL
+      case ("obc_epbl")
+         ! Flather east edge, sigma, EPBL, cooled surface: the open-edge ghost
+         ! columns are evolved by the continuity chain and read back by the
+         ! boundary face's tendencies, so an FMA-contracted vector body vs a
+         ! differently-contracted remainder in `rdb_continuity` made a
+         ! ghost cell's rounding depend on its position in the TILE (nvfortran
+         ! CPU build, 4x1).  Caught by the compat matrix DECOMP leg.  Written
+         ! out in full (not on `common`): the rounding event needs this
+         ! stratification, forcing and tile width (24 x 16, nghost 4, 10 layers).
+         nml = "&sim_nml sim_type = 'ocean' /"//NL// &
+               "&mpi_nml px = "//trim(spx)//", py = "//trim(spy)//" /"//NL// &
+               "&time_nml t_end = 21600.0, dt_fixed = 900.0 /"//NL// &
+               "&nonhydrostatic_nml nz_layers = 10 /"//NL// &
+               "&tracer_nml initial_temperature = 9.0, initial_salinity = 34.8, "// &
+               "T_init_surface = 16.0, T_init_bottom = 3.0, "// &
+               "S_init_surface = 34.6, S_init_bottom = 35.0 /"//NL// &
+               "&ocean_bt_nml auto_n_inner = .true., split_scheme = '"//scheme//"' /"//NL// &
+               "&ocean_hvisc_nml nu_h = 200.0, nu_4 = 1.0e11 /"//NL// &
+               "&ocean_diag_nml enabled = .false. /"//NL// &
+               "&ocean_eos_nml eos = 'linear' /"//NL// &
+               "&ocean_ic_nml T_ref = 10.0, S_ref = 35.0, alpha_T = 0.2, beta_S = 0.77, "// &
+               "rho_0 = 1027.0 /"//NL// &
+               "&ocean_bdrag_nml form = 'quadratic', cd = 0.003, bg_vel = 0.05, hbbl = 0.0 /"//NL// &
+               "&ocean_vdiff_nml implicit_drag = .true. /"//NL// &
+               "&grid_nml nx = 24, ny = 16, nghost = 4, dx = 20000.0, dy = 20000.0 /"//NL// &
+               "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 0.1, wind_stress_y = 0.0 /"//NL// &
+               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
+               "&ocean_topo_nml topo_config = 'spoon', max_depth = 2000.0, "// &
+               "edge_depth = 300.0, slope_scale = 150000.0, wind_config = 'constant', "// &
+               "coriolis_beta = 2.0e-11, coriolis_y_ref = 160000.0 /"//NL// &
+               "&ocean_thermo_nml enable_thermodynamics = .true., q_heat = -60.0 /"//NL// &
+               "&ocean_vmix_nml use_kpp = .false. /"//NL// &
+               "&ocean_epbl_nml enable = .true., mld_use_prev_guess = .true., "// &
+               "mstar_scheme = 'om4' /"//NL// &
+               "&ocean_bc_nml west = 'wall', east = 'open', south = 'wall', north = 'wall' /"//NL
       case ("tripolar", "redi_cfl_fold", "drain_ratio_fold", "drain_ratio_fold_h3", "eulz_tripolar")
          ! Analytic tripolar cap (59N-83N, phi_join 74N) closed by the north
          ! fold, periodic in x, under a constant wind, with the double-Drake
