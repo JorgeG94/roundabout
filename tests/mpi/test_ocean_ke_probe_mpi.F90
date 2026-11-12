@@ -87,6 +87,7 @@ contains
       real(wp), allocatable :: h(:, :, :), u(:, :, :), v(:, :, :), fx(:, :, :), fy(:, :, :), kec(:, :, :)
       real(wp), allocatable :: iu(:, :), iv(:, :)
       integer :: nx, ny, i, j, k, ig, jg
+      logical :: own_u, own_v
       nx = nxp + 2*NG
       ny = nyp + 2*NG
       allocate (h(nx, ny, NZ), u(nx + 1, ny, NZ), v(nx, ny + 1, NZ), fx(nx + 1, ny, NZ), &
@@ -119,6 +120,28 @@ contains
       do j = 1, ny + 1
          do i = 1, nx
             iv(i, j) = 1.0_wp + 0.02_wp*(j - NG + joff)
+         end do
+      end do
+      ! POISON every u/v/fx/fy value this rank does not own (ghost faces are
+      ! stale at the production stage-close sample): owned = west faces of the
+      ! owned cells, plus the global east / north boundary face.  h and kec
+      ! ghosts stay exact (the probe documents that it relies on them).
+      do k = 1, NZ
+         do j = 1, ny + 1
+            do i = 1, nx + 1
+               own_u = (j >= NG + 1 .and. j <= NG + nyp) .and. (i >= NG + 1 .and. &
+                                                               (i <= NG + nxp .or. (i == NG + nxp + 1 .and. ioff + nxp == nxg_use)))
+               own_v = (i >= NG + 1 .and. i <= NG + nxp) .and. (j >= NG + 1 .and. &
+                                                               (j <= NG + nyp .or. (j == NG + nyp + 1 .and. joff + nyp == nyg_use)))
+               if (.not. own_u .and. j <= ny) then
+                  u(i, j, k) = 1.0e3_wp*(rank + 1)*(i + j + k)
+                  fx(i, j, k) = 7.0e2_wp*(rank + 1)*(i - j + k)
+               end if
+               if (.not. own_v .and. i <= nx) then
+                  v(i, j, k) = -1.0e3_wp*(rank + 1)*(i + j + k)
+                  fy(i, j, k) = 7.0e2_wp*(rank + 1)*(i - j + k)
+               end if
+            end do
          end do
       end do
       !$acc enter data copyin(h, u, v, fx, fy, kec, iu, iv)

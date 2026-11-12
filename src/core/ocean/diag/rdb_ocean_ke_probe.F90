@@ -16,25 +16,28 @@ module rdb_ocean_ke_probe
    !!          internal Kelvin wave is wall-trapped there).
    !!
    !! Multi-rank: every region is defined in GLOBAL cell indices
-   !! (`i_offset_global`/`nx_global`), each owned cell (and each interior
-   !! face, owned by the cell on its east/north side) is counted by
-   !! exactly one rank, the per-cell value is summed with the
-   !! reproducing EFP sums, combined with `halo_allreduce_efp_list`
-   !! (collective: all ranks call whenever the step-window gate is open)
-   !! and printed once by rank 0, so the digits are identical on any
-   !! rank count.  Ghost cells are read as they stand (last halo
-   !! exchange), exactly as on one rank.
+   !! (`i_offset_global`/`nx_global`).  The KE is summed PER OWNED FACE
+   !! (see `ke_region_one`): each u/v face is read by exactly one rank, so
+   !! NO u/v ghost is ever read.  The only ghosts the probe relies on are
+   !! those of `h_layer` (the face thickness straddles a seam), which are
+   !! current at both sample points.  Sums are reproducing EFP sums,
+   !! combined with `halo_allreduce_efp_list` (collective: all ranks call
+   !! whenever the step-window gate is open) and printed once by rank 0,
+   !! so the digits are identical on any rank count.
    !!
-   !! Gated by `&ocean_bt_nml debug_ke_attr` with an optional
+   !! Gated by `&ocean_debug_nml ke_attr` with an optional
    !! `[ke_attr_start_step, ke_attr_end_step]` outer-step window.
    !! Default off ⇒ bit-identical (untaken branches only); model state is
-   !! never written.
+   !! never written.  `ke_probe_coradv_split` (KE_ATTR_PV rows) has NO
+   !! caller in the stepping loop today (it is only imported there); it is
+   !! decomposition-safe as a routine but additionally needs the Coriolis
+   !! scratch (`ke_centre`) ghosts to be current when called.
    use, intrinsic :: iso_fortran_env, only: int64, real64
    use rdb_constants, only: wp
    use rdb_efp, only: efp_t, efp_carry, efp_to_real, EFP_DIGITS
    use rdb_halo, only: halo_allreduce_efp_list
    use rdb_comm_env, only: comm_env_rank
-   use rdb_ocean_console_stats, only: efp_decompose_impl
+   use rdb_ocean_console_stats, only: efp_decompose_impl, efp_summands_guard
    use rdb_grid, only: hgrid_t
    use rdb_multilayer_state, only: multilayer_state_t
    use rdb_ocean_metrics, only: ocean_metrics_t
@@ -218,11 +221,41 @@ contains
       end do
    end subroutine ke_regions_efp_local
 
+   pure function in_region(region, ic, jc, nx_g, ny_g, rim_w, east_w) result(r)
+      !! Is GLOBAL cell (ic, jc) in the region (1 full, 2 rim, 3 east)?
+      !! Cells outside the domain are in no region.
+      !$acc routine seq
+      integer, intent(in) :: region, ic, jc, nx_g, ny_g, rim_w, east_w
+      logical :: r
+      r = (ic >= 1 .and. ic <= nx_g .and. jc >= 1 .and. jc <= ny_g)
+      if (r .and. region == 2) then
+         r = (ic - 1 < rim_w .or. nx_g - ic < rim_w .or. jc - 1 < rim_w .or. ny_g - jc < rim_w)
+      else if (r .and. region == 3) then
+         r = (nx_g - ic < east_w)
+      end if
+   end function in_region
+
    subroutine ke_region_one(h, u, v, nx, ny, nz, nghost, nx_phys, ny_phys, &
                             i_off, j_off, nx_g, ny_g, rim_w, east_w, region, total)
-      !! One region (1 full, 2 rim, 3 east) of `ke_regions_efp_local`:
-      !! one k-slab at a time, seven EFP accumulators (the footprint of
-      !! `compute_total_ke_efp`), carried between slabs.
+      !! One region (1 full, 2 rim, 3 east) of `ke_regions_efp_local`,
+      !! summed PER OWNED FACE.  The per-cell KE
+      !! `¼(h_W u_W² + h_E u_E²) + ¼(h_S v_S² + h_N v_N²)` is regrouped as
+      !! `Σ_faces ¼·h_face·u_face²·n`, `n` = number of the face's two
+      !! adjacent cells that lie in the region (0..2), so the global sum is
+      !! algebraically the per-cell one.  A face is read only by the rank
+      !! that owns it: west faces (global index 1..nx_g) of its cells, plus
+      !! the global east boundary face (`ig = nx_g+1`) on the east-most
+      !! rank; v likewise with south faces / the global north face.  No u/v
+      !! GHOST is ever read (they are stale at the stage-close sample).
+      !! `h` ghosts are read (the face thickness straddles a seam): `h` is
+      !! current at both sample points -- the stage-entry sample follows
+      !! the stage-entry exchange, and at stage close `h_layer` was last
+      !! updated by the continuity chain, which ends in a halo exchange
+      !! (`ssp_rk2`), or not at all before the sample (`pred_corr` runs
+      !! continuity after it).  Periodic / tripolar-fold edges: the global
+      !! boundary face is read from the same storage slot the one-rank
+      !! run reads, so they match the one-rank result by construction.
+      !! One k-slab at a time, seven EFP accumulators, carried between slabs.
       integer, intent(in) :: nx, ny, nz, nghost, nx_phys, ny_phys
       integer, intent(in) :: i_off, j_off, nx_g, ny_g, rim_w, east_w, region
       real(wp), intent(in) :: h(nx, ny, nz)
@@ -230,14 +263,14 @@ contains
       real(wp), intent(in) :: v(nx, ny + 1, nz)
       type(efp_t), intent(out) :: total
 
-      integer :: i, j, k, ig, jg
+      integer :: i, j, k, ig, jg, nw
       integer(int64) :: e1, e2, e3, e4, e5, e6, epoison
       integer(int64) :: d1, d2, d3, d4, d5, d6, dpoison
       integer(int64) :: slab_e(EFP_DIGITS)
       real(real64) :: val
-      real(wp) :: h_w, h_e, h_s, h_n
-      logical :: in_reg
+      real(wp) :: hfc
 
+      call efp_summands_guard(2*(nx_phys + 1), ny_phys + 1, "ke_region_one")
       total%v = 0_int64
       total%poison = 0_int64
       do k = 1, nz
@@ -249,29 +282,41 @@ contains
          e6 = 0_int64
          epoison = 0_int64
          !$acc parallel loop collapse(2) reduction(+:e1,e2,e3,e4,e5,e6,epoison) &
-         !$acc&         private(val, h_w, h_e, h_s, h_n, ig, jg, in_reg, d1, d2, d3, d4, d5, d6, dpoison) &
+         !$acc&         private(val, hfc, ig, jg, nw, d1, d2, d3, d4, d5, d6, dpoison) &
          !$acc&         present(h, u, v)
-         do j = nghost + 1, nghost + ny_phys
-            do i = nghost + 1, nghost + nx_phys
+         do j = nghost + 1, nghost + ny_phys + 1
+            do i = nghost + 1, nghost + nx_phys + 1
                ig = i - nghost + i_off
                jg = j - nghost + j_off
-               in_reg = .true.
-               if (region == 2) then
-                  in_reg = (ig - 1 < rim_w .or. nx_g - ig < rim_w .or. &
-                            jg - 1 < rim_w .or. ny_g - jg < rim_w)
-               else if (region == 3) then
-                  in_reg = (nx_g - ig < east_w)
-               end if
+               ! u face (west face of cell ig): owned rows only.
                val = 0.0_real64
-               if (in_reg) then
-                  h_w = 0.5_wp*(h(i - 1, j, k) + h(i, j, k))
-                  h_e = 0.5_wp*(h(i, j, k) + h(i + 1, j, k))
-                  h_s = 0.5_wp*(h(i, j - 1, k) + h(i, j, k))
-                  h_n = 0.5_wp*(h(i, j, k) + h(i, j + 1, k))
-                  val = real(0.25_wp*(h_w*u(i, j, k)*u(i, j, k) + &
-                                      h_e*u(i + 1, j, k)*u(i + 1, j, k)) + &
-                             0.25_wp*(h_s*v(i, j, k)*v(i, j, k) + &
-                                      h_n*v(i, j + 1, k)*v(i, j + 1, k)), real64)
+               if (j <= nghost + ny_phys .and. (i <= nghost + nx_phys .or. ig == nx_g + 1)) then
+                  nw = 0
+                  if (in_region(region, ig - 1, jg, nx_g, ny_g, rim_w, east_w)) nw = nw + 1
+                  if (in_region(region, ig, jg, nx_g, ny_g, rim_w, east_w)) nw = nw + 1
+                  if (nw > 0) then
+                     hfc = 0.5_wp*(h(i - 1, j, k) + h(i, j, k))
+                     val = real(0.25_wp*nw*hfc*u(i, j, k)*u(i, j, k), real64)
+                  end if
+               end if
+               call efp_decompose_impl(val, d1, d2, d3, d4, d5, d6, dpoison)
+               e1 = e1 + d1
+               e2 = e2 + d2
+               e3 = e3 + d3
+               e4 = e4 + d4
+               e5 = e5 + d5
+               e6 = e6 + d6
+               epoison = epoison + dpoison
+               ! v face (south face of cell jg): owned columns only.
+               val = 0.0_real64
+               if (i <= nghost + nx_phys .and. (j <= nghost + ny_phys .or. jg == ny_g + 1)) then
+                  nw = 0
+                  if (in_region(region, ig, jg - 1, nx_g, ny_g, rim_w, east_w)) nw = nw + 1
+                  if (in_region(region, ig, jg, nx_g, ny_g, rim_w, east_w)) nw = nw + 1
+                  if (nw > 0) then
+                     hfc = 0.5_wp*(h(i, j - 1, k) + h(i, j, k))
+                     val = real(0.25_wp*nw*hfc*v(i, j, k)*v(i, j, k), real64)
+                  end if
                end if
                call efp_decompose_impl(val, d1, d2, d3, d4, d5, d6, dpoison)
                e1 = e1 + d1
@@ -327,6 +372,11 @@ contains
                          rim_w, east_w, dt, part, region, total)
       !! One (part: 1 PV / 2 KE, region: 1 full / 2 rim / 3 east) EFP sum
       !! of `coradv_split_efp_local`; seven accumulators per k-slab.
+      !! Reads only OWNED faces (u west faces ig=2..nx_g of its cells, v
+      !! south faces jg=2..ny_g) and, at a seam, the `h` and `ke_centre`
+      !! ghost of the neighbouring cell -- `kec` is the Coriolis kernel's
+      !! scratch, current only if the caller samples right after it
+      !! (this routine has no caller in the stepping loop today).
       integer, intent(in) :: nx, ny, nz, nghost, nx_phys, ny_phys
       integer, intent(in) :: i_off, j_off, nx_g, ny_g, rim_w, east_w, part, region
       real(wp), intent(in) :: h(nx, ny, nz)
@@ -347,6 +397,7 @@ contains
       real(wp) :: h_face, f_tot, f_ke, f_pv, u_mid, w
       logical :: in_reg
 
+      call efp_summands_guard(2*nx_phys, ny_phys, "coradv_one")
       total%v = 0_int64
       total%poison = 0_int64
       do k = 1, nz
