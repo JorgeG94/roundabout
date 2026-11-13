@@ -275,23 +275,52 @@ endif()
 # One blanket flag per compiler replaces the per-file `-Mnofma` /
 # `-ffp-contract=off` lines this file used to carry.  Applied at directory scope
 # (project AND fetched dependencies: pic, pic-mpi, test-drive), after the config
-# flags, like RDB_EXTRA_FORTRAN_FLAGS below.  The GPU build is NOT touched
-# (device code has no vector remainder; FMA stays on).
+# flags, like RDB_EXTRA_FORTRAN_FLAGS below.  The GPU build is NOT touched: its
+# device kernels have no vector remainder and the GPU decomposition gate passes
+# without it (its HOST code -- setup, host loops -- still contracts). This does
+# NOT make vectorised libm calls (glibc libmvec `_ZGV*`) position-independent;
+# that is a separate, tracked follow-up (CLAUDE.md, Gotchas).
 #
-# History of the per-file cases it replaces (each caught by the gate named): -
-# rdb_ocean_horizontal_viscosity (2026-10, NVHPC+GNU): pred_corr carries the
-# `hvisc_du_visc` tendency into the prognostics; z* + visc_rem on 4x1 drifted
-# 1e-8 in eta in 24 steps (decomp_bitid `visc_rem_zstar`, `hvisc_thin_layer`). -
-# rdb_barotropic_coupling (2026-10, NVHPC+GNU): `compute_gtot_faces`'s `p_sum =
-# p_sum + h_face*pbce` in a `do k` inside the outer face loop, ~7e-15 on
-# `bt_visc_rem_u/v`, `epbl_kd_int` (compat matrix cell c023, DECOMP leg). -
-# rdb_remap_column (2026-10, NVHPC+GNU): ALE remap, 1 ulp on one face's
-# `v_face_y_layer` in the 4x1 last tile, kept by the EFP `mass_out` budget
-# (decomp_bitid `gm_ebt_struct/ssp_rk2`, np 4). - rdb_continuity (2026-11,
-# NVHPC): with a Flather east edge the open-edge ghost columns evolved by the
-# continuity chain reach the owned boundary face through the horizontal
-# viscosity; first owned difference at step 12 (6.7e-16), 3.6e-13 by step 24
-# (decomp_bitid `obc_epbl`, np 4).
+# History: the per-file cases this blanket flag replaces (each caught by the
+# gate named).  Entries are independent; GNU and NVHPC cases are separate.
+#
+# cmake-format: off
+#
+# NVHPC, rdb_ocean_horizontal_viscosity.F90 (2026-10): the vector body and the
+#   scalar remainder contract differently; pred_corr carries `hvisc_du_visc`
+#   into the prognostics, and z* + visc_rem on 4x1 drifted 1e-8 in eta in 24
+#   steps (decomp_bitid `visc_rem_zstar`, `hvisc_thin_layer`).
+#
+# NVHPC, rdb_barotropic_coupling.F90 (2026-10): `compute_gtot_faces`'s
+#   `p_sum = p_sum + h_face*pbce` in a `do k` inside the outer face loop,
+#   ~7e-15 on `bt_visc_rem_u/v`, `epbl_kd_int` (compat matrix cell c023,
+#   DECOMP leg).
+#
+# NVHPC, rdb_remap_column.F90 (2026-10): under `-fast -tp=haswell` one face's
+#   remapped `v_face_y_layer` in the first owned column of the 4x1 split's last
+#   tile was 1 ulp off the 2x2 / 1x4 value; the ulp reached the mass flux and
+#   the EFP `mass_out` budget kept it (decomp_bitid `gm_ebt_struct/ssp_rk2`,
+#   np 4).  A per-file bisection of `-Mnofma` isolated this file alone.
+#
+# GNU, rdb_barotropic_coupling.F90 (2026-10): same `compute_gtot_faces` loop
+#   under `-O3 -march=x86-64-v3`, same symptom and gate as the NVHPC case
+#   above (compat cell c023, 1 rank vs 4x1, ~7e-15 relative).
+#
+# GNU, rdb_ocean_horizontal_viscosity.F90 (2026-10): the stress-form path with
+#   `bound_thin_layer` left `v_face_y_layer` / `u_face_x_layer` 1 ulp apart
+#   between splits (decomp_bitid `hvisc_thin_layer/ssp_rk2`, 2x1 and 4x1).
+#
+# GNU, rdb_remap_column.F90 (2026-10): compat cell c023 (sigma, ssp_rk2,
+#   EPBL + tidal + Bryan-Lewis, Leith, MLE, OBC) was bitwise only by luck once
+#   the hvisc line moved Leith's rounding; the 4x1 split's `bt_visc_rem_u/v`
+#   and `epbl_kd_int` came out a few ulp off the 1-rank run.
+#
+# NVHPC, rdb_continuity (found on this branch, not a per-file line on beta):
+#   with a Flather east edge the open-edge ghost columns evolved by the
+#   continuity chain reach the owned boundary face through the horizontal
+#   viscosity; first owned difference at step 12 (6.7e-16), 3.6e-13 by step 24
+#   (decomp_bitid `obc_epbl`, np 4).
+# cmake-format: on
 if(NOT RDB_ENABLE_GPU)
   set(RDB_FMA_POLICY "OFF (CPU build, decomposition reproducibility)")
   if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")

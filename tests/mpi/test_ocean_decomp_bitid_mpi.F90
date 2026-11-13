@@ -728,8 +728,11 @@ contains
          ! 56 fields differ).  Caught by the compat matrix DECOMP leg.  Written
          ! out in full (not on `common`): the rounding event needs this
          ! stratification, forcing and tile width (24 x 16, nghost 4, 10
-         ! layers); on AVX-512 the 14-wide tile may sit differently in the
-         ! vector width and this case may then not catch a regression.
+         ! layers).  "14 columns" is STORAGE (6 owned + 2 x 4 ghosts).  CI pins
+         ! `-march=x86-64-v3` / `-tp=haswell` (AVX2), where that width puts the
+         ! ghosts in the remainder; on an AVX-512 build (`-march=native`) the
+         ! tile may sit differently in the vector width and this case may then
+         ! not catch a regression.  That caveat does not apply to CI.
          nml = "&sim_nml sim_type = 'ocean' /"//NL// &
                "&mpi_nml px = "//trim(spx)//", py = "//trim(spy)//" /"//NL// &
                "&time_nml t_end = 21600.0, dt_fixed = 900.0 /"//NL// &
@@ -1701,16 +1704,18 @@ contains
       !! body or the scalar remainder (with a different FMA contraction)
       !! depends on its position in the TILE, and the tendency is a
       !! difference of fluxes, so the reordering survives cancellation.
-      !! Measured on nvfortran 26.5 CPU + HPC-X, 4x1 and 2x2: up to a
-      !! relative 3e-15 at the faces at and beside a tile seam; the GPU
-      !! build has no remainder loop and is bitwise.  It CAN reach the
-      !! prognostics: under z* + visc_rem (`visc_rem_zstar`) the FMA
-      !! difference drifted eta 1e-8 in 24 steps on 4x1, so the CPU build
-      !! compiles the hvisc module `-Mnofma` (cmake/compiler_flags.cmake).
-      !! That leaves a 1-ULP residual in the tendency at seam faces, which
-      !! stays below one ULP of `u`: every prognostic field compared here
-      !! is BITWISE, and that is what catches a real decomposition bug in
-      !! the viscosity.  Restarts resume on the same decomposition and
+      !! Measured on nvfortran 26.5 CPU + HPC-X, 4x1 and 2x2, with FMA
+      !! contraction ON: up to a relative 3e-15 at the faces at and beside
+      !! a tile seam; the GPU build's device kernels have no remainder
+      !! loop and are bitwise.  It CAN reach the prognostics: under
+      !! z* + visc_rem (`visc_rem_zstar`) the FMA difference drifted eta
+      !! 1e-8 in 24 steps on 4x1.  CPU builds therefore compile with
+      !! contraction off, globally (`-Mnofma` / `-ffp-contract=off`,
+      !! cmake/compiler_flags.cmake), under which every prognostic field
+      !! compared here is BITWISE; that is what catches a real
+      !! decomposition bug in the viscosity.  This carried array itself
+      !! stays excluded from the compare (whether its seam-face residual
+      !! vanishes with contraction off was not re-measured).  Restarts resume on the same decomposition and
       !! restore these arrays verbatim.
       character(len=*), intent(in) :: tag
       carried_tendency = trim(tag) == "hvisc_du_visc" .or. trim(tag) == "hvisc_dv_visc"
