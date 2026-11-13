@@ -158,13 +158,13 @@ program rdb
    ! streams, so every rank is a compute rank.
    call comm_env_setup_roles(.false.)
 
-   ! Guard: GPU + MPI + multiple compute ranks without CUDA-aware MPI
-   ! is a performance trap — host-staged halo exchange destroys scaling.
+   ! Guard: a GPU build hands device buffers to MPI, so a multi-rank run
+   ! needs a CUDA-aware MPI library, declared with RDB_CUDA_AWARE_MPI=ON.
 #if defined(RDB_GPU_OFFLOAD) && !defined(RDB_CUDA_AWARE_MPI)
    if (comm_env_compute_size() > 1) then
       if (mpi_rank == 0) then
-         call logger%error("FATAL: multi-GPU MPI build without CUDA-aware MPI.")
-         call logger%error("Recompile with -DRDB_CUDA_AWARE_MPI=ON")
+         call logger%error("FATAL: multi-rank GPU build not declared CUDA-aware.")
+         call logger%error("Recompile with -DRDB_CUDA_AWARE_MPI=ON (needs a CUDA-aware MPI)")
       end if
       call comm_env_abort(99)
    end if

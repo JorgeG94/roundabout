@@ -85,6 +85,11 @@
 !!     no flux); with two coordinate twins on the same files:
 !!     `file_readers_zstar_full` and `file_readers_zstar` (MOM6 z* + closed
 !!     faces — the z_fixed staircase dilated per column every regrid);
+!!   * wetdry_shoal / wetdry_periodic / wetdry_file - dynamic wet/dry (ssp_rk2
+!!     only): an emergent shoal whose front crosses every seam, on closed walls,
+!!     with periodic west/east, and with the bathymetry read from a file; the
+!!     refreshed ghosts are compared too, and the shoal is checkpointed and
+!!     resumed.  Wet/dry with the tripolar fold or an open-type edge is a fence;
 !!   * sss_restore - the island basin with FILE sea-surface-salinity restoring
 !!     (per-rank windowed two-record target, halo-exchanged, piston salt flux,
 !!     net-zero shift through the EFP allreduce); needs NetCDF;
@@ -96,6 +101,12 @@
 !!     vortex IC (`ic_config = 'balanced_vortex'`) on a closed beta-plane, centred
 !!     on the 2x1/1x2 seams and the 2x2 corner; `_t0` takes zero steps so the
 !!     seeded state itself (incl. ghosts) is compared;
+!!   * balance_rest / balance_rest_t0 / balance_keep_t0 - the same vortex density
+!!     seeded UNBALANCED (`vortex_balance = 'none'`: zero velocity), then
+!!     `ocean_balance_apply` (the API / reinit entry, geostrophic) with
+!!     `ref_level` bottom_rest (global per-layer median + column stretch) or
+!!     keep_h, after poisoning the WHOLE u/v/hu/hv arrays with rank-dependent garbage;
+!!     the `_t0` twins compare the balanced IC itself;
 !!   * drain_ratio / drain_ratio_h3 - windowed tracer drain (ratio 4, ppm / ppm_h3
 !!     + diabatic_first = .false.) on a periodic channel, >1 sub-cycle pass;
 !!   * drain_ratio_weno5 / _weno7 / _weno9 - the same drain with the WENO swept
@@ -209,10 +220,12 @@ program test_ocean_decomp_bitid_mpi
    use rdb_comm_env, only: comm_env_init, comm_env_setup_roles, comm_env_finalize, &
                            comm_env_rank, comm_env_size, comm_env_compute_comm, &
                            comm_env_push_compute_comm, comm_env_pop_compute_comm
-   use pic_mpi_lib, only: comm_t, allreduce, MPI_SUM
+   use pic_mpi_lib, only: comm_t, allreduce, MPI_SUM, MPI_MAX
    use rdb_console_stats, only: console_stats_t, conservation_budget_t
    use rdb_ocean_console_stats, only: ocean_console_stats_report, ocean_budget_stage_weight
    use rdb_ocean_dyn, only: SPLIT_SCHEME_PRED_CORR
+   use rdb_ocean_balance, only: BALANCE_GEOSTROPHIC, ocean_balance_velocity
+   use rdb_ocean_reinit, only: ocean_balance_apply
    use rdb_ocean_fold_exchange, only: ocean_fold_exchange_grow_count
 #ifndef RDB_NO_NETCDF
    use rdb_io_netcdf, only: nc_create_file, nc_close, nc_def_dim, nc_def_var_2d, &
@@ -236,6 +249,8 @@ program test_ocean_decomp_bitid_mpi
    integer, parameter :: MAXF = 128
    character(len=*), parameter :: SG_FILE = "bitid_supergrid.nc"
    character(len=*), parameter :: BATHY_FILE = "bitid_bathy.nc"
+   character(len=*), parameter :: WD_BATHY_FILE = "bitid_wd_bathy.nc"
+      !! The `wetdry_file` case's emergent-shoal bathymetry (written by rank 0).
    character(len=*), parameter :: ZINIT_FILE = "bitid_zinit.nc"
    character(len=*), parameter :: SSS_FILE = "bitid_sss.nc"
    character(len=*), parameter :: TIDE_FILE = "bitid_tide.nc"
@@ -262,6 +277,10 @@ program test_ocean_decomp_bitid_mpi
          !! Mid-run regrows of the fold-exchange buffers (must stay 0).
       integer :: drain_iter = 0
          !! Largest windowed-drain pass count used (0 when the drain never ran).
+      integer :: flips(6) = 0
+         !! Wet/dry runs: owned-cell flips of `wd_wet_dyn`, sampled once per outer
+         !! step, in the seam bands of the shoal -- (wet->dry, dry->wet) x
+         !! (i-line band, j-line band, corner box).  Zero on every other case.
       integer :: ncav(6) = 0
          !! Cavity non-vacuity counts over the OWNED cells: covered wet, open wet,
          !! grounded, melting, top-drag stress > 0, k_top < nz.
@@ -274,12 +293,15 @@ program test_ocean_decomp_bitid_mpi
 
    integer :: rank, nprocs, n_fail, total_fail, ic
    integer :: n_steps_cur = N_STEPS
+   character(len=16) :: balance_ref = ""
+      !! Non-empty: `run_one` calls `ocean_balance_apply` with this `ref_level`
+      !! after `engine_enter_data` (the `balance_*` cases).
       !! Steps `run_one` takes; 0 for the `*_t0` labels (compare the seeded IC itself).
    character(len=256) :: case_filter = ""
       !! `RDB_BITID_CASES`: run only the cases whose name contains this substring.
    type(comm_t) :: comm
    character(len=16), parameter :: SCHEMES(2) = [character(len=16) :: "pred_corr", "ssp_rk2"]
-   character(len=24), parameter :: CASES(61) = [character(len=24) :: &
+   character(len=24), parameter :: CASES(68) = [character(len=24) :: &
                                                 "island_basin", "weno7_pv", &
                                                 "periodic_channel_zstar", &
                                                 "visc_rem_zstar", &
@@ -298,6 +320,8 @@ program test_ocean_decomp_bitid_mpi
                                                 "hvisc_kh_points", "diabatic_end", &
                                                 "hvisc_thin_layer", "hvisc_biharm_stress", &
                                                 "balanced_vortex_t0", "balanced_vortex", &
+                                                "balance_rest_t0", "balance_keep_t0", &
+                                                "balance_rest", &
                                                 "drain_ratio", "drain_ratio_h3", &
                                                 "drain_ratio_weno5", "drain_ratio_weno7", &
                                                 "drain_ratio_weno9", "drain_ratio_fold", &
@@ -307,7 +331,8 @@ program test_ocean_decomp_bitid_mpi
                                                 "dtbt_reset_period", &
                                                 "cavity_zfixed", "cavity_sigma", &
                                                 "cavity_sigma_ratio2", "cavity_gall", "cavity_melt_only", "cavity_periodic", &
-                                                "cavity_combo", "obc_epbl"]
+                                                "cavity_combo", "wetdry_shoal", &
+                                                "wetdry_periodic", "wetdry_file", "chapman_obc", "obc_epbl"]
 
    call comm_env_init()
    call comm_env_setup_roles(.false.)
@@ -330,14 +355,16 @@ program test_ocean_decomp_bitid_mpi
       if (trim(CASES(ic)) == "file_readers" .or. &
           trim(CASES(ic)) == "file_readers_zstar_full" .or. &
           trim(CASES(ic)) == "sss_restore" .or. &
+          trim(CASES(ic)) == "wetdry_file" .or. &
           trim(CASES(ic)) == "manizza" .or. &
           trim(CASES(ic)) == "tidal_files" .or. &
           trim(CASES(ic)) == "tidal_polzin" .or. &
           index(trim(CASES(ic)), "bulk_flux") == 1 .or. &
           trim(CASES(ic)) == "file_readers_zstar") cycle
 #endif
-      ! eulerian_z is refused under pred_corr (validate_config): ssp_rk2 only.
-      if (CASES(ic) (1:4) /= "eulz") call run_case(trim(CASES(ic)), trim(SCHEMES(1)))
+      ! Dynamic wet/dry and eulerian_z refuse pred_corr (validate_config): ssp_rk2 only.
+      if (.not. is_wetdry_case(trim(CASES(ic))) .and. CASES(ic) (1:4) /= "eulz") &
+         call run_case(trim(CASES(ic)), trim(SCHEMES(1)))
       ! diabatic_first = .false. is refused under ssp_rk2 (validate_config).
       ! (drain_ratio_h3 pins it too.)
       if (trim(CASES(ic)) == "diabatic_end" .or. trim(CASES(ic)) == "drain_ratio_h3" .or. &
@@ -346,6 +373,7 @@ program test_ocean_decomp_bitid_mpi
    end do
 
    if (nprocs >= 2) call check_single_rank_fences()
+   if (nprocs >= 2) call check_balance_fold_refusal()
    if (len_trim(case_filter) == 0 .or. index("cavity_grounded_refused", trim(case_filter)) > 0) &
       call check_cavity_grounded_refusal()
 
@@ -375,6 +403,7 @@ contains
       character(len=16) :: spx, spy, snx, sny, sng, snz
       character(len=:), allocatable :: common, bt_extra, bt_head, ice_dyn, hv_extra, drain_extra
       character(len=16) :: rad_earth_s, wind_s, wind_y_s
+      character(len=40) :: vortex_balance
       character(len=8) :: sponge_w, sponge_e
       character(len=64) :: wl
 
@@ -385,6 +414,8 @@ contains
       ! z* open-step case under bbl_glue -- so both cases below now
       ! exercise `visc_rem_chain` (producer + bt_rem_from_av_rem + wt_u
       ! forcing + renorm_visc_rem, UNIFORM BT-correction fold) instead.
+      vortex_balance = "vortex_balance = 'geostrophic'"
+      if (index(label, "balance_") == 1) vortex_balance = "vortex_balance = 'none'"
       ice_dyn = "dynamics = .true., evp_sub_steps = 30, cfl_trunc = 0.01, "// &
                 "project_ci = .true., "
       if (label == "sea_ice_fold_nodyn") ice_dyn = "dynamics = .false., "
@@ -545,7 +576,8 @@ contains
                "coriolis_beta = 2.0e-11 /"//NL// &
                "&ocean_vdiff_nml hvel_mom6 = .true., bbl_glue = .true. /"//NL// &
                "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
-      case ("balanced_vortex", "balanced_vortex_t0")
+      case ("balanced_vortex", "balanced_vortex_t0", "balance_rest", "balance_rest_t0", &
+            "balance_keep_t0")
          ! Isolated balanced cold-core vortex (ic_config = 'balanced_vortex') on a
          ! closed beta-plane, centred on the 2x1/1x2 seams and the 2x2 four-way
          ! corner (x0 = 13 dx, y0 = 9 dx), R = 3 dx so the core also straddles the
@@ -564,7 +596,8 @@ contains
                "&ocean_ic_nml ic_config = 'balanced_vortex', alpha_T = 0.17, "// &
                "rho_0 = 1035.0, vortex_x0 = 260000.0, vortex_y0 = 180000.0, "// &
                "vortex_radius = 60000.0, vortex_hv = 300.0, vortex_dT = -2.0, "// &
-               "vortex_T_surf = 20.0, vortex_dT_dz = 1.5e-2 /"//NL// &
+               "vortex_T_surf = 20.0, vortex_dT_dz = 1.5e-2, "// &
+               trim(vortex_balance)//" /"//NL// &
                "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
       case ("weno7_pv")
          ! The island basin on the Sadourny enstrophy path with the weno7 PV
@@ -675,6 +708,58 @@ contains
                ""//trim(drain_extra)//" /"//NL// &
                "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
                "north = 'wall' /"//NL
+      case ("wetdry_shoal")
+         ! Emergent shoal under dynamic wet/dry (`&ocean_wetdry_nml`): a seamount
+         ! whose summit sits exactly at rest level (4 central cells seed dry,
+         ! on all three seam crossings of the 2x1 / 1x2 / 2x2 splits), driven
+         ! by a constant wind so the front sloshes through a ~3-cell radius and
+         ! the wet/dry hysteresis flips both ways on both sides of each seam.
+         ! Same text as tests/test_ocean_wetdry_engine.F90 (which asserts the
+         ! flips on one rank).  ssp_rk2 only; `ppm_limit_pos` is the
+         ! positivity limiter the wet/dry continuity needs.
+         nml = common// &
+               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
+               "dx = 4000.0, dy = 4000.0 /"//NL// &
+               "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 0.05, wind_stress_y = 0.05 /"//NL// &
+               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
+               "&ocean_topo_nml topo_config = 'seamount', max_depth = 2.0, "// &
+               "edge_depth = 0.0, slope_scale = 28000.0, wind_config = 'constant' /"//NL// &
+               "&ocean_continuity_nml ppm_limit_pos = .true. /"//NL// &
+               "&ocean_wetdry_nml enable = .true. /"//NL// &
+               "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
+      case ("wetdry_periodic")
+         ! The shoal with periodic west/east: px = 1 wraps locally every
+         ! substep, px > 1 turns the wrap into a seam.  Meridional wind only:
+         ! a zonal wind on a periodic channel has no wall to stop it and the
+         ! reference itself runs away (CFL panic) by step 96.
+         nml = common// &
+               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
+               "dx = 4000.0, dy = 4000.0 /"//NL// &
+               "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 0.0, wind_stress_y = 0.02 /"//NL// &
+               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
+               "&ocean_topo_nml topo_config = 'seamount', max_depth = 2.0, "// &
+               "edge_depth = 0.0, slope_scale = 28000.0, wind_config = 'constant' /"//NL// &
+               "&ocean_continuity_nml ppm_limit_pos = .true. /"//NL// &
+               "&ocean_wetdry_nml enable = .true. /"//NL// &
+               "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
+               "north = 'wall' /"//NL
+      case ("wetdry_file")
+         ! An emergent shoal whose bathymetry is READ from a file (the windowed
+         ! per-rank reader): a plateau at 0.07 m, inside the hysteresis band
+         ! [dry_depth, rewet_depth) = [0.05, 0.10), straddles the seams, so the
+         ! seed of every seam ghost matters.  (Measured: the reader already fills
+         ! seam ghosts from the file, so `engine_setup`'s cold-start exchange of
+         ! `wd_wet_dyn` is not what this case exercises.)
+         nml = common// &
+               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
+               "dx = 4000.0, dy = 4000.0 /"//NL// &
+               "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 0.02, wind_stress_y = 0.02 /"//NL// &
+               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
+               "&ocean_topo_nml topo_config = 'file', max_depth = 0.4, wind_config = 'constant' /"//NL// &
+               "&output_nml bathymetry_file = '"//WD_BATHY_FILE//"', output_to_file = .false. /"//NL// &
+               "&ocean_continuity_nml ppm_limit_pos = .true. /"//NL// &
+               "&ocean_wetdry_nml enable = .true. /"//NL// &
+               "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
       case ("dtbt_reset", "dtbt_reset_period")
          ! Re-entrant channel with a Gaussian TRENCH (peak_depth > max_depth) at the
          ! domain centre, which on the odd 27 x 19 grid is the middle of cell (14, 10):
@@ -759,6 +844,23 @@ contains
                "&ocean_epbl_nml enable = .true., mld_use_prev_guess = .true., "// &
                "mstar_scheme = 'om4' /"//NL// &
                "&ocean_bc_nml west = 'wall', east = 'open', south = 'wall', north = 'wall' /"//NL
+      case ("chapman_obc")
+         ! Chapman radiation on the east AND north edges (both split by the
+         ! decomposition: py > 1 splits the east line, px > 1 the north one)
+         ! over a seamount, driven by a tidal west edge and an asymmetric
+         ! wind so the wave reaches both Chapman edges inside the run.  The
+         ! edge-mean eta target and the SW-corner phase-speed scale are
+         ! global quantities; a per-rank partial mean breaks the compare.
+         nml = common// &
+               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
+               "dx = 10000.0, dy = 10000.0 /"//NL// &
+               "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 0.05, wind_stress_y = 0.02 /"//NL// &
+               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
+               "&ocean_topo_nml topo_config = 'seamount', max_depth = 2000.0, "// &
+               "edge_depth = 500.0, slope_scale = 40000.0 /"//NL// &
+               "&ocean_bc_nml west = 'tidal', east = 'chapman', south = 'wall', north = 'chapman', "// &
+               "west_n_tidal = 1, west_tidal_amp = 0.5, west_tidal_phase = 0.0, "// &
+               "west_tidal_omega = 1.4051890e-4 /"//NL
       case ("tripolar", "redi_cfl_fold", "drain_ratio_fold", "drain_ratio_fold_h3", "eulz_tripolar")
          ! Analytic tripolar cap (59N-83N, phi_join 74N) closed by the north
          ! fold, periodic in x, under a constant wind, with the double-Drake
@@ -1152,7 +1254,7 @@ contains
          nml = nml//"&vcoord_nml vcoord_type = 'zstar', zfixed_closed_faces = .true. /"//NL
       end if
       if (label /= "file_readers" .and. label /= "file_readers_zstar_full" .and. &
-          label /= "file_readers_zstar") then
+          label /= "file_readers_zstar" .and. label /= "wetdry_file") then
          nml = nml//"&output_nml output_to_file = .false. /"//NL
       end if
    end function case_nml
@@ -1258,6 +1360,7 @@ contains
       logical :: pushed_self_comm
       integer :: ierr, n
       real(wp) :: t
+      real(wp), allocatable :: wd_prev(:, :)
 
       ok = .false.
       call read_config_from_string(nml, cfg, ierr=ierr)
@@ -1268,6 +1371,15 @@ contains
       if (ierr /= OCEAN_STATUS_OK) return
 
       call engine_enter_data(engine, cfg)
+      if (len_trim(balance_ref) > 0) then
+         call poison_velocity_ghosts(engine, crank)
+         call ocean_balance_apply(engine%state, engine%grid, cfg, BALANCE_GEOSTROPHIC, &
+                                  trim(balance_ref), .true., .false., ierr)
+         if (ierr /= OCEAN_STATUS_OK) then
+            write (*, '(a,i0,a,i0)') "FAIL balance: ocean_balance_apply ierr=", ierr, " rank ", rank
+            return
+         end if
+      end if
       t = 0.0_wp
       ierr = OCEAN_STATUS_OK
       do n = 1, n_steps_cur
@@ -1279,6 +1391,8 @@ contains
          if (ierr /= OCEAN_STATUS_OK) exit
          call engine_step_finalize(engine, DT, t, ierr=ierr)
          if (ierr /= OCEAN_STATUS_OK) exit
+         if (allocated(engine%state%dyn%bt_work%wd_wet_dyn)) &
+            call count_wd_flips(engine, wd_prev, snap%flips)
          t = t + DT
       end do
       if (ierr == OCEAN_STATUS_OK) then
@@ -1344,6 +1458,63 @@ contains
       call engine_exit_data(engine)
       call engine_teardown(engine)
    end subroutine run_one
+
+   subroutine poison_velocity_ghosts(engine, crank)
+      !! Host u/v/hu/hv := rank-dependent garbage in the WHOLE array (the
+      !! balance must overwrite every owned face and refresh the seam ghosts),
+      !! pushed to the device so host and device agree.
+      type(ocean_engine_t), intent(inout) :: engine
+      integer, intent(in) :: crank
+      real(wp) :: g
+      g = 7.0e3_wp*real(crank + 1, wp)
+      engine%state%multilayer%u_face_x_layer = g
+      engine%state%multilayer%v_face_y_layer = -g
+      engine%state%multilayer%hu_face_x_layer = 2.0_wp*g
+      engine%state%multilayer%hv_face_y_layer = -2.0_wp*g
+      associate (uf => engine%state%multilayer%u_face_x_layer, &
+                 vf => engine%state%multilayer%v_face_y_layer, &
+                 huf => engine%state%multilayer%hu_face_x_layer, &
+                 hvf => engine%state%multilayer%hv_face_y_layer)
+         !$acc update device(uf, vf, huf, hvf)
+      end associate
+   end subroutine poison_velocity_ghosts
+
+   subroutine count_wd_flips(engine, prev, flips)
+      !! Accumulate the wet<->dry flips of this rank's OWNED cells of
+      !! `wd_wet_dyn` since the previous call, in the shoal's three seam bands
+      !! (global physical indices, `NX_G` x `NY_G`): the i-line band
+      !! `nx/2-1 .. nx/2+2`, the j-line band `ny/2-1 .. ny/2+2`, and their
+      !! 4 x 4 corner box.  Sampled once per outer step, so a lower bound.
+      type(ocean_engine_t), intent(inout), target :: engine
+      real(wp), allocatable, intent(inout) :: prev(:, :)
+      integer, intent(inout) :: flips(6)
+      integer :: i, j, ig, jg, ng, nxo, nyo
+      logical :: in_i, in_j, was, now
+
+      !$acc update self(engine%state%dyn%bt_work%wd_wet_dyn)
+      ng = engine%grid%nghost
+      nxo = engine%grid%nx_phys
+      nyo = engine%grid%ny_phys
+      if (.not. allocated(prev)) then
+         prev = engine%state%dyn%bt_work%wd_wet_dyn
+         return
+      end if
+      do j = ng + 1, ng + nyo
+         do i = ng + 1, ng + nxo
+            ig = i - ng + engine%grid%i_offset_global
+            jg = j - ng + engine%grid%j_offset_global
+            in_i = ig >= NX_G/2 - 1 .and. ig <= NX_G/2 + 2
+            in_j = jg >= NY_G/2 - 1 .and. jg <= NY_G/2 + 2
+            was = prev(i, j) > 0.5_wp
+            now = engine%state%dyn%bt_work%wd_wet_dyn(i, j) > 0.5_wp
+            if (was .eqv. now) cycle
+            if (in_i) flips(merge(1, 2, was)) = flips(merge(1, 2, was)) + 1
+            if (in_j) flips(merge(3, 4, was)) = flips(merge(3, 4, was)) + 1
+            if (in_i .and. in_j) flips(merge(5, 6, was)) = flips(merge(5, 6, was)) + 1
+         end do
+      end do
+      prev = engine%state%dyn%bt_work%wd_wet_dyn
+   end subroutine count_wd_flips
 
    subroutine push_field(s, tag, a)
       !! Append one 2-D field (stored with a unit third extent).
@@ -1437,10 +1608,42 @@ contains
       end do
       !$acc update self(engine%state%dyn%bt_work%bt_eta_end)
       s%n = s%n + 1
+      if (s%n > MAXF) error stop "test_ocean_decomp_bitid_mpi: raise MAXF"
       s%f(s%n)%tag = "bt_eta_end"
       allocate (s%f(s%n)%a(size(engine%state%dyn%bt_work%bt_eta_end, 1), &
                            size(engine%state%dyn%bt_work%bt_eta_end, 2), 1))
       s%f(s%n)%a(:, :, 1) = engine%state%dyn%bt_work%bt_eta_end
+      ! Dynamic wet/dry: the seam-refreshed transport / gate fields are not
+      ! restart state; snapshot them so `compare` (owned) and `compare_ghosts`
+      ! (seam ghost images) cover them.
+      if (allocated(engine%state%dyn%bt_work%wd_wet_dyn)) then
+         !$acc update self(engine%state%dyn%bt_work%wd_open_u, engine%state%dyn%bt_work%wd_open_v)
+         !$acc update self(engine%state%dyn%bt_work%bt_uhbt, engine%state%dyn%bt_work%bt_vhbt)
+         s%n = s%n + 1
+         if (s%n > MAXF) error stop "test_ocean_decomp_bitid_mpi: raise MAXF"
+         s%f(s%n)%tag = "wd_open_u"
+         s%f(s%n)%a = reshape(engine%state%dyn%bt_work%wd_open_u, &
+                              [size(engine%state%dyn%bt_work%wd_open_u, 1), &
+                               size(engine%state%dyn%bt_work%wd_open_u, 2), 1])
+         s%n = s%n + 1
+         if (s%n > MAXF) error stop "test_ocean_decomp_bitid_mpi: raise MAXF"
+         s%f(s%n)%tag = "wd_open_v"
+         s%f(s%n)%a = reshape(engine%state%dyn%bt_work%wd_open_v, &
+                              [size(engine%state%dyn%bt_work%wd_open_v, 1), &
+                               size(engine%state%dyn%bt_work%wd_open_v, 2), 1])
+         s%n = s%n + 1
+         if (s%n > MAXF) error stop "test_ocean_decomp_bitid_mpi: raise MAXF"
+         s%f(s%n)%tag = "bt_uhbt"
+         s%f(s%n)%a = reshape(engine%state%dyn%bt_work%bt_uhbt, &
+                              [size(engine%state%dyn%bt_work%bt_uhbt, 1), &
+                               size(engine%state%dyn%bt_work%bt_uhbt, 2), 1])
+         s%n = s%n + 1
+         if (s%n > MAXF) error stop "test_ocean_decomp_bitid_mpi: raise MAXF"
+         s%f(s%n)%tag = "bt_vhbt"
+         s%f(s%n)%a = reshape(engine%state%dyn%bt_work%bt_vhbt, &
+                              [size(engine%state%dyn%bt_work%bt_vhbt, 1), &
+                               size(engine%state%dyn%bt_work%bt_vhbt, 2), 1])
+      end if
       if (engine%state%metrics%use_cavity) call add_cavity_fields(engine, s)
       s%io = engine%grid%i_offset_global
       s%jo = engine%grid%j_offset_global
@@ -1456,7 +1659,7 @@ contains
       !! N_CKPT to per-rank files (the driver's `<dir>/restart_rank_NNNNNN.nc`
       !! convention, through `ocean_state_restart_write`), torn down, and
       !! resumed through `engine_setup(restart_file=<dir>)` -- the warm
-      !! restart the driver runs -- for the remaining N_STEPS - N_CKPT
+      !! restart the driver runs -- for the remaining (steps - N_CKPT)
       !! steps.  Every registry field (and the BT end-of-step eta) must
       !! equal the STRAIGHT decomposed run's bitwise over the FULL local
       !! array, ghosts included.  Counts into `n_fail` (rank-summed).
@@ -1503,7 +1706,7 @@ contains
          if (ierr == OCEAN_STATUS_OK) then
             if (step0 == N_CKPT .and. engine%warm_restart) then
                call engine_enter_data(engine, cfg)
-               call advance(engine, cfg, t, N_STEPS - N_CKPT, ierr)
+               call advance(engine, cfg, t, n_steps_cur - N_CKPT, ierr)
                if (ierr == OCEAN_STATUS_OK) then
                   call take_snapshot(engine, res)
                   ok = .true.
@@ -1641,6 +1844,75 @@ contains
       end do
    end subroutine compare
 
+   subroutine compare_ghosts(dec, ref, nbad, report)
+      !! Seam-ghost IMAGE check (wet/dry case only): every ghost cell of the
+      !! listed fields whose global index lies inside the serial array must
+      !! equal the serial value at that global index, bitwise.  `compare`
+      !! looks at owned cells only; this is what notices a ghost band that
+      !! a full-array kernel later reads stale.
+      type(snap_t), intent(in) :: dec, ref
+      integer, intent(out) :: nbad
+      character(len=*), intent(in) :: report
+      ! The layer velocities (`ml_u_face_x_layer`, `ml_v_face_y_layer`) are
+      ! deliberately NOT in this list: their ghosts are refreshed at the next
+      ! stage entry, and the last writer of a step (the vertical-diffusion
+      ! momentum solve) is not followed by an exchange, so at snapshot time they
+      ! are not images of the serial array.  Measured with this check enabled on
+      ! the non-wet/dry `island_basin` case: 42 of 912 u-ghost cells differ at
+      ! np 2, exactly as in the wet/dry cases.  Owned cells are compared by
+      ! `compare`.
+      character(len=20), parameter :: TAGS(5) = [character(len=20) :: "wd_wet_dyn", &
+                                                                                     "wd_open_u", "wd_open_v", "bt_uhbt", "bt_vhbt"]
+      integer :: e, it, i, j, k, ex, ey, nb, ig, jg, nown, itag, nmatch(size(TAGS))
+      logical :: owned
+
+      nbad = 0
+      ! A TAGS entry that matches no snapshot field means a rename silently
+      ! shrank this check: count it as a failure.
+      do itag = 1, size(TAGS)
+         nmatch(itag) = count([(trim(dec%f(e)%tag) == trim(TAGS(itag)), e=1, dec%n)])
+         if (nmatch(itag) == 0) then
+            write (*, '(a,i0,5a)') "  rank ", rank, " ", report, " GHOST CHECK: tag '", &
+               trim(TAGS(itag)), "' matches no snapshot field"
+            nbad = nbad + 1
+         end if
+      end do
+      do e = 1, dec%n
+         if (dec%f(e)%tag /= ref%f(e)%tag) cycle
+         if (all(trim(dec%f(e)%tag) /= TAGS)) cycle
+         it = e
+         associate (a => dec%f(it)%a, b => ref%f(it)%a)
+            ex = size(a, 1) - (dec%nxl + 2*dec%ng)
+            ey = size(a, 2) - (dec%nyl + 2*dec%ng)
+            nb = 0
+            nown = 0
+            do k = 1, size(a, 3)
+               do j = 1, size(a, 2)
+                  do i = 1, size(a, 1)
+                     owned = i > dec%ng .and. i <= dec%ng + dec%nxl + ex .and. &
+                             j > dec%ng .and. j <= dec%ng + dec%nyl + ey
+                     if (owned) cycle
+                     ig = i + dec%io
+                     jg = j + dec%jo
+                     if (ig < 1 .or. ig > size(b, 1) .or. jg < 1 .or. jg > size(b, 2)) cycle
+                     nown = nown + 1
+                     if (transfer(a(i, j, k), 0_int64) /= transfer(b(ig, jg, k), 0_int64)) nb = nb + 1
+                  end do
+               end do
+            end do
+         end associate
+         if (nb > 0) write (*, '(a,i0,5a,i0,a,i0)') "  rank ", rank, " ", report, " GHOST ", &
+            trim(dec%f(e)%tag), ": mismatches=", nb, " of ", nown
+         nbad = nbad + nb
+      end do
+   end subroutine compare_ghosts
+
+   pure logical function is_wetdry_case(label)
+      !! The dynamic wet/dry cases (`wetdry_shoal`, `wetdry_periodic`, `wetdry_file`).
+      character(len=*), intent(in) :: label
+      is_wetdry_case = index(label, "wetdry_") == 1
+   end function is_wetdry_case
+
    pure logical function is_ice_fold_case(label)
       !! The sea-ice-on-the-tripolar-cap cases (A7).
       character(len=*), intent(in) :: label
@@ -1725,11 +1997,18 @@ contains
       character(len=*), intent(in) :: label, scheme
       type(snap_t) :: ref, dec
       logical :: ok_ref, ok_dec
-      integer :: px, nbad, nfin, glob(3), nbud, nb_img
+      integer :: px, nbad, nfin, glob(3), nbud, nghost_bad, nb_img
       character(len=96) :: tag
       type(conservation_budget_t) :: buds(8)
 
       n_steps_cur = N_STEPS
+      balance_ref = ""
+      if (index(label, "balance_rest") == 1) balance_ref = "bottom_rest"
+      if (index(label, "balance_keep") == 1) balance_ref = "keep_h"
+      ! The emergent shoal needs twice the gate length: at 48 steps the
+      ! stale seam-ghost mask is still latched to the owner's value, by 96 the
+      ! front has moved a ghost cell of `wd_wet_dyn` (and `wd_open_*`) off it.
+      if (is_wetdry_case(label)) n_steps_cur = 2*N_STEPS
       if (len(label) > 3) then
          if (label(len(label) - 2:) == "_t0") n_steps_cur = 0
       end if
@@ -1741,6 +2020,16 @@ contains
       end if
 
       if (is_ice_fold_case(label)) call check_ice_seam(ref, trim(label)//"/"//scheme)
+      if (is_wetdry_case(label)) then
+         ! Non-vacuity: the front must cross every seam band in BOTH directions
+         ! in the serial reference (the decomposed runs are then compared to it).
+         if (any(ref%flips == 0)) then
+            write (*, '(3a,6(1x,i0))') "FAIL ", label, ": a seam band never flips in the reference:", ref%flips
+            n_fail = n_fail + 1
+         else if (rank == 0) then
+         write (*, '(3a,6(1x,i0))') "case ", label, ": reference seam-band flips (i w>d d>w, j w>d d>w, corner w>d d>w):", ref%flips
+         end if
+      end if
       if (index(label, "cavity_") == 1) call check_cavity_counters(ref, label, trim(label)//"/"//scheme)
 
       nbud = 0
@@ -1753,6 +2042,10 @@ contains
             glob = [1, 0, 1]
          else
             call compare(dec, ref, nbad, nfin, trim(tag))
+            if (is_wetdry_case(label)) then
+               call compare_ghosts(dec, ref, nghost_bad, trim(tag))
+               nbad = nbad + nghost_bad
+            end if
             if (index(label, "cavity_") == 1) then
                call check_ghost_images(dec, ref, nb_img, trim(tag))
                nbad = nbad + nb_img
@@ -1790,7 +2083,7 @@ contains
             ! `dt_therm_ratio = 1`, not a decomposition defect.
             if ((label == "sea_ice" .or. label == "sea_ice_transport" .or. &
                  label == "bulk_flux_ice" .or. label == "dtbt_reset" .or. &
-                 label == "cavity_sigma_ratio2" .or. is_ice_fold_case(label)) .and. &
+                 label == "cavity_sigma_ratio2" .or. is_wetdry_case(label) .or. is_ice_fold_case(label)) .and. &
                 (nprocs/px == 1 .or. px == nprocs/px) .and. &
                 (nprocs > 1 .or. label == "cavity_sigma_ratio2")) then
                ! 4x1 and 2x2 at np = 4 (and 2x1 at np = 2).
@@ -2116,6 +2409,64 @@ contains
       end if
    end subroutine check_periodic_sponge_serial_out
 
+   subroutine check_balance_fold_refusal()
+      !! `ocean_balance_velocity` with the north fold TAG set, split north-south
+      !! (1 x nprocs, so only the north rank row holds the fold): every rank
+      !! must return the SAME refusal status, for the FOLD reason, and none may
+      !! block in the later collective (a rank-local early return, keyed on
+      !! `bc%north_fold`, would leave the south ranks in the `|f|` allreduce).
+      !! The grid is SPHERICAL with periodic x and `north = 'tripolar_fold'`:
+      !! `ocean_bc_validate_fold` only asks for periodic west/east, and the
+      !! "tripolar grid needs the fold" rule runs one way, so the grid-kind gate
+      !! passes and the fold-tag line is the one reached (on a tripolar grid
+      !! the grid-kind refusal fires first and would mask it).
+      use rdb_error_ring, only: error_ring_clear, error_ring_get
+      type(ocean_engine_t) :: engine
+      type(config_t) :: cfg
+      integer :: ierr, ierr_b, st(2), ibc, nfold, nf(1)
+      character(len=:), allocatable :: nml
+      character(len=*), parameter :: WALLS = "north = 'wall'"
+      character(len=*), parameter :: FOLD = "north = 'tripolar_fold'"
+      character(len=*), parameter :: PERIODIC_X = "west = 'periodic', east = 'periodic'"
+      character(len=*), parameter :: ALL_WALLS = "west = 'wall', east = 'wall'"
+
+      ierr_b = -1
+      nfold = 0
+      nml = case_nml("spherical", "pred_corr", 1, nprocs)
+      ibc = index(nml, ALL_WALLS)
+      if (ibc > 0) nml = nml(:ibc - 1)//PERIODIC_X//nml(ibc + len(ALL_WALLS):)
+      ibc = index(nml, WALLS)
+      if (ibc > 0) nml = nml(:ibc - 1)//FOLD//nml(ibc + len(WALLS):)
+      call read_config_from_string(nml, cfg, ierr=ierr)
+      if (ierr == OCEAN_STATUS_OK) call validate_config(cfg, ierr)
+      if (ierr == OCEAN_STATUS_OK) call engine_setup(engine, cfg, ierr, compute_rank=rank, &
+                                                     compute_size=nprocs)
+      if (ierr == OCEAN_STATUS_OK) then
+         call engine_enter_data(engine, cfg)
+         call error_ring_clear()
+         call ocean_balance_velocity(engine%grid, cfg, engine%state, BALANCE_GEOSTROPHIC, ierr_b)
+         if (index(error_ring_get(0), "tripolar north fold") > 0) nfold = 1
+         call engine_exit_data(engine)
+         call engine_teardown(engine)
+      end if
+      st = [ierr_b, -ierr_b]
+      call allreduce(comm, st, op=MPI_MAX)
+      ! nfold: every rank must have seen the fold message (min over ranks).
+      nf = -nfold
+      call allreduce(comm, nf, op=MPI_MAX)
+      ibc = nf(1)
+      if (ierr /= OCEAN_STATUS_OK .or. st(1) /= -st(2) .or. st(1) == OCEAN_STATUS_OK &
+          .or. ibc /= -1) then
+         write (*, '(a,i0,a,i0,a,i0,a,i0,a,i0)') "FAIL balance fold refusal: setup ierr=", ierr, &
+            ", status max=", st(1), ", min=", -st(2), ", fold-message on all ranks (-1 = yes)=", ibc, &
+            " rank ", rank
+         n_fail = n_fail + 1
+      else if (rank == 0) then
+         write (*, '(a,i0,a)') "case balance fold refusal: every rank refused for the fold (status ", &
+            st(1), ") (ok)"
+      end if
+   end subroutine check_balance_fold_refusal
+
    subroutine check_single_rank_fences()
       !! The single-rank features must be REFUSED at configure on more than
       !! one rank -- with the process grid left unset (px = py = 1, which
@@ -2142,9 +2493,7 @@ contains
                                      "&ocean_cavity_melt_nml enable = .true., exchange_law = 'const_gamma', "// &
                                      "gamma_t = 2.2e-2, gamma_s = -1.0, cdrag_top = 2.5e-3, "// &
                                      "ice_conduction = 'insulating', s_ice = 0.0, far_field_depth = 10.0"
-      character(len=1400), parameter :: KNOBS(8) = [character(len=1400) :: &
-                                                    "&ocean_wetdry_nml enable = .true. /", &
-                                                    "&ocean_bc_nml east = 'chapman' /", &
+      character(len=1400), parameter :: KNOBS(6) = [character(len=1400) :: &
                                                     ! cavity + freshwater = 'mass'
                                                     CAV//CAV_DYN//" /"//new_line("a")// &
                                                     CAV_MELT//", freshwater = 'mass' /", &
@@ -2179,9 +2528,7 @@ contains
       ! One distinctive substring of the message each entry must produce, so a
       ! fence that is deleted while a LATER, more generic refusal still fires
       ! (the bulk-forcing one, the validate envelope) cannot pass unnoticed.
-      character(len=64), parameter :: WHY(8) = [character(len=64) :: &
-                                                "&ocean_wetdry_nml enable = .true. is single-rank", &
-                                                "'chapman' edges are single-rank", &
+      character(len=64), parameter :: WHY(6) = [character(len=64) :: &
                                                 "freshwater = 'mass' with a cavity is unproven", &
                                                 "draft_config = 'file' is unproven", &
                                                 "enable with &ocean_bulk_flux_nml enable is unproven", &
@@ -2191,25 +2538,60 @@ contains
       type(ocean_engine_t) :: engine
       type(config_t) :: cfg
       character(len=:), allocatable :: nml
-      integer :: ik, ierr, im
-      logical :: why_found, engine_ran
+      character(len=1400) :: lab
+      character(len=64) :: want
+      integer :: ik, ierr, im, ie
+      logical :: why_found, engine_ran, must_validate
 
-      do ik = 1, size(KNOBS)
-         nml = "&sim_nml sim_type = 'ocean' /"//NL// &
-               "&grid_nml nx = 26, ny = 18, nghost = 3, "// &
-               merge("dx = 1.0, dy = 1.0        ", "dx = 20000.0, dy = 20000.0", &
-                     index(KNOBS(ik), "'spherical'") > 0)//" /"//NL// &
-               "&time_nml t_end = 86400.0, dt_fixed = 900.0, start_date = '1958-01-01' /"//NL// &
-               "&nonhydrostatic_nml nz_layers = 4 /"//NL// &
-               "&ocean_bt_nml auto_n_inner = .true., split_scheme = 'ssp_rk2' /"//NL// &
-               "&ocean_diag_nml enabled = .false. /"//NL// &
-               "&output_nml output_to_file = .false. /"//NL// &
-               trim(KNOBS(ik))//NL
+      ! Entries 1..size(KNOBS) share one namelist template; the last two are
+      ! the dynamic wet/dry refusals, built from gate cases (wet/dry itself
+      ! runs decomposed: the `wetdry_*` cases).
+      do ik = 1, size(KNOBS) + 2
+         if (ik <= size(KNOBS)) then
+            lab = KNOBS(ik)
+            want = WHY(ik)
+            must_validate = index(KNOBS(ik), "cavity_dyn") > 0
+            nml = "&sim_nml sim_type = 'ocean' /"//NL// &
+                  "&grid_nml nx = 26, ny = 18, nghost = 3, "// &
+                  merge("dx = 1.0, dy = 1.0        ", "dx = 20000.0, dy = 20000.0", &
+                        index(KNOBS(ik), "'spherical'") > 0)//" /"//NL// &
+                  "&time_nml t_end = 86400.0, dt_fixed = 900.0, start_date = '1958-01-01' /"//NL// &
+                  "&nonhydrostatic_nml nz_layers = 4 /"//NL// &
+                  "&ocean_bt_nml auto_n_inner = .true., split_scheme = 'ssp_rk2' /"//NL// &
+                  "&ocean_diag_nml enabled = .false. /"//NL// &
+                  "&output_nml output_to_file = .false. /"//NL// &
+                  trim(KNOBS(ik))//NL
+         else if (ik == size(KNOBS) + 1) then
+            ! Wet/dry is decomposition-safe on a wall / periodic domain, but its
+            ! masks and limiter fluxes are not folded: the very tripolar-cap case
+            ! that is accepted (and bit-identical) above, plus wet/dry, must be
+            ! refused on > 1 rank by the ENGINE gate (not validate_config: the
+            ! positivity limiter is supplied, so the config is valid).
+            lab = "&ocean_wetdry_nml enable = .true. / on the tripolar-fold case"
+            want = "with north = 'tripolar_fold' is unproven"
+            must_validate = .true.
+            nml = case_nml("tripolar", "ssp_rk2", 1, 1)//"&ocean_continuity_nml ppm_limit_pos = .true. /"//NL// &
+                  "&ocean_wetdry_nml enable = .true. /"//NL
+         else
+            ! The shoal (valid under validate_config) with an OPEN east edge: the
+            ! limiter at a boundary face reads fluxes outside the domain.
+            lab = "&ocean_wetdry_nml enable = .true. / with an open east edge"
+            want = "neither wall nor periodic"
+            must_validate = .true.
+            nml = case_nml("wetdry_shoal", "ssp_rk2", 1, 1)
+            ie = index(nml, "east = 'wall'")
+            if (ie < 1) then
+               write (*, '(3a,i0)') "FAIL fence: '", trim(lab), "' substitution found no east = 'wall', rank ", rank
+               n_fail = n_fail + 1
+               cycle
+            end if
+            nml = nml(1:ie - 1)//"east = 'open'"//nml(ie + len("east = 'wall'"):)
+         end if
          call read_config_from_string(nml, cfg, ierr=ierr)
          if (ierr == OCEAN_STATUS_OK) call validate_config(cfg, ierr)
-         if (ierr /= OCEAN_STATUS_OK .and. index(KNOBS(ik), "cavity_dyn") > 0) then
+         if (ierr /= OCEAN_STATUS_OK .and. must_validate) then
             write (*, '(a,i0)') "  fence entry ", ik
-            write (*, '(a,i0)') "FAIL fence: the cavity namelist is refused by validate_config, "// &
+            write (*, '(3a,i0)') "FAIL fence: '", trim(lab), "' is refused by validate_config, "// &
                "so the engine fence is never reached (vacuous), rank ", rank
             n_fail = n_fail + 1
             cycle
@@ -2222,25 +2604,25 @@ contains
          end if
          why_found = .false.
          do im = 0, error_ring_count() - 1
-            if (index(error_ring_get(im), trim(WHY(ik))) > 0) why_found = .true.
+            if (index(error_ring_get(im), trim(want)) > 0) why_found = .true.
          end do
-         ! Entries `validate_config` itself refuses (wet/dry) never reach the engine
+         ! An entry `validate_config` itself refuses never reaches the engine
          ! fence: status-only, no reason to read.
          if (engine_ran .and. ierr /= OCEAN_STATUS_OK .and. .not. why_found) then
             if (error_ring_count() > 0) write (*, '(2a)') "  first ring message: ", &
                trim(error_ring_get(0))
-            write (*, '(3a,i0)') "FAIL fence: '", trim(KNOBS(ik)), &
+            write (*, '(3a,i0)') "FAIL fence: '", trim(lab), &
                "' was refused, but NOT for the expected reason (no error-ring message "// &
-               "contains '"//trim(WHY(ik))//"'), rank ", rank
+               "contains '"//trim(want)//"'), rank ", rank
             n_fail = n_fail + 1
             cycle
          end if
          if (ierr == OCEAN_STATUS_OK) then
-            write (*, '(3a,i0)') "FAIL fence: '", trim(KNOBS(ik)), &
+            write (*, '(3a,i0)') "FAIL fence: '", trim(lab), &
                "' was ACCEPTED on multi-rank, rank ", rank
             n_fail = n_fail + 1
          else if (rank == 0) then
-            write (*, '(3a)') "case fence: '", trim(KNOBS(ik)), &
+            write (*, '(3a)') "case fence: '", trim(lab), &
                "' refused on multi-rank for the expected reason (ok)"
          end if
       end do
@@ -2315,6 +2697,24 @@ contains
          end do
       end do
       call nc_create_file(BATHY_FILE, ncid)
+      call nc_def_dim(ncid, "y", NY_G, dy_)
+      call nc_def_dim(ncid, "x", NX_G, dx_)
+      call nc_def_var_2d(ncid, "depth", [dy_, dx_], v1)
+      call nc_enddef(ncid)
+      call nc_put_var_2d(ncid, v1, byx)
+      call nc_close(ncid)
+
+      ! `wetdry_file` bathymetry (C-order (y, x)): a 0.07 m plateau (inside the
+      ! wet/dry hysteresis band [0.05, 0.10)) of radius 2.5 cells about the
+      ! domain centre, rising quadratically to 0.4 m: the cells beside every
+      ! seam crossing seed WET with the depth in the band.
+      do i = 1, NX_G
+         do j = 1, NY_G
+            x = sqrt((real(i, wp) - 13.5_wp)**2 + (real(j, wp) - 9.5_wp)**2)
+            byx(j, i) = min(0.4_wp, 0.07_wp + 0.1_wp*max(0.0_wp, x - 2.5_wp)**2)
+         end do
+      end do
+      call nc_create_file(WD_BATHY_FILE, ncid)
       call nc_def_dim(ncid, "y", NY_G, dy_)
       call nc_def_dim(ncid, "x", NX_G, dx_)
       call nc_def_var_2d(ncid, "depth", [dy_, dx_], v1)
