@@ -52,9 +52,10 @@ module rdb_ocean_balance
    !! (the far-field background of a compact anomaly; a plain mean would add a
    !! uniform offset equal to the anomaly's area-mean, which leaves the
    !! velocities unchanged but shifts the absolute sea level).  Each column is
-   !! then stretched uniformly, `h_k <- h_k (b + eta)/sum h`, with every tracer's
-   !! `c` divided by the same factor so the content is kept (a sigma-like
-   !! choice, not an isopycnal one).
+   !! then stretched uniformly, `h_k <- h_k (b + eta)/sum h`.  Only `h_layer` is
+   !! scaled: tracers are stored as concentration `c`, so the content `h*c` scales
+   !! with `h` and `c` is left untouched (a sigma-like choice, not an isopycnal
+   !! one).
    !!
    !! **Residency (GPU `-gpu=mem:separate`).**  Must be called AFTER
    !! `ocean_state_enter_data` (`engine_enter_data`): the PGF and EOS kernels are
@@ -65,13 +66,34 @@ module rdb_ocean_balance
    !! return host and device agree.  Never an aggregate derived-type update.
    !!
    !! **Scope.**  Geostrophic only (`BALANCE_GRADIENT` is reserved and fails
-   !! loud).  Single rank; cartesian and spherical lon-lat grids; refuses
+   !! loud).  Cartesian and spherical lon-lat grids; refuses
    !! tripolar / supergrid, porous barriers, wet/dry, ice-shelf cavities, and
    !! any face where `|f| < f_min` (the equatorial band has no geostrophic
    !! solution).  Every refusal returns an error status and leaves `u`, `v`
-   !! (and `h`) untouched.  Ghost-cell velocities come out of the same stencil
-   !! on the ghost thickness/density; the first model step's halo exchange
-   !! owns them from then on.
+   !! (and `h`) untouched.
+   !!
+   !! **Decomposed domains (bitwise identical to one rank).**  Every stencil
+   !! above is local; the only global quantities are (i) the per-layer MEDIAN
+   !! `rho_ref,k`, computed on more than one rank by an exact bisection over
+   !! the ordered bit patterns of the wet interior densities (global counts via
+   !! an exact allreduce, so the result is the SAME element the one-rank
+   !! quickselect returns), (ii) the `|f|` floor (global min) and (iii) the
+   !! bottom-rest failure flag (global max, so every rank returns the same
+   !! status).  The inputs are first made seam-valid (host exchange of `h`,
+   !! tracers, and the prescribed `rho` when thermodynamics is off).  Output
+   !! `u`, `v`, `hu`, `hv` ghosts are NOT exchanged (the one-sided edge average
+   !! at a tile edge differs from the neighbour's owned value).  The rebaseline
+   !! tail of `ocean_balance_apply` refreshes only `h`, `u`, `v` and the tracer
+   !! seam ghosts (`refresh_seam_ghosts`) and then pushes the host `hu`/`hv`,
+   !! so the device `hu`/`hv` seam ghosts keep the balance's one-sided
+   !! tile-edge values until the first step recomputes them (nothing reads
+   !! them before that).  The
+   !! decomposed branch is gated by the `balance_*` cases of
+   !! `test_ocean_decomp_bitid_mpi`; its only source caller chain
+   !! (`ocean_balance_apply` <- the C API) is single-rank, so it is reachable
+   !! today only from that test.  On one rank the ghost-cell velocities come
+   !! out of the same stencil on the ghost thickness/density.
+   use, intrinsic :: iso_fortran_env, only: int64, real64
    use rdb_constants, only: wp, H_VANISHED
    use rdb_config, only: config_t
    use rdb_grid, only: hgrid_t
@@ -79,12 +101,14 @@ module rdb_ocean_balance
    use rdb_ocean_status, only: OCEAN_STATUS_OK, OCEAN_STATUS_ERR_IC_SEED, &
                                OCEAN_STATUS_ERR_NOT_INITIALISED
    use rdb_ocean_state, only: ocean_state_t
+   use rdb_ocean_boundary_types, only: OBC_TRIPOLAR_FOLD
    use rdb_ocean_metrics, only: parse_grid_config, GRID_CONFIG_CARTESIAN, &
                                 GRID_CONFIG_SPHERICAL
    use rdb_ocean_eos_compute, only: ocean_eos_compute
    use rdb_ocean_pressure_force, only: ocean_pressure_force_compute
    use rdb_barotropic_coupling, only: derive_bt_from_layers, pgf_free_surface_gravity
-   use rdb_ocean_halo, only: ocean_halo_is_decomposed
+   use rdb_ocean_halo, only: ocean_halo_is_decomposed, ocean_halo_centre
+   use rdb_halo, only: halo_allreduce_min, halo_allreduce_max, halo_allreduce_sum_i8
    use pic_logger, only: logger => global_logger
    use pic_strings, only: to_string
    implicit none
@@ -134,7 +158,7 @@ contains
       character(len=16) :: ref
       real(wp) :: fmin
       logical :: rest, rho_from_eos
-      integer :: nx, ny, nz
+      integer :: nx, ny, nz, it
       real(wp), allocatable :: scale_col(:, :), ax(:, :, :), ay(:, :, :)
       real(wp), allocatable :: u_new(:, :, :), v_new(:, :, :)
 
@@ -176,6 +200,27 @@ contains
       nz = state%multilayer%nz_ml
       rho_from_eos = cfg%ocean%thermo%enable_thermodynamics .and. &
                      state%multilayer%idx_salinity > 0 .and. state%multilayer%idx_temperature > 0
+
+      ! ---- decomposed: seam-valid host inputs (no-op on one rank) ----
+      ! Only for a DIRECT caller of this routine: `ocean_balance_apply` has
+      ! already refreshed these seam ghosts (the exchange repeats it).  No test
+      ! proves it: every test goes through `ocean_balance_apply`.  The
+      ! condition is the rank-uniform process-grid fact, never a rank-local one.
+      ! On one rank the caller's own fill stands (that path stays bit-identical;
+      ! note the primitive would also wrap a periodic edge locally).
+      if (ocean_halo_is_decomposed()) then
+         call ocean_halo_centre(state%multilayer%h_layer, nz, .false.)
+         if (allocated(state%multilayer%tracers)) then
+            do it = 1, size(state%multilayer%tracers)
+               if (allocated(state%multilayer%tracers(it)%c)) then
+                  call ocean_halo_centre(state%multilayer%tracers(it)%c, nz, .false.)
+               end if
+            end do
+         end if
+         ! Prescribed density (thermodynamics off): rho is an input, not an EOS
+         ! output.  Not covered by any test (the vortex uses the EOS).
+         if (.not. rho_from_eos) call ocean_halo_centre(state%multilayer%rho_layer, nz, .false.)
+      end if
 
       ! ---- inputs host -> device (leaf arrays only) ----
       call push_thickness_tracers(state)
@@ -233,8 +278,9 @@ contains
 
    function refusals_clear(grid, cfg, state, fmin, ierr) result(ok)
       !! `.true.` when no unsupported feature is active and `|f| >= fmin` on every
-      !! open interior face; otherwise fails loud (status in `ierr`).  Pure
-      !! host reads: mutates nothing.
+      !! open interior face; otherwise fails loud (status in `ierr`).  Host
+      !! reads plus one collective (the `|f|` min on a decomposed run, so it
+      !! must be reached by every rank or none); mutates nothing.
       type(hgrid_t), intent(in) :: grid
       type(config_t), intent(in) :: cfg
       type(ocean_state_t), intent(in) :: state
@@ -243,7 +289,7 @@ contains
       logical :: ok
 
       integer :: gk, ng, nx, ny, i, j
-      real(wp) :: fu, fv, fworst
+      real(wp) :: fu, fv, fworst, fglob
 
       ok = .false.
       gk = parse_grid_config(trim(cfg%ocean%grid%grid_config))
@@ -253,7 +299,10 @@ contains
                    "supergrid angle rotation are untested)", ierr, OCEAN_STATUS_ERR_IC_SEED)
          return
       end if
-      if (state%bc%north_fold) then
+      ! The configured north TAG (rank-uniform), not `bc%north_fold`, which is
+      ! true only on the north rank row: every rank must refuse together, before
+      ! the collective `|f|` reduction below.
+      if (state%bc%north%bc_type == OBC_TRIPOLAR_FOLD) then
          call fail("ocean_balance_velocity: the tripolar north fold is not supported", &
                    ierr, OCEAN_STATUS_ERR_IC_SEED)
          return
@@ -270,11 +319,6 @@ contains
       end if
       if (state%metrics%use_cavity) then
          call fail("ocean_balance_velocity: ice-shelf cavities are not supported", &
-                   ierr, OCEAN_STATUS_ERR_IC_SEED)
-         return
-      end if
-      if (ocean_halo_is_decomposed()) then
-         call fail("ocean_balance_velocity: single-rank only (the domain is decomposed)", &
                    ierr, OCEAN_STATUS_ERR_IC_SEED)
          return
       end if
@@ -298,6 +342,11 @@ contains
             fworst = min(fworst, abs(fv))
          end do
       end do
+      ! Rank-uniform verdict: every rank sees the global worst face.
+      if (ocean_halo_is_decomposed()) then
+         call halo_allreduce_min(fworst, fglob)
+         fworst = fglob
+      end if
       if (fworst < fmin) then
          call fail("ocean_balance_velocity: |f| = "//to_string(fworst)//" s^-1 < f_min = "// &
                    to_string(fmin)//" s^-1 on an open face: no geostrophic solution at the "// &
@@ -409,7 +458,9 @@ contains
       integer, intent(inout) :: ierr
 
       integer :: i, j, k, ng, nx, ny, nz, n
-      real(wp) :: rho0, eta, tot
+      integer(int64) :: n_global
+      real(wp) :: rho0, eta, tot, bad, bad_g
+      logical :: failed
       real(wp), allocatable :: rho_ref(:), buf(:)
 
       nx = grid%nx_total
@@ -427,14 +478,20 @@ contains
                buf(n) = state%multilayer%rho_layer(i, j, k)
             end do
          end do
-         if (n == 0) then
+         if (ocean_halo_is_decomposed()) then
+            call global_lower_median(buf, n, rho_ref(k), n_global)
+         else
+            n_global = n
+            if (n > 0) call lower_median(buf, n, rho_ref(k))
+         end if
+         if (n_global == 0) then
             call fail("ocean_balance_velocity: no wet interior cells", ierr, OCEAN_STATUS_ERR_IC_SEED)
             return
          end if
-         call lower_median(buf, n, rho_ref(k))
       end do
 
       scale_col = 1.0_wp
+      failed = .false.
       do j = 1, ny
          do i = 1, nx
             if (state%metrics%wet_T(i, j) < 0.5_wp) cycle
@@ -448,15 +505,113 @@ contains
             end do
             if (tot <= 0.0_wp) cycle
             if (state%barotropic%b(i, j) + eta <= 0.0_wp) then
-               call fail("ocean_balance_velocity: bottom_rest sea level empties the column at ("// &
-                         to_string(i)//","//to_string(j)//"): b + eta = "// &
-                         to_string(state%barotropic%b(i, j) + eta)//" m", ierr, OCEAN_STATUS_ERR_IC_SEED)
-               return
+               ! Ghost columns count too (the one-rank run stretches them with
+               ! the same formula), so the verdict is the same on every rank.
+               if (.not. failed) then
+                  call fail("ocean_balance_velocity: bottom_rest sea level empties the column at global ("// &
+                            to_string(i - ng + grid%i_offset_global)//","// &
+                            to_string(j - ng + grid%j_offset_global)//"): b + eta = "// &
+                            to_string(state%barotropic%b(i, j) + eta)//" m", ierr, OCEAN_STATUS_ERR_IC_SEED)
+               end if
+               failed = .true.
+               cycle
             end if
             scale_col(i, j) = (state%barotropic%b(i, j) + eta)/tot
          end do
       end do
+      ! Collective: a rank that saw no bad column must still return the refusal.
+      if (ocean_halo_is_decomposed()) then
+         bad = merge(1.0_wp, 0.0_wp, failed)
+         call halo_allreduce_max(bad, bad_g)
+         if (bad_g > 0.5_wp .and. .not. failed) then
+            call fail("ocean_balance_velocity: bottom_rest sea level empties a column on another rank", &
+                      ierr, OCEAN_STATUS_ERR_IC_SEED)
+         end if
+      end if
    end subroutine bottom_rest_scale
+
+   subroutine global_lower_median(a, n, m, n_global)
+      !! Lower median over the union of every rank's `a(1:n)` (collective),
+      !! identical to `lower_median` on the gathered array: the smallest value
+      !! `x` with `count(a <= x) >= (N + 1)/2`, found by bisection on the
+      !! monotone int64 image of the IEEE bit pattern.  Counts ride the exact
+      !! real64 allreduce (`halo_allreduce_sum_i8`).  `n_global = N`; `m` is
+      !! untouched when `N = 0`.  Returns the k-th order statistic, k =
+      !! (N + 1)/2, with bits identical to the one-rank selection, except that
+      !! -0.0 and +0.0 share a key and come back as +0.0.  Non-finite input is
+      !! not guarded (densities are full rho).
+      integer, intent(in) :: n
+      real(wp), intent(in) :: a(:)
+      real(wp), intent(out) :: m
+      integer(int64), intent(out) :: n_global
+      integer(int64) :: lo, hi, mid, cnt, kth, nl
+      real(wp) :: vmin, vmax, gmin, gmax
+      integer :: i
+
+      nl = int(n, int64)
+      call halo_allreduce_sum_i8(nl, n_global)
+      if (n_global == 0) return
+      vmin = huge(1.0_wp)
+      vmax = -huge(1.0_wp)
+      do i = 1, n
+         vmin = min(vmin, a(i))
+         vmax = max(vmax, a(i))
+      end do
+      call halo_allreduce_min(vmin, gmin)
+      call halo_allreduce_max(vmax, gmax)
+      kth = (n_global + 1_int64)/2_int64
+      lo = ordered_key(gmin)
+      hi = ordered_key(gmax)
+      do while (lo < hi)
+         mid = lo/2_int64 + hi/2_int64 + (mod(lo, 2_int64) + mod(hi, 2_int64))/2_int64
+         mid = max(lo, min(mid, hi - 1_int64))
+         nl = 0_int64
+         do i = 1, n
+            if (ordered_key(a(i)) <= mid) nl = nl + 1_int64
+         end do
+         call halo_allreduce_sum_i8(nl, cnt)
+         if (cnt >= kth) then
+            hi = mid
+         else
+            lo = mid + 1_int64
+         end if
+      end do
+      m = key_value(lo)
+   end subroutine global_lower_median
+
+   pure function ordered_key(x) result(key)
+      !! Monotone int64 image of a finite working-precision value, via its
+      !! real64 image (negative values flip; -0.0 and +0.0 share key 0).
+      real(wp), intent(in) :: x
+      integer(int64) :: key
+      integer(int64) :: b
+      real(real64) :: xd
+      ! Keyed on the double: `transfer` of a 4-byte real into an int64 leaves
+      ! the top bytes processor-dependent, and real(sp) -> real64 is exact and
+      ! order-preserving, so a single-precision build orders correctly too.
+      xd = real(x, real64)
+      b = transfer(xd, b)
+      if (b >= 0_int64) then
+         key = b
+      else
+         key = -iand(b, huge(b))
+      end if
+   end function ordered_key
+
+   pure function key_value(key) result(x)
+      !! Inverse of `ordered_key`.
+      integer(int64), intent(in) :: key
+      real(wp) :: x
+      integer(int64) :: b
+      real(real64) :: xd
+      if (key >= 0_int64) then
+         b = key
+      else
+         b = ior(-key, -huge(b) - 1_int64)
+      end if
+      xd = transfer(b, xd)
+      x = real(xd, wp)   ! exact: the key came from a working-precision value
+   end function key_value
 
    pure subroutine lower_median(a, n, m)
       !! Lower median `m` of `a(1:n)` by quickselect.  `a` is a scratch buffer:

@@ -279,7 +279,7 @@ ROWS = [
          "item 9 (queued)",
          message=r"zfixed_closed_faces does not yet compose with &ocean_bt_nml correction_bc_pgf"),
 
-    # ----- under an ice-shelf cavity (single-rank row) -------------------
+    # ----- under an ice-shelf cavity -------------------------------------------
     _gap("cavity_vcoord", "refused", ("cavity",),
          "Under a cavity v1 accepts sigma (it rescales the live column) and z_fixed (taught "
          "the ice base) only; the others are unvalidated or draft-following -- zstar too, "
@@ -493,26 +493,22 @@ ROWS = [
     # `decomp_hycom_visc_rem` DELETED (PR-4, the flip): its witness
     # (hycom + bt=visc_rem) now decomposes bitwise -- the visc_rem halo
     # refresh (PR-1 of the plan) already closes it on this base.
-    _gap("decomp_eulerian_z_ssp_rk2", "runtime", ("vc_eulerian_z", "ssp_rk2", "epbl", "mle"),
-         "eulerian_z under ssp_rk2 (its legacy per-stage vertical-advection + h-rescale path) "
-         "with EPBL + Fox-Kemper MLE is not decomposition-invariant: last-bit differences in "
-         "every owned cell on 2x2 and 4x1 (max|diff|/max|field| 3e-11 after 24 steps); "
-         "EPBL alone, and the same pair on z_fixed / sigma or under pred_corr, are bitwise.  "
-         "(Its visc_rem half was the visc_rem-weighted BT fold leaving non-image ghost "
-         "velocities; fixed by the post-fold face refresh in `run_stage_split`.)",
-         "NOT TRACKED (found by this matrix, 2026-10-04)", expect=("DECOMP",),
-         message=r"\dx\d: \d+ field mismatch", scope="any",
-         # re-minimised 2026-10-05 (greedy, every other axis at base)
-         witness={"vcoord": "eulerian_z", "split": "ssp_rk2", "vmix_bl": "epbl", "eddy": "mle"}),
+    # `decomp_eulerian_z_ssp_rk2` DELETED (fix/eulerian-z-epbl-mle-decomp): not an
+    # EPBL / MLE defect.  eulerian_z's per-stage vertical advection runs AFTER the
+    # post-continuity halo exchange and advanced the ghost columns of h and the
+    # tracers with the tile's own `flux_h_layer` (never exchanged), so ghosts
+    # differed from their owners; they are now refreshed right after it (gates:
+    # `eulz*` in test_ocean_decomp_bitid_mpi).
 
     # ===================================================================
     # KNOWN_GAP -- the GPU leg (nvfortran cc70) only.
     # ===================================================================
     _gap("gpu_eulerian_z_epbl_mle_drift", "runtime", ("vc_eulerian_z", "ssp_rk2", "epbl", "mle"),
          "eulerian_z + ssp_rk2 + EPBL + MLE ends 2e-7 (field norm) away from gfortran in 24 "
-         "steps, 3000x the PASS population's spread: the same combination is not "
-         "decomposition-invariant either (decomp_eulerian_z_ssp_rk2), so an order-sensitive "
-         "operation amplified through the EPBL / MLE thresholds.",
+         "steps, 3000x the PASS population's spread: an order-sensitive "
+         "operation amplified through the EPBL / MLE thresholds (the per-tile ghost h / "
+         "tracers of the eulerian_z vertical advection may have fed it; re-test on a "
+         "GPU matrix leg).",
          "NOT TRACKED (found by this matrix, 2026-10-04)", expect=("CROSS_BACKEND",),
          message=r"norm .* > band", scope="any", backend="gpu",
          # c049 of the 2026-10-04 array, as generated (not minimised: GPU-only)
@@ -522,15 +518,8 @@ ROWS = [
                   "pgf": "mont", "eos": "linear", "coriolis": "sadourny", "pv_adv": "weno5",
                   "bt": "wave_drag", "geometry": "obc", "grid": "spherical"}),
 
-    # ===================================================================
-    # KNOWN_GAP -- single-rank features: the DECOMP leg's configure-time
-    # refusal on more than one rank.
-    # ===================================================================
-    _single_rank("cavity_single_rank", ("cavity",),
-                 "The ice-shelf cavity is single-rank in v1: the grounding statistics are "
-                 "global reductions its configure does not take.",
-                 "'Single-rank-only features to lift: ... cavity'",
-                 message=r"&ocean_cavity_dyn_nml enable=\.true\. is single-rank in v1"),
+    # (No KNOWN_GAP section for single-rank features: the last row, the
+    # cavity's, was deleted when the cavity went multi-rank.)
 ]
 
 
@@ -605,6 +594,7 @@ VALUE_PATHS.update({
     ("geometry", "tripolar"): ["src/core/ocean/boundary/rdb_ocean_fold*.F90",
                                "src/core/ocean/state/rdb_ocean_bipolar.F90"],
     ("geometry", "cavity"): ["src/core/ocean/state/rdb_ocean_cavity.F90",
+                             "src/core/ocean/state/setup/rdb_ocean_setup_cavity.F90",
                              _P + "vertical/rdb_ocean_cavity_*.F90",
                              _P + "vertical/rdb_ocean_top_drag.F90"],
     ("forcing", "cool"): [_P + "vertical/rdb_ocean_surface_flux.F90"],

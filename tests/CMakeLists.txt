@@ -141,6 +141,7 @@ set(RDB_TESTS
     "test_ocean_cavity_flux|test_ocean_cavity_flux|collect_ocean_cavity_flux_tests|ocean_cavity_flux|ocean"
     "test_ocean_cavity_diags|test_ocean_cavity_diags|collect_ocean_cavity_diags_tests|ocean_cavity_diags|ocean"
     "test_ocean_cavity_grounded_budget|test_ocean_cavity_grounded_budget|collect_ocean_cavity_grounded_budget_tests|ocean_cavity_grounded_budget|ocean"
+    "test_ocean_cavity_engine|test_ocean_cavity_engine|collect_ocean_cavity_engine_tests|ocean_cavity_engine|ocean"
     "test_ocean_cavity_freshwater|test_ocean_cavity_freshwater|collect_ocean_cavity_freshwater_tests|ocean_cavity_freshwater|ocean"
     "test_ocean_pgf_wright|test_ocean_pgf_wright|collect_ocean_pgf_wright_tests|ocean_pgf_wright|ocean"
     "test_ocean_pgf_gprime|test_ocean_pgf_gprime|collect_ocean_pgf_gprime_tests|ocean_pgf_gprime|ocean"
@@ -361,6 +362,7 @@ set(RDB_TESTS
     "test_ocean_wave_drag|test_ocean_wave_drag|collect_ocean_wave_drag_tests|ocean_wave_drag|ocean"
     "test_ocean_wetdry|test_ocean_wetdry|collect_ocean_wetdry_tests|ocean_wetdry|ocean"
     "test_ocean_wetdry_driver|test_ocean_wetdry_driver|collect_ocean_wetdry_driver_tests|ocean_wetdry_driver|ocean"
+    "test_ocean_wetdry_engine|test_ocean_wetdry_engine|collect_ocean_wetdry_engine_tests|ocean_wetdry_engine|ocean"
     "test_ocean_surface_stress|test_ocean_surface_stress|collect_ocean_surface_stress_tests|ocean_surface_stress|ocean"
     "test_coriolis_inertial|test_coriolis_inertial|collect_coriolis_inertial_tests|coriolis_inertial|ocean"
     "test_coriolis_multilayer|test_coriolis_multilayer|collect_coriolis_multilayer_tests|coriolis_multilayer|ocean"
@@ -653,7 +655,8 @@ if(RDB_ENABLE_MPI)
       test_ocean_tripolar_fold_mpi
       test_ocean_fold_exchange_mpi
       test_ocean_fold_sites_mpi
-      test_ocean_decomp_bitid_mpi)
+      test_ocean_decomp_bitid_mpi
+      test_ocean_ke_probe_mpi)
   set(MPI_TEST_NPROCS_test_halo_mpi 4)
   set(MPI_TEST_NPROCS_test_halo_ocean_mpi 4)
   set(MPI_TEST_NPROCS_test_ocean_dyn_mpi 2)
@@ -663,6 +666,7 @@ if(RDB_ENABLE_MPI)
   set(MPI_TEST_NPROCS_test_ocean_fold_exchange_mpi 2)
   set(MPI_TEST_NPROCS_test_ocean_fold_sites_mpi 2)
   set(MPI_TEST_NPROCS_test_ocean_decomp_bitid_mpi 2)
+  set(MPI_TEST_NPROCS_test_ocean_ke_probe_mpi 4)
   # Per-test regime label (same values as the RDB_TESTS 5th field;
   # classification is by the source path of the modules each test imports).
   set(MPI_TEST_REGIME_test_halo_mpi core)
@@ -674,6 +678,7 @@ if(RDB_ENABLE_MPI)
   set(MPI_TEST_REGIME_test_ocean_fold_exchange_mpi ocean)
   set(MPI_TEST_REGIME_test_ocean_fold_sites_mpi ocean)
   set(MPI_TEST_REGIME_test_ocean_decomp_bitid_mpi ocean)
+  set(MPI_TEST_REGIME_test_ocean_ke_probe_mpi ocean)
   # Writes + reads NetCDF inputs (the per-rank windowed readers).
   set(MPI_NETCDF_TESTS test_ocean_decomp_bitid_mpi)
   foreach(test ${MPI_TESTS})
@@ -696,6 +701,19 @@ if(RDB_ENABLE_MPI)
       set_tests_properties(rdb_${test} PROPERTIES ENVIRONMENT
                                                   "OMP_NUM_THREADS=1")
     endif()
+    if(${test} STREQUAL test_ocean_decomp_bitid_mpi)
+      # 2-rank leg; same 4 h TIMEOUT and rationale as the 1/4-rank legs below.
+      set_tests_properties(rdb_${test} PROPERTIES TIMEOUT 14400)
+    endif()
+  endforeach()
+  # The KE probe reduction must give the same digits on any rank count: the
+  # registered 4-rank run covers 4x1/1x4/2x2; add the 1- and 2-rank runs.
+  foreach(np 1 2)
+    add_test(NAME rdb_test_ocean_ke_probe_mpi_${np}rank
+             COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${np}
+                     $<TARGET_FILE:test_ocean_ke_probe_mpi>)
+    set_tests_properties(rdb_test_ocean_ke_probe_mpi_${np}rank
+                         PROPERTIES LABELS "ocean")
   endforeach()
   # test_ocean_dyn_mpi uses ocean_test_metrics from rdb_analytical.
   target_link_libraries(test_ocean_dyn_mpi PRIVATE rdb_analytical)
@@ -788,9 +806,16 @@ if(RDB_ENABLE_MPI)
   add_test(NAME rdb_test_ocean_decomp_bitid_mpi_4rank
            COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 4
                    $<TARGET_FILE:test_ocean_decomp_bitid_mpi>)
+  # TIMEOUT: the project uses enable_testing() without include(CTest), so there
+  # is NO default timeout.  This test deliberately runs a must-be-refused probe
+  # (check_cavity_grounded_refusal) in which every rank has to reach the same
+  # configure verdict; if a verdict regresses to per-tile the ranks hang in the
+  # next collective and, with no TIMEOUT, CI would wait forever.  The honest run
+  # is long (1 rank ~56 min on one V100; 4 ranks ~70 min on a loaded CPU box),
+  # so the limit is 4 h: headroom for a loaded box, still finite.
   set_tests_properties(
     rdb_test_ocean_decomp_bitid_mpi_1rank rdb_test_ocean_decomp_bitid_mpi_4rank
-    PROPERTIES LABELS "ocean" ENVIRONMENT "OMP_NUM_THREADS=1")
+    PROPERTIES LABELS "ocean" ENVIRONMENT "OMP_NUM_THREADS=1" TIMEOUT 14400)
   # OM3 C2c-3b: atm-state provider + ocean bulk-flux consumer, 1 vs 2x2
   # bit-identity (atm%tas, ss%tau_x/tau_y, sf%q_sens physical cells). Not part
   # of the generic MPI_TESTS foreach above (it needs exactly the {1,4}rank legs
