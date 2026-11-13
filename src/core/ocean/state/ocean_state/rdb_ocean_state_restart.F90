@@ -428,9 +428,16 @@ contains
       !     one-step lag), so without them a warm restart would apply
       !     zero melt for its first step.  `optional=.true.`: an older
       !     checkpoint resumes with the zero seed rather than failing.
-      !     The slot's own arrays (`cavity_flux%melt`, `t_b`, ...) are
-      !     NOT registered — they are recomputed from state before first
-      !     use, the same derived-field rule as `mass_flux_*`.
+      !     The slot's own arrays are NOT all derived: the ones the FIRST
+      !     resumed step reads before the finalize that rewrites them are
+      !     carried state, registered below (`cavity_melt`, `cavity_active`,
+      !     `cavity_s_far`, `cavity_t_b` for `freshwater='mass'`, whose
+      !     in-stage mass step spends the previous step's melt; `cavity_ustar`
+      !     and `shelf_stress` for the melt-only under-ice `u_*`, which KPP/
+      !     EPBL read one thermo step late).  The remaining slot arrays
+      !     (`t_far`, `u_far`, `s_b`, `q_ocean`, `gamma_*`, `status`,
+      !     `comp_scale`) are written by the finalize before anything reads
+      !     them, the same derived-field rule as `mass_flux_*`.
       if (allocated(state%surface_flux%heat_cavity)) then
          call reg%register_2d("sf_heat_cavity", state%surface_flux%heat_cavity, 0, &
                               size(state%surface_flux%heat_cavity, 1), &
@@ -440,6 +447,34 @@ contains
          call reg%register_2d("sf_salt_cavity", state%surface_flux%salt_cavity, 0, &
                               size(state%surface_flux%salt_cavity, 1), &
                               size(state%surface_flux%salt_cavity, 2), optional=.true.)
+      end if
+
+      if (state%cavity_flux%enable .and. allocated(state%cavity_flux%melt)) then
+         ! `optional`: a checkpoint written before these were registered
+         ! resumes with the zero seed (the old behaviour: a 'mass' run
+         ! drops one mass step, a melt-only run runs one step with no
+         ! under-ice u_*).  Host arrays here; the read lands BEFORE
+         ! `cavity_flux%enter_data` (copyin + update device), so they reach
+         ! the device with the rest of the slot; the write pulls them with
+         ! the registry's component-array `update self`.
+         call reg%register_2d("cavity_melt", state%cavity_flux%melt, 0, &
+                              size(state%cavity_flux%melt, 1), &
+                              size(state%cavity_flux%melt, 2), optional=.true.)
+         call reg%register_2d("cavity_active", state%cavity_flux%active, 0, &
+                              size(state%cavity_flux%active, 1), &
+                              size(state%cavity_flux%active, 2), optional=.true.)
+         call reg%register_2d("cavity_s_far", state%cavity_flux%s_far, 0, &
+                              size(state%cavity_flux%s_far, 1), &
+                              size(state%cavity_flux%s_far, 2), optional=.true.)
+         call reg%register_2d("cavity_t_b", state%cavity_flux%t_b, 0, &
+                              size(state%cavity_flux%t_b, 1), &
+                              size(state%cavity_flux%t_b, 2), optional=.true.)
+         call reg%register_2d("cavity_ustar", state%cavity_flux%ustar, 0, &
+                              size(state%cavity_flux%ustar, 1), &
+                              size(state%cavity_flux%ustar, 2), optional=.true.)
+         call reg%register_2d("shelf_stress", state%surface_stress%stress_shelf, 0, &
+                              size(state%surface_stress%stress_shelf, 1), &
+                              size(state%surface_stress%stress_shelf, 2), optional=.true.)
       end if
 
       ! --- Assembled net surface fluxes under the component set.  With

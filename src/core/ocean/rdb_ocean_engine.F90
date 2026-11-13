@@ -1367,7 +1367,10 @@ contains
       ! `engine_step_finalize`, AFTER the first resumed step -- whose
       ! tracer apply would otherwise drop the melt flux once.  Same
       ! resume latch as the sea-ice path above.  Cold start untouched.
-      if (did_restart .and. engine%state%cavity_flux%enable) then
+      ! Gated on thermodynamics as well: the straight run's filler returns
+      ! before latching when they are off, so nothing is latched there.
+      if (did_restart .and. engine%state%cavity_flux%enable .and. &
+          cfg%ocean%thermo%enable_thermodynamics) then
          engine%state%surface_flux%has_heat = .true.
          engine%state%surface_flux%has_salt = .true.
       end if
