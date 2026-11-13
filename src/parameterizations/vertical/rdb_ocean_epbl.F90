@@ -1,5 +1,12 @@
 !! Energetics-based planetary boundary layer (EPBL) for the ocean core.
 module rdb_ocean_epbl
+   !! **Reproducibility.**  Every exp/log/pow/cbrt/erfc here is the
+   !! position-independent `rdb_sm_*` library (module-local include), never the
+   !! compiler intrinsic, so a column's result does not depend on its place in a
+   !! vectorised loop or on the tile width.  Quantities constant per step,
+   !! column or configuration are evaluated once, outside the loop that used to
+   !! repeat them.
+   !!
    !! Prognostic-energy surface boundary layer: each thermo step the
    !! wind supplies mechanical TKE (mstar·rho0·u*^3·dt) and surface
    !! buoyancy loss supplies convective PE (nstar-weighted); the
@@ -42,6 +49,7 @@ module rdb_ocean_epbl
                              scratch_3d_buffer_enter_data_impl, &
                              scratch_3d_buffer_exit_data_impl
    use, intrinsic :: iso_fortran_env, only: int64
+   use, intrinsic :: ieee_arithmetic, only: ieee_is_nan, ieee_is_finite
    use rdb_mem_report, only: arr_bytes
    implicit none
    private
@@ -131,6 +139,13 @@ module rdb_ocean_epbl
    real(wp), parameter :: LT_R_LOSS = 0.667_wp
       !! Stokes-transport loss ratio.
    real(wp), parameter :: LT_PI = 4.0_wp*atan(1.0_wp)
+      !! Compile-time constant expression (folded), not a runtime `atan`.
+
+   ! Position-independent exp/log/pow/cbrt/erfc (`rdb_sm_*`): the EPBL
+   ! energetics must not depend on a column's place in a vectorised loop, or a
+   ! decomposed run rounds it differently from one rank.  Constants once here,
+   ! bodies in `contains`.
+#include "rdb_safe_math_consts.inc"
 
    type :: ocean_epbl_t
       logical :: is_init = .false.
@@ -354,6 +369,10 @@ module rdb_ocean_epbl
    end type ocean_epbl_t
 
 contains
+
+#include "rdb_safe_math_core.inc"
+#include "rdb_safe_math_pow.inc"
+#include "rdb_safe_math_erfc.inc"
 
    ! =================================================================
    ! Lifecycle
@@ -640,14 +659,14 @@ contains
          mstar_s = mstar_coef1*sqrt(max(0.0_wp, b0)/(ustar*ustar*absf_floor))
          mstar_n = 0.0_wp
          if (ustar > absf_floor*bld) then
-            mstar_n = c_ek*log(ustar/(absf_floor*max(bld, 1.0e-10_wp)))
+            mstar_n = c_ek*rdb_sm_log(ustar/(absf_floor*max(bld, 1.0e-10_wp)))
          end if
          mstar = max(mstar_s, min(1.25_wp, mstar_n))
          if (mstar_cap > 0.0_wp) mstar = min(mstar_cap, mstar)
       case (EPBL_MSTAR_RH18)
-         msn_term = cn2*exp(cn3*bld*absf/ustar)
+         msn_term = cn2*rdb_sm_exp(cn3*bld*absf/ustar)
          mstar_n = cn1*msn_term/(1.0_wp + msn_term)
-         mstar_s = cs1*(max(0.0_wp, b0)**2*bld/(ustar**5*absf_floor))**cs2
+         mstar_s = cs1*rdb_sm_pow(max(0.0_wp, b0)**2*bld/(ustar**5*absf_floor), cs2)
          mstar = mstar_n + mstar_s
          if (mstar_cap > 0.0_wp) mstar = min(mstar_cap, mstar)
       case default  ! EPBL_MSTAR_CONSTANT
@@ -688,7 +707,7 @@ contains
          if (mixlen_exponent == 2.0_wp) then
             shape_val = translay_scale + (1.0_wp - translay_scale)*fr*fr
          else
-            shape_val = translay_scale + (1.0_wp - translay_scale)*fr**mixlen_exponent
+            shape_val = translay_scale + (1.0_wp - translay_scale)*rdb_sm_pow(fr, mixlen_exponent)
          end if
       end if
    end function epbl_mixlen_shape
@@ -726,7 +745,7 @@ contains
          ! alpha can go negative below U10 ~ 3 m/s; clamp z0 positive
          ! before the log.
          z0w = max(z0_smooth + alpha_ch*ustar_air**2/GRAVITY, 1.0e-10_wp)
-         u10_new = ustar_air*log(10.0_wp/z0w)/LT_VONKAR_WAVES
+         u10_new = ustar_air*rdb_sm_log(10.0_wp/z0w)/LT_VONKAR_WAVES
          if (abs(u10_new - u10) <= 1.0e-3_wp*u10) then
             u10 = u10_new
             converged = .true.
@@ -760,16 +779,18 @@ contains
          !! From `epbl_lf17_wave_state`.
       real(wp) :: la
 
-      real(wp) :: xkz, root2kz, r1, r3, r5, ustokes_sl
+      real(wp) :: xkz, root2kz, r1, r3, r5, ustokes_sl, ec1, ec2
 
       xkz = kphil*zsl
       root2kz = sqrt(2.0_wp*xkz)
       r1 = (0.302_wp - 1.68_wp*xkz)*one_m_exp_x(2.0_wp*xkz)
       r3 = (0.1264_wp + 0.64_wp*xkz)*one_m_exp_x(5.12_wp*xkz)
       if (root2kz > 1.0e-3_wp) then
-         r5 = sqrt(LT_PI)*(root2kz*(-0.84_wp*erfc(root2kz) + &
-                                    0.2_wp*erfc(1.6_wp*root2kz)) + &
-                           0.1182_wp*(erfc(1.6_wp*root2kz) - erfc(root2kz))/root2kz)
+         ! erfc(root2kz) and erfc(1.6 root2kz) each appear twice: evaluate once.
+         ec1 = rdb_sm_erfc(root2kz)
+         ec2 = rdb_sm_erfc(1.6_wp*root2kz)
+         r5 = sqrt(LT_PI)*(root2kz*(-0.84_wp*ec1 + 0.2_wp*ec2) + &
+                           0.1182_wp*(ec2 - ec1)/root2kz)
       else
          r5 = -0.64_wp*sqrt(LT_PI)*root2kz + &
               (-0.14184_wp + 1.0839648_wp*root2kz*root2kz)
@@ -789,7 +810,7 @@ contains
       if (x < 1.0e-4_wp) then
          f = 1.0_wp - x*(0.5_wp - x/6.0_wp)
       else
-         f = (1.0_wp - exp(-x))/x
+         f = (1.0_wp - rdb_sm_exp(-x))/x
       end if
    end function one_m_exp_x
 
@@ -828,9 +849,9 @@ contains
       la_mod = max(la_mod, 1.0e-10_wp)
 
       if (scheme == EPBL_LT_ADDITIVE) then
-         mstar = mstar + coef*la_mod**expo
+         mstar = mstar + coef*rdb_sm_pow(la_mod, expo)
       else
-         enh = min(max_enh, 1.0_wp + coef*la_mod**expo)
+         enh = min(max_enh, 1.0_wp + coef*rdb_sm_pow(la_mod, expo))
          mstar = mstar*enh
       end if
    end subroutine epbl_lt_enhance
@@ -1019,6 +1040,7 @@ contains
       ! (PR-21) penetrating-SW TKE ledger locals
       real(wp) :: i0_col, d_top_sw, d_bot_sw, heat_sw1, heat_sw2, q_nonpen_kin
       real(wp) :: ctke_sw_kb, r_sw, heat_nb, phi_sum, ea, eb
+      real(wp) :: e1_top, e2_top, e1_bot, e2_bot
       integer :: nb_i
 
       nx = grid%nx_total
@@ -1046,7 +1068,8 @@ contains
                d_wind, d_conv, d_forcing, d_mixing, d_mdecay, d_cdecay, &
                q_t_kin, q_s_kin, &
                i0_col, d_top_sw, d_bot_sw, heat_sw1, heat_sw2, q_nonpen_kin, &
-               ctke_sw_kb, r_sw, heat_nb, phi_sum, ea, eb, nb_i)
+               ctke_sw_kb, r_sw, heat_nb, phi_sum, ea, eb, nb_i, &
+               e1_top, e2_top, e1_bot, e2_bot)
 
          ! ---- Column prep: T0/S0 + PE/steric weights (downward) ----
          ! (E3) The top of this column.  0 Pa at a free surface; the
@@ -1074,6 +1097,8 @@ contains
             i0_col = 0.0_wp
          end if
          d_top_sw = 0.0_wp
+         e1_top = 1.0_wp   ! exp(-0/zeta): transmission at the surface
+         e2_top = 1.0_wp
          do k = nz, 1, -1
             hk = ms%h_layer(i, j, k)
             if (hk > 0.0_wp) then
@@ -1109,9 +1134,9 @@ contains
                d_bot_sw = d_top_sw + hk
                phi_sum = 0.0_wp
                do nb_i = 1, sw_nb
-                  ea = exp(-sw_kappa(i, j, nb_i)*d_top_sw)
+                  ea = rdb_sm_exp(-sw_kappa(i, j, nb_i)*d_top_sw)
                   if (k > ms%k_bot(i, j)) then
-                     eb = exp(-sw_kappa(i, j, nb_i)*d_bot_sw)
+                     eb = rdb_sm_exp(-sw_kappa(i, j, nb_i)*d_bot_sw)
                   else
                      eb = 0.0_wp   ! opaque bed: absorb the remainder
                   end if
@@ -1125,14 +1150,18 @@ contains
             else if (sw_ctke_active) then
                d_bot_sw = d_top_sw + hk
                if (k > ms%k_bot(i, j)) then
-                  heat_sw1 = i0_col*sw_R*inv_rho0_cp*dt* &
-                             (exp(-d_top_sw/sw_zeta1) - exp(-d_bot_sw/sw_zeta1))
-                  heat_sw2 = i0_col*(1.0_wp - sw_R)*inv_rho0_cp*dt* &
-                             (exp(-d_top_sw/sw_zeta2) - exp(-d_bot_sw/sw_zeta2))
+                  ! The layer-top transmissions are the previous layer's
+                  ! bottom ones (carried), so each interface is evaluated once.
+                  e1_bot = rdb_sm_exp(-d_bot_sw/sw_zeta1)
+                  e2_bot = rdb_sm_exp(-d_bot_sw/sw_zeta2)
+                  heat_sw1 = i0_col*sw_R*inv_rho0_cp*dt*(e1_top - e1_bot)
+                  heat_sw2 = i0_col*(1.0_wp - sw_R)*inv_rho0_cp*dt*(e2_top - e2_bot)
+                  e1_top = e1_bot
+                  e2_top = e2_bot
                else
                   ! opaque bed: absorb the whole remaining irradiance.
-                  heat_sw1 = i0_col*sw_R*inv_rho0_cp*dt*exp(-d_top_sw/sw_zeta1)
-                  heat_sw2 = i0_col*(1.0_wp - sw_R)*inv_rho0_cp*dt*exp(-d_top_sw/sw_zeta2)
+                  heat_sw1 = i0_col*sw_R*inv_rho0_cp*dt*e1_top
+                  heat_sw2 = i0_col*(1.0_wp - sw_R)*inv_rho0_cp*dt*e2_top
                end if
                this%ctke_sw%data(i, j, k) = &
                   -0.5_wp*GRAVITY*this%rho0*this%dcolht_t%data(i, j, k)* &
@@ -1310,7 +1339,7 @@ contains
 
                   ! (1) mechanical TKE decays across the layer above
                   !     (Ekman-scale e-folding; no decay at f = 0).
-                  exp_kh = exp(-h_ka*idecay)
+                  exp_kh = rdb_sm_exp(-h_ka*idecay)
                   d_mdecay = d_mdecay + (1.0_wp - exp_kh)*mech_tke
                   mech_tke = mech_tke*exp_kh
 
@@ -1403,11 +1432,11 @@ contains
                            surf_scale = max(0.05_wp, 1.0_wp - htot/mld_guess)
                            vstar = this%vstar_scale_fac*surf_scale* &
                                    (this%vstar_surf_fac*ustar + &
-                                    (this%wstar_ustar_coef*conv_perel/ &
-                                     (dt*this%rho0))**(1.0_wp/3.0_wp))
+                                    rdb_sm_cbrt(this%wstar_ustar_coef*conv_perel/ &
+                                                (dt*this%rho0)))
                         else
                            vstar = this%vstar_scale_fac* &
-                                   (tke_here/(dt*this%rho0))**(1.0_wp/3.0_wp)
+                                   rdb_sm_cbrt(tke_here/(dt*this%rho0))
                         end if
                         if (this%mld_iteration) then
                            mixlen = max(this%min_mix_len, &
@@ -1459,11 +1488,11 @@ contains
                               surf_scale = max(0.05_wp, 1.0_wp - htot/mld_guess)
                               vstar = this%vstar_scale_fac*surf_scale* &
                                       (this%vstar_surf_fac*ustar + &
-                                       (this%wstar_ustar_coef*conv_perel/ &
-                                        (dt*this%rho0))**(1.0_wp/3.0_wp))
+                                       rdb_sm_cbrt(this%wstar_ustar_coef*conv_perel/ &
+                                                   (dt*this%rho0)))
                            else
                               vstar = this%vstar_scale_fac* &
-                                      (tke_here/(dt*this%rho0))**(1.0_wp/3.0_wp)
+                                      rdb_sm_cbrt(tke_here/(dt*this%rho0))
                            end if
                            if (this%mld_iteration) then
                               mixlen = max(this%min_mix_len, &
