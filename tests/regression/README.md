@@ -1451,9 +1451,10 @@ go through a stdlib classic-NetCDF writer — nothing to install):
   `remap_boundary_extrap`, `remap_nonuniform_weights`,
   and `remap_check_preconditions`;
 * edge variants: `closed` (walls + island), `channel` (re-entrant in x, a
-  north sponge band), `obc` (a Flather open east edge), and the single-rank
+  north sponge band), `obc` (a Flather open east edge), the single-rank
   row `tripolar` (the analytic tripolar generator: 15 x 1 degree from 59 N,
-  bipolar cap above 70 N, north fold, px = 1) and `cavity` (a flat 200 m ice
+  bipolar cap above 70 N, north fold, px = 1) and `cavity` (runs on any rank
+  count, DECOMP leg included; a flat 200 m ice
   draft over the deep northern third; it enables the cavity dynamics and the
   draft only, NEITHER the basal melt NOR the top drag, so its PASS says nothing
   about the melt path -- that is covered by the `cavity_*` cases of

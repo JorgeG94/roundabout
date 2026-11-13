@@ -102,12 +102,13 @@ contains
          call grid_allreduce_max(grid, maxval(ocean_state%metrics%z_draft), g_max)
          call grid_allreduce_min(grid, minval(ocean_state%metrics%z_draft), g_min)
          if (g_max /= g_min) then
+            call grid_allreduce_max(grid, maxval(ocean_state%metrics%p_ice_ref), pice_max)
             call fail("&ocean_cavity_dyn_nml enable=.true. with a NON-UNIFORM "// &
                       "draft requires &ocean_pgf_nml p_top_in_bc=.true.  The "// &
                       "isostatic load rho_ref*g*z_draft would otherwise never "// &
                       "reach the FV_MOM6 pa(nz+1) surface boundary condition, "// &
                       "leaving the pressure stack ~"// &
-                      to_string(maxval(ocean_state%metrics%p_ice_ref))// &
+                      to_string(pice_max)// &
                       " Pa off its anomaly scale and the column out of "// &
                       "hydrostatic balance.  (A UNIFORM draft is exempt: a "// &
                       "load with no gradient is provably inert in the top BC.)", &
@@ -301,7 +302,8 @@ contains
          !! Non-zero on a melt configuration conflict when present;
          !! absent behaves as today (`error stop`).
       integer :: nx, ny, n_zero_f, n_unloaded
-      integer(int64) :: nz_glob
+      integer(int64) :: nz_glob, n_own_glob
+      integer :: ng, nxp, nyp
       real(wp) :: ptop_max
       real(wp) :: gamma_s_eff
 
@@ -312,6 +314,9 @@ contains
 
       nx = size(ocean_state%cavity_flux%f_cor, 1)
       ny = size(ocean_state%cavity_flux%f_cor, 2)
+      ng = grid%nghost
+      nxp = grid%nx_phys
+      nyp = grid%ny_phys
 
       ! ---- knobs -> slot ----
       ocean_state%cavity_flux%far_field_depth = cfg%ocean%cavity_melt%far_field_depth
@@ -371,10 +376,19 @@ contains
          ! Rank-uniform verdict: global sum (a tile-local count would let one
          ! rank refuse while the others carry on).
          call grid_allreduce_sum_i8(grid, int(n_zero_f, int64), nz_glob)
-         n_zero_f = int(nz_glob)
-         if (n_zero_f > 0) then
+         ! The verdict keeps the all-cell count (it was never layout-free at
+         ! the ghost ring and is unchanged on one rank); the PRINTED number
+         ! is the OWNED-cell global count, which does not depend on the
+         ! decomposition (a seam ghost is another rank's owned cell).
+         n_zero_f = cavity_count_zero_f( &
+                    ocean_state%cavity_flux%f_cor(ng + 1:ng + nxp, ng + 1:ng + nyp), &
+                    ocean_state%metrics%cover_frac(ng + 1:ng + nxp, ng + 1:ng + nyp), &
+                    ocean_state%multilayer%wet_mask(ng + 1:ng + nxp, ng + 1:ng + nyp), &
+                    nxp, nyp)
+         call grid_allreduce_sum_i8(grid, int(n_zero_f, int64), n_own_glob)
+         if (nz_glob > 0) then
             call fail("&ocean_cavity_melt_nml exchange_law='hj99': "// &
-                      to_string(n_zero_f)//" ice-covered wet column(s) sit at "// &
+                      to_string(n_own_glob)//" owned ice-covered wet column(s) sit at "// &
                       "f = 0.  Holland & Jenkins (1999) eq. (15) takes "// &
                       "ln(.../|f| h_nu) and eq. (18) divides by f*L_O, so the law "// &
                       "has no value there and the kernel would return "// &
@@ -394,9 +408,15 @@ contains
       n_unloaded = cavity_count_unloaded_p_top(ocean_state%multilayer%p_top, &
                                                ocean_state%metrics%p_ice_ref, nx, ny)
       call grid_allreduce_sum_i8(grid, int(n_unloaded, int64), nz_glob)
-      n_unloaded = int(nz_glob)
-      if (n_unloaded > 0) then
-         call fail("&ocean_cavity_melt_nml: "//to_string(n_unloaded)//" column(s) "// &
+      ! Verdict on the all-cell count (unchanged); printed number = owned
+      ! cells, layout-independent.
+      n_unloaded = cavity_count_unloaded_p_top( &
+                   ocean_state%multilayer%p_top(ng + 1:ng + nxp, ng + 1:ng + nyp), &
+                   ocean_state%metrics%p_ice_ref(ng + 1:ng + nxp, ng + 1:ng + nyp), &
+                   nxp, nyp)
+      call grid_allreduce_sum_i8(grid, int(n_unloaded, int64), n_own_glob)
+      if (nz_glob > 0) then
+         call fail("&ocean_cavity_melt_nml: "//to_string(n_own_glob)//" owned column(s) "// &
                    "have ms%p_top < metrics%p_ice_ref, so the top-of-column load was "// &
                    "never assembled.  The melt liquidus is a CONSUMER of ms%p_top; "// &
                    "its sole producer is configure_ocean_cavity "// &

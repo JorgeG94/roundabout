@@ -1937,7 +1937,7 @@ contains
       integer, intent(out) :: ierr
 
       integer :: draft_code, source_code, nx, ny, ng
-      integer :: n_over_land, n_grounded, n_interior
+      integer :: n_over_land, n_grounded, n_interior, n_over_land_all
       integer :: sign_code, local_ierr
       real(wp) :: per_metre, x0_g, x1_g, y0_g, y1_g, slope_g, amp
       logical :: geographic
@@ -2088,8 +2088,14 @@ contains
       ! says land, so land columns keep the datum they always had
       ! (`bt_H_ref = b`) and the counted-once invariant stays exact on
       ! every column.
+      ! The PRINTED count is the OWNED cells' (global, layout-independent);
+      ! the helper below still zeroes the ghost ring too.
+      n_over_land = count(state%barotropic%b(ng + 1:ng + grid%nx_phys, ng + 1:ng + grid%ny_phys) &
+                          < LAND_DEPTH_THRESHOLD .and. &
+                          state%metrics%z_draft(ng + 1:ng + grid%nx_phys, ng + 1:ng + grid%ny_phys) &
+                          /= 0.0_wp)
       call cavity_apply_land_exclusion(state%metrics%z_draft, state%barotropic%b, &
-                                       nx, ny, n_over_land)
+                                       nx, ny, n_over_land_all)
 
       call cavity_count_grounded(state%barotropic%b, state%metrics%z_draft, &
                                  cfg%ocean%cavity_dyn%h_min_cavity, ng, &

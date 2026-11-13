@@ -1537,6 +1537,7 @@ contains
       use pic_strings, only: to_string
       use rdb_error_ring, only: fail
       use rdb_ocean_status, only: OCEAN_STATUS_OK, OCEAN_STATUS_ERR_SETUP
+      use rdb_grid_reduce, only: grid_allreduce_sum_i8
       type(hgrid_t), intent(in) :: grid
          !! Horizontal grid (for `nx_total`/`ny_total`).
       type(ocean_cavity_flux_t), intent(inout) :: cav
@@ -1556,11 +1557,12 @@ contains
          !! absent ⇒ run (the `ocean_surface_flux_assemble` convention).
       integer, intent(out), optional :: ierr
          !! `OCEAN_STATUS_OK`, or `OCEAN_STATUS_ERR_SETUP` after a non-finite
-         !! column.  The count is per TILE, so only some ranks see it: a
-         !! present `ierr` lets the driver abort ALL ranks (`comm_env_abort`)
-         !! instead of this rank `error stop`-ping while the others block in
+         !! column.  The count is reduced over the tiles, so EVERY rank
+         !! gets the same verdict; a present `ierr` lets the driver abort
+         !! ALL ranks (`comm_env_abort`) instead of this rank `error stop`-ping while the others block in
          !! the next collective.  Absent ⇒ `error stop` (single-rank callers).
       integer :: nx, ny, nz, idx_t, idx_s
+      integer(int64) :: nf_loc, nf_glob
 
       if (present(ierr)) ierr = OCEAN_STATUS_OK
       if (.not. cav%is_init) return
@@ -1608,6 +1610,15 @@ contains
                                   + int(cav%n_not_converged_step, int64)
       cav%n_no_root_total = cav%n_no_root_total + int(cav%n_no_root_step, int64)
       cav%n_other_total = cav%n_other_total + int(cav%n_other_step, int64)
+
+      ! Rank-uniform verdict: the non-finite count is per TILE, so reduce it
+      ! (one integer per thermo step, melt on only: every early return above
+      ! is config-uniform; an identity on an untiled grid).  EVERY rank then
+      ! reports the same failure, whichever caller (driver, API, bench, test)
+      ! handles `ierr`.
+      nf_loc = int(cav%n_nonfinite_step, int64)
+      call grid_allreduce_sum_i8(grid, nf_loc, nf_glob)
+      cav%n_nonfinite_step = int(nf_glob)
 
       if (cavity_melt_status_is_fatal(cav%n_nonfinite_step)) then
          call fail("&ocean_cavity_melt_nml: "//to_string(cav%n_nonfinite_step)// &

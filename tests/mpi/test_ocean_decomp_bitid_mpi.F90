@@ -1503,12 +1503,13 @@ contains
             ! Windowed-drain cases: the sub-cycle must run >1 pass (else the
             ! pass-count reduction is never exercised) and every layout must
             ! have used the same count as the serial reference.
-            ! (`cavity_combo` is exempt from the >1-pass requirement: its quiescent
-            ! flow needs a single pass per window; it still runs the windowed
-            ! accumulation and the per-window drain, and is compared bitwise.)
-            if (index(case_nml(label, scheme, 1, 1), "dt_tracer_advect_ratio") > 0 .and. &
-                label /= "cavity_combo") then
-               if (ref%drain_iter < 2 .or. dec%drain_iter /= ref%drain_iter) then
+            ! (`cavity_combo` waives ONLY the ">1 pass" requirement: its quiescent
+            ! flow needs a single pass per window.  It must still have run the
+            ! drain at all (ref >= 1) with the same count on every layout; the
+            ! windowed accumulation is compared bitwise.)
+            if (index(case_nml(label, scheme, 1, 1), "dt_tracer_advect_ratio") > 0) then
+               if (ref%drain_iter < merge(1, 2, label == "cavity_combo") .or. &
+                   dec%drain_iter /= ref%drain_iter) then
                   write (*, '(3a,i0,a,i0)') "FAIL ", trim(tag), ": drain passes ref=", &
                      ref%drain_iter, " dec=", dec%drain_iter
                   nbad = nbad + 1
@@ -1647,7 +1648,8 @@ contains
       type(ocean_engine_t) :: engine
       type(config_t) :: cfg
       character(len=:), allocatable :: nml
-      integer :: px, ierr, nbad, glob(1)
+      integer :: px, ierr, nbad, glob(1), im
+      logical :: why_found
       character(len=96) :: tag
 
       do px = nprocs, 1, -1
@@ -1662,11 +1664,24 @@ contains
             write (*, '(3a,i0)') "FAIL ", trim(tag), ": validate_config refused the probe, rank ", rank
             nbad = 1
          else
+            call error_ring_clear()
             call engine_setup(engine, cfg, ierr, compute_rank=rank, compute_size=nprocs)
             call engine_teardown(engine)
             if (ierr == OCEAN_STATUS_OK) then
                write (*, '(3a,i0)') "FAIL ", trim(tag), ": ACCEPTED, rank ", rank
                nbad = 1
+            else
+               ! Refused is not enough: it must be the grounded-fraction
+               ! refusal ("the prescribed draft grounds N of M ..."), on this rank.
+               why_found = .false.
+               do im = 0, error_ring_count() - 1
+                  if (index(error_ring_get(im), "draft grounds") > 0) why_found = .true.
+               end do
+               if (.not. why_found) then
+                  write (*, '(3a,i0)') "FAIL ", trim(tag), &
+                     ": refused, but NOT for the grounded-fraction reason, rank ", rank
+                  nbad = 1
+               end if
             end if
          end if
          glob(1) = nbad
