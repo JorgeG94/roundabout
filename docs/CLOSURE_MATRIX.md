@@ -539,8 +539,8 @@ default off. The top drag is in [section 9](#9-drag-and-surface-stress).
 | Rest residual under a sloping draft | measured, not a knob | none | Sigma-PGF truncation, cubic in the slope. | `test_ocean_cavity_load` |
 
 **Envelope** (each fails loud at configure): `form = "fv_mom6"` with
-`gfs_scale = 1`; `vcoord_type` in {`sigma`, `z_fixed`}; the split solver; one
-rank; `bt_halo = 0`; and no wet/dry, porous barriers, sea ice or
+`gfs_scale = 1`; `vcoord_type` in {`sigma`, `z_fixed`}; the split solver;
+`bt_halo = 0`; and no wet/dry, porous barriers, sea ice or
 `&ocean_tides_nml use_sal`. `&ocean_zinit_nml enable` composes.
 
 **Full notes in the archive:** [geometry and load table (original cells, measurements) and envelope](CLOSURE_MATRIX_ARCHIVE.md#a23)
@@ -566,7 +566,7 @@ Coupling: `rdb_ocean_cavity_flux.F90`, called from `engine_step_finalize`.
 | Flux delivery | with `enable` | none | `heat_cavity` and `salt_cavity` fold into `Q_heat` and `Q_salt`. | `test_ocean_cavity_flux` |
 | Virtual salt flux | **default** | `freshwater = "virtual"` | Dilution identity. Adds no volume. | `test_ocean_cavity_flux` |
 | Real freshwater mass | opt-in | `freshwater = "mass"` | Adds `dh = m·dt/ρ₀` to the top layer. Refused with wet/dry and `dt_tracer_advect_ratio > 1`. | `test_ocean_cavity_freshwater` |
-| Sea-level compensation | opt-in; needs `freshwater="mass"` | `volume_compensation` (`"none"`; `"uniform_open_ocean"`) | Removes the melt volume over uncovered cells. | `test_ocean_cavity_freshwater` |
+| Sea-level compensation | opt-in; needs `freshwater="mass"` | `volume_compensation` (`"none"`; `"uniform_open_ocean"`) | Removes the melt volume over uncovered cells. Refused at configure when the global open area is 0. | `test_ocean_cavity_freshwater` |
 | Budgets | with `enable` | none | Rides the existing heat and salt surface budgets; mass adds `ms%mass_src`. | `test_ocean_cavity_flux`, `test_ocean_cavity_freshwater`, `test_ocean_cavity_grounded_budget` |
 | Status accounting | with `enable` | none | Non-finite input or state is fatal; other failures are counted and get a zero-melt safe state. | `test_ocean_cavity_flux` |
 | Cover mask on atmospheric forcing | follows `&ocean_cavity_dyn_nml enable` | none | Atmospheric terms are scaled by `1 − cover_frac`. | `test_ocean_cavity_flux` |

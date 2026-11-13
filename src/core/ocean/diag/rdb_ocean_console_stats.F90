@@ -341,7 +341,8 @@ contains
          !! `efp_real_diff` treatment.  The cumulative `mass_out` is
          !! accumulated per step in EFP bins too (`mass_out_efp_on`, set
          !! from this knob); the cavity-only `mass_src` stays an FP running
-         !! sum (single-rank path).
+         !! sum, booked on one tile (global cell (1,1)) so the cross-rank
+         !! sum is the global source once.
       real(wp), intent(in), optional :: budget_stage_weight
          !! Per-outer-step weight for the salt/heat budget accumulators, from
          !! `ocean_budget_stage_weight(is_pc)`.  Absent ⇒ the historical

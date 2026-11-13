@@ -271,6 +271,11 @@ program test_ocean_decomp_bitid_mpi
          !! Wet/dry runs: owned-cell flips of `wd_wet_dyn`, sampled once per outer
          !! step, in the seam bands of the shoal -- (wet->dry, dry->wet) x
          !! (i-line band, j-line band, corner box).  Zero on every other case.
+      real(wp) :: mvol_max = 0.0_wp, mvol_min = 0.0_wp, dw_max = 0.0_wp, dw_min = 0.0_wp
+         !! `freshwater='mass'`: range over the run of the global melt volume
+         !! (m^3/step) and of the compensating withdrawal `dw` (m).
+      integer :: mvol_nvar = 0, dw_nvar = 0
+         !! Number of steps on which each changed (non-vacuity: varying, non-zero).
       integer :: ncav(6) = 0
          !! Cavity non-vacuity counts over the OWNED cells: covered wet, open wet,
          !! grounded, melting, top-drag stress > 0, k_top < nz.
@@ -291,7 +296,7 @@ program test_ocean_decomp_bitid_mpi
       !! `RDB_BITID_CASES`: run only the cases whose name contains this substring.
    type(comm_t) :: comm
    character(len=16), parameter :: SCHEMES(2) = [character(len=16) :: "pred_corr", "ssp_rk2"]
-   character(len=24), parameter :: CASES(67) = [character(len=24) :: &
+   character(len=24), parameter :: CASES(69) = [character(len=24) :: &
                                                 "island_basin", "weno7_pv", &
                                                 "periodic_channel_zstar", &
                                                 "visc_rem_zstar", &
@@ -322,7 +327,8 @@ program test_ocean_decomp_bitid_mpi
                                                 "cavity_zfixed", "cavity_sigma", &
                                                 "cavity_sigma_ratio2", "cavity_gall", "cavity_melt_only", "cavity_periodic", &
                                                 "cavity_combo", "wetdry_shoal", &
-                                                "wetdry_periodic", "wetdry_file", "chapman_obc"]
+                                                "wetdry_periodic", "wetdry_file", "chapman_obc", &
+                                                "cavity_mass", "cavity_mass_comp"]
 
    call comm_env_init()
    call comm_env_setup_roles(.false.)
@@ -1233,6 +1239,8 @@ contains
       character(len=24) :: sfrac
       character(len=8) :: xedge
       character(len=48) :: vdf, xlaw
+      character(len=96) :: fw
+      character(len=:), allocatable :: pst
 
       vm = ""
       vdf = ""
@@ -1241,6 +1249,16 @@ contains
       if (label == "cavity_periodic") xedge = "periodic"
       tdrag = "&ocean_tdrag_nml enable = .true., form = 'quadratic', cd = 2.5e-3 /"//NL
       if (label == "cavity_melt_only") tdrag = ""
+      fw = ""
+      pst = ""
+      if (index(label, "cavity_mass") == 1) then
+         ! Real freshwater mass (a Boussinesq volume on the top layer); the
+         ! pseudo-salt tracer runs the mass step's pseudo-salt mirror.  Both
+         ! cases are in the checkpoint/resume leg.
+         fw = ", freshwater = 'mass', volume_compensation = '"// &
+              merge("uniform_open_ocean", "none              ", label == "cavity_mass_comp")//"'"
+         pst = "&ocean_tracers_nml enable_pseudo_salt = .true. /"//NL
+      end if
       if (label == "cavity_zfixed") then
          nzl = "8"
          vc = "&vcoord_nml vcoord_type = 'z_fixed', zfixed_closed_faces = .true. /"//NL
@@ -1287,8 +1305,8 @@ contains
             "&ocean_forcing_nml enable_components = .true. /"//NL// &
             "&ocean_cavity_melt_nml enable = .true., exchange_law = '"//trim(xlaw)//"', "// &
             "gamma_t = 2.2e-2, gamma_s = -1.0, cdrag_top = 2.5e-3, "// &
-            "ice_conduction = 'insulating', s_ice = 0.0, far_field_depth = 10.0 /"//NL// &
-            tdrag//vdf// &
+            "ice_conduction = 'insulating', s_ice = 0.0, far_field_depth = 10.0"//trim(fw)//" /"//NL// &
+            pst//tdrag//vdf// &
             "&ocean_pgf_nml form = 'fv_mom6', p_top_in_bc = .true. /"//NL// &
             "&ocean_eos_nml eos = 'linear', tfreeze_set = 'isomip' /"//NL// &
             "&ocean_bc_nml west = '"//xedge//"', east = '"//xedge//"', south = 'wall', "// &
@@ -1333,6 +1351,10 @@ contains
       do n = 1, n_steps_cur
          call engine_step(engine, DT, t, ierr=ierr)
          if (ierr /= OCEAN_STATUS_OK) exit
+         if (index(nml, "freshwater = 'mass'") > 0) then
+            call track_mass_range(snap, engine%state%cavity_flux%melt_volume_step, &
+                                  engine%state%cavity_flux%comp_withdrawal_step, n)
+         end if
          ! Driver order: the sea-ice block (a no-op unless `&ocean_ice_nml
          ! enable`) between the dyn-core advance and the finalize.
          call engine_step_ice(engine, cfg, DT, t, ierr=ierr)
@@ -2029,9 +2051,11 @@ contains
             ! `dt_therm_ratio = 1`, not a decomposition defect.
             if ((label == "sea_ice" .or. label == "sea_ice_transport" .or. &
                  label == "bulk_flux_ice" .or. label == "dtbt_reset" .or. &
-                 label == "cavity_sigma_ratio2" .or. is_wetdry_case(label) .or. is_ice_fold_case(label)) .and. &
+                 label == "cavity_sigma_ratio2" .or. label == "cavity_mass" .or. &
+                 label == "cavity_mass_comp" .or. is_wetdry_case(label) .or. is_ice_fold_case(label)) .and. &
                 (nprocs/px == 1 .or. px == nprocs/px) .and. &
-                (nprocs > 1 .or. label == "cavity_sigma_ratio2")) then
+                (nprocs > 1 .or. label == "cavity_sigma_ratio2" .or. label == "cavity_mass" .or. &
+                 label == "cavity_mass_comp")) then
                ! 4x1 and 2x2 at np = 4 (and 2x1 at np = 2).
                call check_resume_leg(case_nml(label, scheme, px, nprocs/px), dec, &
                                      trim(tag))
@@ -2109,6 +2133,27 @@ contains
       end if
    end subroutine check_ghost_images
 
+   subroutine track_mass_range(snap, vol, dw, n)
+      !! Record the range of the per-step melt volume and compensating
+      !! withdrawal (non-vacuity of the `freshwater='mass'` cases).
+      type(snap_t), intent(inout) :: snap
+      real(wp), intent(in) :: vol, dw
+      integer, intent(in) :: n
+      if (n == 1) then
+         snap%mvol_max = vol
+         snap%mvol_min = vol
+         snap%dw_max = dw
+         snap%dw_min = dw
+      else
+         if (vol /= snap%mvol_max .or. vol /= snap%mvol_min) snap%mvol_nvar = snap%mvol_nvar + 1
+         if (dw /= snap%dw_max .or. dw /= snap%dw_min) snap%dw_nvar = snap%dw_nvar + 1
+         snap%mvol_max = max(snap%mvol_max, vol)
+         snap%mvol_min = min(snap%mvol_min, vol)
+         snap%dw_max = max(snap%dw_max, dw)
+         snap%dw_min = min(snap%dw_min, dw)
+      end if
+   end subroutine track_mass_range
+
    subroutine check_cavity_counters(ref, label, tag)
       !! Non-vacuity of a cavity case on the serial reference: every count the
       !! case relies on must be non-zero (a geometry that drifts off the cavity
@@ -2129,6 +2174,19 @@ contains
             n_fail = n_fail + 1
          end if
       end do
+      if (index(label, "cavity_mass") == 1) then
+         if (rank == 0) write (*, '(3a,4(1x,es12.4),2(1x,i0))') "case ", tag, &
+            ": mass step range (vol_max vol_min dw_max dw_min, #changes vol dw) =", &
+            ref%mvol_max, ref%mvol_min, ref%dw_max, ref%dw_min, ref%mvol_nvar, ref%dw_nvar
+         if (ref%mvol_max <= 0.0_wp .or. ref%mvol_nvar == 0) then
+            write (*, '(3a)') "FAIL ", tag, ": melt volume is zero or constant (vacuous mass case)"
+            n_fail = n_fail + 1
+         end if
+         if (label == "cavity_mass_comp" .and. (ref%dw_max <= 0.0_wp .or. ref%dw_nvar == 0)) then
+            write (*, '(3a)') "FAIL ", tag, ": compensation dw is zero or constant (vacuous)"
+            n_fail = n_fail + 1
+         end if
+      end if
       if (rank == 0) write (*, '(3a,6(1x,i0))') "case ", tag, ": cavity counts (covered, open, grounded, "// &
          "melting, dragged, k_top<nz) =", ref%ncav
    end subroutine check_cavity_counters
@@ -2299,7 +2357,9 @@ contains
       type(conservation_budget_t), intent(in) :: dec_buds(:)
       integer :: k, nbad
 
-      if (trim(label) /= "periodic_sponge") return
+      ! `cavity_mass*`: the console's mass `src` must be the GLOBAL source once
+      ! (not once per rank), i.e. equal to the serial reference's.
+      if (trim(label) /= "periodic_sponge" .and. index(label, "cavity_mass") /= 1) return
 
       if (.not. ref_bud%mass_active) then
          n_fail = n_fail + 1
@@ -2323,6 +2383,12 @@ contains
       end if
 
       nbad = 0
+      if (rank == 0 .and. index(label, "cavity_mass") == 1) then
+         write (*, '(4a,es22.14)') "  budget mass_src ", trim(label), "/", trim(scheme), ref_bud%mass_src
+         do k = 1, size(dec_buds)
+            write (*, '(a,i0,a,es22.14)') "     layout ", k, " mass_src ", dec_buds(k)%mass_src
+         end do
+      end if
       do k = 1, size(dec_buds)
          if (dec_buds(k)%mass_active .neqv. ref_bud%mass_active .or. &
              dec_buds(k)%salt_active .neqv. ref_bud%salt_active .or. &
@@ -2341,6 +2407,12 @@ contains
              transfer(dec_buds(k)%salt_src, 0_int64) /= transfer(ref_bud%salt_src, 0_int64) .or. &
              transfer(dec_buds(k)%heat_src, 0_int64) /= transfer(ref_bud%heat_src, 0_int64)) then
             nbad = nbad + 1
+            if (rank == 0) write (*, '(a,i0,a)') "  serial-out layout ", k, &
+               " (mass_out mass_src salt_out salt_src heat_out heat_src; dec then ref):"
+            if (rank == 0) write (*, '(6(1x,es22.14))') dec_buds(k)%mass_out, dec_buds(k)%mass_src, &
+               dec_buds(k)%salt_out, dec_buds(k)%salt_src, dec_buds(k)%heat_out, dec_buds(k)%heat_src
+            if (rank == 0) write (*, '(6(1x,es22.14))') ref_bud%mass_out, ref_bud%mass_src, &
+               ref_bud%salt_out, ref_bud%salt_src, ref_bud%heat_out, ref_bud%heat_src
          end if
       end do
 
@@ -2440,9 +2512,10 @@ contains
                                      "gamma_t = 2.2e-2, gamma_s = -1.0, cdrag_top = 2.5e-3, "// &
                                      "ice_conduction = 'insulating', s_ice = 0.0, far_field_depth = 10.0"
       character(len=1400), parameter :: KNOBS(6) = [character(len=1400) :: &
-                                                    ! cavity + freshwater = 'mass'
+                                                    ! cavity covering every wet column + uniform_open_ocean (global open area 0)
                                                     CAV//CAV_DYN//" /"//new_line("a")// &
-                                                    CAV_MELT//", freshwater = 'mass' /", &
+                                                    CAV_MELT//", freshwater = 'mass', "// &
+                                                    "volume_compensation = 'uniform_open_ocean' /", &
                                                     ! cavity + a file draft
                                                     CAV//"&ocean_cavity_dyn_nml enable = .true., "// &
                                                     "draft_config = 'file', draft_file = 'draft.nc', "// &
@@ -2475,7 +2548,7 @@ contains
       ! fence that is deleted while a LATER, more generic refusal still fires
       ! (the bulk-forcing one, the validate envelope) cannot pass unnoticed.
       character(len=64), parameter :: WHY(6) = [character(len=64) :: &
-                                                "freshwater = 'mass' with a cavity is unproven", &
+                                                "global open area is 0", &
                                                 "draft_config = 'file' is unproven", &
                                                 "enable with &ocean_bulk_flux_nml enable is unproven", &
                                                 "is not 'wall' or 'periodic'", &

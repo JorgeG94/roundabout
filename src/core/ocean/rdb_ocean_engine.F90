@@ -120,7 +120,6 @@ module rdb_ocean_engine
    use rdb_ocean_surface_flux, only: ocean_surface_flux_assemble
    use rdb_ocean_surface_stress, only: ocean_surface_stress_set_shelf_from_ustar
    use rdb_ocean_cavity_flux, only: ocean_cavity_flux_step
-   use rdb_ocean_cavity_melt, only: parse_cavity_freshwater, CAVITY_FW_MASS
    use rdb_ocean_vcoord, only: parse_ocean_vcoord_type, VCOORD_LAGRANGIAN
    use rdb_ocean_setup, only: configure_ocean_metrics, configure_ocean_land_mask, &
                               configure_ocean_forcing, &
@@ -482,22 +481,12 @@ contains
                       ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
-         ! Ice-shelf cavity (dyn + virtual melt + top drag) runs decomposed,
+         ! Ice-shelf cavity (dyn + melt, virtual or real-mass freshwater + top drag) runs decomposed,
          ! bitwise (`cavity_*` cases of `test_ocean_decomp_bitid_mpi`).  The
          ! combinations below have NO case yet; each is refused narrowly,
          ! keyed on the rank count and on rank-uniform config, so every rank
          ! fails together.
          if (cfg%ocean%cavity_dyn%enable) then
-            if (cfg%ocean%cavity_melt%enable .and. &
-                parse_cavity_freshwater(cfg%ocean%cavity_melt%freshwater) == CAVITY_FW_MASS) then
-               call fail("&ocean_cavity_melt_nml freshwater = 'mass' with a cavity is "// &
-                         "unproven on a decomposed domain ("//to_string(csize)// &
-                         " ranks requested): the melt volume and open area are "// &
-                         "global floating-point sums whose order depends on the "// &
-                         "layout.  Use freshwater = 'virtual' or run on 1 rank.", &
-                         ierr, OCEAN_STATUS_ERR_SETUP)
-               return
-            end if
             if (trim(cfg%ocean%cavity_dyn%draft_config) == "file") then
                call fail("&ocean_cavity_dyn_nml draft_config = 'file' is unproven on a "// &
                          "decomposed domain ("//to_string(csize)//" ranks requested): "// &
