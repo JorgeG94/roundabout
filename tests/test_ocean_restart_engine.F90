@@ -117,7 +117,17 @@ contains
                   new_unittest("restart_engine_bkgnd_full_reseed_on_restart", &
                                test_engine_bkgnd_full_reseed_on_restart), &
                   new_unittest("restart_engine_cold_seeds_kv_without_checkpoint", &
-                               test_engine_cold_seeds_kv_without_checkpoint) &
+                               test_engine_cold_seeds_kv_without_checkpoint), &
+                  new_unittest("restart_engine_bit_exact_cavity_melt_drag", &
+                               test_engine_bit_exact_cavity_melt_drag), &
+                  new_unittest("restart_engine_bit_exact_cavity_melt_only", &
+                               test_engine_bit_exact_cavity_melt_only), &
+                  new_unittest("restart_engine_bit_exact_cavity_therm2_window_end", &
+                               test_engine_bit_exact_cavity_therm2_end), &
+                  new_unittest("restart_engine_bit_exact_cavity_therm2_mid_window", &
+                               test_engine_bit_exact_cavity_therm2_mid), &
+                  new_unittest("restart_engine_bit_exact_cavity_melt_only_therm2", &
+                               test_engine_bit_exact_cavity_melt_only_therm2) &
                   ]
    end subroutine collect_ocean_restart_engine_tests
 
@@ -347,10 +357,76 @@ contains
                "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
                "north = 'wall' /"//NL// &
                "&output_nml output_to_file = .false. /"//NL
+      case ("cavity_zfixed", "cavity_zfixed_therm2")
+         nml = cavity_nml(.true., .true., label == "cavity_zfixed_therm2")
+      case ("cavity_sigma_melt_only", "cavity_sigma_melt_only_therm2")
+         nml = cavity_nml(.false., .false., label == "cavity_sigma_melt_only_therm2")
       case default
          error stop "test_ocean_restart_engine: unknown case"
       end select
    end function case_nml
+
+   function cavity_nml(zfixed, top_drag, therm2) result(nml)
+      !! Ice-shelf cavity with basal melt (and optionally top drag) over a
+      !! seamount, closed basin, `enable_components`: the engine-driven
+      !! cavity namelists of the cavity engine tests.  `zfixed` = z_fixed
+      !! (no KPP, fixed-z layers); else sigma with the default KPP.
+      logical, intent(in) :: zfixed, top_drag, therm2
+      character(len=:), allocatable :: nml
+      character(len=*), parameter :: NL = new_line("a")
+      character(len=:), allocatable :: vc, nzl, cav, vm, td
+      if (zfixed) then
+         nzl = "8"
+         vc = "&vcoord_nml vcoord_type = 'z_fixed', zfixed_closed_faces = .true. /"//NL
+         cav = ", h_min_cavity = 250.0 /"//NL
+         vm = "&ocean_vmix_nml use_kpp = .false., pp81_nu0 = 0.0, pp81_nu_bg = 1.0e-3, "// &
+              "pp81_kappa_bg = 5.0e-5"
+      else
+         nzl = "4"
+         vc = "&vcoord_nml vcoord_type = 'sigma' /"//NL
+         cav = ", h_min_cavity = 100.0 /"//NL
+         vm = "&ocean_vmix_nml"
+      end if
+      if (therm2) then
+         if (zfixed) then
+            vm = vm//", dt_therm_ratio = 2 /"//NL
+         else
+            vm = vm//" dt_therm_ratio = 2 /"//NL
+         end if
+      else
+         if (zfixed) then
+            vm = vm//" /"//NL
+         else
+            vm = ""
+         end if
+      end if
+      td = ""
+      if (top_drag) td = "&ocean_tdrag_nml enable = .true., form = 'quadratic', cd = 2.5e-3 /"//NL
+      nml = "&sim_nml sim_type = 'ocean' /"//NL// &
+            "&time_nml t_end = 86400.0, dt_fixed = 600.0 /"//NL// &
+            "&nonhydrostatic_nml nz_layers = "//nzl//" /"//NL// &
+            "&tracer_nml initial_salinity = 34.5, T_init_surface = 3.0, T_init_bottom = 1.0 /"//NL// &
+            "&ocean_bt_nml auto_n_inner = .true., split_scheme = 'pred_corr' /"//NL// &
+            "&ocean_hvisc_nml nu_h = 200.0, lateral_closure = 'smagorinsky', smag_ah = .true. /"//NL// &
+            "&ocean_diag_nml enabled = .false. /"//NL// &
+            "&grid_nml nx = 26, ny = 18, nghost = 3, dx = 20000.0, dy = 20000.0 /"//NL// &
+            "&physics_nml coriolis_f = -1.409e-4 /"//NL// &
+            vc//vm// &
+            "&ocean_topo_nml topo_config = 'seamount', max_depth = 1000.0, edge_depth = 400.0, "// &
+            "slope_scale = 80000.0, wind_config = 'constant', taux_magnitude = 0.05 /"//NL// &
+            "&ocean_cavity_dyn_nml enable = .true., draft_config = 'linear', "// &
+            "draft_depth = 500.0, draft_slope = -4.0e-4, draft_x0 = 0.0, "// &
+            "draft_x1 = 380000.0, draft_y1 = 260000.0"//cav// &
+            "&ocean_forcing_nml enable_components = .true. /"//NL// &
+            "&ocean_cavity_melt_nml enable = .true., exchange_law = 'const_gamma', "// &
+            "gamma_t = 2.2e-2, gamma_s = -1.0, cdrag_top = 2.5e-3, "// &
+            "ice_conduction = 'insulating', s_ice = 0.0, far_field_depth = 10.0 /"//NL// &
+            td// &
+            "&ocean_pgf_nml form = 'fv_mom6', p_top_in_bc = .true. /"//NL// &
+            "&ocean_eos_nml eos = 'linear', tfreeze_set = 'isomip' /"//NL// &
+            "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL// &
+            "&output_nml output_to_file = .false. /"//NL
+   end function cavity_nml
 
    subroutine make_engine(engine, cfg, nml, ok, restart_file, t0, step0)
       type(ocean_engine_t), intent(inout) :: engine
@@ -437,6 +513,18 @@ contains
       call push2(snap, "surface_stress_mag", engine%state%surface_stress%stress_mag)
       call push2(snap, "surface_flux_Q_heat", engine%state%surface_flux%Q_heat)
       call push2(snap, "surface_flux_Q_salt", engine%state%surface_flux%Q_salt)
+      if (engine%state%cavity_flux%enable) then
+         ! Cavity outputs the next step (or the next finalize) reads.
+         !$acc update self(engine%state%cavity_flux%melt, engine%state%cavity_flux%t_b)
+         !$acc update self(engine%state%cavity_flux%ustar, engine%state%surface_stress%stress_shelf)
+         !$acc update self(engine%state%surface_flux%heat_cavity, engine%state%surface_flux%salt_cavity)
+         call push2(snap, "cavity_melt", engine%state%cavity_flux%melt)
+         call push2(snap, "cavity_t_b", engine%state%cavity_flux%t_b)
+         call push2(snap, "cavity_ustar", engine%state%cavity_flux%ustar)
+         call push2(snap, "cavity_stress_shelf", engine%state%surface_stress%stress_shelf)
+         call push2(snap, "cavity_heat", engine%state%surface_flux%heat_cavity)
+         call push2(snap, "cavity_salt", engine%state%surface_flux%salt_cavity)
+      end if
    end subroutine take_snapshot
 
    subroutine push(snap, tag, a)
@@ -481,6 +569,11 @@ contains
             return
          end if
          if (index(sa%f(e)%tag, "ice_") == 1) n_ice = n_ice + 1
+         ! The melt slot's own outputs are recomputed at the next thermo
+         ! step and are not state at the resume point; they are compared
+         ! after the resumed steps, where any lag they carry shows.
+         if (index(when, "resume point") > 0 .and. index(sa%f(e)%tag, "cavity_") == 1 &
+             .and. sa%f(e)%tag /= "cavity_heat" .and. sa%f(e)%tag /= "cavity_salt") cycle
          if (any(shape(sa%f(e)%a) /= shape(sb%f(e)%a))) then
             nbad_fields = nbad_fields + 1
             msg = msg//" "//trim(sa%f(e)%tag)//"(shape)"
@@ -800,6 +893,48 @@ contains
       integer :: n_ice
       call run_round_trip(error, "gm_meke_varmix_therm2", 5, 4, n_ice)
    end subroutine test_engine_bit_exact_gm
+
+   subroutine test_engine_bit_exact_cavity_melt_drag(error)
+      !! Basal melt + top drag, `dt_therm_ratio = 1`: the first resumed step
+      !! must integrate the carried melt heat/salt flux.
+      type(error_type), allocatable, intent(out) :: error
+      integer :: n_ice
+      call run_round_trip(error, "cavity_zfixed", 5, 4, n_ice)
+   end subroutine test_engine_bit_exact_cavity_melt_drag
+
+   subroutine test_engine_bit_exact_cavity_melt_only(error)
+      !! Melt only (no top drag, KPP on): the under-ice `u_*` of the first
+      !! resumed step comes from the melt slot's lagged `ustar`.
+      type(error_type), allocatable, intent(out) :: error
+      integer :: n_ice
+      call run_round_trip(error, "cavity_sigma_melt_only", 5, 4, n_ice)
+   end subroutine test_engine_bit_exact_cavity_melt_only
+
+   subroutine test_engine_bit_exact_cavity_therm2_end(error)
+      !! `dt_therm_ratio = 2`, checkpoint at a WINDOW BOUNDARY (even N_WRITE):
+      !! the resumed step is a thermo step.
+      type(error_type), allocatable, intent(out) :: error
+      integer :: n_ice
+      call run_round_trip(error, "cavity_zfixed_therm2", 4, 4, n_ice)
+   end subroutine test_engine_bit_exact_cavity_therm2_end
+
+   subroutine test_engine_bit_exact_cavity_therm2_mid(error)
+      !! `dt_therm_ratio = 2`, checkpoint MID window (odd N_WRITE).
+      type(error_type), allocatable, intent(out) :: error
+      integer :: n_ice
+      call run_round_trip(error, "cavity_zfixed_therm2", 5, 4, n_ice)
+   end subroutine test_engine_bit_exact_cavity_therm2_mid
+
+   subroutine test_engine_bit_exact_cavity_melt_only_therm2(error)
+      !! Melt only + KPP at `dt_therm_ratio = 2`, checkpoint at a window
+      !! boundary and mid window: the non-thermo resumed step reads the
+      !! lagged melt `ustar` through `stress_shelf`.
+      type(error_type), allocatable, intent(out) :: error
+      integer :: n_ice
+      call run_round_trip(error, "cavity_sigma_melt_only_therm2", 4, 4, n_ice)
+      if (allocated(error)) return
+      call run_round_trip(error, "cavity_sigma_melt_only_therm2", 5, 4, n_ice)
+   end subroutine test_engine_bit_exact_cavity_melt_only_therm2
 
    subroutine ice_round_trip(error, label)
       !! N_WRITE = 5 (odd) with `dt_therm_ratio = 2`: the checkpoint lands
