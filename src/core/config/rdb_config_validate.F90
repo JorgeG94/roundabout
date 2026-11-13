@@ -1,5 +1,6 @@
 submodule(rdb_config) rdb_config_validate
    !! validate_config and its helper predicates.
+   use rdb_safe_math, only: safe_exp
    implicit none
 
    real(wp), parameter :: VORTEX_F_MIN = 1.0e-6_wp
@@ -4127,7 +4128,7 @@ contains
       ! largest gradient at d = Hv/sqrt(2) of sqrt(2) exp(-1/2) |dT|/Hv =
       ! 0.858 |dT|/Hv (K/m); the background dT/dz must exceed it or N^2 < 0.
       if (cfg%ocean%ic%vortex_dT < 0.0_wp .and. cfg%ocean%ic%vortex_hv > 0.0_wp) then
-         dtdz_min = sqrt(2.0_wp)*exp(-0.5_wp)*abs(cfg%ocean%ic%vortex_dT)/cfg%ocean%ic%vortex_hv
+         dtdz_min = sqrt(2.0_wp)*safe_exp(-0.5_wp)*abs(cfg%ocean%ic%vortex_dT)/cfg%ocean%ic%vortex_hv
          if (cfg%ocean%ic%vortex_dT_dz <= dtdz_min) then
             call logger%error("balanced_vortex is statically UNSTABLE (N^2 < 0 in the core): "// &
                               "a cold core dT = "//to_string(cfg%ocean%ic%vortex_dT)// &

@@ -38,6 +38,7 @@ module rdb_ocean_stability_audit
    !! module header for `bound_kh` / `stress_tensor` semantics).
    use rdb_constants, only: wp, PI, VCOORD_SIGMA, VCOORD_ZSIGMA, &
                             VCOORD_ZSTAR_SIGMA
+   use rdb_safe_math, only: safe_cos, safe_cbrt
    use rdb_config, only: config_t
    use rdb_grid, only: hgrid_t
    use rdb_vcoord, only: parse_vcoord_type
@@ -275,7 +276,7 @@ contains
       real(wp), intent(in) :: nu_h, beta
       real(wp) :: delta_m
       if (beta > 0.0_wp .and. nu_h > 0.0_wp) then
-         delta_m = (nu_h/beta)**(1.0_wp/3.0_wp)
+         delta_m = safe_cbrt(nu_h/beta)
       else
          delta_m = huge(1.0_wp)
       end if
@@ -398,7 +399,7 @@ contains
       else
          do j = j0, j1
             do i = i0, i1
-               beta_ij = 2.0_wp*cfg%ocean%grid%omega*cos(metrics%geolatT(i, j)*DEG2RAD)/ &
+               beta_ij = 2.0_wp*cfg%ocean%grid%omega*safe_cos(metrics%geolatT(i, j)*DEG2RAD)/ &
                          cfg%ocean%grid%rad_earth
                if (beta_ij <= 0.0_wp) cycle
                dx_ij = min(metrics%dxT(i, j), metrics%dyT(i, j))

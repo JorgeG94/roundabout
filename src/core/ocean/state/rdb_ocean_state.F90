@@ -11,6 +11,7 @@ module rdb_ocean_state
                             DEG2RAD, TWO_PI, VCOORD_Z_FIXED, VCOORD_ZSTAR_FULL, &
                             VCOORD_ZSTAR
    use rdb_grid, only: hgrid_t
+   use rdb_safe_math, only: safe_exp
    use pic_logger, only: logger => global_logger
    use rdb_error_ring, only: fail
    use pic_strings, only: to_string
@@ -1714,7 +1715,7 @@ contains
       else if (t < -T_SAT) then
          r = 1.0_wp
       else
-         r = 1.0_wp/(1.0_wp + exp(t))
+         r = 1.0_wp/(1.0_wp + safe_exp(t))
       end if
    end function isomip_logistic
 
