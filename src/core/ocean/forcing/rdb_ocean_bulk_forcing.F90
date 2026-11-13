@@ -41,22 +41,26 @@ module rdb_ocean_bulk_forcing
    !! EXCHANGED, never extrapolated" contract; the stress pair's
    !! ghosts are filled afterwards, see below.
    !!
-   !! **Stress: cell-centred, then a scalar halo copy, then the face
-   !! average, then the REAL vector seam refresh.**  `bulk_flux_column`
-   !! naturally produces a CELL-CENTRED stress (same point as `uas`/
-   !! `vas`).  Averaging that onto the C-grid `tau_x`/`tau_y` FACES
-   !! needs the neighbour cell on both sides of every face, including
-   !! the faces at the tile edge -- which needs this rank's cell-centred
-   !! ghost ring to hold the NEIGHBOUR's real physical value, not a
-   !! locally-recomputed (zero-atm-input) one.  `ocean_halo_centre`
-   !! (the 2D specific) supplies exactly that: an MPI exchange (or local periodic wrap)
-   !! of the plain SCALAR field, no vector sign handling -- which is
-   !! why the tripolar fold row comes out of it with the wrong sign
-   !! (a scalar copy, not a vector one) and is deliberately not relied
-   !! on: `ocean_seam_refresh_surface_stress`, called last, re-does the
-   !! face pair's own proper vector exchange + periodic wrap + fold and
-   !! is what leaves `tau_x`/`tau_y` (and `stress_mag`) correct
-   !! everywhere a kernel reads them.
+   !! **Stress: cell-centred, then the halo, then the face average, then
+   !! the REAL vector seam refresh.**  `bulk_flux_column` naturally
+   !! produces a CELL-CENTRED stress (same point as `uas`/`vas`).
+   !! Averaging that onto the C-grid `tau_x`/`tau_y` FACES needs the
+   !! neighbour cell on both sides of every face, including the faces at
+   !! the tile edge -- which needs this rank's cell-centred ghost ring to
+   !! hold the NEIGHBOUR's real physical value, not a locally-recomputed
+   !! (zero-atm-input) one.  `ocean_halo_centre` supplies that: an MPI
+   !! exchange (or local periodic wrap) of the plain SCALAR field.  Under
+   !! a tripolar fold the north ghost rows are then filled from the
+   !! mirror cells (`ocean_fold_wrap_centre_flat`, px-aware) and
+   !! NEGATED, because the fold's 180-degree rotation reverses both
+   !! vector components.  The fold-line `tau_y` face (the north face of
+   !! the last physical row) is thereby the two-sided average
+   !! `0.5*(tauy_c(i) - tauy_c(i'))`, antisymmetric by construction;
+   !! without it that face averaged against a zero ghost and the fold
+   !! projection copied the half-magnitude value across.
+   !! `ocean_seam_refresh_surface_stress`, called last, re-does the face
+   !! pair's own vector exchange + periodic wrap + fold and the
+   !! `stress_mag` refresh KPP/EPBL read for u_*.
    !!
    !! **Open-water weighting.**  `ocean_sea_ice_t%part_size(:,:,0)` IS
    !! the open-water fraction already -- the category partition sums
@@ -99,6 +103,7 @@ module rdb_ocean_bulk_forcing
    use rdb_ocean_surface_flux, only: ocean_surface_flux_t
    use rdb_ocean_halo_state, only: ocean_seam_refresh_surface_stress
    use rdb_ocean_halo, only: ocean_halo_centre
+   use rdb_ocean_fold_apply, only: ocean_fold_wrap_centre_flat
    use rdb_mem_report, only: arr_bytes
    implicit none
    private
@@ -308,6 +313,19 @@ contains
       call ocean_halo_centre(this%taux_c)
       call ocean_halo_centre(this%tauy_c)
 
+      ! Tripolar fold of the cell-centred pair as a VECTOR: copy the
+      ! mirror cells into the north ghost rows (the centre-scalar fold,
+      ! px-aware) and negate them -- the 180-degree rotation of the fold
+      ! reverses both components.  The face average below then forms the
+      ! fold-line `tau_y` face from the cell on each side of the fold.
+      ! (The zonal fold only touches ghost-row `taux_c`/`tau_x`, which the
+      ! seam refresh below rewrites, so it changes no output; kept for symmetry.)
+      if (bc%north_fold) then
+         call ocean_fold_wrap_centre_flat(grid, bc, this%taux_c, nx, ny, 1)
+         call ocean_fold_wrap_centre_flat(grid, bc, this%tauy_c, nx, ny, 1)
+         call bulk_forcing_negate_north_ghosts_impl(nx, ny, ng + nyp + 1, this%taux_c, this%tauy_c)
+      end if
+
       call bulk_forcing_stress_face_impl(nx, ny, this%taux_c, this%tauy_c, ss%tau_x, ss%tau_y)
 
       ! The REAL vector exchange + periodic wrap + tripolar fold, and
@@ -444,6 +462,20 @@ contains
          end if
       end do
    end subroutine bulk_forcing_core_impl
+
+   pure subroutine bulk_forcing_negate_north_ghosts_impl(nx, ny, j_lo, taux_c, tauy_c)
+      !! Reverse the sign of both stress components in the north ghost
+      !! rows `j_lo:ny` (storage) -- the vector part of the tripolar
+      !! fold, applied after the scalar-copy fold has filled them.
+      integer, intent(in) :: nx, ny, j_lo
+      real(wp), intent(inout) :: taux_c(nx, ny), tauy_c(nx, ny)
+      integer :: i, j
+
+      do concurrent(j=j_lo:ny, i=1:nx)
+         taux_c(i, j) = -taux_c(i, j)
+         tauy_c(i, j) = -tauy_c(i, j)
+      end do
+   end subroutine bulk_forcing_negate_north_ghosts_impl
 
    pure subroutine bulk_forcing_stress_face_impl(nx, ny, taux_c, tauy_c, tau_x, tau_y)
       !! Cell-centred stress -> C-grid face average, ALL faces

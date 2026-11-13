@@ -108,6 +108,7 @@ module rdb_ocean_engine
    use rdb_ocean_periodic, only: ocean_periodic_wrap_state, ocean_periodic_wrap_centre_2d
    use rdb_ocean_fold_apply, only: ocean_fold_wrap_state, ocean_fold_wrap_eta_2d
    use rdb_ocean_boundary_data, only: ocean_boundary_data_constant_t
+   use rdb_barotropic_substep, only: chapman_setup_corner, chapman_workspace_cleanup
    use rdb_ocean_boundary_types, only: ocean_bc_state_set_edges, ocean_bc_state_set_topology, &
                                        ocean_bc_type_from_string, OBC_PERIODIC, OBC_WALL, &
                                        OBC_TRIPOLAR_FOLD, OBC_CHAPMAN
@@ -449,6 +450,38 @@ contains
          ! an unset process grid (px = py = 1, auto-factored above) does
          ! not trip -- so this is the gate that always holds.  Every rank
          ! evaluates the same condition and fails together.
+         ! Dynamic wet/dry is decomposition-safe on a wall / periodic domain
+         ! (nghost >= 3 keeps the owned cells and the innermost ghost layer
+         ! exact through the fast loop by induction; three once-per-stage
+         ! refreshes keep the outer ghosts as images).  Two things are UNPROVEN
+         ! on a decomposed domain and refused here:
+         !  * the tripolar fold: the wd_* masks and the limiter fluxes are
+         !    never folded, on any rank count;
+         !  * any edge that is not WALL or PERIODIC: the limiter adds
+         !    min(theta(ng), theta(ng+1)) at the boundary face, and theta(ng)
+         !    reads fluxes at faces OUTSIDE the domain, which at a seam
+         !    crossing the open edge come from corner ghosts / the
+         !    zero-gradient fill, a radius no OBC decomposition case reads.
+         if (cfg%ocean%wetdry%enable .and. &
+             ocean_bc_type_from_string(cfg%ocean%bc%north) == OBC_TRIPOLAR_FOLD) then
+            call fail("&ocean_wetdry_nml enable = .true. with north = 'tripolar_fold' is "// &
+                      "unproven on more than one rank ("//to_string(csize)//" ranks "// &
+                      "requested): the wet/dry masks and limiter fluxes are not folded.  "// &
+                      "Run on 1 rank.", &
+                      ierr, OCEAN_STATUS_ERR_SETUP)
+            return
+         end if
+         if (cfg%ocean%wetdry%enable .and. ( &
+             wetdry_edge_is_open(cfg%ocean%bc%west) .or. wetdry_edge_is_open(cfg%ocean%bc%east) .or. &
+             wetdry_edge_is_open(cfg%ocean%bc%south) .or. wetdry_edge_is_open(cfg%ocean%bc%north))) then
+            call fail("&ocean_wetdry_nml enable = .true. with an &ocean_bc_nml edge that is "// &
+                      "neither wall nor periodic (open / tidal / clamped / chapman / sponge / "// &
+                      "...) is unproven on more than one rank ("//to_string(csize)// &
+                      " ranks requested): the limiter at the boundary face reads fluxes "// &
+                      "outside the domain that are not decomposition-checked.  Run on 1 rank.", &
+                      ierr, OCEAN_STATUS_ERR_SETUP)
+            return
+         end if
          ! Ice-shelf cavity (dyn + virtual melt + top drag) runs decomposed,
          ! bitwise (`cavity_*` cases of `test_ocean_decomp_bitid_mpi`).  The
          ! combinations below have NO case yet; each is refused narrowly,
@@ -502,13 +535,6 @@ contains
                return
             end if
          end if
-         if (cfg%ocean%wetdry%enable) then
-            call fail("&ocean_wetdry_nml enable = .true. is single-rank ("// &
-                      to_string(csize)//" ranks requested): the wet-mask / outflow-"// &
-                      "limiter halo exchange is not implemented.  Run on 1 rank.", &
-                      ierr, OCEAN_STATUS_ERR_SETUP)
-            return
-         end if
          ! Sea ice runs on the ocean's decomposition: the category state,
          ! the EVP ice velocity, the transport's CAS state and the blended
          ! surface stress are halo-exchanged (`engine_step_ice`) and, under
@@ -527,20 +553,6 @@ contains
                       "arrays) is single-rank ("//to_string(csize)//" ranks requested): "// &
                       "the arrays describe the whole grid.  Use the file readers "// &
                       "(topo_config='file', grid_config='supergrid') or 1 rank.", &
-                      ierr, OCEAN_STATUS_ERR_SETUP)
-            return
-         end if
-         ! Chapman radiation keeps ONE edge-uniform eta target per edge,
-         ! computed from the tile's own stretch of the edge (and a corner
-         ! depth): split along a Chapman edge, every rank radiates toward a
-         ! different target.
-         if (any([ocean_bc_type_from_string(cfg%ocean%bc%west), &
-                  ocean_bc_type_from_string(cfg%ocean%bc%east), &
-                  ocean_bc_type_from_string(cfg%ocean%bc%south), &
-                  ocean_bc_type_from_string(cfg%ocean%bc%north)] == OBC_CHAPMAN)) then
-            call fail("&ocean_bc_nml 'chapman' edges are single-rank ("// &
-                      to_string(csize)//" ranks requested): the edge-mean eta target "// &
-                      "is a per-rank partial mean.  Use 'open' (Flather) or run on 1 rank.", &
                       ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
@@ -1182,6 +1194,29 @@ contains
       if (cfg%ocean%bt%n_inner >= 1) then
          call ocean_halo_centre(engine%state%dyn%bt_work%bt_H_ref, device_resident=.false.)
       end if
+      ! Chapman phase-speed scale: global south-west corner `bt_H_ref` and
+      ! `idx_cu`, latched once (static data; collective, all ranks call it).
+      if (cfg%ocean%bt%n_inner >= 1) then
+         call chapman_setup_corner(engine%grid, engine%state%dyn%bt_work%bt_H_ref, &
+                                   engine%state%metrics%idxCu, engine%state%bc)
+      end if
+      ! Dynamic wet/dry cold start: `wd_wet_dyn` was seeded over the whole
+      ! local array by `configure_ocean_wetdry`, BEFORE the bathymetry halo
+      ! fill above, so its seam ghosts hold the seed of whatever `b` the ghost
+      ! held then.  An owner cell in the hysteresis band would keep a wrong
+      ! innermost-ghost mask and the seam-face gate would differ, so the seed
+      ! must be an image.  Measured: the formula bathymetry setters and the
+      ! windowed file reader (full-width band of rows +- nghost, read from the
+      ! file) already hand the seed the owner's seam-ghost values, so removing
+      ! this exchange changes no case (`wetdry_shoal`, `wetdry_file`); what it
+      ! still repairs is a ghost the reader EXTRAPOLATES (a global periodic
+      ! edge: the halo fill wraps it later, the seed saw the extrapolation).
+      ! Kept as the ordering guarantee; no case proves it.  Host data
+      ! (pre-`enter_data`), hence `device_resident=.false.`; collective on the rank-uniform switch; a warm
+      ! restart already carries the checkpointed ghosts.
+      if (cfg%ocean%wetdry%enable .and. .not. did_restart) then
+         call ocean_halo_centre(engine%state%dyn%bt_work%wd_wet_dyn, device_resident=.false.)
+      end if
 
       ! px > 1 tripolar: refresh the static corner Coriolis array's x ghosts
       ! from their OWNERS before it is folded.  The analytic generator
@@ -1317,6 +1352,21 @@ contains
       ! after it (that is where p_ice_ref comes from), BEFORE enter_data.
       call configure_ocean_cavity_melt(cfg, engine%state, engine%grid, rank, ierr=ierr)
       if (setup_failed(ierr)) return
+
+      ! Warm restart with basal melt: the carried `sf_heat_cavity`/
+      ! `sf_salt_cavity` (and the assembled Q) were restored above, but
+      ! `set_surface_flux_const` cleared the host `has_heat`/`has_salt`
+      ! latches and the melt filler only re-latches them in
+      ! `engine_step_finalize`, AFTER the first resumed step -- whose
+      ! tracer apply would otherwise drop the melt flux once.  Same
+      ! resume latch as the sea-ice path above.  Cold start untouched.
+      ! Gated on thermodynamics as well: the straight run's filler returns
+      ! before latching when they are off, so nothing is latched there.
+      if (did_restart .and. engine%state%cavity_flux%enable .and. &
+          cfg%ocean%thermo%enable_thermodynamics) then
+         engine%state%surface_flux%has_heat = .true.
+         engine%state%surface_flux%has_salt = .true.
+      end if
 
       ! Ice-shelf TOP drag (Phase 4a): coefficients + the static FACE
       ! cover masks projected from `metrics%cover_frac`.  AFTER the
@@ -1457,6 +1507,17 @@ contains
       if (allocated(engine%staged_v)) deallocate (engine%staged_v)
       if (allocated(engine%staged_tracers)) deallocate (engine%staged_tracers)
    end subroutine engine_apply_staged_ic
+
+   pure function wetdry_edge_is_open(edge_name) result(is_open)
+      !! `.true.` iff the edge string parses to anything but WALL or PERIODIC
+      !! (open, tidal, clamped, chapman, sponge, an unparsable name, ...): the
+      !! edge types the multi-rank wet/dry gate has no decomposition case for.
+      character(len=*), intent(in) :: edge_name
+      logical :: is_open
+      integer :: t
+      t = ocean_bc_type_from_string(edge_name)
+      is_open = (t /= OBC_WALL .and. t /= OBC_PERIODIC)
+   end function wetdry_edge_is_open
 
    pure function setup_failed(ierr) result(bad)
       !! `.true.` iff `ierr` is present and non-OK — the "shall I
@@ -2234,6 +2295,7 @@ contains
 #ifndef RDB_NO_NETCDF
       if (engine%diag_enabled) call close_stream(engine%state%diag)
 #endif
+      call chapman_workspace_cleanup()
       call ocean_halo_destroy()
       call ocean_fold_exchange_destroy()
       call engine%geo%destroy()

@@ -53,7 +53,7 @@ module rdb_ocean_restart
       integer :: rank = 0
          !! 0 (host scalar), 2, or 3.
       real(wp), pointer :: p0 => null()
-         !! Host scalar (rank-0 persistent state, e.g. Chapman eta_old).
+         !! Host scalar (e.g. Chapman eta_old: a global value, identical on every rank).
       real(wp), pointer :: p2(:, :) => null()
          !! Host array for rank-2 fields (incl. ghosts).
       real(wp), pointer :: p3(:, :, :) => null()
@@ -167,9 +167,10 @@ contains
    end function registry_entry_found
 
    subroutine registry_register_scalar(this, tag, scal, optional)
-      !! Register a host scalar (rank-0 persistent state, e.g. the Chapman
-      !! `eta_old_chapman_*` corner values).  Host-only — never device-
-      !! mapped, so the write path skips `update self` for it.
+      !! Register a host scalar (scalar persistent state, e.g. the Chapman
+      !! `eta_old_chapman_*` edge means, global and identical on every
+      !! rank).  Host-only — never device-mapped, so the write path skips
+      !! `update self` for it.
       class(restart_registry_t), intent(inout) :: this
       character(len=*), intent(in) :: tag
       real(wp), target, intent(in) :: scal

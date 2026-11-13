@@ -1279,7 +1279,7 @@ contains
       type(hgrid_t), intent(in) :: grid
       integer, intent(in) :: compute_rank
       integer :: nx_w, ny_w, i, j, ng, n_intertidal
-      real(wp) :: d0
+      real(wp) :: d0, n_loc, n_glob
 
       ocean_state%dyn%bt_work%wetdry_enable = cfg%ocean%wetdry%enable
       if (.not. cfg%ocean%wetdry%enable) return
@@ -1323,42 +1323,51 @@ contains
                           to_string(cfg%ocean%wetdry%rewet_depth)// &
                           " m (upwind BT faces + positive-definite "// &
                           "outflow limiter + bed-blocking gate)")
-         ! v2 semantic trap (plan §10.1): with wet/dry ON the static land
-         ! seed cutoff moves to `b < -land_margin`, so any column whose bed
-         ! is in the band `[-land_margin, LAND_DEPTH_THRESHOLD)` is NOT
-         ! static land any more — it becomes a dynamically-dry INTERTIDAL
-         ! flat that floods once eta clears dry_depth.  This affects formula
-         ! topos that flag land as b ≈ 0 (island / double_drake), file
-         ! bathymetry with a b = 1 m land-flag convention, AND generated
-         ! topos like neverworld2 that force continents into the band — so
-         ! a name-based check is incomplete.  Scan the seeded interior
-         ! bathymetry directly and warn (rank 0) with the exact count when
-         ! ANY intertidal-band cell exists.  It's a WARNING, not an abort:
-         ! intertidal flats can be intentional; the message just makes the
-         ! regime change loud and specific.
-         ng = grid%nghost
-         n_intertidal = 0
-         do j = ng + 1, ny_w - ng
-            do i = ng + 1, nx_w - ng
-               d0 = ocean_state%barotropic%b(i, j)
-               if (d0 >= -cfg%ocean%wetdry%land_margin .and. &
-                   d0 < LAND_DEPTH_THRESHOLD) then
-                  n_intertidal = n_intertidal + 1
-               end if
-            end do
+      end if
+      ! v2 semantic trap (plan §10.1): with wet/dry ON the static land
+      ! seed cutoff moves to `b < -land_margin`, so any column whose bed
+      ! is in the band `[-land_margin, LAND_DEPTH_THRESHOLD)` is NOT
+      ! static land any more — it becomes a dynamically-dry INTERTIDAL
+      ! flat that floods once eta clears dry_depth.  This affects formula
+      ! topos that flag land as b ≈ 0 (island / double_drake), file
+      ! bathymetry with a b = 1 m land-flag convention, AND generated
+      ! topos like neverworld2 that force continents into the band — so
+      ! a name-based check is incomplete.  Scan the seeded interior
+      ! bathymetry directly and warn (rank 0) with the exact GLOBAL count when
+      ! ANY intertidal-band cell exists.  It's a WARNING, not an abort:
+      ! intertidal flats can be intentional; the message just makes the
+      ! regime change loud and specific.
+      ng = grid%nghost
+      n_intertidal = 0
+      do j = ng + 1, ny_w - ng
+         do i = ng + 1, nx_w - ng
+            d0 = ocean_state%barotropic%b(i, j)
+            if (d0 >= -cfg%ocean%wetdry%land_margin .and. &
+                d0 < LAND_DEPTH_THRESHOLD) then
+               n_intertidal = n_intertidal + 1
+            end if
          end do
-         if (n_intertidal > 0) then
-            call logger%warning("Wet/dry: "//to_string(n_intertidal)// &
-                                " interior cell(s) have bed elevations in the "// &
-                                "intertidal band [-land_margin, "// &
-                                "LAND_DEPTH_THRESHOLD) — under the wetdry-aware "// &
-                                "static seed (land iff b < -land_margin) these "// &
-                                "are LIVE intertidal flats that flood when eta "// &
-                                "clears dry_depth, NOT static land.  If you "// &
-                                "intended static continents, use bed elevations "// &
-                                "b < -land_margin (= "// &
-                                to_string(-cfg%ocean%wetdry%land_margin)//" m).")
-         end if
+      end do
+      ! Global count: an integer count rides the real64 sum exactly.  Skip the
+      ! collective when this tile IS the whole domain (this runs before
+      ! `ocean_halo_init`, so `ocean_halo_is_decomposed()` is still false here).
+      n_loc = real(n_intertidal, wp)
+      n_glob = n_loc
+      if (grid%nx_phys /= grid%nx_global .or. grid%ny_phys /= grid%ny_global) then
+         call halo_allreduce_sum(n_loc, n_glob)
+      end if
+      n_intertidal = nint(n_glob)
+      if (n_intertidal > 0 .and. compute_rank == 0) then
+         call logger%warning("Wet/dry: "//to_string(n_intertidal)// &
+                             " interior cell(s) have bed elevations in the "// &
+                             "intertidal band [-land_margin, "// &
+                             "LAND_DEPTH_THRESHOLD) — under the wetdry-aware "// &
+                             "static seed (land iff b < -land_margin) these "// &
+                             "are LIVE intertidal flats that flood when eta "// &
+                             "clears dry_depth, NOT static land.  If you "// &
+                             "intended static continents, use bed elevations "// &
+                             "b < -land_margin (= "// &
+                             to_string(-cfg%ocean%wetdry%land_margin)//" m).")
       end if
    end subroutine configure_ocean_wetdry
 

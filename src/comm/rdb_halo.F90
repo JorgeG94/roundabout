@@ -44,6 +44,7 @@ module rdb_halo
    public :: halo_exchange_3d_device
    public :: halo_allreduce_sum
    public :: halo_allreduce_sum_i8
+   public :: halo_allreduce_sum_vec
    public :: halo_sync_buffers_ensure
    public :: halo_sync_buffers_cleanup
    public :: halo_sync_buffers_ensure_3d
@@ -1063,6 +1064,29 @@ contains
       call allreduce(comm, local_val, global_val, op=MPI_SUM)
 
    end subroutine halo_allreduce_sum
+
+   subroutine halo_allreduce_sum_vec(local_vals, global_vals, n)
+      !! Element-wise MPI_SUM of `n` reals in ONE collective.  Used to gather
+      !! a line whose entries each have exactly one nonzero contributor
+      !! (every other rank adds +0), so the result is exact and independent
+      !! of the rank count.  COLLECTIVE: every compute rank must call it
+      !! with the same `n`.  Non-in-place.
+      integer, intent(in) :: n
+      real(wp), intent(in) :: local_vals(n)
+      real(wp), intent(out) :: global_vals(n)
+
+      type(comm_t) :: comm
+
+      comm = comm_env_compute_comm()
+      ! Single rank: identity (pic-mpi's serial backend `error stop`s in
+      ! `allreduce`).
+      if (comm%size() == 1) then
+         global_vals = local_vals
+         return
+      end if
+      call allreduce(comm, local_vals, global_vals, op=MPI_SUM)
+
+   end subroutine halo_allreduce_sum_vec
 
    subroutine halo_allreduce_sum_i8(local_val, global_val)
       !! Cross-rank int64 sum for the decomposition-invariant chksum
