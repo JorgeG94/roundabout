@@ -991,6 +991,7 @@ contains
       integer :: ng, nx_t, ny_t, nx_p, i0, i1, shift
       real(wp) :: ridge, max_diff
       real(wp), allocatable :: h_a(:, :, :), h_b_shifted(:, :, :)
+      real(wp), allocatable :: ridge_prof(:)
 
       checks: block
 
@@ -1018,9 +1019,19 @@ contains
          dyn_a%bt_work%bt_H_ref = 0.0_wp
          ms_a%u_face_x_layer = 0.0_wp
          ms_a%v_face_y_layer = 0.0_wp
+         ! ONE shared ridge table: both runs read the same stored values, so their
+         ! inputs are bitwise a circular shift of each other by construction.
+         ! Evaluating sin() inline in two differently-shaped loops is not safe: the
+         ! plain loop vectorises onto libmvec's _ZGVdN4v_sin (a few ulp off glibc's
+         ! scalar sin) while the mod()-indexed loop stays scalar, so the "same" ridge
+         ! differed by 1 ulp at some cells -- an input difference, not a model one.
+         allocate (ridge_prof(0:nx_p - 1))
+         do i = 0, nx_p - 1
+            ridge_prof(i) = H0_MEAN + H0_AMP*sin(2.0_wp*PI*real(i, wp)/real(nx_p, wp))
+         end do
          do j = 1, ny_t
             do i = i0, i1
-               ridge = H0_MEAN + H0_AMP*sin(2.0_wp*PI*real(i - i0, wp)/real(nx_p, wp))
+               ridge = ridge_prof(i - i0)
                dyn_a%bt_work%bt_H_ref(i, j) = real(NZ, wp)*ridge
                do k = 1, NZ
                   ms_a%h_layer(i, j, k) = ridge
@@ -1034,8 +1045,7 @@ contains
          ms_b%v_face_y_layer = 0.0_wp
          do j = 1, ny_t
             do i = i0, i1
-               ridge = H0_MEAN + H0_AMP*sin(2.0_wp*PI* &
-                                            real(mod(i - i0 + shift, nx_p), wp)/real(nx_p, wp))
+               ridge = ridge_prof(mod(i - i0 + shift, nx_p))
                dyn_b%bt_work%bt_H_ref(i, j) = real(NZ, wp)*ridge
                do k = 1, NZ
                   ms_b%h_layer(i, j, k) = ridge
@@ -1105,7 +1115,7 @@ contains
             end do
          end do
          max_diff = maxval(abs(h_a - h_b_shifted))
-         deallocate (h_a, h_b_shifted)
+         deallocate (h_a, h_b_shifted, ridge_prof)
 
          call check(error, max_diff == 0.0_wp, &
                     "bathy_seam: shift(B) /= A bit-for-bit with zonal ridge bathymetry, max_diff=" &
