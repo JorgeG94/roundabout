@@ -63,6 +63,7 @@ contains
                   new_unittest("bt_halo_default_is_auto_sentinel", test_bt_halo_default_sentinel), &
                   new_unittest("resolve_bt_halo", test_resolve_bt_halo), &
                   new_unittest("bt_halo_auto_exclusion", test_bt_halo_auto_exclusion), &
+                  new_unittest("chapman_bt_halo_refused", test_chapman_bt_halo_refused), &
                   new_unittest("diag_density_requires_rho_levels", test_diag_density_requires_rho_levels), &
                   new_unittest("ice_hlim_count_leading_run", test_ice_hlim_count_leading_run), &
                   new_unittest("ice_hlim_spec_validity", test_ice_hlim_spec_validity), &
@@ -412,6 +413,57 @@ contains
       ! the fail-loud gate for that impossible combination, not resolution.
       call check(error, resolve_bt_halo(4, 2, .true.) == 4, "explicit width unchanged by exclusion")
    end subroutine test_resolve_bt_halo
+
+   subroutine test_chapman_bt_halo_refused(error)
+      !! A chapman OBC edge excludes the wide-halo BT march-in: AUTO resolves
+      !! to 0, an explicit `bt_halo > 0` is refused, `bt_halo = 0` accepted.
+      type(error_type), allocatable, intent(out) :: error
+      type(config_t) :: cfg
+      logical :: excluded
+      character(len=:), allocatable :: reason
+      integer :: ierr
+
+      cfg%ocean%bc%east = "chapman"
+      call bt_halo_auto_exclusion(cfg, excluded, reason)
+      call check(error, excluded, "chapman edge not detected as bt_halo exclusion")
+      if (allocated(error)) return
+
+      call read_config_from_string( &
+         "&sim_nml sim_type = 'ocean' /"//new_line('a')// &
+         "&grid_nml nx = 24, ny = 16, nghost = 3, dx = 20000.0, dy = 20000.0 /"// &
+         new_line('a')// &
+         "&ocean_bc_nml east = 'chapman' /"//new_line('a')// &
+         "&ocean_bt_nml bt_halo = 4, visc_rem_chain = .false. /"//new_line('a'), cfg, ierr=ierr)
+      call check(error, ierr == OCEAN_STATUS_OK, "chapman + bt_halo namelist must parse")
+      if (allocated(error)) return
+      call validate_config(cfg, ierr=ierr)
+      call check(error, ierr /= OCEAN_STATUS_OK, &
+                 "chapman edge with explicit bt_halo > 0 must be refused")
+      if (allocated(error)) return
+
+      ! CONTROL: the same namelist WITHOUT the chapman edge must be accepted,
+      ! so the refusal above is the Chapman rule and nothing else (the
+      ! `visc_rem_chain` default alone refuses any bt_halo > 0).
+      call read_config_from_string( &
+         "&sim_nml sim_type = 'ocean' /"//new_line('a')// &
+         "&grid_nml nx = 24, ny = 16, nghost = 3, dx = 20000.0, dy = 20000.0 /"// &
+         new_line('a')// &
+         "&ocean_bt_nml bt_halo = 4, visc_rem_chain = .false. /"//new_line('a'), cfg, ierr=ierr)
+      call validate_config(cfg, ierr=ierr)
+      call check(error, ierr == OCEAN_STATUS_OK, &
+                 "control (no chapman edge) with bt_halo = 4 must be accepted")
+      if (allocated(error)) return
+
+      call read_config_from_string( &
+         "&sim_nml sim_type = 'ocean' /"//new_line('a')// &
+         "&grid_nml nx = 24, ny = 16, nghost = 3, dx = 20000.0, dy = 20000.0 /"// &
+         new_line('a')// &
+         "&ocean_bc_nml east = 'chapman' /"//new_line('a')// &
+         "&ocean_bt_nml bt_halo = 0 /"//new_line('a'), cfg, ierr=ierr)
+      call validate_config(cfg, ierr=ierr)
+      call check(error, ierr == OCEAN_STATUS_OK, &
+                 "chapman edge with bt_halo = 0 must be accepted")
+   end subroutine test_chapman_bt_halo_refused
 
    subroutine test_bt_halo_auto_exclusion(error)
       !! The exclusion detector mirrors validate_config's explicit-bt_halo>0 set.

@@ -193,6 +193,15 @@ module rdb_ocean_boundary_types
       real(wp) :: eta_old_chapman_s = 0.0_wp
       real(wp) :: eta_old_chapman_n = 0.0_wp
 
+      ! Chapman phase-speed scale: `bt_H_ref` and `idx_cu` at the GLOBAL
+      ! south-west corner cell, latched once at engine setup
+      ! (`chapman_setup_corner`, static data, identical on every rank).
+      ! `chapman_corner_ready = .false.` (direct kernel callers that skip
+      ! engine setup) makes the substep read its own tile's corner.
+      real(wp) :: chapman_h_corner = 0.0_wp
+      real(wp) :: chapman_idx_corner = 0.0_wp
+      logical :: chapman_corner_ready = .false.
+
       ! Open-edge tracer reservoirs. Allocated only when res_lscale_out > 0
       ! or res_lscale_in > 0 on an open-ish edge. Shape per edge:
       !   tres_west/east : (ny_total, nz_ml, n_tracers)

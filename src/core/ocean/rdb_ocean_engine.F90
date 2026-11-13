@@ -108,6 +108,7 @@ module rdb_ocean_engine
    use rdb_ocean_periodic, only: ocean_periodic_wrap_state, ocean_periodic_wrap_centre_2d
    use rdb_ocean_fold_apply, only: ocean_fold_wrap_state, ocean_fold_wrap_eta_2d
    use rdb_ocean_boundary_data, only: ocean_boundary_data_constant_t
+   use rdb_barotropic_substep, only: chapman_setup_corner, chapman_workspace_cleanup
    use rdb_ocean_boundary_types, only: ocean_bc_state_set_edges, ocean_bc_state_set_topology, &
                                        ocean_bc_type_from_string, OBC_PERIODIC, OBC_WALL, &
                                        OBC_TRIPOLAR_FOLD, OBC_CHAPMAN
@@ -541,20 +542,6 @@ contains
                       "arrays) is single-rank ("//to_string(csize)//" ranks requested): "// &
                       "the arrays describe the whole grid.  Use the file readers "// &
                       "(topo_config='file', grid_config='supergrid') or 1 rank.", &
-                      ierr, OCEAN_STATUS_ERR_SETUP)
-            return
-         end if
-         ! Chapman radiation keeps ONE edge-uniform eta target per edge,
-         ! computed from the tile's own stretch of the edge (and a corner
-         ! depth): split along a Chapman edge, every rank radiates toward a
-         ! different target.
-         if (any([ocean_bc_type_from_string(cfg%ocean%bc%west), &
-                  ocean_bc_type_from_string(cfg%ocean%bc%east), &
-                  ocean_bc_type_from_string(cfg%ocean%bc%south), &
-                  ocean_bc_type_from_string(cfg%ocean%bc%north)] == OBC_CHAPMAN)) then
-            call fail("&ocean_bc_nml 'chapman' edges are single-rank ("// &
-                      to_string(csize)//" ranks requested): the edge-mean eta target "// &
-                      "is a per-rank partial mean.  Use 'open' (Flather) or run on 1 rank.", &
                       ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
@@ -1195,6 +1182,12 @@ contains
       end if
       if (cfg%ocean%bt%n_inner >= 1) then
          call ocean_halo_centre(engine%state%dyn%bt_work%bt_H_ref, device_resident=.false.)
+      end if
+      ! Chapman phase-speed scale: global south-west corner `bt_H_ref` and
+      ! `idx_cu`, latched once (static data; collective, all ranks call it).
+      if (cfg%ocean%bt%n_inner >= 1) then
+         call chapman_setup_corner(engine%grid, engine%state%dyn%bt_work%bt_H_ref, &
+                                   engine%state%metrics%idxCu, engine%state%bc)
       end if
       ! Dynamic wet/dry cold start: `wd_wet_dyn` was seeded over the whole
       ! local array by `configure_ocean_wetdry`, BEFORE the bathymetry halo
@@ -2291,6 +2284,7 @@ contains
 #ifndef RDB_NO_NETCDF
       if (engine%diag_enabled) call close_stream(engine%state%diag)
 #endif
+      call chapman_workspace_cleanup()
       call ocean_halo_destroy()
       call ocean_fold_exchange_destroy()
       call engine%geo%destroy()

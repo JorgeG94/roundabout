@@ -296,7 +296,7 @@ program test_ocean_decomp_bitid_mpi
       !! `RDB_BITID_CASES`: run only the cases whose name contains this substring.
    type(comm_t) :: comm
    character(len=16), parameter :: SCHEMES(2) = [character(len=16) :: "pred_corr", "ssp_rk2"]
-   character(len=24), parameter :: CASES(68) = [character(len=24) :: &
+   character(len=24), parameter :: CASES(69) = [character(len=24) :: &
                                                 "island_basin", "weno7_pv", &
                                                 "periodic_channel_zstar", &
                                                 "visc_rem_zstar", &
@@ -327,7 +327,7 @@ program test_ocean_decomp_bitid_mpi
                                                 "cavity_zfixed", "cavity_sigma", &
                                                 "cavity_sigma_ratio2", "cavity_gall", "cavity_melt_only", "cavity_periodic", &
                                                 "cavity_combo", "wetdry_shoal", &
-                                                "wetdry_periodic", "wetdry_file", &
+                                                "wetdry_periodic", "wetdry_file", "chapman_obc", &
                                                 "cavity_mass", "cavity_mass_comp"]
 
    call comm_env_init()
@@ -796,6 +796,23 @@ contains
                "&ocean_topo_nml topo_config = 'seamount', max_depth = 2000.0, "// &
                "edge_depth = 200.0, slope_scale = 40000.0 /"//NL// &
                "&ocean_bc_nml west = 'tidal', east = 'open', south = 'wall', north = 'wall', "// &
+               "west_n_tidal = 1, west_tidal_amp = 0.5, west_tidal_phase = 0.0, "// &
+               "west_tidal_omega = 1.4051890e-4 /"//NL
+      case ("chapman_obc")
+         ! Chapman radiation on the east AND north edges (both split by the
+         ! decomposition: py > 1 splits the east line, px > 1 the north one)
+         ! over a seamount, driven by a tidal west edge and an asymmetric
+         ! wind so the wave reaches both Chapman edges inside the run.  The
+         ! edge-mean eta target and the SW-corner phase-speed scale are
+         ! global quantities; a per-rank partial mean breaks the compare.
+         nml = common// &
+               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
+               "dx = 10000.0, dy = 10000.0 /"//NL// &
+               "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 0.05, wind_stress_y = 0.02 /"//NL// &
+               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
+               "&ocean_topo_nml topo_config = 'seamount', max_depth = 2000.0, "// &
+               "edge_depth = 500.0, slope_scale = 40000.0 /"//NL// &
+               "&ocean_bc_nml west = 'tidal', east = 'chapman', south = 'wall', north = 'chapman', "// &
                "west_n_tidal = 1, west_tidal_amp = 0.5, west_tidal_phase = 0.0, "// &
                "west_tidal_omega = 1.4051890e-4 /"//NL
       case ("tripolar", "redi_cfl_fold", "drain_ratio_fold", "drain_ratio_fold_h3", "eulz_tripolar")
@@ -2494,8 +2511,7 @@ contains
                                      "&ocean_cavity_melt_nml enable = .true., exchange_law = 'const_gamma', "// &
                                      "gamma_t = 2.2e-2, gamma_s = -1.0, cdrag_top = 2.5e-3, "// &
                                      "ice_conduction = 'insulating', s_ice = 0.0, far_field_depth = 10.0"
-      character(len=1400), parameter :: KNOBS(7) = [character(len=1400) :: &
-                                                    "&ocean_bc_nml east = 'chapman' /", &
+      character(len=1400), parameter :: KNOBS(6) = [character(len=1400) :: &
                                                     ! cavity covering every wet column + uniform_open_ocean (global open area 0)
                                                     CAV//CAV_DYN//" /"//new_line("a")// &
                                                     CAV_MELT//", freshwater = 'mass', "// &
@@ -2531,8 +2547,7 @@ contains
       ! One distinctive substring of the message each entry must produce, so a
       ! fence that is deleted while a LATER, more generic refusal still fires
       ! (the bulk-forcing one, the validate envelope) cannot pass unnoticed.
-      character(len=64), parameter :: WHY(7) = [character(len=64) :: &
-                                                "'chapman' edges are single-rank", &
+      character(len=64), parameter :: WHY(6) = [character(len=64) :: &
                                                 "global open area is 0", &
                                                 "draft_config = 'file' is unproven", &
                                                 "enable with &ocean_bulk_flux_nml enable is unproven", &

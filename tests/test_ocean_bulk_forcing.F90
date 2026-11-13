@@ -80,6 +80,8 @@ contains
                   new_unittest("bulk_forcing_sst_first_live", test_sst_first_live), &
                   new_unittest("bulk_forcing_rotation_exact", test_rotation_exact), &
                   new_unittest("bulk_forcing_open_water_halves", test_open_water_halves), &
+                  new_unittest("bulk_forcing_stress_fold_line", test_stress_fold_line), &
+                  new_unittest("bulk_forcing_stress_no_fold_unchanged", test_stress_no_fold_line), &
                   new_unittest("ice_atm_forcing_seb_linearization", test_ice_seb_linearization) &
                   ]
    end subroutine collect_ocean_bulk_forcing_tests
@@ -575,6 +577,112 @@ contains
 
       call destroy_cartesian_metrics(metrics)
    end subroutine test_open_water_halves
+
+   ! =================================================================
+   ! Tripolar fold line -- the meridional stress on the fold-line face
+   ! =================================================================
+
+   subroutine fold_stress_case(fold, tau_y_fold, tauy_c_last, ni, jf)
+      !! Run `bulk_forcing_apply` on a (6 x 3) single-rank tile with a
+      !! wind field that is a TRUE VECTOR field continuous across the
+      !! tripolar fold: the 180-degree rotation of the local frame negates
+      !! both components at the mirror cell `i' = ni+1-i`, so
+      !! `uas(i') = -uas(i)` and `vas(i') = -vas(i)` on the last row (the
+      !! stress is odd in the wind).  Returns the fold-line `tau_y` row
+      !! (storage row `jf = nghost+nj+1`) and the last physical row of the
+      !! cell-centred `tauy_c`.
+      logical, intent(in) :: fold
+      integer, intent(in) :: ni, jf
+      real(wp), intent(out) :: tau_y_fold(ni), tauy_c_last(ni)
+
+      type(hgrid_t) :: grid
+      type(ocean_metrics_t) :: metrics
+      type(ocean_bc_state_t) :: bc
+      type(multilayer_state_t) :: ms
+      type(ocean_sea_ice_t) :: ice
+      type(atm_state_t) :: atm
+      type(bulk_forcing_t) :: bf
+      type(ocean_surface_stress_t) :: ss
+      type(ocean_surface_flux_t) :: sf
+      integer :: i, j
+      real(wp) :: d
+
+      call grid%init(ni, NYP, NGHOST, 1.0_wp, 1.0_wp)
+      call make_cartesian_metrics(metrics, grid)
+      call init_halo_single_rank(grid)
+      bc%north_fold = fold
+      call make_ms(grid, ms)
+      call make_atm(grid, atm)
+      do j = 1, grid%ny_total
+         do i = 1, grid%nx_total
+            d = real(i - NGHOST, wp) - 0.5_wp*real(ni + 1, wp)
+            atm%uas(i, j) = 2.0_wp*d + 0.1_wp*d**3
+            atm%vas(i, j) = 3.0_wp*d - 0.2_wp*d**3 + 1.0_wp*d*real(j, wp)/real(NYP, wp)
+         end do
+      end do
+      call make_bulk_forcing(grid, .true., bf)
+      call ss%init(grid)
+      call sf%init(grid)
+      call sf%set_components(grid, .true.)
+      ! uas/vas are host-set: run_apply's atm%enter_data() copies them in (no update before the map).
+      call run_apply(grid, metrics, bc, atm, ms, ice, bf, ss, sf)
+      do i = 1, ni
+         tau_y_fold(i) = ss%tau_y(NGHOST + i, jf)
+         tauy_c_last(i) = bf%tauy_c(NGHOST + i, NGHOST + NYP)
+      end do
+      call ocean_halo_destroy()
+      call destroy_cartesian_metrics(metrics)
+   end subroutine fold_stress_case
+
+   subroutine test_stress_fold_line(error)
+      !! The fold-line `tau_y` face (the NORTH face of the last physical
+      !! T-row, storage row `nghost+nj+1`) must be the two-sided average
+      !! across the fold, the mirror cell's stress entering with the vector
+      !! sign: `0.5*(tauy_c(i) - tauy_c(i'))`.  Antisymmetric by itself.
+      !! Before the fix the north ghost row of `tauy_c` was never folded
+      !! (zero), giving `0.5*tauy_c(i)` on the east half.
+      type(error_type), allocatable, intent(out) :: error
+      integer, parameter :: NI = 6
+      real(wp) :: tau_y(NI), tc(NI), want, odd_err
+      integer :: i, ip
+
+      call fold_stress_case(.true., tau_y, tc, NI, NGHOST + NYP + 1)
+      checks: block
+         odd_err = 0.0_wp
+         do i = 1, NI
+            odd_err = max(odd_err, abs(tc(i) + tc(NI + 1 - i)))
+         end do
+         call check(error, odd_err < 1.0e-14_wp, .true., "precondition: tauy_c odd across the fold")
+         if (allocated(error)) exit checks
+         call check(error, maxval(abs(tc)) > 1.0e-3_wp, .true., "precondition: nonzero stress")
+         if (allocated(error)) exit checks
+         do i = 1, NI
+            ip = NI + 1 - i
+            want = 0.5_wp*(tc(i) - tc(ip))
+            call check(error, abs(tau_y(i) - want) < 1.0e-14_wp, .true., &
+                       "fold-line tau_y == two-sided average 0.5*(tauy_c(i) - tauy_c(i'))")
+            if (allocated(error)) exit checks
+            call check(error, tau_y(i) + tau_y(ip), 0.0_wp, "fold-line tau_y antisymmetric", thr=0.0_wp)
+            if (allocated(error)) exit checks
+         end do
+      end block checks
+   end subroutine test_stress_fold_line
+
+   subroutine test_stress_no_fold_line(error)
+      !! Without a fold the last-row face is the one-sided edge average against the
+      !! zero ghost, `0.5*tauy_c(i, last)` -- unchanged by the fold fix.
+      type(error_type), allocatable, intent(out) :: error
+      integer, parameter :: NI = 6
+      real(wp) :: tau_y(NI), tc(NI)
+      integer :: i
+
+      call fold_stress_case(.false., tau_y, tc, NI, NGHOST + NYP + 1)
+      do i = 1, NI
+         call check(error, tau_y(i), 0.5_wp*tc(i), "no fold: tau_y(jf) = 0.5*(tauy_c(last) + 0 ghost)", &
+                    thr=0.0_wp)
+         if (allocated(error)) return
+      end do
+   end subroutine test_stress_no_fold_line
 
    subroutine run_apply(grid, metrics, bc, atm, ms, ice, bf, ss, sf)
       !! `bulk_forcing_apply` with the production device residency: the

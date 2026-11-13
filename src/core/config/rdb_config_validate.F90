@@ -3821,6 +3821,18 @@ contains
                               "BT solve would silently transport on un-narrowed widths)")
             has_error = .true.
          end if
+         if (any_chapman_edge(cfg)) then
+            ! The Chapman edge mean is gathered from the NORMAL-width
+            ! `bt_eta` on the device, and the march-in's wide clone is not
+            ! bit-identical with open boundaries (the wide band evolves
+            ! under array-edge closures the OBC target does not see).
+            call logger%error("&ocean_bt_nml bt_halo > 0 is mutually exclusive "// &
+                              "with a chapman &ocean_bc_nml edge (the Chapman "// &
+                              "target is gathered from the normal-width barotropic "// &
+                              "state; the wide-halo march-in is not bit-identical "// &
+                              "with open boundaries)")
+            has_error = .true.
+         end if
          if (cfg%ocean%cavity_dyn%enable) then
             ! Same failure mode as porous, one level up: `metrics_w` is
             ! re-filled from the grid formula and carries no `z_draft`, so
@@ -4405,6 +4417,17 @@ contains
       if (compute_size < 0 .and. exclusion_active) width = 0   ! never taken; keeps the dummies referenced
    end function resolve_bt_halo
 
+   pure function any_chapman_edge(cfg) result(any_ch)
+      !! True iff any of the four `&ocean_bc_nml` edges is `chapman`.
+      use rdb_ocean_boundary_types, only: ocean_bc_type_from_string, OBC_CHAPMAN
+      type(config_t), intent(in) :: cfg
+      logical :: any_ch
+      any_ch = ocean_bc_type_from_string(cfg%ocean%bc%west) == OBC_CHAPMAN .or. &
+               ocean_bc_type_from_string(cfg%ocean%bc%east) == OBC_CHAPMAN .or. &
+               ocean_bc_type_from_string(cfg%ocean%bc%south) == OBC_CHAPMAN .or. &
+               ocean_bc_type_from_string(cfg%ocean%bc%north) == OBC_CHAPMAN
+   end function any_chapman_edge
+
    pure module subroutine bt_halo_auto_exclusion(cfg, excluded, reason)
       !! Single source of truth for the BT march-in exclusion set (mirrors the
       !! explicit-`bt_halo > 0` fail-loud checks in `validate_config`).  Reports
@@ -4430,6 +4453,8 @@ contains
          reason = "psurf enable"
       else if (cfg%ocean%porous%enable) then
          reason = "porous enable"
+      else if (any_chapman_edge(cfg)) then
+         reason = "chapman &ocean_bc_nml edge"
       else if (cfg%ocean%cavity_dyn%enable) then
          ! The wide BT clone rebuilds `metrics_w` from the grid formula and
          ! carries no `z_draft`, so its reference depth would be the BED —
