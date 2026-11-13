@@ -982,12 +982,12 @@ contains
       !! `&ocean_bt_nml inhalo_march` (EXPERIMENTAL) is accepted on a clean
       !! nghost = 3 ocean namelist and refused, one fence at a time, with
       !! `bt_halo > 0`, wet/dry, `use_cont_type`, `upstream_h_face`, tides,
-      !! psurf, and a stride above `nghost - 1`.
+      !! psurf, a chapman edge, and a stride above `nghost - 1`.
       type(error_type), allocatable, intent(out) :: error
       type(config_t) :: cfg
       integer :: ierr, k
 
-      do k = 0, 7
+      do k = 0, 8
          ierr = -999
          call read_config_from_string( &
             "&sim_nml sim_type = 'ocean' /"//new_line('a')// &
@@ -1004,6 +1004,7 @@ contains
          case (5); cfg%ocean%tides%enable = .true.
          case (6); cfg%ocean%psurf%enable = .true.
          case (7); cfg%ocean%bt%inhalo_stride = 3     ! > nghost - 1 = 2
+         case (8); cfg%ocean%bc%west = "chapman"
          case default
             cfg%ocean%bt%inhalo_stride = 2            ! == nghost - 1: accepted
          end select

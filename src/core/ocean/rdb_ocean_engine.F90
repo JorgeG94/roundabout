@@ -1725,6 +1725,10 @@ contains
             engine%state%dyn%bt_work%inhalo_stride = max(1, engine%grid%nghost - 1)
          end if
          ! Test hook (ghost poison, see `inhalo_poison`); host, once.
+         call logger%info("bt inhalo_march ON: stride="// &
+                          to_string(engine%state%dyn%bt_work%inhalo_stride)// &
+                          " nghost="//to_string(engine%grid%nghost)// &
+                          " n_inner="//to_string(cfg%ocean%bt%n_inner))
          call env_int_or_zero("RDB_BT_INHALO_POISON", engine%state%dyn%bt_work%inhalo_poison)
       end if
       if (cfg%ocean%bt%bt_halo > 0) then

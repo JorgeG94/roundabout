@@ -3891,6 +3891,13 @@ contains
                               "tides / psurf (eta_forcing ghost band not exchanged)")
             has_error = .true.
          end if
+         if (any_chapman_edge(cfg)) then
+            call logger%error("&ocean_bt_nml inhalo_march is mutually exclusive with "// &
+                              "a chapman &ocean_bc_nml edge (the collective edge "// &
+                              "mean inside the fast loop is untested with the "// &
+                              "skipped exchanges)")
+            has_error = .true.
+         end if
          if (cfg%ocean%bt%inhalo_stride < 0) then
             call logger%error("&ocean_bt_nml inhalo_stride must be >= 0")
             has_error = .true.
