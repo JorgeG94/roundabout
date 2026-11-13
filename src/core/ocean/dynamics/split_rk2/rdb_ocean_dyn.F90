@@ -4122,6 +4122,25 @@ contains
          call tracer_advect_vertical(grid, va, ms, therm_dt, active=therm_active)
          call probe_dS(grid, ms, "after tracer_advect_vertical", stage_id, step_id)
          call profiler_stop("ocean_vertical_advect")
+         ! The two column-local kernels above ran AFTER the post-continuity
+         ! exchange and advanced the ghost columns of h_layer and the tracers
+         ! with the tile's OWN `flux_h_layer`, which is never exchanged (its
+         ! outermost ghost face carries no flux).  A ghost column therefore
+         ! ends the step different from its owner, and the next reader of a
+         ! seam / wrap / fold ghost sees a tile-dependent value.  Refresh h and
+         ! the tracers from their owners (exchange, periodic wrap, tripolar
+         ! fold; on-device data, as the post-continuity refresh above).
+         ! Unconditional on decomposition: a periodic or folded axis on ONE
+         ! rank has the same defect as a seam.  (`run_gm_step` does the same
+         ! for the bolus path.)  The block cannot simply move before the
+         ! post-continuity refresh: tracer_hdiff / Redi sit in between and
+         ! would then act on post-vertical-advection tracers.
+         call ocean_halo_exchange_ml_state(ms)
+         if (present(bc)) then
+            call ocean_periodic_wrap_state(grid, bc, ms, skip_x=ocean_halo_is_decomposed_x(), &
+                                           skip_y=ocean_halo_is_decomposed_y())
+            call ocean_fold_wrap_state(grid, bc, ms)
+         end if
       end if
    end subroutine run_continuity_chain
 
@@ -4738,6 +4757,8 @@ contains
          !! Physical-edge flags for the transport wall-zeroing.  .true. = physical
          !! domain edge (WALL zero applies); .false. = MPI seam (halo owns it, O0).
       logical :: is_lagrangian, therm_active, flux_active
+      logical :: ke_per_x, ke_per_y
+         !! GLOBAL periodic-axis tags for the KE probe (rank-uniform).
       logical :: is_pc, is_pred
          !! pred_corr stage roles (SPEC §2/§4 S4): `is_pred` = the predictor
          !! (stage 1 under pred_corr) — provisional `up = u + BE·dt·accel`,
@@ -4879,8 +4900,15 @@ contains
          end if
       end if
 
+      ke_per_x = .false.
+      ke_per_y = .false.
+      if (present(bc)) then
+         ke_per_x = bc%periodic_x
+         ke_per_y = bc%periodic_y
+      end if
       ! KE attribution: stage-entry baseline (debug_ke_attr; no-op when off).
-      call ke_probe_sample(grid, ms, dyn%ke_probe, "entry", stage_id, step_id)
+      call ke_probe_sample(grid, ms, dyn%ke_probe, "entry", stage_id, step_id, &
+                           ke_per_x, ke_per_y)
       call chksum_state(grid, ms, dyn%chksum_probe, "entry", stage_id, step_id)
 
       ! ---- 1. Snapshot u_bt^n, v_bt^n at start of stage ----
@@ -5679,7 +5707,8 @@ contains
       end if
       ! KE attribution: implicit vertical friction (+ folded drag/stress
       ! when implicit_*) — the stage-close segment (debug_ke_attr).
-      call ke_probe_sample(grid, ms, dyn%ke_probe, "vdiff_vmix", stage_id, step_id)
+      call ke_probe_sample(grid, ms, dyn%ke_probe, "vdiff_vmix", stage_id, step_id, &
+                           ke_per_x, ke_per_y)
       call chksum_state(grid, ms, dyn%chksum_probe, "stage_close", stage_id, step_id)
       call probe_dS(grid, ms, "after vdiff/vmix (stage end)", stage_id, step_id)
 
