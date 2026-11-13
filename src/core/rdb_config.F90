@@ -1093,6 +1093,23 @@ module rdb_config
          !! cavity_dyn enable, supergrid/tripolar grid_config.  The set of record is
          !! `bt_halo_auto_exclusion`; keep it and the `validate_config`
          !! checks in lockstep.
+      logical :: inhalo_march = .false.
+         !! EXPERIMENTAL.  In-halo barotropic march: inside the EXISTING
+         !! `nghost`-wide halo the fast loop exchanges its ghost bands once
+         !! every `inhalo_stride` substeps instead of every substep, and
+         !! drops the mid-substep u exchange.  One substep invalidates one
+         !! more outer ghost layer, so `nghost - 1` substeps leave the owned
+         !! cells exact; the force and `bt_rem` are exchanged once per
+         !! solve and the previous-substep velocities with every skipped
+         !! exchange.  Contract: N ranks == 1 rank, bitwise, on owned cells.
+         !! Default off (bit-identical, no new work).  Mutually exclusive
+         !! with `bt_halo > 0`; refused with wet/dry, `use_cont_type`,
+         !! `upstream_h_face`, tides, psurf.  Stride, sanity and the
+         !! exchange count: RESULT of the spike in plans/.
+      integer :: inhalo_stride = 0
+         !! Substeps per ghost exchange under `inhalo_march`.  `0` = derive
+         !! (`nghost - 1`, floored at 1).  A larger value is an experiment
+         !! knob: it breaks the contract (owned cells go inexact).
    end type ocean_bt_config_t
 
    type :: ocean_debug_config_t

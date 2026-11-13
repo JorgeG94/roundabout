@@ -567,6 +567,17 @@ contains
                          "(-1 = auto: resolves to 0, the march-in is opt-in; "// &
                          "0 = explicit off, bit-identical)", &
                          min=BT_HALO_AUTO_SENTINEL))
+      pl => cfg%ocean%bt%inhalo_march
+      call g%add(nml_logical("inhalo_march", pl, &
+                             "EXPERIMENTAL: in-halo BT march -- exchange the fast-loop ghost "// &
+                             "bands once per (nghost-1) substeps inside the existing halo; "// &
+                             "N ranks bitwise == 1 rank; exclusive with bt_halo > 0, wet/dry, "// &
+                             "use_cont_type, upstream_h_face, tides, psurf"))
+      pi => cfg%ocean%bt%inhalo_stride
+      call g%add(nml_int("inhalo_stride", pi, &
+                         "Substeps per ghost exchange under inhalo_march (0 = derive "// &
+                         "nghost-1; larger values break the bitwise contract: experiment only)", &
+                         min=0))
       call schema%add_group(g)
    end subroutine register_ocean_bt
 

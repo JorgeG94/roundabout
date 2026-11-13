@@ -1688,6 +1688,22 @@ contains
    ! Device placement
    ! ================================================================
 
+   subroutine env_int_or_zero(name, val)
+      !! Integer from an environment variable; 0 when unset or unparsable.
+      character(len=*), intent(in) :: name
+      integer, intent(out) :: val
+      character(len=16) :: buf
+      character(len=64) :: msg
+      integer :: ios
+
+      val = 0
+      buf = ""
+      call get_environment_variable(name, buf)
+      if (len_trim(buf) == 0) return
+      read (buf, *, iostat=ios, iomsg=msg) val
+      if (ios /= 0) val = 0
+   end subroutine env_int_or_zero
+
    subroutine engine_enter_data(engine, cfg)
       !! Map the ocean state onto the device, then (when `bt_halo > 0`)
       !! allocate + attach the wide-halo BT march-in workspace, then
@@ -1699,6 +1715,20 @@ contains
 
       call ocean_state_enter_data(engine%state)
       engine%state%dyn%bt_halo = cfg%ocean%bt%bt_halo
+      engine%state%dyn%bt_work%inhalo_stride = 0
+      engine%state%dyn%bt_work%inhalo_poison = 0
+      engine%state%dyn%bt_work%inhalo_skip = 0
+      if (cfg%ocean%bt%inhalo_march) then
+         ! One substep invalidates one more outer ghost layer, so nghost-1
+         ! substeps leave the owned cells exact (see the fast loop).
+         engine%state%dyn%bt_work%inhalo_stride = cfg%ocean%bt%inhalo_stride
+         if (cfg%ocean%bt%inhalo_stride <= 0) then
+            engine%state%dyn%bt_work%inhalo_stride = max(1, engine%grid%nghost - 1)
+         end if
+         ! Debug environment switches (ablation mask, ghost poison); host, once.
+         call env_int_or_zero("RDB_BT_INHALO_SKIP", engine%state%dyn%bt_work%inhalo_skip)
+         call env_int_or_zero("RDB_BT_INHALO_POISON", engine%state%dyn%bt_work%inhalo_poison)
+      end if
       if (cfg%ocean%bt%bt_halo > 0) then
          call ocean_dyn_enable_bt_wide(engine%state%dyn, engine%grid, &
                                        cfg%dx, cfg%dy, &
