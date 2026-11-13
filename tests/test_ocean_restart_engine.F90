@@ -118,6 +118,8 @@ contains
                                test_engine_bkgnd_full_reseed_on_restart), &
                   new_unittest("restart_engine_cold_seeds_kv_without_checkpoint", &
                                test_engine_cold_seeds_kv_without_checkpoint), &
+                  new_unittest("restart_engine_cavity_old_checkpoint_loads", &
+                               test_engine_cavity_old_checkpoint_loads), &
                   new_unittest("restart_engine_bit_exact_cavity_melt_drag", &
                                test_engine_bit_exact_cavity_melt_drag), &
                   new_unittest("restart_engine_bit_exact_cavity_melt_only", &
@@ -883,6 +885,77 @@ contains
       call engine_teardown(eb)
       call delete_file(FN)
    end subroutine test_engine_cold_seeds_kv_without_checkpoint
+
+   subroutine test_engine_cavity_old_checkpoint_loads(error)
+      !! OLD-CHECKPOINT path of the cavity restart fields.  The six
+      !! `cavity_*` / `shelf_stress` entries are optional on read, so a
+      !! checkpoint written before they were registered must still load
+      !! (with the "Restart file lacks optional field" warning) and the
+      !! absent field keeps its zero seed.  `drop_field` drops ONE tag per
+      !! call; the one dropped here is `shelf_stress`, the one that feeds
+      !! the melt-only under-ice `u_*` of the first resumed step (the case
+      !! is the melt-only `cavity_sigma_ustar`, where that stress is
+      !! non-zero).  Asserts: setup succeeds, the run is a warm restart,
+      !! the dropped field is at its zero seed while a carried sibling
+      !! (`cavity_ustar`) was restored, and it steps and stays finite.
+      !! NOT bitwise by design (the first resumed step has no under-ice
+      !! u_*); the bitwise gate is the `restart_engine_bit_exact_cavity_*`
+      !! set.
+      use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+      type(error_type), allocatable, intent(out) :: error
+      type(ocean_engine_t), target :: ea, eb
+      type(config_t) :: cfg_a, cfg_b
+      type(snapshot_t) :: sb
+      real(wp) :: t_a, t_b
+      integer :: step_b, ierr, f
+      logical :: ok
+
+      checks: block
+         call make_engine(ea, cfg_a, case_nml("cavity_sigma_ustar"), ok)
+         call check(error, ok, "engine A setup failed")
+         if (allocated(error)) exit checks
+         t_a = 0.0_wp
+         call advance(ea, cfg_a, t_a, 5, ok)
+         call check(error, ok, "engine A failed before the checkpoint")
+         if (allocated(error)) exit checks
+         call check(error, maxval(abs(ea%state%surface_stress%stress_shelf)) > 0.0_wp, &
+                    "vacuous: stress_shelf is zero in the written run")
+         if (allocated(error)) exit checks
+         call ocean_state_restart_write_drop_field(ea%state, ea%grid, ea%decomp, FN, t_a, &
+                                                   5, "shelf_stress", ierr=ierr)
+         call check(error, ierr == OCEAN_STATUS_OK, "checkpoint write (drop shelf_stress) failed")
+         if (allocated(error)) exit checks
+         call engine_exit_data(ea)
+         call engine_teardown(ea)
+
+         call make_engine(eb, cfg_b, case_nml("cavity_sigma_ustar"), ok, &
+                          restart_file=FN, t0=t_b, step0=step_b)
+         call check(error, ok, "engine B (old-style cavity checkpoint) setup failed")
+         if (allocated(error)) exit checks
+         call check(error, eb%warm_restart, "engine B did not take the warm-restart path")
+         if (allocated(error)) exit checks
+         call check(error, step_b == 5, "restart step count not restored")
+         if (allocated(error)) exit checks
+         call check(error, maxval(abs(eb%state%surface_stress%stress_shelf)) == 0.0_wp, &
+                    "the dropped shelf_stress did not keep its zero seed")
+         if (allocated(error)) exit checks
+         call check(error, maxval(abs(eb%state%cavity_flux%ustar)) > 0.0_wp, &
+                    "the carried cavity_ustar was not restored")
+         if (allocated(error)) exit checks
+         call advance(eb, cfg_b, t_b, 4, ok)
+         call check(error, ok, "engine B failed to step after the old-style resume")
+         if (allocated(error)) exit checks
+         call take_snapshot(eb, sb)
+         do f = 1, sb%n
+            call check(error, all(ieee_is_finite(sb%f(f)%a)), &
+                       "non-finite "//trim(sb%f(f)%tag)//" after the old-style resume")
+            if (allocated(error)) exit checks
+         end do
+      end block checks
+      call engine_exit_data(eb)
+      call engine_teardown(eb)
+      call delete_file(FN)
+   end subroutine test_engine_cavity_old_checkpoint_loads
 
    subroutine test_engine_bit_exact_ice(error)
       type(error_type), allocatable, intent(out) :: error

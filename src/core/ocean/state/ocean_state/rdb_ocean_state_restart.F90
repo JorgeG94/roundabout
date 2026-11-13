@@ -433,8 +433,11 @@ contains
       !     carried state, registered below (`cavity_melt`, `cavity_active`,
       !     `cavity_s_far`, `cavity_t_b` for `freshwater='mass'`, whose
       !     in-stage mass step spends the previous step's melt; `cavity_ustar`
-      !     and `shelf_stress` for the melt-only under-ice `u_*`, which KPP/
-      !     EPBL read one thermo step late).  The remaining slot arrays
+      !     and `shelf_stress` for the melt-only under-ice `u_*`: KPP/EPBL
+      !     read `stress_shelf` as the previous OUTER step's finalize left
+      !     it, `rho0*ustar^2` from the latest thermo-cadence `ustar`.  That
+      !     makes `shelf_stress` derivable from `cavity_ustar`; both are
+      !     registered, which is harmless).  The remaining slot arrays
       !     (`t_far`, `u_far`, `s_b`, `q_ocean`, `gamma_*`, `status`,
       !     `comp_scale`) are written by the finalize before anything reads
       !     them, the same derived-field rule as `mass_flux_*`.
