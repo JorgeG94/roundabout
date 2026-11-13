@@ -59,6 +59,8 @@
 !!     EOS, `2gyre` wind;
 !!   * obc_radiation_sponge — Orlanski-radiating open south edge with tracer
 !!     reservoirs, clamped north inflow, legacy relaxing sponge band west;
+!!   * obc_sponge_east — the same with the sponge band on the EAST edge (west
+!!     a wall), the combination once documented as drifting at round-off;
 !!   * closures — the spherical case with EPBL (instead of KPP), Fox-Kemper
 !!     MLE, GM + MEKE, Redi, kappa-shear, tidal mixing, convective
 !!     adjustment, geothermal heating and tracer hdiff;
@@ -250,12 +252,12 @@ program test_ocean_decomp_bitid_mpi
       !! `RDB_BITID_CASES`: run only the cases whose name contains this substring.
    type(comm_t) :: comm
    character(len=16), parameter :: SCHEMES(2) = [character(len=16) :: "pred_corr", "ssp_rk2"]
-   character(len=24), parameter :: CASES(52) = [character(len=24) :: &
+   character(len=24), parameter :: CASES(53) = [character(len=24) :: &
                                                 "island_basin", "weno7_pv", &
                                                 "periodic_channel_zstar", &
                                                 "visc_rem_zstar", &
                                                 "periodic_sponge", &
-                                                "open_obc", "spherical", "obc_radiation_sponge", &
+                                                "open_obc", "spherical", "obc_radiation_sponge", "obc_sponge_east", &
                                                 "closures", "file_readers", &
                                                 "file_readers_zstar_full", &
                                                 "file_readers_zstar", "sea_ice", &
@@ -341,6 +343,7 @@ contains
       character(len=16) :: spx, spy, snx, sny, sng, snz
       character(len=:), allocatable :: common, bt_extra, bt_head, ice_dyn, hv_extra, drain_extra
       character(len=16) :: rad_earth_s, wind_s, wind_y_s
+      character(len=8) :: sponge_w, sponge_e
       character(len=64) :: wl
 
       ! The visc_rem chain rides on the common &ocean_bt_nml group (one
@@ -825,9 +828,15 @@ contains
                   "&ocean_thermo_nml enable_thermodynamics = .true., q_heat = -100.0 /"//NL// &
                   "&ocean_vmix_nml dt_therm_ratio = 2, diabatic_first = .false. /"//NL
          end select
-      case ("obc_radiation_sponge")
+      case ("obc_radiation_sponge", "obc_sponge_east")
          ! Orlanski-radiating open south edge with tracer reservoirs, a
          ! clamped (inflow) north edge, and a relaxing sponge band west.
+         sponge_w = "sponge"
+         sponge_e = "wall"
+         if (label == "obc_sponge_east") then
+            sponge_w = "wall"
+            sponge_e = "sponge"
+         end if
          nml = common// &
                "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
                "dx = 10000.0, dy = 10000.0 /"//NL// &
@@ -836,7 +845,8 @@ contains
                "&ocean_topo_nml topo_config = 'seamount', max_depth = 2000.0, "// &
                "edge_depth = 500.0, slope_scale = 40000.0, wind_config = '2gyre', "// &
                "taux_magnitude = 0.05 /"//NL// &
-               "&ocean_bc_nml west = 'sponge', east = 'wall', south = 'open', "// &
+               "&ocean_bc_nml west = '"//trim(sponge_w)//"', east = '"//trim(sponge_e)// &
+               "', south = 'open', "// &
                "north = 'clamped', north_clamped_v = -0.01, sponge_width = 3, "// &
                "sponge_strength = 1.0e-4, sponge_relax_tracers = .true., "// &
                "radiation_scheme = 'orlanski', res_lscale_out = 20000.0, "// &

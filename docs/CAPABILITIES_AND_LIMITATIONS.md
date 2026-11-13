@@ -509,10 +509,6 @@ These are the only such paths found.
   open boundaries. It is therefore OPT-IN: the default (`bt_halo = -1`,
   AUTO) resolves to 0 on every rank count, and a multi-rank run that sets it
   explicitly logs a warning.
-- **An EAST legacy `'sponge'` edge together with a `'clamped'` north edge**,
-  split in x, drifts at round-off on the east boundary face.  A west sponge
-  edge (alone, or with Orlanski-open and clamped edges) and every other
-  combination tested are exact.
 
 ### Global 1-degree scaling
 
