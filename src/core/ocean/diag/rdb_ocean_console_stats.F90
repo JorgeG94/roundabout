@@ -41,7 +41,7 @@ module rdb_ocean_console_stats
    public :: ocean_budget_stage_weight
    public :: ocean_heat_src_sum, ocean_salt_src_sum
    public :: ocean_frazil_heat_src
-   public :: efp_decompose_impl
+   public :: efp_decompose_impl, efp_summands_guard
       !! Production export, not a test hook: `rdb_ocean_dyn` accumulates the
       !! console mass `out` in EFP bins with it inside a device kernel, so
       !! it must not sit under `RDB_ENABLE_TESTING`.

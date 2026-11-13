@@ -1969,10 +1969,11 @@ contains
          case ("none", "flat", "linear")
             continue
          case ("file")
-            ! Ships single-rank, through the PR-14 static-2-D reader
+            ! Reads through the PR-14 static-2-D reader
             ! (`ocean_data_input_load_static_2d`), which DOES apply the
-            ! global offset — but the cavity as a whole is single-rank
-            ! fenced below, and the loader re-asserts it.
+            ! global offset; on more than one rank `engine_setup` refuses
+            ! this source (unproven on a decomposed domain) and the seed
+            ! re-asserts it.
             if (len_trim(cfg%ocean%cavity_dyn%draft_file) == 0) then
                call logger%error("&ocean_cavity_dyn_nml draft_config='file' requires "// &
                                  "draft_file")
@@ -2664,15 +2665,6 @@ contains
                               "ice.")
             has_error = .true.
          end if
-         if (cfg%px*cfg%py > 1) then
-            call logger%error("&ocean_cavity_dyn_nml enable=.true. is single-rank in "// &
-                              "v1 (px*py = "//to_string(cfg%px*cfg%py)//").  The "// &
-                              "draft halo itself is two lines, but the grounding "// &
-                              "statistics are global reductions the v1 configure does "// &
-                              "not take, and draft_config='file' inherits the "// &
-                              "local-nx reader.  Lifting the fence is its own PR.")
-            has_error = .true.
-         end if
          ! --- mutually exclusive capabilities ---
          if (cfg%ocean%wetdry%enable) then
             call logger%error("&ocean_cavity_dyn_nml enable=.true. is mutually "// &
@@ -3128,14 +3120,6 @@ contains
                               "exclusive with &ocean_bt_nml use_cont_type / "// &
                               "upstream_h_face (all three replace the BT Pass-1 "// &
                               "face thickness; composition deferred)")
-            has_error = .true.
-         end if
-         ! v1 single-rank: the theta/mask ghost exchange lands with the
-         ! C-grid MPI halo work.
-         if (cfg%px*cfg%py > 1) then
-            call logger%error("&ocean_wetdry_nml enable=.true. is single-rank in "// &
-                              "v1 (px*py = 1); the wet-mask/limiter halo exchange "// &
-                              "is deferred to the C-grid MPI work")
             has_error = .true.
          end if
          ! Wet/dry needs the split solver: the limiter lives in the BT substep.
