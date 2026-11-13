@@ -495,18 +495,6 @@ contains
                       ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
-         ! Manizza chlorophyll shortwave: the per-rank windowed chlorophyll read
-         ! fills the interior only (no halo exchange, ghosts stay at the
-         ! floor), and the ghosts feed `sw_kappa`; there is no multi-rank
-         ! bit-identity gate for it.
-         if (trim(cfg%ocean%thermo%sw_scheme) == "manizza05") then
-            call fail("&ocean_thermo_nml sw_scheme = 'manizza05' is single-rank ("// &
-                      to_string(csize)//" ranks requested): the chlorophyll climatology "// &
-                      "is read per rank without ghosts and has no multi-rank "// &
-                      "bit-identity gate.  Run on 1 rank.", &
-                      ierr, OCEAN_STATUS_ERR_SETUP)
-            return
-         end if
       end if
 
       call decomp_init_from_config(engine%decomp, cfg, csize, rank)
@@ -1728,7 +1716,8 @@ contains
                             engine%state%metrics, t)
       ! Chlorophyll -> per-band opacities (no-op unless sw_scheme="manizza05").
       call sw_chl_apply(engine%state%sw_chl, engine%state%data_input, engine%grid, &
-                        engine%state%multilayer%wet_mask, engine%state%surface_flux, t)
+                        engine%state%multilayer%wet_mask, engine%state%surface_flux, &
+                        engine%state%bc, t)
 
       ! Ocean bulk-flux consumer (OM3 C2c-3a): no-op unless
       ! `&ocean_bulk_flux_nml enable = .true.` (which `validate_config`

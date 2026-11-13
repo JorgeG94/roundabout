@@ -76,6 +76,10 @@
 !!   * sss_restore - the island basin with FILE sea-surface-salinity restoring
 !!     (per-rank windowed two-record target, halo-exchanged, piston salt flux,
 !!     net-zero shift through the EFP allreduce); needs NetCDF;
+!!   * manizza - the island basin with the chlorophyll-dependent N-band
+!!     shortwave (`sw_scheme = 'manizza05'`): per-rank windowed two-record
+!!     chlorophyll, its seam-ghost exchange, the per-band opacities; needs
+!!     NetCDF;
 !!   * balanced_vortex / balanced_vortex_t0 - the isolated balanced cold-core
 !!     vortex IC (`ic_config = 'balanced_vortex'`) on a closed beta-plane, centred
 !!     on the 2x1/1x2 seams and the 2x2 corner; `_t0` takes zero steps so the
@@ -205,6 +209,7 @@ program test_ocean_decomp_bitid_mpi
    character(len=*), parameter :: ZINIT_FILE = "bitid_zinit.nc"
    character(len=*), parameter :: SSS_FILE = "bitid_sss.nc"
    character(len=*), parameter :: TIDE_FILE = "bitid_tide.nc"
+   character(len=*), parameter :: CHL_FILE = "bitid_chl.nc"
    character(len=*), parameter :: ATM_WARM = "bitid_atm_warm.nc"
    character(len=*), parameter :: ATM_COLD = "bitid_atm_cold.nc"
    character(len=*), parameter :: ATM_CRSE = "bitid_atm_coarse.nc"
@@ -241,7 +246,7 @@ program test_ocean_decomp_bitid_mpi
       !! `RDB_BITID_CASES`: run only the cases whose name contains this substring.
    type(comm_t) :: comm
    character(len=16), parameter :: SCHEMES(2) = [character(len=16) :: "pred_corr", "ssp_rk2"]
-   character(len=24), parameter :: CASES(49) = [character(len=24) :: &
+   character(len=24), parameter :: CASES(50) = [character(len=24) :: &
                                                 "island_basin", "weno7_pv", &
                                                 "periodic_channel_zstar", &
                                                 "visc_rem_zstar", &
@@ -265,7 +270,7 @@ program test_ocean_decomp_bitid_mpi
                                                 "drain_ratio_weno9", "drain_ratio_fold", &
                                                 "drain_ratio_fold_h3", "eulz", "eulz_periodic", &
                                                 "eulz_tripolar", "eulz_epbl_mle", "bulk_flux", &
-                                                "bulk_flux_ice", "bulk_flux_fold"]
+                                                "bulk_flux_ice", "bulk_flux_fold", "manizza"]
 
    call comm_env_init()
    call comm_env_setup_roles(.false.)
@@ -288,6 +293,7 @@ program test_ocean_decomp_bitid_mpi
       if (trim(CASES(ic)) == "file_readers" .or. &
           trim(CASES(ic)) == "file_readers_zstar_full" .or. &
           trim(CASES(ic)) == "sss_restore" .or. &
+          trim(CASES(ic)) == "manizza" .or. &
           trim(CASES(ic)) == "tidal_files" .or. &
           trim(CASES(ic)) == "tidal_polzin" .or. &
           index(trim(CASES(ic)), "bulk_flux") == 1 .or. &
@@ -327,7 +333,7 @@ contains
       integer, intent(in) :: px, py
       character(len=:), allocatable :: nml
       character(len=*), parameter :: NL = new_line("a")
-      character(len=16) :: spx, spy, snx, sny, sng
+      character(len=16) :: spx, spy, snx, sny, sng, snz
       character(len=:), allocatable :: common, bt_extra, ice_dyn, hv_extra, drain_extra
       character(len=16) :: rad_earth_s, wind_s, wind_y_s
       character(len=64) :: wl
@@ -393,6 +399,8 @@ contains
       write (spy, '(i0)') py
       write (snx, '(i0)') NX_G
       write (sny, '(i0)') NY_G
+      snz = "4"
+      if (label == "manizza") snz = "8"
       ! weno9 needs nghost = 5: widen the grid so the np = 4 layouts (1x4 ->
       ! ny/4 rows, 4x1 -> nx/4 columns) stay at least nghost wide.
       if (label == "drain_ratio_weno9") then
@@ -402,7 +410,7 @@ contains
       common = "&sim_nml sim_type = 'ocean' /"//NL// &
                "&mpi_nml px = "//trim(spx)//", py = "//trim(spy)//" /"//NL// &
                "&time_nml t_end = 86400.0, dt_fixed = 900.0 /"//NL// &
-               "&nonhydrostatic_nml nz_layers = 4 /"//NL// &
+               "&nonhydrostatic_nml nz_layers = "//trim(snz)//" /"//NL// &
                "&tracer_nml initial_temperature = 12.0, initial_salinity = 35.0, "// &
                "T_init_surface = 20.0, T_init_bottom = 4.0 /"//NL// &
                "&ocean_bt_nml auto_n_inner = .true., split_scheme = '"//scheme//"'"// &
@@ -442,6 +450,27 @@ contains
                "&ocean_restore_nml enable_restore_salt = .true., piston_s = 0.5, "// &
                "sss_file = '"//SSS_FILE//"', sss_var = 'salt', sss_as_sflux = .true., "// &
                "sss_adjust_net_zero = .true. /"//NL// &
+               "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
+      case ("manizza")
+         ! The island basin with the Manizza (2005) chlorophyll shortwave: the
+         ! per-rank windowed read of a two-record spatially non-uniform,
+         ! non-symmetric chlorophyll climatology, its seam-ghost exchange, and
+         ! the per-band opacities feeding the deposition kernel and the KPP
+         ! B_0 coupling.  A wrong window or a stale ghost changes the heating.
+         ! Shallow (100 m) and 8 layers deep so the blue AND red bands cross
+         ! several interfaces: the opacities, not just the surface layer, drive
+         ! the heating.
+         nml = common// &
+               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
+               "dx = 20000.0, dy = 20000.0 /"//NL// &
+               "&physics_nml coriolis_f = 1.0e-4 /"//NL// &
+               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
+               "&ocean_topo_nml topo_config = 'island', max_depth = 100.0, "// &
+               "slope_scale = 0.15, wind_config = '2gyre', taux_magnitude = 0.1, "// &
+               "coriolis_beta = 2.0e-11 /"//NL// &
+               "&ocean_thermo_nml enable_thermodynamics = .true., q_heat = 400.0, "// &
+               "sw_pen_frac = 1.0, sw_scheme = 'manizza05', "// &
+               "sw_chl_file = '"//CHL_FILE//"', sw_chl_var = 'CHL' /"//NL// &
                "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
       case ("visc_rem_chain")
          ! The island basin with the visc_rem chain live end to end: MOM6
@@ -1855,6 +1884,31 @@ contains
       call nc_enddef(ncid)
       call nc_put_var_2d(ncid, v1, tt(:, :, 1))
       call nc_put_var_2d(ncid, v2, tt(:, :, 2))
+      call nc_close(ncid)
+
+      ! Chlorophyll climatology (x, y, time): two records, strongly
+      ! non-uniform and non-symmetric in both directions (a low-chl corner
+      ! against a bloom), so a wrong window or a stale seam ghost changes the
+      ! band opacities.
+      tt(:, :, 2) = 0.0_wp
+      do j = 1, NY_G
+         do i = 1, NX_G
+            x = real(i, wp)/real(NX_G, wp)
+            y = real(j, wp)/real(NY_G, wp)
+            tt(i, j, 1) = 0.01_wp + 0.25_wp*x**2*(1.0_wp - 0.7_wp*y) + &
+                          0.12_wp*abs(sin(9.0_wp*x + 4.0_wp*y))
+            tt(i, j, 2) = 1.5_wp*tt(i, j, 1) + 0.03_wp*y
+         end do
+      end do
+      call nc_create_file(CHL_FILE, ncid)
+      call nc_def_dim(ncid, "x", NX_G, dx_)
+      call nc_def_dim(ncid, "y", NY_G, dy_)
+      call nc_def_dim(ncid, "time", 2, dz_)
+      call nc_def_var_3d(ncid, "CHL", [dx_, dy_, dz_], v1)
+      call rdb_def_var_1d(ncid, "time", dz_, v2)
+      call nc_enddef(ncid)
+      ierr = nf90_put_var(ncid, v1, tt)
+      call rdb_put_var_1d(ncid, v2, [0.0_wp, 172800.0_wp])
       call nc_close(ncid)
       call write_atm_file(ATM_WARM, ATM_WARM_LIST, 288.0_wp, 4.0e-3_wp, 72, 36)
       call write_atm_file(ATM_COLD, ATM_COLD_LIST, 255.0_wp, 6.0e-4_wp, 72, 36)
