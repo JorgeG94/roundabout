@@ -1034,7 +1034,8 @@ contains
       !$acc enter data copyin(a_h, a_melt, a_sfar, a_tb, a_act, a_s, a_t, a_sb, a_hb, a_ktop)
       call cavity_mass_apply_impl(N, N, 1, DTC/RHO0, DTC/RHO0, 0.0_wp, a_act, a_melt, a_sfar, a_tb, &
                                   a_h, a_s, a_t, a_sb, a_hb, a_ktop, n_own, NG)
-      !$acc update device(a_h, a_s, a_t, a_sb, a_hb)
+      ! Reset the thickness on host AND device (the first call overwrote the
+      ! device copy) so both calls see the same starved columns.
       a_h = 10.0_wp
       !$acc update device(a_h)
       call cavity_mass_apply_impl(N, N, 1, DTC/RHO0, DTC/RHO0, 0.0_wp, a_act, a_melt, a_sfar, a_tb, &

@@ -1237,7 +1237,7 @@ contains
       tot%poison = epoison
    end function cavity_mass_melt_volume_efp
 
-   function cavity_open_area_efp(nx, ny, nghost, wet_mask, cover_frac, areaT) result(tot)
+   pure function cavity_open_area_efp(nx, ny, nghost, wet_mask, cover_frac, areaT) result(tot)
       !! RANK-LOCAL open-ocean AREA (m^2) as an EFP sum over OWNED cells:
       !! the wet area the ice does NOT cover.  Configure-time only, on
       !! HOST arrays before `enter_data` (a plain host loop, no device
@@ -1259,6 +1259,10 @@ contains
       integer :: i, j
       tot%v = 0_int64
       tot%poison = 0_int64
+      if (int(nx - 2*nghost, int64)*int(ny - 2*nghost, int64) > EFP_MAX_SUMMANDS) then
+         tot%poison = 1_int64   ! surfaces as NaN: the bins could overflow
+         return
+      end if
       do j = nghost + 1, ny - nghost
          do i = nghost + 1, nx - nghost
             if (wet_mask(i, j) > 0.5_wp .and. cover_frac(i, j) < 0.5_wp) then
@@ -1461,7 +1465,7 @@ contains
       !! to the coordinate's target after `rk2_average`.
       !!
       !! NON-`pure`: it logs, it fails loud, it mutates `ms%mass_src`,
-      !! and (with compensation on) it issues one collective.  Its six
+      !! and it issues one EFP collective plus one integer thin-tally reduction.  Its six
       !! kernels are all `pure`.
       !!
       !! `mem:separate`: every array is mapped by its owning slot's
@@ -1495,7 +1499,8 @@ contains
       real(wp) :: dt_over_rho0, vol_melt, area_open, dw, share
       type(efp_t) :: loc(1), glob(1)
       logical :: owns_source
-      integer(int64) :: thin_loc(2), thin_glob(2)
+      integer(int64) :: thin_loc, thin_glob
+      integer(int64), parameter :: THIN_PACK = 4294967296_int64
 
       if (.not. cav%is_init) return
       if (.not. cav%enable) return
@@ -1586,12 +1591,12 @@ contains
       ! an identity on an untiled grid) and let EVERY rank decide and fail
       ! together instead of one rank stopping while the rest hang in the
       ! next collective.
-      thin_loc(1) = int(n_thin_src, int64)
-      thin_loc(2) = int(n_thin_comp, int64)
-      call grid_allreduce_sum_i8(grid, thin_loc(1), thin_glob(1))
-      call grid_allreduce_sum_i8(grid, thin_loc(2), thin_glob(2))
-      n_thin_src = int(thin_glob(1))
-      n_thin_comp = int(thin_glob(2))
+      ! ONE reduction: the two counts are packed into one int64 (comp in the
+      ! high 32 bits; each count is far below 2**31).
+      thin_loc = int(n_thin_src, int64) + int(n_thin_comp, int64)*THIN_PACK
+      call grid_allreduce_sum_i8(grid, thin_loc, thin_glob)
+      n_thin_src = int(modulo(thin_glob, THIN_PACK))
+      n_thin_comp = int(thin_glob/THIN_PACK)
       cav%n_thin_step = n_thin_src + n_thin_comp
       cav%n_thin_total = cav%n_thin_total + int(cav%n_thin_step, int64)
       if (cavity_mass_thin_is_fatal(cav%n_thin_step)) then

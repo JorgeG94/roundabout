@@ -271,7 +271,7 @@ program test_ocean_decomp_bitid_mpi
          !! Wet/dry runs: owned-cell flips of `wd_wet_dyn`, sampled once per outer
          !! step, in the seam bands of the shoal -- (wet->dry, dry->wet) x
          !! (i-line band, j-line band, corner box).  Zero on every other case.
-real(wp) :: mvol_max = 0.0_wp, mvol_min = 0.0_wp, dw_max = 0.0_wp, dw_min = 0.0_wp
+      real(wp) :: mvol_max = 0.0_wp, mvol_min = 0.0_wp, dw_max = 0.0_wp, dw_min = 0.0_wp
          !! `freshwater='mass'`: range over the run of the global melt volume
          !! (m^3/step) and of the compensating withdrawal `dw` (m).
       integer :: mvol_nvar = 0, dw_nvar = 0
