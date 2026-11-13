@@ -19,6 +19,7 @@ module rdb_ocean_tide_astro
    !!   * Kowalik & Luick (2019), "Modern Theory and Practice of Tide
    !!     Analysis and Prediction" (Tables I.4 argument, I.6 nodal).
    use rdb_constants, only: wp
+   use rdb_safe_math, only: safe_cos, safe_sin
    use rdb_calendar, only: gregorian_day_number, days_since_1900
    implicit none
    private
@@ -132,8 +133,10 @@ contains
          return
       end if
       call mean_longitudes(dnum, s_deg, h_deg, p_deg, n_deg)
-      cos_n = cos(n_deg*TIDE_DEG2RAD)
-      sin_n = sin(n_deg*TIDE_DEG2RAD)
+      ! Position-independent trig (rdb_safe_math); the lunar-node longitude is
+      ! reduced to one turn first so the argument stays inside its valid range.
+      cos_n = safe_cos(modulo(n_deg, 360.0_wp)*TIDE_DEG2RAD)
+      sin_n = safe_sin(modulo(n_deg, 360.0_wp)*TIDE_DEG2RAD)
       ! M2, N2
       f_nodal(1) = 1.0_wp - 0.037_wp*cos_n
       u_nodal(1) = (-2.1_wp)*TIDE_DEG2RAD*sin_n
