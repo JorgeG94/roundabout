@@ -1360,6 +1360,21 @@ contains
       call configure_ocean_cavity_melt(cfg, engine%state, engine%grid, rank, ierr=ierr)
       if (setup_failed(ierr)) return
 
+      ! Warm restart with basal melt: the carried `sf_heat_cavity`/
+      ! `sf_salt_cavity` (and the assembled Q) were restored above, but
+      ! `set_surface_flux_const` cleared the host `has_heat`/`has_salt`
+      ! latches and the melt filler only re-latches them in
+      ! `engine_step_finalize`, AFTER the first resumed step -- whose
+      ! tracer apply would otherwise drop the melt flux once.  Same
+      ! resume latch as the sea-ice path above.  Cold start untouched.
+      ! Gated on thermodynamics as well: the straight run's filler returns
+      ! before latching when they are off, so nothing is latched there.
+      if (did_restart .and. engine%state%cavity_flux%enable .and. &
+          cfg%ocean%thermo%enable_thermodynamics) then
+         engine%state%surface_flux%has_heat = .true.
+         engine%state%surface_flux%has_salt = .true.
+      end if
+
       ! Ice-shelf TOP drag (Phase 4a): coefficients + the static FACE
       ! cover masks projected from `metrics%cover_frac`.  AFTER the
       ! cover_frac halo exchange and after configure_ocean_cavity_melt
