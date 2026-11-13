@@ -61,6 +61,15 @@ is released under the MIT License (``LICENSE``). Neither NOAA-GFDL nor the
 MOM6 or SIS2 developers endorse Roundabout, and they are not responsible for
 it.
 
+Code ported from CICE and Icepack (the CICE Consortium; sea-ice column
+physics and dynamics) is used and modified under the BSD-3-Clause license.
+The repository carries the notice in ``LICENSES/BSD-3-Clause-CICE.txt`` and
+repeats it, with the upstream versions ported from, in ``NOTICE``. Neither the
+CICE Consortium nor Triad National Security, LLC endorses Roundabout, and they
+are not responsible for it. Publications that use the CICE-derived ice are
+asked by the CICE Consortium Distribution Policy to acknowledge it; the
+suggested text is in ``docs/howto/ported_file_header.md``.
+
 
 References
 ==========
