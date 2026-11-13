@@ -1741,9 +1741,20 @@ contains
       !! the engine auto-factors and which `validate_config`'s px*py fences
       !! cannot see), so the engine-side gate is the one exercised.
       character(len=*), parameter :: NL = new_line("a")
-      character(len=160), parameter :: KNOBS(3) = [character(len=160) :: &
+      ! The cavity knob needs a namelist `validate_config` ACCEPTS (FV_MOM6 PGF
+      ! with `p_top_in_bc`, a sigma column, an analytic draft): the bare
+      ! `enable = .true.` is refused by `validate_config` for the PGF form
+      ! before `engine_setup` runs, which made this fence vacuous.  The
+      ! validate-accepts check below keeps every entry honest.
+      character(len=400), parameter :: KNOBS(3) = [character(len=400) :: &
                                                    "&ocean_wetdry_nml enable = .true. /", &
-                                                   "&ocean_cavity_dyn_nml enable = .true. /", &
+                                                   "&vcoord_nml vcoord_type = 'sigma' /"//new_line("a")// &
+                                                   "&ocean_pgf_nml form = 'fv_mom6', p_top_in_bc = .true. /"// &
+                                                   new_line("a")// &
+                                                   "&ocean_cavity_dyn_nml enable = .true., "// &
+                                                   "draft_config = 'linear', draft_depth = 300.0, "// &
+                                                   "draft_slope = 0.0, draft_x0 = 0.0, "// &
+                                                   "h_min_cavity = 10.0 /", &
                                                    "&ocean_bc_nml east = 'chapman' /"]
       type(ocean_engine_t) :: engine
       type(config_t) :: cfg
@@ -1761,6 +1772,12 @@ contains
                trim(KNOBS(ik))//NL
          call read_config_from_string(nml, cfg, ierr=ierr)
          if (ierr == OCEAN_STATUS_OK) call validate_config(cfg, ierr)
+         if (ierr /= OCEAN_STATUS_OK .and. index(KNOBS(ik), "cavity_dyn") > 0) then
+            write (*, '(a,i0)') "FAIL fence: the cavity namelist is refused by validate_config, "// &
+               "so the engine fence is never reached (vacuous), rank ", rank
+            n_fail = n_fail + 1
+            cycle
+         end if
          if (ierr == OCEAN_STATUS_OK) then
             call engine_setup(engine, cfg, ierr, compute_rank=rank, compute_size=nprocs)
             call engine_teardown(engine)

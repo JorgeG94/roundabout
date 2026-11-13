@@ -141,6 +141,7 @@ set(RDB_TESTS
     "test_ocean_cavity_flux|test_ocean_cavity_flux|collect_ocean_cavity_flux_tests|ocean_cavity_flux|ocean"
     "test_ocean_cavity_diags|test_ocean_cavity_diags|collect_ocean_cavity_diags_tests|ocean_cavity_diags|ocean"
     "test_ocean_cavity_grounded_budget|test_ocean_cavity_grounded_budget|collect_ocean_cavity_grounded_budget_tests|ocean_cavity_grounded_budget|ocean"
+    "test_ocean_cavity_engine|test_ocean_cavity_engine|collect_ocean_cavity_engine_tests|ocean_cavity_engine|ocean"
     "test_ocean_cavity_freshwater|test_ocean_cavity_freshwater|collect_ocean_cavity_freshwater_tests|ocean_cavity_freshwater|ocean"
     "test_ocean_pgf_wright|test_ocean_pgf_wright|collect_ocean_pgf_wright_tests|ocean_pgf_wright|ocean"
     "test_ocean_pgf_gprime|test_ocean_pgf_gprime|collect_ocean_pgf_gprime_tests|ocean_pgf_gprime|ocean"
