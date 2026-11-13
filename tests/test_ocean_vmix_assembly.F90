@@ -71,15 +71,15 @@ contains
       type(hgrid_t), intent(in) :: grid
       type(multilayer_state_t), intent(inout) :: ms
       type(ocean_vmix_t), intent(inout) :: vmix
-      !$acc enter data copyin(ms, vmix)
+      !$omp target enter data map(to: ms, vmix)
       call ms%enter_data()
       call vmix%enter_data()
-      !$acc update device(vmix%kv, vmix%kt, vmix%ks)
+      !$omp target update to(vmix%kv, vmix%kt, vmix%ks)
       call vmix_assemble(grid, vmix, ms)
-      !$acc update self(vmix%kv, vmix%kt, vmix%ks)
+      !$omp target update from(vmix%kv, vmix%kt, vmix%ks)
       call vmix%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms, vmix)
+      !$omp target exit data map(delete: ms, vmix)
    end subroutine run_assemble
 
    ! -----------------------------------------------------------------
@@ -338,14 +338,14 @@ contains
          vmix%kv(5, 4, 3) = -2.0e-3_wp   ! a deliberate negative
 
          st = 99
-         !$acc enter data copyin(ms, vmix)
+         !$omp target enter data map(to: ms, vmix)
          call ms%enter_data()
          call vmix%enter_data()
-         !$acc update device(vmix%kv, vmix%kt, vmix%ks)
+         !$omp target update to(vmix%kv, vmix%kt, vmix%ks)
          call vmix_assemble(grid, vmix, ms, status=st)
          call vmix%exit_data()
          call ms%exit_data()
-         !$acc exit data delete(ms, vmix)
+         !$omp target exit data map(delete: ms, vmix)
 
          call check(error, st == 1, "guard did not report a negative diffusivity")
       end block checks
@@ -576,7 +576,7 @@ contains
          ! vmix's exit_data does `exit data delete` (not copyout) on kv —
          ! pull the computed result back explicitly first (mirrors
          ! test_ocean_pp81.F90:run_pp81).
-         !$acc update self(state1%vmix%kv, state2%vmix%kv)
+         !$omp target update from(state1%vmix%kv, state2%vmix%kv)
          call ocean_state_exit_data(state1)
          call ocean_state_exit_data(state2)
 
@@ -613,15 +613,15 @@ contains
          end do
          vmix%ks = -999.0_wp   ! deliberate garbage — must be fully clobbered
 
-         !$acc enter data copyin(ms, vmix)
+         !$omp target enter data map(to: ms, vmix)
          call ms%enter_data()
          call vmix%enter_data()
-         !$acc update device(vmix%kt, vmix%ks)
+         !$omp target update to(vmix%kt, vmix%ks)
          call vmix_split_kd_heat_salt(grid, vmix, ms)
-         !$acc update self(vmix%kt, vmix%ks)
+         !$omp target update from(vmix%kt, vmix%ks)
          call vmix%exit_data()
          call ms%exit_data()
-         !$acc exit data delete(ms, vmix)
+         !$omp target exit data map(delete: ms, vmix)
 
          call check(error, all(vmix%ks == vmix%kt), &
                     "vmix_split_kd_heat_salt: ks != kt over the full (nx,ny,nz+1) extent")

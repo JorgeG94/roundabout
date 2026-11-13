@@ -233,7 +233,7 @@ contains
          metrics%use_closed_faces = .true.
          metrics%open_u = 1.0_wp
          metrics%open_v = 1.0_wp
-         !$acc update device(metrics%open_u, metrics%open_v)
+         !$omp target update to(metrics%open_u, metrics%open_v)
       else
          call make_cartesian_metrics(metrics, grid)
       end if
@@ -315,14 +315,14 @@ contains
          ! check with the SEEDED velocity's own depth mean as the "diff"
          ! (measured 2.83E-02 / 1.49E-02 at the two faces -- exactly the
          ! magnitude of the thing that went missing, not round-off).
-         !$acc update self(bt_work%bt_ubt)
+         !$omp target update from(bt_work%bt_ubt)
          bt_work%ubt_at_n = bt_work%bt_ubt
          ! Choose an arbitrary end state and ZERO forcing -- Delta = ubt_end
          ! - ubt_at_n exactly. Host-side writes to already-mapped arrays
          ! need `update device` to reach the kernels below.
          bt_work%bt_ubt_end = bt_work%bt_ubt + 0.2_wp
          bt_work%F_bt_u = 0.0_wp
-         !$acc update device(bt_work%bt_ubt_end, bt_work%F_bt_u, bt_work%ubt_at_n)
+         !$omp target update to(bt_work%bt_ubt_end, bt_work%F_bt_u, bt_work%ubt_at_n)
          dt = 1.0_wp
 
          call apply_bt_correction(bt_work, ms, dt, metrics, use_visc_rem=.true.)
@@ -332,11 +332,11 @@ contains
          ! reference) must reproduce bt_ubt_end to round-off.
          nu = size(bt_work%bt_ubt_end, 1)
          allocate (f_mean(nu, size(bt_work%bt_ubt_end, 2)))
-         !$acc enter data create(f_mean)
+         !$omp target enter data map(alloc: f_mean)
          call face_depth_mean_u(grid, ms%u_face_x_layer, ms%h_layer, f_mean, NZ, metrics, &
                                 bt_work%bt_H_ref, bt_work%frhat_scheme)
-         !$acc update self(f_mean)
-         !$acc exit data delete(f_mean)
+         !$omp target update from(f_mean)
+         !$omp target exit data map(delete: f_mean)
 
          call bt_work%exit_data()
          call ms%exit_data()
@@ -406,7 +406,7 @@ contains
          call metrics%enter_data()
          call bt_work%enter_data()
          call compute_bt_rem_from_visc_rem(grid, bt_work, ms, metrics, 4)
-         !$acc update self(bt_work%av_rem_u, bt_work%av_rem_v)
+         !$omp target update from(bt_work%av_rem_u, bt_work%av_rem_v)
          call bt_work%exit_data()
          call metrics%exit_data()
          call ms%exit_data()

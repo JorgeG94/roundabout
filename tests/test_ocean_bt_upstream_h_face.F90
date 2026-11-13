@@ -367,17 +367,17 @@ contains
       ! Map to device — `-gpu=mem:separate` requires explicit
       ! enter_data; the substep loop touches many bt_work members.
       call make_cartesian_metrics(metrics, grid)
-      !$acc enter data copyin(force_u, force_v)
+      !$omp target enter data map(to: force_u, force_v)
       call bt_off%enter_data()
       call bt_on%enter_data()
       call barotropic_substep_linear(grid, metrics, bt_off, force_u, force_v, n_steps, dt_inner)
       call barotropic_substep_linear(grid, metrics, bt_on, force_u, force_v, n_steps, dt_inner)
-      !$acc update self(bt_off%bt_eta, bt_off%bt_ubt, bt_off%bt_vbt)
-      !$acc update self(bt_on%bt_eta, bt_on%bt_ubt, bt_on%bt_vbt)
+      !$omp target update from(bt_off%bt_eta, bt_off%bt_ubt, bt_off%bt_vbt)
+      !$omp target update from(bt_on%bt_eta, bt_on%bt_ubt, bt_on%bt_vbt)
       call bt_off%exit_data()
       call bt_on%exit_data()
       call destroy_cartesian_metrics(metrics)
-      !$acc exit data delete(force_u, force_v)
+      !$omp target exit data map(delete: force_u, force_v)
 
       max_diff_eta = 0.0_wp
       do j = 1, ny

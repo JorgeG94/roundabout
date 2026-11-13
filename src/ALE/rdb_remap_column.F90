@@ -81,7 +81,7 @@ module rdb_remap_column
 contains
 
    pure subroutine boundary_half_jump(h_self, h_nbr, dq_up, d)
-      !$acc routine seq
+      !$omp declare target
       !! Linear-exact half-jump across a BOUNDARY cell (k=1 or k=nz),
       !! where a centred stencil has no second neighbour.
       !!
@@ -118,7 +118,7 @@ contains
    end subroutine boundary_half_jump
 
    pure function remap_column_preconditions_ok(nz, dz_old, dz_new, rel_tol) result(ok)
-      !$acc routine seq
+      !$omp declare target
       !! Precondition test for one remap column, as a `pure` predicate so the
       !! caller decides what to do about a violation (audit findings V5, V6).
       !!
@@ -166,7 +166,7 @@ contains
    end function remap_column_preconditions_ok
 
    pure subroutine plm_slope_nonuniform(h_l, h_c, h_r, q_l, q_c, q_r, slope)
-      !$acc routine seq
+      !$omp declare target
       !! Thickness-weighted PLM slope — Colella & Woodward (1984) eq (1.7)
       !! with the (1.8) bound, the form MOM6 ships as `PLM_slope_cw`.
       !!
@@ -225,7 +225,7 @@ contains
    end subroutine plm_slope_nonuniform
 
    pure subroutine ppm_edge_two_cell(h_l, h_r, q_l, q_r, edge)
-      !$acc routine seq
+      !$omp declare target
       !! Thickness-weighted two-cell interface value — the non-uniform
       !! generalisation of `0.5*(q_l + q_r)`.
       !!
@@ -249,7 +249,7 @@ contains
    end subroutine ppm_edge_two_cell
 
    pure subroutine ppm_jump_nonuniform(h_l, h_c, h_r, q_l, q_c, q_r, dq)
-      !$acc routine seq
+      !$omp declare target
       !! Colella & Woodward (1984) eq (1.7) — the thickness-weighted
       !! second-order jump `delta a` across the cell, which eq (1.6)
       !! consumes.  Returned UNLIMITED, deliberately.
@@ -285,7 +285,7 @@ contains
    end subroutine ppm_jump_nonuniform
 
    pure subroutine ppm_edge_nonuniform(h0, h1, h2, h3, q1, q2, dq1, dq2, edge)
-      !$acc routine seq
+      !$omp declare target
       !! Colella & Woodward (1984) eq (1.6): the fourth-order interface value
       !! between cells 1 and 2 on a NON-UNIFORM stencil `h0,h1,h2,h3`.
       !!
@@ -326,7 +326,7 @@ contains
    end subroutine ppm_edge_nonuniform
 
    pure subroutine remap_column(method, nz, dz_old, dz_new, q_old, q_new, bnd_extrap, nonunif)
-      !$acc routine seq
+      !$omp declare target
       !! Dispatch to the requested remapping method.
       integer, intent(in) :: method
          !! REMAP_PCM, REMAP_PLM, REMAP_PPM, REMAP_PPM_H4, or REMAP_PQM
@@ -375,7 +375,7 @@ contains
    end subroutine remap_column
 
    pure subroutine remap_column_pcm(nz, dz_old, dz_new, q_old, q_new)
-      !$acc routine seq
+      !$omp declare target
       !! Piecewise-constant (donor cell) remap. Diffusive, guaranteed monotone.
       integer, intent(in) :: nz
       real(wp), intent(in) :: dz_old(nz)
@@ -430,7 +430,7 @@ contains
    end subroutine remap_column_pcm
 
    pure subroutine remap_column_plm(nz, dz_old, dz_new, q_old, q_new, bnd_extrap, nonunif)
-      !$acc routine seq
+      !$omp declare target
       !! Piecewise-linear (minmod-limited) remap. Monotone (no new extrema).
       !! Per old layer k: q_hat(xi) = q(k) + slope(k)*(2*xi - 1), xi in [0,1],
       !! slope(k) = 0.5*minmod(q(k+1)-q(k), q(k)-q(k-1)).
@@ -549,7 +549,7 @@ contains
    end subroutine remap_column_plm
 
    pure subroutine remap_column_ppm(nz, dz_old, dz_new, q_old, q_new, bnd_extrap, nonunif)
-      !$acc routine seq
+      !$omp declare target
       !! Piecewise-parabolic (Colella & Woodward 1984) remap.
       !! Per old layer k, xi in [0,1]:
       !!   q_hat(xi) = q_L + xi*(q_R - q_L + q6*(1 - xi)), q6 = 6*q_bar - 3*(q_L+q_R)
@@ -778,7 +778,7 @@ contains
    end subroutine remap_column_ppm
 
    pure subroutine remap_column_ppm_h4(nz, dz_old, dz_new, q_old, q_new, bnd_extrap, nonunif)
-      !$acc routine seq
+      !$omp declare target
       !! PPM with non-uniform 4th-order (H4) edge values (White & Adcroft 2008).
       !! As `remap_column_ppm` but the interior edge estimate is the
       !! thickness-weighted exactly-4th-order stencil (reduces to PPM's
@@ -1058,7 +1058,7 @@ contains
    end subroutine remap_column_ppm_h4
 
    pure subroutine pqm_solve_diag_dominant(n, al, ac, au, r, x)
-      !$acc routine seq
+      !$omp declare target
       !! Diagonally-dominant tridiagonal solve; central diagonal supplied as the
       !! OFFSET `ac` from `al + au` (full pivot = ac + al + au). Never divides by
       !! zero for positive-definite ac, al, au (White & Adcroft 2008).
@@ -1098,7 +1098,7 @@ contains
    end subroutine pqm_solve_diag_dominant
 
    pure subroutine pqm_end_value_h4(dz, u, csys)
-      !$acc routine seq
+      !$omp declare target
       !! One-sided 4th-order polynomial fit of the cell averages `u` to the
       !! four boundary layers `dz` (thicknesses, must be positive), returning
       !! the four coefficients `csys` of the fit (White & Adcroft 2008,
@@ -1170,7 +1170,7 @@ contains
    end subroutine pqm_end_value_h4
 
    pure subroutine remap_column_pqm(nz, dz_old, dz_new, q_old, q_new, bnd_extrap, nonunif)
-      !$acc routine seq
+      !$omp declare target
       !! Piecewise-quartic (PQM_IH4IH3) conservative remap (White & Adcroft 2008).
       !! Implicit-h4 edge VALUES + implicit-h3 edge SLOPES (each a
       !! diagonally-dominant tridiagonal solve with one-sided 4-cell boundary

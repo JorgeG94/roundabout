@@ -109,9 +109,9 @@ contains
       ice%m_snow = 0.0_wp
 
       checks: block
-         !$acc enter data copyin(ice)
+         !$omp target enter data map(to: ice)
          call ice%enter_data()
-         !$acc enter data copyin(stress)
+         !$omp target enter data map(to: stress)
          call stress%enter_data()
          ! `metrics%wet_T` is read on-device by `ice_cell_concentration_impl`
          ! inside `ice_ocean_stress_flux`, and `make_cartesian_metrics`
@@ -121,7 +121,7 @@ contains
          call ice_ocean_stress_flux(metrics, stress, ice)
 
          ! Component arrays only — never `update self(stress)`.
-         !$acc update self(stress%tau_x, stress%tau_y, stress%stress_mag)
+         !$omp target update from(stress%tau_x, stress%tau_y, stress%stress_mag)
 
          ! Physical faces / cells only.  The blend gives the two ARRAY-edge
          ! faces (i = 1, i = nx+1) a deliberate half weight — they have only
@@ -174,14 +174,14 @@ contains
       allocate (mag_configure, source=stress%stress_mag)
 
       checks: block
-         !$acc enter data copyin(ice)
+         !$omp target enter data map(to: ice)
          call ice%enter_data()
-         !$acc enter data copyin(stress)
+         !$omp target enter data map(to: stress)
          call stress%enter_data()
 
          call ice_ocean_stress_flux(metrics, stress, ice)
 
-         !$acc update self(stress%tau_x, stress%stress_mag)
+         !$omp target update from(stress%tau_x, stress%stress_mag)
 
          call check(error, all(stress%tau_x == WIND_X), &
                     "ice_free_wind_bitident: zero-cover blend perturbed tau_x")
@@ -247,14 +247,14 @@ contains
       mag_drag = sqrt(FXOC*FXOC + FYOC*FYOC)
 
       checks: block
-         !$acc enter data copyin(ice)
+         !$omp target enter data map(to: ice)
          call ice%enter_data()
-         !$acc enter data copyin(stress)
+         !$omp target enter data map(to: stress)
          call stress%enter_data()
 
          call ice_ocean_stress_flux(metrics, stress, ice)
 
-         !$acc update self(stress%tau_x, stress%tau_y, stress%stress_mag)
+         !$omp target update from(stress%tau_x, stress%tau_y, stress%stress_mag)
 
          worst = 0.0_wp
          do j = 1, ny
@@ -312,9 +312,9 @@ contains
       type(ocean_sea_ice_t), intent(inout) :: ice
       type(ocean_surface_stress_t), intent(inout) :: stress
       type(ocean_metrics_t), intent(inout) :: metrics
-      !$acc exit data delete(stress)
+      !$omp target exit data map(delete: stress)
       call stress%exit_data()
-      !$acc exit data delete(ice)
+      !$omp target exit data map(delete: ice)
       call ice%exit_data()
       call ice_ocean_stress_cleanup()
       call ice%destroy()

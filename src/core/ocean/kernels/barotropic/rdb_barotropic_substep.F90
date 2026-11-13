@@ -95,13 +95,13 @@ contains
       allocate (ch_lbuf(n), ch_gbuf(n))
       ch_lbuf = 0.0_wp
       ch_gbuf = 0.0_wp
-      !$acc enter data copyin(ch_lbuf)
+      !$omp target enter data map(to: ch_lbuf)
    end subroutine chapman_workspace_ensure
 
    subroutine chapman_workspace_cleanup()
       !! Release the Chapman line buffers (device mirror first).
       if (allocated(ch_lbuf)) then
-         !$acc exit data delete(ch_lbuf)
+         !$omp target exit data map(delete: ch_lbuf)
          deallocate (ch_lbuf)
       end if
       if (allocated(ch_gbuf)) deallocate (ch_gbuf)
@@ -144,7 +144,7 @@ contains
       integer, intent(in) :: n
       real(wp), intent(out) :: mean
 
-      !$acc update self(ch_lbuf(1:n))
+      !$omp target update from(ch_lbuf(1:n))
       if (ocean_halo_is_decomposed()) then
          call halo_allreduce_sum_vec(ch_lbuf, ch_gbuf, n)
       else
@@ -939,14 +939,8 @@ contains
       ! present_or_copyin handling — they are genuinely unmapped when their
       ! feature is off, so a blanket `default(present)` would fault the default
       ! (wetdry-off, tides-off) configuration at region entry.
-      !$acc data present(force_u, force_v, bt_eta, bt_H_ref, bt_eta_new, &
-      !$acc              bt_ke_centre, eta_sum, bt_eta_end, bt_ubt, bt_ubt_prev, &
-      !$acc              bt_rem_u, ubt_sum, uhbt_sum, bt_uhbt, bt_ubt_end, &
-      !$acc              bt_vbt, bt_vbt_prev, bt_rem_v, vbt_sum, vhbt_sum, &
-      !$acc              bt_vhbt, bt_vbt_end, bt_zeta_corner, f_corner, &
-      !$acc              area_cu, area_cv, dx_cu, dx_cv, dy_cu, dy_cv, &
-      !$acc              iarea_bu, iarea_t, idx_cu, idy_cv)
-      !$acc kernels async(1)
+      ! [acc->omp] dropped clause-less target data: acc data present(...) asserts residency, moves nothing (bare target data is invalid OpenMP)
+      ! [acc->omp] dropped CUDA-graph wrapper: kernels async(1)
       do concurrent(j=1:ny, i=1:nx)
          eta_sum(i, j) = 0.0_wp
       end do
@@ -958,21 +952,14 @@ contains
          vbt_sum(i, j) = 0.0_wp
          vhbt_sum(i, j) = 0.0_wp
       end do
-      !$acc end kernels
+      ! [acc->omp] dropped CUDA-graph wrapper: end kernels
 
       do n = 1, n_steps
          ! Drained by the !$acc wait(1) after the n_steps loop.
          ! Explicit present() on the always-mapped promoted arrays drops the
          ! per-launch copy-fallback pre-check (the lazily-mapped bt_work
          ! components / optional eta_forcing keep implicit present_or_copyin).
-         !$acc kernels async(1) &
-         !$acc   present(force_u, force_v, bt_eta, bt_H_ref, bt_eta_new, &
-         !$acc           bt_ke_centre, eta_sum, bt_eta_end, bt_ubt, bt_ubt_prev, &
-         !$acc           bt_rem_u, ubt_sum, uhbt_sum, bt_uhbt, bt_ubt_end, &
-         !$acc           bt_vbt, bt_vbt_prev, bt_rem_v, vbt_sum, vhbt_sum, &
-         !$acc           bt_vhbt, bt_vbt_end, bt_zeta_corner, f_corner, &
-         !$acc           area_cu, area_cv, dx_cu, dx_cv, dy_cu, dy_cv, &
-         !$acc           iarea_bu, iarea_t, idx_cu, idy_cv)
+         ! [acc->omp] dropped CUDA-graph wrapper: kernels async(1) &
          if (wd_on) then
             ! ---- Pass 1w (wet/dry): positive-definite upwind flux form ----
             ! Replaces the centred Pass 1 below when `&ocean_wetdry_nml
@@ -1590,13 +1577,13 @@ contains
          ! it).  Gated on a REAL decomposition: single-rank (incl. periodic,
          ! whose local wrap ran above) keeps the async(1) queue un-drained --
          ! bit-identical, no extra sync.
-         !$acc end kernels
+         ! [acc->omp] dropped CUDA-graph wrapper: end kernels
          ! Mid-substep u seam exchange (D4 mirror of the periodic u ghost-wrap
          ! above).  Absorbed at bt_halo>0: the 2-cell/substep stencil budget
          ! already covers Pass 2c's u_at_v consumption inside the wide band.
          if (.not. marchin .and. ocean_halo_is_decomposed()) then
             call profiler_start("ocean_comms_bt")
-            !$acc wait(1)
+            ! [acc->omp] dropped CUDA-graph wrapper: wait (1)
             call oh_count_bt_u_mid()
             call oh_count_suppress_on()
             call ocean_halo_face_x(bt_ubt)
@@ -1612,7 +1599,7 @@ contains
          ! march-in (`bt_halo > 0`), and a wait on an empty queue is free.
          if (dist_fold) then
             call profiler_start("ocean_comms_bt")
-            !$acc wait(1)
+            ! [acc->omp] dropped CUDA-graph wrapper: wait (1)
             call ocean_fold_begin(2*grid%nghost)
             call ocean_fold_pack(bt_eta, nx, ny, FOLD_STAG_T)
             call ocean_fold_pack(bt_ubt, nx + 1, ny, FOLD_STAG_U)
@@ -1622,14 +1609,7 @@ contains
             call ocean_fold_end()
             call profiler_stop("ocean_comms_bt")
          end if
-         !$acc kernels async(1) &
-         !$acc   present(force_u, force_v, bt_eta, bt_H_ref, bt_eta_new, &
-         !$acc           bt_ke_centre, eta_sum, bt_eta_end, bt_ubt, bt_ubt_prev, &
-         !$acc           bt_rem_u, ubt_sum, uhbt_sum, bt_uhbt, bt_ubt_end, &
-         !$acc           bt_vbt, bt_vbt_prev, bt_rem_v, vbt_sum, vhbt_sum, &
-         !$acc           bt_vhbt, bt_vbt_end, bt_zeta_corner, f_corner, &
-         !$acc           area_cu, area_cv, dx_cu, dx_cv, dy_cu, dy_cv, &
-         !$acc           iarea_bu, iarea_t, idx_cu, idy_cv)
+         ! [acc->omp] dropped CUDA-graph wrapper: kernels async(1) &
          ! ---- Pass 2c: v_bt update at interior north faces ----
          do concurrent(j=2:ny, i=1:nx) &
             local(zeta_at_v, f_at_v, u_at_v, ke_grad_y, d_eta, &
@@ -1833,7 +1813,7 @@ contains
             end do
          end if
 
-         !$acc end kernels
+         ! [acc->omp] dropped CUDA-graph wrapper: end kernels
          ! `bt_late` (px > 1): the vbt fold + fold-line projection (B3) as
          ! an owner-routed exchange, BEFORE the accumulators, so they sum
          ! the projected fold-line v exactly as the serial run does.  The
@@ -1841,19 +1821,12 @@ contains
          ! queue, so the split changes no result).
          if (dist_fold) then
             call profiler_start("ocean_comms_bt")
-            !$acc wait(1)
+            ! [acc->omp] dropped CUDA-graph wrapper: wait (1)
             call ocean_fold_north_v_face(bt_vbt, nx, ny + 1, grid%nx_phys, grid%ny_phys, &
                                          grid%nghost)
             call profiler_stop("ocean_comms_bt")
          end if
-         !$acc kernels async(1) &
-         !$acc   present(force_u, force_v, bt_eta, bt_H_ref, bt_eta_new, &
-         !$acc           bt_ke_centre, eta_sum, bt_eta_end, bt_ubt, bt_ubt_prev, &
-         !$acc           bt_rem_u, ubt_sum, uhbt_sum, bt_uhbt, bt_ubt_end, &
-         !$acc           bt_vbt, bt_vbt_prev, bt_rem_v, vbt_sum, vhbt_sum, &
-         !$acc           bt_vhbt, bt_vbt_end, bt_zeta_corner, f_corner, &
-         !$acc           area_cu, area_cv, dx_cu, dx_cv, dy_cu, dy_cv, &
-         !$acc           iarea_bu, iarea_t, idx_cu, idy_cv)
+         ! [acc->omp] dropped CUDA-graph wrapper: kernels async(1) &
          ! Time-mean accumulators — three disjoint, independent writes
          ! fused over the staggered union (η centres, u/v faces) with
          ! per-array index guards; one launch instead of three.
@@ -1868,7 +1841,7 @@ contains
                vbt_sum(i, j) = vbt_sum(i, j) + bt_vbt(i, j)
             end if
          end do
-         !$acc end kernels
+         ! [acc->omp] dropped CUDA-graph wrapper: end kernels
          ! End-of-substep ghost refresh.
          ! v1 path (marchin=.false.): drain async(1) then one normal grouped
          ! exchange per substep (bit-identical; D0).
@@ -1879,13 +1852,13 @@ contains
          if (marchin) then
             if (mod(n, num_cycles) == 0 .and. n < n_steps) then
                call profiler_start("ocean_comms_bt")
-               !$acc wait(1)
+               ! [acc->omp] dropped CUDA-graph wrapper: wait (1)
                call ocean_halo_bt_group_2d_wide(bt_eta, bt_ubt, bt_vbt, grid%nghost)
                call profiler_stop("ocean_comms_bt")
             end if
          else
             call profiler_start("ocean_comms_bt")
-            !$acc wait(1)
+            ! [acc->omp] dropped CUDA-graph wrapper: wait (1)
             call ocean_halo_bt_group_2d(bt_eta, bt_ubt, bt_vbt)
             call profiler_stop("ocean_comms_bt")
          end if
@@ -1895,7 +1868,7 @@ contains
       ! See barotropic_substep_linear for the Hallberg 2009 rationale.
       ! Stays on async(1) from the fast loop; one drain after the time-mean.
       inv_n = 1.0_wp/real(n_steps, wp)
-      !$acc kernels async(1)
+      ! [acc->omp] dropped CUDA-graph wrapper: kernels async(1)
       do concurrent(j=1:ny, i=1:nx)
          bt_eta_end(i, j) = bt_eta(i, j)
       end do
@@ -1917,9 +1890,9 @@ contains
          bt_vbt(i, j) = vbt_sum(i, j)*inv_n
          bt_vhbt(i, j) = vhbt_sum(i, j)*inv_n
       end do
-      !$acc end kernels
-      !$acc wait(1)   ! single drain: the whole substep ran on async(1)
-      !$acc end data
+      ! [acc->omp] dropped CUDA-graph wrapper: end kernels
+      ! [acc->omp] dropped CUDA-graph wrapper: wait (1) ! single drain: the whole substep ran on async(1)
+      ! [acc->omp] dropped clause-less end target data
       ! Exit seam freshen.  The accumulators above add each substep's η/u/v
       ! BEFORE that substep's grouped exchange, so a seam ghost of the time
       ! mean holds this rank's own (inexact) ghost-row march, not the

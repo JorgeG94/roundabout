@@ -1475,7 +1475,7 @@ contains
                  vf => engine%state%multilayer%v_face_y_layer, &
                  huf => engine%state%multilayer%hu_face_x_layer, &
                  hvf => engine%state%multilayer%hv_face_y_layer)
-         !$acc update device(uf, vf, huf, hvf)
+         !$omp target update to(uf, vf, huf, hvf)
       end associate
    end subroutine poison_velocity_ghosts
 
@@ -1491,7 +1491,7 @@ contains
       integer :: i, j, ig, jg, ng, nxo, nyo
       logical :: in_i, in_j, was, now
 
-      !$acc update self(engine%state%dyn%bt_work%wd_wet_dyn)
+      !$omp target update from(engine%state%dyn%bt_work%wd_wet_dyn)
       ng = engine%grid%nghost
       nxo = engine%grid%nx_phys
       nyo = engine%grid%ny_phys
@@ -1540,10 +1540,10 @@ contains
       type(snap_t), intent(inout) :: s
       integer :: i, j, ng, nz
 
-      !$acc update self(engine%state%cavity_flux%melt, engine%state%cavity_flux%ustar, engine%state%cavity_flux%t_b)
-      !$acc update self(engine%state%surface_stress%stress_shelf, engine%state%tdrag%stress_top)
-      !$acc update self(engine%state%tdrag%cover_u, engine%state%tdrag%cover_v)
-      !$acc update self(engine%state%multilayer%wet_mask)
+      !$omp target update from(engine%state%cavity_flux%melt, engine%state%cavity_flux%ustar, engine%state%cavity_flux%t_b)
+      !$omp target update from(engine%state%surface_stress%stress_shelf, engine%state%tdrag%stress_top)
+      !$omp target update from(engine%state%tdrag%cover_u, engine%state%tdrag%cover_v)
+      !$omp target update from(engine%state%multilayer%wet_mask)
       call push_field(s, "cav:melt", engine%state%cavity_flux%melt)
       call push_field(s, "cav:ustar", engine%state%cavity_flux%ustar)
       call push_field(s, "cav:t_b", engine%state%cavity_flux%t_b)
@@ -1590,9 +1590,9 @@ contains
             if (en%rank == 0) cycle     ! rank-local host scalars (Chapman corners)
             if (en%device_mapped) then
                if (en%rank == 2) then
-                  !$acc update self(en%p2)
+                  !$omp target update from(en%p2)
                else
-                  !$acc update self(en%p3)
+                  !$omp target update from(en%p3)
                end if
             end if
             s%n = s%n + 1
@@ -1606,7 +1606,7 @@ contains
             end if
          end associate
       end do
-      !$acc update self(engine%state%dyn%bt_work%bt_eta_end)
+      !$omp target update from(engine%state%dyn%bt_work%bt_eta_end)
       s%n = s%n + 1
       if (s%n > MAXF) error stop "test_ocean_decomp_bitid_mpi: raise MAXF"
       s%f(s%n)%tag = "bt_eta_end"
@@ -1617,8 +1617,8 @@ contains
       ! restart state; snapshot them so `compare` (owned) and `compare_ghosts`
       ! (seam ghost images) cover them.
       if (allocated(engine%state%dyn%bt_work%wd_wet_dyn)) then
-         !$acc update self(engine%state%dyn%bt_work%wd_open_u, engine%state%dyn%bt_work%wd_open_v)
-         !$acc update self(engine%state%dyn%bt_work%bt_uhbt, engine%state%dyn%bt_work%bt_vhbt)
+         !$omp target update from(engine%state%dyn%bt_work%wd_open_u, engine%state%dyn%bt_work%wd_open_v)
+         !$omp target update from(engine%state%dyn%bt_work%bt_uhbt, engine%state%dyn%bt_work%bt_vhbt)
          s%n = s%n + 1
          if (s%n > MAXF) error stop "test_ocean_decomp_bitid_mpi: raise MAXF"
          s%f(s%n)%tag = "wd_open_u"

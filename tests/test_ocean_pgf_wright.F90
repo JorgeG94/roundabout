@@ -94,14 +94,14 @@ contains
       type(ocean_pressure_force_t), intent(inout) :: pgf
       type(ocean_metrics_t) :: metrics
       call make_cartesian_metrics(metrics, grid)
-      !$acc enter data copyin(ms, pgf)
+      !$omp target enter data map(to: ms, pgf)
       call ms%enter_data()
       call pgf%enter_data()
       call ocean_pressure_force_compute(grid, metrics, pgf, ms)
-      !$acc update self(pgf%dpdx_face%data, pgf%dpdy_face%data, pgf%rho_insitu%data)
+      !$omp target update from(pgf%dpdx_face%data, pgf%dpdy_face%data, pgf%rho_insitu%data)
       call pgf%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms, pgf)
+      !$omp target exit data map(delete: ms, pgf)
       call destroy_cartesian_metrics(metrics)
    end subroutine run_pgf
 
@@ -191,15 +191,15 @@ contains
          allocate (p_edge_out(NX, NY, NZ + 1))
          allocate (rho_insitu_out(NX, NY, NZ))
 
-         !$acc enter data copyin(h_layer, hS, hT, rho_layer_seed, p_top)
-         !$acc enter data create(p_edge_out, rho_insitu_out)
+         !$omp target enter data map(to: h_layer, hS, hT, rho_layer_seed, p_top)
+         !$omp target enter data map(alloc: p_edge_out, rho_insitu_out)
          call eos_wright_pgf_column_sweep_impl( &
             h_layer, hS, hT, rho_layer_seed, p_top, &
             p_edge_out, rho_insitu_out, &
             GRAVITY, RHO_0, NX, NY, NZ)
-         !$acc update self(p_edge_out, rho_insitu_out)
-         !$acc exit data delete(p_edge_out, rho_insitu_out)
-         !$acc exit data delete(h_layer, hS, hT, rho_layer_seed, p_top)
+         !$omp target update from(p_edge_out, rho_insitu_out)
+         !$omp target exit data map(delete: p_edge_out, rho_insitu_out)
+         !$omp target exit data map(delete: h_layer, hS, hT, rho_layer_seed, p_top)
 
          max_rho_err = 0.0_wp
          max_pedge_err = 0.0_wp

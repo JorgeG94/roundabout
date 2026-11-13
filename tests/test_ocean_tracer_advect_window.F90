@@ -64,9 +64,9 @@ contains
    subroutine map_in(ms, ct)
       type(multilayer_state_t), intent(inout) :: ms
       type(continuity_t), intent(inout) :: ct
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
-      !$acc enter data copyin(ct)
+      !$omp target enter data map(to: ct)
       call ct%enter_data()
    end subroutine map_in
 
@@ -74,9 +74,9 @@ contains
       type(multilayer_state_t), intent(inout) :: ms
       type(continuity_t), intent(inout) :: ct
       call ct%exit_data()
-      !$acc exit data delete(ct)
+      !$omp target exit data map(delete: ct)
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
    end subroutine map_out
 
    subroutine test_swept_oracle(error)
@@ -132,17 +132,17 @@ contains
 
          allocate (F(nx + 1, ny, NZ))
          call map_in(ms, ct)
-         !$acc enter data copyin(metrics)
+         !$omp target enter data map(to: metrics)
          call metrics%enter_data()
-         !$acc data copy(F)
+         !$omp target data map(tofrom: F)
          call drain_parabola_x(nx, ny, NZ, metrics%wet_T, ms%tracers(ms%idx_salinity)%c, &
                                ct%hprev_work, ct%tr_work, ct%pal, ct%par, ct%pa6)
          call drain_swept_flux_x(nx, ny, NZ, metrics%areaT, ct%uhh_x, &
                                  ct%hprev_work, ct%pal, ct%par, ct%pa6, F)
-         !$acc update self(F, ct%pal, ct%par, ct%pa6)
-         !$acc end data
+         !$omp target update from(F, ct%pal, ct%par, ct%pa6)
+         !$omp end target data
          call metrics%exit_data()
-         !$acc exit data delete(metrics)
+         !$omp target exit data map(delete: metrics)
          call map_out(ms, ct)
 
          aLd = ct%pal(donor, j, k)
@@ -204,13 +204,13 @@ contains
          ct%uhtr(ic + 1, jc, k) = q
 
          call map_in(ms, ct)
-         !$acc enter data copyin(metrics)
+         !$omp target enter data map(to: metrics)
          call metrics%enter_data()
          call drain_reconstruct_hprev(nx, ny, NZ, metrics%areaT, metrics%iareaT, &
                                       ms%h_layer, ct%uhtr, ct%vhtr, ct%hprev_work)
-         !$acc update self(ct%hprev_work)
+         !$omp target update from(ct%hprev_work)
          call metrics%exit_data()
-         !$acc exit data delete(metrics)
+         !$omp target exit data map(delete: metrics)
          call map_out(ms, ct)
 
          expect = H0 + q/area
@@ -316,14 +316,14 @@ contains
             mass0 = area*sum(ms%h_layer(i0:i1, j0:j1, :)*ms%tracers(ms%idx_salinity)%c(i0:i1, j0:j1, :))
 
             call map_in(ms, ct)
-            !$acc enter data copyin(metrics)
+            !$omp target enter data map(to: metrics)
             call metrics%enter_data()
-            !$acc enter data copyin(bc)
+            !$omp target enter data map(to: bc)
             call drain(grid, metrics, ct, ms, ratio, bc)
-            !$acc exit data delete(bc)
+            !$omp target exit data map(delete: bc)
             call metrics%exit_data()
-            !$acc exit data delete(metrics)
-            !$acc update self(ct%uhtr, ct%vhtr)
+            !$omp target exit data map(delete: metrics)
+            !$omp target update from(ct%uhtr, ct%vhtr)
             call map_out(ms, ct)
 
             mass1 = area*sum(ms%h_layer(i0:i1, j0:j1, :)*ms%tracers(ms%idx_salinity)%c(i0:i1, j0:j1, :))
@@ -413,14 +413,14 @@ contains
       j0 = NGHOST + 1
       j1 = NGHOST + grid%ny_phys
       call map_in(ms, ct)
-      !$acc enter data copyin(metrics)
+      !$omp target enter data map(to: metrics)
       call metrics%enter_data()
-      !$acc enter data copyin(bc)
+      !$omp target enter data map(to: bc)
       call drain(grid, metrics, ct, ms, 1, bc)
-      !$acc exit data delete(bc)
+      !$omp target exit data map(delete: bc)
       call metrics%exit_data()
-      !$acc exit data delete(metrics)
-      !$acc update self(ct%uhtr, ct%vhtr)
+      !$omp target exit data map(delete: metrics)
+      !$omp target update from(ct%uhtr, ct%vhtr)
       call map_out(ms, ct)
 
       call check(error, maxval(abs(ct%uhtr)) > 0.0_wp, "pass cap left no carried uhtr")
@@ -472,20 +472,20 @@ contains
       end do
 
       call map_in(ms, ct)
-      !$acc enter data copyin(metrics)
+      !$omp target enter data map(to: metrics)
       call metrics%enter_data()
-      !$acc enter data copyin(bc)
+      !$omp target enter data map(to: bc)
       call drain(grid, metrics, ct, ms, 1, bc)
       call check(error, ct%drain_carry_windows == 1, "window 1 did not carry (cap not forced)")
       ! Further windows: no new transport, h_layer left at its window-end value.
       do iw = 1, 12
          call drain(grid, metrics, ct, ms, 1, bc)
-         !$acc update self(ct%uhtr, ct%vhtr)
+         !$omp target update from(ct%uhtr, ct%vhtr)
          if (maxval(abs(ct%uhtr)) == 0.0_wp .and. maxval(abs(ct%vhtr)) == 0.0_wp) exit
       end do
-      !$acc exit data delete(bc)
+      !$omp target exit data map(delete: bc)
       call metrics%exit_data()
-      !$acc exit data delete(metrics)
+      !$omp target exit data map(delete: metrics)
       call map_out(ms, ct)
 
       if (.not. allocated(error)) call check(error, &
@@ -557,13 +557,13 @@ contains
          end do
 
          call map_in(ms, ct)
-         !$acc enter data copyin(metrics)
+         !$omp target enter data map(to: metrics)
          call metrics%enter_data()
-         !$acc enter data copyin(bc)
+         !$omp target enter data map(to: bc)
          call drain(grid, metrics, ct, ms, 1, bc)
-         !$acc exit data delete(bc)
+         !$omp target exit data map(delete: bc)
          call metrics%exit_data()
-         !$acc exit data delete(metrics)
+         !$omp target exit data map(delete: metrics)
          call map_out(ms, ct)
 
          ! Concentration must be C0 everywhere in the interior to round-off.
@@ -651,7 +651,7 @@ contains
          end do
 
          call map_in(ms, ct)
-         !$acc enter data copyin(metrics)
+         !$omp target enter data map(to: metrics)
          call metrics%enter_data()
          ! Two RK2 stages of one accumulation window.
          call continuity_tracer_step_split(grid, metrics, ct, ms, DT_STEP, &
@@ -659,7 +659,7 @@ contains
          call continuity_tracer_step_split(grid, metrics, ct, ms, DT_STEP, &
                                            tracer_mode=TR_MODE_ACCUMULATE)
          call metrics%exit_data()
-         !$acc exit data delete(metrics)
+         !$omp target exit data map(delete: metrics)
          call map_out(ms, ct)
 
          ! (a) the thickness genuinely moved — the test is not vacuous.
@@ -747,13 +747,13 @@ contains
          ct%uhtr = uvol
          ct%vhtr = 0.0_wp
          call map_in(ms, ct)
-         !$acc enter data copyin(metrics)
+         !$omp target enter data map(to: metrics)
          call metrics%enter_data()
-         !$acc enter data copyin(bc)
+         !$omp target enter data map(to: bc)
          call drain(grid, metrics, ct, ms, 1, bc)
-         !$acc exit data delete(bc)
+         !$omp target exit data map(delete: bc)
          call metrics%exit_data()
-         !$acc exit data delete(metrics)
+         !$omp target exit data map(delete: metrics)
          call map_out(ms, ct)
          allocate (hTr_a, source=ms%tracers(ms%idx_salinity)%c)
          call ct%destroy()
@@ -775,13 +775,13 @@ contains
          ct%uhtr = uvol
          ct%vhtr = 0.0_wp
          call map_in(ms, ct)
-         !$acc enter data copyin(metrics)
+         !$omp target enter data map(to: metrics)
          call metrics%enter_data()
-         !$acc enter data copyin(bc)
+         !$omp target enter data map(to: bc)
          call drain(grid, metrics, ct, ms, 1, bc)
-         !$acc exit data delete(bc)
+         !$omp target exit data map(delete: bc)
          call metrics%exit_data()
-         !$acc exit data delete(metrics)
+         !$omp target exit data map(delete: metrics)
          call map_out(ms, ct)
 
          max_diff = 0.0_wp
@@ -842,13 +842,13 @@ contains
          ct%vhtr = 0.0_wp
 
          call map_in(ms, ct)
-         !$acc enter data copyin(metrics)
+         !$omp target enter data map(to: metrics)
          call metrics%enter_data()
-         !$acc enter data copyin(bc)
+         !$omp target enter data map(to: bc)
          call drain(grid, metrics, ct, ms, ratio, bc)
-         !$acc exit data delete(bc)
+         !$omp target exit data map(delete: bc)
          call metrics%exit_data()
-         !$acc exit data delete(metrics)
+         !$omp target exit data map(delete: metrics)
          call map_out(ms, ct)
 
          tr_min = minval(ms%tracers(ms%idx_salinity)%c(i0:i1, j0:j1, :))
@@ -914,7 +914,7 @@ contains
          ms_b%tracers(ms_b%idx_salinity)%c = ms_a%tracers(ms_a%idx_salinity)%c
          ms_b%tracers(ms_b%idx_temperature)%c = ms_a%tracers(ms_a%idx_temperature)%c
 
-         !$acc enter data copyin(ms_a, ms_b, ct_a, ct_b, metrics)
+         !$omp target enter data map(to: ms_a, ms_b, ct_a, ct_b, metrics)
          call ms_a%enter_data(); call ms_b%enter_data()
          call ct_a%enter_data(); call ct_b%enter_data()
          call metrics%enter_data()
@@ -923,13 +923,13 @@ contains
          ! B: identical but reached via the new mode arg set to ADVECT.
          call continuity_tracer_step_split(grid, metrics, ct_b, ms_b, DT, &
                                            tracer_mode=0)
-         !$acc update self(ms_a%tracers(ms_a%idx_salinity)%c, &
-         !$acc             ms_b%tracers(ms_b%idx_salinity)%c, &
-         !$acc             ms_a%h_layer, ms_b%h_layer)
+         !$omp target update from(ms_a%tracers(ms_a%idx_salinity)%c, &
+         !$omp             ms_b%tracers(ms_b%idx_salinity)%c, &
+         !$omp             ms_a%h_layer, ms_b%h_layer)
          call metrics%exit_data()
          call ct_a%exit_data(); call ct_b%exit_data()
          call ms_a%exit_data(); call ms_b%exit_data()
-         !$acc exit data delete(ms_a, ms_b, ct_a, ct_b, metrics)
+         !$omp target exit data map(delete: ms_a, ms_b, ct_a, ct_b, metrics)
 
          max_diff = maxval(abs(ms_a%tracers(ms_a%idx_salinity)%c &
                                - ms_b%tracers(ms_b%idx_salinity)%c))
@@ -1015,13 +1015,13 @@ contains
             mass0 = area*sum(ms%h_layer(i0:i1, j0:j1, :)*ms%tracers(ms%idx_salinity)%c(i0:i1, j0:j1, :))
 
             call map_in(ms, ct)
-            !$acc enter data copyin(metrics)
+            !$omp target enter data map(to: metrics)
             call metrics%enter_data()
-            !$acc enter data copyin(bc)
+            !$omp target enter data map(to: bc)
             call drain(grid, metrics, ct, ms, ratio, bc)
-            !$acc exit data delete(bc)
+            !$omp target exit data map(delete: bc)
             call metrics%exit_data()
-            !$acc exit data delete(metrics)
+            !$omp target exit data map(delete: metrics)
             call map_out(ms, ct)
 
             mass1 = area*sum(ms%h_layer(i0:i1, j0:j1, :)*ms%tracers(ms%idx_salinity)%c(i0:i1, j0:j1, :))
@@ -1075,13 +1075,13 @@ contains
          ct%vhtr = vvol
 
          call map_in(ms, ct)
-         !$acc enter data copyin(metrics)
+         !$omp target enter data map(to: metrics)
          call metrics%enter_data()
-         !$acc enter data copyin(bc)
+         !$omp target enter data map(to: bc)
          call drain(grid, metrics, ct, ms, ratio, bc)
-         !$acc exit data delete(bc)
+         !$omp target exit data map(delete: bc)
          call metrics%exit_data()
-         !$acc exit data delete(metrics)
+         !$omp target exit data map(delete: metrics)
          call map_out(ms, ct)
 
          tr_min = minval(ms%tracers(ms%idx_salinity)%c(i0:i1, j0:j1, :))
@@ -1161,13 +1161,13 @@ contains
             mass0 = area*sum(ms%h_layer(i0:i1, j0:j1, :)*ms%tracers(ms%idx_salinity)%c(i0:i1, j0:j1, :))
 
             call map_in(ms, ct)
-            !$acc enter data copyin(metrics)
+            !$omp target enter data map(to: metrics)
             call metrics%enter_data()
-            !$acc enter data copyin(bc)
+            !$omp target enter data map(to: bc)
             call drain(grid, metrics, ct, ms, ratio, bc)
-            !$acc exit data delete(bc)
+            !$omp target exit data map(delete: bc)
             call metrics%exit_data()
-            !$acc exit data delete(metrics)
+            !$omp target exit data map(delete: metrics)
             call map_out(ms, ct)
 
             mass1 = area*sum(ms%h_layer(i0:i1, j0:j1, :)*ms%tracers(ms%idx_salinity)%c(i0:i1, j0:j1, :))
@@ -1231,17 +1231,17 @@ contains
 
          allocate (F(nx + 1, ny, NZ))
          call map_in(ms, ct)
-         !$acc enter data copyin(metrics)
+         !$omp target enter data map(to: metrics)
          call metrics%enter_data()
-         !$acc data copy(F)
+         !$omp target data map(tofrom: F)
          call drain_parabola_x(nx, ny, NZ, metrics%wet_T, ms%tracers(ms%idx_salinity)%c, &
                                ct%hprev_work, ct%tr_work, ct%pal, ct%par, ct%pa6)
          call drain_swept_flux_x(nx, ny, NZ, metrics%areaT, ct%uhh_x, &
                                  ct%hprev_work, ct%pal, ct%par, ct%pa6, F)
-         !$acc update self(F)
-         !$acc end data
+         !$omp target update from(F)
+         !$omp end target data
          call metrics%exit_data()
-         !$acc exit data delete(metrics)
+         !$omp target exit data map(delete: metrics)
          call map_out(ms, ct)
 
          call check(error, maxval(abs(F(1, :, :))) < 1.0e-30_wp, &
@@ -1299,17 +1299,17 @@ contains
 
          allocate (F(nx, ny + 1, NZ))
          call map_in(ms, ct)
-         !$acc enter data copyin(metrics)
+         !$omp target enter data map(to: metrics)
          call metrics%enter_data()
-         !$acc data copy(F)
+         !$omp target data map(tofrom: F)
          call drain_parabola_y(nx, ny, NZ, metrics%wet_T, ms%tracers(ms%idx_salinity)%c, &
                                ct%hprev_work, ct%tr_work, ct%pal, ct%par, ct%pa6)
          call drain_swept_flux_y(nx, ny, NZ, metrics%areaT, ct%uhh_y, &
                                  ct%hprev_work, ct%pal, ct%par, ct%pa6, F)
-         !$acc update self(F)
-         !$acc end data
+         !$omp target update from(F)
+         !$omp end target data
          call metrics%exit_data()
-         !$acc exit data delete(metrics)
+         !$omp target exit data map(delete: metrics)
          call map_out(ms, ct)
 
          call check(error, maxval(abs(F(:, 1, :))) < 1.0e-30_wp, &

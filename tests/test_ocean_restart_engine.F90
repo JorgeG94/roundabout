@@ -517,9 +517,9 @@ contains
       do e = 1, reg%n
          associate (en => reg%entries(e))
             if (en%device_mapped .and. en%rank == 2) then
-               !$acc update self(en%p2)
+               !$omp target update from(en%p2)
             else if (en%device_mapped .and. en%rank == 3) then
-               !$acc update self(en%p3)
+               !$omp target update from(en%p3)
             end if
             select case (en%rank)
             case (0)
@@ -531,9 +531,9 @@ contains
             end select
          end associate
       end do
-      !$acc update self(engine%state%surface_stress%tau_x, engine%state%surface_stress%tau_y)
-      !$acc update self(engine%state%surface_stress%stress_mag)
-      !$acc update self(engine%state%surface_flux%Q_heat, engine%state%surface_flux%Q_salt)
+      !$omp target update from(engine%state%surface_stress%tau_x, engine%state%surface_stress%tau_y)
+      !$omp target update from(engine%state%surface_stress%stress_mag)
+      !$omp target update from(engine%state%surface_flux%Q_heat, engine%state%surface_flux%Q_salt)
       call push2(snap, "surface_stress_tau_x", engine%state%surface_stress%tau_x)
       call push2(snap, "surface_stress_tau_y", engine%state%surface_stress%tau_y)
       call push2(snap, "surface_stress_mag", engine%state%surface_stress%stress_mag)
@@ -922,7 +922,7 @@ contains
          call advance(ea, cfg_a, t_a, 5, ok)
          call check(error, ok, "engine A failed before the checkpoint")
          if (allocated(error)) exit checks
-         !$acc update self(ea%state%surface_stress%stress_shelf)
+         !$omp target update from(ea%state%surface_stress%stress_shelf)
          call check(error, maxval(abs(ea%state%surface_stress%stress_shelf)) > 0.0_wp, &
                     "vacuous: stress_shelf is zero in the written run")
          if (allocated(error)) exit checks
@@ -943,7 +943,7 @@ contains
          if (allocated(error)) exit checks
          call check(error, step_b == 5, "restart step count not restored")
          if (allocated(error)) exit checks
-         !$acc update self(eb%state%surface_stress%stress_shelf, eb%state%cavity_flux%ustar)
+         !$omp target update from(eb%state%surface_stress%stress_shelf, eb%state%cavity_flux%ustar)
          call check(error, maxval(abs(eb%state%surface_stress%stress_shelf)) == 0.0_wp, &
                     "the dropped shelf_stress did not keep its zero seed")
          if (allocated(error)) exit checks
@@ -1103,8 +1103,8 @@ contains
       call check(error, ok, "advance to the perturbation point failed")
       if (allocated(error)) return
 
-      !$acc update self(ea%state%vmix%bl_depth, ea%state%multilayer%h_layer)
-      !$acc update self(ea%state%surface_stress%stress_shelf)
+      !$omp target update from(ea%state%vmix%bl_depth, ea%state%multilayer%h_layer)
+      !$omp target update from(ea%state%surface_stress%stress_shelf)
       ratio = 0.0_wp
       smax = maxval(ea%state%surface_stress%stress_shelf)
       do j = 1, ea%grid%ny_total
@@ -1124,7 +1124,7 @@ contains
       if (allocated(error)) return
 
       ec%state%surface_stress%stress_shelf = 0.0_wp
-      !$acc update device(ec%state%surface_stress%stress_shelf)
+      !$omp target update to(ec%state%surface_stress%stress_shelf)
       call advance(ea, cfg_a, t_a, 4, ok)
       call advance(ec, cfg_c, t_c, 4, ok)
       call check(error, ok, "advance after the perturbation failed")

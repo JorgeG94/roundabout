@@ -71,9 +71,9 @@ contains
    subroutine map_in(ms, ct)
       type(multilayer_state_t), intent(inout) :: ms
       type(continuity_t), intent(inout) :: ct
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
-      !$acc enter data copyin(ct)
+      !$omp target enter data map(to: ct)
       call ct%enter_data()
    end subroutine map_in
 
@@ -81,9 +81,9 @@ contains
       type(multilayer_state_t), intent(inout) :: ms
       type(continuity_t), intent(inout) :: ct
       call ct%exit_data()
-      !$acc exit data delete(ct)
+      !$omp target exit data map(delete: ct)
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
    end subroutine map_out
 
    subroutine run_step(grid, metrics, ct, ms, dt)

@@ -199,7 +199,7 @@ contains
 
       ! mem:separate: map everything the apply touches (component arrays
       ! only are read back; directives are inert on CPU builds).
-      !$acc enter data copyin(atm, ms, bf, ss, sf)
+      !$omp target enter data map(to: atm, ms, bf, ss, sf)
       call atm%enter_data()
       call ms%enter_data()
       call bf%enter_data()
@@ -207,14 +207,14 @@ contains
       call sf%enter_data()
 
       call bulk_forcing_apply(grid, metrics, bc, atm, ms, ice, bf, ss, sf)
-      !$acc update self(ss%tau_x, ss%tau_y, ss%stress_mag, bf%tauy_c)
+      !$omp target update from(ss%tau_x, ss%tau_y, ss%stress_mag, bf%tauy_c)
 
       call sf%exit_data()
       call ss%exit_data()
       call bf%exit_data()
       call ms%exit_data()
       call atm%exit_data()
-      !$acc exit data delete(atm, ms, bf, ss, sf)
+      !$omp target exit data map(delete: atm, ms, bf, ss, sf)
 
       allocate (snap%tau_x(size(ss%tau_x, 1), size(ss%tau_x, 2)), source=ss%tau_x)
       allocate (snap%tau_y(size(ss%tau_y, 1), size(ss%tau_y, 2)), source=ss%tau_y)

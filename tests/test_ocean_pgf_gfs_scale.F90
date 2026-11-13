@@ -64,14 +64,14 @@ contains
                      NGHOST, dx, dx)
       call make_cartesian_metrics(metrics, grid)
       call pgf%set_bathymetry(b_user)
-      !$acc enter data copyin(ms, pgf)
+      !$omp target enter data map(to: ms, pgf)
       call ms%enter_data()
       call pgf%enter_data()
       call ocean_pressure_force_compute(grid, metrics, pgf, ms)
-      !$acc update self(pgf%dpdx_face%data, pgf%dpdy_face%data)
+      !$omp target update from(pgf%dpdx_face%data, pgf%dpdy_face%data)
       call pgf%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms, pgf)
+      !$omp target exit data map(delete: ms, pgf)
       call destroy_cartesian_metrics(metrics)
    end subroutine run_pgf_with_b
 

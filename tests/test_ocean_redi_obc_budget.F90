@@ -183,8 +183,8 @@ contains
 
       is = engine%state%multilayer%idx_salinity
       it = engine%state%multilayer%idx_temperature
-      !$acc update self(engine%state%multilayer%h_layer, engine%state%multilayer%tracers(is)%c)
-      !$acc update self(engine%state%multilayer%tracers(it)%c)
+      !$omp target update from(engine%state%multilayer%h_layer, engine%state%multilayer%tracers(is)%c)
+      !$omp target update from(engine%state%multilayer%tracers(it)%c)
       ng = engine%grid%nghost
       nx = engine%grid%nx_total
       ny = engine%grid%ny_total

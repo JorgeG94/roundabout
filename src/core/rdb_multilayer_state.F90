@@ -757,36 +757,36 @@ contains
       type(multilayer_state_t), intent(inout) :: this
       integer :: it
 
-      !$acc enter data copyin(this%h_layer, this%h_layer0, &
-      !$acc&                  this%u_face_x_layer, this%hu_face_x_layer, &
-      !$acc&                  this%v_face_y_layer, this%hv_face_y_layer, &
-      !$acc&                  this%u_face_x_layer0, this%v_face_y_layer0, &
-      !$acc&                  this%u_av_layer, this%v_av_layer, this%h_av_layer, &
-      !$acc&                  this%w_interface)
-      !$acc enter data create(this%mass_flux_x_layer, this%mass_flux_y_layer, &
-      !$acc&                  this%flux_h_layer)
-      !$acc enter data copyin(this%p_top)
-      !$acc enter data copyin(this%rho_layer, this%mass_budget_continuity, &
-      !$acc&                  this%heat_budget_surface, this%salt_budget_surface, &
-      !$acc&                  this%heat_budget_geothermal, &
-      !$acc&                  this%heat_budget_sponge, this%salt_budget_sponge, &
-      !$acc&                  this%heat_budget_vert_adv, this%salt_budget_vert_adv, &
-      !$acc&                  this%heat_budget_vdiff, this%salt_budget_vdiff, &
-      !$acc&                  this%heat_budget_hdiff, this%salt_budget_hdiff, &
-      !$acc&                  this%heat_budget_horiz_adv, this%salt_budget_horiz_adv, &
-      !$acc&                  this%mass_budget_remap, this%heat_budget_remap, &
-      !$acc&                  this%salt_budget_remap, this%wet_mask)
+      !$omp target enter data map(to: this%h_layer, this%h_layer0, &
+      !$omp&                  this%u_face_x_layer, this%hu_face_x_layer, &
+      !$omp&                  this%v_face_y_layer, this%hv_face_y_layer, &
+      !$omp&                  this%u_face_x_layer0, this%v_face_y_layer0, &
+      !$omp&                  this%u_av_layer, this%v_av_layer, this%h_av_layer, &
+      !$omp&                  this%w_interface)
+      !$omp target enter data map(alloc: this%mass_flux_x_layer, this%mass_flux_y_layer, &
+      !$omp&                  this%flux_h_layer)
+      !$omp target enter data map(to: this%p_top)
+      !$omp target enter data map(to: this%rho_layer, this%mass_budget_continuity, &
+      !$omp&                  this%heat_budget_surface, this%salt_budget_surface, &
+      !$omp&                  this%heat_budget_geothermal, &
+      !$omp&                  this%heat_budget_sponge, this%salt_budget_sponge, &
+      !$omp&                  this%heat_budget_vert_adv, this%salt_budget_vert_adv, &
+      !$omp&                  this%heat_budget_vdiff, this%salt_budget_vdiff, &
+      !$omp&                  this%heat_budget_hdiff, this%salt_budget_hdiff, &
+      !$omp&                  this%heat_budget_horiz_adv, this%salt_budget_horiz_adv, &
+      !$omp&                  this%mass_budget_remap, this%heat_budget_remap, &
+      !$omp&                  this%salt_budget_remap, this%wet_mask)
       ! `copyin`, not `create`: the first-live-layer indices are filled
       ! on the HOST at configure (before this map) and never recomputed
       ! on device, so the seeded value has to travel with the map.
-      !$acc enter data copyin(this%k_top, this%k_top_u, this%k_top_v)
-      !$acc enter data copyin(this%k_bot, this%k_bot_u, this%k_bot_v)
+      !$omp target enter data map(to: this%k_top, this%k_top_u, this%k_top_v)
+      !$omp target enter data map(to: this%k_bot, this%k_bot_u, this%k_bot_v)
 
       if (allocated(this%tracers)) then
-         !$acc enter data copyin(this%tracers)
+         !$omp target enter data map(to: this%tracers)
          do it = 1, size(this%tracers)
-            !$acc enter data copyin(this%tracers(it)%c, &
-            !$acc&                  this%tracers(it)%c0)
+            !$omp target enter data map(to: this%tracers(it)%c, &
+            !$omp&                  this%tracers(it)%c0)
          end do
       end if
 
@@ -812,36 +812,36 @@ contains
 
       if (allocated(this%tracers)) then
          do it = 1, size(this%tracers)
-            !$acc exit data copyout(this%tracers(it)%c)
-            !$acc exit data delete(this%tracers(it)%c0)
+            !$omp target exit data map(from: this%tracers(it)%c)
+            !$omp target exit data map(delete: this%tracers(it)%c0)
          end do
-         !$acc exit data delete(this%tracers)
+         !$omp target exit data map(delete: this%tracers)
       end if
 
       this%registry_locked = .false.
 
-      !$acc exit data copyout(this%h_layer, &
-      !$acc&                  this%u_face_x_layer, this%v_face_y_layer, &
-      !$acc&                  this%hu_face_x_layer, this%hv_face_y_layer, &
-      !$acc&                  this%w_interface)
-      !$acc exit data copyout(this%rho_layer)
-      !$acc exit data delete(this%p_top)
-      !$acc exit data delete(this%h_layer0, &
-      !$acc&                 this%u_av_layer, this%v_av_layer, this%h_av_layer, &
-      !$acc&                 this%u_face_x_layer0, this%v_face_y_layer0, &
-      !$acc&                 this%mass_flux_x_layer, this%mass_flux_y_layer, &
-      !$acc&                 this%flux_h_layer, this%mass_budget_continuity, &
-      !$acc&                 this%heat_budget_surface, this%salt_budget_surface, &
-      !$acc&                 this%heat_budget_geothermal, &
-      !$acc&                 this%heat_budget_sponge, this%salt_budget_sponge, &
-      !$acc&                 this%heat_budget_vert_adv, this%salt_budget_vert_adv, &
-      !$acc&                 this%heat_budget_vdiff, this%salt_budget_vdiff, &
-      !$acc&                 this%heat_budget_hdiff, this%salt_budget_hdiff, &
-      !$acc&                 this%heat_budget_horiz_adv, this%salt_budget_horiz_adv, &
-      !$acc&                 this%mass_budget_remap, this%heat_budget_remap, &
-      !$acc&                 this%salt_budget_remap, this%wet_mask)
-      !$acc exit data delete(this%k_top, this%k_top_u, this%k_top_v)
-      !$acc exit data delete(this%k_bot, this%k_bot_u, this%k_bot_v)
+      !$omp target exit data map(from: this%h_layer, &
+      !$omp&                  this%u_face_x_layer, this%v_face_y_layer, &
+      !$omp&                  this%hu_face_x_layer, this%hv_face_y_layer, &
+      !$omp&                  this%w_interface)
+      !$omp target exit data map(from: this%rho_layer)
+      !$omp target exit data map(delete: this%p_top)
+      !$omp target exit data map(delete: this%h_layer0, &
+      !$omp&                 this%u_av_layer, this%v_av_layer, this%h_av_layer, &
+      !$omp&                 this%u_face_x_layer0, this%v_face_y_layer0, &
+      !$omp&                 this%mass_flux_x_layer, this%mass_flux_y_layer, &
+      !$omp&                 this%flux_h_layer, this%mass_budget_continuity, &
+      !$omp&                 this%heat_budget_surface, this%salt_budget_surface, &
+      !$omp&                 this%heat_budget_geothermal, &
+      !$omp&                 this%heat_budget_sponge, this%salt_budget_sponge, &
+      !$omp&                 this%heat_budget_vert_adv, this%salt_budget_vert_adv, &
+      !$omp&                 this%heat_budget_vdiff, this%salt_budget_vdiff, &
+      !$omp&                 this%heat_budget_hdiff, this%salt_budget_hdiff, &
+      !$omp&                 this%heat_budget_horiz_adv, this%salt_budget_horiz_adv, &
+      !$omp&                 this%mass_budget_remap, this%heat_budget_remap, &
+      !$omp&                 this%salt_budget_remap, this%wet_mask)
+      !$omp target exit data map(delete: this%k_top, this%k_top_u, this%k_top_v)
+      !$omp target exit data map(delete: this%k_bot, this%k_bot_u, this%k_bot_v)
    end subroutine multilayer_state_exit_data_impl
 
 #include "rdb_vanished_layer.inc"

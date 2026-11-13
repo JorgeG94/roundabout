@@ -793,9 +793,9 @@ contains
          end do
          dyn%bt_work%bt_H_ref = real(NZC, wp)*H0
 
-         !$acc enter data copyin(metrics)
+         !$omp target enter data map(to: metrics)
          call metrics%enter_data()
-         !$acc enter data copyin(ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
+         !$omp target enter data map(to: ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
          call ms%enter_data(); call ct%enter_data(); call cor%enter_data()
          call pgf%enter_data(); call hv%enter_data(); call bd%enter_data()
          call ss%enter_data(); call va%enter_data(); call hd%enter_data()
@@ -811,9 +811,9 @@ contains
          call hd%exit_data(); call va%exit_data(); call ss%exit_data()
          call bd%exit_data(); call hv%exit_data(); call pgf%exit_data()
          call cor%exit_data(); call ct%exit_data(); call ms%exit_data()
-         !$acc exit data delete(ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
+         !$omp target exit data map(delete: ms, ct, cor, pgf, hv, bd, ss, va, hd, vd, vmix, dyn)
          call metrics%exit_data()
-         !$acc exit data delete(metrics)
+         !$omp target exit data map(delete: metrics)
 
          max_du = maxval(abs(ms%u_face_x_layer))
          max_dv = maxval(abs(ms%v_face_y_layer))

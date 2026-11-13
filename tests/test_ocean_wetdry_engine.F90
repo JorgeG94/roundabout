@@ -157,10 +157,10 @@ contains
          call engine_step_finalize(engine, DT, t, ierr=ierr)
          if (ierr /= OCEAN_STATUS_OK) exit
          t = t + DT
-         !$acc update self(engine%state%multilayer%h_layer)
-         !$acc update self(engine%state%dyn%bt_work%wd_wet_dyn)
-         !$acc update self(engine%state%multilayer%u_face_x_layer)
-         !$acc update self(engine%state%multilayer%v_face_y_layer)
+         !$omp target update from(engine%state%multilayer%h_layer)
+         !$omp target update from(engine%state%dyn%bt_work%wd_wet_dyn)
+         !$omp target update from(engine%state%multilayer%u_face_x_layer)
+         !$omp target update from(engine%state%multilayer%v_face_y_layer)
          if (.not. all(ieee_is_finite(engine%state%multilayer%h_layer)) .or. &
              .not. all(ieee_is_finite(engine%state%multilayer%u_face_x_layer)) .or. &
              .not. all(ieee_is_finite(engine%state%multilayer%v_face_y_layer))) then

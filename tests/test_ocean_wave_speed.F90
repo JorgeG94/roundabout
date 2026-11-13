@@ -377,21 +377,21 @@ contains
    subroutine map_in_ws(ms, ws)
       type(multilayer_state_t), intent(inout) :: ms
       type(ocean_wave_speed_t), intent(inout) :: ws
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
-      !$acc enter data copyin(ws)
+      !$omp target enter data map(to: ws)
       call ws%enter_data()
    end subroutine map_in_ws
 
    subroutine map_out_ws(ms, ws)
       type(multilayer_state_t), intent(inout) :: ms
       type(ocean_wave_speed_t), intent(inout) :: ws
-      !$acc update self(ws%cg1, ws%rd, ws%rd_over_dx)
-      !$acc update self(ws%ebt_struct, ws%cg1_ebt)
+      !$omp target update from(ws%cg1, ws%rd, ws%rd_over_dx)
+      !$omp target update from(ws%ebt_struct, ws%cg1_ebt)
       call ws%exit_data()
-      !$acc exit data delete(ws)
+      !$omp target exit data map(delete: ws)
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
    end subroutine map_out_ws
 
    ! -----------------------------------------------------------------
@@ -485,7 +485,7 @@ contains
          call metrics%init(grid)
          call metrics_fill_cartesian(metrics, grid, DXT_M, DXT_M)
          call metrics_finalize(metrics)
-         !$acc enter data copyin(metrics)
+         !$omp target enter data map(to: metrics)
          call metrics%enter_data()
 
          ms%nz_ml = NZ
@@ -517,7 +517,7 @@ contains
          call ws%destroy()
          call ms%destroy()
          call metrics%exit_data()
-         !$acc exit data delete(metrics)
+         !$omp target exit data map(delete: metrics)
          call metrics%destroy()
          deallocate (f_centre)
 
@@ -529,7 +529,7 @@ contains
          call metrics%init(grid)
          call metrics_fill_cartesian(metrics, grid, DXT_M, DXT_M)
          call metrics_finalize(metrics)
-         !$acc enter data copyin(metrics)
+         !$omp target enter data map(to: metrics)
          call metrics%enter_data()
 
          ms%nz_ml = NZ
@@ -557,7 +557,7 @@ contains
          call ws%destroy()
          call ms%destroy()
          call metrics%exit_data()
-         !$acc exit data delete(metrics)
+         !$omp target exit data map(delete: metrics)
          call metrics%destroy()
          deallocate (f_centre)
 
@@ -642,7 +642,7 @@ contains
          ! only `ms`/`ws` need mapping here.
          call map_in_ws(ms, ws)
          call wavespeed_compute(grid, metrics, ws, ms)
-         !$acc update self(ws%f_centre, ws%beta_centre)
+         !$omp target update from(ws%f_centre, ws%beta_centre)
          call map_out_ws(ms, ws)
 
          ! (i) planetary dispatch: f_centre == |2*Omega*sin(geolat)|.

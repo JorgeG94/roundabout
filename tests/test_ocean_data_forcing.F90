@@ -326,15 +326,15 @@ contains
       ! destination, blend on-device, pull the result back.  On a host
       ! build every directive is inert and the same assertions hold.
       tq = 0.5_wp*TEND
-      !$acc enter data copyin(reader)
+      !$omp target enter data map(to: reader)
       call reader%enter_data()
-      !$acc enter data copyin(ss%tau_x, ss%tau_y, ss%stress_mag)
+      !$omp target enter data map(to: ss%tau_x, ss%tau_y, ss%stress_mag)
       call ocean_data_input_update_all(reader, tq)
       call ocean_data_forcing_apply(df, reader, grid, ss, sf, bc, tq)
-      !$acc update self(ss%tau_x, ss%stress_mag)
-      !$acc exit data delete(ss%tau_x, ss%tau_y, ss%stress_mag)
+      !$omp target update from(ss%tau_x, ss%stress_mag)
+      !$omp target exit data map(delete: ss%tau_x, ss%tau_y, ss%stress_mag)
       call reader%exit_data()
-      !$acc exit data delete(reader)
+      !$omp target exit data map(delete: reader)
 
       do j = NGHOST + 1, NGHOST + NYP
          do i = NGHOST + 1, NGHOST + NXP
@@ -403,16 +403,16 @@ contains
       call ocean_data_forcing_configure(cfg, reader, grid, ss, sf, bc, df)
 
       ss%tau_x = SENTINEL
-      !$acc enter data copyin(reader)
+      !$omp target enter data map(to: reader)
       call reader%enter_data()
-      !$acc enter data copyin(ss%tau_x, ss%tau_y, ss%stress_mag)
-      !$acc update device(ss%tau_x)
+      !$omp target enter data map(to: ss%tau_x, ss%tau_y, ss%stress_mag)
+      !$omp target update to(ss%tau_x)
       call ocean_data_input_update_all(reader, 0.0_wp)
       call ocean_data_forcing_apply(df, reader, grid, ss, sf, bc, 0.0_wp)
-      !$acc update self(ss%tau_x)
-      !$acc exit data delete(ss%tau_x, ss%tau_y, ss%stress_mag)
+      !$omp target update from(ss%tau_x)
+      !$omp target exit data map(delete: ss%tau_x, ss%tau_y, ss%stress_mag)
       call reader%exit_data()
-      !$acc exit data delete(reader)
+      !$omp target exit data map(delete: reader)
 
       call check(error, abs(ss%tau_x(ilo, jlo) - 110.0_wp) < TOL, &
                  "T2a: file element (1,1) must land at (nghost+1, nghost+1)")
@@ -438,16 +438,16 @@ contains
       call ocean_data_forcing_configure(cfg, reader, grid, ss, sf, bc, df)
 
       ss%tau_x = SENTINEL
-      !$acc enter data copyin(reader)
+      !$omp target enter data map(to: reader)
       call reader%enter_data()
-      !$acc enter data copyin(ss%tau_x, ss%tau_y, ss%stress_mag)
-      !$acc update device(ss%tau_x)
+      !$omp target enter data map(to: ss%tau_x, ss%tau_y, ss%stress_mag)
+      !$omp target update to(ss%tau_x)
       call ocean_data_input_update_all(reader, 0.0_wp)
       call ocean_data_forcing_apply(df, reader, grid, ss, sf, bc, 0.0_wp)
-      !$acc update self(ss%tau_x)
-      !$acc exit data delete(ss%tau_x, ss%tau_y, ss%stress_mag)
+      !$omp target update from(ss%tau_x)
+      !$omp target exit data map(delete: ss%tau_x, ss%tau_y, ss%stress_mag)
       call reader%exit_data()
-      !$acc exit data delete(reader)
+      !$omp target exit data map(delete: reader)
 
       ! West ghosts wrap from the east physical block, and vice versa.
       ! The gradient file varies in i, so the wrapped value differs from
@@ -504,13 +504,13 @@ contains
       call tau_x_config(cfg, trim(fname), "field")
       call ocean_data_forcing_configure(cfg, reader, grid, ss, sf, bc, df)
 
-      !$acc enter data copyin(reader)
+      !$omp target enter data map(to: reader)
       call reader%enter_data()
-      !$acc enter data copyin(ss%tau_x, ss%tau_y, ss%stress_mag)
+      !$omp target enter data map(to: ss%tau_x, ss%tau_y, ss%stress_mag)
 
       call ocean_data_input_update_all(reader, 50.0_wp)
       call ocean_data_forcing_apply(df, reader, grid, ss, sf, bc, 50.0_wp)
-      !$acc update self(ss%stress_mag)
+      !$omp target update from(ss%stress_mag)
       do j = NGHOST + 1, NGHOST + NYP
          do i = NGHOST + 1, NGHOST + NXP
             call check(error, abs(ss%stress_mag(i, j) - 0.5_wp*TAU) < TOL, &
@@ -521,7 +521,7 @@ contains
 
       call ocean_data_input_update_all(reader, 150.0_wp)
       call ocean_data_forcing_apply(df, reader, grid, ss, sf, bc, 150.0_wp)
-      !$acc update self(ss%stress_mag)
+      !$omp target update from(ss%stress_mag)
       do j = NGHOST + 1, NGHOST + NYP
          do i = NGHOST + 1, NGHOST + NXP
             call check(error, abs(ss%stress_mag(i, j) - 1.5_wp*TAU) < TOL, &
@@ -530,9 +530,9 @@ contains
          end do
       end do
 
-      !$acc exit data delete(ss%tau_x, ss%tau_y, ss%stress_mag)
+      !$omp target exit data map(delete: ss%tau_x, ss%tau_y, ss%stress_mag)
       call reader%exit_data()
-      !$acc exit data delete(reader)
+      !$omp target exit data map(delete: reader)
 
       call reader%destroy()
       call ss%destroy()
@@ -581,15 +581,15 @@ contains
       call check(error, sf%has_heat, "T4: registering a heat file must latch has_heat")
       if (allocated(error)) return
 
-      !$acc enter data copyin(reader)
+      !$omp target enter data map(to: reader)
       call reader%enter_data()
-      !$acc enter data copyin(sf%Q_heat)
+      !$omp target enter data map(to: sf%Q_heat)
       call ocean_data_input_update_all(reader, 500.0_wp)
       call ocean_data_forcing_apply(df, reader, grid, ss, sf, bc, 500.0_wp)
-      !$acc update self(sf%Q_heat)
-      !$acc exit data delete(sf%Q_heat)
+      !$omp target update from(sf%Q_heat)
+      !$omp target exit data map(delete: sf%Q_heat)
       call reader%exit_data()
-      !$acc exit data delete(reader)
+      !$omp target exit data map(delete: reader)
 
       do j = NGHOST + 1, NGHOST + NYP
          do i = NGHOST + 1, NGHOST + NXP
@@ -643,15 +643,15 @@ contains
 
       tq = 300.0_wp
       expect = 0.5_wp*(TAU + 0.0_wp)
-      !$acc enter data copyin(reader)
+      !$omp target enter data map(to: reader)
       call reader%enter_data()
-      !$acc enter data copyin(ss%tau_x, ss%tau_y, ss%stress_mag)
+      !$omp target enter data map(to: ss%tau_x, ss%tau_y, ss%stress_mag)
       call ocean_data_input_update_all(reader, tq)
       call ocean_data_forcing_apply(df, reader, grid, ss, sf, bc, tq)
-      !$acc update self(ss%tau_x)
-      !$acc exit data delete(ss%tau_x, ss%tau_y, ss%stress_mag)
+      !$omp target update from(ss%tau_x)
+      !$omp target exit data map(delete: ss%tau_x, ss%tau_y, ss%stress_mag)
       call reader%exit_data()
-      !$acc exit data delete(reader)
+      !$omp target exit data map(delete: reader)
 
       do j = NGHOST + 1, NGHOST + NYP
          do i = NGHOST + 1, NGHOST + NXP
@@ -727,15 +727,15 @@ contains
                  "T6: all three flux latches must be set")
       if (allocated(error)) return
 
-      !$acc enter data copyin(reader)
+      !$omp target enter data map(to: reader)
       call reader%enter_data()
-      !$acc enter data copyin(sf%heat_added, sf%evap, sf%lprec, sf%salt_flux, sf%Q_heat)
+      !$omp target enter data map(to: sf%heat_added, sf%evap, sf%lprec, sf%salt_flux, sf%Q_heat)
       call ocean_data_input_update_all(reader, 500.0_wp)
       call ocean_data_forcing_apply(df, reader, grid, ss, sf, bc, 500.0_wp)
-      !$acc update self(sf%heat_added, sf%evap, sf%lprec, sf%salt_flux, sf%Q_heat)
-      !$acc exit data delete(sf%heat_added, sf%evap, sf%lprec, sf%salt_flux, sf%Q_heat)
+      !$omp target update from(sf%heat_added, sf%evap, sf%lprec, sf%salt_flux, sf%Q_heat)
+      !$omp target exit data map(delete: sf%heat_added, sf%evap, sf%lprec, sf%salt_flux, sf%Q_heat)
       call reader%exit_data()
-      !$acc exit data delete(reader)
+      !$omp target exit data map(delete: reader)
 
       do j = NGHOST + 1, NGHOST + NYP
          do i = NGHOST + 1, NGHOST + NXP
@@ -844,9 +844,9 @@ contains
       type(ocean_vdiff_t), intent(inout) :: vd
       type(ocean_vmix_t), intent(inout) :: vmix
       call make_cartesian_metrics(metrics, grid)
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
-      !$acc enter data copyin(ct, cor, pgf, hv, bd, ss, sf, va, hd, vd, vmix)
+      !$omp target enter data map(to: ct, cor, pgf, hv, bd, ss, sf, va, hd, vd, vmix)
       call ct%enter_data()
       call cor%enter_data()
       call pgf%enter_data()
@@ -886,9 +886,9 @@ contains
       call pgf%exit_data()
       call cor%exit_data()
       call ct%exit_data()
-      !$acc exit data delete(ct, cor, pgf, hv, bd, ss, sf, va, hd, vd, vmix)
+      !$omp target exit data map(delete: ct, cor, pgf, hv, bd, ss, sf, va, hd, vd, vmix)
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
    end subroutine ek_map_out
 
    subroutine ek_destroy(ms, ct, cor, pgf, hv, bd, ss, sf, va, hd, vd, vmix, eos, dyn)
@@ -1008,7 +1008,7 @@ contains
       mass_ic = sum(ms%h_layer)
 
       call ek_map_in(grid, metrics, ms, ct, cor, pgf, hv, bd, ss, sf, va, hd, vd, vmix)
-      !$acc enter data copyin(reader)
+      !$omp target enter data map(to: reader)
       call reader%enter_data()
 
       t = t_start
@@ -1023,7 +1023,7 @@ contains
       end do
 
       call reader%exit_data()
-      !$acc exit data delete(reader)
+      !$omp target exit data map(delete: reader)
       call ek_map_out(metrics, ms, ct, cor, pgf, hv, bd, ss, sf, va, hd, vd, vmix)
 
       u_top = ms%u_face_x_layer(grid%nx_total/2, grid%ny_total/2, NZ)

@@ -91,7 +91,7 @@ contains
       !! `rho0 * w`.  `pw` is the participation weight: the open fraction
       !! for a participating cell, `0` for a cell that is closed or has a
       !! non-finite target (those return `f = 0`).
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: c
          !! Surface-layer `S * h` [g/kg m].
       real(wp), intent(in) :: h
@@ -179,9 +179,8 @@ contains
       e5 = 0_int64
       e6 = 0_int64
       epoison = 0_int64
-      !$acc parallel loop collapse(2) reduction(+:e1,e2,e3,e4,e5,e6,epoison) &
-      !$acc&         private(f, pw, ow, val, kt, d1, d2, d3, d4, d5, d6, dpoison) &
-      !$acc&         present(c, h_layer, tgt, wet, cover, areaT, k_top)
+      !$omp target teams distribute parallel do collapse(2) reduction(+:e1,e2,e3,e4,e5,e6,epoison) &
+      !$omp&         private(f, pw, ow, val, kt, d1, d2, d3, d4, d5, d6, dpoison)
       do j = ng + 1, ny - ng
          do i = ng + 1, nx - ng
             kt = rdb_vl_first_live(nx, ny, nz, h_layer, i, j, k_top(i, j))
@@ -231,8 +230,7 @@ contains
       integer :: i, j, kt
       real(wp) :: f, pw, ow
       fmax = 0.0_wp
-      !$acc parallel loop collapse(2) reduction(max:fmax) private(f, pw, ow, kt) &
-      !$acc&         present(c, h_layer, tgt, wet, cover, k_top)
+      !$omp target teams distribute parallel do collapse(2) reduction(max:fmax) private(f, pw, ow, kt)
       do j = ng + 1, ny - ng
          do i = ng + 1, nx - ng
             kt = rdb_vl_first_live(nx, ny, nz, h_layer, i, j, k_top(i, j))

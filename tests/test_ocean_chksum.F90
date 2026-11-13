@@ -48,9 +48,9 @@ contains
             end do
          end do
       end do
-      !$acc enter data copyin(arr)
+      !$omp target enter data map(to: arr)
       call chksum_stats_3d(arr, 4, 3, 2, st)
-      !$acc exit data delete(arr)
+      !$omp target exit data map(delete: arr)
 
       call check(error, st%total == expect_sum, "3D sum must be exact")
       if (allocated(error)) return
@@ -72,9 +72,9 @@ contains
       arr(2, 2) = ieee_value(1.0_wp, ieee_quiet_nan)
       arr(3, 3) = ieee_value(1.0_wp, ieee_positive_inf)
       arr(4, 1) = -ieee_value(1.0_wp, ieee_positive_inf)
-      !$acc enter data copyin(arr)
+      !$omp target enter data map(to: arr)
       call chksum_stats_2d(arr, 5, 4, st)
-      !$acc exit data delete(arr)
+      !$omp target exit data map(delete: arr)
 
       call check(error, st%nonfin == 3, &
                  "nonfin must count NaN + both Infs (the corruption signal)")
@@ -156,10 +156,10 @@ contains
          end do
       end do
 
-      !$acc enter data copyin(arr, rev)
+      !$omp target enter data map(to: arr, rev)
       call chksum_stats_3d(arr, 4, 3, 2, sf)
       call chksum_stats_3d(rev, 4, 3, 2, sr)
-      !$acc exit data delete(arr, rev)
+      !$omp target exit data map(delete: arr, rev)
 
       ! Guard against a no-op permutation: the two arrangements must really
       ! differ (a huge value where a small one now sits).  The FP `total`

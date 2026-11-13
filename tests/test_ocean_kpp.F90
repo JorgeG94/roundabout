@@ -70,20 +70,20 @@ contains
       ! (A7 per-column B_0); zero fields = the old shear-only behaviour.
       type(ocean_surface_flux_t) :: sf_zero
       call sf_zero%init(grid)
-      !$acc enter data copyin(ms, vmix, ss)
+      !$omp target enter data map(to: ms, vmix, ss)
       call ms%enter_data()
       call vmix%enter_data()
-      !$acc enter data copyin(sf_zero)
+      !$omp target enter data map(to: sf_zero)
       call sf_zero%enter_data()
       call vmix_compute_pp81(grid, vmix, ms)
       call vmix_apply_kpp_overlay(grid, vmix, ms, ss, sf_zero)
-      !$acc update self(vmix%kv, vmix%kt, vmix%bl_depth)
+      !$omp target update from(vmix%kv, vmix%kt, vmix%bl_depth)
       call sf_zero%exit_data()
-      !$acc exit data delete(sf_zero)
+      !$omp target exit data map(delete: sf_zero)
       call sf_zero%destroy()
       call vmix%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms, vmix, ss)
+      !$omp target exit data map(delete: ms, vmix, ss)
    end subroutine run_kpp
 
    ! -----------------------------------------------------------------
@@ -122,14 +122,14 @@ contains
          end do
 
          ! PP81-only reference run
-         !$acc enter data copyin(ms, vmix_pp81)
+         !$omp target enter data map(to: ms, vmix_pp81)
          call ms%enter_data()
          call vmix_pp81%enter_data()
          call vmix_compute_pp81(grid, vmix_pp81, ms)
-         !$acc update self(vmix_pp81%kv, vmix_pp81%kt)
+         !$omp target update from(vmix_pp81%kv, vmix_pp81%kt)
          call vmix_pp81%exit_data()
          call ms%exit_data()
-         !$acc exit data delete(ms, vmix_pp81)
+         !$omp target exit data map(delete: ms, vmix_pp81)
 
          ! PP81 + KPP overlay
          call run_kpp(grid, ms, vmix_kpp, ss)
@@ -340,17 +340,17 @@ contains
       type(ocean_vmix_t), intent(inout) :: vmix
       type(ocean_surface_stress_t), intent(inout) :: ss
       type(ocean_surface_flux_t), intent(inout) :: sf
-      !$acc enter data copyin(ms, vmix, ss, sf)
+      !$omp target enter data map(to: ms, vmix, ss, sf)
       call ms%enter_data()
       call vmix%enter_data()
       call sf%enter_data()
       call vmix_compute_pp81(grid, vmix, ms)
       call vmix_apply_kpp_overlay(grid, vmix, ms, ss, sf)
-      !$acc update self(vmix%kv, vmix%kt, vmix%bl_depth)
+      !$omp target update from(vmix%kv, vmix%kt, vmix%bl_depth)
       call sf%exit_data()
       call vmix%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms, vmix, ss, sf)
+      !$omp target exit data map(delete: ms, vmix, ss, sf)
    end subroutine run_kpp_with_flux
 
    subroutine setup_stratified_column(ms, NZ)

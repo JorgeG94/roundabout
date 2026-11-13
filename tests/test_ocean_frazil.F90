@@ -104,18 +104,18 @@ contains
       type(multilayer_state_t), intent(inout) :: ms
       type(ocean_sea_ice_t), intent(inout) :: ice
 
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
       call ice%enter_data()
       call ice_frazil_accumulate(grid, eos, ms, ice%frazil_heat, &
                                  ice%heat_budget_frazil)
       associate (hT => ms%tracers(ms%idx_temperature)%c, &
                  fz => ice%frazil_heat, fb => ice%heat_budget_frazil)
-         !$acc update self(hT, fz, fb)
+         !$omp target update from(hT, fz, fb)
       end associate
       call ice%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
    end subroutine run_frazil
 
    subroutine teardown(ms, eos, ice)
@@ -478,18 +478,18 @@ contains
       type(ocean_sea_ice_t), intent(inout) :: ice
       logical, intent(in) :: pdep, reclaim
 
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
       call ice%enter_data()
       call ice_frazil_accumulate_column(grid, eos, ms, ice%frazil_heat, &
                                         ice%heat_budget_frazil, pdep, reclaim)
       associate (hT => ms%tracers(ms%idx_temperature)%c, &
                  fz => ice%frazil_heat, fb => ice%heat_budget_frazil)
-         !$acc update self(hT, fz, fb)
+         !$omp target update from(hT, fz, fb)
       end associate
       call ice%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
    end subroutine run_column
 
    subroutine test_col_pressure(error)
@@ -696,10 +696,10 @@ contains
       c(1, 2, 1) = -1.0_wp
       wet(3, 2) = 0.0_wp
       c(3, 2, NK) = -8.0_wp
-      !$acc enter data copyin(c, h, wet, kt)
+      !$omp target enter data map(to: c, h, wet, kt)
       call bound_salinity_top_impl(c, h, wet, SMIN, kt, NK, NX, NY)
-      !$acc update self(c)
-      !$acc exit data delete(c, h, wet, kt)
+      !$omp target update from(c)
+      !$omp target exit data map(delete: c, h, wet, kt)
       call check(error, abs(c(1, 1, NK) - SMIN) < 1.0e-14_wp, &
                  "negative S raised to min_salinity")
       if (allocated(error)) return

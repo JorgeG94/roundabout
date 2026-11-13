@@ -230,10 +230,10 @@ contains
    subroutine ocean_slopes_enter_data_impl(this)
       type(ocean_slopes_t), intent(inout) :: this
       if (.not. this%is_init) return
-      !$acc enter data copyin(this%slope_x, this%slope_y)
-      !$acc enter data copyin(this%n2_u, this%n2_v)
-      !$acc enter data copyin(this%t_fill, this%s_fill, this%e_int)
-      !$acc enter data copyin(this%bathy)
+      !$omp target enter data map(to: this%slope_x, this%slope_y)
+      !$omp target enter data map(to: this%n2_u, this%n2_v)
+      !$omp target enter data map(to: this%t_fill, this%s_fill, this%e_int)
+      !$omp target enter data map(to: this%bathy)
    end subroutine ocean_slopes_enter_data_impl
 
    subroutine ocean_slopes_exit_data(this)
@@ -247,10 +247,10 @@ contains
    subroutine ocean_slopes_exit_data_impl(this)
       type(ocean_slopes_t), intent(inout) :: this
       if (.not. this%is_init) return
-      !$acc exit data delete(this%bathy)
-      !$acc exit data delete(this%t_fill, this%s_fill, this%e_int)
-      !$acc exit data delete(this%n2_u, this%n2_v)
-      !$acc exit data delete(this%slope_x, this%slope_y)
+      !$omp target exit data map(delete: this%bathy)
+      !$omp target exit data map(delete: this%t_fill, this%s_fill, this%e_int)
+      !$omp target exit data map(delete: this%n2_u, this%n2_v)
+      !$omp target exit data map(delete: this%slope_x, this%slope_y)
    end subroutine ocean_slopes_exit_data_impl
 
    subroutine ocean_slopes_compute(grid, metrics, eos, slopes, ms, dt)
@@ -618,7 +618,7 @@ contains
       !! p = g·ρ₀·Σ_{k'=ka}^{nz} h(k') — the sum INCLUDES `ka` (the layer
       !! directly above the interface); omitting it shorts the pressure by
       !! one layer (~5e5 Pa) and biases pressure-dependent EOS derivatives.
-      !$acc routine seq
+      !$omp declare target
       integer, intent(in) :: nx, ny, nz, ic, jc, ka
       real(wp), intent(in) :: h_layer(nx, ny, nz)
       real(wp), intent(in) :: rho0

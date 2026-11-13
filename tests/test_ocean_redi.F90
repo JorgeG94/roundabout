@@ -373,9 +373,9 @@ contains
       type(ocean_redi_t), intent(inout) :: rd
       type(eos_t), intent(in) :: eos
       call make_cartesian_metrics(metrics, grid)
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
-      !$acc enter data copyin(rd)
+      !$omp target enter data map(to: rd)
       call rd%enter_data()
    end subroutine map_in
 
@@ -394,12 +394,12 @@ contains
       type(ocean_metrics_t), intent(inout) :: metrics
       type(ocean_redi_t), intent(inout) :: rd
       ! Pull the updated tracers back to host.
-      !$acc update self(ms%tracers(ms%idx_temperature)%c)
-      !$acc update self(ms%tracers(ms%idx_salinity)%c)
+      !$omp target update from(ms%tracers(ms%idx_temperature)%c)
+      !$omp target update from(ms%tracers(ms%idx_salinity)%c)
       call rd%exit_data()
-      !$acc exit data delete(rd)
+      !$omp target exit data map(delete: rd)
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
       call destroy_cartesian_metrics(metrics)
    end subroutine map_out
 
@@ -702,10 +702,10 @@ contains
       if (use_ext) then
          allocate (khu(ni + 1, nj), source=khtr_ext_val)
          allocate (khv(ni, nj + 1), source=khtr_ext_val)
-         !$acc enter data copyin(khu, khv)
+         !$omp target enter data map(to: khu, khv)
          call redi_calc_coeffs(grid, metrics, eos, rd, ms)
          call redi_apply_flux(grid, metrics, rd, ms, DT, khtr_u_ext=khu, khtr_v_ext=khv)
-         !$acc exit data delete(khu, khv)
+         !$omp target exit data map(delete: khu, khv)
          deallocate (khu, khv)
       else
          call run_redi(grid, metrics, eos, rd, ms)
@@ -806,7 +806,7 @@ contains
          kv(IC, JC) = khi
          kv(IC, JC + 1) = khi
          call map_in(ms, metrics, grid, rd, eos)
-         !$acc enter data copyin(ku, kv)
+         !$omp target enter data map(to: ku, kv)
          call redi_calc_coeffs(grid, metrics, eos, rd, ms)
 
          rd%check_diffusive_cfl = .true.
@@ -824,7 +824,7 @@ contains
          rd%max_diffusive_cfl = -1.0_wp
          call redi_apply_flux(grid, metrics, rd, ms, DT, khtr_u_ext=ku, khtr_v_ext=kv)
          n_off = rd%n_itt
-         !$acc exit data delete(ku, kv)
+         !$omp target exit data map(delete: ku, kv)
          call map_out(ms, metrics, rd)
 
          call check(error, n_chk, 4, "check_diffusive_cfl, CFL 3.4 -> n_itt = 4")
@@ -904,7 +904,7 @@ contains
          kv(IC, JC) = khi
          kv(IC, JC + 1) = khi
          call map_in(ms, metrics, grid, rd, eos)
-         !$acc enter data copyin(ku, kv)
+         !$omp target enter data map(to: ku, kv)
          call redi_calc_coeffs(grid, metrics, eos, rd, ms)
          rd%max_diffusive_cfl = CMAX
          call redi_apply_flux(grid, metrics, rd, ms, DT, khtr_u_ext=ku, khtr_v_ext=kv)
@@ -917,7 +917,7 @@ contains
                                 grid%ny_phys, DT, .false., cfl_cap, rd%khtr_u, rd%khtr_v, &
                                 metrics%dy_cu, metrics%dx_cv, metrics%idxCu, metrics%idyCv, &
                                 metrics%areaT, cmax_free)
-         !$acc exit data delete(ku, kv)
+         !$omp target exit data map(delete: ku, kv)
          call map_out(ms, metrics, rd)
 
          call check(error, cmax_free > 3.39_wp, "uncapped field really has CFL 3.4 (test is live)")
@@ -1009,8 +1009,8 @@ contains
          rd%check_diffusive_cfl = .true.
          call redi_apply_flux(grid, metrics, rd, ms, DT, bc=bc)
          n_sub = rd%n_itt
-         !$acc update self(ms%tracers(ms%idx_temperature)%c)
-         !$acc update self(ms%tracers(ms%idx_salinity)%c)
+         !$omp target update from(ms%tracers(ms%idx_temperature)%c)
+         !$omp target update from(ms%tracers(ms%idx_salinity)%c)
          s_sub = ms%tracers(ms%idx_salinity)%c
          t_sub = ms%tracers(ms%idx_temperature)%c
          call map_out(ms, metrics, rd)
@@ -1028,7 +1028,7 @@ contains
          call ocean_halo_centre(ms%tracers(ms%idx_temperature)%c, NZ)
          call ocean_halo_centre(ms%tracers(ms%idx_salinity)%c, NZ)
          call redi_apply_flux(grid, metrics, rd, ms, 0.5_wp*DT, bc=bc)
-         !$acc update self(ms%tracers(ms%idx_salinity)%c)
+         !$omp target update from(ms%tracers(ms%idx_salinity)%c)
          s_ref = ms%tracers(ms%idx_salinity)%c
          call map_out(ms, metrics, rd)
 
@@ -1159,7 +1159,7 @@ contains
       rd%check_diffusive_cfl = subcycle
       call map_in(ms, metrics, grid, rd, eos)
       call run_redi(grid, metrics, eos, rd, ms)
-      !$acc update self(ms%tracers(idx)%c)
+      !$omp target update from(ms%tracers(idx)%c)
       call map_out(ms, metrics, rd)
       i0 = grid%nghost + 1
       i1 = grid%nghost + NX

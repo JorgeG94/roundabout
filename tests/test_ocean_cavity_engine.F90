@@ -242,14 +242,14 @@ contains
       integer :: it
 
       fin = .true.
-      !$acc update self(engine%state%multilayer%h_layer)
-      !$acc update self(engine%state%multilayer%u_face_x_layer)
-      !$acc update self(engine%state%multilayer%v_face_y_layer)
+      !$omp target update from(engine%state%multilayer%h_layer)
+      !$omp target update from(engine%state%multilayer%u_face_x_layer)
+      !$omp target update from(engine%state%multilayer%v_face_y_layer)
       fin = fin .and. all(ieee_is_finite(engine%state%multilayer%h_layer)) &
             .and. all(ieee_is_finite(engine%state%multilayer%u_face_x_layer)) &
             .and. all(ieee_is_finite(engine%state%multilayer%v_face_y_layer))
       do it = 1, size(engine%state%multilayer%tracers)
-         !$acc update self(engine%state%multilayer%tracers(it)%c)
+         !$omp target update from(engine%state%multilayer%tracers(it)%c)
          fin = fin .and. all(ieee_is_finite(engine%state%multilayer%tracers(it)%c))
       end do
    end function state_is_finite
@@ -268,9 +268,9 @@ contains
       ng = engine%grid%nghost
       nz = engine%state%multilayer%nz_ml
       ! The test always runs melt and top drag, so all three arrays are mapped.
-      !$acc update self(engine%state%multilayer%wet_mask)
-      !$acc update self(engine%state%cavity_flux%melt)
-      !$acc update self(engine%state%tdrag%stress_top)
+      !$omp target update from(engine%state%multilayer%wet_mask)
+      !$omp target update from(engine%state%cavity_flux%melt)
+      !$omp target update from(engine%state%tdrag%stress_top)
       associate (ms => engine%state%multilayer, mt => engine%state%metrics, &
                  cf => engine%state%cavity_flux, td => engine%state%tdrag)
          associate (wm => ms%wet_mask, melt => cf%melt, st => td%stress_top)

@@ -101,15 +101,15 @@ contains
       type(hgrid_t), intent(in) :: grid
       type(multilayer_state_t), intent(inout) :: ms
       type(ocean_vmix_t), intent(inout) :: vmix
-      !$acc enter data copyin(ms, vmix)
+      !$omp target enter data map(to: ms, vmix)
       call ms%enter_data()
       call vmix%enter_data()
-      !$acc update device(vmix%kt, vmix%ks)
+      !$omp target update to(vmix%kt, vmix%ks)
       call vmix_split_kd_heat_salt(grid, vmix, ms)
-      !$acc update self(vmix%kt, vmix%ks)
+      !$omp target update from(vmix%kt, vmix%ks)
       call vmix%exit_data()
       call ms%exit_data()
-      !$acc exit data delete(ms, vmix)
+      !$omp target exit data map(delete: ms, vmix)
    end subroutine run_ddiff
 
    logical function close_to(a, b)

@@ -59,9 +59,9 @@ contains
       type(hgrid_t), intent(in) :: grid
       type(ocean_lateral_mix_t), intent(inout) :: lmix
       call make_cartesian_metrics(metrics, grid)
-      !$acc enter data copyin(ms)
+      !$omp target enter data map(to: ms)
       call ms%enter_data()
-      !$acc enter data copyin(lmix)
+      !$omp target enter data map(to: lmix)
       call lmix%enter_data()
    end subroutine map_in
 
@@ -70,9 +70,9 @@ contains
       type(ocean_metrics_t), intent(inout) :: metrics
       type(ocean_lateral_mix_t), intent(inout) :: lmix
       call lmix%exit_data()
-      !$acc exit data delete(lmix)
+      !$omp target exit data map(delete: lmix)
       call ms%exit_data()
-      !$acc exit data delete(ms)
+      !$omp target exit data map(delete: ms)
       call destroy_cartesian_metrics(metrics)
    end subroutine map_out
 
@@ -106,7 +106,7 @@ contains
 
       ! (a) nothing else fills the field: the floor itself (ah_bg = 0).
       call ocean_lateral_mix_compute_lat_floor(lmix, seed_bg=.true.)
-      !$acc update self(lmix%ah_face_x, lmix%ah_face_y)
+      !$omp target update from(lmix%ah_face_x, lmix%ah_face_y)
       worst_a = 0.0_wp
       do n = 2, 4
          jrow = 2*n - 1
@@ -124,9 +124,9 @@ contains
 
       ! (b) a larger competing floor (ah_bg = 500) wins where it is larger.
       lmix%ah_bg = 500.0_wp
-      !$acc update device(lmix%ah_bg)
+      !$omp target update to(lmix%ah_bg)
       call ocean_lateral_mix_compute_lat_floor(lmix, seed_bg=.true.)
-      !$acc update self(lmix%ah_face_x)
+      !$omp target update from(lmix%ah_face_x)
       worst_b = abs(lmix%ah_face_x(2, 1, 1) - 500.0_wp) + abs(lmix%ah_face_x(2, 3, 1) - 500.0_wp)
       call check(error, worst_b == 0.0_wp, "ah_bg=500 must beat the 0 and 125 floors")
       if (allocated(error)) return
@@ -137,9 +137,9 @@ contains
       ! (c) non-seeded: max against a prefilled 700 field.
       lmix%ah_face_x = 700.0_wp
       lmix%ah_face_y = 700.0_wp
-      !$acc update device(lmix%ah_face_x, lmix%ah_face_y)
+      !$omp target update to(lmix%ah_face_x, lmix%ah_face_y)
       call ocean_lateral_mix_compute_lat_floor(lmix, seed_bg=.false.)
-      !$acc update self(lmix%ah_face_x)
+      !$omp target update from(lmix%ah_face_x)
       worst_c = abs(lmix%ah_face_x(2, 1, 1) - 700.0_wp) + abs(lmix%ah_face_x(2, 3, 1) - 700.0_wp)
       call check(error, worst_c == 0.0_wp .and. &
                  abs(lmix%ah_face_x(2, 7, 1) - 1125.0_wp)/1125.0_wp < 1.0e-14_wp, &
@@ -165,7 +165,7 @@ contains
       lmix%ah_vel_scale = ah_vel
       call map_in(ms, metrics, grid, lmix)
       call ocean_lateral_mix_compute_smag_ah(grid, metrics, lmix, ms)
-      !$acc update self(lmix%nu4_face_x, lmix%nu4_face_y)
+      !$omp target update from(lmix%nu4_face_x, lmix%nu4_face_y)
       call map_out(ms, metrics, lmix)
    end subroutine run_ah_vel
 
@@ -246,7 +246,7 @@ contains
       call lmix%build_statics(lat_bu, f_bu)
       call map_in(ms, metrics, grid, lmix)
       call ocean_lateral_mix_compute_smag_ah(grid, metrics, lmix, ms)
-      !$acc update self(lmix%nu4_face_x)
+      !$omp target update from(lmix%nu4_face_x)
       call map_out(ms, metrics, lmix)
    end subroutine run_cor
 

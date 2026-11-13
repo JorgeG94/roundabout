@@ -96,7 +96,7 @@ contains
       real(wp) :: total
       integer :: i, j, k
       total = 0.0_wp
-      !$acc parallel loop collapse(3) reduction(+:total) present(arr)
+      !$omp target teams distribute parallel do collapse(3) reduction(+:total)
       do k = 1, n3
          do j = 1, n2
             do i = 1, n1

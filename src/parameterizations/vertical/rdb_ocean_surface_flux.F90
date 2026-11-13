@@ -545,35 +545,35 @@ contains
 
    subroutine ocean_surfflux_enter_data_impl(this)
       type(ocean_surface_flux_t), intent(inout) :: this
-      !$acc enter data copyin(this%Q_heat, this%Q_salt)
-      !$acc update device(this%Q_heat, this%Q_salt)
+      !$omp target enter data map(to: this%Q_heat, this%Q_salt)
+      !$omp target update to(this%Q_heat, this%Q_salt)
       if (allocated(this%sss_target)) then
-         !$acc enter data copyin(this%sss_target)
-         !$acc update device(this%sss_target)
+         !$omp target enter data map(to: this%sss_target)
+         !$omp target update to(this%sss_target)
       end if
-      !$acc enter data copyin(this%sw_frac, this%sw_kappa, this%sw_chl_field)
-      !$acc update device(this%sw_frac, this%sw_kappa, this%sw_chl_field)
+      !$omp target enter data map(to: this%sw_frac, this%sw_kappa, this%sw_chl_field)
+      !$omp target update to(this%sw_frac, this%sw_kappa, this%sw_chl_field)
       if (this%use_components) then
-         !$acc enter data copyin(this%q_sw, this%q_lw, this%q_lat, this%q_sens, &
-         !$acc&                  this%heat_added, this%heat_cavity, this%evap, &
-         !$acc&                  this%lprec, this%fprec, &
-         !$acc&                  this%vprec, this%lrunoff, this%frunoff, this%seaice_melt, &
-         !$acc&                  this%heat_content_lprec, this%heat_content_fprec, &
-         !$acc&                  this%heat_content_vprec, this%heat_content_lrunoff, &
-         !$acc&                  this%heat_content_frunoff, this%heat_content_seaice_melt, &
-         !$acc&                  this%heat_content_massin, this%heat_content_massout, &
-         !$acc&                  this%salt_flux, this%salt_cavity, &
-         !$acc&                  this%p_surf_atm, this%p_surf)
-         !$acc update device(this%q_sw, this%q_lw, this%q_lat, this%q_sens, &
-         !$acc&               this%heat_added, this%heat_cavity, this%evap, &
-         !$acc&               this%lprec, this%fprec, &
-         !$acc&               this%vprec, this%lrunoff, this%frunoff, this%seaice_melt, &
-         !$acc&               this%heat_content_lprec, this%heat_content_fprec, &
-         !$acc&               this%heat_content_vprec, this%heat_content_lrunoff, &
-         !$acc&               this%heat_content_frunoff, this%heat_content_seaice_melt, &
-         !$acc&               this%heat_content_massin, this%heat_content_massout, &
-         !$acc&               this%salt_flux, this%salt_cavity, &
-         !$acc&               this%p_surf_atm, this%p_surf)
+         !$omp target enter data map(to: this%q_sw, this%q_lw, this%q_lat, this%q_sens, &
+         !$omp&                  this%heat_added, this%heat_cavity, this%evap, &
+         !$omp&                  this%lprec, this%fprec, &
+         !$omp&                  this%vprec, this%lrunoff, this%frunoff, this%seaice_melt, &
+         !$omp&                  this%heat_content_lprec, this%heat_content_fprec, &
+         !$omp&                  this%heat_content_vprec, this%heat_content_lrunoff, &
+         !$omp&                  this%heat_content_frunoff, this%heat_content_seaice_melt, &
+         !$omp&                  this%heat_content_massin, this%heat_content_massout, &
+         !$omp&                  this%salt_flux, this%salt_cavity, &
+         !$omp&                  this%p_surf_atm, this%p_surf)
+         !$omp target update to(this%q_sw, this%q_lw, this%q_lat, this%q_sens, &
+         !$omp&               this%heat_added, this%heat_cavity, this%evap, &
+         !$omp&               this%lprec, this%fprec, &
+         !$omp&               this%vprec, this%lrunoff, this%frunoff, this%seaice_melt, &
+         !$omp&               this%heat_content_lprec, this%heat_content_fprec, &
+         !$omp&               this%heat_content_vprec, this%heat_content_lrunoff, &
+         !$omp&               this%heat_content_frunoff, this%heat_content_seaice_melt, &
+         !$omp&               this%heat_content_massin, this%heat_content_massout, &
+         !$omp&               this%salt_flux, this%salt_cavity, &
+         !$omp&               this%p_surf_atm, this%p_surf)
       end if
    end subroutine ocean_surfflux_enter_data_impl
 
@@ -588,22 +588,22 @@ contains
    subroutine ocean_surfflux_exit_data_impl(this)
       type(ocean_surface_flux_t), intent(inout) :: this
       if (this%use_components) then
-         !$acc exit data delete(this%q_sw, this%q_lw, this%q_lat, this%q_sens, &
-         !$acc&                 this%heat_added, this%heat_cavity, this%evap, &
-         !$acc&                 this%lprec, this%fprec, &
-         !$acc&                 this%vprec, this%lrunoff, this%frunoff, this%seaice_melt, &
-         !$acc&                 this%heat_content_lprec, this%heat_content_fprec, &
-         !$acc&                 this%heat_content_vprec, this%heat_content_lrunoff, &
-         !$acc&                 this%heat_content_frunoff, this%heat_content_seaice_melt, &
-         !$acc&                 this%heat_content_massin, this%heat_content_massout, &
-         !$acc&                 this%salt_flux, this%salt_cavity, &
-         !$acc&                 this%p_surf_atm, this%p_surf)
+         !$omp target exit data map(delete: this%q_sw, this%q_lw, this%q_lat, this%q_sens, &
+         !$omp&                 this%heat_added, this%heat_cavity, this%evap, &
+         !$omp&                 this%lprec, this%fprec, &
+         !$omp&                 this%vprec, this%lrunoff, this%frunoff, this%seaice_melt, &
+         !$omp&                 this%heat_content_lprec, this%heat_content_fprec, &
+         !$omp&                 this%heat_content_vprec, this%heat_content_lrunoff, &
+         !$omp&                 this%heat_content_frunoff, this%heat_content_seaice_melt, &
+         !$omp&                 this%heat_content_massin, this%heat_content_massout, &
+         !$omp&                 this%salt_flux, this%salt_cavity, &
+         !$omp&                 this%p_surf_atm, this%p_surf)
       end if
       if (allocated(this%sss_target)) then
-         !$acc exit data delete(this%sss_target)
+         !$omp target exit data map(delete: this%sss_target)
       end if
-      !$acc exit data delete(this%sw_frac, this%sw_kappa, this%sw_chl_field)
-      !$acc exit data delete(this%Q_heat, this%Q_salt)
+      !$omp target exit data map(delete: this%sw_frac, this%sw_kappa, this%sw_chl_field)
+      !$omp target exit data map(delete: this%Q_heat, this%Q_salt)
    end subroutine ocean_surfflux_exit_data_impl
 
    subroutine ocean_surfflux_set_const(this, q_heat_val, q_salt_val)
@@ -696,7 +696,7 @@ contains
       !! with the chlorophyll floored at `chl_floor` so the power is
       !! defined for zero / fill-value input.  `!$acc routine seq` for the
       !! device fill kernel.
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: chl, a, b, p, chl_floor
       real(wp) :: kappa
       kappa = a + b*max(chl, chl_floor)**p
@@ -708,7 +708,7 @@ contains
       !! `T(0) = sum(frac) = 1`.  The chlorophyll-scheme twin of
       !! `sw_transmission`, shared by the deposition kernel and both
       !! boundary-layer consumers.
-      !$acc routine seq
+      !$omp declare target
       integer, intent(in) :: i, j, nx, ny, nb
       real(wp), intent(in) :: d
       real(wp), intent(in) :: kappa(nx, ny, nb)
@@ -1284,7 +1284,7 @@ contains
       !! consumers cannot disagree about where the sunlight went.  Marked
       !! `!$acc routine seq` so it inlines into same-module device kernels
       !! and is callable from cross-module `do concurrent` kernels.
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: d, R, zeta1, zeta2
       real(wp) :: trans
       trans = R*exp(-d/zeta1) + (1.0_wp - R)*exp(-d/zeta2)
@@ -1309,7 +1309,7 @@ contains
       !! branch `Phi ≈ (tau/6)·(1 - tau²/60)` is mandatory below the
       !! `tau = 1e-2` seam.  `!$acc routine seq` for cross-module device
       !! calls (the EPBL prep sweep).
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: tau
       real(wp) :: phi
       real(wp) :: em1

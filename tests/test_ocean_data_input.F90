@@ -195,15 +195,15 @@ contains
 
       tq = 137.0_wp
       dest = -999.0_wp
-      !$acc enter data copyin(reader)
+      !$omp target enter data map(to: reader)
       call reader%enter_data()
-      !$acc enter data copyin(dest)
+      !$omp target enter data map(to: dest)
       call ocean_data_input_update_all(reader, tq)
       call ocean_data_input_update_2d(reader, id, tq, NX, NY, dest)
-      !$acc update self(dest)
-      !$acc exit data delete(dest)
+      !$omp target update from(dest)
+      !$omp target exit data map(delete: dest)
       call reader%exit_data()
-      !$acc exit data delete(reader)
+      !$omp target exit data map(delete: reader)
 
       do j = 1, NY
          do i = 1, NX
@@ -257,15 +257,15 @@ contains
 
       tq = 217.0_wp
       dest = -999.0_wp
-      !$acc enter data copyin(reader)
+      !$omp target enter data map(to: reader)
       call reader%enter_data()
-      !$acc enter data copyin(dest)
+      !$omp target enter data map(to: dest)
       call ocean_data_input_update_all(reader, tq)
       call ocean_data_input_update_3d(reader, id, tq, NX, NY, NZ, dest)
-      !$acc update self(dest)
-      !$acc exit data delete(dest)
+      !$omp target update from(dest)
+      !$omp target exit data map(delete: dest)
       call reader%exit_data()
-      !$acc exit data delete(reader)
+      !$omp target exit data map(delete: reader)
 
       do k = 1, NZ
          do j = 1, NY
@@ -348,15 +348,15 @@ contains
                                         NX, NY, 1, 1, id, time_mode="cyclic", &
                                         cycle_period=PERIOD)
       dest1 = -999.0_wp
-      !$acc enter data copyin(reader)
+      !$omp target enter data map(to: reader)
       call reader%enter_data()
-      !$acc enter data copyin(dest1)
+      !$omp target enter data map(to: dest1)
       call ocean_data_input_update_all(reader, 315.0_wp)
       call ocean_data_input_update_2d(reader, id, 315.0_wp, NX, NY, dest1)
-      !$acc update self(dest1)
-      !$acc exit data delete(dest1)
+      !$omp target update from(dest1)
+      !$omp target exit data map(delete: dest1)
       call reader%exit_data()
-      !$acc exit data delete(reader)
+      !$omp target exit data map(delete: reader)
       call reader%destroy()
 
       ! Analytic seam value: 0.5*(f(270) + f(0)).
@@ -376,15 +376,15 @@ contains
                                         NX, NY, 1, 1, id, time_mode="cyclic", &
                                         cycle_period=PERIOD)
       dest2 = -999.0_wp
-      !$acc enter data copyin(reader)
+      !$omp target enter data map(to: reader)
       call reader%enter_data()
-      !$acc enter data copyin(dest2)
+      !$omp target enter data map(to: dest2)
       call ocean_data_input_update_all(reader, 675.0_wp)
       call ocean_data_input_update_2d(reader, id, 675.0_wp, NX, NY, dest2)
-      !$acc update self(dest2)
-      !$acc exit data delete(dest2)
+      !$omp target update from(dest2)
+      !$omp target exit data map(delete: dest2)
       call reader%exit_data()
-      !$acc exit data delete(reader)
+      !$omp target exit data map(delete: reader)
       call reader%destroy()
 
       do j = 1, NY
@@ -434,14 +434,14 @@ contains
                  "T4: registration of a STATIC field must read exactly once")
       if (allocated(error)) return
 
-      !$acc enter data copyin(reader)
+      !$omp target enter data map(to: reader)
       call reader%enter_data()
-      !$acc enter data copyin(dest)
+      !$omp target enter data map(to: dest)
 
       dest = -999.0_wp
       call ocean_data_input_update_all(reader, 0.0_wp)
       call ocean_data_input_update_2d(reader, id, 0.0_wp, NX, NY, dest)
-      !$acc update self(dest)
+      !$omp target update from(dest)
       do j = 1, NY
          do i = 1, NX
             expect = real(i, wp) + 10.0_wp*real(j, wp) + 1000.0_wp
@@ -454,7 +454,7 @@ contains
       dest = -999.0_wp
       call ocean_data_input_update_all(reader, 1.0e9_wp)
       call ocean_data_input_update_2d(reader, id, 1.0e9_wp, NX, NY, dest)
-      !$acc update self(dest)
+      !$omp target update from(dest)
       do j = 1, NY
          do i = 1, NX
             expect = real(i, wp) + 10.0_wp*real(j, wp) + 1000.0_wp
@@ -464,9 +464,9 @@ contains
          end do
       end do
 
-      !$acc exit data delete(dest)
+      !$omp target exit data map(delete: dest)
       call reader%exit_data()
-      !$acc exit data delete(reader)
+      !$omp target exit data map(delete: reader)
 
       call check(error, reader%fields(id)%nreads == 1, &
                  "T4: two per-step queries must not trigger a second slab read")
@@ -511,16 +511,16 @@ contains
                                         NX, NY, 1, 1, id, &
                                         scale=SCALE, add_offset=ADD_OFFSET)
 
-      !$acc enter data copyin(reader)
+      !$omp target enter data map(to: reader)
       call reader%enter_data()
-      !$acc enter data copyin(dest)
+      !$omp target enter data map(to: dest)
 
       ! Two steps in the SAME bracket [t_axis(1), t_axis(2)] = [0, 10].
       tq = 3.0_wp
       dest = -999.0_wp
       call ocean_data_input_update_all(reader, tq)
       call ocean_data_input_update_2d(reader, id, tq, NX, NY, dest)
-      !$acc update self(dest)
+      !$omp target update from(dest)
       do j = 1, NY
          do i = 1, NX
             expect_raw = 100.0_wp*real(i, wp) + 5.0_wp*tq
@@ -534,7 +534,7 @@ contains
       dest = -999.0_wp
       call ocean_data_input_update_all(reader, tq)
       call ocean_data_input_update_2d(reader, id, tq, NX, NY, dest)
-      !$acc update self(dest)
+      !$omp target update from(dest)
       do j = 1, NY
          do i = 1, NX
             expect_raw = 100.0_wp*real(i, wp) + 5.0_wp*tq
@@ -544,9 +544,9 @@ contains
          end do
       end do
 
-      !$acc exit data delete(dest)
+      !$omp target exit data map(delete: dest)
       call reader%exit_data()
-      !$acc exit data delete(reader)
+      !$omp target exit data map(delete: reader)
       call reader%destroy()
    end subroutine test_scale_offset
 
@@ -594,16 +594,16 @@ contains
       call ocean_data_input_register_2d(reader, trim(fname), "field", grid, &
                                         NX, NY, 1, 1, id, oor=DATA_OOR_CLAMP)
 
-      !$acc enter data copyin(reader)
+      !$omp target enter data map(to: reader)
       call reader%enter_data()
-      !$acc enter data copyin(dest)
+      !$omp target enter data map(to: dest)
       dest = -999.0_wp
       call ocean_data_input_update_all(reader, 999.0_wp)
       call ocean_data_input_update_2d(reader, id, 999.0_wp, NX, NY, dest)
-      !$acc update self(dest)
-      !$acc exit data delete(dest)
+      !$omp target update from(dest)
+      !$omp target exit data map(delete: dest)
       call reader%exit_data()
-      !$acc exit data delete(reader)
+      !$omp target exit data map(delete: reader)
 
       do j = 1, NY
          do i = 1, NX
@@ -764,16 +764,16 @@ contains
       call ocean_data_input_register_2d(reader, trim(fname), "field", grid, &
                                         NX, NY, 1, 1, id)
 
-      !$acc enter data copyin(reader)
+      !$omp target enter data map(to: reader)
       call reader%enter_data()
-      !$acc enter data copyin(dest)
+      !$omp target enter data map(to: dest)
 
       ! Query 1: bracket (1,2).
       tq = 137.0_wp
       dest = -999.0_wp
       call ocean_data_input_update_all(reader, tq)
       call ocean_data_input_update_2d(reader, id, tq, NX, NY, dest)
-      !$acc update self(dest)
+      !$omp target update from(dest)
       do j = 1, NY
          do i = 1, NX
             expect = A + B*real(i, wp) + C*real(j, wp) + D*tq
@@ -790,7 +790,7 @@ contains
       dest = -999.0_wp
       call ocean_data_input_update_all(reader, tq)
       call ocean_data_input_update_2d(reader, id, tq, NX, NY, dest)
-      !$acc update self(dest)
+      !$omp target update from(dest)
       do j = 1, NY
          do i = 1, NX
             expect = A + B*real(i, wp) + C*real(j, wp) + D*tq
@@ -800,9 +800,9 @@ contains
          end do
       end do
 
-      !$acc exit data delete(dest)
+      !$omp target exit data map(delete: dest)
       call reader%exit_data()
-      !$acc exit data delete(reader)
+      !$omp target exit data map(delete: reader)
       call reader%destroy()
    end subroutine test_gpu_resident
 
@@ -844,15 +844,15 @@ contains
 
       ! Device-blend route, for comparison.
       dest_dev = -999.0_wp
-      !$acc enter data copyin(reader)
+      !$omp target enter data map(to: reader)
       call reader%enter_data()
-      !$acc enter data copyin(dest_dev)
+      !$omp target enter data map(to: dest_dev)
       call ocean_data_input_update_all(reader, 0.0_wp)
       call ocean_data_input_update_2d(reader, id, 0.0_wp, NX, NY, dest_dev)
-      !$acc update self(dest_dev)
-      !$acc exit data delete(dest_dev)
+      !$omp target update from(dest_dev)
+      !$omp target exit data map(delete: dest_dev)
       call reader%exit_data()
-      !$acc exit data delete(reader)
+      !$omp target exit data map(delete: reader)
 
       do j = 1, NY
          do i = 1, NX
@@ -912,15 +912,15 @@ contains
 
       tq = 2.5_wp*86400.0_wp
       dest = -999.0_wp
-      !$acc enter data copyin(reader)
+      !$omp target enter data map(to: reader)
       call reader%enter_data()
-      !$acc enter data copyin(dest)
+      !$omp target enter data map(to: dest)
       call ocean_data_input_update_all(reader, tq)
       call ocean_data_input_update_2d(reader, id, tq, NX, NY, dest)
-      !$acc update self(dest)
-      !$acc exit data delete(dest)
+      !$omp target update from(dest)
+      !$omp target exit data map(delete: dest)
       call reader%exit_data()
-      !$acc exit data delete(reader)
+      !$omp target exit data map(delete: reader)
 
       ! Record 3 of file 1 (value 103, absolute day 2) blended 50/50
       ! with record 1 of file 2 (value 201, absolute day 3).
@@ -970,9 +970,9 @@ contains
                                                  ryf_start_date="1958-01-01", &
                                                  ryf_period_days=400.0_wp)
 
-      !$acc enter data copyin(reader)
+      !$omp target enter data map(to: reader)
       call reader%enter_data()
-      !$acc enter data copyin(dest)
+      !$omp target enter data map(to: dest)
 
       ! Seam: day 350 is halfway between day 300 (value 40) and the
       ! NEXT cycle's day 0/400 (value 10).
@@ -980,7 +980,7 @@ contains
       dest = -999.0_wp
       call ocean_data_input_update_all(reader, tq)
       call ocean_data_input_update_2d(reader, id, tq, NX, NY, dest)
-      !$acc update self(dest)
+      !$omp target update from(dest)
       expect = 0.5_wp*40.0_wp + 0.5_wp*10.0_wp
       call check(error, abs(dest(1, 1) - expect) < 1.0e-9_wp, &
                  "ryf: wrap-seam interpolation (last record <-> next cycle's first) wrong")
@@ -992,14 +992,14 @@ contains
       dest = -999.0_wp
       call ocean_data_input_update_all(reader, tq)
       call ocean_data_input_update_2d(reader, id, tq, NX, NY, dest)
-      !$acc update self(dest)
+      !$omp target update from(dest)
       call check(error, abs(dest(1, 1) - expect) < 1.0e-6_wp, &
                  "ryf: one period later must reproduce the same wrapped value")
       if (allocated(error)) return
 
-      !$acc exit data delete(dest)
+      !$omp target exit data map(delete: dest)
       call reader%exit_data()
-      !$acc exit data delete(reader)
+      !$omp target exit data map(delete: reader)
       call reader%destroy()
    end subroutine test_filelist_ryf_wrap
 
@@ -1062,15 +1062,15 @@ contains
                                                  win_i0=WI0, win_j0=WJ0, win_nx=WNX, win_ny=WNY)
 
       dest = -999.0_wp
-      !$acc enter data copyin(reader)
+      !$omp target enter data map(to: reader)
       call reader%enter_data()
-      !$acc enter data copyin(dest)
+      !$omp target enter data map(to: dest)
       call ocean_data_input_update_all(reader, 5.0_wp*86400.0_wp)
       call ocean_data_input_update_2d(reader, id, 5.0_wp*86400.0_wp, WNX, WNY, dest)
-      !$acc update self(dest)
-      !$acc exit data delete(dest)
+      !$omp target update from(dest)
+      !$omp target exit data map(delete: dest)
       call reader%exit_data()
-      !$acc exit data delete(reader)
+      !$omp target exit data map(delete: reader)
 
       do j = 1, WNY
          do i = 1, WNX
@@ -1166,31 +1166,31 @@ contains
       tq = 50.0_wp*86400.0_wp
 
       dest = -999.0_wp
-      !$acc enter data copyin(reader_hold)
+      !$omp target enter data map(to: reader_hold)
       call reader_hold%enter_data()
-      !$acc enter data copyin(dest)
+      !$omp target enter data map(to: dest)
       call ocean_data_input_update_all(reader_hold, tq)
       call ocean_data_input_update_2d(reader_hold, id_hold, tq, NX, NY, dest)
-      !$acc update self(dest)
+      !$omp target update from(dest)
       call check(error, abs(dest(1, 1) - 10.0_wp) < 1.0e-9_wp, &
                  "filelist hold: w was not forced to 0 (held value should be record n0's exact value)")
-      !$acc exit data delete(dest)
+      !$omp target exit data map(delete: dest)
       call reader_hold%exit_data()
-      !$acc exit data delete(reader_hold)
+      !$omp target exit data map(delete: reader_hold)
       if (allocated(error)) return
 
       dest = -999.0_wp
-      !$acc enter data copyin(reader_blend)
+      !$omp target enter data map(to: reader_blend)
       call reader_blend%enter_data()
-      !$acc enter data copyin(dest)
+      !$omp target enter data map(to: dest)
       call ocean_data_input_update_all(reader_blend, tq)
       call ocean_data_input_update_2d(reader_blend, id_blend, tq, NX, NY, dest)
-      !$acc update self(dest)
+      !$omp target update from(dest)
       call check(error, abs(dest(1, 1) - 15.0_wp) < 1.0e-9_wp, &
                  "filelist hold: the hold=.false. control reader should still blend linearly")
-      !$acc exit data delete(dest)
+      !$omp target exit data map(delete: dest)
       call reader_blend%exit_data()
-      !$acc exit data delete(reader_blend)
+      !$omp target exit data map(delete: reader_blend)
       if (allocated(error)) return
 
       call reader_hold%destroy()

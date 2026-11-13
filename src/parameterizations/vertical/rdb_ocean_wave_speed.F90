@@ -205,25 +205,25 @@ contains
    subroutine ocean_wave_speed_enter_data_impl(this)
       type(ocean_wave_speed_t), intent(inout) :: this
       if (allocated(this%f_centre)) then
-         !$acc enter data copyin(this%f_centre)
+         !$omp target enter data map(to: this%f_centre)
       end if
       if (allocated(this%beta_centre)) then
-         !$acc enter data copyin(this%beta_centre)
+         !$omp target enter data map(to: this%beta_centre)
       end if
       if (allocated(this%cg1)) then
-         !$acc enter data copyin(this%cg1)
+         !$omp target enter data map(to: this%cg1)
       end if
       if (allocated(this%cg1_ebt)) then
-         !$acc enter data copyin(this%cg1_ebt)
+         !$omp target enter data map(to: this%cg1_ebt)
       end if
       if (allocated(this%ebt_struct)) then
-         !$acc enter data copyin(this%ebt_struct)
+         !$omp target enter data map(to: this%ebt_struct)
       end if
       if (allocated(this%rd)) then
-         !$acc enter data copyin(this%rd)
+         !$omp target enter data map(to: this%rd)
       end if
       if (allocated(this%rd_over_dx)) then
-         !$acc enter data copyin(this%rd_over_dx)
+         !$omp target enter data map(to: this%rd_over_dx)
       end if
    end subroutine ocean_wave_speed_enter_data_impl
 
@@ -238,25 +238,25 @@ contains
    subroutine ocean_wave_speed_exit_data_impl(this)
       type(ocean_wave_speed_t), intent(inout) :: this
       if (allocated(this%rd_over_dx)) then
-         !$acc exit data delete(this%rd_over_dx)
+         !$omp target exit data map(delete: this%rd_over_dx)
       end if
       if (allocated(this%rd)) then
-         !$acc exit data delete(this%rd)
+         !$omp target exit data map(delete: this%rd)
       end if
       if (allocated(this%ebt_struct)) then
-         !$acc exit data delete(this%ebt_struct)
+         !$omp target exit data map(delete: this%ebt_struct)
       end if
       if (allocated(this%cg1_ebt)) then
-         !$acc exit data delete(this%cg1_ebt)
+         !$omp target exit data map(delete: this%cg1_ebt)
       end if
       if (allocated(this%cg1)) then
-         !$acc exit data delete(this%cg1)
+         !$omp target exit data map(delete: this%cg1)
       end if
       if (allocated(this%beta_centre)) then
-         !$acc exit data delete(this%beta_centre)
+         !$omp target exit data map(delete: this%beta_centre)
       end if
       if (allocated(this%f_centre)) then
-         !$acc exit data delete(this%f_centre)
+         !$omp target exit data map(delete: this%f_centre)
       end if
    end subroutine ocean_wave_speed_exit_data_impl
 
@@ -318,7 +318,7 @@ contains
    pure subroutine wavespeed_cg1_column(nz, h_rak, rho_rak, rho0, cg1)
       !! First-baroclinic wave speed for ONE column (no EBT output).
       !! Thin wrapper over `wavespeed_mode_column` with `use_ebt=.false.`.
-      !$acc routine seq
+      !$omp declare target
       integer, intent(in) :: nz
       real(wp), intent(in) :: h_rak(NZ_STACK_MAX), rho_rak(NZ_STACK_MAX)
       real(wp), intent(in) :: rho0
@@ -355,7 +355,7 @@ contains
       !! iterations at `lam (1 - EBT_SHIFT)`, normalised to 1 at the surface
       !! and remapped (conservative PLM, no boundary extrapolation) from the
       !! merged thicknesses to the raw ones.
-      !$acc routine seq
+      !$omp declare target
       integer, intent(in) :: nz
       real(wp), intent(in) :: h_rak(NZ_STACK_MAX), rho_rak(NZ_STACK_MAX)
       real(wp), intent(in) :: rho0
@@ -482,7 +482,7 @@ contains
       !! EBT eigenvalue + structure on the committed stack (see
       !! `wavespeed_mode_column`).  `hc(1:kc)` are the merged thicknesses
       !! (surface-down); `h_rak(1:nz)` the raw bottom-up ones.
-      !$acc routine seq
+      !$omp declare target
       integer, intent(in) :: nz, kc
       real(wp), intent(in) :: hc(NZ_STACK_MAX)
       real(wp), intent(in) :: h_rak(NZ_STACK_MAX)
@@ -599,7 +599,7 @@ contains
    pure integer function sturm_count(igu, igl, kc, lam) result(n_chg)
       !! Number of Sturm-sequence sign changes (eigenvalues < lam) via
       !! the three-term determinant recursion with dynamic rescaling.
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: igu(NZ_STACK_MAX + 1), igl(NZ_STACK_MAX + 1)
       integer, intent(in) :: kc
       real(wp), intent(in) :: lam
@@ -634,7 +634,7 @@ contains
 
    pure integer function det_sign(igu, igl, kc, lam) result(sgn)
       !! Sign of det(M(lam)) on rows 2..kc (Sturm/Hallberg recursion).
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: igu(NZ_STACK_MAX + 1), igl(NZ_STACK_MAX + 1)
       integer, intent(in) :: kc
       real(wp), intent(in) :: lam
@@ -665,7 +665,7 @@ contains
       !! Reduces to cg1/|f| away from the equator and sqrt(cg1/(2*beta))
       !! at f=0; a small inside-sqrt guard + denominator floor handle
       !! f = beta = 0.
-      !$acc routine seq
+      !$omp declare target
       real(wp), intent(in) :: cg1, fabs, beta
       real(wp) :: rd
       real(wp) :: denom

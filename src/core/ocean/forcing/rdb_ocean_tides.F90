@@ -237,7 +237,7 @@ contains
          this%amp_cos(c) = pre*cos(ang)
          this%amp_sin(c) = pre*sin(ang)
       end do
-      !$acc update device(this%amp_cos, this%amp_sin)
+      !$omp target update to(this%amp_cos, this%amp_sin)
 
       nx = size(this%eta_eq, 1)
       ny = size(this%eta_eq, 2)
@@ -332,11 +332,11 @@ contains
    subroutine ocean_tides_enter_data_impl(this)
       type(ocean_tides_t), intent(inout) :: this
       if (allocated(this%species_c)) then
-         !$acc enter data copyin(this%species_c, this%omega_c, this%amp_c, &
-         !$acc                   this%love_c, this%phase0, this%f_nodal, &
-         !$acc                   this%u_nodal, this%amp_cos, this%amp_sin, &
-         !$acc                   this%cos_struct, this%sin_struct, this%eta_eq, &
-         !$acc                   this%eta_sal, this%eta_forcing)
+         !$omp target enter data map(to: this%species_c, this%omega_c, this%amp_c, &
+         !$omp                   this%love_c, this%phase0, this%f_nodal, &
+         !$omp                   this%u_nodal, this%amp_cos, this%amp_sin, &
+         !$omp                   this%cos_struct, this%sin_struct, this%eta_eq, &
+         !$omp                   this%eta_sal, this%eta_forcing)
       end if
    end subroutine ocean_tides_enter_data_impl
 
@@ -352,11 +352,11 @@ contains
    subroutine ocean_tides_exit_data_impl(this)
       type(ocean_tides_t), intent(inout) :: this
       if (allocated(this%species_c)) then
-         !$acc exit data delete(this%eta_forcing, this%eta_sal, &
-         !$acc                  this%eta_eq, this%sin_struct, this%cos_struct, &
-         !$acc                  this%amp_sin, this%amp_cos, this%u_nodal, &
-         !$acc                  this%f_nodal, this%phase0, this%love_c, &
-         !$acc                  this%amp_c, this%omega_c, this%species_c)
+         !$omp target exit data map(delete: this%eta_forcing, this%eta_sal, &
+         !$omp                  this%eta_eq, this%sin_struct, this%cos_struct, &
+         !$omp                  this%amp_sin, this%amp_cos, this%u_nodal, &
+         !$omp                  this%f_nodal, this%phase0, this%love_c, &
+         !$omp                  this%amp_c, this%omega_c, this%species_c)
       end if
    end subroutine ocean_tides_exit_data_impl
 

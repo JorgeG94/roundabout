@@ -114,7 +114,7 @@ contains
       associate (uf => engine%state%multilayer%u_face_x_layer, &
                  vf => engine%state%multilayer%v_face_y_layer, &
                  hl => engine%state%multilayer%h_layer)
-         !$acc update self(uf, vf, hl)
+         !$omp target update from(uf, vf, hl)
       end associate
    end subroutine pull_uvh
 
