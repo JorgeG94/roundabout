@@ -97,7 +97,8 @@ module rdb_ocean_engine
    use rdb_ocean_halo, only: ocean_halo_init, ocean_halo_destroy, ocean_halo_reserve, &
                              ocean_halo_centre, &
                              ocean_halo_bt_group_2d, ocean_halo_face_x, &
-                             ocean_halo_bt_group_2d_wide, ocean_halo_is_decomposed
+                             ocean_halo_bt_group_2d_wide, ocean_halo_is_decomposed, &
+                             ocean_halo_is_decomposed_x, ocean_halo_is_decomposed_y
    use rdb_halo, only: halo_allreduce_sum_i8, halo_allreduce_min
    use rdb_barotropic_dtbt, only: bt_dtbt_dt_max, bt_dtbt_n_inner
    use rdb_ocean_halo_state, only: ocean_halo_exchange_ml_state, ocean_halo_exchange_ice_state, &
@@ -495,30 +496,6 @@ contains
                       ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
-         ! Manizza chlorophyll shortwave: the per-rank windowed chlorophyll read
-         ! fills the interior only (no halo exchange, ghosts stay at the
-         ! floor), and the ghosts feed `sw_kappa`; there is no multi-rank
-         ! bit-identity gate for it.
-         if (trim(cfg%ocean%thermo%sw_scheme) == "manizza05") then
-            call fail("&ocean_thermo_nml sw_scheme = 'manizza05' is single-rank ("// &
-                      to_string(csize)//" ranks requested): the chlorophyll climatology "// &
-                      "is read per rank without ghosts and has no multi-rank "// &
-                      "bit-identity gate.  Run on 1 rank.", &
-                      ierr, OCEAN_STATUS_ERR_SETUP)
-            return
-         end if
-         ! The atm-driven bulk-flux consumer (OM3 C2c-3a) feeds the surface
-         ! stress through the centre halo, the seam refresh and the tripolar
-         ! fold, none of which `test_ocean_decomp_bitid_mpi` covers for it
-         ! yet. Single-rank until C2c-3b brings the 1 vs 2x2 gate.
-         if (cfg%ocean%bulk_flux%enable) then
-            call fail("&ocean_bulk_flux_nml enable = .true. is single-rank ("// &
-                      to_string(csize)//" ranks requested): the atm-driven bulk "// &
-                      "forcing has no multi-rank bit-identity gate yet (C2c-3b).  "// &
-                      "Run on 1 rank.", &
-                      ierr, OCEAN_STATUS_ERR_SETUP)
-            return
-         end if
       end if
 
       call decomp_init_from_config(engine%decomp, cfg, csize, rank)
@@ -530,15 +507,17 @@ contains
       call bt_halo_auto_exclusion(cfg, bt_excluded, bt_excl_reason)
       bt_halo_res = resolve_bt_halo(bt_halo_req, csize, bt_excluded)
       cfg%ocean%bt%bt_halo = bt_halo_res
-      ! `dtbt_reset_period >= 0` re-derives `n_inner` mid-run: the new count
-      ! is not agreed across ranks and does not resize the wide-halo BT clone.
-      ! The init-only form (`dtbt_reset_period < 0`) is allowed everywhere.
+      ! `dtbt_reset_period >= 0` re-derives `n_inner` mid-run.  Across ranks that
+      ! is exact (the domain minimum of dt_max is reduced with an order-independent
+      ! min), but the new count does not resize the wide-halo BT clone, so the
+      ! wide-halo march-in (`bt_halo > 0`) stays refused.  The init-only form
+      ! (`dtbt_reset_period < 0`) is allowed everywhere.
       if (bt_dtbt_is_set(cfg%ocean%bt) .and. cfg%ocean%bt%dtbt_reset_period >= 0.0_wp .and. &
-          (csize > 1 .or. bt_halo_res > 0)) then
-         call fail("&ocean_bt_nml dtbt_reset_period >= 0 is single-rank with bt_halo = 0 ("// &
-                   to_string(csize)//" ranks, bt_halo = "//to_string(bt_halo_res)// &
-                   "): n_inner changes mid-run.  Use dtbt_reset_period < 0 (init-only), "// &
-                   "or run on 1 rank with bt_halo = 0.", &
+          bt_halo_res > 0) then
+         call fail("&ocean_bt_nml dtbt_reset_period >= 0 is not supported with the "// &
+                   "wide-halo barotropic march-in (bt_halo = "//to_string(bt_halo_res)// &
+                   "): n_inner changes mid-run and does not resize the wide-halo BT "// &
+                   "clone.  Use dtbt_reset_period < 0 (init-only), or bt_halo = 0.", &
                    ierr, OCEAN_STATUS_ERR_SETUP)
          return
       end if
@@ -1665,6 +1644,24 @@ contains
       !! multiple of `P` (and at the first call).  `n_inner` is a pure
       !! function of the state (`h_layer`, `f`, metrics), so a restart that
       !! re-derives at its first step reproduces it for period 0.
+      !!
+      !! **Multi-rank invariant.**  The reduction runs over OWNED cells, but
+      !! each cell's limit reads `h_layer` at its four neighbours, so ghost
+      !! thickness enters through every seam face.  Those ghosts are already
+      !! valid here by construction: the previous step ended on a stage-end
+      !! exchange followed by full-array averaging / ALE remap (or the setup
+      !! exchange, on the first step) -- an invariant the whole bit-identity
+      !! gate relies on, since `ocean_porous_refresh` and several routines at
+      !! the head of the dyn step read start-of-step ghosts before the first
+      !! stage exchange.  The refresh below is DEFENSIVE: it makes this
+      !! reduction independent of that invariant, using the stage-entry
+      !! sequence verbatim (`ocean_halo_exchange_ml_state`, periodic wrap on
+      !! an axis the exchange does not own, tripolar fold).  The ghosts are
+      !! already exact images, so it rewrites identical values and changes no
+      !! state: a `dtbt_reset_period > 0` run cannot depend on where the
+      !! reset steps fall.  Collective when decomposed; the schedule depends
+      !! only on `t` and config, so every rank calls it on the same steps.
+      !! The `min` over ranks is exact, hence rank-count independent.
       type(ocean_engine_t), intent(inout) :: engine
       real(wp), intent(in) :: dt
       real(wp), intent(in) :: t
@@ -1677,6 +1674,11 @@ contains
                               engine%dtbt_reset_period
       end if
       ng = engine%grid%nghost
+      call ocean_halo_exchange_ml_state(engine%state%multilayer)
+      call ocean_periodic_wrap_state(engine%grid, engine%state%bc, engine%state%multilayer, &
+                                     skip_x=ocean_halo_is_decomposed_x(), &
+                                     skip_y=ocean_halo_is_decomposed_y())
+      call ocean_fold_wrap_state(engine%grid, engine%state%bc, engine%state%multilayer)
       call bt_dtbt_dt_max(engine%grid%nx_total, engine%grid%ny_total, &
                           size(engine%state%multilayer%h_layer, 3), &
                           ng + 1, ng + engine%grid%nx_phys, ng + 1, ng + engine%grid%ny_phys, &
@@ -1740,7 +1742,8 @@ contains
                             engine%state%metrics, t)
       ! Chlorophyll -> per-band opacities (no-op unless sw_scheme="manizza05").
       call sw_chl_apply(engine%state%sw_chl, engine%state%data_input, engine%grid, &
-                        engine%state%multilayer%wet_mask, engine%state%surface_flux, t)
+                        engine%state%multilayer%wet_mask, engine%state%surface_flux, &
+                        engine%state%bc, t)
 
       ! Ocean bulk-flux consumer (OM3 C2c-3a): no-op unless
       ! `&ocean_bulk_flux_nml enable = .true.` (which `validate_config`
