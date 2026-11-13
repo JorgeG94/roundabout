@@ -4292,6 +4292,24 @@ class OceanBt(Group):
         vmin=-1,
     )
 
+    inhalo_march = Bool(
+        'inhalo_march',
+        doc='EXPERIMENTAL: in-halo BT march -- exchange the fast-loop ghost bands once per (nghost-1) substeps inside the existing halo; N ranks bitwise == 1 rank; exclusive with bt_halo > 0, wet/dry, use_cont_type, upstream_h_face, tides, psurf',
+        units='',
+        required=False,
+        default=False,
+    )
+
+    inhalo_stride = Int(
+        'inhalo_stride',
+        doc='Substeps per ghost exchange under inhalo_march (0 = derive nghost-1; refused above nghost-1, which breaks the bitwise contract)',
+        units='',
+        required=False,
+        default=0,
+        has_min=True,
+        vmin=0,
+    )
+
 
 class OceanDebug(Group):
     """`&ocean_debug_nml` -- Forensic probes for the ocean dyn-core (all heavy, all default off)."""
@@ -7328,4 +7346,4 @@ GENERATED_GROUPS = {
 }
 
 N_GROUPS = 63
-N_KNOBS = 807
+N_KNOBS = 809

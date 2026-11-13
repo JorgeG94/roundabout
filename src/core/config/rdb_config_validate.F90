@@ -3866,6 +3866,53 @@ contains
             has_error = .true.
          end if
       end if
+      ! ---- BT in-halo march (inhalo_march) exclusions (EXPERIMENTAL) ----
+      if (cfg%ocean%bt%inhalo_march) then
+         if (cfg%ocean%bt%bt_halo > 0) then
+            call logger%error("&ocean_bt_nml inhalo_march is mutually exclusive with "// &
+                              "bt_halo > 0 (two different ways of skipping the "// &
+                              "per-substep exchange)")
+            has_error = .true.
+         end if
+         if (cfg%ocean%wetdry%enable) then
+            call logger%error("&ocean_bt_nml inhalo_march is mutually exclusive with "// &
+                              "&ocean_wetdry_nml enable (the outflow limiter and the "// &
+                              "wet mask carry no ghost-reach analysis)")
+            has_error = .true.
+         end if
+         if (cfg%ocean%bt%use_cont_type .or. cfg%ocean%bt%upstream_h_face) then
+            call logger%error("&ocean_bt_nml inhalo_march is mutually exclusive with "// &
+                              "use_cont_type / upstream_h_face (their ghost bands are "// &
+                              "built once per stage, not proven images)")
+            has_error = .true.
+         end if
+         if (cfg%ocean%tides%enable .or. cfg%ocean%psurf%enable) then
+            call logger%error("&ocean_bt_nml inhalo_march is mutually exclusive with "// &
+                              "tides / psurf (eta_forcing ghost band not exchanged)")
+            has_error = .true.
+         end if
+         if (any_chapman_edge(cfg)) then
+            call logger%error("&ocean_bt_nml inhalo_march is mutually exclusive with "// &
+                              "a chapman &ocean_bc_nml edge (the collective edge "// &
+                              "mean inside the fast loop is untested with the "// &
+                              "skipped exchanges)")
+            has_error = .true.
+         end if
+         if (cfg%ocean%bt%inhalo_stride < 0) then
+            call logger%error("&ocean_bt_nml inhalo_stride must be >= 0")
+            has_error = .true.
+         end if
+         if (cfg%ocean%bt%inhalo_stride > cfg%nghost - 1) then
+            call logger%error("&ocean_bt_nml inhalo_stride exceeds the bound "// &
+                              "nghost - 1 (the top-level nghost): the ghost "// &
+                              "band shrinks one ring per substep, so a longer "// &
+                              "stride leaves the owned cells inexact")
+            has_error = .true.
+         end if
+      else if (cfg%ocean%bt%inhalo_stride /= 0) then
+         call logger%warning("&ocean_bt_nml inhalo_stride is set but inhalo_march "// &
+                             "= .false.; the stride is ignored")
+      end if
       ! ---- Porous barriers (&ocean_porous_nml) exclusions ----
       if (cfg%ocean%porous%enable) then
          if (cfg%ocean%wetdry%enable) then

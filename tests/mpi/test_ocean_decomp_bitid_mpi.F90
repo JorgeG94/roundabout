@@ -24,7 +24,8 @@
 !!      matching window of the reference.
 !!
 !! Dev filter: `RDB_BITID_CASES=<substring>` runs only the cases whose label
-!! contains it (e.g. `RDB_BITID_CASES=drain`).
+!! contains it (e.g. `RDB_BITID_CASES=drain`); a comma-separated list
+!! (`island_basin,open_obc`) selects every case matching any item.
 !!
 !! Cases (each under `pred_corr` AND `ssp_rk2`, 48 steps):
 !!   * island_basin — closed Cartesian basin with an interior land block
@@ -200,6 +201,16 @@
 !! is opt-in precisely because it is not bit-identical to the serial run over
 !! variable bathymetry or with open boundaries (see `resolve_bt_halo`).
 !!
+!! The EXPERIMENTAL in-halo march (`&ocean_bt_nml inhalo_march`) is a dev axis
+!! of this test: `RDB_BITID_INHALO=1` turns it on for the DECOMPOSED runs only
+!! (N ranks with the march == 1 rank without), `=2` on both legs, `=3` on the
+!! serial reference only (with np = 1: 1 rank on == 1 rank off);
+!! `RDB_BITID_INHALO_STRIDE` overrides the stride and `RDB_BITID_NINNER` pins
+!! `n_inner` on both legs; `RDB_BITID_COUNTS=1` prints rank 0's halo exchange
+!! counters per decomposed run; `RDB_BT_INHALO_POISON=1|2` (read by
+!! `engine_enter_data`) overwrites the ghost layers the march declares invalid
+!! with finite / NaN garbage after every skipped exchange.
+!!
 !! Each bug this test found, and the fix that made it pass, is named in the
 !! commit that fixed it; a regression anywhere prints the first mismatching
 !! cell of every mismatching field on every rank.
@@ -211,6 +222,7 @@ program test_ocean_decomp_bitid_mpi
    use rdb_config, only: config_t, read_config_from_string, validate_config
    use rdb_ocean_status, only: OCEAN_STATUS_OK
    use rdb_error_ring, only: error_ring_clear, error_ring_count, error_ring_get
+   use rdb_ocean_halo_counters, only: oh_counters_reset, oh_counters_format
    use rdb_ocean_engine, only: ocean_engine_t, engine_setup, engine_enter_data, &
                                engine_step, engine_step_ice, engine_step_finalize, &
                                engine_exit_data, &
@@ -298,6 +310,10 @@ program test_ocean_decomp_bitid_mpi
       !! after `engine_enter_data` (the `balance_*` cases).
       !! Steps `run_one` takes; 0 for the `*_t0` labels (compare the seeded IC itself).
    character(len=256) :: case_filter = ""
+   integer :: inhalo_mode = 0, inhalo_stride_env = 0, ninner_env = 0
+   logical :: print_counts = .false.
+      !! `RDB_BITID_INHALO` (0 off, 1 decomposed runs only, 2 both, 3 reference only),
+      !! `RDB_BITID_INHALO_STRIDE`, `RDB_BITID_NINNER`: in-halo march axes.
       !! `RDB_BITID_CASES`: run only the cases whose name contains this substring.
    type(comm_t) :: comm
    character(len=16), parameter :: SCHEMES(2) = [character(len=16) :: "pred_corr", "ssp_rk2"]
@@ -347,9 +363,18 @@ program test_ocean_decomp_bitid_mpi
 
    ! Dev filter: RDB_BITID_CASES=<substring> runs only matching case labels.
    call get_environment_variable("RDB_BITID_CASES", case_filter)
+   call env_int("RDB_BITID_INHALO", inhalo_mode)
+   call env_int("RDB_BITID_INHALO_STRIDE", inhalo_stride_env)
+   call env_int("RDB_BITID_NINNER", ninner_env)
+   block
+      integer :: pc
+      pc = 0
+      call env_int("RDB_BITID_COUNTS", pc)
+      print_counts = pc /= 0
+   end block
    do ic = 1, size(CASES)
       if (len_trim(case_filter) > 0) then
-         if (index(trim(CASES(ic)), trim(case_filter)) == 0) cycle
+         if (.not. case_selected(trim(CASES(ic)), trim(case_filter))) cycle
       end if
 #ifdef RDB_NO_NETCDF
       if (trim(CASES(ic)) == "file_readers" .or. &
@@ -393,6 +418,41 @@ program test_ocean_decomp_bitid_mpi
    if (total_fail > 0) error stop 1
 
 contains
+
+   pure function case_selected(label, filter) result(sel)
+      !! True iff `label` contains any comma-separated item of `filter`.
+      character(len=*), intent(in) :: label, filter
+      logical :: sel
+      integer :: p0, p1
+
+      sel = .false.
+      p0 = 1
+      do while (p0 <= len(filter))
+         p1 = index(filter(p0:), ",")
+         if (p1 == 0) then
+            p1 = len(filter) + 1
+         else
+            p1 = p0 + p1 - 1
+         end if
+         if (p1 > p0) then
+            if (index(label, filter(p0:p1 - 1)) > 0) sel = .true.
+         end if
+         p0 = p1 + 1
+      end do
+   end function case_selected
+
+   subroutine env_int(name, val)
+      character(len=*), intent(in) :: name
+      integer, intent(inout) :: val
+      character(len=32) :: buf
+      character(len=64) :: msg
+      integer :: ios, v
+      buf = ""
+      call get_environment_variable(name, buf)
+      if (len_trim(buf) == 0) return
+      read (buf, *, iostat=ios, iomsg=msg) v
+      if (ios == 0) val = v
+   end subroutine env_int
 
    function case_nml(label, scheme, px, py) result(nml)
       !! The namelist of one case on a px x py process grid.
@@ -1365,6 +1425,20 @@ contains
       ok = .false.
       call read_config_from_string(nml, cfg, ierr=ierr)
       if (ierr /= OCEAN_STATUS_OK) return
+      ! Dev axes (env): the in-halo BT march on the DECOMPOSED runs only
+      ! (RDB_BITID_INHALO=1: N ranks with the march == 1 rank without), or on
+      ! both (=2), or on the serial REFERENCE only (=3: with np = 1 that is
+      ! 1 rank on == 1 rank off); a stride override and a fixed
+      ! n_inner applied to both legs.
+      if (inhalo_mode == 1 .and. csize > 1 .or. inhalo_mode == 2 .or. &
+          inhalo_mode == 3 .and. csize == 1) then
+         cfg%ocean%bt%inhalo_march = .true.
+         cfg%ocean%bt%inhalo_stride = inhalo_stride_env
+      end if
+      if (ninner_env > 0) then
+         cfg%ocean%bt%auto_n_inner = .false.
+         cfg%ocean%bt%n_inner = ninner_env
+      end if
       call validate_config(cfg, ierr)
       if (ierr /= OCEAN_STATUS_OK) return
       call engine_setup(engine, cfg, ierr, compute_rank=crank, compute_size=csize)
@@ -1380,6 +1454,7 @@ contains
             return
          end if
       end if
+      call oh_counters_reset()
       t = 0.0_wp
       ierr = OCEAN_STATUS_OK
       do n = 1, n_steps_cur
@@ -1395,6 +1470,12 @@ contains
             call count_wd_flips(engine, wd_prev, snap%flips)
          t = t + DT
       end do
+      if (print_counts .and. csize > 1 .and. crank == 0) then
+         write (*, '(a,i0,a,i0,a,i0,a,l1,a,a)') "COUNTS n_inner=", cfg%ocean%bt%n_inner, &
+            " steps=", n_steps_cur, " stride=", engine%state%dyn%bt_work%inhalo_stride, &
+            " bebt>0=", engine%state%dyn%bt_work%bebt > 0.0_wp, " ", &
+            trim(oh_counters_format())
+      end if
       if (ierr == OCEAN_STATUS_OK) then
          ! Closed-budget mass/salt/heat out+src at the final step, EFP-reduced
          ! (reproducing_sums default on) so it is order-invariant across rank
