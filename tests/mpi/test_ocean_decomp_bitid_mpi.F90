@@ -24,7 +24,8 @@
 !!      matching window of the reference.
 !!
 !! Dev filter: `RDB_BITID_CASES=<substring>` runs only the cases whose label
-!! contains it (e.g. `RDB_BITID_CASES=drain`).
+!! contains it (e.g. `RDB_BITID_CASES=drain`); a comma-separated list
+!! (`island_basin,open_obc`) selects every case matching any item.
 !!
 !! Cases (each under `pred_corr` AND `ssp_rk2`, 48 steps):
 !!   * island_basin — closed Cartesian basin with an interior land block
@@ -373,7 +374,7 @@ program test_ocean_decomp_bitid_mpi
    end block
    do ic = 1, size(CASES)
       if (len_trim(case_filter) > 0) then
-         if (index(trim(CASES(ic)), trim(case_filter)) == 0) cycle
+         if (.not. case_selected(trim(CASES(ic)), trim(case_filter))) cycle
       end if
 #ifdef RDB_NO_NETCDF
       if (trim(CASES(ic)) == "file_readers" .or. &
@@ -417,6 +418,28 @@ program test_ocean_decomp_bitid_mpi
    if (total_fail > 0) error stop 1
 
 contains
+
+   pure function case_selected(label, filter) result(sel)
+      !! True iff `label` contains any comma-separated item of `filter`.
+      character(len=*), intent(in) :: label, filter
+      logical :: sel
+      integer :: p0, p1
+
+      sel = .false.
+      p0 = 1
+      do while (p0 <= len(filter))
+         p1 = index(filter(p0:), ",")
+         if (p1 == 0) then
+            p1 = len(filter) + 1
+         else
+            p1 = p0 + p1 - 1
+         end if
+         if (p1 > p0) then
+            if (index(label, filter(p0:p1 - 1)) > 0) sel = .true.
+         end if
+         p0 = p1 + 1
+      end do
+   end function case_selected
 
    subroutine env_int(name, val)
       character(len=*), intent(in) :: name

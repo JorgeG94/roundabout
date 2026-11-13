@@ -1104,12 +1104,13 @@ module rdb_config
          !! exchange.  Contract: N ranks == 1 rank, bitwise, on owned cells.
          !! Default off (bit-identical, no new work).  Mutually exclusive
          !! with `bt_halo > 0`; refused with wet/dry, `use_cont_type`,
-         !! `upstream_h_face`, tides, psurf.  Stride, sanity and the
-         !! exchange count: RESULT of the spike in plans/.
+         !! `upstream_h_face`, tides, psurf.  Verified bitwise against one
+         !! rank by `test_ocean_decomp_bitid_mpi` (ctest `_inhalo` variants,
+         !! with ghost poisoning); see `docs/CAPABILITIES_AND_LIMITATIONS.md`.
       integer :: inhalo_stride = 0
          !! Substeps per ghost exchange under `inhalo_march`.  `0` = derive
-         !! (`nghost - 1`, floored at 1).  A larger value is an experiment
-         !! knob: it breaks the contract (owned cells go inexact).
+         !! (`nghost - 1`, floored at 1).  A larger value breaks the contract
+         !! (owned cells go inexact) and is refused at configure.
    end type ocean_bt_config_t
 
    type :: ocean_debug_config_t

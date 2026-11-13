@@ -576,7 +576,7 @@ contains
       pi => cfg%ocean%bt%inhalo_stride
       call g%add(nml_int("inhalo_stride", pi, &
                          "Substeps per ghost exchange under inhalo_march (0 = derive "// &
-                         "nghost-1; larger values break the bitwise contract: experiment only)", &
+                         "nghost-1; refused above nghost-1, which breaks the bitwise contract)", &
                          min=0))
       call schema%add_group(g)
    end subroutine register_ocean_bt

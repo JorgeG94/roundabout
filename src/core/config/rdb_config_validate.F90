@@ -3895,6 +3895,16 @@ contains
             call logger%error("&ocean_bt_nml inhalo_stride must be >= 0")
             has_error = .true.
          end if
+         if (cfg%ocean%bt%inhalo_stride > cfg%nghost - 1) then
+            call logger%error("&ocean_bt_nml inhalo_stride exceeds the bound "// &
+                              "nghost - 1 (the top-level nghost): the ghost "// &
+                              "band shrinks one ring per substep, so a longer "// &
+                              "stride leaves the owned cells inexact")
+            has_error = .true.
+         end if
+      else if (cfg%ocean%bt%inhalo_stride /= 0) then
+         call logger%warning("&ocean_bt_nml inhalo_stride is set but inhalo_march "// &
+                             "= .false.; the stride is ignored")
       end if
       ! ---- Porous barriers (&ocean_porous_nml) exclusions ----
       if (cfg%ocean%porous%enable) then

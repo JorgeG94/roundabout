@@ -666,10 +666,9 @@ contains
          !! reduces to the v1 constant, bit-identical.
       logical :: in_band
          !! Pass-1 per-iteration local: cell lies inside the effective band.
-      integer :: inhalo_k, inhalo_phase, inhalo_extra, inhalo_pmode, pz
+      integer :: inhalo_k, inhalo_phase
          !! In-halo march (`bt_work%inhalo_stride`, 0 = off): substeps per
-         !! ghost exchange; substeps since the last exchange; debug poison
-         !! extra depth / mode / depth scratch.  Host integers, tested once
+         !! ghost exchange; substeps since the last exchange.  Host integers, tested once
          !! per substep.
       logical :: pz_w, pz_e, pz_s, pz_n
          !! Debug poison: which sides are MPI seams.
@@ -1911,48 +1910,26 @@ contains
                call profiler_start("ocean_comms_bt")
                !$acc wait(1)
                call ocean_halo_bt_group_2d(bt_eta, bt_ubt, bt_vbt)
-               if (bebt > 0.0_wp .and. n < n_steps .and. iand(bt_work%inhalo_skip, 8) == 0) then
-                  call ocean_halo_face_x(bt_ubt_prev)
-                  call ocean_halo_face_y(bt_vbt_prev)
+               if (bebt > 0.0_wp .and. n < n_steps .and. ocean_halo_is_decomposed()) then
+                  ! Out-of-line (reaches the arrays through `bt_work`) so the
+                  ! knob-off path hands no new array to an external routine.
+                  call inhalo_exchange_prev(bt_work)
                end if
                call profiler_stop("ocean_comms_bt")
             else if (bt_work%inhalo_poison > 0) then
-               ! Debug: prove the reach.  Overwrite the ghost layers the march
-               ! declares invalid after `inhalo_phase` substeps (eta: phase
-               ! cells; u/v faces: phase+1) at MPI seams with rank-dependent
-               ! garbage.  Owned results must not change.
-               inhalo_pmode = mod(bt_work%inhalo_poison, 10)
-               inhalo_extra = bt_work%inhalo_poison/10
+               ! Test hook (RDB_BT_INHALO_POISON, read once at setup): prove
+               ! the reach by overwriting the ghost layers the march declares
+               ! invalid with rank-dependent garbage.  Owned results must not
+               ! change.
                pz_w = ocean_halo_is_decomposed_x() .and. (.not. has_w .or. per_x_tag)
                pz_e = ocean_halo_is_decomposed_x() .and. (.not. has_e .or. per_x_tag)
                pz_s = ocean_halo_is_decomposed_y() .and. (.not. has_s .or. per_y_tag)
                pz_n = ocean_halo_is_decomposed_y() .and. (.not. has_n .or. per_y_tag)
-               pz = inhalo_phase + inhalo_extra
-               !$acc wait(1)
-               !$acc kernels async(1) present(bt_eta, bt_ubt, bt_vbt)
-               do concurrent(j=1:ny, i=1:nx)
-                  if ((pz_w .and. i <= pz) .or. (pz_e .and. i > nx - pz) .or. &
-                      (pz_s .and. j <= pz) .or. (pz_n .and. j > ny - pz)) then
-                     bt_eta(i, j) = poison_value(inhalo_pmode, i + grid%i_offset_global, &
-                                                 j + grid%j_offset_global)
-                  end if
-               end do
-               do concurrent(j=1:ny, i=1:nx + 1)
-                  if ((pz_w .and. i <= pz + 1) .or. (pz_e .and. i > nx - pz) .or. &
-                      (pz_s .and. j <= pz) .or. (pz_n .and. j > ny - pz)) then
-                     bt_ubt(i, j) = poison_value(inhalo_pmode, i + grid%i_offset_global, &
-                                                 j + grid%j_offset_global + 1000)
-                  end if
-               end do
-               do concurrent(j=1:ny + 1, i=1:nx)
-                  if ((pz_w .and. i <= pz + 1) .or. (pz_e .and. i > nx - pz - 1) .or. &
-                      (pz_s .and. j <= pz + 1) .or. (pz_n .and. j > ny - pz)) then
-                     bt_vbt(i, j) = poison_value(inhalo_pmode, i + grid%i_offset_global + 2000, &
-                                                 j + grid%j_offset_global)
-                  end if
-               end do
-               !$acc end kernels
-               !$acc wait(1)
+               call inhalo_poison_ghosts(nx, ny, bt_eta, bt_ubt, bt_vbt, &
+                                         mod(bt_work%inhalo_poison, 10), &
+                                         inhalo_phase + bt_work%inhalo_poison/10, &
+                                         pz_w, pz_e, pz_s, pz_n, &
+                                         grid%i_offset_global, grid%j_offset_global)
             end if
          else if (marchin) then
             if (mod(n, num_cycles) == 0 .and. n < n_steps) then
@@ -2007,12 +1984,6 @@ contains
       if (.not. marchin) then
          call profiler_start("ocean_comms_bt")
          call ocean_halo_bt_group_2d(bt_eta, bt_ubt, bt_vbt)
-         if (inhalo_k > 0 .and. iand(bt_work%inhalo_skip, 16) == 0) then
-            ! The time-mean transports accumulated the inexact ghost march of
-            ! the skipped substeps; the slow continuity renormalises on them.
-            call ocean_halo_face_x(bt_uhbt)
-            call ocean_halo_face_y(bt_vhbt)
-         end if
          call profiler_stop("ocean_comms_bt")
       end if
 
@@ -2104,25 +2075,23 @@ contains
       type(ocean_bc_state_t), intent(inout), optional :: bc
       real(wp), intent(in), optional :: t
       real(wp), intent(in), optional :: eta_forcing(grid%nx_total, grid%ny_total)
+      logical :: inhalo
+         !! In-halo march active on a decomposed run (entry/exit exchanges).
 
-      if (bt_work%inhalo_stride > 0) then
+      inhalo = bt_work%inhalo_stride > 0 .and. ocean_halo_is_decomposed()
+      if (inhalo) then
          ! In-halo march entry: every ghost-band input of the first substeps
          ! must be an exact image of its owner (the skipped exchanges never
          ! refresh them).  Once per solve: the state, the slow force and the
-         ! bt_rem weights.
+         ! bt_rem weights.  (One rank: the fast loop's own periodic wrap
+         ! covers it, the off path exchanges none of these.)
          call profiler_start("ocean_comms_bt")
          !$acc wait(1)
-         if (iand(bt_work%inhalo_skip, 1) == 0) then
-            call ocean_halo_bt_group_2d(bt_work%bt_eta, bt_work%bt_ubt, bt_work%bt_vbt)
-         end if
-         if (iand(bt_work%inhalo_skip, 2) == 0) then
-            call ocean_halo_face_x(bt_work%F_bt_u_fast)
-            call ocean_halo_face_y(bt_work%F_bt_v_fast)
-         end if
-         if (iand(bt_work%inhalo_skip, 4) == 0) then
-            call ocean_halo_face_x(bt_work%bt_rem_u)
-            call ocean_halo_face_y(bt_work%bt_rem_v)
-         end if
+         call ocean_halo_bt_group_2d(bt_work%bt_eta, bt_work%bt_ubt, bt_work%bt_vbt)
+         call ocean_halo_face_x(bt_work%F_bt_u_fast)
+         call ocean_halo_face_y(bt_work%F_bt_v_fast)
+         call ocean_halo_face_x(bt_work%bt_rem_u)
+         call ocean_halo_face_y(bt_work%bt_rem_v)
          call profiler_stop("ocean_comms_bt")
       end if
       call barotropic_substep_nonlinear(grid, bt_work, &
@@ -2147,6 +2116,61 @@ contains
                                         iarea_bu=metrics%iareaBu, iarea_t=metrics%iareaT, &
                                         idx_cu=metrics%idxCu, idy_cv=metrics%idyCv, &
                                         bc=bc, t=t, eta_forcing=eta_forcing)
+      if (inhalo) then
+         ! The time-mean transports accumulated the inexact ghost march of
+         ! the skipped substeps; the slow continuity renormalises on them.
+         call profiler_start("ocean_comms_bt")
+         call ocean_halo_face_x(bt_work%bt_uhbt)
+         call ocean_halo_face_y(bt_work%bt_vhbt)
+         call profiler_stop("ocean_comms_bt")
+      end if
    end subroutine barotropic_substep_nonlinear_interior
+
+   subroutine inhalo_exchange_prev(bt_work)
+      !! In-halo march: exchange the previous-substep velocities that Pass 1's
+      !! BEBT projection reads in the ghost band (stashed locally, hence
+      !! inexact there after a skipped exchange).  Separate from the hot
+      !! routine on purpose: handing `bt_ubt_prev`/`bt_vbt_prev` to an external
+      !! routine from inside it would pessimise its `do concurrent` kernels
+      !! even with the knob off.
+      type(barotropic_workstate_t), intent(inout) :: bt_work
+      call ocean_halo_face_x(bt_work%bt_ubt_prev)
+      call ocean_halo_face_y(bt_work%bt_vbt_prev)
+   end subroutine inhalo_exchange_prev
+
+   subroutine inhalo_poison_ghosts(nx, ny, bt_eta, bt_ubt, bt_vbt, pmode, pz, &
+                                   pz_w, pz_e, pz_s, pz_n, ioff, joff)
+      !! Test hook behind `RDB_BT_INHALO_POISON` (1 finite garbage, 2 NaN,
+      !! +10 per extra layer): overwrite the `pz` outer ghost layers at MPI
+      !! seams with rank-dependent garbage between exchanges.
+      integer, intent(in) :: nx, ny, pmode, pz, ioff, joff
+      logical, intent(in) :: pz_w, pz_e, pz_s, pz_n
+      real(wp), intent(inout) :: bt_eta(nx, ny)
+      real(wp), intent(inout) :: bt_ubt(nx + 1, ny)
+      real(wp), intent(inout) :: bt_vbt(nx, ny + 1)
+      integer :: i, j
+      !$acc wait(1)
+      !$acc kernels async(1) present(bt_eta, bt_ubt, bt_vbt)
+      do concurrent(j=1:ny, i=1:nx)
+         if ((pz_w .and. i <= pz) .or. (pz_e .and. i > nx - pz) .or. &
+             (pz_s .and. j <= pz) .or. (pz_n .and. j > ny - pz)) then
+            bt_eta(i, j) = poison_value(pmode, i + ioff, j + joff)
+         end if
+      end do
+      do concurrent(j=1:ny, i=1:nx + 1)
+         if ((pz_w .and. i <= pz + 1) .or. (pz_e .and. i > nx - pz) .or. &
+             (pz_s .and. j <= pz) .or. (pz_n .and. j > ny - pz)) then
+            bt_ubt(i, j) = poison_value(pmode, i + ioff, j + joff + 1000)
+         end if
+      end do
+      do concurrent(j=1:ny + 1, i=1:nx)
+         if ((pz_w .and. i <= pz + 1) .or. (pz_e .and. i > nx - pz - 1) .or. &
+             (pz_s .and. j <= pz + 1) .or. (pz_n .and. j > ny - pz)) then
+            bt_vbt(i, j) = poison_value(pmode, i + ioff + 2000, j + joff)
+         end if
+      end do
+      !$acc end kernels
+      !$acc wait(1)
+   end subroutine inhalo_poison_ghosts
 
 end module rdb_barotropic_substep

@@ -806,6 +806,24 @@ if(RDB_ENABLE_MPI)
   add_test(NAME rdb_test_ocean_decomp_bitid_mpi_4rank
            COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 4
                    $<TARGET_FILE:test_ocean_decomp_bitid_mpi>)
+  # EXPERIMENTAL in-halo barotropic march (`&ocean_bt_nml inhalo_march`): the
+  # decomposed runs march with it (poisoned NaN ghosts between exchanges), the
+  # serial reference without; a representative subset of the families (walls +
+  # island, periodic, open/tidal OBC, tripolar fold incl. px > 1).
+  foreach(np 2 4)
+    add_test(NAME rdb_test_ocean_decomp_bitid_mpi_${np}rank_inhalo
+             COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${np}
+                     $<TARGET_FILE:test_ocean_decomp_bitid_mpi>)
+    set_tests_properties(
+      rdb_test_ocean_decomp_bitid_mpi_${np}rank_inhalo
+      PROPERTIES
+        LABELS
+        "ocean"
+        ENVIRONMENT
+        "OMP_NUM_THREADS=1;RDB_BITID_INHALO=1;RDB_BT_INHALO_POISON=2;RDB_BITID_CASES=island_basin,periodic_channel_zstar,open_obc,tripolar"
+        TIMEOUT
+        14400)
+  endforeach()
   # TIMEOUT: the project uses enable_testing() without include(CTest), so there
   # is NO default timeout.  This test deliberately runs a must-be-refused probe
   # (check_cavity_grounded_refusal) in which every rank has to reach the same

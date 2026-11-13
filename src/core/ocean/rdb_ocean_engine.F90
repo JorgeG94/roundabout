@@ -1717,7 +1717,6 @@ contains
       engine%state%dyn%bt_halo = cfg%ocean%bt%bt_halo
       engine%state%dyn%bt_work%inhalo_stride = 0
       engine%state%dyn%bt_work%inhalo_poison = 0
-      engine%state%dyn%bt_work%inhalo_skip = 0
       if (cfg%ocean%bt%inhalo_march) then
          ! One substep invalidates one more outer ghost layer, so nghost-1
          ! substeps leave the owned cells exact (see the fast loop).
@@ -1725,8 +1724,7 @@ contains
          if (cfg%ocean%bt%inhalo_stride <= 0) then
             engine%state%dyn%bt_work%inhalo_stride = max(1, engine%grid%nghost - 1)
          end if
-         ! Debug environment switches (ablation mask, ghost poison); host, once.
-         call env_int_or_zero("RDB_BT_INHALO_SKIP", engine%state%dyn%bt_work%inhalo_skip)
+         ! Test hook (ghost poison, see `inhalo_poison`); host, once.
          call env_int_or_zero("RDB_BT_INHALO_POISON", engine%state%dyn%bt_work%inhalo_poison)
       end if
       if (cfg%ocean%bt%bt_halo > 0) then

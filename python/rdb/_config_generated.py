@@ -4302,7 +4302,7 @@ class OceanBt(Group):
 
     inhalo_stride = Int(
         'inhalo_stride',
-        doc='Substeps per ghost exchange under inhalo_march (0 = derive nghost-1; larger values break the bitwise contract: experiment only)',
+        doc='Substeps per ghost exchange under inhalo_march (0 = derive nghost-1; refused above nghost-1, which breaks the bitwise contract)',
         units='',
         required=False,
         default=0,

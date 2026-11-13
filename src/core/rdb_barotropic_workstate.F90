@@ -232,17 +232,12 @@ module rdb_barotropic_workstate
       integer :: inhalo_stride = 0
          !! In-halo march (EXPERIMENTAL): substeps per ghost exchange of the
          !! fast loop; `0` = off (exchange every substep, mid-u exchange on).
-      integer :: inhalo_skip = 0
-         !! Debug (ablation): bit mask of in-halo exchanges to LEAVE OUT to
-         !! measure which ones the march needs: 1 entry state group, 2 entry
-         !! force, 4 entry bt_rem, 8 per-cycle previous-substep velocities, 16 exit
-         !! time-mean transports.
-         !! Set from the environment at enter_data; 0 = all exchanges on.
       integer :: inhalo_poison = 0
-         !! Debug: after every SKIPPED exchange point overwrite the ghost
+         !! Test hook: after every SKIPPED exchange point overwrite the ghost
          !! layers the march declares invalid at MPI seams with rank-dependent
-         !! garbage (1 = large finite, 2 = NaN).  Set from the environment
-         !! at enter_data; 0 = inert.
+         !! garbage (1 = large finite, 2 = NaN, +10 per extra layer).  Read
+         !! once from the environment variable `RDB_BT_INHALO_POISON` at
+         !! enter_data; 0 = inert.
       real(wp) :: bebt = 0.1_wp
          !! MOM6 `BEBT` (default 0.1, as MOM6).  Continuity flux uses
          !! `ubt_trans = (1+bebt)·ubt^n − bebt·ubt^{n-1}` — the
