@@ -62,6 +62,8 @@ module test_ocean_cavity_freshwater
                                     cavity_mass_melt_volume_efp, cavity_open_area_efp, cavity_comp_apply_impl, &
                                     cavity_comp_withdrawal, cavity_mass_thin_is_fatal, &
                                     H_CAVITY_FLOOR
+   use rdb_grid, only: hgrid_t
+   use rdb_grid_reduce, only: grid_allreduce_efp_list, grid_is_tiled
    use rdb_efp, only: efp_t, efp_from_real, efp_plus, efp_to_real
    use, intrinsic :: iso_fortran_env, only: real64
    use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan, ieee_is_finite
@@ -165,6 +167,9 @@ contains
                                test_comp_withdrawal), &
                   new_unittest("melt_volume_efp_matches_host_efp_and_poisons_on_nan", &
                                test_melt_volume_efp), &
+                  new_unittest("thin_tally_counts_owned_columns_only", test_thin_owned_only), &
+                  new_unittest("grid_efp_reduce_is_identity_on_an_untiled_grid", &
+                               test_grid_efp_identity), &
                   new_unittest("compensation_leaves_open_ocean_concentrations_alone", &
                                test_comp_concentrations), &
                   new_unittest("mass_budget_closes_from_step_zero_with_a_live_source", &
@@ -998,6 +1003,79 @@ contains
       call check(error, all(dev%v == ref%v) .and. dev%poison == 0 .and. &
                  real(efp_to_real(dev), wp) > 0.0_wp, "open area EFP over owned wet uncovered cells")
    end subroutine test_melt_volume_efp
+
+   subroutine test_thin_owned_only(error)
+      !! The thin-withdrawal tally of BOTH sinks counts OWNED columns only
+      !! (the abort verdict is summed over ranks, so a ghost image of a
+      !! neighbour's thin column must not be counted twice): a starved
+      !! column in the ghost ring is skipped when `nghost` is given and
+      !! counted when it is not.
+      type(error_type), allocatable, intent(out) :: error
+      integer, parameter :: N = 5, NG = 1
+      real(wp) :: a_h(N, N, 1), a_melt(N, N), a_sfar(N, N), a_tb(N, N), a_act(N, N)
+      real(wp) :: a_s(N, N, 1), a_t(N, N, 1), a_sb(N, N, 1), a_hb(N, N, 1)
+      real(wp) :: a_wet(N, N), a_cov(N, N), a_sc(N, N)
+      integer :: a_ktop(N, N), n_own, n_all, n_c_own, n_c_all
+
+      a_h = 10.0_wp
+      a_s = 340.0_wp
+      a_t = -10.0_wp
+      a_sb = 0.0_wp
+      a_hb = 0.0_wp
+      a_sfar = S0
+      a_tb = TB
+      a_ktop = 1
+      a_act = 1.0_wp
+      a_melt = 0.0_wp
+      a_melt(1, 1) = -1.0e5_wp
+      a_melt(3, 3) = -1.0e5_wp
+      a_wet = 1.0_wp
+      a_cov = 0.0_wp
+      !$acc enter data copyin(a_h, a_melt, a_sfar, a_tb, a_act, a_s, a_t, a_sb, a_hb, a_ktop)
+      call cavity_mass_apply_impl(N, N, 1, DTC/RHO0, DTC/RHO0, 0.0_wp, a_act, a_melt, a_sfar, a_tb, &
+                                  a_h, a_s, a_t, a_sb, a_hb, a_ktop, n_own, NG)
+      !$acc update device(a_h, a_s, a_t, a_sb, a_hb)
+      a_h = 10.0_wp
+      !$acc update device(a_h)
+      call cavity_mass_apply_impl(N, N, 1, DTC/RHO0, DTC/RHO0, 0.0_wp, a_act, a_melt, a_sfar, a_tb, &
+                                  a_h, a_s, a_t, a_sb, a_hb, a_ktop, n_all)
+      !$acc exit data delete(a_h, a_melt, a_sfar, a_tb, a_act, a_s, a_t, a_sb, a_hb, a_ktop)
+      call check(error, n_own == 1 .and. n_all == 2, "mass source: ghost column skipped with nghost")
+      if (allocated(error)) return
+
+      ! The compensation sink: dw deeper than the layer clamps every open column.
+      a_h = 10.0_wp
+      a_sc = 1.0_wp
+      a_s = 340.0_wp
+      a_t = -10.0_wp
+      a_sb = 0.0_wp
+      a_hb = 0.0_wp
+      a_wet = 1.0_wp
+      !$acc enter data copyin(a_h, a_s, a_t, a_sb, a_hb, a_wet, a_cov, a_sc)
+      call cavity_comp_apply_impl(N, N, 1, 20.0_wp, a_wet, a_cov, a_h, a_s, a_t, a_sb, a_hb, a_sc, &
+                                  n_c_own, NG)
+      a_h = 10.0_wp
+      !$acc update device(a_h)
+      call cavity_comp_apply_impl(N, N, 1, 20.0_wp, a_wet, a_cov, a_h, a_s, a_t, a_sb, a_hb, a_sc, &
+                                  n_c_all)
+      !$acc exit data delete(a_h, a_s, a_t, a_sb, a_hb, a_wet, a_cov, a_sc)
+      call check(error, n_c_own == (N - 2*NG)**2 .and. n_c_all == N*N, &
+                 "compensation sink: ghost columns skipped with nghost")
+   end subroutine test_thin_owned_only
+
+   subroutine test_grid_efp_identity(error)
+      !! `grid_allreduce_efp_list` returns its input unchanged on an untiled
+      !! grid (the replicated serial reference must not sum N copies).
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: g
+      type(efp_t) :: loc(2), glob(2)
+      loc(1) = efp_from_real(1.2345678901234e7_real64)
+      loc(2) = efp_from_real(-3.0e-3_real64)
+      call grid_allreduce_efp_list(g, loc, glob, 2)
+      call check(error,.not. grid_is_tiled(g) .and. all(glob(1)%v == loc(1)%v) .and. &
+                 all(glob(2)%v == loc(2)%v) .and. glob(1)%poison == 0, &
+                 "untiled grid: identity")
+   end subroutine test_grid_efp_identity
 
    subroutine test_comp_withdrawal(error)
       !! The uniform sink's arithmetic, and its no-open-ocean fallback —

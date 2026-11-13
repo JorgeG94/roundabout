@@ -300,7 +300,7 @@ module rdb_ocean_cavity_flux
    use rdb_efp, only: efp_t, EFP_DIGITS, EFP_MAX_SUMMANDS, efp_carry, efp_plus, &
                       efp_from_real, efp_to_real
    use rdb_ocean_console_stats, only: efp_decompose_impl
-   use rdb_grid_reduce, only: grid_allreduce_efp_list
+   use rdb_grid_reduce, only: grid_allreduce_efp_list, grid_allreduce_sum_i8
    use rdb_eos, only: eos_t
    use rdb_mem_report, only: arr_bytes
    use rdb_multilayer_state, only: multilayer_state_t
@@ -941,7 +941,7 @@ contains
    pure subroutine cavity_mass_apply_impl(nx, ny, nz, dt_over_rho0, inv_rho0_dt, s_ice, &
                                           active, melt, s_far, t_b, &
                                           h_layer, c_S, c_T, &
-                                          salt_budget, heat_budget, k_top, n_thin)
+                                          salt_budget, heat_budget, k_top, n_thin, nghost)
       !! The real-mass top-layer source: add the meltwater VOLUME to
       !! `h_layer` at the first LIVE layer `k_top(i,j)`, replace the
       !! virtual salt flux the assembler
@@ -1024,11 +1024,17 @@ contains
          !! it would trip the fatal thin-withdrawal clamp on every column
          !! at once (a filler is already AT the marker).
       integer, intent(out) :: n_thin
-         !! Columns whose withdrawal had to be clamped.
-      integer :: i, j, kt, c_thin
+         !! Columns whose withdrawal had to be clamped (OWNED cells only
+         !! when `nghost` is given, else the whole array).
+      integer, intent(in), optional :: nghost
+         !! Halo width; the thin tally skips ghosts so it is a per-tile
+         !! count of OWNED columns (rank-uniform once summed).
+      integer :: i, j, kt, c_thin, ng
       logical :: thin
       real(wp) :: dh, h0, hn, cell_s, cell_t, virt
 
+      ng = 0
+      if (present(nghost)) ng = nghost
       c_thin = 0
       do concurrent(j=1:ny, i=1:nx) local(kt, dh, h0, hn, cell_s, cell_t, virt, thin) reduce(+:c_thin)
          if (active(i, j) > 0.5_wp) then
@@ -1036,7 +1042,7 @@ contains
             h0 = h_layer(i, j, kt)
             dh = melt(i, j)*dt_over_rho0
             call cavity_melt_thickness_pair(h0, dh, hn, thin)
-            if (thin) c_thin = c_thin + 1
+            if (thin .and. i > ng .and. i <= nx - ng .and. j > ng .and. j <= ny - ng) c_thin = c_thin + 1
             virt = -melt(i, j)*(s_far(i, j) - s_ice)
             cell_s = -inv_rho0_dt*virt + dh*s_ice
             cell_t = dh*t_b(i, j)
@@ -1307,7 +1313,7 @@ contains
 
    pure subroutine cavity_comp_apply_impl(nx, ny, nz, dw, wet_mask, cover_frac, &
                                           h_layer, c_S, c_T, &
-                                          salt_budget, heat_budget, scale, n_thin)
+                                          salt_budget, heat_budget, scale, n_thin, nghost)
       !! The `volume_compensation = "uniform_open_ocean"` sink: remove
       !! `dw` metres of the top layer from every wet cell the ice does
       !! NOT cover, the removed parcel carrying that cell's own `T` and
@@ -1349,10 +1355,15 @@ contains
       real(wp), intent(out) :: scale(nx, ny)
          !! `h_new/h_old` where the sink acted, exactly 1 elsewhere.
       integer, intent(out) :: n_thin
-         !! Columns whose withdrawal had to be clamped.
-      integer :: i, j, c_thin
+         !! Columns whose withdrawal had to be clamped (OWNED cells only
+         !! when `nghost` is given).
+      integer, intent(in), optional :: nghost
+         !! Halo width; the tally skips ghosts.
+      integer :: i, j, c_thin, ng
       real(wp) :: h0, hn, d, f, cell_s, cell_t, p_new, p_old
 
+      ng = 0
+      if (present(nghost)) ng = nghost
       c_thin = 0
       do concurrent(j=1:ny, i=1:nx) local(h0, hn, d, f, cell_s, cell_t, p_new, p_old) reduce(+:c_thin)
          if (wet_mask(i, j) > 0.5_wp .and. cover_frac(i, j) < 0.5_wp) then
@@ -1367,7 +1378,7 @@ contains
                ! already at or below it (`min(h0, ...)`, so `hn <= h0`
                ! always and the sink can never become a deposit).
                hn = min(h0, H_CAVITY_FLOOR)
-               c_thin = c_thin + 1
+               if (i > ng .and. i <= nx - ng .and. j > ng .and. j <= ny - ng) c_thin = c_thin + 1
             end if
             if (h0 > H_DIV_EPS) then
                f = hn/h0
@@ -1484,6 +1495,7 @@ contains
       real(wp) :: dt_over_rho0, vol_melt, area_open, dw, share
       type(efp_t) :: loc(1), glob(1)
       logical :: owns_source
+      integer(int64) :: thin_loc(2), thin_glob(2)
 
       if (.not. cav%is_init) return
       if (.not. cav%enable) return
@@ -1532,7 +1544,7 @@ contains
                                   cav%active, cav%melt, cav%s_far, cav%t_b, &
                                   ms%h_layer, ms%tracers(idx_s)%c, ms%tracers(idx_t)%c, &
                                   ms%salt_budget_surface, ms%heat_budget_surface, &
-                                  ms%k_top, n_thin_src)
+                                  ms%k_top, n_thin_src, grid%nghost)
       ! The console SUMS `mass_src` over ranks, so the GLOBAL source is
       ! booked on exactly one tile -- the one holding global cell (1,1)
       ! (every other tile adds zero); a serial run is that tile.
@@ -1550,7 +1562,7 @@ contains
          call cavity_comp_apply_impl(nx, ny, nz, dw, ms%wet_mask, metrics%cover_frac, &
                                      ms%h_layer, ms%tracers(idx_s)%c, &
                                      ms%tracers(idx_t)%c, ms%salt_budget_surface, &
-                                     ms%heat_budget_surface, cav%comp_scale, n_thin_comp)
+                                     ms%heat_budget_surface, cav%comp_scale, n_thin_comp, grid%nghost)
          ! NOTE the sink stays on `k = nz` and is NOT routed through
          ! `k_top`, deliberately: its own gate is `cover_frac < 0.5`, so
          ! it only ever acts on OPEN-OCEAN columns, and an open-ocean
@@ -1569,6 +1581,17 @@ contains
       end if
 
       ! (4) Accounting, then fail loud.
+      ! Rank-uniform verdict: both tallies count OWNED columns of this tile
+      ! only, so reduce them (two integers per thermo step, 'mass' mode only;
+      ! an identity on an untiled grid) and let EVERY rank decide and fail
+      ! together instead of one rank stopping while the rest hang in the
+      ! next collective.
+      thin_loc(1) = int(n_thin_src, int64)
+      thin_loc(2) = int(n_thin_comp, int64)
+      call grid_allreduce_sum_i8(grid, thin_loc(1), thin_glob(1))
+      call grid_allreduce_sum_i8(grid, thin_loc(2), thin_glob(2))
+      n_thin_src = int(thin_glob(1))
+      n_thin_comp = int(thin_glob(2))
       cav%n_thin_step = n_thin_src + n_thin_comp
       cav%n_thin_total = cav%n_thin_total + int(cav%n_thin_step, int64)
       if (cavity_mass_thin_is_fatal(cav%n_thin_step)) then

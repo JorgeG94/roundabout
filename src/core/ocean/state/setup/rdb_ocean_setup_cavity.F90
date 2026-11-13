@@ -377,6 +377,18 @@ contains
       if (ocean_state%cavity_flux%freshwater == CAVITY_FW_MASS) then
          call ocean_cavity_set_open_area(ocean_state%cavity_flux, grid, ocean_state%metrics, &
                                          ocean_state%multilayer%wet_mask)
+         if (ocean_state%cavity_flux%volume_comp == CAVITY_VC_UNIFORM_OPEN .and. &
+             .not. (ocean_state%cavity_flux%open_area > 0.0_wp)) then
+            ! Global verdict (the area is already the exact global sum), so
+            ! every rank refuses together.
+            call fail("&ocean_cavity_melt_nml volume_compensation = 'uniform_open_ocean' "// &
+                      "needs open (uncovered, wet) ocean to remove the melt volume from, "// &
+                      "but the global open area is 0 (the shelf covers every wet column): "// &
+                      "the sink would silently do nothing and the domain would gain "// &
+                      "mass.  Use volume_compensation = 'none' or a draft that leaves "// &
+                      "open water.", ierr, OCEAN_STATUS_ERR_SETUP)
+            return
+         end if
       end if
       if (ocean_state%cavity_flux%par%law == CAVITY_LAW_HJ99) then
          n_zero_f = cavity_count_zero_f(ocean_state%cavity_flux%f_cor, &

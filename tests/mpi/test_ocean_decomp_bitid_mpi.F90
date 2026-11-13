@@ -2495,8 +2495,12 @@ contains
                                      "&ocean_cavity_melt_nml enable = .true., exchange_law = 'const_gamma', "// &
                                      "gamma_t = 2.2e-2, gamma_s = -1.0, cdrag_top = 2.5e-3, "// &
                                      "ice_conduction = 'insulating', s_ice = 0.0, far_field_depth = 10.0"
-      character(len=1400), parameter :: KNOBS(6) = [character(len=1400) :: &
+      character(len=1400), parameter :: KNOBS(7) = [character(len=1400) :: &
                                                     "&ocean_bc_nml east = 'chapman' /", &
+                                                    ! cavity covering every wet column + uniform_open_ocean (global open area 0)
+                                                    CAV//CAV_DYN//" /"//new_line("a")// &
+                                                    CAV_MELT//", freshwater = 'mass', "// &
+                                                    "volume_compensation = 'uniform_open_ocean' /", &
                                                     ! cavity + a file draft
                                                     CAV//"&ocean_cavity_dyn_nml enable = .true., "// &
                                                     "draft_config = 'file', draft_file = 'draft.nc', "// &
@@ -2528,8 +2532,9 @@ contains
       ! One distinctive substring of the message each entry must produce, so a
       ! fence that is deleted while a LATER, more generic refusal still fires
       ! (the bulk-forcing one, the validate envelope) cannot pass unnoticed.
-      character(len=64), parameter :: WHY(6) = [character(len=64) :: &
+      character(len=64), parameter :: WHY(7) = [character(len=64) :: &
                                                 "'chapman' edges are single-rank", &
+                                                "global open area is 0", &
                                                 "draft_config = 'file' is unproven", &
                                                 "enable with &ocean_bulk_flux_nml enable is unproven", &
                                                 "is not 'wall' or 'periodic'", &
