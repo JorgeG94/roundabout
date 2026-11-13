@@ -56,10 +56,11 @@ module test_ocean_remap_stream
       !! identical expressions in different files and loop shapes; a compiler
       !! that contracts `a*b + c` into an FMA decides per expression context,
       !! so they differ by a few ulp on a default (`-march=native`) build and
-      !! agree BITWISE when FMA contraction is off for the ALE remap files
-      !! (`-ffp-contract=off` / `-Mnofma`, measured: 0 differing cells at
-      !! nz = 3, 4, 7, 50, 128 with the flag).  Set to `0` once the build
-      !! pins that.
+      !! agree BITWISE when FMA contraction is off (`-ffp-contract=off` /
+      !! `-Mnofma`, now the CPU-build default; measured: 0 differing cells at
+      !! nz = 3, 4, 7, 50, 128 with the flag).  Do NOT set this to `0`: the
+      !! GPU build still contracts (its host code and device kernels), so
+      !! the tolerance stays at 16 ulp.
 
 contains
 

@@ -55,6 +55,16 @@
 !!     docstring);
 !!   * open_obc — tidal west edge (eta target) + Flather east edge,
 !!     zstar_sigma, over a seamount;
+!!   * obc_epbl — Flather east edge, sigma, EPBL, cooled surface, 24 x 16 at
+!!     nghost = 4 (the compat-matrix cell): at -np 4 the 4x1 east tile is 14
+!!     columns wide and the open-edge ghost columns it evolves sit in the
+!!     vector remainder of the continuity loops; with FMA contraction on
+!!     their last-bit rounding differed from the serial run and reached the
+!!     owned boundary face through the horizontal viscosity (first owned
+!!     difference at step 12, 6.7e-16, 3.6e-13 by step 24).  CPU builds now
+!!     compile with contraction off (`cmake/compiler_flags.cmake`).  The
+!!     case depends on the tile width (14) relative to the vector width
+!!     (AVX2): on an AVX-512 target it may not catch a regression;
 !!   * spherical — lon-lat sector, planetary Coriolis, spoon basin, Wright
 !!     EOS, `2gyre` wind;
 !!   * obc_radiation_sponge — Orlanski-radiating open south edge with tracer
@@ -291,7 +301,7 @@ program test_ocean_decomp_bitid_mpi
       !! `RDB_BITID_CASES`: run only the cases whose name contains this substring.
    type(comm_t) :: comm
    character(len=16), parameter :: SCHEMES(2) = [character(len=16) :: "pred_corr", "ssp_rk2"]
-   character(len=24), parameter :: CASES(67) = [character(len=24) :: &
+   character(len=24), parameter :: CASES(68) = [character(len=24) :: &
                                                 "island_basin", "weno7_pv", &
                                                 "periodic_channel_zstar", &
                                                 "visc_rem_zstar", &
@@ -322,7 +332,7 @@ program test_ocean_decomp_bitid_mpi
                                                 "cavity_zfixed", "cavity_sigma", &
                                                 "cavity_sigma_ratio2", "cavity_gall", "cavity_melt_only", "cavity_periodic", &
                                                 "cavity_combo", "wetdry_shoal", &
-                                                "wetdry_periodic", "wetdry_file", "chapman_obc"]
+                                                "wetdry_periodic", "wetdry_file", "chapman_obc", "obc_epbl"]
 
    call comm_env_init()
    call comm_env_setup_roles(.false.)
@@ -792,6 +802,48 @@ contains
                "&ocean_bc_nml west = 'tidal', east = 'open', south = 'wall', north = 'wall', "// &
                "west_n_tidal = 1, west_tidal_amp = 0.5, west_tidal_phase = 0.0, "// &
                "west_tidal_omega = 1.4051890e-4 /"//NL
+      case ("obc_epbl")
+         ! Flather east edge, sigma, EPBL, cooled surface: the open-edge ghost
+         ! columns are evolved by the continuity chain and the owned boundary
+         ! face reads them through the horizontal viscosity, so with FMA
+         ! contraction on, a vector body vs a differently-contracted remainder
+         ! made a ghost cell's rounding depend on its position in the TILE
+         ! (nvfortran CPU, 4x1, AVX2; the mismatch list starts with
+         ! bt_visc_rem_u/v and epbl_kd_int only because it is alphabetical --
+         ! 56 fields differ).  Caught by the compat matrix DECOMP leg.  Written
+         ! out in full (not on `common`): the rounding event needs this
+         ! stratification, forcing and tile width (24 x 16, nghost 4, 10
+         ! layers).  "14 columns" is STORAGE (6 owned + 2 x 4 ghosts).  CI pins
+         ! `-march=x86-64-v3` / `-tp=haswell` (AVX2), where that width puts the
+         ! ghosts in the remainder; on an AVX-512 build (`-march=native`) the
+         ! tile may sit differently in the vector width and this case may then
+         ! not catch a regression.  That caveat does not apply to CI.
+         nml = "&sim_nml sim_type = 'ocean' /"//NL// &
+               "&mpi_nml px = "//trim(spx)//", py = "//trim(spy)//" /"//NL// &
+               "&time_nml t_end = 21600.0, dt_fixed = 900.0 /"//NL// &
+               "&nonhydrostatic_nml nz_layers = 10 /"//NL// &
+               "&tracer_nml initial_temperature = 9.0, initial_salinity = 34.8, "// &
+               "T_init_surface = 16.0, T_init_bottom = 3.0, "// &
+               "S_init_surface = 34.6, S_init_bottom = 35.0 /"//NL// &
+               "&ocean_bt_nml auto_n_inner = .true., split_scheme = '"//scheme//"' /"//NL// &
+               "&ocean_hvisc_nml nu_h = 200.0, nu_4 = 1.0e11 /"//NL// &
+               "&ocean_diag_nml enabled = .false. /"//NL// &
+               "&ocean_eos_nml eos = 'linear' /"//NL// &
+               "&ocean_ic_nml T_ref = 10.0, S_ref = 35.0, alpha_T = 0.2, beta_S = 0.77, "// &
+               "rho_0 = 1027.0 /"//NL// &
+               "&ocean_bdrag_nml form = 'quadratic', cd = 0.003, bg_vel = 0.05, hbbl = 0.0 /"//NL// &
+               "&ocean_vdiff_nml implicit_drag = .true. /"//NL// &
+               "&grid_nml nx = 24, ny = 16, nghost = 4, dx = 20000.0, dy = 20000.0 /"//NL// &
+               "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 0.1, wind_stress_y = 0.0 /"//NL// &
+               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
+               "&ocean_topo_nml topo_config = 'spoon', max_depth = 2000.0, "// &
+               "edge_depth = 300.0, slope_scale = 150000.0, wind_config = 'constant', "// &
+               "coriolis_beta = 2.0e-11, coriolis_y_ref = 160000.0 /"//NL// &
+               "&ocean_thermo_nml enable_thermodynamics = .true., q_heat = -60.0 /"//NL// &
+               "&ocean_vmix_nml use_kpp = .false. /"//NL// &
+               "&ocean_epbl_nml enable = .true., mld_use_prev_guess = .true., "// &
+               "mstar_scheme = 'om4' /"//NL// &
+               "&ocean_bc_nml west = 'wall', east = 'open', south = 'wall', north = 'wall' /"//NL
       case ("chapman_obc")
          ! Chapman radiation on the east AND north edges (both split by the
          ! decomposition: py > 1 splits the east line, px > 1 the north one)
@@ -1924,16 +1976,18 @@ contains
       !! body or the scalar remainder (with a different FMA contraction)
       !! depends on its position in the TILE, and the tendency is a
       !! difference of fluxes, so the reordering survives cancellation.
-      !! Measured on nvfortran 26.5 CPU + HPC-X, 4x1 and 2x2: up to a
-      !! relative 3e-15 at the faces at and beside a tile seam; the GPU
-      !! build has no remainder loop and is bitwise.  It CAN reach the
-      !! prognostics: under z* + visc_rem (`visc_rem_zstar`) the FMA
-      !! difference drifted eta 1e-8 in 24 steps on 4x1, so the CPU build
-      !! compiles the hvisc module `-Mnofma` (cmake/compiler_flags.cmake).
-      !! That leaves a 1-ULP residual in the tendency at seam faces, which
-      !! stays below one ULP of `u`: every prognostic field compared here
-      !! is BITWISE, and that is what catches a real decomposition bug in
-      !! the viscosity.  Restarts resume on the same decomposition and
+      !! Measured on nvfortran 26.5 CPU + HPC-X, 4x1 and 2x2, with FMA
+      !! contraction ON: up to a relative 3e-15 at the faces at and beside
+      !! a tile seam; the GPU build's device kernels have no remainder
+      !! loop and are bitwise.  It CAN reach the prognostics: under
+      !! z* + visc_rem (`visc_rem_zstar`) the FMA difference drifted eta
+      !! 1e-8 in 24 steps on 4x1.  CPU builds therefore compile with
+      !! contraction off, globally (`-Mnofma` / `-ffp-contract=off`,
+      !! cmake/compiler_flags.cmake), under which every prognostic field
+      !! compared here is BITWISE; that is what catches a real
+      !! decomposition bug in the viscosity.  This carried array itself
+      !! stays excluded from the compare (whether its seam-face residual
+      !! vanishes with contraction off was not re-measured).  Restarts resume on the same decomposition and
       !! restore these arrays verbatim.
       character(len=*), intent(in) :: tag
       carried_tendency = trim(tag) == "hvisc_du_visc" .or. trim(tag) == "hvisc_dv_visc"

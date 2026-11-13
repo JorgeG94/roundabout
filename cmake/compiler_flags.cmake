@@ -85,81 +85,11 @@ if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
     message(STATUS "CPU serial (no threading)")
   endif()
 
-  if(NOT RDB_ENABLE_GPU)
-    # Decomposition bit-identity on the CPU build.  nvfortran vectorises the
-    # horizontal-viscosity kernels with an FMA-contracted vector body and a
-    # differently-contracted scalar remainder, so a face's rounding depends on
-    # its position in the TILE.  The `pred_corr` predictor carries that tendency
-    # (`hvisc_du_visc`) into the prognostics: z* + visc_rem on a 4x1 split
-    # drifted 1e-8 in eta within 24 steps (test_ocean_decomp_bitid_mpi
-    # `visc_rem_zstar`).  The GPU build has no remainder loop and is bitwise
-    # without this.
-    set_source_files_properties(
-      ${PROJECT_SOURCE_DIR}/src/parameterizations/lateral/rdb_ocean_horizontal_viscosity.F90
-      PROPERTIES COMPILE_OPTIONS "-Mnofma")
-    # Same class of bug, same fix, different kernel (compat cell c023, 2026-10):
-    # compute_gtot_faces's hand-inlined frhat_h_face_step body (PR #179 -- the
-    # GPU call-site miscompile fix, see that routine's docstring) accumulates
-    # `p_sum = p_sum + h_face*pbce(i,j,k)` inside a `do k` loop nested in the
-    # outer `do concurrent(j,i)` face loop. On the CPU build nvfortran
-    # vectorises the OUTER loop and FMA-contracts the vector body differently
-    # from the scalar remainder, so a face's rounding depends on where it falls
-    # relative to the vector width -- exactly the tile-width-dependent drift the
-    # hvisc line above already guards against. Caught by the pairwise compat
-    # matrix's DECOMP leg (1 rank vs 4x1 MPI, ~7e-15 relative on
-    # `bt_visc_rem_u/v`, `epbl_kd_int`) under `vcoord=sigma split=ssp_rk2 ...
-    # bt=correction_bc_pgf`.
-    set_source_files_properties(
-      ${PROJECT_SOURCE_DIR}/src/core/ocean/kernels/barotropic/rdb_barotropic_coupling.F90
-      PROPERTIES COMPILE_OPTIONS "-Mnofma")
-    # Third file, same class (2026-10): the ALE column remap.  Under `-fast
-    # -tp=haswell` the remapped `v_face_y_layer` of one face in the first owned
-    # column of the 4x1 split's last tile came out 1 ulp off the 2x2 / 1x4
-    # value; fields re-converged, but the ulp reached the mass flux and the EFP
-    # `mass_out` budget kept it (test_ocean_decomp_bitid_mpi
-    # `gm_ebt_struct/ssp_rk2`, 4 ranks).  A per-file bisection of `-Mnofma` over
-    # every source isolates this file alone; the Debug build and the GPU build
-    # are bitwise without it.
-    set_source_files_properties(
-      ${PROJECT_SOURCE_DIR}/src/ALE/rdb_remap_column.F90
-      PROPERTIES COMPILE_OPTIONS "-Mnofma")
-  endif()
-
 elseif(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
   set(CMAKE_Fortran_FLAGS
       "${CMAKE_Fortran_FLAGS} -ffree-form -std=gnu -O3 -ffree-line-length-none")
   set(CMAKE_Fortran_FLAGS_DEBUG "-g -O0 -fcheck=all -fbacktrace -Wall -Wextra")
   set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -march=native -funroll-loops")
-  # Decomposition bit-identity on the GNU CPU build (compat cell c023, 2026-10).
-  # `compute_gtot_faces`'s hand-inlined `frhat_h_face_step` body (PR #179's GPU
-  # call-site-miscompile fix) accumulates `p_sum = p_sum + h_face*pbce(i,j,k)`
-  # inside a `do k` loop nested in the outer `do concurrent(j,i)` face loop. At
-  # `-O3 -march=x86-64-v3` gfortran vectorises that outer loop and FMA-contracts
-  # the vector body differently from the scalar remainder, so a face's rounding
-  # depends on where it falls relative to the vector width -- the same shape of
-  # bug the NVHPC `-Mnofma` line on `rdb_ocean_horizontal_viscosity.F90`
-  # documents, now hit on GNU instead. Caught by the pairwise compat matrix's
-  # DECOMP leg (1 rank vs 4x1 MPI, ~7e-15 relative on `bt_visc_rem_u/v`,
-  # `epbl_kd_int`) under `vcoord=sigma split=ssp_rk2 ... bt=correction_bc_pgf`.
-  set_source_files_properties(
-    ${PROJECT_SOURCE_DIR}/src/core/ocean/kernels/barotropic/rdb_barotropic_coupling.F90
-    PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")
-  # The horizontal-viscosity kernels, the GNU twin of the NVHPC `-Mnofma` line
-  # above: under `-O3 -march=x86-64-v3` the stress-form path with
-  # `bound_thin_layer` left `v_face_y_layer` / `u_face_x_layer` 1 ulp apart
-  # between splits (test_ocean_decomp_bitid_mpi `hvisc_thin_layer/ssp_rk2`, 2x1
-  # and 4x1).
-  set_source_files_properties(
-    ${PROJECT_SOURCE_DIR}/src/parameterizations/lateral/rdb_ocean_horizontal_viscosity.F90
-    PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")
-  # The ALE column remap, the GNU twin of the NVHPC `-Mnofma` line above. Compat
-  # cell c023 (sigma, ssp_rk2, EPBL + tidal + Bryan-Lewis, Leith, MLE, OBC, ...)
-  # was bitwise across splits only by luck: once the hvisc line above moved
-  # Leith's rounding, the 4x1 split's `bt_visc_rem_u/v` and `epbl_kd_int` came
-  # out a few ulp off the 1-rank run (2x1, 1x2, 2x2 still bitwise).  A per-file
-  # bisection of `-ffp-contract=off` over every source isolates this file alone.
-  set_source_files_properties(${PROJECT_SOURCE_DIR}/src/ALE/rdb_remap_column.F90
-                              PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")
   if(RDB_ENABLE_COVERAGE)
     # gcov instrumentation: disable optimisation so line counts map cleanly,
     # apply --coverage to both compile and link (gcc driver expands it to
@@ -331,6 +261,93 @@ elseif(CMAKE_Fortran_COMPILER_ID STREQUAL "LFortran")
   set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -O3")
   set(CMAKE_Fortran_FLAGS_DEBUG "")
   set(CMAKE_Fortran_FLAGS_RELEASE "")
+endif()
+
+# FMA contraction policy (CPU builds): OFF, for decomposition reproducibility.
+#
+# The contract is "a decomposed run equals the 1-rank run BITWISE on owned
+# cells".  On CPU builds the vectoriser FMA-contracts a loop's vector body and
+# its scalar remainder/peel differently, so a cell's rounding depends on its
+# position in the TILE, hence on the tile width.  Almost every kernel loops over
+# full storage (writing open-edge ghosts that are never exchanged) and owned
+# cells have the same body-vs-remainder exposure, and WHICH loops are exposed
+# depends on the compiler version -- so a per-file list is not an honest scope.
+# One blanket flag per compiler replaces the per-file `-Mnofma` /
+# `-ffp-contract=off` lines this file used to carry.  Applied at directory scope
+# (project AND fetched dependencies: pic, pic-mpi, test-drive), after the config
+# flags, like RDB_EXTRA_FORTRAN_FLAGS below.  The GPU build is NOT touched: its
+# device kernels have no vector remainder and the GPU decomposition gate passes
+# without it (its HOST code -- setup, host loops -- still contracts). This does
+# NOT make vectorised libm calls (glibc libmvec `_ZGV*`) position-independent;
+# that is a separate, tracked follow-up (CLAUDE.md, Gotchas).
+#
+# History: the per-file cases this blanket flag replaces (each caught by the
+# gate named).  Entries are independent; GNU and NVHPC cases are separate.
+#
+# cmake-format: off
+#
+# NVHPC, rdb_ocean_horizontal_viscosity.F90 (2026-10): the vector body and the
+#   scalar remainder contract differently; pred_corr carries `hvisc_du_visc`
+#   into the prognostics, and z* + visc_rem on 4x1 drifted 1e-8 in eta in 24
+#   steps (decomp_bitid `visc_rem_zstar`, `hvisc_thin_layer`).
+#
+# NVHPC, rdb_barotropic_coupling.F90 (2026-10): `compute_gtot_faces`'s
+#   `p_sum = p_sum + h_face*pbce` in a `do k` inside the outer face loop,
+#   ~7e-15 on `bt_visc_rem_u/v`, `epbl_kd_int` (compat matrix cell c023,
+#   DECOMP leg).
+#
+# NVHPC, rdb_remap_column.F90 (2026-10): under `-fast -tp=haswell` one face's
+#   remapped `v_face_y_layer` in the first owned column of the 4x1 split's last
+#   tile was 1 ulp off the 2x2 / 1x4 value; the ulp reached the mass flux and
+#   the EFP `mass_out` budget kept it (decomp_bitid `gm_ebt_struct/ssp_rk2`,
+#   np 4).  A per-file bisection of `-Mnofma` isolated this file alone.
+#
+# GNU, rdb_barotropic_coupling.F90 (2026-10): same `compute_gtot_faces` loop
+#   under `-O3 -march=x86-64-v3`, same symptom and gate as the NVHPC case
+#   above (compat cell c023, 1 rank vs 4x1, ~7e-15 relative).
+#
+# GNU, rdb_ocean_horizontal_viscosity.F90 (2026-10): the stress-form path with
+#   `bound_thin_layer` left `v_face_y_layer` / `u_face_x_layer` 1 ulp apart
+#   between splits (decomp_bitid `hvisc_thin_layer/ssp_rk2`, 2x1 and 4x1).
+#
+# GNU, rdb_remap_column.F90 (2026-10): compat cell c023 (sigma, ssp_rk2,
+#   EPBL + tidal + Bryan-Lewis, Leith, MLE, OBC) was bitwise only by luck once
+#   the hvisc line moved Leith's rounding; the 4x1 split's `bt_visc_rem_u/v`
+#   and `epbl_kd_int` came out a few ulp off the 1-rank run.
+#
+# NVHPC, rdb_continuity (found on this branch, not a per-file line on beta):
+#   with a Flather east edge the open-edge ghost columns evolved by the
+#   continuity chain reach the owned boundary face through the horizontal
+#   viscosity; first owned difference at step 12 (6.7e-16), 3.6e-13 by step 24
+#   (decomp_bitid `obc_epbl`, np 4).
+# cmake-format: on
+if(NOT RDB_ENABLE_GPU)
+  set(RDB_FMA_POLICY "OFF (CPU build, decomposition reproducibility)")
+  if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
+    add_compile_options("$<$<COMPILE_LANGUAGE:Fortran>:-Mnofma>")
+  elseif(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
+    # Contraction is already off at -O0 (Debug); harmless there.
+    add_compile_options("$<$<COMPILE_LANGUAGE:Fortran>:-ffp-contract=off>")
+  elseif(CMAKE_Fortran_COMPILER_ID STREQUAL "Intel" OR CMAKE_Fortran_COMPILER_ID
+                                                       STREQUAL "IntelLLVM")
+    # UNTESTED (no ifx/ifort here).  `-fp-model=precise` alone does not stop FMA
+    # formation; `-no-fma` is the documented Intel switch for it.
+    add_compile_options("$<$<COMPILE_LANGUAGE:Fortran>:-no-fma>")
+    set(RDB_FMA_POLICY
+        "OFF, -no-fma (UNTESTED; CPU build, decomposition reproducibility)")
+  elseif(CMAKE_Fortran_COMPILER_ID STREQUAL "LLVMFlang")
+    # UNTESTED (no flang here).  flang-new accepts clang's -ffp-contract.
+    add_compile_options("$<$<COMPILE_LANGUAGE:Fortran>:-ffp-contract=off>")
+    set(RDB_FMA_POLICY
+        "OFF, -ffp-contract=off (UNTESTED; CPU build, decomposition reproducibility)"
+    )
+  else()
+    set(RDB_FMA_POLICY
+        "compiler default (no contraction switch known for ${CMAKE_Fortran_COMPILER_ID})"
+    )
+  endif()
+else()
+  set(RDB_FMA_POLICY "ON (GPU build)")
 endif()
 
 # Applied LAST, and deliberately via add_compile_options rather than by
