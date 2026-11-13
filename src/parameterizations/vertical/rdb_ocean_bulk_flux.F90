@@ -90,7 +90,13 @@
 !! FLIPPED (see the sign-convention note above) and `q_sens`/`q_lat`
 !! straight through, then re-runs `ocean_surface_flux_assemble`.
 module rdb_ocean_bulk_flux
+   !! **Reproducibility.**  In this module saturation humidity `exp` and the stability-function
+   !! `log`/`atan` are the module-local `rdb_sm_*` library bodies (`rdb_safe_math`), so a
+   !! column's fluxes do not depend on its place in a vectorised loop or on the tile width.
+   !!
    use rdb_constants, only: wp, GRAVITY
+   use, intrinsic :: ieee_arithmetic, only: ieee_is_nan, ieee_is_finite
+   use, intrinsic :: iso_fortran_env, only: int64
    use rdb_ice_enthalpy, only: ICE_LAT_FUS
    implicit none
    private
@@ -220,6 +226,11 @@ module rdb_ocean_bulk_flux
          !! Longwave emissivity used by `bulk_flux_longwave_up`.
    end type bulk_flux_config_t
 
+   ! Position-independent exp/log/atan for the saturation humidity and the
+   ! stability functions (`rdb_sm_*`): a bulk column must round the same in
+   ! any lane of any tile.  Constants once here, bodies at the end of `contains`.
+#include "rdb_safe_math_consts.inc"
+
 contains
 
    pure function bulk_flux_config_n_iter_ok(cfg) result(ok)
@@ -249,7 +260,7 @@ contains
       real(wp), intent(in) :: rho_air
          !! Ambient air density, kg/m^3.
       real(wp) :: qsat
-      qsat = BULK_QSAT_SALINITY_FACTOR*BULK_QSAT_COEF_A/rho_air*exp(-BULK_QSAT_COEF_B/sst_k)
+      qsat = BULK_QSAT_SALINITY_FACTOR*BULK_QSAT_COEF_A/rho_air*rdb_sm_exp(-BULK_QSAT_COEF_B/sst_k)
    end function bulk_flux_qsat_seawater
 
    pure function bulk_flux_qsat_ice(t_k, rho_air) result(qsat)
@@ -264,7 +275,7 @@ contains
       real(wp), intent(in) :: rho_air
          !! Ambient air density, kg/m^3.
       real(wp) :: qsat
-      qsat = BULK_QSAT_ICE_COEF_A/rho_air*exp(-BULK_QSAT_ICE_COEF_B/t_k)
+      qsat = BULK_QSAT_ICE_COEF_A/rho_air*rdb_sm_exp(-BULK_QSAT_ICE_COEF_B/t_k)
    end function bulk_flux_qsat_ice
 
    pure function bulk_flux_cdn10_neutral(u10n) result(cdn10)
@@ -324,9 +335,9 @@ contains
          psi_m = -5.0_wp*zeta
          psi_h = -5.0_wp*zeta
       else
-         psi_m = log((1.0_wp + 2.0_wp*x + x2)*(1.0_wp + x2)/8.0_wp) &
-                 - 2.0_wp*(atan(x) - atan(1.0_wp))
-         psi_h = 2.0_wp*log((1.0_wp + x2)/2.0_wp)
+         psi_m = rdb_sm_log((1.0_wp + 2.0_wp*x + x2)*(1.0_wp + x2)/8.0_wp) &
+                 - 2.0_wp*(rdb_sm_atan(x) - SM_PIO4_HI)   ! atan(1) = pi/4
+         psi_h = 2.0_wp*rdb_sm_log((1.0_wp + x2)/2.0_wp)
       end if
    end subroutine bulk_flux_psi
 
@@ -441,11 +452,11 @@ contains
          ! co-locates tas/huss at 2 m), so psi_h at the humidity height
          ! is the same psi_ht just computed -- no third stability branch.
 
-         wv10n = wv/(1.0_wp + cdn10_rt*(log(z_wind/BULK_Z_REF10) - psi_mu)/BULK_VON_KARMAN)
+         wv10n = wv/(1.0_wp + cdn10_rt*(rdb_sm_log(z_wind/BULK_Z_REF10) - psi_mu)/BULK_VON_KARMAN)
          wv10n = max(wv10n, BULK_WIND_MIN)
 
-         ta_use = t_air - tstar*(log(z_ta/z_wind) + psi_hu - psi_ht)/BULK_VON_KARMAN
-         qa_use = q_air - qstar*(log(z_ta/z_wind) + psi_hu - psi_ht)/BULK_VON_KARMAN
+         ta_use = t_air - tstar*(rdb_sm_log(z_ta/z_wind) + psi_hu - psi_ht)/BULK_VON_KARMAN
+         qa_use = q_air - qstar*(rdb_sm_log(z_ta/z_wind) + psi_hu - psi_ht)/BULK_VON_KARMAN
          tv = ta_use*(1.0_wp + BULK_TVQ_AIR*qa_use)
 
          cdn10 = bulk_flux_cdn10_neutral(wv10n)
@@ -458,9 +469,9 @@ contains
          stab = merge(1.0_wp, 0.0_wp, zetau >= 0.0_wp)
          ctn10 = (BULK_CTN10_STABLE_COEF*stab + BULK_CTN10_UNSTABLE_COEF*(1.0_wp - stab))*cdn10_rt
 
-         xx = (log(z_wind/BULK_Z_REF10) - psi_mu)/BULK_VON_KARMAN
+         xx = (rdb_sm_log(z_wind/BULK_Z_REF10) - psi_mu)/BULK_VON_KARMAN
          cdn = cdn10/(1.0_wp + cdn10_rt*xx)**2
-         xx = (log(z_wind/BULK_Z_REF10) - psi_hu)/BULK_VON_KARMAN
+         xx = (rdb_sm_log(z_wind/BULK_Z_REF10) - psi_hu)/BULK_VON_KARMAN
          ctn = ctn10/(1.0_wp + ctn10*xx/cdn10_rt)*sqrt(cdn/cdn10)
          cen = cen10/(1.0_wp + cen10*xx/cdn10_rt)*sqrt(cdn/cdn10)
 
@@ -554,5 +565,9 @@ contains
          end if
       end do
    end subroutine bulk_flux_driver_2d
+
+#include "rdb_safe_math_core.inc"
+
+#include "rdb_safe_math_atan.inc"
 
 end module rdb_ocean_bulk_flux

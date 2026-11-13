@@ -1,5 +1,11 @@
 !! JRA55-do-style prescribed atmospheric-state provider (OM3 wave-3, C2c-2b).
 module rdb_atm_state
+   !! **Reproducibility.**  The solar-position sin/cos are `safe_sin`/`safe_cos`
+   !! (host, `rdb_safe_math`) and `rdb_sm_sin`/`rdb_sm_cos` (the per-cell zenith
+   !! kernel), so `cosz` does not depend on a cell's vector position or tile width.
+   !! Every phase is bounded (day-of-year angle in [0, 2 pi), hour angle within a
+   !! few hundred degrees), so no time-growing argument reaches the library.
+   !!
    !! Builds the nine-field atmospheric state `tas, huss, uas, vas, psl,
    !! rlds, rsds, prra, prsn` (Tsujino et al. 2018, JRA55-do) on the model
    !! T-grid: time-blend each field's current bracket on the shared PR-14
@@ -70,7 +76,9 @@ module rdb_atm_state
    !! one is the data-forcing anti-pattern `rdb_ocean_data_forcing`'s
    !! docstring already warns against.
    use, intrinsic :: iso_fortran_env, only: int64
+   use, intrinsic :: ieee_arithmetic, only: ieee_is_nan, ieee_is_finite
    use rdb_constants, only: wp, TWO_PI, DEG2RAD
+   use rdb_safe_math, only: safe_sin, safe_cos
    use rdb_grid, only: hgrid_t
    use rdb_config, only: config_t
    use rdb_ocean_metrics, only: ocean_metrics_t
@@ -178,6 +186,10 @@ module rdb_atm_state
       procedure, non_overridable :: bytes => atm_state_bytes
       procedure, non_overridable :: destroy => atm_state_destroy
    end type atm_state_t
+
+   ! Position-independent sin/cos for the per-cell zenith kernel
+   ! (`rdb_sm_*`): constants once here, bodies at the end of `contains`.
+#include "rdb_safe_math_consts.inc"
 
 contains
 
@@ -824,12 +836,12 @@ contains
 
       gamma = TWO_PI*(real(doy - 1, wp) + (hour_frac - 12.0_wp)/24.0_wp)/365.0_wp
 
-      decl = 0.006918_wp - 0.399912_wp*cos(gamma) + 0.070257_wp*sin(gamma) &
-             - 0.006758_wp*cos(2.0_wp*gamma) + 0.000907_wp*sin(2.0_wp*gamma) &
-             - 0.002697_wp*cos(3.0_wp*gamma) + 0.001480_wp*sin(3.0_wp*gamma)
+      decl = 0.006918_wp - 0.399912_wp*safe_cos(gamma) + 0.070257_wp*safe_sin(gamma) &
+             - 0.006758_wp*safe_cos(2.0_wp*gamma) + 0.000907_wp*safe_sin(2.0_wp*gamma) &
+             - 0.002697_wp*safe_cos(3.0_wp*gamma) + 0.001480_wp*safe_sin(3.0_wp*gamma)
 
-      eqtime_min = 229.18_wp*(0.000075_wp + 0.001868_wp*cos(gamma) - 0.032077_wp*sin(gamma) &
-                              - 0.014615_wp*cos(2.0_wp*gamma) - 0.040849_wp*sin(2.0_wp*gamma))
+      eqtime_min = 229.18_wp*(0.000075_wp + 0.001868_wp*safe_cos(gamma) - 0.032077_wp*safe_sin(gamma) &
+                              - 0.014615_wp*safe_cos(2.0_wp*gamma) - 0.040849_wp*safe_sin(2.0_wp*gamma))
    end subroutine atm_spencer_sun
 
    pure subroutine atm_coszen_apply_impl(nx_total, ny_total, nghost, nx_phys, ny_phys, nq, &
@@ -863,14 +875,14 @@ contains
 
          tst_min = hour_frac_inst*60.0_wp + eqtime_inst + 4.0_wp*lon_deg
          ha = (tst_min/4.0_wp - 180.0_wp)*DEG2RAD
-         cz = sin(lat_r)*sin(decl_inst) + cos(lat_r)*cos(decl_inst)*cos(ha)
+         cz = rdb_sm_sin(lat_r)*rdb_sm_sin(decl_inst) + rdb_sm_cos(lat_r)*rdb_sm_cos(decl_inst)*rdb_sm_cos(ha)
          cosz(ii, jj) = max(0.0_wp, cz)
 
          acc = 0.0_wp
          do k = 1, nq
             tst_min = hour_frac_q(k)*60.0_wp + eqtime_q(k) + 4.0_wp*lon_deg
             ha = (tst_min/4.0_wp - 180.0_wp)*DEG2RAD
-            cz = sin(lat_r)*sin(decl_q(k)) + cos(lat_r)*cos(decl_q(k))*cos(ha)
+            cz = rdb_sm_sin(lat_r)*rdb_sm_sin(decl_q(k)) + rdb_sm_cos(lat_r)*rdb_sm_cos(decl_q(k))*rdb_sm_cos(ha)
             acc = acc + max(0.0_wp, cz)
          end do
          mean_val = acc/real(nq, wp)
@@ -932,5 +944,9 @@ contains
          dst(nghost + i, nghost + j) = src(i, j)
       end do
    end subroutine atm_state_scatter_impl
+
+#include "rdb_safe_math_core.inc"
+
+#include "rdb_safe_math_trig.inc"
 
 end module rdb_atm_state
