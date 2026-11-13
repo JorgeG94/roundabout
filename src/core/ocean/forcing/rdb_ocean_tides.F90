@@ -242,7 +242,9 @@ contains
          pre = this%amp_c(c)*this%love_c(c)*this%f_nodal(c)
          ! `ang` grows with model time: reduce to [0, 2 pi) before the
          ! position-independent trig (valid to 1.6e6 rad; M2 reaches that in
-         ! ~120 model years).  `modulo` is exact and rank-independent.
+         ! ~120 model years).  `modulo` of a deterministic host
+         ! scalar, computed once per constituent per call, so every rank
+         ! gets the same value.
          ang = modulo(ang, TWO_PI)
          this%amp_cos(c) = pre*safe_cos(ang)
          this%amp_sin(c) = pre*safe_sin(ang)

@@ -5275,7 +5275,9 @@ contains
       ! the BT corrector reads (MOM6's barotropic solver), once
       ! per barotropic call, BEFORE the substeps below.
       if (dyn%bt_work%bt_rem_from_visc_rem) then
+         call profiler_start("ocean_bt_rem")
          call compute_bt_rem_from_visc_rem(grid, dyn%bt_work, ms, metrics, n_inner)
+         call profiler_stop("ocean_bt_rem")
       else if (dyn%bt_work%bt_substep_drag) then
          call compute_bt_rem(grid, dyn%bt_work, ms, metrics, bd%r_linear, bd%hbbl, dt_inner)
       else if (dyn%bt_work%lwd_enable) then

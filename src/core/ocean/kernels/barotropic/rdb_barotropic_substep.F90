@@ -90,8 +90,9 @@ contains
 
    pure function tidal_cos(phase) result(c)
       !! `cos(phase)` for the tidal OBC target.  `phase = omega*t + ...` grows
-      !! with model time, so it is first reduced to [0, 2 pi) (`modulo`, exact
-      !! and identical on every rank) and then passed to the position-
+      !! with model time, so it is first reduced to [0, 2 pi) (`modulo`: a
+      !! deterministic host scalar, computed once per constituent per call, so
+      !! every rank gets the same value) and then passed to the position-
       !! independent `safe_cos` (valid to 1.6e6 rad; an M2 phase reaches that in
       !! ~120 model years).  Cody & Waite (1980), ch. 8.
       real(wp), intent(in) :: phase
