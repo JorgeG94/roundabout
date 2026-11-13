@@ -59,9 +59,12 @@ module test_ocean_cavity_freshwater
    use rdb_ocean_status, only: OCEAN_STATUS_OK
    use rdb_comm_env, only: comm_env_init, comm_env_setup_roles
    use rdb_ocean_cavity_flux, only: cavity_mass_apply_impl, cavity_mass_salt_mirror_impl, &
-                                    cavity_mass_totals_impl, cavity_comp_apply_impl, &
+                                    cavity_mass_melt_volume_efp, cavity_open_area_efp, cavity_comp_apply_impl, &
                                     cavity_comp_withdrawal, cavity_mass_thin_is_fatal, &
                                     H_CAVITY_FLOOR
+   use rdb_efp, only: efp_t, efp_from_real, efp_plus, efp_to_real
+   use, intrinsic :: iso_fortran_env, only: real64
+   use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan, ieee_is_finite
    use rdb_ocean_remap, only: ocean_remap_tracer_column
    use rdb_constants, only: REMAP_PPM
    use rdb_ocean_cavity_melt, only: parse_cavity_freshwater, parse_cavity_volume_comp, &
@@ -160,6 +163,8 @@ contains
                                test_pseudo_salt_mirror_clamped), &
                   new_unittest("compensation_withdrawal_is_volume_over_open_area", &
                                test_comp_withdrawal), &
+                  new_unittest("melt_volume_efp_matches_host_efp_and_poisons_on_nan", &
+                               test_melt_volume_efp), &
                   new_unittest("compensation_leaves_open_ocean_concentrations_alone", &
                                test_comp_concentrations), &
                   new_unittest("mass_budget_closes_from_step_zero_with_a_live_source", &
@@ -887,6 +892,112 @@ contains
       call check(error, a_ps(1, 1, 1) == a_s(1, 1, 1), &
                  "pseudo-salt equals salinity bit-for-bit when the clamp fires and s_ice /= 0")
    end subroutine test_pseudo_salt_mirror_clamped
+
+   subroutine test_melt_volume_efp(error)
+      !! The device EFP melt-volume reduction against the host EFP sum over
+      !! the same OWNED cells (ghosts hold large values that must NOT be
+      !! counted; a mixed-sign, widely varying, partly inactive field), and
+      !! the non-finite contract: a NaN in an ACTIVE owned cell makes the
+      !! result NaN (never a plausible finite number), while the same NaN
+      !! in an inactive cell or a ghost is not summed.  GPU rules: every
+      !! array the kernel touches is mapped, and the host fill is pushed
+      !! with `update device` (component-free plain arrays).
+      type(error_type), allocatable, intent(out) :: error
+      integer, parameter :: NX = 17, NY = 13, NG = 3
+      real(wp) :: a_act(NX, NY), a_melt(NX, NY), a_area(NX, NY), a_wet(NX, NY), a_cov(NX, NY)
+      type(efp_t) :: dev, ref, tmp
+      real(wp) :: dto, plain
+      integer :: i, j
+
+      dto = 900.0_wp/RHO0
+      do j = 1, NY
+         do i = 1, NX
+            a_area(i, j) = 4.0e6_wp*(1.0_wp + 0.3_wp*sin(0.7_wp*real(i, wp) + 0.3_wp*real(j, wp)))
+            a_melt(i, j) = 3.0e-4_wp*sin(1.3_wp*real(i, wp))*cos(0.9_wp*real(j, wp)) + &
+                           1.0e-7_wp*real(i*j, wp)
+            a_act(i, j) = merge(1.0_wp, 0.0_wp, mod(i + 2*j, 5) /= 0)
+            a_wet(i, j) = merge(1.0_wp, 0.0_wp, mod(i*j, 7) /= 3)
+            a_cov(i, j) = merge(1.0_wp, 0.0_wp, i < 9)
+            if (i <= NG .or. i > NX - NG .or. j <= NG .or. j > NY - NG) a_melt(i, j) = 1.0e3_wp
+         end do
+      end do
+
+      ref%v = 0
+      ref%poison = 0
+      plain = 0.0_wp
+      do j = NG + 1, NY - NG
+         do i = NG + 1, NX - NG
+            if (a_act(i, j) > 0.5_wp) then
+               tmp = efp_from_real(real(a_melt(i, j)*dto*a_area(i, j), real64))
+               ref = efp_plus(ref, tmp)
+               plain = plain + a_melt(i, j)*dto*a_area(i, j)
+            end if
+         end do
+      end do
+
+      !$acc enter data copyin(a_act, a_melt, a_area)
+      dev = cavity_mass_melt_volume_efp(NX, NY, NG, dto, a_act, a_melt, a_area)
+      call check(error, all(dev%v == ref%v) .and. dev%poison == 0, &
+                 "device EFP melt volume must equal the host EFP sum bit-for-bit")
+      if (allocated(error)) then
+         !$acc exit data delete(a_act, a_melt, a_area)
+         return
+      end if
+      call check(error, abs(real(efp_to_real(dev), wp) - plain) <= 1.0e-12_wp*abs(plain), &
+                 "and agree with the plain sum to round-off")
+      if (allocated(error)) then
+         !$acc exit data delete(a_act, a_melt, a_area)
+         return
+      end if
+
+      ! A NaN in an INACTIVE owned cell and in a ghost is not summed.
+      a_melt(NG + 1, NG + 1) = ieee_value(1.0_wp, ieee_quiet_nan)
+      a_act(NG + 1, NG + 1) = 0.0_wp
+      a_melt(1, 1) = ieee_value(1.0_wp, ieee_quiet_nan)
+      !$acc update device(a_act, a_melt)
+      dev = cavity_mass_melt_volume_efp(NX, NY, NG, dto, a_act, a_melt, a_area)
+      ! (the inactive cell was active in the reference; recompute it)
+      ref%v = 0
+      ref%poison = 0
+      do j = NG + 1, NY - NG
+         do i = NG + 1, NX - NG
+            if (a_act(i, j) > 0.5_wp) then
+               ref = efp_plus(ref, efp_from_real(real(a_melt(i, j)*dto*a_area(i, j), real64)))
+            end if
+         end do
+      end do
+      call check(error, all(dev%v == ref%v) .and. dev%poison == 0 .and. &
+                 ieee_is_finite(real(efp_to_real(dev), wp)), &
+                 "a NaN in an inactive cell or a ghost must not be summed")
+      if (allocated(error)) then
+         !$acc exit data delete(a_act, a_melt, a_area)
+         return
+      end if
+
+      ! A NaN in an ACTIVE owned cell poisons the result.
+      a_melt(NG + 2, NG + 2) = ieee_value(1.0_wp, ieee_quiet_nan)
+      a_act(NG + 2, NG + 2) = 1.0_wp
+      !$acc update device(a_act, a_melt)
+      dev = cavity_mass_melt_volume_efp(NX, NY, NG, dto, a_act, a_melt, a_area)
+      !$acc exit data delete(a_act, a_melt, a_area)
+      call check(error, dev%poison > 0 .and. .not. ieee_is_finite(real(efp_to_real(dev), wp)), &
+                 "a NaN melt in an active owned cell must surface as NaN, not a finite number")
+      if (allocated(error)) return
+
+      ! The configure-time open area is the same owned-cell EFP, wet and uncovered only.
+      a_melt = 0.0_wp
+      ref%v = 0
+      ref%poison = 0
+      do j = NG + 1, NY - NG
+         do i = NG + 1, NX - NG
+            if (a_wet(i, j) > 0.5_wp .and. a_cov(i, j) < 0.5_wp) &
+               ref = efp_plus(ref, efp_from_real(real(a_area(i, j), real64)))
+         end do
+      end do
+      dev = cavity_open_area_efp(NX, NY, NG, a_wet, a_cov, a_area)
+      call check(error, all(dev%v == ref%v) .and. dev%poison == 0 .and. &
+                 real(efp_to_real(dev), wp) > 0.0_wp, "open area EFP over owned wet uncovered cells")
+   end subroutine test_melt_volume_efp
 
    subroutine test_comp_withdrawal(error)
       !! The uniform sink's arithmetic, and its no-open-ocean fallback —

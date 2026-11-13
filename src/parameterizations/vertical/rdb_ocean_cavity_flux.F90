@@ -296,6 +296,11 @@ module rdb_ocean_cavity_flux
    use, intrinsic :: iso_fortran_env, only: int64
    use rdb_constants, only: wp, H_VANISHED, H_DIV_EPS, RHO_WATER
    use rdb_grid, only: hgrid_t
+   use, intrinsic :: iso_fortran_env, only: real64
+   use rdb_efp, only: efp_t, EFP_DIGITS, EFP_MAX_SUMMANDS, efp_carry, efp_plus, &
+                      efp_from_real, efp_to_real
+   use rdb_ocean_console_stats, only: efp_decompose_impl
+   use rdb_grid_reduce, only: grid_allreduce_efp_list
    use rdb_eos, only: eos_t
    use rdb_mem_report, only: arr_bytes
    use rdb_multilayer_state, only: multilayer_state_t
@@ -322,7 +327,9 @@ module rdb_ocean_cavity_flux
    public :: cavity_mass_apply_impl
    public :: cavity_mass_salt_mirror_impl
    public :: cavity_mass_dilute_impl
-   public :: cavity_mass_totals_impl
+   public :: cavity_mass_melt_volume_efp
+   public :: cavity_open_area_efp
+   public :: ocean_cavity_set_open_area
    public :: cavity_comp_apply_impl
    public :: cavity_mass_thin_is_fatal
    public :: cavity_comp_withdrawal
@@ -1144,26 +1151,27 @@ contains
       end do
    end subroutine cavity_mass_salt_mirror_impl
 
-   pure subroutine cavity_mass_totals_impl(nx, ny, nghost, dt_over_rho0, active, &
-                                           wet_mask, cover_frac, melt, areaT, &
-                                           vol_melt, area_open)
-      !! The two INTERIOR integrals the mass budget and the compensation
-      !! sink need, reduced on device in one pass:
+   function cavity_mass_melt_volume_efp(nx, ny, nghost, dt_over_rho0, active, melt, areaT) &
+      result(tot)
+      !! RANK-LOCAL meltwater VOLUME (m^3) added this step, as an EFP
+      !! reproducing sum: `sum(melt*dt/rho_0 * areaT)` over the OWNED
+      !! cells (`nghost+1 .. n-nghost`) of the active columns.  The result is
+      !! layout-independent once the per-rank values are combined with
+      !! `grid_allreduce_efp_list` (a plain floating-point sum over a
+      !! decomposition depends on the split).
       !!
-      !!   `vol_melt`  — the meltwater volume (m^3) added this step,
-      !!                 `sum(melt*dt/rho_0 * areaT)` over active columns;
-      !!   `area_open` — the wet area (m^2) the ice does NOT cover.
+      !! Ghosts are excluded exactly as `ocean_accumulate_mass_out`
+      !! excludes them (the console totals are interior integrals).
+      !! `melt*dt_over_rho0` is formed with the same scalar and in the same
+      !! order as the apply kernel's `dh`.
       !!
-      !! GHOSTS ARE EXCLUDED (`nghost+1 .. n-nghost`), exactly as
-      !! `ocean_accumulate_mass_out` excludes them: the console's totals
-      !! are interior integrals, so a source term that counted the halo
-      !! would be measuring a different domain than the total it has to
-      !! close.  The per-cell APPLY still runs over the whole array, like
-      !! every other surface kernel — the halo exchange owns the ghosts.
-      !!
-      !! `melt*dt_over_rho0` is formed with the same scalar and in the
-      !! same order as the apply kernel's `dh`, so the two agree to the
-      !! last bit per cell and the residual is reduction round-off only.
+      !! Device: ONE small `!$acc parallel loop` reduction with the seven
+      !! integer accumulators of the console's `compute_total_h_efp` (the
+      !! proven footprint; `efp_decompose_impl` is the same `routine seq`
+      !! helper).  `active`, `melt`, `areaT` are device-resident (their
+      !! slots' `enter_data`); the result is a host scalar.  NON-FINITE
+      !! INPUT: a NaN/Inf summand sets the `poison` counter, so
+      !! `efp_to_real` returns NaN instead of a plausible finite number.
       integer, intent(in) :: nx
          !! First dimension (ghosts included).
       integer, intent(in) :: ny
@@ -1174,38 +1182,106 @@ contains
          !! `dt/rho_0`.
       real(wp), intent(in) :: active(nx, ny)
          !! Composed solve mask.
-      real(wp), intent(in) :: wet_mask(nx, ny)
-         !! Static wet (1) / land (0) mask.
-      real(wp), intent(in) :: cover_frac(nx, ny)
-         !! Ice-cover fraction (v1 binary).
       real(wp), intent(in) :: melt(nx, ny)
          !! Melt mass flux (kg/m^2/s).
       real(wp), intent(in) :: areaT(nx, ny)
          !! Cell area (m^2).
-      real(wp), intent(out) :: vol_melt
-         !! Meltwater volume this step (m^3).
-      real(wp), intent(out) :: area_open
-         !! Uncovered wet area (m^2).
+      type(efp_t) :: tot
       integer :: i, j, i_lo, i_hi, j_lo, j_hi
-      real(wp) :: acc_v, acc_a
+      integer(int64) :: e1, e2, e3, e4, e5, e6, epoison
+      integer(int64) :: d1, d2, d3, d4, d5, d6, dpoison
+      integer(int64) :: bins(EFP_DIGITS)
+      real(real64) :: val
 
       i_lo = nghost + 1
       i_hi = nx - nghost
       j_lo = nghost + 1
       j_hi = ny - nghost
-      acc_v = 0.0_wp
-      acc_a = 0.0_wp
-      do concurrent(j=j_lo:j_hi, i=i_lo:i_hi) reduce(+:acc_v, acc_a)
-         if (active(i, j) > 0.5_wp) then
-            acc_v = acc_v + melt(i, j)*dt_over_rho0*areaT(i, j)
-         end if
-         if (wet_mask(i, j) > 0.5_wp .and. cover_frac(i, j) < 0.5_wp) then
-            acc_a = acc_a + areaT(i, j)
-         end if
+      if (int(i_hi - i_lo + 1, int64)*int(j_hi - j_lo + 1, int64) > EFP_MAX_SUMMANDS) then
+         error stop "cavity_mass_melt_volume_efp: cell count exceeds EFP_MAX_SUMMANDS"
+      end if
+      e1 = 0_int64
+      e2 = 0_int64
+      e3 = 0_int64
+      e4 = 0_int64
+      e5 = 0_int64
+      e6 = 0_int64
+      epoison = 0_int64
+      !$acc parallel loop collapse(2) reduction(+:e1,e2,e3,e4,e5,e6,epoison) &
+      !$acc&         private(val, d1, d2, d3, d4, d5, d6, dpoison) present(active, melt, areaT)
+      do j = j_lo, j_hi
+         do i = i_lo, i_hi
+            val = 0.0_real64
+            if (active(i, j) > 0.5_wp) then
+               val = real(melt(i, j)*dt_over_rho0*areaT(i, j), real64)
+            end if
+            call efp_decompose_impl(val, d1, d2, d3, d4, d5, d6, dpoison)
+            e1 = e1 + d1
+            e2 = e2 + d2
+            e3 = e3 + d3
+            e4 = e4 + d4
+            e5 = e5 + d5
+            e6 = e6 + d6
+            epoison = epoison + dpoison
+         end do
       end do
-      vol_melt = acc_v
-      area_open = acc_a
-   end subroutine cavity_mass_totals_impl
+      bins = [e1, e2, e3, e4, e5, e6]
+      call efp_carry(bins)
+      tot%v = bins
+      tot%poison = epoison
+   end function cavity_mass_melt_volume_efp
+
+   function cavity_open_area_efp(nx, ny, nghost, wet_mask, cover_frac, areaT) result(tot)
+      !! RANK-LOCAL open-ocean AREA (m^2) as an EFP sum over OWNED cells:
+      !! the wet area the ice does NOT cover.  Configure-time only, on
+      !! HOST arrays before `enter_data` (a plain host loop, no device
+      !! code); the wet mask and the v1 binary cover are static, so the
+      !! area is computed once.
+      integer, intent(in) :: nx
+         !! First dimension (ghosts included).
+      integer, intent(in) :: ny
+         !! Second dimension.
+      integer, intent(in) :: nghost
+         !! Halo width to exclude on every side.
+      real(wp), intent(in) :: wet_mask(nx, ny)
+         !! Static wet (1) / land (0) mask.
+      real(wp), intent(in) :: cover_frac(nx, ny)
+         !! Ice-cover fraction (v1 binary).
+      real(wp), intent(in) :: areaT(nx, ny)
+         !! Cell area (m^2).
+      type(efp_t) :: tot
+      integer :: i, j
+      tot%v = 0_int64
+      tot%poison = 0_int64
+      do j = nghost + 1, ny - nghost
+         do i = nghost + 1, nx - nghost
+            if (wet_mask(i, j) > 0.5_wp .and. cover_frac(i, j) < 0.5_wp) then
+               tot = efp_plus(tot, efp_from_real(real(areaT(i, j), real64)))
+            end if
+         end do
+      end do
+   end function cavity_open_area_efp
+
+   subroutine ocean_cavity_set_open_area(cav, grid, metrics, wet_mask)
+      !! Configure-time: store the GLOBAL open-ocean area in
+      !! `cav%open_area`, exact and layout-independent (EFP over owned
+      !! cells, one collective, converted to real once).  Collective on a
+      !! tiled grid (rank-uniform call: the caller keys it on config).
+      !! Host data only (before the device map).
+      type(ocean_cavity_flux_t), intent(inout) :: cav
+         !! The cavity slot; writes `open_area`.
+      type(hgrid_t), intent(in) :: grid
+         !! Horizontal grid.
+      type(ocean_metrics_t), intent(in) :: metrics
+         !! `cover_frac`, `areaT`.
+      real(wp), intent(in) :: wet_mask(:, :)
+         !! `multilayer%wet_mask`.
+      type(efp_t) :: loc(1), glob(1)
+      loc(1) = cavity_open_area_efp(grid%nx_total, grid%ny_total, grid%nghost, wet_mask, &
+                                    metrics%cover_frac, metrics%areaT)
+      call grid_allreduce_efp_list(grid, loc, glob, 1)
+      cav%open_area = real(efp_to_real(glob(1)), wp)
+   end subroutine ocean_cavity_set_open_area
 
    pure function cavity_comp_withdrawal(vol_melt, area_open) result(dw)
       !! The uniform per-unit-area thickness the `uniform_open_ocean`
@@ -1384,11 +1460,10 @@ contains
       use pic_strings, only: to_string
       use rdb_error_ring, only: fail
       use rdb_ocean_status, only: OCEAN_STATUS_ERR_SETUP
-      use rdb_halo, only: halo_allreduce_sum
       type(hgrid_t), intent(in) :: grid
          !! Horizontal grid (`nx_total`/`ny_total`/`nghost`).
       type(ocean_metrics_t), intent(in) :: metrics
-         !! Reads `cover_frac` and `areaT`.
+         !! Reads `areaT`.
       type(ocean_cavity_flux_t), intent(inout) :: cav
          !! The cavity-melt slot; reads `melt`/`active`/`t_b`, writes
          !! `comp_scale` and the thin counters.
@@ -1406,7 +1481,9 @@ contains
          !! Thermo-cadence gate.  Present-and-false ⇒ early return;
          !! absent ⇒ run.
       integer :: nx, ny, nz, idx_t, idx_s, idx_ps, it, n_thin_src, n_thin_comp
-      real(wp) :: dt_over_rho0, vol_melt, area_open, dw, tmp
+      real(wp) :: dt_over_rho0, vol_melt, area_open, dw, share
+      type(efp_t) :: loc(1), glob(1)
+      logical :: owns_source
 
       if (.not. cav%is_init) return
       if (.not. cav%enable) return
@@ -1425,19 +1502,17 @@ contains
       idx_ps = ms%idx_pseudo_salt
       dt_over_rho0 = dt/cav%rho0
 
-      ! (1) Interior integrals FIRST: the melt volume the budget tracks
-      ! and the open-ocean area the sink would spend it over.  Combined
-      ! across ranks so a decomposed domain removes the same total the
-      ! whole domain gained.
-      call cavity_mass_totals_impl(nx, ny, grid%nghost, dt_over_rho0, cav%active, &
-                                   ms%wet_mask, metrics%cover_frac, cav%melt, &
-                                   metrics%areaT, vol_melt, area_open)
-      tmp = vol_melt
-      call halo_allreduce_sum(tmp, vol_melt)
-      tmp = area_open
-      call halo_allreduce_sum(tmp, area_open)
+      ! (1) The melt volume the budget tracks and the open-ocean area the
+      ! sink spends it over.  ONE code path on every rank count: the
+      ! volume is an EFP reproducing sum over owned cells combined by one
+      ! EFP collective (so it is bit-identical on any layout), the area is
+      ! the static configure-time value (`ocean_cavity_set_open_area`).
+      loc(1) = cavity_mass_melt_volume_efp(nx, ny, grid%nghost, dt_over_rho0, cav%active, &
+                                           cav%melt, metrics%areaT)
+      call grid_allreduce_efp_list(grid, loc, glob, 1)
+      vol_melt = real(efp_to_real(glob(1)), wp)
+      area_open = cav%open_area
       cav%melt_volume_step = vol_melt
-      cav%open_area = area_open
 
       ! (2) The source.
       ! The pseudo-salt mirror goes FIRST: it needs the pre-source thickness
@@ -1458,7 +1533,13 @@ contains
                                   ms%h_layer, ms%tracers(idx_s)%c, ms%tracers(idx_t)%c, &
                                   ms%salt_budget_surface, ms%heat_budget_surface, &
                                   ms%k_top, n_thin_src)
-      ms%mass_src = ms%mass_src + weight*RHO_WATER*vol_melt
+      ! The console SUMS `mass_src` over ranks, so the GLOBAL source is
+      ! booked on exactly one tile -- the one holding global cell (1,1)
+      ! (every other tile adds zero); a serial run is that tile.
+      owns_source = (grid%i_offset_global == 0 .and. grid%j_offset_global == 0)
+      share = 0.0_wp
+      if (owns_source) share = weight*RHO_WATER*vol_melt
+      ms%mass_src = ms%mass_src + share
 
       ! (3) The sink, when the knob asks for it.
       n_thin_comp = 0
@@ -1482,7 +1563,9 @@ contains
          ! same product the withdrawal was derived from — so with no
          ! clamping this cancels the source term to the last bit and the
          ! domain mass is constant.
-         ms%mass_src = ms%mass_src - weight*RHO_WATER*dw*area_open
+         share = 0.0_wp
+         if (owns_source) share = weight*RHO_WATER*dw*area_open
+         ms%mass_src = ms%mass_src - share
       end if
 
       ! (4) Accounting, then fail loud.
