@@ -76,6 +76,10 @@
 !!   * sss_restore - the island basin with FILE sea-surface-salinity restoring
 !!     (per-rank windowed two-record target, halo-exchanged, piston salt flux,
 !!     net-zero shift through the EFP allreduce); needs NetCDF;
+!!   * manizza - the island basin with the chlorophyll-dependent N-band
+!!     shortwave (`sw_scheme = 'manizza05'`): per-rank windowed two-record
+!!     chlorophyll, its seam-ghost exchange, the per-band opacities; needs
+!!     NetCDF;
 !!   * balanced_vortex / balanced_vortex_t0 - the isolated balanced cold-core
 !!     vortex IC (`ic_config = 'balanced_vortex'`) on a closed beta-plane, centred
 !!     on the 2x1/1x2 seams and the 2x2 corner; `_t0` takes zero steps so the
@@ -187,7 +191,8 @@ program test_ocean_decomp_bitid_mpi
 #ifndef RDB_NO_NETCDF
    use rdb_io_netcdf, only: nc_create_file, nc_close, nc_def_dim, nc_def_var_2d, &
                             nc_def_var_3d, nc_enddef, nc_put_var_2d, rdb_def_var_1d, &
-                            rdb_put_var_1d, output_rank_filename, ensure_directory_exists
+                            rdb_put_var_1d, output_rank_filename, ensure_directory_exists, &
+                            nc_put_att
    use netcdf, only: nf90_put_var
 #endif
    implicit none
@@ -208,6 +213,13 @@ program test_ocean_decomp_bitid_mpi
    character(len=*), parameter :: ZINIT_FILE = "bitid_zinit.nc"
    character(len=*), parameter :: SSS_FILE = "bitid_sss.nc"
    character(len=*), parameter :: TIDE_FILE = "bitid_tide.nc"
+   character(len=*), parameter :: CHL_FILE = "bitid_chl.nc"
+   character(len=*), parameter :: ATM_WARM = "bitid_atm_warm.nc"
+   character(len=*), parameter :: ATM_COLD = "bitid_atm_cold.nc"
+   character(len=*), parameter :: ATM_CRSE = "bitid_atm_coarse.nc"
+   character(len=*), parameter :: ATM_WARM_LIST = "bitid_atm_warm_files.txt"
+   character(len=*), parameter :: ATM_CRSE_LIST = "bitid_atm_coarse_files.txt"
+   character(len=*), parameter :: ATM_COLD_LIST = "bitid_atm_cold_files.txt"
 
    type :: field_t
       !! One compared field: a host copy of the whole local array (2-D
@@ -238,7 +250,7 @@ program test_ocean_decomp_bitid_mpi
       !! `RDB_BITID_CASES`: run only the cases whose name contains this substring.
    type(comm_t) :: comm
    character(len=16), parameter :: SCHEMES(2) = [character(len=16) :: "pred_corr", "ssp_rk2"]
-   character(len=24), parameter :: CASES(44) = [character(len=24) :: &
+   character(len=24), parameter :: CASES(52) = [character(len=24) :: &
                                                 "island_basin", "weno7_pv", &
                                                 "periodic_channel_zstar", &
                                                 "visc_rem_zstar", &
@@ -260,7 +272,9 @@ program test_ocean_decomp_bitid_mpi
                                                 "drain_ratio", "drain_ratio_h3", &
                                                 "drain_ratio_weno5", "drain_ratio_weno7", &
                                                 "drain_ratio_weno9", "drain_ratio_fold", &
-                                                "drain_ratio_fold_h3", "dtbt_reset", &
+                                                "drain_ratio_fold_h3", "eulz", "eulz_periodic", &
+                                                "eulz_tripolar", "eulz_epbl_mle", "bulk_flux", &
+                                                "bulk_flux_ice", "bulk_flux_fold", "manizza", "dtbt_reset", &
                                                 "dtbt_reset_period"]
 
    call comm_env_init()
@@ -284,11 +298,14 @@ program test_ocean_decomp_bitid_mpi
       if (trim(CASES(ic)) == "file_readers" .or. &
           trim(CASES(ic)) == "file_readers_zstar_full" .or. &
           trim(CASES(ic)) == "sss_restore" .or. &
+          trim(CASES(ic)) == "manizza" .or. &
           trim(CASES(ic)) == "tidal_files" .or. &
           trim(CASES(ic)) == "tidal_polzin" .or. &
+          index(trim(CASES(ic)), "bulk_flux") == 1 .or. &
           trim(CASES(ic)) == "file_readers_zstar") cycle
 #endif
-      call run_case(trim(CASES(ic)), trim(SCHEMES(1)))
+      ! eulerian_z is refused under pred_corr (validate_config): ssp_rk2 only.
+      if (CASES(ic) (1:4) /= "eulz") call run_case(trim(CASES(ic)), trim(SCHEMES(1)))
       ! diabatic_first = .false. is refused under ssp_rk2 (validate_config).
       ! (drain_ratio_h3 pins it too.)
       if (trim(CASES(ic)) == "diabatic_end" .or. trim(CASES(ic)) == "drain_ratio_h3" .or. &
@@ -321,9 +338,10 @@ contains
       integer, intent(in) :: px, py
       character(len=:), allocatable :: nml
       character(len=*), parameter :: NL = new_line("a")
-      character(len=16) :: spx, spy, snx, sny, sng
+      character(len=16) :: spx, spy, snx, sny, sng, snz
       character(len=:), allocatable :: common, bt_extra, bt_head, ice_dyn, hv_extra, drain_extra
       character(len=16) :: rad_earth_s, wind_s, wind_y_s
+      character(len=64) :: wl
 
       ! The visc_rem chain rides on the common &ocean_bt_nml group (one
       ! group per namelist).  D1 follow-up (2026-10): the weighted
@@ -391,6 +409,8 @@ contains
       write (spy, '(i0)') py
       write (snx, '(i0)') NX_G
       write (sny, '(i0)') NY_G
+      snz = "4"
+      if (label == "manizza") snz = "8"
       ! weno9 needs nghost = 5: widen the grid so the np = 4 layouts (1x4 ->
       ! ny/4 rows, 4x1 -> nx/4 columns) stay at least nghost wide.
       if (label == "drain_ratio_weno9") then
@@ -406,7 +426,7 @@ contains
       common = "&sim_nml sim_type = 'ocean' /"//NL// &
                "&mpi_nml px = "//trim(spx)//", py = "//trim(spy)//" /"//NL// &
                "&time_nml t_end = 86400.0, dt_fixed = 900.0 /"//NL// &
-               "&nonhydrostatic_nml nz_layers = 4 /"//NL// &
+               "&nonhydrostatic_nml nz_layers = "//trim(snz)//" /"//NL// &
                "&tracer_nml initial_temperature = 12.0, initial_salinity = 35.0, "// &
                "T_init_surface = 20.0, T_init_bottom = 4.0 /"//NL// &
                "&ocean_bt_nml "//bt_head//"split_scheme = '"//scheme//"'"// &
@@ -446,6 +466,27 @@ contains
                "&ocean_restore_nml enable_restore_salt = .true., piston_s = 0.5, "// &
                "sss_file = '"//SSS_FILE//"', sss_var = 'salt', sss_as_sflux = .true., "// &
                "sss_adjust_net_zero = .true. /"//NL// &
+               "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
+      case ("manizza")
+         ! The island basin with the Manizza (2005) chlorophyll shortwave: the
+         ! per-rank windowed read of a two-record spatially non-uniform,
+         ! non-symmetric chlorophyll climatology, its seam-ghost exchange, and
+         ! the per-band opacities feeding the deposition kernel and the KPP
+         ! B_0 coupling.  A wrong window or a stale ghost changes the heating.
+         ! Shallow (100 m) and 8 layers deep so the blue AND red bands cross
+         ! several interfaces: the opacities, not just the surface layer, drive
+         ! the heating.
+         nml = common// &
+               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
+               "dx = 20000.0, dy = 20000.0 /"//NL// &
+               "&physics_nml coriolis_f = 1.0e-4 /"//NL// &
+               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
+               "&ocean_topo_nml topo_config = 'island', max_depth = 100.0, "// &
+               "slope_scale = 0.15, wind_config = '2gyre', taux_magnitude = 0.1, "// &
+               "coriolis_beta = 2.0e-11 /"//NL// &
+               "&ocean_thermo_nml enable_thermodynamics = .true., q_heat = 400.0, "// &
+               "sw_pen_frac = 1.0, sw_scheme = 'manizza05', "// &
+               "sw_chl_file = '"//CHL_FILE//"', sw_chl_var = 'CHL' /"//NL// &
                "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
       case ("visc_rem_chain")
          ! The island basin with the visc_rem chain live end to end: MOM6
@@ -503,6 +544,26 @@ contains
                "coriolis_beta = 2.0e-11 /"//NL// &
                "&ocean_coriolis_nml form = 'sadourny', pv_adv_scheme = 'weno7' /"//NL// &
                "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
+      case ("eulz", "eulz_periodic")
+         ! Plain eulerian_z (per-step vertical advection pins h to the
+         ! reference; no EPBL, no MLE): the vertical advection runs after the
+         ! post-continuity exchange, so a ghost column must be refreshed from
+         ! its owner afterwards.  "eulz" = closed seamount basin
+         ! (walls: seam ghosts only); "eulz_periodic" = the periodic channel
+         ! of periodic_channel_zstar (wrap ghosts, also on one rank).
+         nml = common// &
+               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
+               "dx = 20000.0, dy = 20000.0 /"//NL// &
+               "&physics_nml coriolis_f = -1.0e-4, wind_stress_x = 0.1 /"//NL// &
+               "&vcoord_nml vcoord_type = 'eulerian_z' /"//NL// &
+               "&ocean_topo_nml topo_config = 'seamount', max_depth = 2000.0, "// &
+               "edge_depth = 1500.0, slope_scale = 60000.0 /"//NL
+         if (label == "eulz_periodic") then
+            nml = nml//"&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
+                  "north = 'wall' /"//NL
+         else
+            nml = nml//"&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
+         end if
       case ("periodic_channel_zstar")
          ! Re-entrant channel over a seamount, z* (ALE remap every step).
          nml = common// &
@@ -616,7 +677,7 @@ contains
                "&ocean_bc_nml west = 'tidal', east = 'open', south = 'wall', north = 'wall', "// &
                "west_n_tidal = 1, west_tidal_amp = 0.5, west_tidal_phase = 0.0, "// &
                "west_tidal_omega = 1.4051890e-4 /"//NL
-      case ("tripolar", "redi_cfl_fold", "drain_ratio_fold", "drain_ratio_fold_h3")
+      case ("tripolar", "redi_cfl_fold", "drain_ratio_fold", "drain_ratio_fold_h3", "eulz_tripolar")
          ! Analytic tripolar cap (59N-83N, phi_join 74N) closed by the north
          ! fold, periodic in x, under a constant wind, with the double-Drake
          ! land walls reaching the fold line at asymmetric columns (1 and
@@ -631,7 +692,7 @@ contains
                "phi_join = 74.0, lon_pole = 0.0, rad_earth = "//trim(rad_earth_s)//", "// &
                "coriolis_scheme = 'planetary' /"//NL// &
                "&physics_nml wind_stress_x = "//trim(wind_s)//", wind_stress_y = "//trim(wind_y_s)//" /"//NL// &
-               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
+               "&vcoord_nml vcoord_type = '"//trim(merge("eulerian_z", "sigma     ", label == "eulz_tripolar"))//"' /"//NL// &
                "&ocean_topo_nml topo_config = 'double_drake', max_depth = 1000.0, "// &
                "slope_scale = 0.2 /"//NL// &
                "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
@@ -659,7 +720,7 @@ contains
       case ("spherical", "closures", "gm_ebt_struct", "gm_fgnv", "meke_gm_work", &
             "hvisc_om3_floors", "vmix_no_interior", "tidal_files", "tidal_polzin", &
             "bbl_lotw", "hvisc_kh_points", "diabatic_end", "hvisc_thin_layer", &
-            "hvisc_biharm_stress")
+            "hvisc_biharm_stress", "eulz_epbl_mle")
          ! Lon-lat sector, spoon basin, Wright EOS.  "closures" adds the
          ! lateral and vertical parameterisation set on top (EPBL instead of
          ! KPP, Fox-Kemper MLE, GM + MEKE, Redi, kappa-shear, tidal mixing,
@@ -671,7 +732,9 @@ contains
                "dx = 1.0, dy = 1.0 /"//NL// &
                "&ocean_grid_nml grid_config = 'spherical', lon_west = 0.0, lat_south = 20.0, "// &
                "rad_earth = 6.371e6, coriolis_scheme = 'planetary' /"//NL// &
-               "&vcoord_nml vcoord_type = '"//merge("zstar", "sigma", label == "diabatic_end")// &
+               "&vcoord_nml vcoord_type = '"// &
+               trim(merge("zstar     ", merge("eulerian_z", "sigma     ", label == "eulz_epbl_mle"), &
+                          label == "diabatic_end"))// &
                "' /"//NL// &
                "&ocean_eos_nml eos = 'wright' /"//NL// &
                "&ocean_topo_nml topo_config = 'spoon', max_depth = 3000.0, "// &
@@ -694,6 +757,16 @@ contains
                   "&ocean_hdiff_nml kappa_h = 100.0 /"//NL
          end if
          select case (label)
+         case ("eulz_epbl_mle")
+            ! eulerian_z (legacy per-stage vertical advection + h rescale)
+            ! with EPBL and Fox-Kemper MLE: the pair that once drifted at
+            ! round-off under ssp_rk2.
+            nml = nml// &
+                  "&ocean_vmix_nml use_kpp = .false. /"//NL// &
+                  "&ocean_epbl_nml enable = .true., mstar_scheme = 'om4', "// &
+                  "mld_use_prev_guess = .true. /"//NL// &
+                  "&ocean_foxkemper_nml enable = .true., use_mom_mixrate = .true., "// &
+                  "mld_decay_time = 86400.0 /"//NL
          case ("gm_ebt_struct")
             ! GM with the EBT vertical structure of KhTh (the structure is the
             ! wave-speed slot's `ebt_struct`, a per-cell field read at both
@@ -878,6 +951,96 @@ contains
                "&ocean_ice_ic_nml conc_config = 'uniform', h_ice = 1.0, conc = 0.7 /"//NL// &
                "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
                "north = 'tripolar_fold' /"//NL
+      case ("bulk_flux", "bulk_flux_ice", "bulk_flux_fold")
+         ! Atmosphere-driven bulk forcing (`&ocean_atm_forcing_nml` +
+         ! `&ocean_bulk_flux_nml`): nine prescribed atmospheric fields from
+         ! files the test writes (spatially NON-uniform, non-symmetric in
+         ! both directions), regridded per rank, turned into stress + heat +
+         ! freshwater fluxes at the cell centres and averaged to faces
+         ! across every rank seam.  `bulk_flux`: lon-lat spoon basin, walls.
+         ! `bulk_flux_ice`: a cold re-entrant lon-lat channel with sea ice
+         ! (EVP + category transport) whose open-water fraction scales the
+         ! bulk fluxes and whose surface stress is blended.  `bulk_flux_fold`:
+         ! the tripolar cap, so the stress crosses the north fold.
+         nml = "&sim_nml sim_type = 'ocean' /"//NL// &
+               "&mpi_nml px = "//trim(spx)//", py = "//trim(spy)//" /"//NL// &
+               "&time_nml t_end = 86400.0, dt_fixed = 900.0, start_date = '2000-06-21' /"//NL// &
+               "&nonhydrostatic_nml nz_layers = 4 /"//NL// &
+               "&ocean_bt_nml auto_n_inner = .true., split_scheme = '"//scheme//"' /"//NL// &
+               "&ocean_hvisc_nml nu_h = 200.0, lateral_closure = 'smagorinsky', "// &
+               "smag_ah = .true. /"//NL// &
+               "&ocean_diag_nml enabled = .false. /"//NL// &
+               "&ocean_eos_nml eos = 'wright' /"//NL// &
+               "&ocean_thermo_nml enable_thermodynamics = .true. /"//NL// &
+               "&ocean_forcing_nml enable_components = .true. /"//NL// &
+               "&ocean_bulk_flux_nml enable = .true., n_iter = 5, z_wind = 10.0, "// &
+               "z_ta = 10.0 /"//NL
+         if (label == "bulk_flux_ice") then
+            nml = nml// &
+                  "&tracer_nml initial_temperature = -1.83, initial_salinity = 34.0, "// &
+                  "T_init_surface = -1.82, T_init_bottom = -1.835 /"//NL// &
+                  "&ocean_atm_forcing_nml enable = .true., time_mode = 'interannual', "// &
+                  "filelist_tas = '"//ATM_COLD_LIST//"', filelist_huss = '"//ATM_COLD_LIST// &
+                  "', filelist_uas = '"//ATM_COLD_LIST//"', filelist_vas = '"//ATM_COLD_LIST// &
+                  "', filelist_psl = '"//ATM_COLD_LIST//"', filelist_rlds = '"//ATM_COLD_LIST// &
+                  "', filelist_rsds = '"//ATM_COLD_LIST//"', filelist_prra = '"//ATM_COLD_LIST// &
+                  "', filelist_prsn = '"//ATM_COLD_LIST//"' /"//NL// &
+                  "&ocean_vmix_nml dt_therm_ratio = 2 /"//NL// &
+                  "&ocean_ice_nml enable = .true., ncat = 5, nk_ice = 2, "// &
+                  "restore_lambda = 20.0, dynamics = .true., evp_sub_steps = 30, "// &
+                  "cfl_trunc = 0.01, project_ci = .true., transport = .true., "// &
+                  "adv_substeps = 2 /"//NL// &
+                  "&ocean_ice_ic_nml conc_config = 'uniform', h_ice = 1.0, conc = 0.7 /"//NL
+         else
+            wl = ATM_WARM_LIST
+            if (label == "bulk_flux_fold") wl = ATM_CRSE_LIST
+            nml = nml// &
+                  "&tracer_nml initial_temperature = 12.0, initial_salinity = 35.0, "// &
+                  "T_init_surface = 20.0, T_init_bottom = 4.0 /"//NL// &
+                  "&ocean_atm_forcing_nml enable = .true., time_mode = 'interannual', "// &
+                  "filelist_tas = '"//trim(wl)//"', filelist_huss = '"//trim(wl)// &
+                  "', filelist_uas = '"//trim(wl)//"', filelist_vas = '"//trim(wl)// &
+                  "', filelist_psl = '"//trim(wl)//"', filelist_rlds = '"//trim(wl)// &
+                  "', filelist_rsds = '"//trim(wl)//"', filelist_prra = '"//trim(wl)// &
+                  "', filelist_prsn = '"//trim(wl)//"' /"//NL
+         end if
+         if (label == "bulk_flux_fold") then
+            ! Coarse (30 x 10 degree) atmosphere source.  The default
+            ! conservative flux regrid (`fluxes_regrid` is not set) overflows
+            ! its per-target-cell candidate cap (`REGRID_NMAX_CAP`) on the
+            ! tripolar cap with a fine (5-degree) source, even on one rank:
+            ! a serial limitation independent of the decomposition.  The
+            ! 10-degree latitude spacing keeps a source centre (85N) poleward
+            ! of `phi_join`, so the bilinear state regrid has a meridional
+            ! gradient over the whole cap, not only in longitude.
+            nml = nml// &
+                  "&grid_nml nx = 30, ny = 24, nghost = 3, dx = 12.0, dy = 1.0 /"//NL// &
+                  "&ocean_grid_nml grid_config = 'tripolar', lon_west = 0.0, "// &
+                  "lat_south = 59.0, phi_join = 74.0, lon_pole = 0.0, "// &
+                  "rad_earth = 6.378e6, coriolis_scheme = 'planetary' /"//NL// &
+                  "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
+                  "&ocean_topo_nml topo_config = 'double_drake', max_depth = 1000.0, "// &
+                  "slope_scale = 0.2 /"//NL// &
+                  "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
+                  "north = 'tripolar_fold' /"//NL
+         else
+            nml = nml// &
+                  "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
+                  "dx = 1.0, dy = 1.0 /"//NL// &
+                  "&ocean_grid_nml grid_config = 'spherical', lon_west = 0.0, "// &
+                  "lat_south = 20.0, rad_earth = 6.371e6, "// &
+                  "coriolis_scheme = 'planetary' /"//NL// &
+                  "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
+                  "&ocean_topo_nml topo_config = 'spoon', max_depth = 3000.0, "// &
+                  "edge_depth = 300.0, slope_scale = 300000.0 /"//NL
+            if (label == "bulk_flux_ice") then
+               nml = nml//"&ocean_bc_nml west = 'periodic', east = 'periodic', "// &
+                     "south = 'wall', north = 'wall' /"//NL
+            else
+               nml = nml//"&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', "// &
+                     "north = 'wall' /"//NL
+            end if
+         end if
       case default
          error stop "test_ocean_decomp_bitid_mpi: unknown case"
       end select
@@ -1367,7 +1530,7 @@ contains
             glob = [nbad, nfin, 0]
 #ifndef RDB_NO_NETCDF
             if ((label == "sea_ice" .or. label == "sea_ice_transport" .or. &
-                 label == "dtbt_reset" .or. is_ice_fold_case(label)) .and. &
+                 label == "bulk_flux_ice" .or. label == "dtbt_reset" .or. is_ice_fold_case(label)) .and. &
                 (nprocs/px == 1 .or. px == nprocs/px) .and. nprocs > 1) then
                ! 4x1 and 2x2 at np = 4 (and 2x1 at np = 2).
                call check_resume_leg(case_nml(label, scheme, px, nprocs/px), dec, &
@@ -1752,7 +1915,123 @@ contains
       call nc_put_var_2d(ncid, v1, tt(:, :, 1))
       call nc_put_var_2d(ncid, v2, tt(:, :, 2))
       call nc_close(ncid)
+
+      ! Chlorophyll climatology (x, y, time): two records, strongly
+      ! non-uniform and non-symmetric in both directions (a low-chl corner
+      ! against a bloom), so a wrong window or a stale seam ghost changes the
+      ! band opacities.
+      tt(:, :, 2) = 0.0_wp
+      do j = 1, NY_G
+         do i = 1, NX_G
+            x = real(i, wp)/real(NX_G, wp)
+            y = real(j, wp)/real(NY_G, wp)
+            tt(i, j, 1) = 0.01_wp + 0.25_wp*x**2*(1.0_wp - 0.7_wp*y) + &
+                          0.12_wp*abs(sin(9.0_wp*x + 4.0_wp*y))
+            tt(i, j, 2) = 1.5_wp*tt(i, j, 1) + 0.03_wp*y
+         end do
+      end do
+      call nc_create_file(CHL_FILE, ncid)
+      call nc_def_dim(ncid, "x", NX_G, dx_)
+      call nc_def_dim(ncid, "y", NY_G, dy_)
+      call nc_def_dim(ncid, "time", 2, dz_)
+      call nc_def_var_3d(ncid, "CHL", [dx_, dy_, dz_], v1)
+      call rdb_def_var_1d(ncid, "time", dz_, v2)
+      call nc_enddef(ncid)
+      ierr = nf90_put_var(ncid, v1, tt)
+      call rdb_put_var_1d(ncid, v2, [0.0_wp, 172800.0_wp])
+      call nc_close(ncid)
+      call write_atm_file(ATM_WARM, ATM_WARM_LIST, 288.0_wp, 4.0e-3_wp, 72, 36)
+      call write_atm_file(ATM_COLD, ATM_COLD_LIST, 255.0_wp, 6.0e-4_wp, 72, 36)
+      ! 30 x 10 degree source for the tripolar cap (see the bulk_flux_fold case).
+      call write_atm_file(ATM_CRSE, ATM_CRSE_LIST, 288.0_wp, 4.0e-3_wp, 12, 18)
    end subroutine write_input_files
+
+   subroutine write_atm_file(path, listname, tas0, huss0, nlon, nlat)
+      !! One global lon-lat file (5 degrees, two time records, all nine CMOR
+      !! names) of spatially varying, east-west and north-south ASYMMETRIC
+      !! prescribed atmospheric state (affine + sinusoid in lon/lat), plus
+      !! the one-line filelist the namelist points at.
+      character(len=*), intent(in) :: path, listname
+      real(wp), intent(in) :: tas0, huss0
+      integer, intent(in) :: nlon, nlat
+      real(wp), parameter :: PI = 3.14159265358979323846_wp
+      character(len=4), parameter :: VN(9) = [character(len=4) :: "tas", "huss", "uas", &
+                                                                                       "vas", "psl", "rlds", "rsds", "prra", "prsn"]
+      real(wp) :: lon(nlon), lat(nlat), lonb(2, nlon), latb(2, nlat), tax(2), f(nlon, nlat, 2)
+      real(wp) :: sx, sy, dlo, dla
+      integer :: ncid, dlon_, dlat_, dbnd, dtim, vlon, vlat, vlonb, vlatb, vtim, vf(9)
+      integer :: v, i, j, k, ierr, u
+
+      dlo = 360.0_wp/real(nlon, wp)
+      dla = 180.0_wp/real(nlat, wp)
+      do i = 1, nlon
+         lonb(1, i) = dlo*real(i - 1, wp)
+         lonb(2, i) = dlo*real(i, wp)
+         lon(i) = 0.5_wp*(lonb(1, i) + lonb(2, i))
+      end do
+      do j = 1, nlat
+         latb(1, j) = -90.0_wp + dla*real(j - 1, wp)
+         latb(2, j) = -90.0_wp + dla*real(j, wp)
+         lat(j) = 0.5_wp*(latb(1, j) + latb(2, j))
+      end do
+      tax = [0.0_wp, 10.0_wp]
+      call nc_create_file(path, ncid)
+      call nc_def_dim(ncid, "lon", nlon, dlon_)
+      call nc_def_dim(ncid, "lat", nlat, dlat_)
+      call nc_def_dim(ncid, "bnds", 2, dbnd)
+      call nc_def_dim(ncid, "time", 2, dtim)
+      call rdb_def_var_1d(ncid, "lon", dlon_, vlon)
+      call rdb_def_var_1d(ncid, "lat", dlat_, vlat)
+      call nc_def_var_2d(ncid, "lon_bnds", [dbnd, dlon_], vlonb)
+      call nc_def_var_2d(ncid, "lat_bnds", [dbnd, dlat_], vlatb)
+      call rdb_def_var_1d(ncid, "time", dtim, vtim)
+      call nc_put_att(ncid, vtim, "units", "days since 2000-06-20 00:00:00")
+      do v = 1, 9
+         call nc_def_var_3d(ncid, trim(VN(v)), [dlon_, dlat_, dtim], vf(v))
+      end do
+      call nc_enddef(ncid)
+      call rdb_put_var_1d(ncid, vlon, lon)
+      call rdb_put_var_1d(ncid, vlat, lat)
+      ierr = nf90_put_var(ncid, vlonb, lonb)
+      ierr = nf90_put_var(ncid, vlatb, latb)
+      call rdb_put_var_1d(ncid, vtim, tax)
+      do v = 1, 9
+         do k = 1, 2
+            do j = 1, nlat
+               do i = 1, nlon
+                  sx = sin(2.0_wp*PI*lon(i)/37.0_wp + 0.3_wp)
+                  sy = cos(2.0_wp*PI*lat(j)/29.0_wp - 0.5_wp)
+                  select case (v)
+                  case (1)
+                     f(i, j, k) = tas0 + 4.0_wp*sx + 0.15_wp*(lat(j) - 20.0_wp) + &
+                                  0.05_wp*tax(k)
+                  case (2)
+                     f(i, j, k) = huss0*(1.0_wp + 0.2_wp*sy + 0.1_wp*sx)
+                  case (3)
+                     f(i, j, k) = 6.0_wp + 4.0_wp*sx + 0.05_wp*(lat(j) - 20.0_wp)
+                  case (4)
+                     f(i, j, k) = -3.0_wp + 3.0_wp*sy + 0.04_wp*lon(i) + 0.02_wp*tax(k)
+                  case (5)
+                     f(i, j, k) = 1.01e5_wp - 300.0_wp*sx + 5.0_wp*lat(j)
+                  case (6)
+                     f(i, j, k) = 330.0_wp + 15.0_wp*sy + 20.0_wp*sx
+                  case (7)
+                     f(i, j, k) = 180.0_wp + 40.0_wp*sx*sy + 0.5_wp*lat(j)
+                  case (8)
+                     f(i, j, k) = 2.0e-5_wp*(1.0_wp + 0.5_wp*sx)
+                  case default
+                     f(i, j, k) = 1.0e-6_wp*(1.0_wp + 0.5_wp*sy)
+                  end select
+               end do
+            end do
+         end do
+         ierr = nf90_put_var(ncid, vf(v), f)
+      end do
+      call nc_close(ncid)
+      open (newunit=u, file=listname, status='replace', action='write')
+      write (u, '(a)') trim(path)
+      close (u)
+   end subroutine write_atm_file
 #endif
 
 end program test_ocean_decomp_bitid_mpi
