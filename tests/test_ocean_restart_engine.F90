@@ -908,16 +908,21 @@ contains
       type(snapshot_t) :: sb
       real(wp) :: t_a, t_b
       integer :: step_b, ierr, f
-      logical :: ok
+      logical :: ok, ea_live, eb_live
+
+      ea_live = .false.
+      eb_live = .false.
 
       checks: block
          call make_engine(ea, cfg_a, case_nml("cavity_sigma_ustar"), ok)
+         ea_live = ok
          call check(error, ok, "engine A setup failed")
          if (allocated(error)) exit checks
          t_a = 0.0_wp
          call advance(ea, cfg_a, t_a, 5, ok)
          call check(error, ok, "engine A failed before the checkpoint")
          if (allocated(error)) exit checks
+         !$acc update self(ea%state%surface_stress%stress_shelf)
          call check(error, maxval(abs(ea%state%surface_stress%stress_shelf)) > 0.0_wp, &
                     "vacuous: stress_shelf is zero in the written run")
          if (allocated(error)) exit checks
@@ -927,15 +932,18 @@ contains
          if (allocated(error)) exit checks
          call engine_exit_data(ea)
          call engine_teardown(ea)
+         ea_live = .false.
 
          call make_engine(eb, cfg_b, case_nml("cavity_sigma_ustar"), ok, &
                           restart_file=FN, t0=t_b, step0=step_b)
+         eb_live = ok
          call check(error, ok, "engine B (old-style cavity checkpoint) setup failed")
          if (allocated(error)) exit checks
          call check(error, eb%warm_restart, "engine B did not take the warm-restart path")
          if (allocated(error)) exit checks
          call check(error, step_b == 5, "restart step count not restored")
          if (allocated(error)) exit checks
+         !$acc update self(eb%state%surface_stress%stress_shelf, eb%state%cavity_flux%ustar)
          call check(error, maxval(abs(eb%state%surface_stress%stress_shelf)) == 0.0_wp, &
                     "the dropped shelf_stress did not keep its zero seed")
          if (allocated(error)) exit checks
@@ -952,8 +960,17 @@ contains
             if (allocated(error)) exit checks
          end do
       end block checks
-      call engine_exit_data(eb)
-      call engine_teardown(eb)
+      ! Tear down whatever is still mapped on EVERY path: a check that
+      ! fails above `exit checks` must not leave an engine's device
+      ! mappings (and the halo buffers) behind for the next case.
+      if (ea_live) then
+         call engine_exit_data(ea)
+         call engine_teardown(ea)
+      end if
+      if (eb_live) then
+         call engine_exit_data(eb)
+         call engine_teardown(eb)
+      end if
       call delete_file(FN)
    end subroutine test_engine_cavity_old_checkpoint_loads
 
