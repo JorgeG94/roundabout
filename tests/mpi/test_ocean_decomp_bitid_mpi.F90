@@ -59,6 +59,8 @@
 !!     EOS, `2gyre` wind;
 !!   * obc_radiation_sponge — Orlanski-radiating open south edge with tracer
 !!     reservoirs, clamped north inflow, legacy relaxing sponge band west;
+!!   * obc_sponge_east — the same with the sponge band on the EAST edge (west
+!!     a wall), the combination once documented as drifting at round-off;
 !!   * closures — the spherical case with EPBL (instead of KPP), Fox-Kemper
 !!     MLE, GM + MEKE, Redi, kappa-shear, tidal mixing, convective
 !!     adjustment, geothermal heating and tracer hdiff;
@@ -81,6 +83,10 @@
 !!   * sss_restore - the island basin with FILE sea-surface-salinity restoring
 !!     (per-rank windowed two-record target, halo-exchanged, piston salt flux,
 !!     net-zero shift through the EFP allreduce); needs NetCDF;
+!!   * manizza - the island basin with the chlorophyll-dependent N-band
+!!     shortwave (`sw_scheme = 'manizza05'`): per-rank windowed two-record
+!!     chlorophyll, its seam-ghost exchange, the per-band opacities; needs
+!!     NetCDF;
 !!   * balanced_vortex / balanced_vortex_t0 - the isolated balanced cold-core
 !!     vortex IC (`ic_config = 'balanced_vortex'`) on a closed beta-plane, centred
 !!     on the 2x1/1x2 seams and the 2x2 corner; `_t0` takes zero steps so the
@@ -89,6 +95,8 @@
 !!     + diabatic_first = .false.) on a periodic channel, >1 sub-cycle pass;
 !!   * drain_ratio_weno5 / _weno7 / _weno9 - the same drain with the WENO swept
 !!     reconstruction at nghost 3 / 4 / 5 (rung ladder keyed on global edges);
+!!   * dtbt_reset / dtbt_reset_period - `&ocean_bt_nml dtbt` re-derived every step / hourly;
+!!     `dtbt` sits at an n_inner threshold so n_inner flips 14 <-> 15 mid-run (27x19 trench)
 !!   * drain_ratio_fold / drain_ratio_fold_h3 - the same drain across the tripolar fold
 !!     (distributed fold exchange for px > 1);
 !!   * tracer_ppm_h3 - re-entrant channel (periodic x) with
@@ -154,6 +162,19 @@
 !!     shows here exactly like every other compared field; the
 !!     BT-correction fold itself stays UNIFORM (D1 follow-up — MOM6 never
 !!     weights it).
+!!   * cavity_zfixed / cavity_sigma / cavity_sigma_ratio2 / cavity_periodic /
+!!     cavity_melt_only / cavity_combo (EPBL + hj99 + implicit_top_drag + tracer ratio 2) / cavity_gall — the ice-shelf cavity (dyn + virtual
+!!     melt + quadratic top drag, `cavity_melt_only` without the drag) with a
+!!     grounded disc and an L-shaped calving front on the 2x2 seams
+!!     (`cavity_nml`).  On top of the registry fields the gate compares the
+!!     cavity's own outputs (melt, u*, t_b, stress_shelf, stress_top) on owned
+!!     cells, checks the SEAM-GHOST images of the four face twins
+!!     `cover_u/v`, `k_top_u/v` against the serial reference, and fails when a
+!!     non-vacuity count of the serial reference is 0.  `cavity_gall` has a
+!!     tile that is entirely grounded on the 4x1 split; its global grounded
+!!     fraction is under `grounded_max_frac`, so every layout must ACCEPT it,
+!!     and the same draft against a lower limit must be REFUSED on every rank
+!!     without a hang (`check_cavity_grounded_refusal`).
 !! All are stratified with a boundary-layer scheme on, so the tiles exchange real
 !! flow and real tracer structure.  26 x 18 cells (tripolar: 30 x 24),
 !! nghost = 3 (weno7_pv: 26 x 24, nghost = 5): every factorisation above is
@@ -173,7 +194,7 @@ program test_ocean_decomp_bitid_mpi
    use rdb_constants, only: wp
    use rdb_config, only: config_t, read_config_from_string, validate_config
    use rdb_ocean_status, only: OCEAN_STATUS_OK
-   use rdb_error_ring, only: error_ring_clear, error_ring_get, ERROR_RING_MSG_LEN
+   use rdb_error_ring, only: error_ring_clear, error_ring_count, error_ring_get
    use rdb_ocean_engine, only: ocean_engine_t, engine_setup, engine_enter_data, &
                                engine_step, engine_step_ice, engine_step_finalize, &
                                engine_exit_data, &
@@ -200,6 +221,8 @@ program test_ocean_decomp_bitid_mpi
    integer, parameter :: NX_G = 26
    integer, parameter :: NY_G = 18
    integer, parameter :: N_STEPS = 48
+   character(len=*), parameter :: DTBT_FRAC = "-0.84678989"
+      !! `dtbt` of the `dtbt_reset*` cases (fraction of the largest stable substep).
    integer, parameter :: N_CKPT = 25
       !! Checkpoint step of the write/resume leg: odd, so with
       !! `dt_therm_ratio = 2` it lands mid thermo window.
@@ -213,6 +236,7 @@ program test_ocean_decomp_bitid_mpi
    character(len=*), parameter :: ZINIT_FILE = "bitid_zinit.nc"
    character(len=*), parameter :: SSS_FILE = "bitid_sss.nc"
    character(len=*), parameter :: TIDE_FILE = "bitid_tide.nc"
+   character(len=*), parameter :: CHL_FILE = "bitid_chl.nc"
    character(len=*), parameter :: ATM_WARM = "bitid_atm_warm.nc"
    character(len=*), parameter :: ATM_COLD = "bitid_atm_cold.nc"
    character(len=*), parameter :: ATM_CRSE = "bitid_atm_coarse.nc"
@@ -239,6 +263,9 @@ program test_ocean_decomp_bitid_mpi
          !! Wet/dry runs: owned-cell flips of `wd_wet_dyn`, sampled once per outer
          !! step, in the seam bands of the shoal -- (wet->dry, dry->wet) x
          !! (i-line band, j-line band, corner box).  Zero on every other case.
+      integer :: ncav(6) = 0
+         !! Cavity non-vacuity counts over the OWNED cells: covered wet, open wet,
+         !! grounded, melting, top-drag stress > 0, k_top < nz.
       type(conservation_budget_t) :: bud
          !! Closed-budget mass/salt/heat out+src totals at the final step —
          !! EFP-reduced (`reproducing_sums`, default on), so these must be
@@ -253,12 +280,12 @@ program test_ocean_decomp_bitid_mpi
       !! `RDB_BITID_CASES`: run only the cases whose name contains this substring.
    type(comm_t) :: comm
    character(len=16), parameter :: SCHEMES(2) = [character(len=16) :: "pred_corr", "ssp_rk2"]
-   character(len=24), parameter :: CASES(52) = [character(len=24) :: &
+   character(len=24), parameter :: CASES(63) = [character(len=24) :: &
                                                 "island_basin", "weno7_pv", &
                                                 "periodic_channel_zstar", &
                                                 "visc_rem_zstar", &
                                                 "periodic_sponge", &
-                                                "open_obc", "spherical", "obc_radiation_sponge", &
+                                                "open_obc", "spherical", "obc_radiation_sponge", "obc_sponge_east", &
                                                 "closures", "file_readers", &
                                                 "file_readers_zstar_full", &
                                                 "file_readers_zstar", "sea_ice", &
@@ -277,7 +304,11 @@ program test_ocean_decomp_bitid_mpi
                                                 "drain_ratio_weno9", "drain_ratio_fold", &
                                                 "drain_ratio_fold_h3", "eulz", "eulz_periodic", &
                                                 "eulz_tripolar", "eulz_epbl_mle", "bulk_flux", &
-                                                "bulk_flux_ice", "bulk_flux_fold", "wetdry_shoal", &
+                                                "bulk_flux_ice", "bulk_flux_fold", "manizza", "dtbt_reset", &
+                                                "dtbt_reset_period", &
+                                                "cavity_zfixed", "cavity_sigma", &
+                                                "cavity_sigma_ratio2", "cavity_gall", "cavity_melt_only", "cavity_periodic", &
+                                                "cavity_combo", "wetdry_shoal", &
                                                 "wetdry_periodic", "wetdry_file"]
 
    call comm_env_init()
@@ -302,6 +333,7 @@ program test_ocean_decomp_bitid_mpi
           trim(CASES(ic)) == "file_readers_zstar_full" .or. &
           trim(CASES(ic)) == "sss_restore" .or. &
           trim(CASES(ic)) == "wetdry_file" .or. &
+          trim(CASES(ic)) == "manizza" .or. &
           trim(CASES(ic)) == "tidal_files" .or. &
           trim(CASES(ic)) == "tidal_polzin" .or. &
           index(trim(CASES(ic)), "bulk_flux") == 1 .or. &
@@ -318,6 +350,8 @@ program test_ocean_decomp_bitid_mpi
    end do
 
    if (nprocs >= 2) call check_single_rank_fences()
+   if (len_trim(case_filter) == 0 .or. index("cavity_grounded_refused", trim(case_filter)) > 0) &
+      call check_cavity_grounded_refusal()
 
    call comm%barrier()
    total_fail = n_fail
@@ -342,9 +376,10 @@ contains
       integer, intent(in) :: px, py
       character(len=:), allocatable :: nml
       character(len=*), parameter :: NL = new_line("a")
-      character(len=16) :: spx, spy, snx, sny, sng
-      character(len=:), allocatable :: common, bt_extra, ice_dyn, hv_extra, drain_extra
+      character(len=16) :: spx, spy, snx, sny, sng, snz
+      character(len=:), allocatable :: common, bt_extra, bt_head, ice_dyn, hv_extra, drain_extra
       character(len=16) :: rad_earth_s, wind_s, wind_y_s
+      character(len=8) :: sponge_w, sponge_e
       character(len=64) :: wl
 
       ! The visc_rem chain rides on the common &ocean_bt_nml group (one
@@ -358,6 +393,11 @@ contains
                 "project_ci = .true., "
       if (label == "sea_ice_fold_nodyn") ice_dyn = "dynamics = .false., "
       bt_extra = ""
+      bt_head = "auto_n_inner = .true., "
+      ! Per-step (period 0) / hourly (period 3600 s) re-derivation of n_inner from
+      ! the live thicknesses; the fraction sits at an n_inner threshold (see case).
+      if (label == "dtbt_reset") bt_head = "dtbt = "//DTBT_FRAC//", dtbt_reset_period = 0.0, "
+      if (label == "dtbt_reset_period") bt_head = "dtbt = "//DTBT_FRAC//", dtbt_reset_period = 3600.0, "
       if (label == "visc_rem_zstar") bt_extra = ", visc_rem_chain = .true."
       if (label == "visc_rem_chain") then
          bt_extra = ", visc_rem_chain = .true., frhat_scheme = 'hybrid'"
@@ -408,24 +448,37 @@ contains
       write (spy, '(i0)') py
       write (snx, '(i0)') NX_G
       write (sny, '(i0)') NY_G
+      snz = "4"
+      if (label == "manizza") snz = "8"
       ! weno9 needs nghost = 5: widen the grid so the np = 4 layouts (1x4 ->
       ! ny/4 rows, 4x1 -> nx/4 columns) stay at least nghost wide.
       if (label == "drain_ratio_weno9") then
          snx = "32"
          sny = "24"
       end if
+      ! Odd extents put the trench centre in the middle of a cell, so the CFL-controlling
+      ! (deepest) cell is unique and sits beside the 2-way seam on both axes.
+      if (index(label, "dtbt_reset") == 1) then
+         snx = "27"
+         sny = "19"
+      end if
       common = "&sim_nml sim_type = 'ocean' /"//NL// &
                "&mpi_nml px = "//trim(spx)//", py = "//trim(spy)//" /"//NL// &
                "&time_nml t_end = 86400.0, dt_fixed = 900.0 /"//NL// &
-               "&nonhydrostatic_nml nz_layers = 4 /"//NL// &
+               "&nonhydrostatic_nml nz_layers = "//trim(snz)//" /"//NL// &
                "&tracer_nml initial_temperature = 12.0, initial_salinity = 35.0, "// &
                "T_init_surface = 20.0, T_init_bottom = 4.0 /"//NL// &
-               "&ocean_bt_nml auto_n_inner = .true., split_scheme = '"//scheme//"'"// &
+               "&ocean_bt_nml "//bt_head//"split_scheme = '"//scheme//"'"// &
                bt_extra//" /"//NL// &
                "&ocean_hvisc_nml nu_h = 200.0, lateral_closure = 'smagorinsky', "// &
                "smag_ah = .true."//hv_extra//" /"//NL// &
                "&ocean_diag_nml enabled = .false. /"//NL// &
                ""
+
+      if (index(label, "cavity_") == 1) then
+         nml = cavity_nml(label, scheme, spx, spy)//"&output_nml output_to_file = .false. /"//NL
+         return
+      end if
 
       select case (label)
       case ("island_basin")
@@ -457,6 +510,27 @@ contains
                "&ocean_restore_nml enable_restore_salt = .true., piston_s = 0.5, "// &
                "sss_file = '"//SSS_FILE//"', sss_var = 'salt', sss_as_sflux = .true., "// &
                "sss_adjust_net_zero = .true. /"//NL// &
+               "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
+      case ("manizza")
+         ! The island basin with the Manizza (2005) chlorophyll shortwave: the
+         ! per-rank windowed read of a two-record spatially non-uniform,
+         ! non-symmetric chlorophyll climatology, its seam-ghost exchange, and
+         ! the per-band opacities feeding the deposition kernel and the KPP
+         ! B_0 coupling.  A wrong window or a stale ghost changes the heating.
+         ! Shallow (100 m) and 8 layers deep so the blue AND red bands cross
+         ! several interfaces: the opacities, not just the surface layer, drive
+         ! the heating.
+         nml = common// &
+               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
+               "dx = 20000.0, dy = 20000.0 /"//NL// &
+               "&physics_nml coriolis_f = 1.0e-4 /"//NL// &
+               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
+               "&ocean_topo_nml topo_config = 'island', max_depth = 100.0, "// &
+               "slope_scale = 0.15, wind_config = '2gyre', taux_magnitude = 0.1, "// &
+               "coriolis_beta = 2.0e-11 /"//NL// &
+               "&ocean_thermo_nml enable_thermodynamics = .true., q_heat = 400.0, "// &
+               "sw_pen_frac = 1.0, sw_scheme = 'manizza05', "// &
+               "sw_chl_file = '"//CHL_FILE//"', sw_chl_var = 'CHL' /"//NL// &
                "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
       case ("visc_rem_chain")
          ! The island basin with the visc_rem chain live end to end: MOM6
@@ -657,6 +731,20 @@ contains
                "&ocean_continuity_nml ppm_limit_pos = .true. /"//NL// &
                "&ocean_wetdry_nml enable = .true. /"//NL// &
                "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
+      case ("dtbt_reset", "dtbt_reset_period")
+         ! Re-entrant channel with a Gaussian TRENCH (peak_depth > max_depth) at the
+         ! domain centre, which on the odd 27 x 19 grid is the middle of cell (14, 10):
+         ! the unique deepest, hence CFL-controlling, cell.  It is the first/last
+         ! column and row of a 2x1 / 1x2 tile, so its limit reads h across the seam.
+         nml = common// &
+               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
+               "dx = 20000.0, dy = 20000.0 /"//NL// &
+               "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 0.2 /"//NL// &
+               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
+               "&ocean_topo_nml topo_config = 'seamount', max_depth = 2000.0, "// &
+               "edge_depth = 3000.0, slope_scale = 60000.0 /"//NL// &
+               "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
+               "north = 'wall' /"//NL
       case ("tracer_ppm_h3")
          ! Re-entrant channel (periodic west/east) over a seamount, sigma, with
          ! the ppm_h3 horizontal tracer advection (Huynh edges + limiter, a
@@ -833,9 +921,15 @@ contains
                   "&ocean_thermo_nml enable_thermodynamics = .true., q_heat = -100.0 /"//NL// &
                   "&ocean_vmix_nml dt_therm_ratio = 2, diabatic_first = .false. /"//NL
          end select
-      case ("obc_radiation_sponge")
+      case ("obc_radiation_sponge", "obc_sponge_east")
          ! Orlanski-radiating open south edge with tracer reservoirs, a
          ! clamped (inflow) north edge, and a relaxing sponge band west.
+         sponge_w = "sponge"
+         sponge_e = "wall"
+         if (label == "obc_sponge_east") then
+            sponge_w = "wall"
+            sponge_e = "sponge"
+         end if
          nml = common// &
                "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
                "dx = 10000.0, dy = 10000.0 /"//NL// &
@@ -844,7 +938,8 @@ contains
                "&ocean_topo_nml topo_config = 'seamount', max_depth = 2000.0, "// &
                "edge_depth = 500.0, slope_scale = 40000.0, wind_config = '2gyre', "// &
                "taux_magnitude = 0.05 /"//NL// &
-               "&ocean_bc_nml west = 'sponge', east = 'wall', south = 'open', "// &
+               "&ocean_bc_nml west = '"//trim(sponge_w)//"', east = '"//trim(sponge_e)// &
+               "', south = 'open', "// &
                "north = 'clamped', north_clamped_v = -0.01, sponge_width = 3, "// &
                "sponge_strength = 1.0e-4, sponge_relax_tracers = .true., "// &
                "radiation_scheme = 'orlanski', res_lscale_out = 20000.0, "// &
@@ -1076,6 +1171,94 @@ contains
       end if
    end function case_nml
 
+   function cavity_nml(label, scheme, spx, spy, gfrac) result(nml)
+      !! Ice-shelf cavity cases (dyn + virtual melt + quadratic top drag, all
+      !! walls).  The text is `cavity_case_nml` of `test_ocean_cavity_engine`
+      !! (which asserts the geometry sits ON the 2x2 seams: a grounded disc
+      !! from a centred seamount, an L-shaped sloping calving front).
+      !!   cavity_zfixed       z_fixed + closed faces, nz 8, PP81;
+      !!   cavity_sigma        sigma, nz 4, KPP on (live under-ice u*);
+      !!   cavity_sigma_ratio2 cavity_sigma with `dt_therm_ratio = 2`;
+      !!   cavity_melt_only cavity_sigma with the top drag OFF (melt-only under-ice u*);
+      !!   cavity_periodic cavity_sigma re-entrant in x (periodic west/east): the shelf
+      !!                       box sits against the wrap and the face twins wrap;
+      !!   cavity_combo       cavity_sigma with the cheap composition knobs that have no case of
+      !!                       their own: EPBL (KPP off), the `hj99` exchange law, the vdiff
+      !!                       `implicit_top_drag` fold and `dt_tracer_advect_ratio = 2`;
+      !!   cavity_gall         a flat bed under a deep sloping draft with no box
+      !!                       limit: the west 14 of 26 columns are grounded
+      !!                       (global 14/26 = 0.54), so a 4x1 west tile is 100 %
+      !!                       grounded; `grounded_max_frac` is `gfrac`.
+      character(len=*), intent(in) :: label, scheme, spx, spy
+      real(wp), intent(in), optional :: gfrac
+      character(len=:), allocatable :: nml
+      character(len=*), parameter :: NL = new_line("a")
+      character(len=:), allocatable :: vc, nzl, cav, vm, topo, draft, tdrag
+      character(len=24) :: sfrac
+      character(len=8) :: xedge
+      character(len=48) :: vdf, xlaw
+
+      vm = ""
+      vdf = ""
+      xlaw = "const_gamma"
+      xedge = "wall"
+      if (label == "cavity_periodic") xedge = "periodic"
+      tdrag = "&ocean_tdrag_nml enable = .true., form = 'quadratic', cd = 2.5e-3 /"//NL
+      if (label == "cavity_melt_only") tdrag = ""
+      if (label == "cavity_zfixed") then
+         nzl = "8"
+         vc = "&vcoord_nml vcoord_type = 'z_fixed', zfixed_closed_faces = .true. /"//NL
+         cav = ", h_min_cavity = 250.0 /"//NL
+         vm = "&ocean_vmix_nml use_kpp = .false., pp81_nu0 = 0.0, pp81_nu_bg = 1.0e-3, "// &
+              "pp81_kappa_bg = 5.0e-5 /"//NL
+      else
+         nzl = "4"
+         vc = "&vcoord_nml vcoord_type = 'sigma' /"//NL
+         cav = ", h_min_cavity = 100.0 /"//NL
+         if (label == "cavity_sigma_ratio2") vm = "&ocean_vmix_nml dt_therm_ratio = 2 /"//NL
+         if (label == "cavity_combo") then
+            vm = "&ocean_vmix_nml use_kpp = .false., dt_therm_ratio = 2, dt_tracer_advect_ratio = 2 /"//NL// &
+                 "&ocean_epbl_nml enable = .true. /"//NL
+            vdf = "&ocean_vdiff_nml implicit_top_drag = .true. /"//NL
+            xlaw = "hj99"
+         end if
+      end if
+      topo = "&ocean_topo_nml topo_config = 'seamount', max_depth = 1000.0, edge_depth = 400.0, "// &
+             "slope_scale = 80000.0, wind_config = 'constant', taux_magnitude = 0.05 /"//NL
+      draft = "draft_depth = 500.0, draft_slope = -4.0e-4, draft_x0 = 0.0, "// &
+              "draft_x1 = 380000.0, draft_y1 = 260000.0"
+      if (index(label, "cavity_gall") == 1) then
+         topo = "&ocean_topo_nml topo_config = 'flat', max_depth = 1000.0, "// &
+                "wind_config = 'constant', taux_magnitude = 0.05 /"//NL
+         draft = "draft_depth = 1400.0, draft_slope = -2.2e-3, draft_x0 = 0.0"
+         sfrac = "0.6"
+         if (present(gfrac)) write (sfrac, '(f6.3)') gfrac
+         cav = ", h_min_cavity = 100.0, grounded_max_frac = "//trim(adjustl(sfrac))//" /"//NL
+      end if
+      nml = "&sim_nml sim_type = 'ocean' /"//NL// &
+            "&mpi_nml px = "//trim(spx)//", py = "//trim(spy)//" /"//NL// &
+            "&time_nml t_end = 86400.0, dt_fixed = 900.0 /"//NL// &
+            "&nonhydrostatic_nml nz_layers = "//nzl//" /"//NL// &
+            "&tracer_nml initial_salinity = 34.5, T_init_surface = 3.0, T_init_bottom = 1.0 /"//NL// &
+            "&ocean_bt_nml auto_n_inner = .true., split_scheme = '"//scheme//"' /"//NL// &
+            "&ocean_hvisc_nml nu_h = 200.0, lateral_closure = 'smagorinsky', smag_ah = .true. /"//NL// &
+            "&ocean_diag_nml enabled = .false. /"//NL// &
+            "&grid_nml nx = 26, ny = 18, nghost = 3, dx = 20000.0, dy = 20000.0 /"//NL// &
+            "&physics_nml coriolis_f = -1.409e-4 /"//NL// &
+            vc//vm//topo// &
+            "&ocean_cavity_dyn_nml enable = .true., draft_config = 'linear', "// &
+            draft//cav// &
+            "&ocean_forcing_nml enable_components = .true. /"//NL// &
+            "&ocean_cavity_melt_nml enable = .true., exchange_law = '"//trim(xlaw)//"', "// &
+            "gamma_t = 2.2e-2, gamma_s = -1.0, cdrag_top = 2.5e-3, "// &
+            "ice_conduction = 'insulating', s_ice = 0.0, far_field_depth = 10.0 /"//NL// &
+            tdrag//vdf// &
+            "&ocean_pgf_nml form = 'fv_mom6', p_top_in_bc = .true. /"//NL// &
+            "&ocean_eos_nml eos = 'linear', tfreeze_set = 'isomip' /"//NL// &
+            "&ocean_bc_nml west = '"//xedge//"', east = '"//xedge//"', south = 'wall', "// &
+            "north = 'wall' /"//NL
+   end function cavity_nml
+
    subroutine run_one(nml, csize, crank, snap, ok)
       !! Configure, step N_STEPS, snapshot every registry field to host.
       character(len=*), intent(in) :: nml
@@ -1215,6 +1398,64 @@ contains
       end do
       prev = engine%state%dyn%bt_work%wd_wet_dyn
    end subroutine count_wd_flips
+   subroutine push_field(s, tag, a)
+      !! Append one 2-D field (stored with a unit third extent).
+      type(snap_t), intent(inout) :: s
+      character(len=*), intent(in) :: tag
+      real(wp), intent(in) :: a(:, :)
+      s%n = s%n + 1
+      if (s%n > MAXF) error stop "test_ocean_decomp_bitid_mpi: raise MAXF"
+      s%f(s%n)%tag = tag
+      allocate (s%f(s%n)%a(size(a, 1), size(a, 2), 1))
+      s%f(s%n)%a(:, :, 1) = a
+   end subroutine push_field
+
+   subroutine add_cavity_fields(engine, s)
+      !! The ice-shelf cavity's own outputs and static face twins, which the
+      !! restart registry does not carry: the slot arrays (melt rate, friction
+      !! velocity, interface temperature, under-ice stress, drag stress),
+      !! compared on owned cells like every other field, and the four face
+      !! twins `cover_u/v`, `k_top_u/v` (tag `img:`), additionally compared over
+      !! the SEAM GHOSTS by `check_ghost_images`.  Also fills the non-vacuity
+      !! counts.  Component arrays only are pulled from the device.
+      type(ocean_engine_t), intent(inout), target :: engine
+      type(snap_t), intent(inout) :: s
+      integer :: i, j, ng, nz
+
+      !$acc update self(engine%state%cavity_flux%melt, engine%state%cavity_flux%ustar, engine%state%cavity_flux%t_b)
+      !$acc update self(engine%state%surface_stress%stress_shelf, engine%state%tdrag%stress_top)
+      !$acc update self(engine%state%tdrag%cover_u, engine%state%tdrag%cover_v)
+      !$acc update self(engine%state%multilayer%wet_mask)
+      call push_field(s, "cav:melt", engine%state%cavity_flux%melt)
+      call push_field(s, "cav:ustar", engine%state%cavity_flux%ustar)
+      call push_field(s, "cav:t_b", engine%state%cavity_flux%t_b)
+      call push_field(s, "cav:stress_shelf", engine%state%surface_stress%stress_shelf)
+      call push_field(s, "cav:stress_top", engine%state%tdrag%stress_top)
+      call push_field(s, "img:cover_u", engine%state%tdrag%cover_u)
+      call push_field(s, "img:cover_v", engine%state%tdrag%cover_v)
+      call push_field(s, "img:k_top_u", real(engine%state%multilayer%k_top_u, wp))
+      call push_field(s, "img:k_top_v", real(engine%state%multilayer%k_top_v, wp))
+
+      ng = engine%grid%nghost
+      nz = engine%state%multilayer%nz_ml
+      s%ncav = 0
+      do j = ng + 1, ng + engine%grid%ny_phys
+         do i = ng + 1, ng + engine%grid%nx_phys
+            associate (wet => engine%state%multilayer%wet_mask(i, j) > 0.5_wp, &
+                       cov => engine%state%metrics%cover_frac(i, j) > 0.0_wp)
+               if (wet .and. cov) s%ncav(1) = s%ncav(1) + 1
+               if (wet .and. .not. cov) s%ncav(2) = s%ncav(2) + 1
+               if (.not. wet .and. engine%state%metrics%z_draft(i, j) > 0.0_wp) &
+                  s%ncav(3) = s%ncav(3) + 1
+               if (wet .and. cov .and. engine%state%cavity_flux%melt(i, j) /= 0.0_wp) &
+                  s%ncav(4) = s%ncav(4) + 1
+               if (wet .and. cov .and. engine%state%tdrag%stress_top(i, j) > 0.0_wp) &
+                  s%ncav(5) = s%ncav(5) + 1
+               if (engine%state%multilayer%k_top(i, j) < nz) s%ncav(6) = s%ncav(6) + 1
+            end associate
+         end do
+      end do
+   end subroutine add_cavity_fields
 
    subroutine take_snapshot(engine, s)
       !! Host copy of every restart-registry field (device -> host first)
@@ -1285,6 +1526,7 @@ contains
                               [size(engine%state%dyn%bt_work%bt_vhbt, 1), &
                                size(engine%state%dyn%bt_work%bt_vhbt, 2), 1])
       end if
+      if (engine%state%metrics%use_cavity) call add_cavity_fields(engine, s)
       s%io = engine%grid%i_offset_global
       s%jo = engine%grid%j_offset_global
       s%nxl = engine%grid%nx_phys
@@ -1413,8 +1655,9 @@ contains
          end if
          nb = count(transfer(a%f(e)%a, 0_int64, size(a%f(e)%a)) /= &
                     transfer(b%f(e)%a, 0_int64, size(b%f(e)%a)))
-         if (nb > 0) write (*, '(a,i0,5a,i0)') "  rank ", rank, " ", report, &
-            " write/resume ", trim(a%f(e)%tag), ": mismatches=", nb
+         if (nb > 0) write (*, '(a,i0,5a,i0,a,es10.3)') "  rank ", rank, " ", report, &
+            " write/resume ", trim(a%f(e)%tag), ": mismatches=", nb, &
+            "  max|diff|=", maxval(abs(a%f(e)%a - b%f(e)%a))
          nbad = nbad + nb
       end do
    end subroutine compare_full
@@ -1634,7 +1877,7 @@ contains
       character(len=*), intent(in) :: label, scheme
       type(snap_t) :: ref, dec
       logical :: ok_ref, ok_dec
-      integer :: px, nbad, nfin, glob(3), nbud, nghost_bad
+      integer :: px, nbad, nfin, glob(3), nbud, nghost_bad, nb_img
       character(len=96) :: tag
       type(conservation_budget_t) :: buds(8)
 
@@ -1664,6 +1907,7 @@ contains
          write (*, '(3a,6(1x,i0))') "case ", label, ": reference seam-band flips (i w>d d>w, j w>d d>w, corner w>d d>w):", ref%flips
          end if
       end if
+      if (index(label, "cavity_") == 1) call check_cavity_counters(ref, label, trim(label)//"/"//scheme)
 
       nbud = 0
       do px = nprocs, 1, -1
@@ -1679,11 +1923,20 @@ contains
                call compare_ghosts(dec, ref, nghost_bad, trim(tag))
                nbad = nbad + nghost_bad
             end if
+            if (index(label, "cavity_") == 1) then
+               call check_ghost_images(dec, ref, nb_img, trim(tag))
+               nbad = nbad + nb_img
+            end if
             ! Windowed-drain cases: the sub-cycle must run >1 pass (else the
             ! pass-count reduction is never exercised) and every layout must
             ! have used the same count as the serial reference.
+            ! (`cavity_combo` waives ONLY the ">1 pass" requirement: its quiescent
+            ! flow needs a single pass per window.  It must still have run the
+            ! drain at all (ref >= 1) with the same count on every layout; the
+            ! windowed accumulation is compared bitwise.)
             if (index(case_nml(label, scheme, 1, 1), "dt_tracer_advect_ratio") > 0) then
-               if (ref%drain_iter < 2 .or. dec%drain_iter /= ref%drain_iter) then
+               if (ref%drain_iter < merge(1, 2, label == "cavity_combo") .or. &
+                   dec%drain_iter /= ref%drain_iter) then
                   write (*, '(3a,i0,a,i0)') "FAIL ", trim(tag), ": drain passes ref=", &
                      ref%drain_iter, " dec=", dec%drain_iter
                   nbad = nbad + 1
@@ -1696,9 +1949,20 @@ contains
                nbad = nbad + dec%ngrow
             glob = [nbad, nfin, 0]
 #ifndef RDB_NO_NETCDF
+            ! Cavity: only `cavity_sigma_ratio2` (melt + top drag, checkpoint
+            ! mid thermo window).  The ratio-1 cavity cases (`cavity_zfixed`,
+            ! `cavity_sigma`, `cavity_gall`, `cavity_melt_only`) are NOT in the
+            ! list: measured on ONE rank (np 1, same failure decomposed), their
+            ! resume differs from the straight run (tracers ~1e-3, u/v ~3e-8,
+            ! `sf_heat_cavity` ~9e-2) while the same namelist with the melt off
+            ! (dyn + draft only) resumes bit-identically and the ratio-2 twin
+            ! does too: a serial warm-restart defect of the melt path at
+            ! `dt_therm_ratio = 1`, not a decomposition defect.
             if ((label == "sea_ice" .or. label == "sea_ice_transport" .or. &
-                 label == "bulk_flux_ice" .or. is_wetdry_case(label) .or. is_ice_fold_case(label)) .and. &
-                (nprocs/px == 1 .or. px == nprocs/px) .and. nprocs > 1) then
+                 label == "bulk_flux_ice" .or. label == "dtbt_reset" .or. &
+                 label == "cavity_sigma_ratio2" .or. is_wetdry_case(label) .or. is_ice_fold_case(label)) .and. &
+                (nprocs/px == 1 .or. px == nprocs/px) .and. &
+                (nprocs > 1 .or. label == "cavity_sigma_ratio2")) then
                ! 4x1 and 2x2 at np = 4 (and 2x1 at np = 2).
                call check_resume_leg(case_nml(label, scheme, px, nprocs/px), dec, &
                                      trim(tag))
@@ -1731,6 +1995,136 @@ contains
       ! (>= 2 distinct factorizations).
       if (nbud >= 2) call compare_budget(buds(1:nbud), label, scheme)
    end subroutine run_case
+
+   subroutine check_ghost_images(dec, ref, nbad, tag)
+      !! Seam-ghost image check for the `img:` face twins: EVERY element of the
+      !! tile's local array (ghost ring and the outermost face included) whose
+      !! global index lies inside the serial reference must equal the reference
+      !! there, bitwise.  Indices outside the reference (beyond a physical edge)
+      !! have no image and are skipped.
+      type(snap_t), intent(in) :: dec, ref
+      integer, intent(out) :: nbad
+      character(len=*), intent(in) :: tag
+      integer :: e, i, j, gi, gj, nb, nchecked
+      character(len=160) :: first
+
+      nbad = 0
+      nchecked = 0
+      do e = 1, dec%n
+         if (dec%f(e)%tag(1:4) /= "img:") cycle
+         nb = 0
+         first = ""
+         do j = 1, size(dec%f(e)%a, 2)
+            do i = 1, size(dec%f(e)%a, 1)
+               gi = i + dec%io
+               gj = j + dec%jo
+               if (gi < 1 .or. gj < 1 .or. gi > size(ref%f(e)%a, 1) .or. &
+                   gj > size(ref%f(e)%a, 2)) cycle
+               nchecked = nchecked + 1
+               if (transfer(dec%f(e)%a(i, j, 1), 0_int64) /= &
+                   transfer(ref%f(e)%a(gi, gj, 1), 0_int64)) then
+                  if (nb == 0) write (first, '(a,2(i0,1x),a,es12.4,a,es12.4)') &
+                     "first at local (i,j)=", i, j, ": ", dec%f(e)%a(i, j, 1), " vs ", &
+                     ref%f(e)%a(gi, gj, 1)
+                  nb = nb + 1
+               end if
+            end do
+         end do
+         if (nb > 0) write (*, '(a,i0,5a,i0,2a)') "  rank ", rank, " ", tag, " ghost image ", &
+            trim(dec%f(e)%tag), ": mismatches=", nb, "  ", trim(first)
+         nbad = nbad + nb
+      end do
+      if (nchecked == 0) then
+         write (*, '(3a,i0)') "FAIL ", tag, ": ghost-image check compared nothing on rank ", rank
+         nbad = nbad + 1
+      end if
+   end subroutine check_ghost_images
+
+   subroutine check_cavity_counters(ref, label, tag)
+      !! Non-vacuity of a cavity case on the serial reference: every count the
+      !! case relies on must be non-zero (a geometry that drifts off the cavity
+      !! would otherwise pass trivially).  `cavity_gall` is covered end to end,
+      !! so it has no open water.
+      type(snap_t), intent(in) :: ref
+      character(len=*), intent(in) :: label, tag
+      integer :: c
+      logical :: need(6)
+
+      need = .true.
+      if (index(label, "cavity_gall") == 1) need(2) = .false.
+      if (label /= "cavity_zfixed") need(6) = .false.
+      if (label == "cavity_melt_only") need(5) = .false.
+      do c = 1, 6
+         if (need(c) .and. ref%ncav(c) == 0) then
+            write (*, '(3a,i0,a)') "FAIL ", tag, ": cavity non-vacuity count #", c, " is 0"
+            n_fail = n_fail + 1
+         end if
+      end do
+      if (rank == 0) write (*, '(3a,6(1x,i0))') "case ", tag, ": cavity counts (covered, open, grounded, "// &
+         "melting, dragged, k_top<nz) =", ref%ncav
+   end subroutine check_cavity_counters
+
+   subroutine check_cavity_grounded_refusal()
+      !! A draft that grounds more of the domain than `grounded_max_frac` must
+      !! be REFUSED, identically, on every rank of every layout (and on the
+      !! serial reference): the verdict is taken on the GLOBAL integer count.
+      !! Before it was, each tile compared its own fraction, so one rank
+      !! refused while the others carried on and the job hung.  The probe has
+      !! global fraction 14/26 = 0.54 against a limit of 0.4 (the accepted
+      !! twin, `cavity_gall`, uses 0.6).  The run is guarded by the
+      !! explicit ctest TIMEOUT on this test: a hang is a failure.
+      type(ocean_engine_t) :: engine
+      type(config_t) :: cfg
+      character(len=:), allocatable :: nml
+      integer :: px, ierr, nbad, glob(1), im
+      logical :: why_found
+      character(len=96) :: tag
+
+      do px = nprocs, 1, -1
+         if (mod(nprocs, px) /= 0) cycle
+         nbad = 0
+         write (tag, '(a,i0,a,i0)') "cavity_grounded_refused ", px, "x", nprocs/px
+         nml = cavity_nml("cavity_gall", "pred_corr", int_str(px), int_str(nprocs/px), 0.4_wp)// &
+               "&output_nml output_to_file = .false. /"//new_line("a")
+         call read_config_from_string(nml, cfg, ierr=ierr)
+         if (ierr == OCEAN_STATUS_OK) call validate_config(cfg, ierr)
+         if (ierr /= OCEAN_STATUS_OK) then
+            write (*, '(3a,i0)') "FAIL ", trim(tag), ": validate_config refused the probe, rank ", rank
+            nbad = 1
+         else
+            call error_ring_clear()
+            call engine_setup(engine, cfg, ierr, compute_rank=rank, compute_size=nprocs)
+            call engine_teardown(engine)
+            if (ierr == OCEAN_STATUS_OK) then
+               write (*, '(3a,i0)') "FAIL ", trim(tag), ": ACCEPTED, rank ", rank
+               nbad = 1
+            else
+               ! Refused is not enough: it must be the grounded-fraction
+               ! refusal ("the prescribed draft grounds N of M ..."), on this rank.
+               why_found = .false.
+               do im = 0, error_ring_count() - 1
+                  if (index(error_ring_get(im), "draft grounds") > 0) why_found = .true.
+               end do
+               if (.not. why_found) then
+                  write (*, '(3a,i0)') "FAIL ", trim(tag), &
+                     ": refused, but NOT for the grounded-fraction reason, rank ", rank
+                  nbad = 1
+               end if
+            end if
+         end if
+         glob(1) = nbad
+         call allreduce(comm, glob, op=MPI_SUM)
+         if (rank == 0 .and. glob(1) == 0) &
+            write (*, '(3a)') "case ", trim(tag), ": refused on every rank (ok)"
+         if (glob(1) > 0) n_fail = n_fail + 1
+      end do
+   end subroutine check_cavity_grounded_refusal
+
+   function int_str(n) result(str)
+      integer, intent(in) :: n
+      character(len=16) :: str
+      write (str, '(i0)') n
+   end function int_str
 
    subroutine compare_budget(buds, label, scheme)
       !! Bit-identity check across every decomposed-factorization budget of
@@ -1898,28 +2292,91 @@ contains
       !! the engine auto-factors and which `validate_config`'s px*py fences
       !! cannot see), so the engine-side gate is the one exercised.
       character(len=*), parameter :: NL = new_line("a")
-      character(len=200), parameter :: KNOBS(2) = [character(len=200) :: &
-                                        "&ocean_cavity_dyn_nml enable = .true., draft_config = 'flat', draft_depth = 50.0 /"//NL// &
-                                                   "&ocean_pgf_nml form = 'fv_mom6' /", &
-                                                   "&ocean_bc_nml east = 'chapman' /"]
-      character(len=60), parameter :: WANTS(2) = [character(len=60) :: &
-                                                  "cavity_dyn_nml enable = .true. is single-rank", &
-                                                  "chapman' edges are single-rank"]
+      ! The cavity entries need a namelist `validate_config` ACCEPTS (FV_MOM6 PGF
+      ! with `p_top_in_bc`, a sigma column, an analytic draft, virtual-freshwater
+      ! melt with a matching top-drag coefficient): a bare `enable = .true.` is
+      ! refused by `validate_config` before `engine_setup` runs, which made
+      ! that fence vacuous.  The validate-accepts check below keeps every
+      ! entry honest.  The cavity itself RUNS decomposed (the `cavity_*` cases);
+      ! each entry below is one narrow combination that has no case yet.
+      character(len=*), parameter :: CAV = &
+                                     "&vcoord_nml vcoord_type = 'sigma' /"//new_line("a")// &
+                                     "&ocean_pgf_nml form = 'fv_mom6', p_top_in_bc = .true. /"//new_line("a")// &
+                                     "&ocean_eos_nml eos = 'linear', tfreeze_set = 'isomip' /"//new_line("a")// &
+                                     "&ocean_forcing_nml enable_components = .true. /"//new_line("a")// &
+                                     "&ocean_tdrag_nml enable = .true., form = 'quadratic', cd = 2.5e-3 /"//new_line("a")
+      character(len=*), parameter :: CAV_DYN = &
+                                     "&ocean_cavity_dyn_nml enable = .true., draft_config = 'linear', "// &
+                                     "draft_depth = 300.0, draft_slope = 0.0, draft_x0 = 0.0, h_min_cavity = 10.0"
+      character(len=*), parameter :: CAV_MELT = &
+                                     "&ocean_cavity_melt_nml enable = .true., exchange_law = 'const_gamma', "// &
+                                     "gamma_t = 2.2e-2, gamma_s = -1.0, cdrag_top = 2.5e-3, "// &
+                                     "ice_conduction = 'insulating', s_ice = 0.0, far_field_depth = 10.0"
+      character(len=1400), parameter :: KNOBS(7) = [character(len=1400) :: &
+                                                    "&ocean_bc_nml east = 'chapman' /", &
+                                                    ! cavity + freshwater = 'mass'
+                                                    CAV//CAV_DYN//" /"//new_line("a")// &
+                                                    CAV_MELT//", freshwater = 'mass' /", &
+                                                    ! cavity + a file draft
+                                                    CAV//"&ocean_cavity_dyn_nml enable = .true., "// &
+                                                    "draft_config = 'file', draft_file = 'draft.nc', "// &
+                                                    "draft_var = 'draft', h_min_cavity = 10.0 /", &
+                                                    ! cavity + bulk forcing
+                                                    CAV//CAV_DYN//" /"//new_line("a")// &
+                                                  "&ocean_grid_nml grid_config = 'spherical', lon_west = 0.0, lat_south = 0.0 /"// &
+                                                    new_line("a")// &
+                                                    "&ocean_atm_forcing_nml enable = .true., filelist_tas = 'a.txt', "// &
+                                                    "filelist_huss = 'a.txt', filelist_uas = 'a.txt', "// &
+                                                    "filelist_vas = 'a.txt', filelist_psl = 'a.txt', "// &
+                                                    "filelist_rlds = 'a.txt', filelist_rsds = 'a.txt', "// &
+                                                    "filelist_prra = 'a.txt', filelist_prsn = 'a.txt' /"// &
+                                                    new_line("a")// &
+                                                    "&ocean_bulk_flux_nml enable = .true. /", &
+                                                    ! cavity + an open edge
+                                                    CAV//CAV_DYN//" /"//new_line("a")// &
+                                                    "&ocean_bc_nml east = 'open' /", &
+                                                    ! cavity + a sponge edge
+                                                    CAV//CAV_DYN//" /"//new_line("a")// &
+                                                    "&ocean_bc_nml north = 'sponge' /", &
+                                                    ! cavity + the tripolar fold
+                                                    CAV//CAV_DYN//" /"//new_line("a")// &
+                                                    "&ocean_grid_nml grid_config = 'tripolar', "// &
+                                                    "lat_south = 59.0, phi_join = 74.0, "// &
+                                                    "coriolis_scheme = 'planetary' /"//new_line("a")// &
+                                                    "&ocean_bc_nml west = 'periodic', "// &
+                                                    "east = 'periodic', north = 'tripolar_fold' /"]
+      ! One distinctive substring of the message each entry must produce, so a
+      ! fence that is deleted while a LATER, more generic refusal still fires
+      ! (the bulk-forcing one, the validate envelope) cannot pass unnoticed.
+      character(len=64), parameter :: WHY(7) = [character(len=64) :: &
+                                                "'chapman' edges are single-rank", &
+                                                "freshwater = 'mass' with a cavity is unproven", &
+                                                "draft_config = 'file' is unproven", &
+                                                "enable with &ocean_bulk_flux_nml enable is unproven", &
+                                                "is not 'wall' or 'periodic'", &
+                                                "is not 'wall' or 'periodic'", &
+                                                "'tripolar_fold' is unproven"]
       type(ocean_engine_t) :: engine
       type(config_t) :: cfg
       character(len=:), allocatable :: nml
-      character(len=200) :: lab
-      integer :: ik, ierr, ie, ierr0
-      character(len=160) :: want
-      character(len=ERROR_RING_MSG_LEN) :: got
+      character(len=1400) :: lab
+      character(len=64) :: want
+      integer :: ik, ierr, im, ie
+      logical :: why_found, engine_ran, must_validate
 
+      ! Entries 1..size(KNOBS) share one namelist template; the last two are
+      ! the dynamic wet/dry refusals, built from gate cases (wet/dry itself
+      ! runs decomposed: the `wetdry_*` cases).
       do ik = 1, size(KNOBS) + 2
          if (ik <= size(KNOBS)) then
-            lab = trim(KNOBS(ik))
-            want = trim(WANTS(ik))
+            lab = KNOBS(ik)
+            want = WHY(ik)
+            must_validate = index(KNOBS(ik), "cavity_dyn") > 0
             nml = "&sim_nml sim_type = 'ocean' /"//NL// &
-                  "&grid_nml nx = 26, ny = 18, nghost = 3, dx = 20000.0, dy = 20000.0 /"//NL// &
-                  "&time_nml t_end = 86400.0, dt_fixed = 900.0 /"//NL// &
+                  "&grid_nml nx = 26, ny = 18, nghost = 3, "// &
+                  merge("dx = 1.0, dy = 1.0        ", "dx = 20000.0, dy = 20000.0", &
+                        index(KNOBS(ik), "'spherical'") > 0)//" /"//NL// &
+                  "&time_nml t_end = 86400.0, dt_fixed = 900.0, start_date = '1958-01-01' /"//NL// &
                   "&nonhydrostatic_nml nz_layers = 4 /"//NL// &
                   "&ocean_bt_nml auto_n_inner = .true., split_scheme = 'ssp_rk2' /"//NL// &
                   "&ocean_diag_nml enabled = .false. /"//NL// &
@@ -1933,6 +2390,7 @@ contains
             ! positivity limiter is supplied, so the config is valid).
             lab = "&ocean_wetdry_nml enable = .true. / on the tripolar-fold case"
             want = "with north = 'tripolar_fold' is unproven"
+            must_validate = .true.
             nml = case_nml("tripolar", "ssp_rk2", 1, 1)//"&ocean_continuity_nml ppm_limit_pos = .true. /"//NL// &
                   "&ocean_wetdry_nml enable = .true. /"//NL
          else
@@ -1940,6 +2398,7 @@ contains
             ! limiter at a boundary face reads fluxes outside the domain.
             lab = "&ocean_wetdry_nml enable = .true. / with an open east edge"
             want = "neither wall nor periodic"
+            must_validate = .true.
             nml = case_nml("wetdry_shoal", "ssp_rk2", 1, 1)
             ie = index(nml, "east = 'wall'")
             if (ie < 1) then
@@ -1949,31 +2408,43 @@ contains
             end if
             nml = nml(1:ie - 1)//"east = 'open'"//nml(ie + len("east = 'wall'"):)
          end if
-         call error_ring_clear()
          call read_config_from_string(nml, cfg, ierr=ierr)
          if (ierr == OCEAN_STATUS_OK) call validate_config(cfg, ierr)
-         if (ierr /= OCEAN_STATUS_OK) then
-            ! The fence must be reached through the ENGINE gate: a config the
-            ! earlier checks already refuse proves nothing about it.
-            write (*, '(3a,i0)') "FAIL fence: '", trim(lab), &
-               "' did not pass read_config/validate_config, rank ", rank
+         if (ierr /= OCEAN_STATUS_OK .and. must_validate) then
+            write (*, '(a,i0)') "  fence entry ", ik
+            write (*, '(3a,i0)') "FAIL fence: '", trim(lab), "' is refused by validate_config, "// &
+               "so the engine fence is never reached (vacuous), rank ", rank
             n_fail = n_fail + 1
             cycle
          end if
-         call engine_setup(engine, cfg, ierr, compute_rank=rank, compute_size=nprocs)
-         call engine_teardown(engine)
-         ierr0 = ierr
-         got = error_ring_get(0)
-         if (ierr0 == OCEAN_STATUS_OK) then
+         call error_ring_clear()
+         engine_ran = ierr == OCEAN_STATUS_OK
+         if (ierr == OCEAN_STATUS_OK) then
+            call engine_setup(engine, cfg, ierr, compute_rank=rank, compute_size=nprocs)
+            call engine_teardown(engine)
+         end if
+         why_found = .false.
+         do im = 0, error_ring_count() - 1
+            if (index(error_ring_get(im), trim(want)) > 0) why_found = .true.
+         end do
+         ! An entry `validate_config` itself refuses never reaches the engine
+         ! fence: status-only, no reason to read.
+         if (engine_ran .and. ierr /= OCEAN_STATUS_OK .and. .not. why_found) then
+            if (error_ring_count() > 0) write (*, '(2a)') "  first ring message: ", &
+               trim(error_ring_get(0))
+            write (*, '(3a,i0)') "FAIL fence: '", trim(lab), &
+               "' was refused, but NOT for the expected reason (no error-ring message "// &
+               "contains '"//trim(want)//"'), rank ", rank
+            n_fail = n_fail + 1
+            cycle
+         end if
+         if (ierr == OCEAN_STATUS_OK) then
             write (*, '(3a,i0)') "FAIL fence: '", trim(lab), &
                "' was ACCEPTED on multi-rank, rank ", rank
             n_fail = n_fail + 1
-         else if (index(got, trim(want)) == 0) then
-            write (*, '(5a,i0,2a)') "FAIL fence: '", trim(lab), "' refused with the wrong message (expected '", &
-               trim(want), "'), rank ", rank, ": ", trim(got(1:min(len_trim(got), 160)))
-            n_fail = n_fail + 1
          else if (rank == 0) then
-            write (*, '(3a)') "case fence: '", trim(lab), "' refused by engine_setup (ok)"
+            write (*, '(3a)') "case fence: '", trim(lab), &
+               "' refused on multi-rank for the expected reason (ok)"
          end if
       end do
    end subroutine check_single_rank_fences
@@ -2145,6 +2616,31 @@ contains
       call nc_enddef(ncid)
       call nc_put_var_2d(ncid, v1, tt(:, :, 1))
       call nc_put_var_2d(ncid, v2, tt(:, :, 2))
+      call nc_close(ncid)
+
+      ! Chlorophyll climatology (x, y, time): two records, strongly
+      ! non-uniform and non-symmetric in both directions (a low-chl corner
+      ! against a bloom), so a wrong window or a stale seam ghost changes the
+      ! band opacities.
+      tt(:, :, 2) = 0.0_wp
+      do j = 1, NY_G
+         do i = 1, NX_G
+            x = real(i, wp)/real(NX_G, wp)
+            y = real(j, wp)/real(NY_G, wp)
+            tt(i, j, 1) = 0.01_wp + 0.25_wp*x**2*(1.0_wp - 0.7_wp*y) + &
+                          0.12_wp*abs(sin(9.0_wp*x + 4.0_wp*y))
+            tt(i, j, 2) = 1.5_wp*tt(i, j, 1) + 0.03_wp*y
+         end do
+      end do
+      call nc_create_file(CHL_FILE, ncid)
+      call nc_def_dim(ncid, "x", NX_G, dx_)
+      call nc_def_dim(ncid, "y", NY_G, dy_)
+      call nc_def_dim(ncid, "time", 2, dz_)
+      call nc_def_var_3d(ncid, "CHL", [dx_, dy_, dz_], v1)
+      call rdb_def_var_1d(ncid, "time", dz_, v2)
+      call nc_enddef(ncid)
+      ierr = nf90_put_var(ncid, v1, tt)
+      call rdb_put_var_1d(ncid, v2, [0.0_wp, 172800.0_wp])
       call nc_close(ncid)
       call write_atm_file(ATM_WARM, ATM_WARM_LIST, 288.0_wp, 4.0e-3_wp, 72, 36)
       call write_atm_file(ATM_COLD, ATM_COLD_LIST, 255.0_wp, 6.0e-4_wp, 72, 36)

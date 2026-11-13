@@ -88,7 +88,7 @@ More acronyms (CWC, PGF, PP81, ALE, EPBL, MEKE) and concept definitions (vanishi
 | Run a global 1-degree ocean on a tripolar grid | Yes | `validation_examples/ocean/global_1deg/` runs on 1, 2 and 4 ranks with identical state. |
 | Run on NVIDIA GPUs | Yes | NVHPC is the primary target. GPU tests run locally, because CI has no GPU runner (see [section 12](#12-gpu-compilers-and-performance)). |
 | Run on AMD or Intel GPUs | Not supported | Not a supported or CI-tested target. GPU offload goes through NVHPC (`-stdpar=gpu` plus OpenACC), and there is no HIP or SYCL backend. The code is also built with Intel and AMD toolchains to find compiler bugs, but that is not a GPU port. |
-| Study an ice-shelf cavity with basal melt | Partly | Single rank only. The ISOMIP+ files are configuration deliverables, not validated results. See [section 10](#10-ice-shelf-cavities). |
+| Study an ice-shelf cavity with basal melt | Partly | Runs on 1, 2 and 4 ranks with virtual freshwater (bitwise identical to one rank on the analytic-draft box configuration). The ISOMIP+ files are configuration deliverables, not validated results. See [section 10](#10-ice-shelf-cavities). |
 | Include sea ice | Partly | A dynamical core and column model. No ridging, melt ponds or lateral melt. See [section 9](#9-sea-ice). |
 | Run an ice-coupled global climate model | No | The Hollingsworth-Källén Coriolis correction is not implemented. |
 | Study coastal flooding, dam breaks, bores, estuaries | No | That work lives in the separate coastal repository. |
@@ -139,7 +139,7 @@ Both schemes wrap the same nonlinear barotropic fast loop. The stability suite r
 
 - The default barotropic damping is `&ocean_bt_nml bebt = 0.1` (MOM6 parity). The continuity renormalisation uses the donor-flip-consistent flux (`&ocean_continuity_nml renorm_consistent_flux = .true.`). Together they close the stepped-terrain barotropic grid-scale mode (FINDING B in [section 5](#5-vertical-coordinates)).
 - Coriolis is a closed-form rotation, so it adds no time-step limit.
-- `&ocean_bt_nml dtbt` (OM3 `DTBT`) sets the barotropic substep as a fraction of the largest stable step `dt_max`, taken over wet cells from `1/dt_max² = ½(1+2·bebt)[(1/A_T)Σ g·D·dy/dx + Σ f²_corner]` (so the corner Coriolis term and `bebt` both enter the limit); `dtbt_reset_period = 0` re-derives `n_inner` every step from the live column depths. A positive `dtbt_reset_period` re-derives it on a time grid, so a restart in mid-period re-derives at its first step and is not bit-identical to the uninterrupted run (period `0` and `< 0` are). It replaces `auto_n_inner`/`cfl_bt_safety` and fails loud if combined with them. `dtbt_reset_period >= 0` changes `n_inner` mid-run, so it is single-rank with `bt_halo = 0` and is refused at engine setup otherwise; the init-only form (`< 0`) is allowed on any rank count.
+- `&ocean_bt_nml dtbt` (OM3 `DTBT`) sets the barotropic substep as a fraction of the largest stable step `dt_max`, taken over wet cells from `1/dt_max² = ½(1+2·bebt)[(1/A_T)Σ g·D·dy/dx + Σ f²_corner]` (so the corner Coriolis term and `bebt` both enter the limit); `dtbt_reset_period = 0` re-derives `n_inner` every step from the live column depths. A positive `dtbt_reset_period` re-derives it on a time grid, so a restart in mid-period re-derives at its first step and is not bit-identical to the uninterrupted run (period `0` and `< 0` are). It replaces `auto_n_inner`/`cfl_bt_safety` and fails loud if combined with them. `dtbt_reset_period >= 0` changes `n_inner` mid-run: it is multi-rank (the domain minimum of `dt_max` is reduced across ranks, bit-identical to one rank) but is refused at engine setup with `bt_halo > 0`, whose wide-halo BT clone is not resized; the init-only form (`< 0`) is allowed there too.
 - This is a sub-cycled fast mode, not a semi-implicit free surface. The gravity-wave term is not treated implicitly in the SCHISM or Casulli sense.
 
 **Full notes in the archive:**
@@ -341,7 +341,7 @@ Other boundary facts:
 | Surface heat and salt flux (scalar) | Shipped | `&ocean_thermo_nml q_heat`, `q_salt` | Stamped into the top layer (`k = nz`). |
 | Surface-flux component set | Shipped, opt-in | `&ocean_forcing_nml enable_components` | Mass fluxes carry enthalpy and salt bookkeeping but do **not** change column mass. `salt_flux` stays virtual. |
 | Shortwave penetration | Shipped | `&ocean_thermo_nml sw_pen_frac`, `sw_source`, `sw_transmission` | Two-band transmission shared by the deposit and both boundary-layer schemes. `sw_source = "q_sw"` needs `enable_components`. Inert at `sw_pen_frac = 0`. |
-| Shortwave penetration, chlorophyll-dependent (Manizza et al. 2005) | Shipped, opt-in | `&ocean_thermo_nml sw_scheme = "manizza05"`, `sw_chl_file`, `sw_chl_var`, `sw_nbands`, `sw_blue_frac`, `sw_opacity_coef`, `sw_chl_power`, `sw_opacity_land` | Whole shortwave band-absorbed (0.42 visible split blue/red, 0.58 near-infrared) with per-column opacities from a monthly-cyclic chlorophyll climatology; one transmission shared by the deposit, KPP `B_0` and the EPBL ledger. Total shortwave only (no separate visible/near-infrared forcing). The climatology is a 365-day year (no leap years, no calendar) and model `t = 0` is 1 January. **Single-rank only**: the per-rank chlorophyll read fills the interior without ghosts and the ghosts feed `sw_kappa`, so more than one rank is refused at engine setup. The `PEN_SW_FLUX_ABSORB` floor (2.5e-11 degC m/s remainder dump) is not applied; the dropped heat is negligible. |
+| Shortwave penetration, chlorophyll-dependent (Manizza et al. 2005) | Shipped, opt-in | `&ocean_thermo_nml sw_scheme = "manizza05"`, `sw_chl_file`, `sw_chl_var`, `sw_nbands`, `sw_blue_frac`, `sw_opacity_coef`, `sw_chl_power`, `sw_opacity_land` | Whole shortwave band-absorbed (0.42 visible split blue/red, 0.58 near-infrared) with per-column opacities from a monthly-cyclic chlorophyll climatology; one transmission shared by the deposit, KPP `B_0` and the EPBL ledger. Total shortwave only (no separate visible/near-infrared forcing). The climatology is a 365-day year (no leap years, no calendar) and model `t = 0` is 1 January. Multi-rank: the windowed chlorophyll read's seam ghosts are exchanged (MPI / periodic wrap / tripolar fold) before the opacities are derived, bit-identical to one rank. The gate (`manizza` case of `test_ocean_decomp_bitid_mpi`) is a walled 100 m, 8-layer basin: the periodic wrap and the tripolar fold are reached only through the shared centre-field exchange helper (also used by the SSS target), not by this case. The `PEN_SW_FLUX_ABSORB` floor (2.5e-11 degC m/s remainder dump) is not applied; the dropped heat is negligible. |
 | Surface buoyancy restoring | Shipped, opt-in | `&ocean_restore_nml` | Scalar targets, and file-based SSS restoring (OM3 `RESTORE_SALINITY`): time-varying target on the model grid, salt-flux form `F = rho0 w dS`, per-cell clamp `max_delta_sss`, optional global net-zero by scaling or area-mean subtraction (EFP sums, decomposition independent); multi-rank is covered by the `sss_restore` case of `test_ocean_decomp_bitid_mpi`. Temperature file restoring is not implemented (OM3 has it off). |
 | Time-varying NetCDF forcing | Shipped, opt-in | `&ocean_dataovr_nml enable` | Six tags: `tau_x`, `tau_y`, `heat`, `salt`, `evap`, `lprec`. Files must already be on the model grid. One time mode is shared by all tags. |
 | Atmospheric pressure loading (inverse barometer) | Shipped, opt-in | `&ocean_psurf_nml enable` | The version 1 fill is a uniform scalar, which is inert. Needs `enable_components` and the split solver. Excludes `bt_halo > 0`. |
@@ -409,7 +409,7 @@ Other boundary facts:
 
 ## 10. Ice-shelf cavities
 
-An ice-shelf cavity is a **static, prescribed ice draft** over the ocean. The model treats the ice as a lid with a pressure load, a basal melt flux and an optional drag. Everything here is default off and byte-identical when off. All of it is **single rank** and runs only with the split solver.
+An ice-shelf cavity is a **static, prescribed ice draft** over the ocean. The model treats the ice as a lid with a pressure load, a basal melt flux and an optional drag. Everything here is default off and byte-identical when off. It runs on more than one rank, bitwise identical to one rank, for the virtual-freshwater melt, the top drag and the analytic draft between wall or periodic edges; the combinations in [the refusal table](#refused-at-configure-on-more-than-one-rank) are refused on more than one rank. It runs only with the split solver.
 
 **Status in one line.** The pieces ship and have analytical tests. The ISOMIP+ Ocean0/1/2 files in `validation_examples/ocean/isomip_plus/` are *configuration deliverables, not validated results*. They pass `validate_config` and run. Nothing is tuned to a melt rate. A quiescent sloping-lid cavity is not yet at rest.
 
@@ -432,7 +432,7 @@ An ice-shelf cavity is a **static, prescribed ice draft** over the ocean. The mo
 | Vertical coordinates | `sigma` and `z_fixed` only | `&vcoord_nml vcoord_type` | `zstar` is refused. Others are refused. `thickness_config` must not be `"uniform_z"`. |
 | True isostatic load | **Not implemented** | `draft_source = "in_situ"` | Fails loud. |
 | Fractional (area-blended) calving front | **Not implemented** | – | No producer for a fractional cover. |
-| Multi-rank cavity | **Refused** | – | Grounding statistics are single-rank reductions. |
+| Multi-rank cavity | Shipped (virtual freshwater) | – | The grounded-fraction check is taken on the global integer count, so every rank gives the same verdict. `freshwater = "mass"`, `draft_config = "file"`, the tripolar fold, bulk forcing and open / tidal / clamped / Chapman / sponge edges are refused on more than one rank. **Allowed on more than one rank, not covered by a decomposition case:** a spherical grid, a periodic south/north edge pair, `draft_source = "thickness"`, and `&ocean_tdrag_nml htbl > 0` (the HTBL-distributed top drag; the gate case uses the `implicit_top_drag` fold, which excludes it). Nothing refuses these; a result on them is unverified against one rank. The gate does cover EPBL (KPP off), the `hj99` exchange law, `implicit_top_drag` and `dt_tracer_advect_ratio = 2` (`cavity_combo`). **Compatibility-matrix limit:** the matrix's `cavity` axis value enables neither the melt nor the top drag (dyn + draft only), so its PASS says nothing about the melt path; the melt path is covered by the `cavity_*` decomposition cases only. |
 
 ### Envelope: what the cavity refuses
 
@@ -451,6 +451,7 @@ Under `z_fixed` plus a cavity, melt and top drag are accepted, and `kappa_h /= 0
 ### Caveats to read before quoting a number
 
 - **Meltwater is virtual by default.** It adds no volume and no direct buoyancy, only the salinity signature of dilution. For a cavity the meltwater buoyancy *is* the circulation. This is a first-order limit of the default, and configure warns on every virtual run. `freshwater = "mass"` removes it. In a closed box real mass raises sea level, so also set `volume_compensation`.
+- **A warm restart with cavity melt is not bit-identical at `dt_therm_ratio = 1`.** Measured on one rank (so not a decomposition effect): resuming at step 25 of 48, tracers differ by up to 2e-3, the face velocities by 3e-8 and `heat_cavity` by 9e-2 W/m² from the straight run, with or without the top drag, in `z_fixed` and sigma. The same namelist without melt resumes bit-identically, and so does the `dt_therm_ratio = 2` twin (checkpoint mid thermo window). **Diagnosed by reading, fix pending (not yet verified by a run):** the host flags `sf%has_heat` / `has_salt` are cleared on resume (`set_surface_flux_const` in `engine_setup`) and re-latched only inside `ocean_cavity_flux_step` at the end of the first resumed step, so at `dt_therm_ratio = 1` the first resumed step drops the melt heat and salt flux once. In the melt-only case (top drag off) there is a second cause: the under-ice `u*` and `stress_shelf` are not checkpointed, so `u*` is zero on the first resumed step. The melt slot's own arrays (`melt`, `u*`, `t_b`) are not restart state. A separate branch fixes it.
 - **A resting loaded cavity is not exactly at rest.** Under sigma with a sloping draft, the leftover force is the sigma-coordinate PGF truncation. It grows as the cube of the draft slope. A grounding-line cell is decades worse. Measured at `max|u| = 7.08e-8 m/s` over 12 000 s on the small test case.
 - **Resolved beds are far worse under sigma.** The ISOMIP+ channel wall gives `rx0 = 0.726`, which is 3.6 times the classical 0.2 bound. `ocean0_idealised_draft.nml` runs three days and then goes negative in thickness. No knob fixes this. Sloping-coordinate PGF corrections are a later phase. `ocean_stability_audit` warns at configure with the computed `rx0`.
 - **`z_fixed` is the alternative, and it works with closed faces.** `ocean0_idealised_zfixed.nml` runs the full 30 days with melt and top drag on. The sigma twin blows up on day 15.9. Even so, `z_fixed` is not at rest on a sloping draft. See the archive entries for this section for the numbers, the energy plateau and the open budget question after day 15.
@@ -484,7 +485,8 @@ Under `z_fixed` plus a cavity, melt and top drag are accepted, and `kappa_h /= 0
 | Restart on a different rank count | **Not implemented** | – | – |
 | Parallel (collective) NetCDF | **Not implemented** | – | Output is per rank, merged offline by `tools/merge_output.py`. |
 | CUDA-aware halo exchange | Shipped | `-DRDB_CUDA_AWARE_MPI=ON` | A multi-GPU run needs it, and `CUDA_VISIBLE_DEVICES` pinned per rank before `MPI_Init`. The driver refuses a host-staged multi-GPU build. |
-| Barotropic march-in (wide halo) | Opt-in, **not bit-identical** | `&ocean_bt_nml bt_halo > 0` | See the list below. The default (`-1`, auto) resolves to 0. |
+| Barotropic march-in (wide halo) | Opt-in, **not bit-identical** | `&ocean_bt_nml bt_halo > 0` | See the list below. The default (`-1`, auto) resolves to 0. Refused at engine setup together with `&ocean_bt_nml dtbt` + `dtbt_reset_period >= 0` (the re-derived `n_inner` does not resize the wide-halo clone). |
+| OM3-style barotropic step reset | Shipped | `&ocean_bt_nml dtbt`, `dtbt_reset_period >= 0` | Bit-identical on any split with `bt_halo = 0` (global min of `dt_max` over owned cells, h ghosts refreshed first); gate: `dtbt_reset*` cases of `test_ocean_decomp_bitid_mpi`. |
 
 ### Refused at configure on more than one rank
 
@@ -492,12 +494,12 @@ Each check is fail-loud on every rank and names the knob. The check keys on the 
 
 | Feature | Why |
 |---|---|
-| `&ocean_cavity_dyn_nml enable` (and the melt / top-drag paths that require it) | the grounding statistics are global reductions the configure does not take; `draft_config="file"` has no windowed reader |
+| `&ocean_cavity_melt_nml freshwater = "mass"` with a cavity | the melt volume and open area are global floating-point sums whose order depends on the layout; unproven on a decomposed domain |
+| `&ocean_cavity_dyn_nml draft_config = "file"` | the windowed draft read has no multi-rank bit-identity case; unproven on a decomposed domain |
+| A cavity with `north = "tripolar_fold"`, with `&ocean_bulk_flux_nml enable`, or with any `&ocean_bc_nml` edge other than `wall` / `periodic` | no decomposition case; unproven on a decomposed domain (the bulk stress also carries no ice-cover mask) |
 | `&ocean_wetdry_nml enable` together with `north = "tripolar_fold"` | unproven: the wet/dry masks and limiter fluxes (`wd_wet_dyn`, `wd_open_u/v`, `bt_uhbt/bt_vhbt`) are not folded, on any rank count; a one-rank tripolar wet/dry run has simply never been run |
 | `&ocean_wetdry_nml enable` together with a west / east / south / north edge that is not `wall` or `periodic` (open, tidal, clamped, chapman, sponge) | unproven on a decomposed domain: the limiter adds `min(theta(ng), theta(ng+1))` at the boundary face and `theta(ng)` reads fluxes outside the domain, which at a seam crossing the open edge come from corner ghosts / the zero-gradient fill, a radius no OBC decomposition case reads; a tidal-flat case is a follow-up |
 | `&ocean_bc_nml` `'chapman'` edges | the edge-uniform eta target is a per-rank partial mean |
-| `&ocean_thermo_nml sw_scheme = "manizza05"` | the per-rank chlorophyll read fills the interior only (no ghosts) and the ghosts feed `sw_kappa`; no decomposition bit-identity case |
-| `&ocean_bt_nml dtbt` with `dtbt_reset_period >= 0` (or with `bt_halo > 0`) | `n_inner` changes mid-run, which is not agreed across ranks and does not resize the wide-halo BT clone; the init-only form (`dtbt_reset_period < 0`) is allowed |
 | tripolar fold with a north tile shorter than `nghost + 1` rows (`ny/py`), or tiles narrower than `nghost + 1` columns (`nx/px`, when `px > 1`) | the fold mirrors `nghost` rows below the fold line from the north tile itself; the width rule keeps every tile wider than its own ghost band |
 | in-memory geometry injection (the API's staged bathymetry / supergrid arrays) | they describe the whole grid, not a tile (the file readers are windowed) |
 | `nghost < 3` | the PPM stencil degrades to first order at a seam face (`ocean_halo_init`) |
@@ -512,10 +514,6 @@ These are the only such paths found.
   open boundaries. It is therefore OPT-IN: the default (`bt_halo = -1`,
   AUTO) resolves to 0 on every rank count, and a multi-rank run that sets it
   explicitly logs a warning.
-- **An EAST legacy `'sponge'` edge together with a `'clamped'` north edge**,
-  split in x, drifts at round-off on the east boundary face.  A west sponge
-  edge (alone, or with Orlanski-open and clamped edges) and every other
-  combination tested are exact.
 
 ### Global 1-degree scaling
 
