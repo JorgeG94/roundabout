@@ -1939,7 +1939,7 @@ contains
       do ik = 1, size(KNOBS)
          nml = "&sim_nml sim_type = 'ocean' /"//NL// &
                "&grid_nml nx = 26, ny = 18, nghost = 3, "// &
-               merge("dx = 1.0, dy = 1.0    ", "dx = 20000.0, dy = 20000.0", &
+               merge("dx = 1.0, dy = 1.0        ", "dx = 20000.0, dy = 20000.0", &
                      index(KNOBS(ik), "'spherical'") > 0)//" /"//NL// &
                "&time_nml t_end = 86400.0, dt_fixed = 900.0, start_date = '1958-01-01' /"//NL// &
                "&nonhydrostatic_nml nz_layers = 4 /"//NL// &
