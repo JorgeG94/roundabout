@@ -1061,11 +1061,21 @@ contains
       real(wp), intent(in) :: dt_cum, p0_rho, c0
       real(wp), intent(inout) :: pres_mice(nx, ny)
       integer :: i, j
-      real(wp) :: ci_proj
+      real(wp) :: ci_proj, p_open
 
+      ! An ice-free cell (`ci == 0`) projects to `0*exp(finite) = 0` whatever
+      ! `sh_dd` is, so its strength is the one constant `exp(-c0)`: evaluate
+      ! it once and skip both per-cell exponentials (same two library calls
+      ! on the same arguments, so bit-identical).  A non-finite or huge
+      ! exponent argument (`exp` overflow, NaN) keeps the full path.
+      p_open = p0_rho*rdb_sm_exp(-c0*max(1.0_wp - 0.0_wp, 0.0_wp))
       do concurrent(j=1:ny, i=1:nx) local(ci_proj)
-         ci_proj = ci(i, j)*rdb_sm_exp(-dt_cum*sh_dd(i, j))
-         pres_mice(i, j) = p0_rho*rdb_sm_exp(-c0*max(1.0_wp - ci_proj, 0.0_wp))
+         if (ci(i, j) == 0.0_wp .and. abs(dt_cum*sh_dd(i, j)) < 700.0_wp) then
+            pres_mice(i, j) = p_open
+         else
+            ci_proj = ci(i, j)*rdb_sm_exp(-dt_cum*sh_dd(i, j))
+            pres_mice(i, j) = p0_rho*rdb_sm_exp(-c0*max(1.0_wp - ci_proj, 0.0_wp))
+         end if
       end do
    end subroutine evp_project_ci_impl
 
