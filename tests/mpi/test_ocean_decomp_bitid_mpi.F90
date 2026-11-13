@@ -91,6 +91,12 @@
 !!     vortex IC (`ic_config = 'balanced_vortex'`) on a closed beta-plane, centred
 !!     on the 2x1/1x2 seams and the 2x2 corner; `_t0` takes zero steps so the
 !!     seeded state itself (incl. ghosts) is compared;
+!!   * balance_rest / balance_rest_t0 / balance_keep_t0 - the same vortex density
+!!     seeded UNBALANCED (`vortex_balance = 'none'`: zero velocity), then
+!!     `ocean_balance_apply` (the API / reinit entry, geostrophic) with
+!!     `ref_level` bottom_rest (global per-layer median + column stretch) or
+!!     keep_h, after poisoning the WHOLE u/v/hu/hv arrays with rank-dependent garbage;
+!!     the `_t0` twins compare the balanced IC itself;
 !!   * drain_ratio / drain_ratio_h3 - windowed tracer drain (ratio 4, ppm / ppm_h3
 !!     + diabatic_first = .false.) on a periodic channel, >1 sub-cycle pass;
 !!   * drain_ratio_weno5 / _weno7 / _weno9 - the same drain with the WENO swept
@@ -204,10 +210,12 @@ program test_ocean_decomp_bitid_mpi
    use rdb_comm_env, only: comm_env_init, comm_env_setup_roles, comm_env_finalize, &
                            comm_env_rank, comm_env_size, comm_env_compute_comm, &
                            comm_env_push_compute_comm, comm_env_pop_compute_comm
-   use pic_mpi_lib, only: comm_t, allreduce, MPI_SUM
+   use pic_mpi_lib, only: comm_t, allreduce, MPI_SUM, MPI_MAX
    use rdb_console_stats, only: console_stats_t, conservation_budget_t
    use rdb_ocean_console_stats, only: ocean_console_stats_report, ocean_budget_stage_weight
    use rdb_ocean_dyn, only: SPLIT_SCHEME_PRED_CORR
+   use rdb_ocean_balance, only: BALANCE_GEOSTROPHIC, ocean_balance_velocity
+   use rdb_ocean_reinit, only: ocean_balance_apply
    use rdb_ocean_fold_exchange, only: ocean_fold_exchange_grow_count
 #ifndef RDB_NO_NETCDF
    use rdb_io_netcdf, only: nc_create_file, nc_close, nc_def_dim, nc_def_var_2d, &
@@ -275,12 +283,15 @@ program test_ocean_decomp_bitid_mpi
 
    integer :: rank, nprocs, n_fail, total_fail, ic
    integer :: n_steps_cur = N_STEPS
+   character(len=16) :: balance_ref = ""
+      !! Non-empty: `run_one` calls `ocean_balance_apply` with this `ref_level`
+      !! after `engine_enter_data` (the `balance_*` cases).
       !! Steps `run_one` takes; 0 for the `*_t0` labels (compare the seeded IC itself).
    character(len=256) :: case_filter = ""
       !! `RDB_BITID_CASES`: run only the cases whose name contains this substring.
    type(comm_t) :: comm
    character(len=16), parameter :: SCHEMES(2) = [character(len=16) :: "pred_corr", "ssp_rk2"]
-   character(len=24), parameter :: CASES(63) = [character(len=24) :: &
+   character(len=24), parameter :: CASES(66) = [character(len=24) :: &
                                                 "island_basin", "weno7_pv", &
                                                 "periodic_channel_zstar", &
                                                 "visc_rem_zstar", &
@@ -299,6 +310,8 @@ program test_ocean_decomp_bitid_mpi
                                                 "hvisc_kh_points", "diabatic_end", &
                                                 "hvisc_thin_layer", "hvisc_biharm_stress", &
                                                 "balanced_vortex_t0", "balanced_vortex", &
+                                                "balance_rest_t0", "balance_keep_t0", &
+                                                "balance_rest", &
                                                 "drain_ratio", "drain_ratio_h3", &
                                                 "drain_ratio_weno5", "drain_ratio_weno7", &
                                                 "drain_ratio_weno9", "drain_ratio_fold", &
@@ -350,6 +363,7 @@ program test_ocean_decomp_bitid_mpi
    end do
 
    if (nprocs >= 2) call check_single_rank_fences()
+   if (nprocs >= 2) call check_balance_fold_refusal()
    if (len_trim(case_filter) == 0 .or. index("cavity_grounded_refused", trim(case_filter)) > 0) &
       call check_cavity_grounded_refusal()
 
@@ -379,6 +393,7 @@ contains
       character(len=16) :: spx, spy, snx, sny, sng, snz
       character(len=:), allocatable :: common, bt_extra, bt_head, ice_dyn, hv_extra, drain_extra
       character(len=16) :: rad_earth_s, wind_s, wind_y_s
+      character(len=40) :: vortex_balance
       character(len=8) :: sponge_w, sponge_e
       character(len=64) :: wl
 
@@ -389,6 +404,8 @@ contains
       ! z* open-step case under bbl_glue -- so both cases below now
       ! exercise `visc_rem_chain` (producer + bt_rem_from_av_rem + wt_u
       ! forcing + renorm_visc_rem, UNIFORM BT-correction fold) instead.
+      vortex_balance = "vortex_balance = 'geostrophic'"
+      if (index(label, "balance_") == 1) vortex_balance = "vortex_balance = 'none'"
       ice_dyn = "dynamics = .true., evp_sub_steps = 30, cfl_trunc = 0.01, "// &
                 "project_ci = .true., "
       if (label == "sea_ice_fold_nodyn") ice_dyn = "dynamics = .false., "
@@ -549,7 +566,8 @@ contains
                "coriolis_beta = 2.0e-11 /"//NL// &
                "&ocean_vdiff_nml hvel_mom6 = .true., bbl_glue = .true. /"//NL// &
                "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
-      case ("balanced_vortex", "balanced_vortex_t0")
+      case ("balanced_vortex", "balanced_vortex_t0", "balance_rest", "balance_rest_t0", &
+            "balance_keep_t0")
          ! Isolated balanced cold-core vortex (ic_config = 'balanced_vortex') on a
          ! closed beta-plane, centred on the 2x1/1x2 seams and the 2x2 four-way
          ! corner (x0 = 13 dx, y0 = 9 dx), R = 3 dx so the core also straddles the
@@ -568,7 +586,8 @@ contains
                "&ocean_ic_nml ic_config = 'balanced_vortex', alpha_T = 0.17, "// &
                "rho_0 = 1035.0, vortex_x0 = 260000.0, vortex_y0 = 180000.0, "// &
                "vortex_radius = 60000.0, vortex_hv = 300.0, vortex_dT = -2.0, "// &
-               "vortex_T_surf = 20.0, vortex_dT_dz = 1.5e-2 /"//NL// &
+               "vortex_T_surf = 20.0, vortex_dT_dz = 1.5e-2, "// &
+               trim(vortex_balance)//" /"//NL// &
                "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
       case ("weno7_pv")
          ! The island basin on the Sadourny enstrophy path with the weno7 PV
@@ -1283,6 +1302,15 @@ contains
       if (ierr /= OCEAN_STATUS_OK) return
 
       call engine_enter_data(engine, cfg)
+      if (len_trim(balance_ref) > 0) then
+         call poison_velocity_ghosts(engine, crank)
+         call ocean_balance_apply(engine%state, engine%grid, cfg, BALANCE_GEOSTROPHIC, &
+                                  trim(balance_ref), .true., .false., ierr)
+         if (ierr /= OCEAN_STATUS_OK) then
+            write (*, '(a,i0,a,i0)') "FAIL balance: ocean_balance_apply ierr=", ierr, " rank ", rank
+            return
+         end if
+      end if
       t = 0.0_wp
       ierr = OCEAN_STATUS_OK
       do n = 1, n_steps_cur
@@ -1362,6 +1390,26 @@ contains
       call engine_teardown(engine)
    end subroutine run_one
 
+   subroutine poison_velocity_ghosts(engine, crank)
+      !! Host u/v/hu/hv := rank-dependent garbage in the WHOLE array (the
+      !! balance must overwrite every owned face and refresh the seam ghosts),
+      !! pushed to the device so host and device agree.
+      type(ocean_engine_t), intent(inout) :: engine
+      integer, intent(in) :: crank
+      real(wp) :: g
+      g = 7.0e3_wp*real(crank + 1, wp)
+      engine%state%multilayer%u_face_x_layer = g
+      engine%state%multilayer%v_face_y_layer = -g
+      engine%state%multilayer%hu_face_x_layer = 2.0_wp*g
+      engine%state%multilayer%hv_face_y_layer = -2.0_wp*g
+      associate (uf => engine%state%multilayer%u_face_x_layer, &
+                 vf => engine%state%multilayer%v_face_y_layer, &
+                 huf => engine%state%multilayer%hu_face_x_layer, &
+                 hvf => engine%state%multilayer%hv_face_y_layer)
+         !$acc update device(uf, vf, huf, hvf)
+      end associate
+   end subroutine poison_velocity_ghosts
+
    subroutine count_wd_flips(engine, prev, flips)
       !! Accumulate the wet<->dry flips of this rank's OWNED cells of
       !! `wd_wet_dyn` since the previous call, in the shoal's three seam bands
@@ -1398,6 +1446,7 @@ contains
       end do
       prev = engine%state%dyn%bt_work%wd_wet_dyn
    end subroutine count_wd_flips
+
    subroutine push_field(s, tag, a)
       !! Append one 2-D field (stored with a unit third extent).
       type(snap_t), intent(inout) :: s
@@ -1882,6 +1931,9 @@ contains
       type(conservation_budget_t) :: buds(8)
 
       n_steps_cur = N_STEPS
+      balance_ref = ""
+      if (index(label, "balance_rest") == 1) balance_ref = "bottom_rest"
+      if (index(label, "balance_keep") == 1) balance_ref = "keep_h"
       ! The emergent shoal needs twice the gate length: at 48 steps the
       ! stale seam-ghost mask is still latched to the owner's value, by 96 the
       ! front has moved a ghost cell of `wd_wet_dyn` (and `wd_open_*`) off it.
@@ -2285,6 +2337,64 @@ contains
             " serial-out: reference budget bit-identical to every decomposed factorization"
       end if
    end subroutine check_periodic_sponge_serial_out
+
+   subroutine check_balance_fold_refusal()
+      !! `ocean_balance_velocity` with the north fold TAG set, split north-south
+      !! (1 x nprocs, so only the north rank row holds the fold): every rank
+      !! must return the SAME refusal status, for the FOLD reason, and none may
+      !! block in the later collective (a rank-local early return, keyed on
+      !! `bc%north_fold`, would leave the south ranks in the `|f|` allreduce).
+      !! The grid is SPHERICAL with periodic x and `north = 'tripolar_fold'`:
+      !! `ocean_bc_validate_fold` only asks for periodic west/east, and the
+      !! "tripolar grid needs the fold" rule runs one way, so the grid-kind gate
+      !! passes and the fold-tag line is the one reached (on a tripolar grid
+      !! the grid-kind refusal fires first and would mask it).
+      use rdb_error_ring, only: error_ring_clear, error_ring_get
+      type(ocean_engine_t) :: engine
+      type(config_t) :: cfg
+      integer :: ierr, ierr_b, st(2), ibc, nfold, nf(1)
+      character(len=:), allocatable :: nml
+      character(len=*), parameter :: WALLS = "north = 'wall'"
+      character(len=*), parameter :: FOLD = "north = 'tripolar_fold'"
+      character(len=*), parameter :: PERIODIC_X = "west = 'periodic', east = 'periodic'"
+      character(len=*), parameter :: ALL_WALLS = "west = 'wall', east = 'wall'"
+
+      ierr_b = -1
+      nfold = 0
+      nml = case_nml("spherical", "pred_corr", 1, nprocs)
+      ibc = index(nml, ALL_WALLS)
+      if (ibc > 0) nml = nml(:ibc - 1)//PERIODIC_X//nml(ibc + len(ALL_WALLS):)
+      ibc = index(nml, WALLS)
+      if (ibc > 0) nml = nml(:ibc - 1)//FOLD//nml(ibc + len(WALLS):)
+      call read_config_from_string(nml, cfg, ierr=ierr)
+      if (ierr == OCEAN_STATUS_OK) call validate_config(cfg, ierr)
+      if (ierr == OCEAN_STATUS_OK) call engine_setup(engine, cfg, ierr, compute_rank=rank, &
+                                                     compute_size=nprocs)
+      if (ierr == OCEAN_STATUS_OK) then
+         call engine_enter_data(engine, cfg)
+         call error_ring_clear()
+         call ocean_balance_velocity(engine%grid, cfg, engine%state, BALANCE_GEOSTROPHIC, ierr_b)
+         if (index(error_ring_get(0), "tripolar north fold") > 0) nfold = 1
+         call engine_exit_data(engine)
+         call engine_teardown(engine)
+      end if
+      st = [ierr_b, -ierr_b]
+      call allreduce(comm, st, op=MPI_MAX)
+      ! nfold: every rank must have seen the fold message (min over ranks).
+      nf = -nfold
+      call allreduce(comm, nf, op=MPI_MAX)
+      ibc = nf(1)
+      if (ierr /= OCEAN_STATUS_OK .or. st(1) /= -st(2) .or. st(1) == OCEAN_STATUS_OK &
+          .or. ibc /= -1) then
+         write (*, '(a,i0,a,i0,a,i0,a,i0,a,i0)') "FAIL balance fold refusal: setup ierr=", ierr, &
+            ", status max=", st(1), ", min=", -st(2), ", fold-message on all ranks (-1 = yes)=", ibc, &
+            " rank ", rank
+         n_fail = n_fail + 1
+      else if (rank == 0) then
+         write (*, '(a,i0,a)') "case balance fold refusal: every rank refused for the fold (status ", &
+            st(1), ") (ok)"
+      end if
+   end subroutine check_balance_fold_refusal
 
    subroutine check_single_rank_fences()
       !! The single-rank features must be REFUSED at configure on more than
