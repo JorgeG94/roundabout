@@ -95,9 +95,7 @@
 !!     plus Flather OPEN east edge, the fronts reaching the open edges (split by
 !!     the 1x2 / 2x2 / 1x4 / 4x1 seams) and the corner where a seam meets them;
 !!     ghosts (outside-domain ones included), budget and the checkpoint/resume leg
-!!     compared.  Bitwise equal to one rank on the GPU build; CPU builds need
-!!     FMA contraction off and, with gfortran, a scalar (non-libmvec) cosine in
-!!     the tidal forcing.  NOTE: the cases do NOT show the positive-definite
+!!     compared.  NOTE: the cases do NOT show the positive-definite
 !!     limiter acting (theta < 1) at an open face: the open-edge columns are
 !!     >= 0.6 m (a shallower one is refused at configure) and a per-step sample
 !!     of the last substep's theta never saw theta < 1 within 3 cells of the
