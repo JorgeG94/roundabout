@@ -236,7 +236,7 @@ derives `n_inner` from the gravity-wave CFL **once at configure time**
 resolved value back into `cfg%ocean%bt%n_inner` — which is why `cfg` is
 `intent(inout)` all the way up to `main`. It is NOT re-derived per step
 (unless `&ocean_bt_nml dtbt` with `dtbt_reset_period = 0`, which re-derives it every
-step, single-rank only); CFL truncation is a counter (`dyn%ntrunc_total`), not a controller.
+step; multi-rank bit-identical via a global min, refused with `bt_halo > 0`); CFL truncation is a counter (`dyn%ntrunc_total`), not a controller.
 Under `ssp_rk2` the two stages are averaged; under `pred_corr` the
 corrector's single full-dt update IS the step (averaging forward-backward
 stages annihilates the internal wave), and the salt/heat console budget weight

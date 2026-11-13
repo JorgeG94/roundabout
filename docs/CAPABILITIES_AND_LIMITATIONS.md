@@ -139,7 +139,7 @@ Both schemes wrap the same nonlinear barotropic fast loop. The stability suite r
 
 - The default barotropic damping is `&ocean_bt_nml bebt = 0.1` (MOM6 parity). The continuity renormalisation uses the donor-flip-consistent flux (`&ocean_continuity_nml renorm_consistent_flux = .true.`). Together they close the stepped-terrain barotropic grid-scale mode (FINDING B in [section 5](#5-vertical-coordinates)).
 - Coriolis is a closed-form rotation, so it adds no time-step limit.
-- `&ocean_bt_nml dtbt` (OM3 `DTBT`) sets the barotropic substep as a fraction of the largest stable step `dt_max`, taken over wet cells from `1/dt_max² = ½(1+2·bebt)[(1/A_T)Σ g·D·dy/dx + Σ f²_corner]` (so the corner Coriolis term and `bebt` both enter the limit); `dtbt_reset_period = 0` re-derives `n_inner` every step from the live column depths. A positive `dtbt_reset_period` re-derives it on a time grid, so a restart in mid-period re-derives at its first step and is not bit-identical to the uninterrupted run (period `0` and `< 0` are). It replaces `auto_n_inner`/`cfl_bt_safety` and fails loud if combined with them. `dtbt_reset_period >= 0` changes `n_inner` mid-run, so it is single-rank with `bt_halo = 0` and is refused at engine setup otherwise; the init-only form (`< 0`) is allowed on any rank count.
+- `&ocean_bt_nml dtbt` (OM3 `DTBT`) sets the barotropic substep as a fraction of the largest stable step `dt_max`, taken over wet cells from `1/dt_max² = ½(1+2·bebt)[(1/A_T)Σ g·D·dy/dx + Σ f²_corner]` (so the corner Coriolis term and `bebt` both enter the limit); `dtbt_reset_period = 0` re-derives `n_inner` every step from the live column depths. A positive `dtbt_reset_period` re-derives it on a time grid, so a restart in mid-period re-derives at its first step and is not bit-identical to the uninterrupted run (period `0` and `< 0` are). It replaces `auto_n_inner`/`cfl_bt_safety` and fails loud if combined with them. `dtbt_reset_period >= 0` changes `n_inner` mid-run: it is multi-rank (the domain minimum of `dt_max` is reduced across ranks, bit-identical to one rank) but is refused at engine setup with `bt_halo > 0`, whose wide-halo BT clone is not resized; the init-only form (`< 0`) is allowed there too.
 - This is a sub-cycled fast mode, not a semi-implicit free surface. The gravity-wave term is not treated implicitly in the SCHISM or Casulli sense.
 
 **Full notes in the archive:**
@@ -483,7 +483,8 @@ Under `z_fixed` plus a cavity, melt and top drag are accepted, and `kappa_h /= 0
 | Restart on a different rank count | **Not implemented** | – | – |
 | Parallel (collective) NetCDF | **Not implemented** | – | Output is per rank, merged offline by `tools/merge_output.py`. |
 | CUDA-aware halo exchange | Shipped | `-DRDB_CUDA_AWARE_MPI=ON` | A multi-GPU run needs it, and `CUDA_VISIBLE_DEVICES` pinned per rank before `MPI_Init`. The driver refuses a host-staged multi-GPU build. |
-| Barotropic march-in (wide halo) | Opt-in, **not bit-identical** | `&ocean_bt_nml bt_halo > 0` | See the list below. The default (`-1`, auto) resolves to 0. |
+| Barotropic march-in (wide halo) | Opt-in, **not bit-identical** | `&ocean_bt_nml bt_halo > 0` | See the list below. The default (`-1`, auto) resolves to 0. Refused at engine setup together with `&ocean_bt_nml dtbt` + `dtbt_reset_period >= 0` (the re-derived `n_inner` does not resize the wide-halo clone). |
+| OM3-style barotropic step reset | Shipped | `&ocean_bt_nml dtbt`, `dtbt_reset_period >= 0` | Bit-identical on any split with `bt_halo = 0` (global min of `dt_max` over owned cells, h ghosts refreshed first); gate: `dtbt_reset*` cases of `test_ocean_decomp_bitid_mpi`. |
 
 ### Refused at configure on more than one rank
 
@@ -494,7 +495,6 @@ Each check is fail-loud on every rank and names the knob. The check keys on the 
 | `&ocean_cavity_dyn_nml enable` (and the melt / top-drag paths that require it) | the grounding statistics are global reductions the configure does not take; `draft_config="file"` has no windowed reader |
 | `&ocean_wetdry_nml enable` | the wet-mask / outflow-limiter halo exchange is not implemented |
 | `&ocean_bc_nml` `'chapman'` edges | the edge-uniform eta target is a per-rank partial mean |
-| `&ocean_bt_nml dtbt` with `dtbt_reset_period >= 0` (or with `bt_halo > 0`) | `n_inner` changes mid-run, which is not agreed across ranks and does not resize the wide-halo BT clone; the init-only form (`dtbt_reset_period < 0`) is allowed |
 | tripolar fold with a north tile shorter than `nghost + 1` rows (`ny/py`), or tiles narrower than `nghost + 1` columns (`nx/px`, when `px > 1`) | the fold mirrors `nghost` rows below the fold line from the north tile itself; the width rule keeps every tile wider than its own ghost band |
 | in-memory geometry injection (the API's staged bathymetry / supergrid arrays) | they describe the whole grid, not a tile (the file readers are windowed) |
 | `nghost < 3` | the PPM stencil degrades to first order at a seam face (`ocean_halo_init`) |

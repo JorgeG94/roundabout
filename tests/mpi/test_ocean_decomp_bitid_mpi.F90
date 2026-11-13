@@ -88,6 +88,8 @@
 !!     + diabatic_first = .false.) on a periodic channel, >1 sub-cycle pass;
 !!   * drain_ratio_weno5 / _weno7 / _weno9 - the same drain with the WENO swept
 !!     reconstruction at nghost 3 / 4 / 5 (rung ladder keyed on global edges);
+!!   * dtbt_reset / dtbt_reset_period - `&ocean_bt_nml dtbt` re-derived every step / hourly;
+!!     `dtbt` sits at an n_inner threshold so n_inner flips 14 <-> 15 mid-run (27x19 trench)
 !!   * drain_ratio_fold / drain_ratio_fold_h3 - the same drain across the tripolar fold
 !!     (distributed fold exchange for px > 1);
 !!   * tracer_ppm_h3 - re-entrant channel (periodic x) with
@@ -198,6 +200,8 @@ program test_ocean_decomp_bitid_mpi
    integer, parameter :: NX_G = 26
    integer, parameter :: NY_G = 18
    integer, parameter :: N_STEPS = 48
+   character(len=*), parameter :: DTBT_FRAC = "-0.84678989"
+      !! `dtbt` of the `dtbt_reset*` cases (fraction of the largest stable substep).
    integer, parameter :: N_CKPT = 25
       !! Checkpoint step of the write/resume leg: odd, so with
       !! `dt_therm_ratio = 2` it lands mid thermo window.
@@ -246,7 +250,7 @@ program test_ocean_decomp_bitid_mpi
       !! `RDB_BITID_CASES`: run only the cases whose name contains this substring.
    type(comm_t) :: comm
    character(len=16), parameter :: SCHEMES(2) = [character(len=16) :: "pred_corr", "ssp_rk2"]
-   character(len=24), parameter :: CASES(50) = [character(len=24) :: &
+   character(len=24), parameter :: CASES(52) = [character(len=24) :: &
                                                 "island_basin", "weno7_pv", &
                                                 "periodic_channel_zstar", &
                                                 "visc_rem_zstar", &
@@ -270,7 +274,8 @@ program test_ocean_decomp_bitid_mpi
                                                 "drain_ratio_weno9", "drain_ratio_fold", &
                                                 "drain_ratio_fold_h3", "eulz", "eulz_periodic", &
                                                 "eulz_tripolar", "eulz_epbl_mle", "bulk_flux", &
-                                                "bulk_flux_ice", "bulk_flux_fold", "manizza"]
+                                                "bulk_flux_ice", "bulk_flux_fold", "manizza", "dtbt_reset", &
+                                                "dtbt_reset_period"]
 
    call comm_env_init()
    call comm_env_setup_roles(.false.)
@@ -334,7 +339,7 @@ contains
       character(len=:), allocatable :: nml
       character(len=*), parameter :: NL = new_line("a")
       character(len=16) :: spx, spy, snx, sny, sng, snz
-      character(len=:), allocatable :: common, bt_extra, ice_dyn, hv_extra, drain_extra
+      character(len=:), allocatable :: common, bt_extra, bt_head, ice_dyn, hv_extra, drain_extra
       character(len=16) :: rad_earth_s, wind_s, wind_y_s
       character(len=64) :: wl
 
@@ -349,6 +354,11 @@ contains
                 "project_ci = .true., "
       if (label == "sea_ice_fold_nodyn") ice_dyn = "dynamics = .false., "
       bt_extra = ""
+      bt_head = "auto_n_inner = .true., "
+      ! Per-step (period 0) / hourly (period 3600 s) re-derivation of n_inner from
+      ! the live thicknesses; the fraction sits at an n_inner threshold (see case).
+      if (label == "dtbt_reset") bt_head = "dtbt = "//DTBT_FRAC//", dtbt_reset_period = 0.0, "
+      if (label == "dtbt_reset_period") bt_head = "dtbt = "//DTBT_FRAC//", dtbt_reset_period = 3600.0, "
       if (label == "visc_rem_zstar") bt_extra = ", visc_rem_chain = .true."
       if (label == "visc_rem_chain") then
          bt_extra = ", visc_rem_chain = .true., frhat_scheme = 'hybrid'"
@@ -407,13 +417,19 @@ contains
          snx = "32"
          sny = "24"
       end if
+      ! Odd extents put the trench centre in the middle of a cell, so the CFL-controlling
+      ! (deepest) cell is unique and sits beside the 2-way seam on both axes.
+      if (index(label, "dtbt_reset") == 1) then
+         snx = "27"
+         sny = "19"
+      end if
       common = "&sim_nml sim_type = 'ocean' /"//NL// &
                "&mpi_nml px = "//trim(spx)//", py = "//trim(spy)//" /"//NL// &
                "&time_nml t_end = 86400.0, dt_fixed = 900.0 /"//NL// &
                "&nonhydrostatic_nml nz_layers = "//trim(snz)//" /"//NL// &
                "&tracer_nml initial_temperature = 12.0, initial_salinity = 35.0, "// &
                "T_init_surface = 20.0, T_init_bottom = 4.0 /"//NL// &
-               "&ocean_bt_nml auto_n_inner = .true., split_scheme = '"//scheme//"'"// &
+               "&ocean_bt_nml "//bt_head//"split_scheme = '"//scheme//"'"// &
                bt_extra//" /"//NL// &
                "&ocean_hvisc_nml nu_h = 200.0, lateral_closure = 'smagorinsky', "// &
                "smag_ah = .true."//hv_extra//" /"//NL// &
@@ -617,6 +633,20 @@ contains
                "&ocean_thermo_nml enable_thermodynamics = .true., q_heat = -100.0 /"//NL// &
                "&ocean_vmix_nml dt_therm_ratio = 4, dt_tracer_advect_ratio = 4"// &
                ""//trim(drain_extra)//" /"//NL// &
+               "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
+               "north = 'wall' /"//NL
+      case ("dtbt_reset", "dtbt_reset_period")
+         ! Re-entrant channel with a Gaussian TRENCH (peak_depth > max_depth) at the
+         ! domain centre, which on the odd 27 x 19 grid is the middle of cell (14, 10):
+         ! the unique deepest, hence CFL-controlling, cell.  It is the first/last
+         ! column and row of a 2x1 / 1x2 tile, so its limit reads h across the seam.
+         nml = common// &
+               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
+               "dx = 20000.0, dy = 20000.0 /"//NL// &
+               "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 0.2 /"//NL// &
+               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
+               "&ocean_topo_nml topo_config = 'seamount', max_depth = 2000.0, "// &
+               "edge_depth = 3000.0, slope_scale = 60000.0 /"//NL// &
                "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
                "north = 'wall' /"//NL
       case ("tracer_ppm_h3")
@@ -1500,7 +1530,7 @@ contains
             glob = [nbad, nfin, 0]
 #ifndef RDB_NO_NETCDF
             if ((label == "sea_ice" .or. label == "sea_ice_transport" .or. &
-                 label == "bulk_flux_ice" .or. is_ice_fold_case(label)) .and. &
+                 label == "bulk_flux_ice" .or. label == "dtbt_reset" .or. is_ice_fold_case(label)) .and. &
                 (nprocs/px == 1 .or. px == nprocs/px) .and. nprocs > 1) then
                ! 4x1 and 2x2 at np = 4 (and 2x1 at np = 2).
                call check_resume_leg(case_nml(label, scheme, px, nprocs/px), dec, &
