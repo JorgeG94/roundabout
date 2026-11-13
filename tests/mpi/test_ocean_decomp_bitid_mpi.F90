@@ -1236,11 +1236,8 @@ contains
       pst = ""
       if (index(label, "cavity_mass") == 1) then
          ! Real freshwater mass (a Boussinesq volume on the top layer); the
-         ! pseudo-salt tracer runs the mass step's pseudo-salt mirror.  NOT in
-         ! the checkpoint/resume leg: the mass step reads `cav%melt/active/
-         ! s_far/t_b`, which are not restart state on this base (a separate
-         ! branch registers them), so a warm restart in this mode differs on
-         ! ONE rank too.
+         ! pseudo-salt tracer runs the mass step's pseudo-salt mirror.  Both
+         ! cases are in the checkpoint/resume leg.
          fw = ", freshwater = 'mass', volume_compensation = '"// &
               merge("uniform_open_ocean", "none              ", label == "cavity_mass_comp")//"'"
          pst = "&ocean_tracers_nml enable_pseudo_salt = .true. /"//NL
@@ -2037,9 +2034,11 @@ contains
             ! `dt_therm_ratio = 1`, not a decomposition defect.
             if ((label == "sea_ice" .or. label == "sea_ice_transport" .or. &
                  label == "bulk_flux_ice" .or. label == "dtbt_reset" .or. &
-                 label == "cavity_sigma_ratio2" .or. is_wetdry_case(label) .or. is_ice_fold_case(label)) .and. &
+                 label == "cavity_sigma_ratio2" .or. label == "cavity_mass" .or. &
+                 label == "cavity_mass_comp" .or. is_wetdry_case(label) .or. is_ice_fold_case(label)) .and. &
                 (nprocs/px == 1 .or. px == nprocs/px) .and. &
-                (nprocs > 1 .or. label == "cavity_sigma_ratio2")) then
+                (nprocs > 1 .or. label == "cavity_sigma_ratio2" .or. label == "cavity_mass" .or. &
+                 label == "cavity_mass_comp")) then
                ! 4x1 and 2x2 at np = 4 (and 2x1 at np = 2).
                call check_resume_leg(case_nml(label, scheme, px, nprocs/px), dec, &
                                      trim(tag))
