@@ -400,6 +400,7 @@ contains
       real(wp) :: zetau, zetat
       real(wp) :: psi_mu, psi_hu, psi_mt, psi_ht
       real(wp) :: xx
+      real(wp) :: lg_wind, lg_ta
       integer :: n
 
       sst_k = sst_degc + BULK_T0_KELVIN
@@ -420,6 +421,11 @@ contains
       tv = t_air*(1.0_wp + BULK_TVQ_AIR*q_air)
       ta_use = t_air
       qa_use = q_air
+
+      ! The two reference-height logarithms are constants of the call (heights
+      ! are scalars): evaluate once, not in every height-adjustment iteration.
+      lg_wind = rdb_sm_log(z_wind/BULK_Z_REF10)
+      lg_ta = rdb_sm_log(z_ta/z_wind)
 
       wv10n = wv
       ! `stab` selects the Stanton-number branch from the SIGN of
@@ -452,11 +458,11 @@ contains
          ! co-locates tas/huss at 2 m), so psi_h at the humidity height
          ! is the same psi_ht just computed -- no third stability branch.
 
-         wv10n = wv/(1.0_wp + cdn10_rt*(rdb_sm_log(z_wind/BULK_Z_REF10) - psi_mu)/BULK_VON_KARMAN)
+         wv10n = wv/(1.0_wp + cdn10_rt*(lg_wind - psi_mu)/BULK_VON_KARMAN)
          wv10n = max(wv10n, BULK_WIND_MIN)
 
-         ta_use = t_air - tstar*(rdb_sm_log(z_ta/z_wind) + psi_hu - psi_ht)/BULK_VON_KARMAN
-         qa_use = q_air - qstar*(rdb_sm_log(z_ta/z_wind) + psi_hu - psi_ht)/BULK_VON_KARMAN
+         ta_use = t_air - tstar*(lg_ta + psi_hu - psi_ht)/BULK_VON_KARMAN
+         qa_use = q_air - qstar*(lg_ta + psi_hu - psi_ht)/BULK_VON_KARMAN
          tv = ta_use*(1.0_wp + BULK_TVQ_AIR*qa_use)
 
          cdn10 = bulk_flux_cdn10_neutral(wv10n)
@@ -469,9 +475,9 @@ contains
          stab = merge(1.0_wp, 0.0_wp, zetau >= 0.0_wp)
          ctn10 = (BULK_CTN10_STABLE_COEF*stab + BULK_CTN10_UNSTABLE_COEF*(1.0_wp - stab))*cdn10_rt
 
-         xx = (rdb_sm_log(z_wind/BULK_Z_REF10) - psi_mu)/BULK_VON_KARMAN
+         xx = (lg_wind - psi_mu)/BULK_VON_KARMAN
          cdn = cdn10/(1.0_wp + cdn10_rt*xx)**2
-         xx = (rdb_sm_log(z_wind/BULK_Z_REF10) - psi_hu)/BULK_VON_KARMAN
+         xx = (lg_wind - psi_hu)/BULK_VON_KARMAN
          ctn = ctn10/(1.0_wp + ctn10*xx/cdn10_rt)*sqrt(cdn/cdn10)
          cen = cen10/(1.0_wp + cen10*xx/cdn10_rt)*sqrt(cdn/cdn10)
 

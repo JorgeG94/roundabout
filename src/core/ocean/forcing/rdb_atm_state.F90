@@ -796,6 +796,8 @@ contains
       real(wp) :: hour_frac_inst, decl_inst, eqtime_inst
       real(wp) :: hour_frac_q(ATM_COSZ_NQUAD), decl_q(ATM_COSZ_NQUAD), &
                   eqtime_q(ATM_COSZ_NQUAD)
+      real(wp) :: sdec_inst, cdec_inst
+      real(wp) :: sdec_q(ATM_COSZ_NQUAD), cdec_q(ATM_COSZ_NQUAD)
       integer :: k
 
       call atm_spencer_sun(this%epoch, t, hour_frac_inst, decl_inst, eqtime_inst)
@@ -807,10 +809,19 @@ contains
          call atm_spencer_sun(this%epoch, t_node, hour_frac_q(k), decl_q(k), eqtime_q(k))
       end do
 
+      ! Declination sin/cos are scalars of the step: evaluate them once here (the
+      ! same library routine as the kernel's `rdb_sm_*`, so the same bits), not
+      ! once per cell per node.
+      sdec_inst = safe_sin(decl_inst)
+      cdec_inst = safe_cos(decl_inst)
+      sdec_q = safe_sin(decl_q)
+      cdec_q = safe_cos(decl_q)
+
       call atm_coszen_apply_impl(this%nx_total, this%ny_total, this%nghost, &
                                  this%nx_phys, this%ny_phys, ATM_COSZ_NQUAD, &
-                                 hour_frac_q, decl_q, eqtime_q, &
-                                 hour_frac_inst, decl_inst, eqtime_inst, &
+                                 hour_frac_q, eqtime_q, &
+                                 hour_frac_inst, sdec_inst, cdec_inst, eqtime_inst, &
+                                 sdec_q, cdec_q, &
                                  metrics%geolonT, metrics%geolatT, &
                                  this%rsds_rec, this%cosz, this%cosz_mean, this%rsds)
    end subroutine atm_sw_coszen_refresh
@@ -845,8 +856,9 @@ contains
    end subroutine atm_spencer_sun
 
    pure subroutine atm_coszen_apply_impl(nx_total, ny_total, nghost, nx_phys, ny_phys, nq, &
-                                         hour_frac_q, decl_q, eqtime_q, &
-                                         hour_frac_inst, decl_inst, eqtime_inst, &
+                                         hour_frac_q, eqtime_q, &
+                                         hour_frac_inst, sdec_inst, cdec_inst, eqtime_inst, &
+                                         sdec_q, cdec_q, &
                                          geolonT, geolatT, rsds_rec, cosz, cosz_mean, rsds)
       !! The ONE device kernel: per physical T-cell, the instantaneous
       !! `cos Z` (clamped >= 0) at `(hour_frac_inst, decl_inst,
@@ -857,32 +869,35 @@ contains
       !! `geolonT`/`geolatT` is a host-precomputed scalar/short array
       !! (CLAUDE.md `do-concurrent` dummy + device-safety rules).
       integer, intent(in) :: nx_total, ny_total, nghost, nx_phys, ny_phys, nq
-      real(wp), intent(in) :: hour_frac_q(nq), decl_q(nq), eqtime_q(nq)
-      real(wp), intent(in) :: hour_frac_inst, decl_inst, eqtime_inst
+      real(wp), intent(in) :: hour_frac_q(nq), eqtime_q(nq)
+      real(wp), intent(in) :: sdec_q(nq), cdec_q(nq)
+      real(wp), intent(in) :: hour_frac_inst, sdec_inst, cdec_inst, eqtime_inst
       real(wp), intent(in) :: geolonT(nx_total, ny_total), geolatT(nx_total, ny_total)
       real(wp), intent(in) :: rsds_rec(nx_total, ny_total)
       real(wp), intent(inout) :: cosz(nx_total, ny_total), cosz_mean(nx_total, ny_total)
       real(wp), intent(inout) :: rsds(nx_total, ny_total)
 
       integer :: i, j, ii, jj, k
-      real(wp) :: lat_r, lon_deg, tst_min, ha, cz, acc, mean_val
+      real(wp) :: lat_r, slat, clat, lon_deg, tst_min, ha, cz, acc, mean_val
 
       do concurrent(j=1:ny_phys, i=1:nx_phys)
          ii = nghost + i
          jj = nghost + j
          lat_r = geolatT(ii, jj)*DEG2RAD
          lon_deg = geolonT(ii, jj)
+         slat = rdb_sm_sin(lat_r)
+         clat = rdb_sm_cos(lat_r)
 
          tst_min = hour_frac_inst*60.0_wp + eqtime_inst + 4.0_wp*lon_deg
          ha = (tst_min/4.0_wp - 180.0_wp)*DEG2RAD
-         cz = rdb_sm_sin(lat_r)*rdb_sm_sin(decl_inst) + rdb_sm_cos(lat_r)*rdb_sm_cos(decl_inst)*rdb_sm_cos(ha)
+         cz = slat*sdec_inst + clat*cdec_inst*rdb_sm_cos(ha)
          cosz(ii, jj) = max(0.0_wp, cz)
 
          acc = 0.0_wp
          do k = 1, nq
             tst_min = hour_frac_q(k)*60.0_wp + eqtime_q(k) + 4.0_wp*lon_deg
             ha = (tst_min/4.0_wp - 180.0_wp)*DEG2RAD
-            cz = rdb_sm_sin(lat_r)*rdb_sm_sin(decl_q(k)) + rdb_sm_cos(lat_r)*rdb_sm_cos(decl_q(k))*rdb_sm_cos(ha)
+            cz = slat*sdec_q(k) + clat*cdec_q(k)*rdb_sm_cos(ha)
             acc = acc + max(0.0_wp, cz)
          end do
          mean_val = acc/real(nq, wp)
