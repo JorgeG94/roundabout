@@ -312,7 +312,7 @@ Choose per edge with `&ocean_bc_nml`.
 | Open (Flather) | Shipped | `flather_form`, per-edge `*_ext_u/v` | Barotropic Flather plus a per-layer zero-gradient baroclinic anomaly. The `"full"` form supports an exterior velocity. |
 | Tidal | Shipped | `obc_tidal_nodal` | Multi-constituent `eta`. |
 | Clamped | Shipped | – | Dirichlet `eta`, `u`, `v` and per-tracer inflow values. |
-| Chapman | Shipped | – | **Refused on more than one rank.** |
+| Chapman | Shipped | – | Bit-identical on every split: the edge-mean `eta` target, its persistent `eta_old` and the south-west-corner phase-speed scale are global quantities (one gathered line per edge, summed in global index order; `chapman_obc` decomposition case). Refused with an explicit `&ocean_bt_nml bt_halo > 0` (AUTO resolves to 0). GPU: the 1-rank target used to be read from stale host memory (`bt_eta` is device-only); it is now pulled from the device, so 1-rank GPU Chapman answers changed. |
 | Sponge | Shipped | `sponge_relax_tracers`, `&ocean_sponge_nml` | A closed wall at the outer face plus an interior band of momentum decay and optional tracer relaxation. |
 | Periodic | Shipped | – | Needs `nghost >= 3` and paired edges. The seam is bit-exact. |
 | Radiation and nudging | Shipped, opt-in | `radiation_scheme = "orlanski"`, `nudge_tau_in/out`, `res_lscale_in/out` | Per-layer implicit-upwind Orlanski radiation on the normal velocity, with a running-mean phase speed and an `rx_max` clip. The default `radiation_scheme = "anomaly"` is the Flather mean plus a zero-gradient baroclinic anomaly. `rx` and `u_prev` are not restart state, so a restart starts the scheme cold. |
@@ -500,7 +500,6 @@ Each check is fail-loud on every rank and names the knob. The check keys on the 
 | A cavity with `north = "tripolar_fold"`, with `&ocean_bulk_flux_nml enable`, or with any `&ocean_bc_nml` edge other than `wall` / `periodic` | no decomposition case; unproven on a decomposed domain (the bulk stress also carries no ice-cover mask) |
 | `&ocean_wetdry_nml enable` together with `north = "tripolar_fold"` | unproven: the wet/dry masks and limiter fluxes (`wd_wet_dyn`, `wd_open_u/v`, `bt_uhbt/bt_vhbt`) are not folded, on any rank count; a one-rank tripolar wet/dry run has simply never been run |
 | `&ocean_wetdry_nml enable` together with a west / east / south / north edge that is not `wall` or `periodic` (open, tidal, clamped, chapman, sponge) | unproven on a decomposed domain: the limiter adds `min(theta(ng), theta(ng+1))` at the boundary face and `theta(ng)` reads fluxes outside the domain, which at a seam crossing the open edge come from corner ghosts / the zero-gradient fill, a radius no OBC decomposition case reads; a tidal-flat case is a follow-up |
-| `&ocean_bc_nml` `'chapman'` edges | the edge-uniform eta target is a per-rank partial mean |
 | tripolar fold with a north tile shorter than `nghost + 1` rows (`ny/py`), or tiles narrower than `nghost + 1` columns (`nx/px`, when `px > 1`) | the fold mirrors `nghost` rows below the fold line from the north tile itself; the width rule keeps every tile wider than its own ghost band |
 | in-memory geometry injection (the API's staged bathymetry / supergrid arrays) | they describe the whole grid, not a tile (the file readers are windowed) |
 | `nghost < 3` | the PPM stencil degrades to first order at a seam face (`ocean_halo_init`) |

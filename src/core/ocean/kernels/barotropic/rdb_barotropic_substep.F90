@@ -56,7 +56,9 @@ module rdb_barotropic_substep
    use rdb_ocean_halo, only: ocean_halo_bt_group_2d, ocean_halo_face_x, &
                              ocean_halo_bt_group_2d_wide, &
                              ocean_halo_is_decomposed, &
-                             ocean_halo_is_decomposed_x, ocean_halo_is_decomposed_y
+                             ocean_halo_is_decomposed_x, ocean_halo_is_decomposed_y, &
+                             ocean_halo_global_extent
+   use rdb_halo, only: halo_allreduce_sum_vec
    use rdb_ocean_halo_counters, only: oh_count_bt_u_mid, &
                                       oh_count_suppress_on, oh_count_suppress_off
    use rdb_profiler, only: profiler_start, profiler_stop
@@ -70,8 +72,119 @@ module rdb_barotropic_substep
    public :: barotropic_substep_linear
    public :: barotropic_substep_nonlinear
    public :: barotropic_substep_nonlinear_interior
+   public :: chapman_setup_corner
+   public :: chapman_workspace_cleanup
+
+   real(wp), allocatable :: ch_lbuf(:)
+      !! Chapman edge line at GLOBAL index (device-mapped; host mirror).
+   real(wp), allocatable :: ch_gbuf(:)
+      !! Chapman edge line after the cross-rank sum (host only).
 
 contains
+
+   subroutine chapman_workspace_ensure(n)
+      !! Lazy-allocate the persistent Chapman line buffers (host + device
+      !! mirror for `ch_lbuf`, host-only `ch_gbuf`) to at least `n` entries.
+      !! Released by `chapman_workspace_cleanup`.
+      integer, intent(in) :: n
+
+      if (allocated(ch_lbuf)) then
+         if (size(ch_lbuf) >= n) return
+         call chapman_workspace_cleanup()
+      end if
+      allocate (ch_lbuf(n), ch_gbuf(n))
+      ch_lbuf = 0.0_wp
+      ch_gbuf = 0.0_wp
+      !$acc enter data copyin(ch_lbuf)
+   end subroutine chapman_workspace_ensure
+
+   subroutine chapman_workspace_cleanup()
+      !! Release the Chapman line buffers (device mirror first).
+      if (allocated(ch_lbuf)) then
+         !$acc exit data delete(ch_lbuf)
+         deallocate (ch_lbuf)
+      end if
+      if (allocated(ch_gbuf)) deallocate (ch_gbuf)
+   end subroutine chapman_workspace_cleanup
+
+   pure function chapman_line_sum(x, n) result(s)
+      !! Sequential, in-index-order sum of the global edge line.  ONE
+      !! non-inlined instance serves every Chapman edge and the end-of-call
+      !! refresh, so the summation order is a single compiled order that
+      !! cannot differ between call sites or rank counts.
+      integer, intent(in) :: n
+      real(wp), intent(in) :: x(n)
+      real(wp) :: s
+      integer :: i
+      !dir$ noinline
+      !gcc$ attributes noinline :: chapman_line_sum
+      s = 0.0_wp
+      ! No vectorisation (no reassociated partial sums).  Per compiler, since
+      ! nvfortran reads a preceding `dir$ novector` as cancelling its own
+      ! `pgi$l novector`: gfortran needs none (no FP reassociation without
+      ! fast-math).
+#ifdef __NVCOMPILER
+      !pgi$l novector
+#elif defined(__INTEL_LLVM_COMPILER) || defined(__INTEL_COMPILER)
+      !dir$ novector
+#endif
+      do i = 1, n
+         s = s + x(i)
+      end do
+   end function chapman_line_sum
+
+   subroutine chapman_edge_mean(n, mean)
+      !! Global Chapman edge mean from the line already written at its
+      !! GLOBAL index into `ch_lbuf(1:n)` (device) by the caller's kernel:
+      !! pull the line, ONE collective sums it (exactly one nonzero addend
+      !! per slot; identity on one rank), then `chapman_line_sum` and the
+      !! division by the global count `n`.  The mean is the same expression
+      !! for every edge, split or not, at any rank count.
+      !! COLLECTIVE: all ranks must call it, in the same order.
+      integer, intent(in) :: n
+      real(wp), intent(out) :: mean
+
+      !$acc update self(ch_lbuf(1:n))
+      if (ocean_halo_is_decomposed()) then
+         call halo_allreduce_sum_vec(ch_lbuf, ch_gbuf, n)
+      else
+         ! One rank (or no halo module, direct kernel callers): the line is
+         ! already global.
+         ch_gbuf(1:n) = ch_lbuf(1:n)
+      end if
+      mean = chapman_line_sum(ch_gbuf, n)/real(n, wp)
+   end subroutine chapman_edge_mean
+
+   subroutine chapman_setup_corner(grid, bt_H_ref, idx_cu, bc)
+      !! Configure-time (static data): latch `bt_H_ref` and `idx_cu` at the
+      !! GLOBAL south-west corner cell (the Chapman phase-speed scale) into
+      !! `bc`, delivered to every rank from the rank that owns it (all
+      !! others add +0).  The substep then reads two scalars.  COLLECTIVE
+      !! when decomposed: every rank must call it.
+      type(hgrid_t), intent(in) :: grid
+      real(wp), intent(in) :: bt_H_ref(grid%nx_total, grid%ny_total)
+      real(wp), intent(in) :: idx_cu(grid%nx_total + 1, grid%ny_total)
+      type(ocean_bc_state_t), intent(inout) :: bc
+      integer :: i0, j0, nxg, nyg
+      real(wp) :: l(2), g(2)
+
+      l = 0.0_wp
+      if (.not. ocean_halo_is_decomposed()) then
+         l(1) = bt_H_ref(grid%nghost + 1, grid%nghost + 1)
+         l(2) = idx_cu(grid%nghost + 1, grid%nghost + 1)
+         g = l
+      else
+         call ocean_halo_global_extent(i0, j0, nxg, nyg)
+         if (i0 == 1 .and. j0 == 1) then
+            l(1) = bt_H_ref(grid%nghost + 1, grid%nghost + 1)
+            l(2) = idx_cu(grid%nghost + 1, grid%nghost + 1)
+         end if
+         call halo_allreduce_sum_vec(l, g, 2)
+      end if
+      bc%chapman_h_corner = g(1)
+      bc%chapman_idx_corner = g(2)
+      bc%chapman_corner_ready = .true.
+   end subroutine chapman_setup_corner
 
    pure subroutine barotropic_substep_linear(grid, metrics, bt_work, force_u, force_v, n_steps, dt_inner, &
                                              eta_forcing)
@@ -478,7 +591,9 @@ contains
       real(wp) :: t_now
       integer :: nc
       real(wp) :: eta_int_mean_w, eta_int_mean_e, eta_int_mean_s, eta_int_mean_n
-      real(wp) :: chapman_alpha
+      real(wp) :: chapman_alpha, h_corner, idx_corner
+      integer :: gi0, gj0, gnx, gny, jg, jl
+         !! Chapman: global offset + extent of the decomposed domain.
       ! Full-Flather (§4, v2): pre-cached scalars for the interior DC.
       logical  :: use_ff       !! .true. = full-Flather form, .false. = legacy.
       real(wp) :: ext_u_w, ext_u_e, ext_v_s, ext_v_n  !! Exterior velocities.
@@ -714,34 +829,76 @@ contains
          ! (perfect outflow), α = 0 ⇒ wall holds eta_old (closed-ish).
          if (bc_w == OBC_CHAPMAN .or. bc_e == OBC_CHAPMAN .or. &
              bc_s == OBC_CHAPMAN .or. bc_n == OBC_CHAPMAN) then
+            if (bc%chapman_corner_ready) then
+               h_corner = bc%chapman_h_corner
+               idx_corner = bc%chapman_idx_corner
+            else
+               ! Direct kernel callers (unit tests) that never ran engine
+               ! setup: the tile's own corner (== the global one on 1 rank).
+               h_corner = bt_H_ref(grid%nghost + 1, grid%nghost + 1)
+               idx_corner = idx_cu(grid%nghost + 1, grid%nghost + 1)
+            end if
             chapman_alpha = min(1.0_wp, &
-                                sqrt(G*max(bt_H_ref(grid%nghost + 1, grid%nghost + 1), 1.0e-6_wp))* &
-                                real(n_steps, wp)*dt_inner*idx_cu(grid%nghost + 1, grid%nghost + 1))
+                                sqrt(G*max(h_corner, 1.0e-6_wp))* &
+                                real(n_steps, wp)*dt_inner*idx_corner)
+            call ocean_halo_global_extent(gi0, gj0, gnx, gny)
+            if (gnx <= 0 .or. gny <= 0) then
+               ! Halo module not initialised (direct kernel callers).
+               gi0 = 1
+               gj0 = 1
+               gnx = grid%nx_phys
+               gny = grid%ny_phys
+            end if
+            call chapman_workspace_ensure(max(gnx, gny))
             if (bc_w == OBC_CHAPMAN) then
-               eta_int_mean_w = sum(bt_eta(i_w_int, &
-                                           grid%nghost + 1:grid%nghost + grid%ny_phys))/ &
-                                real(grid%ny_phys, wp)
+               do concurrent(jg=1:gny) local(jl)
+                  jl = jg - gj0 + 1
+                  if (has_w .and. jl >= 1 .and. jl <= grid%ny_phys) then
+                     ch_lbuf(jg) = bt_eta(i_w_int, grid%nghost + jl)
+                  else
+                     ch_lbuf(jg) = 0.0_wp
+                  end if
+               end do
+               call chapman_edge_mean(gny, eta_int_mean_w)
                eta_target_w = bc%eta_old_chapman_w + &
                               chapman_alpha*(eta_int_mean_w - bc%eta_old_chapman_w)
             end if
             if (bc_e == OBC_CHAPMAN) then
-               eta_int_mean_e = sum(bt_eta(i_e_int, &
-                                           grid%nghost + 1:grid%nghost + grid%ny_phys))/ &
-                                real(grid%ny_phys, wp)
+               do concurrent(jg=1:gny) local(jl)
+                  jl = jg - gj0 + 1
+                  if (has_e .and. jl >= 1 .and. jl <= grid%ny_phys) then
+                     ch_lbuf(jg) = bt_eta(i_e_int, grid%nghost + jl)
+                  else
+                     ch_lbuf(jg) = 0.0_wp
+                  end if
+               end do
+               call chapman_edge_mean(gny, eta_int_mean_e)
                eta_target_e = bc%eta_old_chapman_e + &
                               chapman_alpha*(eta_int_mean_e - bc%eta_old_chapman_e)
             end if
             if (bc_s == OBC_CHAPMAN) then
-               eta_int_mean_s = sum(bt_eta(grid%nghost + 1:grid%nghost + grid%nx_phys, &
-                                           j_s_int))/ &
-                                real(grid%nx_phys, wp)
+               do concurrent(jg=1:gnx) local(jl)
+                  jl = jg - gi0 + 1
+                  if (has_s .and. jl >= 1 .and. jl <= grid%nx_phys) then
+                     ch_lbuf(jg) = bt_eta(grid%nghost + jl, j_s_int)
+                  else
+                     ch_lbuf(jg) = 0.0_wp
+                  end if
+               end do
+               call chapman_edge_mean(gnx, eta_int_mean_s)
                eta_target_s = bc%eta_old_chapman_s + &
                               chapman_alpha*(eta_int_mean_s - bc%eta_old_chapman_s)
             end if
             if (bc_n == OBC_CHAPMAN) then
-               eta_int_mean_n = sum(bt_eta(grid%nghost + 1:grid%nghost + grid%nx_phys, &
-                                           j_n_int))/ &
-                                real(grid%nx_phys, wp)
+               do concurrent(jg=1:gnx) local(jl)
+                  jl = jg - gi0 + 1
+                  if (has_n .and. jl >= 1 .and. jl <= grid%nx_phys) then
+                     ch_lbuf(jg) = bt_eta(grid%nghost + jl, j_n_int)
+                  else
+                     ch_lbuf(jg) = 0.0_wp
+                  end if
+               end do
+               call chapman_edge_mean(gnx, eta_int_mean_n)
                eta_target_n = bc%eta_old_chapman_n + &
                               chapman_alpha*(eta_int_mean_n - bc%eta_old_chapman_n)
             end if
@@ -1777,34 +1934,68 @@ contains
 
       ! Refresh the persistent Chapman state from the end-of-step η.
       ! Next outer-step's substep block reads this as `eta_old` when
-      ! computing the radiation target.  All host-side: the scalar
-      ! `bc%eta_old_chapman_*` is consumed by host code at the top of
-      ! the next substep-block call and never read from inside a `do
-      ! concurrent` (where it would need a device copy).  Pull
-      ! `bt_eta_end` to host so the reduction reads fresh values.
+      ! computing the radiation target.  For each Chapman edge a device
+      ! kernel writes the edge's η line at its GLOBAL index into the
+      ! persistent line buffer `ch_lbuf` (this rank's owned cells only, +0
+      ! elsewhere), `chapman_edge_mean` pulls that line (`update self`),
+      ! sums it across ranks when decomposed, and takes the in-order mean.
+      ! The scalar `bc%eta_old_chapman_*` is host state, never read inside
+      ! a `do concurrent`.
       if (present(bc)) then
          if (bc_w == OBC_CHAPMAN .or. bc_e == OBC_CHAPMAN .or. &
              bc_s == OBC_CHAPMAN .or. bc_n == OBC_CHAPMAN) then
-            !$acc update self(bt_eta_end)
+            call ocean_halo_global_extent(gi0, gj0, gnx, gny)
+            if (gnx <= 0 .or. gny <= 0) then
+               ! Halo module not initialised (direct kernel callers).
+               gi0 = 1
+               gj0 = 1
+               gnx = grid%nx_phys
+               gny = grid%ny_phys
+            end if
+            call chapman_workspace_ensure(max(gnx, gny))
             if (bc_w == OBC_CHAPMAN) then
-               bc%eta_old_chapman_w = sum(bt_eta_end(i_w_int, &
-                                                     grid%nghost + 1:grid%nghost + grid%ny_phys))/ &
-                                      real(grid%ny_phys, wp)
+               do concurrent(jg=1:gny) local(jl)
+                  jl = jg - gj0 + 1
+                  if (has_w .and. jl >= 1 .and. jl <= grid%ny_phys) then
+                     ch_lbuf(jg) = bt_eta_end(i_w_int, grid%nghost + jl)
+                  else
+                     ch_lbuf(jg) = 0.0_wp
+                  end if
+               end do
+               call chapman_edge_mean(gny, bc%eta_old_chapman_w)
             end if
             if (bc_e == OBC_CHAPMAN) then
-               bc%eta_old_chapman_e = sum(bt_eta_end(i_e_int, &
-                                                     grid%nghost + 1:grid%nghost + grid%ny_phys))/ &
-                                      real(grid%ny_phys, wp)
+               do concurrent(jg=1:gny) local(jl)
+                  jl = jg - gj0 + 1
+                  if (has_e .and. jl >= 1 .and. jl <= grid%ny_phys) then
+                     ch_lbuf(jg) = bt_eta_end(i_e_int, grid%nghost + jl)
+                  else
+                     ch_lbuf(jg) = 0.0_wp
+                  end if
+               end do
+               call chapman_edge_mean(gny, bc%eta_old_chapman_e)
             end if
             if (bc_s == OBC_CHAPMAN) then
-               bc%eta_old_chapman_s = sum(bt_eta_end(grid%nghost + 1:grid%nghost + grid%nx_phys, &
-                                                     j_s_int))/ &
-                                      real(grid%nx_phys, wp)
+               do concurrent(jg=1:gnx) local(jl)
+                  jl = jg - gi0 + 1
+                  if (has_s .and. jl >= 1 .and. jl <= grid%nx_phys) then
+                     ch_lbuf(jg) = bt_eta_end(grid%nghost + jl, j_s_int)
+                  else
+                     ch_lbuf(jg) = 0.0_wp
+                  end if
+               end do
+               call chapman_edge_mean(gnx, bc%eta_old_chapman_s)
             end if
             if (bc_n == OBC_CHAPMAN) then
-               bc%eta_old_chapman_n = sum(bt_eta_end(grid%nghost + 1:grid%nghost + grid%nx_phys, &
-                                                     j_n_int))/ &
-                                      real(grid%nx_phys, wp)
+               do concurrent(jg=1:gnx) local(jl)
+                  jl = jg - gi0 + 1
+                  if (has_n .and. jl >= 1 .and. jl <= grid%nx_phys) then
+                     ch_lbuf(jg) = bt_eta_end(grid%nghost + jl, j_n_int)
+                  else
+                     ch_lbuf(jg) = 0.0_wp
+                  end if
+               end do
+               call chapman_edge_mean(gnx, bc%eta_old_chapman_n)
             end if
          end if
       end if
