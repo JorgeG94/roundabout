@@ -1,0 +1,1385 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>top_drag_stress_mag_impl &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>top_drag_stress_mag_impl
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.0% of total for procedures.">50 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_top_drag.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_top_drag.f90.html'>rdb_ocean_top_drag.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ocean_top_drag.html'>rdb_ocean_top_drag</a></li>
+            <li class="breadcrumb-item active" aria-current="page">top_drag_stress_mag_impl</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/top_drag_stress_mag_impl.html#variable-abs_u_eff~2">abs_u_eff</a>
+            <a class="list-group-item" href="../proc/top_drag_stress_mag_impl.html#variable-cumul_h~4">cumul_h</a>
+            <a class="list-group-item" href="../proc/top_drag_stress_mag_impl.html#variable-h_eff~3">h_eff</a>
+            <a class="list-group-item" href="../proc/top_drag_stress_mag_impl.html#variable-h_in~2">h_in</a>
+            <a class="list-group-item" href="../proc/top_drag_stress_mag_impl.html#variable-h_in_total~2">h_in_total</a>
+            <a class="list-group-item" href="../proc/top_drag_stress_mag_impl.html#variable-h_k~3">h_k</a>
+            <a class="list-group-item" href="../proc/top_drag_stress_mag_impl.html#variable-i~433">i</a>
+            <a class="list-group-item" href="../proc/top_drag_stress_mag_impl.html#variable-j~405">j</a>
+            <a class="list-group-item" href="../proc/top_drag_stress_mag_impl.html#variable-k~283">k</a>
+            <a class="list-group-item" href="../proc/top_drag_stress_mag_impl.html#variable-kt~34">kt</a>
+            <a class="list-group-item" href="../proc/top_drag_stress_mag_impl.html#variable-layer_only~2">layer_only</a>
+            <a class="list-group-item" href="../proc/top_drag_stress_mag_impl.html#variable-quad~2">quad</a>
+            <a class="list-group-item" href="../proc/top_drag_stress_mag_impl.html#variable-spd">spd</a>
+            <a class="list-group-item" href="../proc/top_drag_stress_mag_impl.html#variable-u_c~5">u_c</a>
+            <a class="list-group-item" href="../proc/top_drag_stress_mag_impl.html#variable-u_int~2">u_int</a>
+            <a class="list-group-item" href="../proc/top_drag_stress_mag_impl.html#variable-u_tbl~2">u_tbl</a>
+            <a class="list-group-item" href="../proc/top_drag_stress_mag_impl.html#variable-v_c~4">v_c</a>
+            <a class="list-group-item" href="../proc/top_drag_stress_mag_impl.html#variable-v_int~2">v_int</a>
+            <a class="list-group-item" href="../proc/top_drag_stress_mag_impl.html#variable-v_tbl~2">v_tbl</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/top_drag_stress_mag_impl.html#src">top_drag_stress_mag_impl</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>public pure subroutine top_drag_stress_mag_impl(stress_top, u_face, v_face, h_layer, wet_mask, cover_frac, k_top, h_vanished, variant, r, c_d, h_floor, htbl, bg_vel, tbl_min, rho0, nx_u, ny_u, nx_v, ny_v, nx, ny, nz)  
+</h2>
+    
+
+    <p>Cell-centred magnitude of the top stress (N/m^2), for the
+later <code>ustar_shelf</code> consumer:</p>
+<p>quadratic  <code>|tau| = rho_0 * C_d * |U_tbl_eff|^2</code>
+  linear     <code>|tau| = rho_0 * r * |U_tbl| * h_tbl</code></p>
+<p>Both are <code>rho_0 * (drag acceleration) * (band thickness)</code>, so the
+two forms are one definition, and <code>sqrt(|tau|/rho_0)</code> is the
+friction velocity either way.  Cell-centred velocities come from
+the ordinary 2-point face averages; no cover interpolation is
+needed because <code>cover_frac</code> IS cell-centred here.</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-stress_top~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>stress_top</strong>(nx,ny)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-u_face~26"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>u_face</strong>(nx_u,ny_u,nz)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-v_face~25"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>v_face</strong>(nx_v,ny_v,nz)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_layer~95"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_layer</strong>(nx,ny,nz)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-wet_mask~26"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>wet_mask</strong>(nx,ny)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-cover_frac~9"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>cover_frac</strong>(nx,ny)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-k_top~9"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>k_top</strong>(nx,ny)</td>
+            <td>
+                <p><code>ms%k_top</code> &ndash; the first LIVE layer, <code>nz</code> off a rigid top.
+<code>stress_top</code> is the one number the boundary-layer schemes
+turn into <code>u_*</code> under the shelf (through
+<code>ocean_surface_stress_t%stress_shelf</code>), so a band mean built
+from a filler is a wrong <code>u_*</code> in BOTH KPP and EPBL.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_vanished~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_vanished</strong></td>
+            <td>
+                <p><code>H_VANISHED</code>; see <code>top_drag_tendencies_impl</code>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-variant~9"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>variant</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-r~36"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>r</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-c_d~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>c_d</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_floor~12"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_floor</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-htbl~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>htbl</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-bg_vel~8"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>bg_vel</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-tbl_min~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>tbl_min</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-rho0~54"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>rho0</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx_u~5"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx_u</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny_u~6"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny_u</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx_v~6"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx_v</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny_v~5"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny_v</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx~440"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny~440"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz~325"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~top_drag_stress_mag_impl~~CallsGraph Pages: 1 -->
+<svg id="proctop_drag_stress_mag_implCallsGraph" width="250pt" height="32pt"
+ viewBox="0.00 0.00 250.00 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~top_drag_stress_mag_impl~~CallsGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 28.27)">
+<title>proc~~top_drag_stress_mag_impl~~CallsGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 245.77,-28.27 245.77,4 -4,4"/>
+<!-- proc~top_drag_stress_mag_impl -->
+<g id="proc~~top_drag_stress_mag_impl~~CallsGraph_node1" class="node">
+<title>proc~top_drag_stress_mag_impl</title>
+<polygon fill="none" stroke="black" points="151.77,-24.27 0,-24.27 0,0 151.77,0 151.77,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="75.88" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">top_drag_stress_mag_impl</text>
+</g>
+<!-- local -->
+<g id="proc~~top_drag_stress_mag_impl~~CallsGraph_node2" class="node">
+<title>local</title>
+<polygon fill="#777777" stroke="#777777" points="241.77,-24.27 187.77,-24.27 187.77,0 241.77,0 241.77,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="214.77" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">local</text>
+</g>
+<!-- proc~top_drag_stress_mag_impl&#45;&gt;local -->
+<g id="proc~~top_drag_stress_mag_impl~~CallsGraph_edge1" class="edge">
+<title>proc~top_drag_stress_mag_impl&#45;&gt;local</title>
+<path fill="none" stroke="#ff0000" d="M152.13,-12.13C160.45,-12.13 168.63,-12.13 176.18,-12.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="175.94,-15.64 185.94,-12.14 175.94,-8.64 175.94,-15.64"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~top_drag_stress_mag_impl~~CalledByGraph Pages: 1 -->
+<svg id="proctop_drag_stress_mag_implCalledByGraph" width="641pt" height="50pt"
+ viewBox="0.00 0.00 641.00 50.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~top_drag_stress_mag_impl~~CalledByGraph" class="graph" transform="scale(0.675718 0.675718) rotate(0) translate(4 70.27)">
+<title>proc~~top_drag_stress_mag_impl~~CalledByGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-70.27 944.62,-70.27 944.62,4 -4,4"/>
+<!-- proc~top_drag_stress_mag_impl -->
+<g id="proc~~top_drag_stress_mag_impl~~CalledByGraph_node1" class="node">
+<title>proc~top_drag_stress_mag_impl</title>
+<polygon fill="none" stroke="black" points="940.62,-45.27 788.85,-45.27 788.85,-21 940.62,-21 940.62,-45.27"/>
+<text xml:space="preserve" text-anchor="middle" x="864.74" y="-29.53" font-family="Helvetica,sans-Serif" font-size="10.50">top_drag_stress_mag_impl</text>
+</g>
+<!-- proc~ocean_top_drag_compute_tendencies -->
+<g id="proc~~top_drag_stress_mag_impl~~CalledByGraph_node2" class="node">
+<title>proc~ocean_top_drag_compute_tendencies</title>
+<g id="a_proc~~top_drag_stress_mag_impl~~CalledByGraph_node2"><a xlink:href="../proc/ocean_top_drag_compute_tendencies.html" xlink:title="ocean_top_drag_compute_tendencies">
+<polygon fill="#d9534f" stroke="#d9534f" points="752.85,-45.27 539.58,-45.27 539.58,-21 752.85,-21 752.85,-45.27"/>
+<text xml:space="preserve" text-anchor="middle" x="646.21" y="-29.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_top_drag_compute_tendencies</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_top_drag_compute_tendencies&#45;&gt;proc~top_drag_stress_mag_impl -->
+<g id="proc~~top_drag_stress_mag_impl~~CalledByGraph_edge1" class="edge">
+<title>proc~ocean_top_drag_compute_tendencies&#45;&gt;proc~top_drag_stress_mag_impl</title>
+<path fill="none" stroke="#ff0000" d="M753.25,-33.13C761.25,-33.13 769.25,-33.13 777.1,-33.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="776.95,-36.64 786.95,-33.14 776.95,-29.64 776.95,-36.64"/>
+</g>
+<!-- proc~run_stage -->
+<g id="proc~~top_drag_stress_mag_impl~~CalledByGraph_node3" class="node">
+<title>proc~run_stage</title>
+<g id="a_proc~~top_drag_stress_mag_impl~~CalledByGraph_node3"><a xlink:href="../proc/run_stage.html" xlink:title="run_stage">
+<polygon fill="#d9534f" stroke="#d9534f" points="490.08,-66.27 426.06,-66.27 426.06,-42 490.08,-42 490.08,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="458.07" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage</text>
+</a>
+</g>
+</g>
+<!-- proc~run_stage&#45;&gt;proc~ocean_top_drag_compute_tendencies -->
+<g id="proc~~top_drag_stress_mag_impl~~CalledByGraph_edge2" class="edge">
+<title>proc~run_stage&#45;&gt;proc~ocean_top_drag_compute_tendencies</title>
+<path fill="none" stroke="#ff0000" d="M490.23,-50.62C501.17,-49.39 514.2,-47.92 528,-46.36"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="528.15,-49.86 537.69,-45.27 527.36,-42.91 528.15,-49.86"/>
+</g>
+<!-- proc~run_stage_split -->
+<g id="proc~~top_drag_stress_mag_impl~~CalledByGraph_node4" class="node">
+<title>proc~run_stage_split</title>
+<g id="a_proc~~top_drag_stress_mag_impl~~CalledByGraph_node4"><a xlink:href="../proc/run_stage_split.html" xlink:title="run_stage_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="503.58,-24.27 412.56,-24.27 412.56,0 503.58,0 503.58,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="458.07" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage_split</text>
+</a>
+</g>
+</g>
+<!-- proc~run_stage_split&#45;&gt;proc~ocean_top_drag_compute_tendencies -->
+<g id="proc~~top_drag_stress_mag_impl~~CalledByGraph_edge3" class="edge">
+<title>proc~run_stage_split&#45;&gt;proc~ocean_top_drag_compute_tendencies</title>
+<path fill="none" stroke="#ff0000" d="M503.66,-17.17C511.28,-18.03 519.52,-18.95 528.04,-19.92"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="527.54,-23.38 537.87,-21.03 528.33,-16.43 527.54,-23.38"/>
+</g>
+<!-- proc~ocean_dyn_step -->
+<g id="proc~~top_drag_stress_mag_impl~~CalledByGraph_node5" class="node">
+<title>proc~ocean_dyn_step</title>
+<g id="a_proc~~top_drag_stress_mag_impl~~CalledByGraph_node5"><a xlink:href="../proc/ocean_dyn_step.html" xlink:title="ocean_dyn_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="363.06,-66.27 266.04,-66.27 266.04,-42 363.06,-42 363.06,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="314.55" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step&#45;&gt;proc~run_stage -->
+<g id="proc~~top_drag_stress_mag_impl~~CalledByGraph_edge4" class="edge">
+<title>proc~ocean_dyn_step&#45;&gt;proc~run_stage</title>
+<path fill="none" stroke="#ff0000" d="M363.46,-54.13C379.98,-54.13 398.36,-54.13 414.43,-54.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="414.15,-57.64 424.15,-54.14 414.15,-50.64 414.15,-57.64"/>
+</g>
+<!-- proc~ocean_dyn_step_split -->
+<g id="proc~~top_drag_stress_mag_impl~~CalledByGraph_node6" class="node">
+<title>proc~ocean_dyn_step_split</title>
+<g id="a_proc~~top_drag_stress_mag_impl~~CalledByGraph_node6"><a xlink:href="../proc/ocean_dyn_step_split.html" xlink:title="ocean_dyn_step_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="376.56,-24.27 252.54,-24.27 252.54,0 376.56,0 376.56,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="314.55" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step_split</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step_split&#45;&gt;proc~run_stage_split -->
+<g id="proc~~top_drag_stress_mag_impl~~CalledByGraph_edge5" class="edge">
+<title>proc~ocean_dyn_step_split&#45;&gt;proc~run_stage_split</title>
+<path fill="none" stroke="#00ffff" d="M376.8,-12.13C384.83,-12.13 393.03,-12.13 400.97,-12.13"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="400.85,-15.64 410.85,-12.14 400.85,-8.64 400.85,-15.64"/>
+</g>
+<!-- proc~engine_step -->
+<g id="proc~~top_drag_stress_mag_impl~~CalledByGraph_node7" class="node">
+<title>proc~engine_step</title>
+<g id="a_proc~~top_drag_stress_mag_impl~~CalledByGraph_node7"><a xlink:href="../proc/engine_step.html" xlink:title="engine_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="216.54,-45.27 140.52,-45.27 140.52,-21 216.54,-21 216.54,-45.27"/>
+<text xml:space="preserve" text-anchor="middle" x="178.53" y="-29.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~ocean_dyn_step -->
+<g id="proc~~top_drag_stress_mag_impl~~CalledByGraph_edge6" class="edge">
+<title>proc~engine_step&#45;&gt;proc~ocean_dyn_step</title>
+<path fill="none" stroke="#ff0000" d="M216.86,-38.98C228.6,-40.82 241.87,-42.9 254.72,-44.92"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="253.95,-48.34 264.37,-46.43 255.04,-41.42 253.95,-48.34"/>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~ocean_dyn_step_split -->
+<g id="proc~~top_drag_stress_mag_impl~~CalledByGraph_edge7" class="edge">
+<title>proc~engine_step&#45;&gt;proc~ocean_dyn_step_split</title>
+<path fill="none" stroke="#00ffff" d="M216.86,-27.29C224.42,-26.1 232.62,-24.82 240.93,-23.51"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="241.45,-26.98 250.78,-21.97 240.36,-20.06 241.45,-26.98"/>
+</g>
+<!-- proc~driver_run_ocean -->
+<g id="proc~~top_drag_stress_mag_impl~~CalledByGraph_node8" class="node">
+<title>proc~driver_run_ocean</title>
+<g id="a_proc~~top_drag_stress_mag_impl~~CalledByGraph_node8"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<polygon fill="#d9534f" stroke="#d9534f" points="104.52,-66.27 0,-66.27 0,-42 104.52,-42 104.52,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="52.26" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_step -->
+<g id="proc~~top_drag_stress_mag_impl~~CalledByGraph_edge8" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_step</title>
+<path fill="none" stroke="#ff0000" d="M104.88,-45.41C112.86,-44.06 121.07,-42.68 128.98,-41.34"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="129.5,-44.8 138.78,-39.68 128.34,-37.9 129.5,-44.8"/>
+</g>
+<!-- proc~rdb_ocean_step -->
+<g id="proc~~top_drag_stress_mag_impl~~CalledByGraph_node9" class="node">
+<title>proc~rdb_ocean_step</title>
+<g id="a_proc~~top_drag_stress_mag_impl~~CalledByGraph_node9"><a xlink:href="../proc/rdb_ocean_step.html" xlink:title="rdb_ocean_step">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="100.02,-24.27 4.5,-24.27 4.5,0 100.02,0 100.02,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="52.26" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_step</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_step&#45;&gt;proc~engine_step -->
+<g id="proc~~top_drag_stress_mag_impl~~CalledByGraph_edge9" class="edge">
+<title>proc~rdb_ocean_step&#45;&gt;proc~engine_step</title>
+<path fill="none" stroke="#ff0000" d="M100.24,-20.07C109.62,-21.66 119.5,-23.33 128.93,-24.92"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="128.22,-28.35 138.67,-26.57 129.39,-21.45 128.22,-28.35"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panproctop_drag_stress_mag_implCalledByGraph = svgPanZoom('#proctop_drag_stress_mag_implCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-abs_u_eff~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>abs_u_eff</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-cumul_h~4"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>cumul_h</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_eff~3"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_eff</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_in~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_in</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_in_total~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_in_total</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_k~3"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_k</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-i~433"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>i</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-j~405"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>j</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-k~283"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>k</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-kt~34"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>kt</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-layer_only~2"></span>
+              logical,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>layer_only</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-quad~2"></span>
+              logical,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>quad</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-spd"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>spd</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-u_c~5"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>u_c</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-u_int~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>u_int</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-u_tbl~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>u_tbl</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-v_c~4"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>v_c</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-v_int~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>v_int</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-v_tbl~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>v_tbl</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">pure subroutine </span><span class="n">top_drag_stress_mag_impl</span><span class="p">(</span><span class="n">stress_top</span><span class="p">,</span><span class="w"> </span><span class="n">u_face</span><span class="p">,</span><span class="w"> </span><span class="n">v_face</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                            </span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="n">wet_mask</span><span class="p">,</span><span class="w"> </span><span class="n">cover_frac</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                            </span><span class="n">k_top</span><span class="p">,</span><span class="w"> </span><span class="n">h_vanished</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                            </span><span class="n">variant</span><span class="p">,</span><span class="w"> </span><span class="n">r</span><span class="p">,</span><span class="w"> </span><span class="n">c_d</span><span class="p">,</span><span class="w"> </span><span class="n">h_floor</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                            </span><span class="n">htbl</span><span class="p">,</span><span class="w"> </span><span class="n">bg_vel</span><span class="p">,</span><span class="w"> </span><span class="n">tbl_min</span><span class="p">,</span><span class="w"> </span><span class="n">rho0</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                            </span><span class="n">nx_u</span><span class="p">,</span><span class="w"> </span><span class="n">ny_u</span><span class="p">,</span><span class="w"> </span><span class="n">nx_v</span><span class="p">,</span><span class="w"> </span><span class="n">ny_v</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! Cell-centred magnitude of the top stress (N/m^2), for the</span>
+<span class="w">      </span><span class="c">!! later `ustar_shelf` consumer:</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!!   quadratic  `|tau| = rho_0 * C_d * |U_tbl_eff|^2`</span>
+<span class="w">      </span><span class="c">!!   linear     `|tau| = rho_0 * r * |U_tbl| * h_tbl`</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! Both are `rho_0 * (drag acceleration) * (band thickness)`, so the</span>
+<span class="w">      </span><span class="c">!! two forms are one definition, and `sqrt(|tau|/rho_0)` is the</span>
+<span class="w">      </span><span class="c">!! friction velocity either way.  Cell-centred velocities come from</span>
+<span class="w">      </span><span class="c">!! the ordinary 2-point face averages; no cover interpolation is</span>
+<span class="w">      </span><span class="c">!! needed because `cover_frac` IS cell-centred here.</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nx_u</span><span class="p">,</span><span class="w"> </span><span class="n">ny_u</span><span class="p">,</span><span class="w"> </span><span class="n">nx_v</span><span class="p">,</span><span class="w"> </span><span class="n">ny_v</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">variant</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">r</span><span class="p">,</span><span class="w"> </span><span class="n">c_d</span><span class="p">,</span><span class="w"> </span><span class="n">h_floor</span><span class="p">,</span><span class="w"> </span><span class="n">htbl</span><span class="p">,</span><span class="w"> </span><span class="n">bg_vel</span><span class="p">,</span><span class="w"> </span><span class="n">tbl_min</span><span class="p">,</span><span class="w"> </span><span class="n">rho0</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">u_face</span><span class="p">(</span><span class="n">nx_u</span><span class="p">,</span><span class="w"> </span><span class="n">ny_u</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">),</span><span class="w"> </span><span class="n">v_face</span><span class="p">(</span><span class="n">nx_v</span><span class="p">,</span><span class="w"> </span><span class="n">ny_v</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">h_layer</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">wet_mask</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">),</span><span class="w"> </span><span class="n">cover_frac</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">k_top</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! `ms%k_top` -- the first LIVE layer, `nz` off a rigid top.</span>
+<span class="w">         </span><span class="c">!! `stress_top` is the one number the boundary-layer schemes</span>
+<span class="w">         </span><span class="c">!! turn into `u_*` under the shelf (through</span>
+<span class="w">         </span><span class="c">!! `ocean_surface_stress_t%stress_shelf`), so a band mean built</span>
+<span class="w">         </span><span class="c">!! from a filler is a wrong `u_*` in BOTH KPP and EPBL.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">h_vanished</span>
+<span class="w">         </span><span class="c">!! `H_VANISHED`; see `top_drag_tendencies_impl`.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">stress_top</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">,</span><span class="w"> </span><span class="n">kt</span>
+<span class="w">      </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">layer_only</span><span class="p">,</span><span class="w"> </span><span class="n">quad</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">cumul_h</span><span class="p">,</span><span class="w"> </span><span class="n">h_k</span><span class="p">,</span><span class="w"> </span><span class="n">h_in</span><span class="p">,</span><span class="w"> </span><span class="n">u_int</span><span class="p">,</span><span class="w"> </span><span class="n">v_int</span><span class="p">,</span><span class="w"> </span><span class="n">h_in_total</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">u_c</span><span class="p">,</span><span class="w"> </span><span class="n">v_c</span><span class="p">,</span><span class="w"> </span><span class="n">u_tbl</span><span class="p">,</span><span class="w"> </span><span class="n">v_tbl</span><span class="p">,</span><span class="w"> </span><span class="n">h_eff</span><span class="p">,</span><span class="w"> </span><span class="n">abs_u_eff</span><span class="p">,</span><span class="w"> </span><span class="n">spd</span>
+
+<span class="w">      </span><span class="n">layer_only</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">htbl</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span>
+<span class="w">      </span><span class="n">quad</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">variant</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">TDRAG_QUADRATIC</span><span class="p">)</span>
+
+<span class="w">      </span><span class="k">do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nx</span><span class="p">)</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">         </span><span class="n">local</span><span class="p">(</span><span class="n">k</span><span class="p">,</span><span class="w"> </span><span class="n">kt</span><span class="p">,</span><span class="w"> </span><span class="n">cumul_h</span><span class="p">,</span><span class="w"> </span><span class="n">h_k</span><span class="p">,</span><span class="w"> </span><span class="n">h_in</span><span class="p">,</span><span class="w"> </span><span class="n">u_int</span><span class="p">,</span><span class="w"> </span><span class="n">v_int</span><span class="p">,</span><span class="w"> </span><span class="n">h_in_total</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">               </span><span class="n">u_c</span><span class="p">,</span><span class="w"> </span><span class="n">v_c</span><span class="p">,</span><span class="w"> </span><span class="n">u_tbl</span><span class="p">,</span><span class="w"> </span><span class="n">v_tbl</span><span class="p">,</span><span class="w"> </span><span class="n">h_eff</span><span class="p">,</span><span class="w"> </span><span class="n">abs_u_eff</span><span class="p">,</span><span class="w"> </span><span class="n">spd</span><span class="p">)</span>
+<span class="w">         </span><span class="n">kt</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">k_top</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span>
+<span class="w">         </span><span class="n">cumul_h</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">         </span><span class="n">u_int</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">         </span><span class="n">v_int</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">         </span><span class="n">h_in_total</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">         </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">kt</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="o">-</span><span class="mi">1</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">layer_only</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">k</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">kt</span><span class="p">)</span><span class="w"> </span><span class="k">exit</span>
+<span class="k">            if</span><span class="w"> </span><span class="p">((.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">layer_only</span><span class="p">)</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">cumul_h</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="n">htbl</span><span class="p">)</span><span class="w"> </span><span class="k">exit</span>
+<span class="k">            </span><span class="n">h_k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">h_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">h_k</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="n">h_vanished</span><span class="p">)</span><span class="w"> </span><span class="k">exit</span>
+<span class="k">            if</span><span class="w"> </span><span class="p">(</span><span class="n">layer_only</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               </span><span class="n">h_in</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">h_k</span>
+<span class="w">            </span><span class="k">else</span>
+<span class="k">               </span><span class="n">h_in</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">max</span><span class="p">(</span><span class="mf">0.0_wp</span><span class="p">,</span><span class="w"> </span><span class="nb">min</span><span class="p">(</span><span class="n">h_k</span><span class="p">,</span><span class="w"> </span><span class="n">htbl</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">cumul_h</span><span class="p">))</span>
+<span class="w">            </span><span class="k">end if</span>
+<span class="k">            </span><span class="n">u_c</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="p">(</span><span class="n">u_face</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">u_face</span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">))</span>
+<span class="w">            </span><span class="n">v_c</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="p">(</span><span class="n">v_face</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">v_face</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">))</span>
+<span class="w">            </span><span class="n">u_int</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">u_int</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">u_c</span><span class="o">*</span><span class="n">h_in</span>
+<span class="w">            </span><span class="n">v_int</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v_int</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">v_c</span><span class="o">*</span><span class="n">h_in</span>
+<span class="w">            </span><span class="n">h_in_total</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">h_in_total</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">h_in</span>
+<span class="w">            </span><span class="n">cumul_h</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cumul_h</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">h_k</span>
+<span class="w">         </span><span class="k">end do</span>
+<span class="k">         </span><span class="n">h_eff</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">max</span><span class="p">(</span><span class="nb">max</span><span class="p">(</span><span class="n">h_in_total</span><span class="p">,</span><span class="w"> </span><span class="n">tbl_min</span><span class="p">),</span><span class="w"> </span><span class="n">h_floor</span><span class="p">)</span>
+<span class="w">         </span><span class="n">u_tbl</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">u_int</span><span class="o">/</span><span class="n">h_eff</span>
+<span class="w">         </span><span class="n">v_tbl</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">v_int</span><span class="o">/</span><span class="n">h_eff</span>
+<span class="w">         </span><span class="n">spd</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">sqrt</span><span class="p">(</span><span class="n">u_tbl</span><span class="o">*</span><span class="n">u_tbl</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">v_tbl</span><span class="o">*</span><span class="n">v_tbl</span><span class="p">)</span>
+<span class="w">         </span><span class="n">abs_u_eff</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">max</span><span class="p">(</span><span class="n">bg_vel</span><span class="p">,</span><span class="w"> </span><span class="n">spd</span><span class="p">)</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">quad</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            </span><span class="n">stress_top</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">rho0</span><span class="o">*</span><span class="n">c_d</span><span class="o">*</span><span class="n">abs_u_eff</span><span class="o">*</span><span class="n">abs_u_eff</span><span class="o">*</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                               </span><span class="n">wet_mask</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="o">*</span><span class="n">cover_frac</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span>
+<span class="w">         </span><span class="k">else</span>
+<span class="k">            </span><span class="n">stress_top</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">rho0</span><span class="o">*</span><span class="n">r</span><span class="o">*</span><span class="n">spd</span><span class="o">*</span><span class="n">h_eff</span><span class="o">*</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                               </span><span class="n">wet_mask</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="o">*</span><span class="n">cover_frac</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">      end do</span>
+<span class="k">   end subroutine </span><span class="n">top_drag_stress_mag_impl</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-11-13 23:21 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

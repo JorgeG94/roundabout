@@ -1,0 +1,2819 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>diffuse_velocity_columns_impl &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>diffuse_velocity_columns_impl
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.2% of total for procedures.">193 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_vdiff.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_vdiff.f90.html'>rdb_ocean_vdiff.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ocean_vdiff.html'>rdb_ocean_vdiff</a></li>
+            <li class="breadcrumb-item active" aria-current="page">diffuse_velocity_columns_impl</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/diffuse_velocity_columns_impl.html#variable-eps_hvel">EPS_HVEL</a>
+            <a class="list-group-item" href="../proc/diffuse_velocity_columns_impl.html#variable-stress_h_min">STRESS_H_MIN</a>
+            <a class="list-group-item" href="../proc/diffuse_velocity_columns_impl.html#variable-a_k">a_k</a>
+            <a class="list-group-item" href="../proc/diffuse_velocity_columns_impl.html#variable-alpha~7">alpha</a>
+            <a class="list-group-item" href="../proc/diffuse_velocity_columns_impl.html#variable-b_k~2">b_k</a>
+            <a class="list-group-item" href="../proc/diffuse_velocity_columns_impl.html#variable-bbl_thick~3">bbl_thick</a>
+            <a class="list-group-item" href="../proc/diffuse_velocity_columns_impl.html#variable-beta~12">beta</a>
+            <a class="list-group-item" href="../proc/diffuse_velocity_columns_impl.html#variable-c_k">c_k</a>
+            <a class="list-group-item" href="../proc/diffuse_velocity_columns_impl.html#variable-cp~3">cp</a>
+            <a class="list-group-item" href="../proc/diffuse_velocity_columns_impl.html#variable-cp_prev">cp_prev</a>
+            <a class="list-group-item" href="../proc/diffuse_velocity_columns_impl.html#variable-cut_b">cut_b</a>
+            <a class="list-group-item" href="../proc/diffuse_velocity_columns_impl.html#variable-cut_t">cut_t</a>
+            <a class="list-group-item" href="../proc/diffuse_velocity_columns_impl.html#variable-d_min">d_min</a>
+            <a class="list-group-item" href="../proc/diffuse_velocity_columns_impl.html#variable-denom~12">denom</a>
+            <a class="list-group-item" href="../proc/diffuse_velocity_columns_impl.html#variable-dp">dp</a>
+            <a class="list-group-item" href="../proc/diffuse_velocity_columns_impl.html#variable-dp_prev">dp_prev</a>
+            <a class="list-group-item" href="../proc/diffuse_velocity_columns_impl.html#variable-dz_b">dz_b</a>
+            <a class="list-group-item" href="../proc/diffuse_velocity_columns_impl.html#variable-dz_t">dz_t</a>
+            <a class="list-group-item" href="../proc/diffuse_velocity_columns_impl.html#variable-g_next">g_next</a>
+            <a class="list-group-item" href="../proc/diffuse_velocity_columns_impl.html#variable-gp~2">gp</a>
+            <a class="list-group-item" href="../proc/diffuse_velocity_columns_impl.html#variable-gp_prev">gp_prev</a>
+            <a class="list-group-item" href="../proc/diffuse_velocity_columns_impl.html#variable-hf_k">hf_k</a>
+            <a class="list-group-item" href="../proc/diffuse_velocity_columns_impl.html#variable-hv_0">hv_0</a>
+            <a class="list-group-item" href="../proc/diffuse_velocity_columns_impl.html#variable-hv_p">hv_p</a>
+            <a class="list-group-item" href="../proc/diffuse_velocity_columns_impl.html#variable-i~233">i</a>
+            <a class="list-group-item" href="../proc/diffuse_velocity_columns_impl.html#variable-i_c2">i_c2</a>
+            <a class="list-group-item" href="../proc/diffuse_velocity_columns_impl.html#variable-i_hbbl">i_hbbl</a>
+            <a class="list-group-item" href="../proc/diffuse_velocity_columns_impl.html#variable-i_left">i_left</a>
+            <a class="list-group-item" href="../proc/diffuse_velocity_columns_impl.html#variable-i_right">i_right</a>
+            <a class="list-group-item" href="../proc/diffuse_velocity_columns_impl.html#variable-inv_rho0~2">inv_rho0</a>
+            <a class="list-group-item" href="../proc/diffuse_velocity_columns_impl.html#variable-j~229">j</a>
+            <a class="list-group-item" href="../proc/diffuse_velocity_columns_impl.html#variable-j_above">j_above</a>
+            <a class="list-group-item" href="../proc/diffuse_velocity_columns_impl.html#variable-j_below">j_below</a>
+            <a class="list-group-item" href="../proc/diffuse_velocity_columns_impl.html#variable-j_c2">j_c2</a>
+            <a class="list-group-item" href="../proc/diffuse_velocity_columns_impl.html#variable-k~190">k</a>
+            <a class="list-group-item" href="../proc/diffuse_velocity_columns_impl.html#variable-kb~14">kb</a>
+            <a class="list-group-item" href="../proc/diffuse_velocity_columns_impl.html#variable-kb_live~3">kb_live</a>
+            <a class="list-group-item" href="../proc/diffuse_velocity_columns_impl.html#variable-ktop">ktop</a>
+            <a class="list-group-item" href="../proc/diffuse_velocity_columns_impl.html#variable-kv_bbl~3">kv_bbl</a>
+            <a class="list-group-item" href="../proc/diffuse_velocity_columns_impl.html#variable-kv_cnr">kv_cnr</a>
+            <a class="list-group-item" href="../proc/diffuse_velocity_columns_impl.html#variable-num_b">num_b</a>
+            <a class="list-group-item" href="../proc/diffuse_velocity_columns_impl.html#variable-num_t">num_t</a>
+            <a class="list-group-item" href="../proc/diffuse_velocity_columns_impl.html#variable-r_k">r_k</a>
+            <a class="list-group-item" href="../proc/diffuse_velocity_columns_impl.html#variable-u_next">u_next</a>
+            <a class="list-group-item" href="../proc/diffuse_velocity_columns_impl.html#variable-wind_open">wind_open</a>
+            <a class="list-group-item" href="../proc/diffuse_velocity_columns_impl.html#variable-zacc">zacc</a>
+            <a class="list-group-item" href="../proc/diffuse_velocity_columns_impl.html#variable-zcol_l">zcol_l</a>
+            <a class="list-group-item" href="../proc/diffuse_velocity_columns_impl.html#variable-zcol_r">zcol_r</a>
+            <a class="list-group-item" href="../proc/diffuse_velocity_columns_impl.html#variable-zi_0">zi_0</a>
+            <a class="list-group-item" href="../proc/diffuse_velocity_columns_impl.html#variable-zi_p">zi_p</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/diffuse_velocity_columns_impl.html#src">diffuse_velocity_columns_impl</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>private pure subroutine diffuse_velocity_columns_impl(nu, nv, nz, dt, u_face, h_layer, kv_centre, wet_cell, x_face, nx_cells, ny_cells, use_harmonic, a_diag, b_diag, c_diag, rhs, do_stress, do_drag, rho0, tau_face, lambda_bot, do_top, lambda_top, cover_face, solve_momentum, do_remnant, visc_rem_out, hvel_mom6, hbbl_visc, bbl_glue, hvel_upwind, hvel_harmonic, kv_bbl_face, bbl_thick_face, kv_bbl_bg, do_corner, kv_prandtl, kv_corner, zlevel_faces, k_top_face, k_bot_face)  
+</h2>
+    
+
+    <p>Build + solve the tridiagonal system per face column.
+<code>u_face</code> is either <code>u_face_x_layer</code> (<code>x_face = .true.</code>,
+shape (nx+1, ny)) or <code>v_face_y_layer</code> (<code>x_face = .false.</code>,
+shape (nx, ny+1)).  <code>h_layer</code> is cell-centred (nx, ny, nz)
+and we average across the face direction to get the face
+thickness.  <code>kv_centre</code> is the same cell-centred diffusivity
+field used by the tracer kernel — we average it across the
+face to get a face-located value at each interface.</p>
+<p>For wall faces (i = 1 / i = nx_cells+1 for x_face;
+j = 1 / j = ny_cells+1 for y-face), there&rsquo;s no neighbour
+cell to average with — we fall back to the single available
+cell&rsquo;s thickness + diffusivity.  Mass through walls is
+forced to zero by the continuity kernel anyway, so the
+wall-face viscosity is only there to keep the system
+non-singular.</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nu~9"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nu</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nv~3"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nv</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz~211"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dt~81"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dt</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-u_face~20"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>u_face</strong>(nu,nv,nz)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_layer~48"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_layer</strong>(nx_cells,ny_cells,nz)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-kv_centre~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>kv_centre</strong>(nx_cells,ny_cells,nz+1)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-wet_cell"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>wet_cell</strong>(nx_cells,ny_cells)</td>
+            <td>
+                <p>Cell-centred wet/dry land mask (1 wet, 0 land).  The wind-stress
+fold multiplies <code>tau_face</code> by the face mask <code>min</code> of the two
+bounding cells — matching the explicit surface-stress kernel —
+so no stress is injected at a no-normal-flow land face.  All-wet
+(mask ≡ 1) ⇒ bit-identical.  Only read when <code>do_stress</code>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-x_face~2"></span>
+              logical,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>x_face</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx_cells~2"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx_cells</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny_cells~2"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny_cells</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-use_harmonic~3"></span>
+              logical,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>use_harmonic</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-a_diag~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>a_diag</strong>(nu,nv,nz)</td>
+            <td>
+                <p>Unused since the fused sweep (no row is stored before it is
+eliminated); kept so the call sites are unchanged.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-b_diag~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>b_diag</strong>(nu,nv,nz)</td>
+            <td>
+                <p>Unused, as <code>a_diag</code>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-c_diag~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>c_diag</strong>(nu,nv,nz)</td>
+            <td>
+                <p>Scratch: ends holding the Thomas c&rsquo;.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-rhs~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>rhs</strong>(nu,nv,nz)</td>
+            <td>
+                <p>Scratch: ends holding the Thomas d&rsquo; (when <code>solve_momentum</code>).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-do_stress~2"></span>
+              logical,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>do_stress</strong></td>
+            <td>
+                <p>Fold the surface wind stress into the <code>k = nz</code> RHS row.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-do_drag~2"></span>
+              logical,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>do_drag</strong></td>
+            <td>
+                <p>Fold the bottom drag into the <code>k = k_bot_face</code> diagonal.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-rho0~19"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>rho0</strong></td>
+            <td>
+                <p>Boussinesq reference density for the <code>τ/ρ₀</code> stress conversion.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-tau_face"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>tau_face</strong>(nu,nv)</td>
+            <td>
+                <p>Wind stress (N/m²) on this face.  Present iff <code>do_stress</code>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-lambda_bot"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>lambda_bot</strong>(nu,nv)</td>
+            <td>
+                <p>Bottom-drag Rayleigh rate λ (1/s) on this face.  Present iff
+<code>do_drag</code>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-do_top~2"></span>
+              logical,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>do_top</strong></td>
+            <td>
+                <p>Fold the ice-shelf top drag into the <code>k = nz</code> diagonal AND
+mask the wind-stress RHS by <code>(1 − cover_face)</code>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-lambda_top"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>lambda_top</strong>(nu,nv)</td>
+            <td>
+                <p>Top-drag Rayleigh rate λ (1/s) on this face.  Present iff
+<code>do_top</code>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-cover_face"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>cover_face</strong>(nu,nv)</td>
+            <td>
+                <p>Face ice-cover mask (0 open, 1 under ice), the OR of the two
+abutting cells (<code>rdb_ocean_top_drag</code>).  Present iff <code>do_top</code>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-solve_momentum"></span>
+              logical,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>solve_momentum</strong></td>
+            <td>
+                <p><code>.false.</code> = remnant-only mode: build the matrix and compute
+<code>visc_rem_out</code> WITHOUT touching <code>u_face</code> (the pre-substep
+visc_rem refresh, PGF_BUG.md §9 — MOM6 computes vertvisc_coef
+before btstep every stage, so its BT weights never lag; the
+stage-end producer alone leaves visc_rem ≡ 1 for the whole
+first stage, and the Δu corrector then deposits the spurious
+column-mean into wet layers).  <code>.true.</code> = the normal solve.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-do_remnant~2"></span>
+              logical,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>do_remnant</strong></td>
+            <td>
+                <p>Fill <code>visc_rem_out</code> with the viscous remnant γ_k — the
+sensitivity of the post-friction layer velocity to a uniform
+barotropic acceleration, <code>γ_k ≡ (1/Δt)·∂u_k^{n+1}/∂Ā</code>.  γ
+solves the SAME tridiagonal system as the momentum solve
+(same <code>a_diag</code>/<code>b_diag</code>, and the already-factorized <code>c_diag</code>
+left behind by the momentum forward sweep) with RHS ≡ 1 —
+Roundabout&rsquo;s rows are pre-normalized by <code>h_k</code>, so the remnant RHS
+is the unit vector, NOT <code>h_u(k)</code> (MOM6&rsquo;s un-normalized
+convention).  Reusing the surviving factorization means γ
+cannot drift from the operator actually solved for momentum.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-visc_rem_out"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>visc_rem_out</strong>(nu,nv,nz)</td>
+            <td>
+                <p>Output γ_k, bottom-up (<code>k = 1</code> bed → γ smallest, <code>k = nz</code>
+surface → γ → 1).  Clamped to <code>min(γ, 1.0)</code> at production
+(cheap FP insurance on a quantity the maximum principle
+already bounds to (0, 1]).  Present iff <code>do_remnant</code>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hvel_mom6~2"></span>
+              logical,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hvel_mom6</strong></td>
+            <td>
+                <p>MOM6 HARMONIC_VISC parity for <code>h_u</code> + <code>h_shear</code> (see the slot-type
+docstring).  <code>.false.</code> =&gt; the historical arithmetic-<code>h_u</code> /
+<code>face_thick</code>-<code>dz</code> pair, bit-identical.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hbbl_visc~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hbbl_visc</strong></td>
+            <td>
+                <p>Bottom-layer scale for the <code>botfn</code> blend (MOM6 HBBL).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-bbl_glue~2"></span>
+              logical,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>bbl_glue</strong></td>
+            <td>
+                <p>MOM6 <code>bottomdraglaw</code> coupling parity (see the slot-type
+docstring).  Configure guarantees <code>hvel_mom6</code> when this is on;
+the bed piston then applies whether or not <code>do_drag</code>.
+<code>.false.</code> ⇒ bit-identical.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hvel_upwind~2"></span>
+              logical,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hvel_upwind</strong></td>
+            <td>
+                <p><code>.false.</code> = skip the near-bed upwind blend (pure harmonic
+hvel).  See the slot-type docstring.  <code>hvel_harmonic</code> branch only.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hvel_harmonic~2"></span>
+              logical,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hvel_harmonic</strong></td>
+            <td>
+                <p>MOM6 <code>HARMONIC_VISC</code>: <code>.false.</code> = MOM6&rsquo;s default <code>z_clear</code>
+face-thickness branch, <code>.true.</code> = the harmonic branch (slot-type
+docstring).  Only read when <code>hvel_mom6</code>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-kv_bbl_face"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>kv_bbl_face</strong>(nu,nv)</td>
+            <td>
+                <p>BBL viscosity <code>kv_bbl</code> (m²/s) of this face (MOM6
+<code>visc%Kv_bbl_u</code>).  Only read when <code>bbl_glue</code>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-bbl_thick_face"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>bbl_thick_face</strong>(nu,nv)</td>
+            <td>
+                <p>BBL thickness (m) of this face (MOM6 <code>visc%bbl_thick_u</code>); also
+the height-above-bed normaliser <code>1/I_Hbbl</code> under the glue, as in
+MOM6&rsquo;s <code>bottomdraglaw</code> branch.  Only read when <code>bbl_glue</code>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-kv_bbl_bg~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>kv_bbl_bg</strong></td>
+            <td>
+                <p>MOM6 <code>KV</code>: the background viscosity the BBL viscosity replaces
+within botfn reach of the bed, <code>Kv_tot + (kv_bbl − KV)·botfn</code>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-do_corner~2"></span>
+              logical,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>do_corner</strong></td>
+            <td>
+                <p>Add the corner-staggered viscosity to every face interface.
+Gated INSIDE the single DC (no split loop — NVHPC penalty);
+<code>kv_corner</code> is guaranteed present when <code>do_corner</code>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-kv_prandtl"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>kv_prandtl</strong></td>
+            <td>
+                <p>Scale on <code>kv_corner</code> (Kv = Pr·Kd).  Only read when
+<code>do_corner</code>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-kv_corner"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>kv_corner</strong>(nx_cells+1,ny_cells+1,nz+1)</td>
+            <td>
+                <p>Corner-staggered interface viscosity (SW-corner convention:
+corner (i,j) is the SW corner of cell (i,j)).  A face reads
+the 2-point average of its two END corners: u-face (i,j) →
+corners (i,j)/(i,j+1); v-face (i,j) → corners (i,j)/(i+1,j)
+— the direct corner→face route, never via a tracer point.
+Present iff <code>do_corner</code>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-zlevel_faces~5"></span>
+              logical,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>zlevel_faces</strong></td>
+            <td>
+                <p><code>&amp;vcoord_nml zfixed_closed_faces</code> — z-level partial steps.</p>
+<p>Changes TWO things about the face column, and only when on
+(<code>.false.</code> ⇒ every expression below is textually and
+bit-identically what it has always been):</p>
+<ol>
+<li>the face thickness becomes <code>min(h_L, h_R)</code> instead of the
+   arithmetic (or MOM6-harmonic) mean — the standard
+   partial-cell choice, and the one that makes &ldquo;this layer is
+   an inert FILLER on at least one side&rdquo; visible locally as
+   <code>hvel(k) &lt;= H_VANISHED</code>;</li>
+<li>the tridiagonal coupling across an interface touching such
+   a layer is CUT (<code>alpha = beta = 0</code>), and the layer&rsquo;s own
+   row is forced to the identity.</li>
+</ol>
+<p>Without (2) an OPEN layer is frictionally coupled, every
+single step, to the CLOSED layer above or below it — whose
+velocity <code>mask_layer_velocities</code> has just zeroed — so the
+wall acts as a spurious side drag instead of as free-slip.
+The floor <code>max(hvel, H_VANISHED)</code> does not save it: it makes
+the coupling huge-but-finite (<code>dt·nu/1.5e-4</code>), i.e. a rigid
+glue to zero, which is the worst of the three options.</p>
+<p>This is the DYNAMIC twin of <code>metrics%open_u/open_v</code>: &ldquo;filler
+on either side&rdquo; is <code>min(h_L,h_R) &lt;= H_VANISHED</code> here and
+<code>target_h &lt;= H_VANISHED</code> on either side there, and under
+<code>z_fixed</code> the two agree (η is absorbed by the first LIVE
+layer).  It is derived locally rather than threaded as a 3-D
+mask because this kernel is reached through four flat-impl
+call sites and five dispatcher call sites, none of which sees
+<code>ocean_metrics_t</code>, and a scalar costs nothing.
+The equivalent tracer decoupling already exists, unconditionally,
+in <code>build_factorize_tracer_matrix</code>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-k_top_face"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>k_top_face</strong>(nu,nv)</td>
+            <td>
+                <p><code>ms%k_top_u</code> / <code>k_top_v</code> — the index of the first layer that
+is LIVE on BOTH sides of this face, <code>nz</code> wherever nothing
+vanishes against the top.  The surface row of the column
+solve, the ice-shelf top-drag diagonal fold and the
+wind-stress RHS fold all sit on THIS row instead of on <code>nz</code>:
+under a quasi-geopotential coordinate beneath a shelf the
+rows above it are inert fillers, decoupled to the identity by
+the <code>zlevel_faces</code> gates, so a <code>dt*lambda_top</code> added at <code>nz</code>
+would damp a row that is not coupled to the ocean at all —
+and the drag rate <code>lambda_top</code> is itself captured at
+<code>k_top_face</code> by <code>rdb_ocean_top_drag</code>, so the two MUST agree.
+With <code>k_top_face ≡ nz</code> every expression below is the one it
+replaced, bit for bit.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-k_bot_face"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>k_bot_face</strong>(nu,nv)</td>
+            <td>
+                <p><code>ms%k_bot_u</code> / <code>k_bot_v</code> — the first layer LIVE on BOTH sides
+of this face counting UP from the bed (<code>max</code> of its two
+columns), <code>1</code> wherever nothing vanishes against the bed.  The
+bed row of the column solve (no-flux-below BC, the implicit
+bottom-drag diagonal fold and the <code>bbl_glue</code> piston) sits on
+THIS row instead of on <code>k = 1</code>, and the rows below it — inert
+<code>z_fixed</code> bed fillers — are the identity.  The drag rate
+<code>lambda_bot</code> is itself captured at <code>k_bot_face</code> by
+<code>ocean_bottom_drag_compute_tendencies</code>, so the two MUST agree.
+The height-above-bed stack <code>zint</code> (BBL glue, upwind blend)
+also starts accumulating here.  With <code>k_bot_face ≡ 1</code> every
+expression below is the one it replaced, bit for bit.</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~diffuse_velocity_columns_impl~~CallsGraph Pages: 1 -->
+<svg id="procdiffuse_velocity_columns_implCallsGraph" width="457pt" height="158pt"
+ viewBox="0.00 0.00 457.00 158.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~diffuse_velocity_columns_impl~~CallsGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 154.27)">
+<title>proc~~diffuse_velocity_columns_impl~~CallsGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-154.27 453.31,-154.27 453.31,4 -4,4"/>
+<!-- proc~diffuse_velocity_columns_impl -->
+<g id="proc~~diffuse_velocity_columns_impl~~CallsGraph_node1" class="node">
+<title>proc~diffuse_velocity_columns_impl</title>
+<polygon fill="none" stroke="black" points="172.77,-87.27 0,-87.27 0,-63 172.77,-63 172.77,-87.27"/>
+<text xml:space="preserve" text-anchor="middle" x="86.38" y="-71.54" font-family="Helvetica,sans-Serif" font-size="10.50">diffuse_velocity_columns_impl</text>
+</g>
+<!-- local -->
+<g id="proc~~diffuse_velocity_columns_impl~~CallsGraph_node2" class="node">
+<title>local</title>
+<polygon fill="#777777" stroke="#777777" points="305.28,-150.27 251.28,-150.27 251.28,-126 305.28,-126 305.28,-150.27"/>
+<text xml:space="preserve" text-anchor="middle" x="278.28" y="-134.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">local</text>
+</g>
+<!-- proc~diffuse_velocity_columns_impl&#45;&gt;local -->
+<g id="proc~~diffuse_velocity_columns_impl~~CallsGraph_edge1" class="edge">
+<title>proc~diffuse_velocity_columns_impl&#45;&gt;local</title>
+<path fill="none" stroke="#ff0000" d="M122.59,-87.69C146.76,-96.22 179.62,-107.63 208.77,-117.14 218.82,-120.41 229.76,-123.83 239.87,-126.93"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="238.83,-130.27 249.41,-129.84 240.86,-123.58 238.83,-130.27"/>
+</g>
+<!-- proc~vdiff_face_layer -->
+<g id="proc~~diffuse_velocity_columns_impl~~CallsGraph_node3" class="node">
+<title>proc~vdiff_face_layer</title>
+<g id="a_proc~~diffuse_velocity_columns_impl~~CallsGraph_node3"><a xlink:href="../proc/vdiff_face_layer.html" xlink:title="vdiff_face_layer">
+<polygon fill="#d9534f" stroke="#d9534f" points="326.04,-108.27 230.52,-108.27 230.52,-84 326.04,-84 326.04,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="278.28" y="-92.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vdiff_face_layer</text>
+</a>
+</g>
+</g>
+<!-- proc~diffuse_velocity_columns_impl&#45;&gt;proc~vdiff_face_layer -->
+<g id="proc~~diffuse_velocity_columns_impl~~CallsGraph_edge2" class="edge">
+<title>proc~diffuse_velocity_columns_impl&#45;&gt;proc~vdiff_face_layer</title>
+<path fill="none" stroke="#ff0000" d="M173.17,-84.62C188.6,-86.33 204.36,-88.07 218.79,-89.67"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="218.22,-93.13 228.55,-90.75 218.99,-86.17 218.22,-93.13"/>
+</g>
+<!-- proc~vdiff_interface_coupling -->
+<g id="proc~~diffuse_velocity_columns_impl~~CallsGraph_node4" class="node">
+<title>proc~vdiff_interface_coupling</title>
+<g id="a_proc~~diffuse_velocity_columns_impl~~CallsGraph_node4"><a xlink:href="../proc/vdiff_interface_coupling.html" xlink:title="vdiff_interface_coupling">
+<polygon fill="#d9534f" stroke="#d9534f" points="347.79,-66.27 208.77,-66.27 208.77,-42 347.79,-42 347.79,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="278.28" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vdiff_interface_coupling</text>
+</a>
+</g>
+</g>
+<!-- proc~diffuse_velocity_columns_impl&#45;&gt;proc~vdiff_interface_coupling -->
+<g id="proc~~diffuse_velocity_columns_impl~~CallsGraph_edge3" class="edge">
+<title>proc~diffuse_velocity_columns_impl&#45;&gt;proc~vdiff_interface_coupling</title>
+<path fill="none" stroke="#ff0000" d="M173.17,-65.65C181.09,-64.77 189.1,-63.89 196.97,-63.02"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="197.32,-66.5 206.88,-61.92 196.56,-59.54 197.32,-66.5"/>
+</g>
+<!-- rdb_blf_is_live -->
+<g id="proc~~diffuse_velocity_columns_impl~~CallsGraph_node5" class="node">
+<title>rdb_blf_is_live</title>
+<polygon fill="#777777" stroke="#777777" points="321.16,-24.27 235.39,-24.27 235.39,0 321.16,0 321.16,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="278.28" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_blf_is_live</text>
+</g>
+<!-- proc~diffuse_velocity_columns_impl&#45;&gt;rdb_blf_is_live -->
+<g id="proc~~diffuse_velocity_columns_impl~~CallsGraph_edge4" class="edge">
+<title>proc~diffuse_velocity_columns_impl&#45;&gt;rdb_blf_is_live</title>
+<path fill="none" stroke="#ff0000" d="M122.59,-62.58C146.76,-54.05 179.62,-42.64 208.77,-33.13 213.9,-31.46 219.25,-29.76 224.61,-28.07"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="225.59,-31.43 234.1,-25.12 223.51,-24.75 225.59,-31.43"/>
+</g>
+<!-- proc~face_thick -->
+<g id="proc~~diffuse_velocity_columns_impl~~CallsGraph_node6" class="node">
+<title>proc~face_thick</title>
+<g id="a_proc~~diffuse_velocity_columns_impl~~CallsGraph_node6"><a xlink:href="../proc/face_thick.html" xlink:title="face_thick">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="449.31,-66.27 383.79,-66.27 383.79,-42 449.31,-42 449.31,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="416.55" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">face_thick</text>
+</a>
+</g>
+</g>
+<!-- proc~vdiff_interface_coupling&#45;&gt;proc~face_thick -->
+<g id="proc~~diffuse_velocity_columns_impl~~CallsGraph_edge5" class="edge">
+<title>proc~vdiff_interface_coupling&#45;&gt;proc~face_thick</title>
+<path fill="none" stroke="#00ffff" d="M348.21,-54.13C356.27,-54.13 364.31,-54.13 371.89,-54.13"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="371.84,-57.64 381.84,-54.14 371.84,-50.64 371.84,-57.64"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~diffuse_velocity_columns_impl~~CalledByGraph Pages: 1 -->
+<svg id="procdiffuse_velocity_columns_implCalledByGraph" width="641pt" height="44pt"
+ viewBox="0.00 0.00 641.00 44.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~diffuse_velocity_columns_impl~~CalledByGraph" class="graph" transform="scale(0.597173 0.597173) rotate(0) translate(4 70.27)">
+<title>proc~~diffuse_velocity_columns_impl~~CalledByGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-70.27 1069.39,-70.27 1069.39,4 -4,4"/>
+<!-- proc~diffuse_velocity_columns_impl -->
+<g id="proc~~diffuse_velocity_columns_impl~~CalledByGraph_node1" class="node">
+<title>proc~diffuse_velocity_columns_impl</title>
+<polygon fill="none" stroke="black" points="1065.39,-44.27 892.62,-44.27 892.62,-20 1065.39,-20 1065.39,-44.27"/>
+<text xml:space="preserve" text-anchor="middle" x="979" y="-28.53" font-family="Helvetica,sans-Serif" font-size="10.50">diffuse_velocity_columns_impl</text>
+</g>
+<!-- proc~vdiff_apply_momentum -->
+<g id="proc~~diffuse_velocity_columns_impl~~CalledByGraph_node2" class="node">
+<title>proc~vdiff_apply_momentum</title>
+<g id="a_proc~~diffuse_velocity_columns_impl~~CalledByGraph_node2"><a xlink:href="../proc/vdiff_apply_momentum.html" xlink:title="vdiff_apply_momentum">
+<polygon fill="#d9534f" stroke="#d9534f" points="856.62,-44.27 719.85,-44.27 719.85,-20 856.62,-20 856.62,-44.27"/>
+<text xml:space="preserve" text-anchor="middle" x="788.23" y="-28.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vdiff_apply_momentum</text>
+</a>
+</g>
+</g>
+<!-- proc~vdiff_apply_momentum&#45;&gt;proc~diffuse_velocity_columns_impl -->
+<g id="proc~~diffuse_velocity_columns_impl~~CalledByGraph_edge1" class="edge">
+<title>proc~vdiff_apply_momentum&#45;&gt;proc~diffuse_velocity_columns_impl</title>
+<path fill="none" stroke="#ff0000" d="M857.12,-32.13C864.88,-32.13 872.9,-32.13 880.94,-32.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="880.8,-35.64 890.8,-32.14 880.8,-28.64 880.8,-35.64"/>
+</g>
+<!-- proc~visc_rem_precompute -->
+<g id="proc~~diffuse_velocity_columns_impl~~CalledByGraph_node3" class="node">
+<title>proc~visc_rem_precompute</title>
+<g id="a_proc~~diffuse_velocity_columns_impl~~CalledByGraph_node3"><a xlink:href="../proc/visc_rem_precompute.html" xlink:title="visc_rem_precompute">
+<polygon fill="#d9534f" stroke="#d9534f" points="683.85,-24.27 556.08,-24.27 556.08,0 683.85,0 683.85,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="619.96" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">visc_rem_precompute</text>
+</a>
+</g>
+</g>
+<!-- proc~visc_rem_precompute&#45;&gt;proc~vdiff_apply_momentum -->
+<g id="proc~~diffuse_velocity_columns_impl~~CalledByGraph_edge2" class="edge">
+<title>proc~visc_rem_precompute&#45;&gt;proc~vdiff_apply_momentum</title>
+<path fill="none" stroke="#ff0000" d="M684.3,-19.75C692.1,-20.69 700.14,-21.66 708.13,-22.62"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="707.52,-26.07 717.87,-23.79 708.36,-19.12 707.52,-26.07"/>
+</g>
+<!-- proc~vmix_apply_in_stage -->
+<g id="proc~~diffuse_velocity_columns_impl~~CalledByGraph_node4" class="node">
+<title>proc~vmix_apply_in_stage</title>
+<g id="a_proc~~diffuse_velocity_columns_impl~~CalledByGraph_node4"><a xlink:href="../proc/vmix_apply_in_stage.html" xlink:title="vmix_apply_in_stage">
+<polygon fill="#d9534f" stroke="#d9534f" points="520.08,-64.27 399.06,-64.27 399.06,-40 520.08,-40 520.08,-64.27"/>
+<text xml:space="preserve" text-anchor="middle" x="459.57" y="-48.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vmix_apply_in_stage</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_apply_in_stage&#45;&gt;proc~vdiff_apply_momentum -->
+<g id="proc~~diffuse_velocity_columns_impl~~CalledByGraph_edge3" class="edge">
+<title>proc~vmix_apply_in_stage&#45;&gt;proc~vdiff_apply_momentum</title>
+<path fill="none" stroke="#ff0000" d="M520.49,-48.47C573.24,-45.24 650.44,-40.51 708.24,-36.97"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="708.24,-40.48 718.01,-36.37 707.82,-33.49 708.24,-40.48"/>
+</g>
+<!-- proc~vmix_apply_in_stage&#45;&gt;proc~visc_rem_precompute -->
+<g id="proc~~diffuse_velocity_columns_impl~~CalledByGraph_edge5" class="edge">
+<title>proc~vmix_apply_in_stage&#45;&gt;proc~visc_rem_precompute</title>
+<path fill="none" stroke="#ff0000" d="M510.25,-39.59C525.51,-35.74 542.48,-31.45 558.38,-27.43"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="558.88,-30.92 567.72,-25.08 557.17,-24.13 558.88,-30.92"/>
+</g>
+<!-- proc~run_stage -->
+<g id="proc~~diffuse_velocity_columns_impl~~CalledByGraph_node5" class="node">
+<title>proc~run_stage</title>
+<g id="a_proc~~diffuse_velocity_columns_impl~~CalledByGraph_node5"><a xlink:href="../proc/run_stage.html" xlink:title="run_stage">
+<polygon fill="#d9534f" stroke="#d9534f" points="349.56,-66.27 285.54,-66.27 285.54,-42 349.56,-42 349.56,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="317.55" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage</text>
+</a>
+</g>
+</g>
+<!-- proc~run_stage&#45;&gt;proc~vmix_apply_in_stage -->
+<g id="proc~~diffuse_velocity_columns_impl~~CalledByGraph_edge6" class="edge">
+<title>proc~run_stage&#45;&gt;proc~vmix_apply_in_stage</title>
+<path fill="none" stroke="#00ffff" d="M349.97,-53.69C361.14,-53.53 374.2,-53.34 387.33,-53.15"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="387.37,-56.65 397.31,-53.01 387.27,-49.65 387.37,-56.65"/>
+</g>
+<!-- proc~run_stage_split -->
+<g id="proc~~diffuse_velocity_columns_impl~~CalledByGraph_node6" class="node">
+<title>proc~run_stage_split</title>
+<g id="a_proc~~diffuse_velocity_columns_impl~~CalledByGraph_node6"><a xlink:href="../proc/run_stage_split.html" xlink:title="run_stage_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="363.06,-24.27 272.04,-24.27 272.04,0 363.06,0 363.06,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="317.55" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage_split</text>
+</a>
+</g>
+</g>
+<!-- proc~run_stage_split&#45;&gt;proc~visc_rem_precompute -->
+<g id="proc~~diffuse_velocity_columns_impl~~CalledByGraph_edge4" class="edge">
+<title>proc~run_stage_split&#45;&gt;proc~visc_rem_precompute</title>
+<path fill="none" stroke="#ff0000" d="M363.53,-12.13C411.23,-12.13 487.38,-12.13 544.15,-12.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="544.07,-15.64 554.07,-12.14 544.07,-8.64 544.07,-15.64"/>
+</g>
+<!-- proc~run_stage_split&#45;&gt;proc~vmix_apply_in_stage -->
+<g id="proc~~diffuse_velocity_columns_impl~~CalledByGraph_edge7" class="edge">
+<title>proc~run_stage_split&#45;&gt;proc~vmix_apply_in_stage</title>
+<path fill="none" stroke="#00ffff" d="M362.47,-24.68C375.63,-28.44 390.23,-32.61 403.99,-36.54"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="402.77,-39.84 413.35,-39.22 404.7,-33.1 402.77,-39.84"/>
+</g>
+<!-- proc~ocean_dyn_step -->
+<g id="proc~~diffuse_velocity_columns_impl~~CalledByGraph_node7" class="node">
+<title>proc~ocean_dyn_step</title>
+<g id="a_proc~~diffuse_velocity_columns_impl~~CalledByGraph_node7"><a xlink:href="../proc/ocean_dyn_step.html" xlink:title="ocean_dyn_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="222.54,-66.27 125.52,-66.27 125.52,-42 222.54,-42 222.54,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="174.03" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step&#45;&gt;proc~run_stage -->
+<g id="proc~~diffuse_velocity_columns_impl~~CalledByGraph_edge8" class="edge">
+<title>proc~ocean_dyn_step&#45;&gt;proc~run_stage</title>
+<path fill="none" stroke="#ff0000" d="M222.94,-54.13C239.46,-54.13 257.84,-54.13 273.91,-54.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="273.63,-57.64 283.63,-54.14 273.63,-50.64 273.63,-57.64"/>
+</g>
+<!-- proc~ocean_dyn_step_split -->
+<g id="proc~~diffuse_velocity_columns_impl~~CalledByGraph_node8" class="node">
+<title>proc~ocean_dyn_step_split</title>
+<g id="a_proc~~diffuse_velocity_columns_impl~~CalledByGraph_node8"><a xlink:href="../proc/ocean_dyn_step_split.html" xlink:title="ocean_dyn_step_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="236.04,-24.27 112.02,-24.27 112.02,0 236.04,0 236.04,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="174.03" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step_split</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step_split&#45;&gt;proc~run_stage_split -->
+<g id="proc~~diffuse_velocity_columns_impl~~CalledByGraph_edge9" class="edge">
+<title>proc~ocean_dyn_step_split&#45;&gt;proc~run_stage_split</title>
+<path fill="none" stroke="#00ffff" d="M236.28,-12.13C244.31,-12.13 252.51,-12.13 260.45,-12.13"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="260.33,-15.64 270.33,-12.14 260.33,-8.64 260.33,-15.64"/>
+</g>
+<!-- proc~engine_step -->
+<g id="proc~~diffuse_velocity_columns_impl~~CalledByGraph_node9" class="node">
+<title>proc~engine_step</title>
+<g id="a_proc~~diffuse_velocity_columns_impl~~CalledByGraph_node9"><a xlink:href="../proc/engine_step.html" xlink:title="engine_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="76.02,-45.27 0,-45.27 0,-21 76.02,-21 76.02,-45.27"/>
+<text xml:space="preserve" text-anchor="middle" x="38.01" y="-29.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~ocean_dyn_step -->
+<g id="proc~~diffuse_velocity_columns_impl~~CalledByGraph_edge10" class="edge">
+<title>proc~engine_step&#45;&gt;proc~ocean_dyn_step</title>
+<path fill="none" stroke="#ff0000" d="M76.34,-38.98C88.08,-40.82 101.35,-42.9 114.2,-44.92"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="113.43,-48.34 123.85,-46.43 114.52,-41.42 113.43,-48.34"/>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~ocean_dyn_step_split -->
+<g id="proc~~diffuse_velocity_columns_impl~~CalledByGraph_edge11" class="edge">
+<title>proc~engine_step&#45;&gt;proc~ocean_dyn_step_split</title>
+<path fill="none" stroke="#00ffff" d="M76.34,-27.29C83.9,-26.1 92.1,-24.82 100.41,-23.51"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="100.93,-26.98 110.26,-21.97 99.84,-20.06 100.93,-26.98"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocdiffuse_velocity_columns_implCalledByGraph = svgPanZoom('#procdiffuse_velocity_columns_implCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-eps_hvel"></span>
+              real(kind=wp),
+            </td>
+              <td>private,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>EPS_HVEL</strong></td>
+<td> =</td>
+                <td>1.0e-30_wp</td>
+            <td>
+                <p>MOM6 <code>h_neglect</code> analogue in the harmonic mean / HBBL inverse.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-stress_h_min"></span>
+              real(kind=wp),
+            </td>
+              <td>private,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>STRESS_H_MIN</strong></td>
+<td> =</td>
+                <td>1.0e-3_wp</td>
+            <td>
+                <p>Floor on the surface-layer face thickness in the <code>τ/(ρ₀·h)</code>
+stress conversion — matches <code>ocean_surface_stress_t%h_min</code> so
+the implicit fold reduces to the explicit kernel in the
+well-resolved limit.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-a_k"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>a_k</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-alpha~7"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>alpha</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-b_k~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>b_k</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-bbl_thick~3"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>bbl_thick</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-beta~12"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>beta</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-c_k"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>c_k</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-cp~3"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>cp</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-cp_prev"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>cp_prev</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-cut_b"></span>
+              logical,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>cut_b</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-cut_t"></span>
+              logical,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>cut_t</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-d_min"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>d_min</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-denom~12"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>denom</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dp"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dp</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dp_prev"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dp_prev</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dz_b"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dz_b</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dz_t"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dz_t</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-g_next"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>g_next</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-gp~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>gp</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-gp_prev"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>gp_prev</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hf_k"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hf_k</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hv_0"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hv_0</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hv_p"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hv_p</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-i~233"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>i</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-i_c2"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>i_c2</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-i_hbbl"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>i_hbbl</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-i_left"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>i_left</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-i_right"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>i_right</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-inv_rho0~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>inv_rho0</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-j~229"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>j</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-j_above"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>j_above</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-j_below"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>j_below</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-j_c2"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>j_c2</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-k~190"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>k</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-kb~14"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>kb</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-kb_live~3"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>kb_live</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ktop"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ktop</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-kv_bbl~3"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>kv_bbl</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-kv_cnr"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>kv_cnr</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-num_b"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>num_b</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-num_t"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>num_t</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-r_k"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>r_k</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-u_next"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>u_next</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-wind_open"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>wind_open</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-zacc"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>zacc</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-zcol_l"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>zcol_l</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-zcol_r"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>zcol_r</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-zi_0"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>zi_0</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-zi_p"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>zi_p</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">pure subroutine </span><span class="n">diffuse_velocity_columns_impl</span><span class="p">(</span><span class="n">nu</span><span class="p">,</span><span class="w"> </span><span class="n">nv</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">dt</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                 </span><span class="n">u_face</span><span class="p">,</span><span class="w"> </span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="n">kv_centre</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                 </span><span class="n">wet_cell</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                 </span><span class="n">x_face</span><span class="p">,</span><span class="w"> </span><span class="n">nx_cells</span><span class="p">,</span><span class="w"> </span><span class="n">ny_cells</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                 </span><span class="n">use_harmonic</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                 </span><span class="n">a_diag</span><span class="p">,</span><span class="w"> </span><span class="n">b_diag</span><span class="p">,</span><span class="w"> </span><span class="n">c_diag</span><span class="p">,</span><span class="w"> </span><span class="n">rhs</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                 </span><span class="n">do_stress</span><span class="p">,</span><span class="w"> </span><span class="n">do_drag</span><span class="p">,</span><span class="w"> </span><span class="n">rho0</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                 </span><span class="n">tau_face</span><span class="p">,</span><span class="w"> </span><span class="n">lambda_bot</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                 </span><span class="n">do_top</span><span class="p">,</span><span class="w"> </span><span class="n">lambda_top</span><span class="p">,</span><span class="w"> </span><span class="n">cover_face</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                 </span><span class="n">solve_momentum</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                 </span><span class="n">do_remnant</span><span class="p">,</span><span class="w"> </span><span class="n">visc_rem_out</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                 </span><span class="n">hvel_mom6</span><span class="p">,</span><span class="w"> </span><span class="n">hbbl_visc</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                 </span><span class="n">bbl_glue</span><span class="p">,</span><span class="w"> </span><span class="n">hvel_upwind</span><span class="p">,</span><span class="w"> </span><span class="n">hvel_harmonic</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                 </span><span class="n">kv_bbl_face</span><span class="p">,</span><span class="w"> </span><span class="n">bbl_thick_face</span><span class="p">,</span><span class="w"> </span><span class="n">kv_bbl_bg</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                 </span><span class="n">do_corner</span><span class="p">,</span><span class="w"> </span><span class="n">kv_prandtl</span><span class="p">,</span><span class="w"> </span><span class="n">kv_corner</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                 </span><span class="n">zlevel_faces</span><span class="p">,</span><span class="w"> </span><span class="n">k_top_face</span><span class="p">,</span><span class="w"> </span><span class="n">k_bot_face</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! Build + solve the tridiagonal system per face column.</span>
+<span class="w">      </span><span class="c">!! `u_face` is either `u_face_x_layer` (`x_face = .true.`,</span>
+<span class="w">      </span><span class="c">!! shape (nx+1, ny)) or `v_face_y_layer` (`x_face = .false.`,</span>
+<span class="w">      </span><span class="c">!! shape (nx, ny+1)).  `h_layer` is cell-centred (nx, ny, nz)</span>
+<span class="w">      </span><span class="c">!! and we average across the face direction to get the face</span>
+<span class="w">      </span><span class="c">!! thickness.  `kv_centre` is the same cell-centred diffusivity</span>
+<span class="w">      </span><span class="c">!! field used by the tracer kernel — we average it across the</span>
+<span class="w">      </span><span class="c">!! face to get a face-located value at each interface.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! For wall faces (i = 1 / i = nx_cells+1 for x_face;</span>
+<span class="w">      </span><span class="c">!! j = 1 / j = ny_cells+1 for y-face), there's no neighbour</span>
+<span class="w">      </span><span class="c">!! cell to average with — we fall back to the single available</span>
+<span class="w">      </span><span class="c">!! cell's thickness + diffusivity.  Mass through walls is</span>
+<span class="w">      </span><span class="c">!! forced to zero by the continuity kernel anyway, so the</span>
+<span class="w">      </span><span class="c">!! wall-face viscosity is only there to keep the system</span>
+<span class="w">      </span><span class="c">!! non-singular.</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nu</span><span class="p">,</span><span class="w"> </span><span class="n">nv</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nx_cells</span><span class="p">,</span><span class="w"> </span><span class="n">ny_cells</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dt</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">u_face</span><span class="p">(</span><span class="n">nu</span><span class="p">,</span><span class="w"> </span><span class="n">nv</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">h_layer</span><span class="p">(</span><span class="n">nx_cells</span><span class="p">,</span><span class="w"> </span><span class="n">ny_cells</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">kv_centre</span><span class="p">(</span><span class="n">nx_cells</span><span class="p">,</span><span class="w"> </span><span class="n">ny_cells</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">wet_cell</span><span class="p">(</span><span class="n">nx_cells</span><span class="p">,</span><span class="w"> </span><span class="n">ny_cells</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! Cell-centred wet/dry land mask (1 wet, 0 land).  The wind-stress</span>
+<span class="w">         </span><span class="c">!! fold multiplies `tau_face` by the face mask `min` of the two</span>
+<span class="w">         </span><span class="c">!! bounding cells — matching the explicit surface-stress kernel —</span>
+<span class="w">         </span><span class="c">!! so no stress is injected at a no-normal-flow land face.  All-wet</span>
+<span class="w">         </span><span class="c">!! (mask ≡ 1) ⇒ bit-identical.  Only read when `do_stress`.</span>
+<span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">x_face</span>
+<span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">use_harmonic</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">a_diag</span><span class="p">(</span><span class="n">nu</span><span class="p">,</span><span class="w"> </span><span class="n">nv</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! Unused since the fused sweep (no row is stored before it is</span>
+<span class="w">         </span><span class="c">!! eliminated); kept so the call sites are unchanged.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">b_diag</span><span class="p">(</span><span class="n">nu</span><span class="p">,</span><span class="w"> </span><span class="n">nv</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! Unused, as `a_diag`.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">c_diag</span><span class="p">(</span><span class="n">nu</span><span class="p">,</span><span class="w"> </span><span class="n">nv</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! Scratch: ends holding the Thomas c'.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">rhs</span><span class="p">(</span><span class="n">nu</span><span class="p">,</span><span class="w"> </span><span class="n">nv</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! Scratch: ends holding the Thomas d' (when `solve_momentum`).</span>
+<span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">do_stress</span>
+<span class="w">         </span><span class="c">!! Fold the surface wind stress into the `k = nz` RHS row.</span>
+<span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">do_drag</span>
+<span class="w">         </span><span class="c">!! Fold the bottom drag into the `k = k_bot_face` diagonal.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">rho0</span>
+<span class="w">         </span><span class="c">!! Boussinesq reference density for the `τ/ρ₀` stress conversion.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">tau_face</span><span class="p">(</span><span class="n">nu</span><span class="p">,</span><span class="w"> </span><span class="n">nv</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! Wind stress (N/m²) on this face.  Present iff `do_stress`.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">lambda_bot</span><span class="p">(</span><span class="n">nu</span><span class="p">,</span><span class="w"> </span><span class="n">nv</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! Bottom-drag Rayleigh rate λ (1/s) on this face.  Present iff</span>
+<span class="w">         </span><span class="c">!! `do_drag`.</span>
+<span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">do_top</span>
+<span class="w">         </span><span class="c">!! Fold the ice-shelf top drag into the `k = nz` diagonal AND</span>
+<span class="w">         </span><span class="c">!! mask the wind-stress RHS by `(1 − cover_face)`.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">lambda_top</span><span class="p">(</span><span class="n">nu</span><span class="p">,</span><span class="w"> </span><span class="n">nv</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! Top-drag Rayleigh rate λ (1/s) on this face.  Present iff</span>
+<span class="w">         </span><span class="c">!! `do_top`.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">cover_face</span><span class="p">(</span><span class="n">nu</span><span class="p">,</span><span class="w"> </span><span class="n">nv</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! Face ice-cover mask (0 open, 1 under ice), the OR of the two</span>
+<span class="w">         </span><span class="c">!! abutting cells (`rdb_ocean_top_drag`).  Present iff `do_top`.</span>
+<span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">hvel_mom6</span>
+<span class="w">         </span><span class="c">!! MOM6 HARMONIC_VISC parity for `h_u` + `h_shear` (see the slot-type</span>
+<span class="w">         </span><span class="c">!! docstring).  `.false.` =&gt; the historical arithmetic-`h_u` /</span>
+<span class="w">         </span><span class="c">!! `face_thick`-`dz` pair, bit-identical.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">hbbl_visc</span>
+<span class="w">         </span><span class="c">!! Bottom-layer scale for the `botfn` blend (MOM6 HBBL).</span>
+<span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">bbl_glue</span>
+<span class="w">         </span><span class="c">!! MOM6 `bottomdraglaw` coupling parity (see the slot-type</span>
+<span class="w">         </span><span class="c">!! docstring).  Configure guarantees `hvel_mom6` when this is on;</span>
+<span class="w">         </span><span class="c">!! the bed piston then applies whether or not `do_drag`.</span>
+<span class="w">         </span><span class="c">!! `.false.` ⇒ bit-identical.</span>
+<span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">hvel_upwind</span>
+<span class="w">         </span><span class="c">!! `.false.` = skip the near-bed upwind blend (pure harmonic</span>
+<span class="w">         </span><span class="c">!! hvel).  See the slot-type docstring.  `hvel_harmonic` branch only.</span>
+<span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">hvel_harmonic</span>
+<span class="w">         </span><span class="c">!! MOM6 `HARMONIC_VISC`: `.false.` = MOM6's default `z_clear`</span>
+<span class="w">         </span><span class="c">!! face-thickness branch, `.true.` = the harmonic branch (slot-type</span>
+<span class="w">         </span><span class="c">!! docstring).  Only read when `hvel_mom6`.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">kv_bbl_face</span><span class="p">(</span><span class="n">nu</span><span class="p">,</span><span class="w"> </span><span class="n">nv</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! BBL viscosity `kv_bbl` (m²/s) of this face (MOM6</span>
+<span class="w">         </span><span class="c">!! `visc%Kv_bbl_u`).  Only read when `bbl_glue`.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">bbl_thick_face</span><span class="p">(</span><span class="n">nu</span><span class="p">,</span><span class="w"> </span><span class="n">nv</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! BBL thickness (m) of this face (MOM6 `visc%bbl_thick_u`); also</span>
+<span class="w">         </span><span class="c">!! the height-above-bed normaliser `1/I_Hbbl` under the glue, as in</span>
+<span class="w">         </span><span class="c">!! MOM6's `bottomdraglaw` branch.  Only read when `bbl_glue`.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">kv_bbl_bg</span>
+<span class="w">         </span><span class="c">!! MOM6 `KV`: the background viscosity the BBL viscosity replaces</span>
+<span class="w">         </span><span class="c">!! within botfn reach of the bed, `Kv_tot + (kv_bbl − KV)·botfn`.</span>
+<span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">solve_momentum</span>
+<span class="w">         </span><span class="c">!! `.false.` = remnant-only mode: build the matrix and compute</span>
+<span class="w">         </span><span class="c">!! `visc_rem_out` WITHOUT touching `u_face` (the pre-substep</span>
+<span class="w">         </span><span class="c">!! visc_rem refresh, PGF_BUG.md §9 — MOM6 computes vertvisc_coef</span>
+<span class="w">         </span><span class="c">!! before btstep every stage, so its BT weights never lag; the</span>
+<span class="w">         </span><span class="c">!! stage-end producer alone leaves visc_rem ≡ 1 for the whole</span>
+<span class="w">         </span><span class="c">!! first stage, and the Δu corrector then deposits the spurious</span>
+<span class="w">         </span><span class="c">!! column-mean into wet layers).  `.true.` = the normal solve.</span>
+<span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">do_remnant</span>
+<span class="w">         </span><span class="c">!! Fill `visc_rem_out` with the viscous remnant γ_k — the</span>
+<span class="w">         </span><span class="c">!! sensitivity of the post-friction layer velocity to a uniform</span>
+<span class="w">         </span><span class="c">!! barotropic acceleration, `γ_k ≡ (1/Δt)·∂u_k^{n+1}/∂Ā`.  γ</span>
+<span class="w">         </span><span class="c">!! solves the SAME tridiagonal system as the momentum solve</span>
+<span class="w">         </span><span class="c">!! (same `a_diag`/`b_diag`, and the already-factorized `c_diag`</span>
+<span class="w">         </span><span class="c">!! left behind by the momentum forward sweep) with RHS ≡ 1 —</span>
+<span class="w">         </span><span class="c">!! Roundabout's rows are pre-normalized by `h_k`, so the remnant RHS</span>
+<span class="w">         </span><span class="c">!! is the unit vector, NOT `h_u(k)` (MOM6's un-normalized</span>
+<span class="w">         </span><span class="c">!! convention).  Reusing the surviving factorization means γ</span>
+<span class="w">         </span><span class="c">!! cannot drift from the operator actually solved for momentum.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">visc_rem_out</span><span class="p">(</span><span class="n">nu</span><span class="p">,</span><span class="w"> </span><span class="n">nv</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! Output γ_k, bottom-up (`k = 1` bed → γ smallest, `k = nz`</span>
+<span class="w">         </span><span class="c">!! surface → γ → 1).  Clamped to `min(γ, 1.0)` at production</span>
+<span class="w">         </span><span class="c">!! (cheap FP insurance on a quantity the maximum principle</span>
+<span class="w">         </span><span class="c">!! already bounds to (0, 1]).  Present iff `do_remnant`.</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">k_top_face</span><span class="p">(</span><span class="n">nu</span><span class="p">,</span><span class="w"> </span><span class="n">nv</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! `ms%k_top_u` / `k_top_v` — the index of the first layer that</span>
+<span class="w">         </span><span class="c">!! is LIVE on BOTH sides of this face, `nz` wherever nothing</span>
+<span class="w">         </span><span class="c">!! vanishes against the top.  The surface row of the column</span>
+<span class="w">         </span><span class="c">!! solve, the ice-shelf top-drag diagonal fold and the</span>
+<span class="w">         </span><span class="c">!! wind-stress RHS fold all sit on THIS row instead of on `nz`:</span>
+<span class="w">         </span><span class="c">!! under a quasi-geopotential coordinate beneath a shelf the</span>
+<span class="w">         </span><span class="c">!! rows above it are inert fillers, decoupled to the identity by</span>
+<span class="w">         </span><span class="c">!! the `zlevel_faces` gates, so a `dt*lambda_top` added at `nz`</span>
+<span class="w">         </span><span class="c">!! would damp a row that is not coupled to the ocean at all —</span>
+<span class="w">         </span><span class="c">!! and the drag rate `lambda_top` is itself captured at</span>
+<span class="w">         </span><span class="c">!! `k_top_face` by `rdb_ocean_top_drag`, so the two MUST agree.</span>
+<span class="w">         </span><span class="c">!! With `k_top_face ≡ nz` every expression below is the one it</span>
+<span class="w">         </span><span class="c">!! replaced, bit for bit.</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">k_bot_face</span><span class="p">(</span><span class="n">nu</span><span class="p">,</span><span class="w"> </span><span class="n">nv</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! `ms%k_bot_u` / `k_bot_v` — the first layer LIVE on BOTH sides</span>
+<span class="w">         </span><span class="c">!! of this face counting UP from the bed (`max` of its two</span>
+<span class="w">         </span><span class="c">!! columns), `1` wherever nothing vanishes against the bed.  The</span>
+<span class="w">         </span><span class="c">!! bed row of the column solve (no-flux-below BC, the implicit</span>
+<span class="w">         </span><span class="c">!! bottom-drag diagonal fold and the `bbl_glue` piston) sits on</span>
+<span class="w">         </span><span class="c">!! THIS row instead of on `k = 1`, and the rows below it — inert</span>
+<span class="w">         </span><span class="c">!! `z_fixed` bed fillers — are the identity.  The drag rate</span>
+<span class="w">         </span><span class="c">!! `lambda_bot` is itself captured at `k_bot_face` by</span>
+<span class="w">         </span><span class="c">!! `ocean_bottom_drag_compute_tendencies`, so the two MUST agree.</span>
+<span class="w">         </span><span class="c">!! The height-above-bed stack `zint` (BBL glue, upwind blend)</span>
+<span class="w">         </span><span class="c">!! also starts accumulating here.  With `k_bot_face ≡ 1` every</span>
+<span class="w">         </span><span class="c">!! expression below is the one it replaced, bit for bit.</span>
+<span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">zlevel_faces</span>
+<span class="w">         </span><span class="c">!! `&amp;vcoord_nml zfixed_closed_faces` — z-level partial steps.</span>
+<span class="w">         </span><span class="c">!!</span>
+<span class="w">         </span><span class="c">!! Changes TWO things about the face column, and only when on</span>
+<span class="w">         </span><span class="c">!! (`.false.` ⇒ every expression below is textually and</span>
+<span class="w">         </span><span class="c">!! bit-identically what it has always been):</span>
+<span class="w">         </span><span class="c">!!</span>
+<span class="w">         </span><span class="c">!! 1. the face thickness becomes `min(h_L, h_R)` instead of the</span>
+<span class="w">         </span><span class="c">!!    arithmetic (or MOM6-harmonic) mean — the standard</span>
+<span class="w">         </span><span class="c">!!    partial-cell choice, and the one that makes "this layer is</span>
+<span class="w">         </span><span class="c">!!    an inert FILLER on at least one side" visible locally as</span>
+<span class="w">         </span><span class="c">!!    `hvel(k) &lt;= H_VANISHED`;</span>
+<span class="w">         </span><span class="c">!! 2. the tridiagonal coupling across an interface touching such</span>
+<span class="w">         </span><span class="c">!!    a layer is CUT (`alpha = beta = 0`), and the layer's own</span>
+<span class="w">         </span><span class="c">!!    row is forced to the identity.</span>
+<span class="w">         </span><span class="c">!!</span>
+<span class="w">         </span><span class="c">!! Without (2) an OPEN layer is frictionally coupled, every</span>
+<span class="w">         </span><span class="c">!! single step, to the CLOSED layer above or below it — whose</span>
+<span class="w">         </span><span class="c">!! velocity `mask_layer_velocities` has just zeroed — so the</span>
+<span class="w">         </span><span class="c">!! wall acts as a spurious side drag instead of as free-slip.</span>
+<span class="w">         </span><span class="c">!! The floor `max(hvel, H_VANISHED)` does not save it: it makes</span>
+<span class="w">         </span><span class="c">!! the coupling huge-but-finite (`dt·nu/1.5e-4`), i.e. a rigid</span>
+<span class="w">         </span><span class="c">!! glue to zero, which is the worst of the three options.</span>
+<span class="w">         </span><span class="c">!!</span>
+<span class="w">         </span><span class="c">!! This is the DYNAMIC twin of `metrics%open_u/open_v`: "filler</span>
+<span class="w">         </span><span class="c">!! on either side" is `min(h_L,h_R) &lt;= H_VANISHED` here and</span>
+<span class="w">         </span><span class="c">!! `target_h &lt;= H_VANISHED` on either side there, and under</span>
+<span class="w">         </span><span class="c">!! `z_fixed` the two agree (η is absorbed by the first LIVE</span>
+<span class="w">         </span><span class="c">!! layer).  It is derived locally rather than threaded as a 3-D</span>
+<span class="w">         </span><span class="c">!! mask because this kernel is reached through four flat-impl</span>
+<span class="w">         </span><span class="c">!! call sites and five dispatcher call sites, none of which sees</span>
+<span class="w">         </span><span class="c">!! `ocean_metrics_t`, and a scalar costs nothing.</span>
+<span class="w">         </span><span class="c">!! The equivalent tracer decoupling already exists, unconditionally,</span>
+<span class="w">         </span><span class="c">!! in `build_factorize_tracer_matrix`.</span>
+<span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">do_corner</span>
+<span class="w">         </span><span class="c">!! Add the corner-staggered viscosity to every face interface.</span>
+<span class="w">         </span><span class="c">!! Gated INSIDE the single DC (no split loop — NVHPC penalty);</span>
+<span class="w">         </span><span class="c">!! `kv_corner` is guaranteed present when `do_corner`.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">kv_prandtl</span>
+<span class="w">         </span><span class="c">!! Scale on `kv_corner` (Kv = Pr·Kd).  Only read when</span>
+<span class="w">         </span><span class="c">!! `do_corner`.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">kv_corner</span><span class="p">(</span><span class="n">nx_cells</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ny_cells</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! Corner-staggered interface viscosity (SW-corner convention:</span>
+<span class="w">         </span><span class="c">!! corner (i,j) is the SW corner of cell (i,j)).  A face reads</span>
+<span class="w">         </span><span class="c">!! the 2-point average of its two END corners: u-face (i,j) →</span>
+<span class="w">         </span><span class="c">!! corners (i,j)/(i,j+1); v-face (i,j) → corners (i,j)/(i+1,j)</span>
+<span class="w">         </span><span class="c">!! — the direct corner→face route, never via a tracer point.</span>
+<span class="w">         </span><span class="c">!! Present iff `do_corner`.</span>
+
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">,</span><span class="w"> </span><span class="n">ktop</span><span class="p">,</span><span class="w"> </span><span class="n">kb</span><span class="p">,</span><span class="w"> </span><span class="n">kb_live</span><span class="p">,</span><span class="w"> </span><span class="n">i_left</span><span class="p">,</span><span class="w"> </span><span class="n">i_right</span><span class="p">,</span><span class="w"> </span><span class="n">j_below</span><span class="p">,</span><span class="w"> </span><span class="n">j_above</span><span class="p">,</span><span class="w"> </span><span class="n">i_c2</span><span class="p">,</span><span class="w"> </span><span class="n">j_c2</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">zacc</span><span class="p">,</span><span class="w"> </span><span class="n">zcol_l</span><span class="p">,</span><span class="w"> </span><span class="n">zcol_r</span><span class="p">,</span><span class="w"> </span><span class="n">d_min</span><span class="p">,</span><span class="w"> </span><span class="n">i_hbbl</span><span class="p">,</span><span class="w"> </span><span class="n">kv_bbl</span><span class="p">,</span><span class="w"> </span><span class="n">bbl_thick</span>
+<span class="w">      </span><span class="c">! Sliding window over the face-thickness / height-above-bed stack:</span>
+<span class="w">      </span><span class="c">! `hv_0/hv_p` = hvel(k/k+1), `zi_0/zi_p` = zint(k/k+1).  It</span>
+<span class="w">      </span><span class="c">! replaces the `hvel(NZ_STACK_MAX)` / `zint(NZ_STACK_MAX)` `local()`</span>
+<span class="w">      </span><span class="c">! stacks, which at nz ~ 100 live in GPU local memory.  With the fused</span>
+<span class="w">      </span><span class="c">! sweep below: 2082 -&gt; 957 us per launch on the NK=100 double gyre</span>
+<span class="w">      </span><span class="c">! (512x256, GH200).</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">hv_0</span><span class="p">,</span><span class="w"> </span><span class="n">hv_p</span><span class="p">,</span><span class="w"> </span><span class="n">zi_0</span><span class="p">,</span><span class="w"> </span><span class="n">zi_p</span>
+<span class="w">      </span><span class="c">! Interface couplings: `_b` = interface below row k, `_t` = above.  Each</span>
+<span class="w">      </span><span class="c">! is formed ONCE, as `num = dt*nu_eff` and `dz_eff`, and read by both</span>
+<span class="w">      </span><span class="c">! rows it couples (`alpha = num/(hf_k*dz)`), from the same operands</span>
+<span class="w">      </span><span class="c">! either row used to form it from.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">num_b</span><span class="p">,</span><span class="w"> </span><span class="n">dz_b</span><span class="p">,</span><span class="w"> </span><span class="n">num_t</span><span class="p">,</span><span class="w"> </span><span class="n">dz_t</span><span class="p">,</span><span class="w"> </span><span class="n">kv_cnr</span>
+<span class="w">      </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">cut_b</span><span class="p">,</span><span class="w"> </span><span class="n">cut_t</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">hf_k</span><span class="p">,</span><span class="w"> </span><span class="n">alpha</span><span class="p">,</span><span class="w"> </span><span class="n">beta</span><span class="p">,</span><span class="w"> </span><span class="n">a_k</span><span class="p">,</span><span class="w"> </span><span class="n">b_k</span><span class="p">,</span><span class="w"> </span><span class="n">c_k</span><span class="p">,</span><span class="w"> </span><span class="n">r_k</span><span class="p">,</span><span class="w"> </span><span class="n">denom</span><span class="p">,</span><span class="w"> </span><span class="n">wind_open</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">cp_prev</span><span class="p">,</span><span class="w"> </span><span class="n">dp_prev</span><span class="p">,</span><span class="w"> </span><span class="n">gp_prev</span><span class="p">,</span><span class="w"> </span><span class="n">cp</span><span class="p">,</span><span class="w"> </span><span class="n">dp</span><span class="p">,</span><span class="w"> </span><span class="n">gp</span><span class="p">,</span><span class="w"> </span><span class="n">u_next</span><span class="p">,</span><span class="w"> </span><span class="n">g_next</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">inv_rho0</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">parameter</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">EPS_HVEL</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0e-30_wp</span>
+<span class="w">         </span><span class="c">!! MOM6 `h_neglect` analogue in the harmonic mean / HBBL inverse.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">parameter</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">STRESS_H_MIN</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0e-3_wp</span>
+<span class="w">         </span><span class="c">!! Floor on the surface-layer face thickness in the `τ/(ρ₀·h)`</span>
+<span class="w">         </span><span class="c">!! stress conversion — matches `ocean_surface_stress_t%h_min` so</span>
+<span class="w">         </span><span class="c">!! the implicit fold reduces to the explicit kernel in the</span>
+<span class="w">         </span><span class="c">!! well-resolved limit.</span>
+
+<span class="w">      </span><span class="n">inv_rho0</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0_wp</span><span class="o">/</span><span class="n">rho0</span>
+
+<span class="w">      </span><span class="c">! ONE upward pass per face column: layer k+1's face thickness, row k's</span>
+<span class="w">      </span><span class="c">! coefficients and row k's Thomas forward step (momentum c'/d' and the</span>
+<span class="w">      </span><span class="c">! remnant g share the denominator) in the same iteration, then one</span>
+<span class="w">      </span><span class="c">! back-substitution for both.  `a_diag` / `b_diag` are never stored —</span>
+<span class="w">      </span><span class="c">! nothing reads them after the solve; `c_diag` / `rhs` end holding c'</span>
+<span class="w">      </span><span class="c">! and d', as before.  The arithmetic is the separate-sweep version's,</span>
+<span class="w">      </span><span class="c">! expression for expression (bit-identical).</span>
+<span class="w">      </span><span class="k">do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nv</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nu</span><span class="p">)</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">         </span><span class="n">local</span><span class="p">(</span><span class="n">i_left</span><span class="p">,</span><span class="w"> </span><span class="n">i_right</span><span class="p">,</span><span class="w"> </span><span class="n">j_below</span><span class="p">,</span><span class="w"> </span><span class="n">j_above</span><span class="p">,</span><span class="w"> </span><span class="n">i_c2</span><span class="p">,</span><span class="w"> </span><span class="n">j_c2</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">,</span><span class="w"> </span><span class="n">ktop</span><span class="p">,</span><span class="w"> </span><span class="n">kb</span><span class="p">,</span><span class="w"> </span><span class="n">kb_live</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">               </span><span class="n">zacc</span><span class="p">,</span><span class="w"> </span><span class="n">zcol_l</span><span class="p">,</span><span class="w"> </span><span class="n">zcol_r</span><span class="p">,</span><span class="w"> </span><span class="n">d_min</span><span class="p">,</span><span class="w"> </span><span class="n">i_hbbl</span><span class="p">,</span><span class="w"> </span><span class="n">kv_bbl</span><span class="p">,</span><span class="w"> </span><span class="n">bbl_thick</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">               </span><span class="n">hv_0</span><span class="p">,</span><span class="w"> </span><span class="n">hv_p</span><span class="p">,</span><span class="w"> </span><span class="n">zi_0</span><span class="p">,</span><span class="w"> </span><span class="n">zi_p</span><span class="p">,</span><span class="w"> </span><span class="n">num_b</span><span class="p">,</span><span class="w"> </span><span class="n">dz_b</span><span class="p">,</span><span class="w"> </span><span class="n">num_t</span><span class="p">,</span><span class="w"> </span><span class="n">dz_t</span><span class="p">,</span><span class="w"> </span><span class="n">kv_cnr</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">               </span><span class="n">cut_b</span><span class="p">,</span><span class="w"> </span><span class="n">cut_t</span><span class="p">,</span><span class="w"> </span><span class="n">hf_k</span><span class="p">,</span><span class="w"> </span><span class="n">alpha</span><span class="p">,</span><span class="w"> </span><span class="n">beta</span><span class="p">,</span><span class="w"> </span><span class="n">a_k</span><span class="p">,</span><span class="w"> </span><span class="n">b_k</span><span class="p">,</span><span class="w"> </span><span class="n">c_k</span><span class="p">,</span><span class="w"> </span><span class="n">r_k</span><span class="p">,</span><span class="w"> </span><span class="n">denom</span><span class="p">,</span><span class="w"> </span><span class="n">wind_open</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">               </span><span class="n">cp_prev</span><span class="p">,</span><span class="w"> </span><span class="n">dp_prev</span><span class="p">,</span><span class="w"> </span><span class="n">gp_prev</span><span class="p">,</span><span class="w"> </span><span class="n">cp</span><span class="p">,</span><span class="w"> </span><span class="n">dp</span><span class="p">,</span><span class="w"> </span><span class="n">gp</span><span class="p">,</span><span class="w"> </span><span class="n">u_next</span><span class="p">,</span><span class="w"> </span><span class="n">g_next</span><span class="p">)</span>
+<span class="w">         </span><span class="c">! Neighbour cell indices for averaging h.  (i_c2, j_c2) is the</span>
+<span class="w">         </span><span class="c">! SECOND end corner of this face for the corner-viscosity</span>
+<span class="w">         </span><span class="c">! add-on (the first is (i, j) on both staggerings): a u-face</span>
+<span class="w">         </span><span class="c">! runs south→north (corners (i,j)/(i,j+1)), a v-face west→east</span>
+<span class="w">         </span><span class="c">! (corners (i,j)/(i+1,j)).</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">x_face</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            </span><span class="n">i_left</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">max</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">            </span><span class="n">i_right</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">min</span><span class="p">(</span><span class="n">nx_cells</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="p">)</span>
+<span class="w">            </span><span class="n">j_below</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">j</span>
+<span class="w">            </span><span class="n">j_above</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">j</span>
+<span class="w">            </span><span class="n">i_c2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">i</span>
+<span class="w">            </span><span class="n">j_c2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">j</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">         </span><span class="k">else</span>
+<span class="k">            </span><span class="n">i_left</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">i</span>
+<span class="w">            </span><span class="n">i_right</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">i</span>
+<span class="w">            </span><span class="n">j_below</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">max</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">            </span><span class="n">j_above</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">min</span><span class="p">(</span><span class="n">ny_cells</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span>
+<span class="w">            </span><span class="n">i_c2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">            </span><span class="n">j_c2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">j</span>
+<span class="w">         </span><span class="k">end if</span>
+
+<span class="w">         </span><span class="c">! First live layer of this face counting up from the bed (`1`</span>
+<span class="w">         </span><span class="c">! everywhere but a `z_fixed` bed filler band), and the first live</span>
+<span class="w">         </span><span class="c">! layer counting down from the top (`nz` off a rigid top).</span>
+<span class="w">         </span><span class="n">kb</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">k_bot_face</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span>
+<span class="w">         </span><span class="n">ktop</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">k_top_face</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span>
+
+<span class="w">         </span><span class="c">! ---- This face's bottom boundary layer (MOM6 visc%Kv_bbl_u,</span>
+<span class="w">         </span><span class="c">! visc%bbl_thick_u).  Under the glue the height above the bed is</span>
+<span class="w">         </span><span class="c">! normalised by the BBL thickness, as MOM6's bottomdraglaw branch</span>
+<span class="w">         </span><span class="c">! does (`I_Hbbl = 1/bbl_thick`, vertvisc_coef); otherwise by</span>
+<span class="w">         </span><span class="c">! `hbbl_visc` (MOM6 HBBL).  The legacy glue fills `bbl_thick_face`</span>
+<span class="w">         </span><span class="c">! with `hbbl_visc`, so its arithmetic is unchanged.</span>
+<span class="w">         </span><span class="n">kv_bbl</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">         </span><span class="n">bbl_thick</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">hbbl_visc</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">bbl_glue</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            </span><span class="n">kv_bbl</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">kv_bbl_face</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span>
+<span class="w">            </span><span class="n">bbl_thick</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">bbl_thick_face</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">         </span><span class="n">i_hbbl</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0_wp</span><span class="o">/</span><span class="p">(</span><span class="n">bbl_thick</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">EPS_HVEL</span><span class="p">)</span>
+
+<span class="w">         </span><span class="c">! MOM6 `HARMONIC_VISC = False` (`z_clear`) branch: the two columns'</span>
+<span class="w">         </span><span class="c">! interface heights, from their beds up.  MOM6 starts them at the</span>
+<span class="w">         </span><span class="c">! STATIC depth `-bathyT`; here the column sums stand in for it, which</span>
+<span class="w">         </span><span class="c">! differs only by the free surface and cancels in `z_clear` wherever</span>
+<span class="w">         </span><span class="c">! the two cells' eta agree (an O(d eta) difference across a face).</span>
+<span class="w">         </span><span class="n">zacc</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">         </span><span class="n">zcol_l</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">         </span><span class="n">zcol_r</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">hvel_mom6</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="p">.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">hvel_harmonic</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span>
+<span class="w">               </span><span class="n">zcol_l</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">zcol_l</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">h_layer</span><span class="p">(</span><span class="n">i_left</span><span class="p">,</span><span class="w"> </span><span class="n">j_below</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">               </span><span class="n">zcol_r</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">zcol_r</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">h_layer</span><span class="p">(</span><span class="n">i_right</span><span class="p">,</span><span class="w"> </span><span class="n">j_above</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">            </span><span class="k">end do</span>
+<span class="k">         end if</span>
+<span class="k">         </span><span class="n">d_min</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">min</span><span class="p">(</span><span class="o">-</span><span class="n">zcol_l</span><span class="p">,</span><span class="w"> </span><span class="o">-</span><span class="n">zcol_r</span><span class="p">)</span>
+
+<span class="w">         </span><span class="c">! #178: the static bed index `kb` (`ms%k_bot_u/v`, filled once at</span>
+<span class="w">         </span><span class="c">! configure from the η=0 target) can be a vanished z_fixed bed</span>
+<span class="w">         </span><span class="c">! filler once a free-surface drawdown eats the nominal bed sliver</span>
+<span class="w">         </span><span class="c">! on the live run (`h &lt;= H_VANISHED` on one or both sides of the</span>
+<span class="w">         </span><span class="c">! face) — `kb` itself never moves, so the bed BC / drag piston</span>
+<span class="w">         </span><span class="c">! placed there would be glued to a massless row and decoupled</span>
+<span class="w">         </span><span class="c">! from the live rows above by the `zlevel_faces` gates (visc_rem</span>
+<span class="w">         </span><span class="c">! = 1 exactly, no bottom drag reaches the water).  `kb_live` is</span>
+<span class="w">         </span><span class="c">! the first row at/above `kb` whose face thickness is LIVE by the</span>
+<span class="w">         </span><span class="c">! shared `rdb_blf_is_live` criterion (`rdb_bed_live_face.inc` —</span>
+<span class="w">         </span><span class="c">! `ocean_bottom_drag_compute_tendencies` walks the SAME search so</span>
+<span class="w">         </span><span class="c">! the drag law samples the row the solver glues the BC to) —</span>
+<span class="w">         </span><span class="c">! fall back to `kb` itself when every row at/above it is vanished</span>
+<span class="w">         </span><span class="c">! (should not happen for a face with any live water, but keeps</span>
+<span class="w">         </span><span class="c">! the row index in-bounds).  Only the BED-BC ROW PLACEMENT moves</span>
+<span class="w">         </span><span class="c">! to `kb_live`; the height-above-bed accumulator (`zint`, gated</span>
+<span class="w">         </span><span class="c">! on `k &gt;= kb`) keeps referencing the true physical bed `kb`,</span>
+<span class="w">         </span><span class="c">! unchanged.  `kb_live = kb` ⇒ bit-identical to the pre-#178 path.</span>
+<span class="w">         </span><span class="n">kb_live</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">kb</span>
+<span class="w">         </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">kb</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">rdb_blf_is_live</span><span class="p">(</span><span class="n">h_layer</span><span class="p">(</span><span class="n">i_left</span><span class="p">,</span><span class="w"> </span><span class="n">j_below</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">),</span><span class="w"> </span><span class="n">h_layer</span><span class="p">(</span><span class="n">i_right</span><span class="p">,</span><span class="w"> </span><span class="n">j_above</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                </span><span class="n">zlevel_faces</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               </span><span class="n">kb_live</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">k</span>
+<span class="w">               </span><span class="k">exit</span>
+<span class="k">            end if</span>
+<span class="k">         end do</span>
+
+<span class="w">         </span><span class="c">! Prime the window with layer 1.</span>
+<span class="w">         </span><span class="k">call </span><span class="n">vdiff_face_layer</span><span class="p">(</span><span class="n">h_layer</span><span class="p">(</span><span class="n">i_left</span><span class="p">,</span><span class="w"> </span><span class="n">j_below</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="n">h_layer</span><span class="p">(</span><span class="n">i_right</span><span class="p">,</span><span class="w"> </span><span class="n">j_above</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                               </span><span class="n">u_face</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">kb</span><span class="p">,</span><span class="w"> </span><span class="n">hvel_mom6</span><span class="p">,</span><span class="w"> </span><span class="n">hvel_harmonic</span><span class="p">,</span><span class="w"> </span><span class="n">hvel_upwind</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                               </span><span class="n">zlevel_faces</span><span class="p">,</span><span class="w"> </span><span class="n">d_min</span><span class="p">,</span><span class="w"> </span><span class="n">i_hbbl</span><span class="p">,</span><span class="w"> </span><span class="n">zacc</span><span class="p">,</span><span class="w"> </span><span class="n">zcol_l</span><span class="p">,</span><span class="w"> </span><span class="n">zcol_r</span><span class="p">,</span><span class="w"> </span><span class="n">hv_p</span><span class="p">,</span><span class="w"> </span><span class="n">zi_p</span><span class="p">)</span>
+<span class="w">         </span><span class="n">hv_0</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">         </span><span class="n">zi_0</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">         </span><span class="n">num_t</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">         </span><span class="n">dz_t</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0_wp</span>
+<span class="w">         </span><span class="n">cut_t</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">false</span><span class="p">.</span>
+<span class="w">         </span><span class="n">cp_prev</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">         </span><span class="n">dp_prev</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">         </span><span class="n">gp_prev</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+
+<span class="w">         </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span>
+<span class="w">            </span><span class="n">hv_0</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">hv_p</span>
+<span class="w">            </span><span class="n">zi_0</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">zi_p</span>
+<span class="w">            </span><span class="n">num_b</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">num_t</span>
+<span class="w">            </span><span class="n">dz_b</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dz_t</span>
+<span class="w">            </span><span class="n">cut_b</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cut_t</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">k</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               call </span><span class="n">vdiff_face_layer</span><span class="p">(</span><span class="n">h_layer</span><span class="p">(</span><span class="n">i_left</span><span class="p">,</span><span class="w"> </span><span class="n">j_below</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="n">h_layer</span><span class="p">(</span><span class="n">i_right</span><span class="p">,</span><span class="w"> </span><span class="n">j_above</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                     </span><span class="n">u_face</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="n">k</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">kb</span><span class="p">,</span><span class="w"> </span><span class="n">hvel_mom6</span><span class="p">,</span><span class="w"> </span><span class="n">hvel_harmonic</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                     </span><span class="n">hvel_upwind</span><span class="p">,</span><span class="w"> </span><span class="n">zlevel_faces</span><span class="p">,</span><span class="w"> </span><span class="n">d_min</span><span class="p">,</span><span class="w"> </span><span class="n">i_hbbl</span><span class="p">,</span><span class="w"> </span><span class="n">zacc</span><span class="p">,</span><span class="w"> </span><span class="n">zcol_l</span><span class="p">,</span><span class="w"> </span><span class="n">zcol_r</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                     </span><span class="n">hv_p</span><span class="p">,</span><span class="w"> </span><span class="n">zi_p</span><span class="p">)</span>
+<span class="w">               </span><span class="c">! Interface k+1/2 is read by row k (alpha: bed or interior</span>
+<span class="w">               </span><span class="c">! row) and row k+1 (beta: interior or top row), so it is</span>
+<span class="w">               </span><span class="c">! needed exactly for kb_live &lt;= k &lt;= ktop.</span>
+<span class="w">               </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">k</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="n">kb_live</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">k</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="n">ktop</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="w">                  </span><span class="c">! Corner-viscosity add-on (vertex kappa-shear Kv seam):</span>
+<span class="w">                  </span><span class="c">! direct 2-point end-corner average onto this face, folded</span>
+<span class="w">                  </span><span class="c">! in BEFORE the BBL glue.</span>
+<span class="w">                  </span><span class="n">kv_cnr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">                  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">do_corner</span><span class="p">)</span><span class="w"> </span><span class="n">kv_cnr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">kv_prandtl</span><span class="o">*</span><span class="p">(</span><span class="mf">0.5_wp</span><span class="o">*</span><span class="p">(</span><span class="n">kv_corner</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                              </span><span class="n">kv_corner</span><span class="p">(</span><span class="n">i_c2</span><span class="p">,</span><span class="w"> </span><span class="n">j_c2</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)))</span>
+<span class="w">                  </span><span class="k">call </span><span class="n">vdiff_interface_coupling</span><span class="p">(</span><span class="n">hv_0</span><span class="p">,</span><span class="w"> </span><span class="n">hv_p</span><span class="p">,</span><span class="w"> </span><span class="n">zi_0</span><span class="p">,</span><span class="w"> </span><span class="n">dt</span><span class="p">,</span><span class="w"> </span><span class="n">hvel_mom6</span><span class="p">,</span><span class="w"> </span><span class="n">use_harmonic</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                </span><span class="n">bbl_glue</span><span class="p">,</span><span class="w"> </span><span class="n">kv_bbl</span><span class="p">,</span><span class="w"> </span><span class="n">kv_bbl_bg</span><span class="p">,</span><span class="w"> </span><span class="n">bbl_thick</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                </span><span class="n">zlevel_faces</span><span class="p">,</span><span class="w"> </span><span class="n">do_corner</span><span class="p">,</span><span class="w"> </span><span class="n">kv_cnr</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                </span><span class="n">kv_centre</span><span class="p">(</span><span class="n">i_left</span><span class="p">,</span><span class="w"> </span><span class="n">j_below</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                </span><span class="n">kv_centre</span><span class="p">(</span><span class="n">i_right</span><span class="p">,</span><span class="w"> </span><span class="n">j_above</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                </span><span class="n">num_t</span><span class="p">,</span><span class="w"> </span><span class="n">dz_t</span><span class="p">,</span><span class="w"> </span><span class="n">cut_t</span><span class="p">)</span>
+<span class="w">               </span><span class="k">end if</span>
+<span class="k">            end if</span>
+
+<span class="w">            </span><span class="c">! ---- Row k ----</span>
+<span class="w">            </span><span class="c">! Rows below the first live bed row (`k &lt; kb_live`: inert</span>
+<span class="w">            </span><span class="c">! `z_fixed` bed fillers) and above the first live top row</span>
+<span class="w">            </span><span class="c">! (`k &gt; ktop`: inert fillers inside an ice draft) are the</span>
+<span class="w">            </span><span class="c">! identity, `rhs = u^n`, so the sweep returns them unchanged.</span>
+<span class="w">            </span><span class="c">! The row kinds are mutually exclusive `if` blocks over an</span>
+<span class="w">            </span><span class="c">! init, not an if/else chain: gfortran 15.1 miscompiles a</span>
+<span class="w">            </span><span class="c">! `local()` scalar reassigned across the arms of an if/else</span>
+<span class="w">            </span><span class="c">! inside `do concurrent`.</span>
+<span class="w">            </span><span class="n">a_k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">            </span><span class="n">b_k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0_wp</span>
+<span class="w">            </span><span class="n">c_k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">            </span><span class="c">! Floor the face thickness at H_VANISHED before it enters the</span>
+<span class="w">            </span><span class="c">! α/β denominators: an exactly-collapsed layer (hvel = 0) with</span>
+<span class="w">            </span><span class="c">! kv &gt; 0 would otherwise make α = Inf ⇒ NaN γ.  A no-op wherever</span>
+<span class="w">            </span><span class="c">! hvel ≫ H_VANISHED.</span>
+<span class="w">            </span><span class="n">hf_k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">max</span><span class="p">(</span><span class="n">hv_0</span><span class="p">,</span><span class="w"> </span><span class="n">H_VANISHED</span><span class="p">)</span>
+<span class="w">            </span><span class="c">! Bed row `k = kb_live` (when it is not above `ktop`): no flux</span>
+<span class="w">            </span><span class="c">! below.  SINGLE-LAYER COLUMN (`kb_live = nz`): no interface</span>
+<span class="w">            </span><span class="c">! above either, so `alpha = 0` and the surface is a pure</span>
+<span class="w">            </span><span class="c">! stress-Neumann BC added below.</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">k</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">kb_live</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">k</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="n">ktop</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               </span><span class="n">alpha</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">               </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">kb_live</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                  </span><span class="n">alpha</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">num_t</span><span class="o">/</span><span class="p">(</span><span class="n">hf_k</span><span class="o">*</span><span class="n">dz_t</span><span class="p">)</span>
+<span class="w">                  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">cut_t</span><span class="p">)</span><span class="w"> </span><span class="n">alpha</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">               </span><span class="k">end if</span>
+<span class="k">               </span><span class="n">c_k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">-</span><span class="n">alpha</span>
+<span class="w">               </span><span class="n">b_k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0_wp</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">alpha</span>
+<span class="w">               </span><span class="c">! Bottom-drag stress BC (Roundabout bed = k=kb_live; MIRROR</span>
+<span class="w">               </span><span class="c">! of MOM6 k=nz).  Under `bbl_glue` the drag is MOM6's viscous</span>
+<span class="w">               </span><span class="c">! PISTON `kv_bbl/min(hvel/2, bbl_thick)` (`a_cpl(nz+1)`),</span>
+<span class="w">               </span><span class="c">! which diverges as the bed layer thins and so anchors a</span>
+<span class="w">               </span><span class="c">! grounded sliver to rest (PGF_BUG.md §9.4); it replaces the</span>
+<span class="w">               </span><span class="c">! h-independent Rayleigh fold `dt·λ_bot`, used otherwise.  A</span>
+<span class="w">               </span><span class="c">! drag is a SINK ⇒ POSITIVE diagonal add ⇒ unconditionally</span>
+<span class="w">               </span><span class="c">! stable on thin shelf bottoms.</span>
+<span class="w">               </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">bbl_glue</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                  </span><span class="n">b_k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">b_k</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">dt</span><span class="o">*</span><span class="n">kv_bbl</span><span class="o">/</span><span class="p">(</span><span class="n">hf_k</span><span class="o">*</span><span class="p">(</span><span class="nb">min</span><span class="p">(</span><span class="mf">0.5_wp</span><span class="o">*</span><span class="n">hv_0</span><span class="p">,</span><span class="w"> </span><span class="n">bbl_thick</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">EPS_HVEL</span><span class="p">))</span>
+<span class="w">               </span><span class="k">end if</span>
+<span class="k">               if</span><span class="w"> </span><span class="p">(</span><span class="n">do_drag</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="p">.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">bbl_glue</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                  </span><span class="n">b_k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">b_k</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">dt</span><span class="o">*</span><span class="n">lambda_bot</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span>
+<span class="w">               </span><span class="k">end if</span>
+<span class="k">            end if</span>
+<span class="w">            </span><span class="c">! Top row `k = ktop` above the bed row: no flux above.</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">k</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">ktop</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">k</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">kb_live</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               </span><span class="n">beta</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">num_b</span><span class="o">/</span><span class="p">(</span><span class="n">hf_k</span><span class="o">*</span><span class="n">dz_b</span><span class="p">)</span>
+<span class="w">               </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">cut_b</span><span class="p">)</span><span class="w"> </span><span class="n">beta</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">               </span><span class="n">a_k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">-</span><span class="n">beta</span>
+<span class="w">               </span><span class="n">b_k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0_wp</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">beta</span>
+<span class="w">            </span><span class="k">end if</span>
+<span class="w">            </span><span class="c">! Interior rows.</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">k</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">kb_live</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">k</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">ktop</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               </span><span class="n">beta</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">num_b</span><span class="o">/</span><span class="p">(</span><span class="n">hf_k</span><span class="o">*</span><span class="n">dz_b</span><span class="p">)</span>
+<span class="w">               </span><span class="n">alpha</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">num_t</span><span class="o">/</span><span class="p">(</span><span class="n">hf_k</span><span class="o">*</span><span class="n">dz_t</span><span class="p">)</span>
+<span class="w">               </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">cut_b</span><span class="p">)</span><span class="w"> </span><span class="n">beta</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">               </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">cut_t</span><span class="p">)</span><span class="w"> </span><span class="n">alpha</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">               </span><span class="n">a_k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">-</span><span class="n">beta</span>
+<span class="w">               </span><span class="n">c_k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">-</span><span class="n">alpha</span>
+<span class="w">               </span><span class="n">b_k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0_wp</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">alpha</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">beta</span>
+<span class="w">            </span><span class="k">end if</span>
+
+<span class="k">            </span><span class="n">r_k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">u_face</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">k</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">ktop</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="w">               </span><span class="c">! Ice-shelf top-drag stress BC (the MIRROR of the bed row's</span>
+<span class="w">               </span><span class="c">! `dt·λ_bot` fold).  λ_top is already cover- and wet-masked,</span>
+<span class="w">               </span><span class="c">! so an OPEN face adds an exact zero.  On a single-live-layer</span>
+<span class="w">               </span><span class="c">! face this row is also the bed row and carries the bottom</span>
+<span class="w">               </span><span class="c">! drag, the top drag and the wind together.</span>
+<span class="w">               </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">do_top</span><span class="p">)</span><span class="w"> </span><span class="n">b_k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">b_k</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">dt</span><span class="o">*</span><span class="n">lambda_top</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span>
+<span class="w">               </span><span class="c">! Surface wind-stress Neumann BC (MIRROR of MOM6 k=1): the</span>
+<span class="w">               </span><span class="c">! kinematic stress τ/ρ₀ is a RHS source, pre-normalized by</span>
+<span class="w">               </span><span class="c">! the face thickness, so with no interior coupling it reduces</span>
+<span class="w">               </span><span class="c">! EXACTLY to the explicit `du = dt·τ/(ρ₀·h_top)`.  `tau_face`</span>
+<span class="w">               </span><span class="c">! is masked by the face `min` of the two cells' wet mask (no</span>
+<span class="w">               </span><span class="c">! stress at a land face) and by `(1 − cover_face)` under an</span>
+<span class="w">               </span><span class="c">! ice shelf.  The cover factor is belt and braces — P2c</span>
+<span class="w">               </span><span class="c">! already zeroes `tau` on every covered face at its source</span>
+<span class="w">               </span><span class="c">! (`ocean_surface_stress_apply_cover`, face-for-face the same</span>
+<span class="w">               </span><span class="c">! OR rule as `top_drag_fill_face_cover_impl`) — kept so the</span>
+<span class="w">               </span><span class="c">! fold stays correct STANDALONE against a future forcing path</span>
+<span class="w">               </span><span class="c">! that writes `tau` after the configure-time mask.</span>
+<span class="w">               </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">do_stress</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                  </span><span class="n">wind_open</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0_wp</span>
+<span class="w">                  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">do_top</span><span class="p">)</span><span class="w"> </span><span class="n">wind_open</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0_wp</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">cover_face</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span>
+<span class="w">                  </span><span class="n">r_k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">r_k</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">dt</span><span class="o">*</span><span class="n">tau_face</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="o">*</span><span class="n">wind_open</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                        </span><span class="o">*</span><span class="nb">min</span><span class="p">(</span><span class="n">wet_cell</span><span class="p">(</span><span class="n">i_left</span><span class="p">,</span><span class="w"> </span><span class="n">j_below</span><span class="p">),</span><span class="w"> </span><span class="n">wet_cell</span><span class="p">(</span><span class="n">i_right</span><span class="p">,</span><span class="w"> </span><span class="n">j_above</span><span class="p">))</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                        </span><span class="o">*</span><span class="n">inv_rho0</span><span class="o">/</span><span class="nb">max</span><span class="p">(</span><span class="n">hf_k</span><span class="p">,</span><span class="w"> </span><span class="n">STRESS_H_MIN</span><span class="p">)</span>
+<span class="w">               </span><span class="k">end if</span>
+<span class="k">            end if</span>
+
+<span class="w">            </span><span class="c">! ---- Thomas forward step ----</span>
+<span class="w">            </span><span class="c">! remnant-only mode (`solve_momentum = .false.`) skips the d'</span>
+<span class="w">            </span><span class="c">! leg; c' is always formed (the remnant back-substitution reads</span>
+<span class="w">            </span><span class="c">! it).  The viscous remnant γ (`do_remnant`) solves the SAME</span>
+<span class="w">            </span><span class="c">! operator with RHS ≡ 1 — Roundabout's rows are pre-normalized</span>
+<span class="w">            </span><span class="c">! by h_k, so the unit vector, NOT MOM6's h_u(k) — and shares the</span>
+<span class="w">            </span><span class="c">! denominator, so γ cannot drift from the operator actually</span>
+<span class="w">            </span><span class="c">! solved for momentum.</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">k</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               </span><span class="n">cp</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">c_k</span><span class="o">/</span><span class="n">b_k</span>
+<span class="w">               </span><span class="n">dp</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">r_k</span><span class="o">/</span><span class="n">b_k</span>
+<span class="w">               </span><span class="n">gp</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0_wp</span><span class="o">/</span><span class="n">b_k</span>
+<span class="w">            </span><span class="k">end if</span>
+<span class="k">            if</span><span class="w"> </span><span class="p">(</span><span class="n">k</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               </span><span class="n">denom</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">b_k</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">a_k</span><span class="o">*</span><span class="n">cp_prev</span>
+<span class="w">               </span><span class="n">cp</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">c_k</span><span class="o">/</span><span class="n">denom</span>
+<span class="w">               </span><span class="n">dp</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">r_k</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">a_k</span><span class="o">*</span><span class="n">dp_prev</span><span class="p">)</span><span class="o">/</span><span class="n">denom</span>
+<span class="w">               </span><span class="n">gp</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="mf">1.0_wp</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">a_k</span><span class="o">*</span><span class="n">gp_prev</span><span class="p">)</span><span class="o">/</span><span class="n">denom</span>
+<span class="w">            </span><span class="k">end if</span>
+<span class="k">            </span><span class="n">c_diag</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cp</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">solve_momentum</span><span class="p">)</span><span class="w"> </span><span class="n">rhs</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dp</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">do_remnant</span><span class="p">)</span><span class="w"> </span><span class="n">visc_rem_out</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">gp</span>
+<span class="w">            </span><span class="n">cp_prev</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cp</span>
+<span class="w">            </span><span class="n">dp_prev</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dp</span>
+<span class="w">            </span><span class="n">gp_prev</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">gp</span>
+<span class="w">         </span><span class="k">end do</span>
+
+<span class="w">         </span><span class="c">! ---- Back-substitution: momentum into u_face, γ into</span>
+<span class="w">         </span><span class="c">! visc_rem_out, in one sweep (c' read once).  γ is clamped to</span>
+<span class="w">         </span><span class="c">! `min(γ, 1)` as each element is finalized (MOM6 clamps at</span>
+<span class="w">         </span><span class="c">! consumption; the maximum principle bounds γ to (0, 1], so this is</span>
+<span class="w">         </span><span class="c">! cheap FP insurance). ----</span>
+<span class="w">         </span><span class="n">u_next</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dp_prev</span>
+<span class="w">         </span><span class="n">g_next</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">min</span><span class="p">(</span><span class="n">gp_prev</span><span class="p">,</span><span class="w"> </span><span class="mf">1.0_wp</span><span class="p">)</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">solve_momentum</span><span class="p">)</span><span class="w"> </span><span class="n">u_face</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">u_next</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">do_remnant</span><span class="p">)</span><span class="w"> </span><span class="n">visc_rem_out</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">g_next</span>
+<span class="w">         </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nz</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="o">-</span><span class="mi">1</span>
+<span class="w">            </span><span class="n">cp</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">c_diag</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">solve_momentum</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               </span><span class="n">u_next</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">rhs</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">cp</span><span class="o">*</span><span class="n">u_next</span>
+<span class="w">               </span><span class="n">u_face</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">u_next</span>
+<span class="w">            </span><span class="k">end if</span>
+<span class="k">            if</span><span class="w"> </span><span class="p">(</span><span class="n">do_remnant</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               </span><span class="n">g_next</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">min</span><span class="p">(</span><span class="n">visc_rem_out</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">cp</span><span class="o">*</span><span class="n">g_next</span><span class="p">,</span><span class="w"> </span><span class="mf">1.0_wp</span><span class="p">)</span>
+<span class="w">               </span><span class="n">visc_rem_out</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">g_next</span>
+<span class="w">            </span><span class="k">end if</span>
+<span class="k">         end do</span>
+<span class="k">      end do</span>
+<span class="k">   end subroutine </span><span class="n">diffuse_velocity_columns_impl</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-11-13 23:21 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

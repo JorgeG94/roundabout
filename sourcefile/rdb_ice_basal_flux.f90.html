@@ -1,0 +1,933 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>rdb_ice_basal_flux.F90 &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>rdb_ice_basal_flux.F90
+      <small>Source File</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.1% of total for source files.">76 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ice_basal_flux.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+            <li class="breadcrumb-item active" aria-current="page">rdb_ice_basal_flux.F90</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+        <div id="sidebar">
+      <h3>Contents</h3>
+  
+  
+  
+  
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#mods-0"
+         aria-expanded="false" aria-controls="mods-0">
+         <h4 class="card-header bg-primary text-white">Modules</h4>
+      </a>
+      <div id="mods-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/rdb_ice_basal_flux.html">rdb_ice_basal_flux</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../sourcefile/rdb_ice_basal_flux.f90.html#src">rdb_ice_basal_flux.F90</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    <div class="col-md-9" id='text'>
+      <p>Ocean -&gt; ice basal heat flux fb from above-freezing surface heat (PR 3c).</p>
+      <br>
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">This file depends on</h3>
+          </div>
+          <div class="card-body">
+            <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: sourcefile~~rdb_ice_basal_flux.f90~~EfferentGraph Pages: 1 -->
+<svg id="sourcefilerdb_ice_basal_fluxf90EfferentGraph" width="641pt" height="347pt"
+ viewBox="0.00 0.00 641.00 347.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="sourcefile~~rdb_ice_basal_flux.f90~~EfferentGraph" class="graph" transform="scale(0.670944 0.670944) rotate(0) translate(4 512.89)">
+<title>sourcefile~~rdb_ice_basal_flux.f90~~EfferentGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-512.89 951.37,-512.89 951.37,4 -4,4"/>
+<!-- sourcefile~rdb_ice_basal_flux.f90 -->
+<g id="sourcefile~~rdb_ice_basal_flux.f90~~EfferentGraph_node1" class="node">
+<title>sourcefile~rdb_ice_basal_flux.f90</title>
+<polygon fill="none" stroke="black" points="947.37,-261.27 815.85,-261.27 815.85,-237 947.37,-237 947.37,-261.27"/>
+<text xml:space="preserve" text-anchor="middle" x="881.61" y="-245.53" font-family="Helvetica,sans-Serif" font-size="10.50">rdb_ice_basal_flux.F90</text>
+</g>
+<!-- sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ice_basal_flux.f90~~EfferentGraph_node2" class="node">
+<title>sourcefile~rdb_constants.f90</title>
+<g id="a_sourcefile~~rdb_ice_basal_flux.f90~~EfferentGraph_node2"><a xlink:href="../sourcefile/rdb_constants.f90.html" xlink:title="rdb_constants.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="108.27,-262.27 0,-262.27 0,-238 108.27,-238 108.27,-262.27"/>
+<text xml:space="preserve" text-anchor="middle" x="54.13" y="-246.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_constants.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ice_basal_flux.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ice_basal_flux.f90~~EfferentGraph_edge1" class="edge">
+<title>sourcefile~rdb_ice_basal_flux.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M707.46,-490.13C607.47,-534.5 570.29,-487.05 462.06,-471.13 418.74,-464.76 409.29,-445.04 365.8,-450.13"/>
+</g>
+<!-- sourcefile~rdb_eos.f90 -->
+<g id="sourcefile~~rdb_ice_basal_flux.f90~~EfferentGraph_node3" class="node">
+<title>sourcefile~rdb_eos.f90</title>
+<g id="a_sourcefile~~rdb_ice_basal_flux.f90~~EfferentGraph_node3"><a xlink:href="../sourcefile/rdb_eos.f90.html" xlink:title="rdb_eos.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="746.47,-370.27 670.45,-370.27 670.45,-346 746.47,-346 746.47,-370.27"/>
+<text xml:space="preserve" text-anchor="middle" x="708.46" y="-354.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_eos.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ice_basal_flux.f90&#45;&gt;sourcefile~rdb_eos.f90 -->
+<g id="sourcefile~~rdb_ice_basal_flux.f90~~EfferentGraph_edge2" class="edge">
+<title>sourcefile~rdb_ice_basal_flux.f90&#45;&gt;sourcefile~rdb_eos.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M860.98,-261.64C831.01,-280.72 773.67,-317.25 738.76,-339.47"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="736.96,-336.47 730.41,-344.8 740.72,-342.38 736.96,-336.47"/>
+</g>
+<!-- sourcefile~rdb_grid.f90 -->
+<g id="sourcefile~~rdb_ice_basal_flux.f90~~EfferentGraph_node4" class="node">
+<title>sourcefile~rdb_grid.f90</title>
+<g id="a_sourcefile~~rdb_ice_basal_flux.f90~~EfferentGraph_node4"><a xlink:href="../sourcefile/rdb_grid.f90.html" xlink:title="rdb_grid.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="403.93,-184.27 325.66,-184.27 325.66,-160 403.93,-160 403.93,-184.27"/>
+<text xml:space="preserve" text-anchor="middle" x="364.8" y="-168.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_grid.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ice_basal_flux.f90&#45;&gt;sourcefile~rdb_grid.f90 -->
+<g id="sourcefile~~rdb_ice_basal_flux.f90~~EfferentGraph_edge3" class="edge">
+<title>sourcefile~rdb_ice_basal_flux.f90&#45;&gt;sourcefile~rdb_grid.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M860.62,-236.62C840.88,-224.91 809.43,-207.92 779.85,-199.13 673.77,-167.63 643.22,-170.51 532.57,-170.13"/>
+</g>
+<!-- sourcefile~rdb_ice_column.f90 -->
+<g id="sourcefile~~rdb_ice_basal_flux.f90~~EfferentGraph_node5" class="node">
+<title>sourcefile~rdb_ice_column.f90</title>
+<g id="a_sourcefile~~rdb_ice_basal_flux.f90~~EfferentGraph_node5"><a xlink:href="../sourcefile/rdb_ice_column.f90.html" xlink:title="rdb_ice_column.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="590.58,-340.27 472.56,-340.27 472.56,-316 590.58,-316 590.58,-340.27"/>
+<text xml:space="preserve" text-anchor="middle" x="531.57" y="-324.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_column.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ice_basal_flux.f90&#45;&gt;sourcefile~rdb_ice_column.f90 -->
+<g id="sourcefile~~rdb_ice_basal_flux.f90~~EfferentGraph_edge4" class="edge">
+<title>sourcefile~rdb_ice_basal_flux.f90&#45;&gt;sourcefile~rdb_ice_column.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M825.08,-261.74C763.67,-275.68 664.76,-298.13 599.22,-313.01"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="598.65,-309.55 589.67,-315.17 600.2,-316.37 598.65,-309.55"/>
+</g>
+<!-- sourcefile~rdb_ice_state.f90 -->
+<g id="sourcefile~~rdb_ice_basal_flux.f90~~EfferentGraph_node6" class="node">
+<title>sourcefile~rdb_ice_state.f90</title>
+<g id="a_sourcefile~~rdb_ice_basal_flux.f90~~EfferentGraph_node6"><a xlink:href="../sourcefile/rdb_ice_state.f90.html" xlink:title="rdb_ice_state.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="760.72,-232.27 656.2,-232.27 656.2,-208 760.72,-208 760.72,-232.27"/>
+<text xml:space="preserve" text-anchor="middle" x="708.46" y="-216.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_state.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ice_basal_flux.f90&#45;&gt;sourcefile~rdb_ice_state.f90 -->
+<g id="sourcefile~~rdb_ice_basal_flux.f90~~EfferentGraph_edge5" class="edge">
+<title>sourcefile~rdb_ice_basal_flux.f90&#45;&gt;sourcefile~rdb_ice_state.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M815.42,-238.09C801.26,-235.69 786.3,-233.16 772.24,-230.77"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="773.12,-227.37 762.67,-229.15 771.95,-234.27 773.12,-227.37"/>
+</g>
+<!-- sourcefile~rdb_multilayer_state.f90 -->
+<g id="sourcefile~~rdb_ice_basal_flux.f90~~EfferentGraph_node7" class="node">
+<title>sourcefile~rdb_multilayer_state.f90</title>
+<g id="a_sourcefile~~rdb_ice_basal_flux.f90~~EfferentGraph_node7"><a xlink:href="../sourcefile/rdb_multilayer_state.f90.html" xlink:title="rdb_multilayer_state.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="779.85,-142.27 637.08,-142.27 637.08,-118 779.85,-118 779.85,-142.27"/>
+<text xml:space="preserve" text-anchor="middle" x="708.46" y="-126.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_multilayer_state.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ice_basal_flux.f90&#45;&gt;sourcefile~rdb_multilayer_state.f90 -->
+<g id="sourcefile~~rdb_ice_basal_flux.f90~~EfferentGraph_edge6" class="edge">
+<title>sourcefile~rdb_ice_basal_flux.f90&#45;&gt;sourcefile~rdb_multilayer_state.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M870.05,-236.63C852.91,-217.05 817.2,-179.02 779.85,-156.13 774.3,-152.73 768.23,-149.67 762.07,-146.94"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="763.64,-143.81 753.06,-143.24 760.98,-150.28 763.64,-143.81"/>
+</g>
+<!-- sourcefile~rdb_teos10_convert.f90 -->
+<g id="sourcefile~~rdb_ice_basal_flux.f90~~EfferentGraph_node8" class="node">
+<title>sourcefile~rdb_teos10_convert.f90</title>
+<g id="a_sourcefile~~rdb_ice_basal_flux.f90~~EfferentGraph_node8"><a xlink:href="../sourcefile/rdb_teos10_convert.f90.html" xlink:title="rdb_teos10_convert.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="601.08,-462.27 462.06,-462.27 462.06,-438 601.08,-438 601.08,-462.27"/>
+<text xml:space="preserve" text-anchor="middle" x="531.57" y="-446.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_teos10_convert.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ice_basal_flux.f90&#45;&gt;sourcefile~rdb_teos10_convert.f90 -->
+<g id="sourcefile~~rdb_ice_basal_flux.f90~~EfferentGraph_edge7" class="edge">
+<title>sourcefile~rdb_ice_basal_flux.f90&#45;&gt;sourcefile~rdb_teos10_convert.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M876.8,-261.66C862.97,-304.51 810.78,-445.18 709.46,-490.13"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M707.46,-490.13C684.37,-500.38 620.29,-481.57 576.46,-466.42"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="577.82,-463.19 567.22,-463.17 575.49,-469.79 577.82,-463.19"/>
+</g>
+<!-- sourcefile~rdb_eos.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ice_basal_flux.f90~~EfferentGraph_edge8" class="edge">
+<title>sourcefile~rdb_eos.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#ffda00" stroke-dasharray="5,2" d="M670.05,-357.22C620.81,-357.19 532.31,-361.27 462.06,-387.13 438.07,-395.97 391.18,-447.06 365.8,-450.13"/>
+</g>
+<!-- sourcefile~rdb_eos.f90&#45;&gt;sourcefile~rdb_grid.f90 -->
+<g id="sourcefile~~rdb_ice_basal_flux.f90~~EfferentGraph_edge10" class="edge">
+<title>sourcefile~rdb_eos.f90&#45;&gt;sourcefile~rdb_grid.f90</title>
+<path fill="none" stroke="#ffda00" stroke-dasharray="5,2" d="M681.7,-345.57C636.64,-323.43 540.82,-275.57 462.06,-231.13 439.2,-218.23 413.91,-202.68 394.99,-190.79"/>
+<polygon fill="#ffda00" stroke="#ffda00" points="397.06,-187.96 386.74,-185.57 393.32,-193.87 397.06,-187.96"/>
+</g>
+<!-- sourcefile~rdb_eos.f90&#45;&gt;sourcefile~rdb_teos10_convert.f90 -->
+<g id="sourcefile~~rdb_ice_basal_flux.f90~~EfferentGraph_edge12" class="edge">
+<title>sourcefile~rdb_eos.f90&#45;&gt;sourcefile~rdb_teos10_convert.f90</title>
+<path fill="none" stroke="#ffda00" stroke-dasharray="5,2" d="M691.77,-370.76C671.75,-386.34 635.59,-412.76 601.08,-429.13 597.76,-430.71 594.3,-432.2 590.77,-433.6"/>
+<polygon fill="#ffda00" stroke="#ffda00" points="589.65,-430.29 581.48,-437.03 592.07,-436.85 589.65,-430.29"/>
+</g>
+<!-- sourcefile~rdb_error_ring.f90 -->
+<g id="sourcefile~~rdb_ice_basal_flux.f90~~EfferentGraph_node10" class="node">
+<title>sourcefile~rdb_error_ring.f90</title>
+<g id="a_sourcefile~~rdb_ice_basal_flux.f90~~EfferentGraph_node10"><a xlink:href="../sourcefile/rdb_error_ring.f90.html" xlink:title="rdb_error_ring.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="586.45,-222.27 476.68,-222.27 476.68,-198 586.45,-198 586.45,-222.27"/>
+<text xml:space="preserve" text-anchor="middle" x="531.57" y="-206.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_error_ring.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_eos.f90&#45;&gt;sourcefile~rdb_error_ring.f90 -->
+<g id="sourcefile~~rdb_ice_basal_flux.f90~~EfferentGraph_edge9" class="edge">
+<title>sourcefile~rdb_eos.f90&#45;&gt;sourcefile~rdb_error_ring.f90</title>
+<path fill="none" stroke="#ffda00" stroke-dasharray="5,2" d="M692.55,-345.52C662.09,-319.74 592.52,-260.87 555.98,-229.94"/>
+<polygon fill="#ffda00" stroke="#ffda00" points="558.49,-227.49 548.6,-223.7 553.97,-232.83 558.49,-227.49"/>
+</g>
+<!-- sourcefile~rdb_ocean_status.f90 -->
+<g id="sourcefile~~rdb_ice_basal_flux.f90~~EfferentGraph_node15" class="node">
+<title>sourcefile~rdb_ocean_status.f90</title>
+<g id="a_sourcefile~~rdb_ice_basal_flux.f90~~EfferentGraph_node15"><a xlink:href="../sourcefile/rdb_ocean_status.f90.html" xlink:title="rdb_ocean_status.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="595.08,-420.27 468.06,-420.27 468.06,-396 595.08,-396 595.08,-420.27"/>
+<text xml:space="preserve" text-anchor="middle" x="531.57" y="-404.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_status.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_eos.f90&#45;&gt;sourcefile~rdb_ocean_status.f90 -->
+<g id="sourcefile~~rdb_ice_basal_flux.f90~~EfferentGraph_edge11" class="edge">
+<title>sourcefile~rdb_eos.f90&#45;&gt;sourcefile~rdb_ocean_status.f90</title>
+<path fill="none" stroke="#ffda00" stroke-dasharray="5,2" d="M670.37,-368.74C646.32,-375.62 614.54,-384.7 587.57,-392.41"/>
+<polygon fill="#ffda00" stroke="#ffda00" points="586.83,-388.98 578.18,-395.1 588.76,-395.71 586.83,-388.98"/>
+</g>
+<!-- sourcefile~rdb_grid.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ice_basal_flux.f90~~EfferentGraph_edge13" class="edge">
+<title>sourcefile~rdb_grid.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#48ff00" stroke-dasharray="5,2" d="M331.31,-159.56C292.49,-145.29 229.89,-124.86 206.9,-132.13"/>
+</g>
+<!-- sourcefile~rdb_ice_column.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ice_basal_flux.f90~~EfferentGraph_edge14" class="edge">
+<title>sourcefile~rdb_ice_column.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#00ff91" stroke-dasharray="5,2" d="M484.83,-340.75C476.73,-344.26 468.76,-348.66 462.06,-354.13 438.86,-373.09 447.13,-389.83 426.06,-411.13 403.63,-433.82 397.47,-446.3 365.8,-450.13"/>
+<path fill="none" stroke="#00ff91" stroke-dasharray="5,2" d="M363.8,-450.13C294.57,-458.52 273.95,-469.3 206.9,-450.13"/>
+</g>
+<!-- sourcefile~rdb_ice_enthalpy.f90 -->
+<g id="sourcefile~~rdb_ice_basal_flux.f90~~EfferentGraph_node11" class="node">
+<title>sourcefile~rdb_ice_enthalpy.f90</title>
+<g id="a_sourcefile~~rdb_ice_basal_flux.f90~~EfferentGraph_node11"><a xlink:href="../sourcefile/rdb_ice_enthalpy.f90.html" xlink:title="rdb_ice_enthalpy.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="267.54,-262.27 144.27,-262.27 144.27,-238 267.54,-238 267.54,-262.27"/>
+<text xml:space="preserve" text-anchor="middle" x="205.9" y="-246.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_enthalpy.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ice_column.f90&#45;&gt;sourcefile~rdb_ice_enthalpy.f90 -->
+<g id="sourcefile~~rdb_ice_basal_flux.f90~~EfferentGraph_edge15" class="edge">
+<title>sourcefile~rdb_ice_column.f90&#45;&gt;sourcefile~rdb_ice_enthalpy.f90</title>
+<path fill="none" stroke="#00ff91" stroke-dasharray="5,2" d="M478.21,-315.52C421.45,-301.84 330.86,-280.01 270.16,-265.38"/>
+<polygon fill="#00ff91" stroke="#00ff91" points="271.2,-262.03 260.66,-263.09 269.56,-268.84 271.2,-262.03"/>
+</g>
+<!-- sourcefile~rdb_ice_mass.f90 -->
+<g id="sourcefile~~rdb_ice_basal_flux.f90~~EfferentGraph_node12" class="node">
+<title>sourcefile~rdb_ice_mass.f90</title>
+<g id="a_sourcefile~~rdb_ice_basal_flux.f90~~EfferentGraph_node12"><a xlink:href="../sourcefile/rdb_ice_mass.f90.html" xlink:title="rdb_ice_mass.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="417.81,-340.27 311.79,-340.27 311.79,-316 417.81,-316 417.81,-340.27"/>
+<text xml:space="preserve" text-anchor="middle" x="364.8" y="-324.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_mass.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ice_column.f90&#45;&gt;sourcefile~rdb_ice_mass.f90 -->
+<g id="sourcefile~~rdb_ice_basal_flux.f90~~EfferentGraph_edge16" class="edge">
+<title>sourcefile~rdb_ice_column.f90&#45;&gt;sourcefile~rdb_ice_mass.f90</title>
+<path fill="none" stroke="#00ff91" stroke-dasharray="5,2" d="M472.48,-328.13C458.51,-328.13 443.53,-328.13 429.33,-328.13"/>
+<polygon fill="#00ff91" stroke="#00ff91" points="429.66,-324.64 419.66,-328.14 429.66,-331.64 429.66,-324.64"/>
+</g>
+<!-- sourcefile~rdb_ice_optics.f90 -->
+<g id="sourcefile~~rdb_ice_basal_flux.f90~~EfferentGraph_node13" class="node">
+<title>sourcefile~rdb_ice_optics.f90</title>
+<g id="a_sourcefile~~rdb_ice_basal_flux.f90~~EfferentGraph_node13"><a xlink:href="../sourcefile/rdb_ice_optics.f90.html" xlink:title="rdb_ice_optics.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="419.68,-402.27 309.91,-402.27 309.91,-378 419.68,-378 419.68,-402.27"/>
+<text xml:space="preserve" text-anchor="middle" x="364.8" y="-386.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_optics.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ice_column.f90&#45;&gt;sourcefile~rdb_ice_optics.f90 -->
+<g id="sourcefile~~rdb_ice_basal_flux.f90~~EfferentGraph_edge17" class="edge">
+<title>sourcefile~rdb_ice_column.f90&#45;&gt;sourcefile~rdb_ice_optics.f90</title>
+<path fill="none" stroke="#00ff91" stroke-dasharray="5,2" d="M497.23,-340.68C472.07,-350.15 437.33,-363.22 409.88,-373.55"/>
+<polygon fill="#00ff91" stroke="#00ff91" points="408.92,-370.17 400.79,-376.97 411.39,-376.72 408.92,-370.17"/>
+</g>
+<!-- sourcefile~rdb_ice_state.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ice_basal_flux.f90~~EfferentGraph_edge18" class="edge">
+<title>sourcefile~rdb_ice_state.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#0091ff" stroke-dasharray="5,2" d="M657.58,-232.71C590.71,-247.72 468.51,-268.59 365.8,-250.13"/>
+<path fill="none" stroke="#0091ff" stroke-dasharray="5,2" d="M363.8,-250.13C277.94,-234.59 289.94,-105.33 206.9,-132.13"/>
+</g>
+<!-- sourcefile~rdb_ice_state.f90&#45;&gt;sourcefile~rdb_grid.f90 -->
+<g id="sourcefile~~rdb_ice_basal_flux.f90~~EfferentGraph_edge19" class="edge">
+<title>sourcefile~rdb_ice_state.f90&#45;&gt;sourcefile~rdb_grid.f90</title>
+<path fill="none" stroke="#0091ff" stroke-dasharray="5,2" d="M680.88,-207.58C647.17,-192.83 586.89,-170.32 532.57,-170.13"/>
+</g>
+<!-- sourcefile~rdb_ice_state.f90&#45;&gt;sourcefile~rdb_ice_column.f90 -->
+<g id="sourcefile~~rdb_ice_basal_flux.f90~~EfferentGraph_edge20" class="edge">
+<title>sourcefile~rdb_ice_state.f90&#45;&gt;sourcefile~rdb_ice_column.f90</title>
+<path fill="none" stroke="#0091ff" stroke-dasharray="5,2" d="M687.06,-232.74C656.26,-251.76 597.71,-287.91 562.21,-309.83"/>
+<polygon fill="#0091ff" stroke="#0091ff" points="560.8,-306.59 554.13,-314.82 564.48,-312.54 560.8,-306.59"/>
+</g>
+<!-- sourcefile~rdb_ice_state.f90&#45;&gt;sourcefile~rdb_ice_enthalpy.f90 -->
+<g id="sourcefile~~rdb_ice_basal_flux.f90~~EfferentGraph_edge21" class="edge">
+<title>sourcefile~rdb_ice_state.f90&#45;&gt;sourcefile~rdb_ice_enthalpy.f90</title>
+<path fill="none" stroke="#0091ff" stroke-dasharray="5,2" d="M363.8,-250.13C336.35,-245.2 305.77,-244.22 278.94,-244.81"/>
+<polygon fill="#0091ff" stroke="#0091ff" points="279.1,-241.3 269.21,-245.1 279.31,-248.3 279.1,-241.3"/>
+</g>
+<!-- sourcefile~rdb_mem_report.f90 -->
+<g id="sourcefile~~rdb_ice_basal_flux.f90~~EfferentGraph_node14" class="node">
+<title>sourcefile~rdb_mem_report.f90</title>
+<g id="a_sourcefile~~rdb_ice_basal_flux.f90~~EfferentGraph_node14"><a xlink:href="../sourcefile/rdb_mem_report.f90.html" xlink:title="rdb_mem_report.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="426.06,-104.27 303.54,-104.27 303.54,-80 426.06,-80 426.06,-104.27"/>
+<text xml:space="preserve" text-anchor="middle" x="364.8" y="-88.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_mem_report.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ice_state.f90&#45;&gt;sourcefile~rdb_mem_report.f90 -->
+<g id="sourcefile~~rdb_ice_basal_flux.f90~~EfferentGraph_edge22" class="edge">
+<title>sourcefile~rdb_ice_state.f90&#45;&gt;sourcefile~rdb_mem_report.f90</title>
+<path fill="none" stroke="#0091ff" stroke-dasharray="5,2" d="M694.16,-207.75C679.74,-194.18 656.25,-171.63 637.08,-151.13 620.29,-133.18 623.03,-120.21 601.08,-109.13 550.73,-83.74 486.46,-80.74 437.83,-83.4"/>
+<polygon fill="#0091ff" stroke="#0091ff" points="437.71,-79.9 427.96,-84.04 438.16,-86.89 437.71,-79.9"/>
+</g>
+<!-- sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ice_basal_flux.f90~~EfferentGraph_edge23" class="edge">
+<title>sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#4800ff" stroke-dasharray="5,2" d="M688.61,-117.56C657.65,-97.9 593.4,-61.2 532.57,-52.13"/>
+<path fill="none" stroke="#4800ff" stroke-dasharray="5,2" d="M530.57,-52.13C430.42,-37.21 399.55,-38.97 303.54,-71.13 255.38,-87.27 255.24,-116.53 206.9,-132.13"/>
+<path fill="none" stroke="#4800ff" stroke-dasharray="5,2" d="M204.9,-132.13C148.57,-150.12 97.92,-200.48 72.46,-229.26"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="69.98,-226.78 66.09,-236.63 75.27,-231.35 69.98,-226.78"/>
+</g>
+<!-- sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_grid.f90 -->
+<g id="sourcefile~~rdb_ice_basal_flux.f90~~EfferentGraph_edge26" class="edge">
+<title>sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_grid.f90</title>
+<path fill="none" stroke="#4800ff" stroke-dasharray="5,2" d="M673.48,-142.75C638.61,-154.54 582.56,-170.31 532.57,-170.13"/>
+<path fill="none" stroke="#4800ff" stroke-dasharray="5,2" d="M530.57,-170.13C492.1,-170 448.57,-170.56 415.92,-171.12"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="415.87,-167.62 405.93,-171.3 415.99,-174.62 415.87,-167.62"/>
+</g>
+<!-- sourcefile~rdb_efp.f90 -->
+<g id="sourcefile~~rdb_ice_basal_flux.f90~~EfferentGraph_node9" class="node">
+<title>sourcefile~rdb_efp.f90</title>
+<g id="a_sourcefile~~rdb_ice_basal_flux.f90~~EfferentGraph_node9"><a xlink:href="../sourcefile/rdb_efp.f90.html" xlink:title="rdb_efp.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="568.83,-24.27 494.31,-24.27 494.31,0 568.83,0 568.83,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="531.57" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_efp.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_efp.f90 -->
+<g id="sourcefile~~rdb_ice_basal_flux.f90~~EfferentGraph_edge24" class="edge">
+<title>sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_efp.f90</title>
+<path fill="none" stroke="#4800ff" stroke-dasharray="5,2" d="M695.81,-117.54C677.33,-98.2 639.46,-61.03 601.08,-38.13 594.47,-34.19 587.17,-30.66 579.86,-27.57"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="581.22,-24.35 570.63,-23.91 578.64,-30.85 581.22,-24.35"/>
+</g>
+<!-- sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_error_ring.f90 -->
+<g id="sourcefile~~rdb_ice_basal_flux.f90~~EfferentGraph_edge25" class="edge">
+<title>sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_error_ring.f90</title>
+<path fill="none" stroke="#4800ff" stroke-dasharray="5,2" d="M684.57,-142.66C663.25,-154.1 630.44,-171.16 601.08,-184.13 593.8,-187.35 585.99,-190.55 578.35,-193.54"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="577.21,-190.23 569.13,-197.08 579.72,-196.76 577.21,-190.23"/>
+</g>
+<!-- sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_mem_report.f90 -->
+<g id="sourcefile~~rdb_ice_basal_flux.f90~~EfferentGraph_edge27" class="edge">
+<title>sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_mem_report.f90</title>
+<path fill="none" stroke="#4800ff" stroke-dasharray="5,2" d="M530.57,-52.13C508.41,-48.83 454.37,-63.59 414.18,-76.11"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="413.17,-72.76 404.69,-79.11 415.28,-79.43 413.17,-72.76"/>
+</g>
+<!-- sourcefile~rdb_tracer.f90 -->
+<g id="sourcefile~~rdb_ice_basal_flux.f90~~EfferentGraph_node16" class="node">
+<title>sourcefile~rdb_tracer.f90</title>
+<g id="a_sourcefile~~rdb_ice_basal_flux.f90~~EfferentGraph_node16"><a xlink:href="../sourcefile/rdb_tracer.f90.html" xlink:title="rdb_tracer.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="575.58,-142.27 487.56,-142.27 487.56,-118 575.58,-118 575.58,-142.27"/>
+<text xml:space="preserve" text-anchor="middle" x="531.57" y="-126.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_tracer.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_tracer.f90 -->
+<g id="sourcefile~~rdb_ice_basal_flux.f90~~EfferentGraph_edge28" class="edge">
+<title>sourcefile~rdb_multilayer_state.f90&#45;&gt;sourcefile~rdb_tracer.f90</title>
+<path fill="none" stroke="#4800ff" stroke-dasharray="5,2" d="M636.58,-130.13C620.05,-130.13 602.69,-130.13 587,-130.13"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="587.42,-126.64 577.42,-130.14 587.42,-133.64 587.42,-126.64"/>
+</g>
+<!-- sourcefile~rdb_teos10_convert.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ice_basal_flux.f90~~EfferentGraph_edge29" class="edge">
+<title>sourcefile~rdb_teos10_convert.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#ff00da" stroke-dasharray="5,2" d="M461.81,-446.45C432.17,-445.81 397.18,-446.33 365.8,-450.13"/>
+</g>
+<!-- sourcefile~rdb_ice_enthalpy.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ice_basal_flux.f90~~EfferentGraph_edge30" class="edge">
+<title>sourcefile~rdb_ice_enthalpy.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M143.99,-250.13C135.95,-250.13 127.69,-250.13 119.6,-250.13"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="119.82,-246.64 109.82,-250.14 119.82,-253.64 119.82,-246.64"/>
+</g>
+<!-- sourcefile~rdb_ice_mass.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ice_basal_flux.f90~~EfferentGraph_edge31" class="edge">
+<title>sourcefile~rdb_ice_mass.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#00ff3f" stroke-dasharray="5,2" d="M344.19,-340.76C332.23,-348.63 316.76,-359.14 303.54,-369.13 258.84,-402.94 260.79,-465.54 206.9,-450.13"/>
+<path fill="none" stroke="#00ff3f" stroke-dasharray="5,2" d="M204.9,-450.13C122.82,-426.67 78.42,-321.06 62.29,-273.49"/>
+<polygon fill="#00ff3f" stroke="#00ff3f" points="65.68,-272.6 59.25,-264.18 59.02,-274.77 65.68,-272.6"/>
+</g>
+<!-- sourcefile~rdb_ice_mass.f90&#45;&gt;sourcefile~rdb_ice_enthalpy.f90 -->
+<g id="sourcefile~~rdb_ice_basal_flux.f90~~EfferentGraph_edge32" class="edge">
+<title>sourcefile~rdb_ice_mass.f90&#45;&gt;sourcefile~rdb_ice_enthalpy.f90</title>
+<path fill="none" stroke="#00ff3f" stroke-dasharray="5,2" d="M333.22,-315.55C323.64,-311.44 313.08,-306.75 303.54,-302.13 281.65,-291.55 257.56,-278.59 238.91,-268.25"/>
+<polygon fill="#00ff3f" stroke="#00ff3f" points="240.65,-265.22 230.21,-263.4 237.24,-271.33 240.65,-265.22"/>
+</g>
+<!-- sourcefile~rdb_ice_optics.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ice_basal_flux.f90~~EfferentGraph_edge33" class="edge">
+<title>sourcefile~rdb_ice_optics.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M348.95,-402.74C321.44,-424.51 260.46,-465.45 206.9,-450.13"/>
+</g>
+<!-- sourcefile~rdb_ice_optics.f90&#45;&gt;sourcefile~rdb_ice_enthalpy.f90 -->
+<g id="sourcefile~~rdb_ice_basal_flux.f90~~EfferentGraph_edge34" class="edge">
+<title>sourcefile~rdb_ice_optics.f90&#45;&gt;sourcefile~rdb_ice_enthalpy.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M343.26,-377.62C331.25,-369.95 316.05,-359.62 303.54,-349.13 274.03,-324.41 243.59,-291.84 224.96,-270.94"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="227.74,-268.8 218.5,-263.62 222.49,-273.44 227.74,-268.8"/>
+</g>
+<!-- sourcefile~rdb_mem_report.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ice_basal_flux.f90~~EfferentGraph_edge35" class="edge">
+<title>sourcefile~rdb_mem_report.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#003fff" stroke-dasharray="5,2" d="M308.18,-104.68C277.99,-111.9 240.14,-121.62 206.9,-132.13"/>
+</g>
+<!-- sourcefile~rdb_tracer.f90&#45;&gt;sourcefile~rdb_constants.f90 -->
+<g id="sourcefile~~rdb_ice_basal_flux.f90~~EfferentGraph_edge36" class="edge">
+<title>sourcefile~rdb_tracer.f90&#45;&gt;sourcefile~rdb_constants.f90</title>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M487.27,-127.25C411.44,-122.73 257.8,-116.03 206.9,-132.13"/>
+</g>
+<!-- sourcefile~rdb_tracer.f90&#45;&gt;sourcefile~rdb_grid.f90 -->
+<g id="sourcefile~~rdb_ice_basal_flux.f90~~EfferentGraph_edge37" class="edge">
+<title>sourcefile~rdb_tracer.f90&#45;&gt;sourcefile~rdb_grid.f90</title>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M487.28,-141.17C465.15,-146.81 438.13,-153.7 415.2,-159.54"/>
+<polygon fill="#ff00bf" stroke="#ff00bf" points="414.6,-156.08 405.77,-161.95 416.33,-162.87 414.6,-156.08"/>
+</g>
+<!-- sourcefile~rdb_tracer.f90&#45;&gt;sourcefile~rdb_mem_report.f90 -->
+<g id="sourcefile~~rdb_ice_basal_flux.f90~~EfferentGraph_edge38" class="edge">
+<title>sourcefile~rdb_tracer.f90&#45;&gt;sourcefile~rdb_mem_report.f90</title>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M487.28,-120.15C470.22,-116.22 450.26,-111.61 431.49,-107.29"/>
+<polygon fill="#ff00bf" stroke="#ff00bf" points="432.32,-103.88 421.79,-105.05 430.74,-110.7 432.32,-103.88"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var pansourcefilerdb_ice_basal_fluxf90EfferentGraph = svgPanZoom('#sourcefilerdb_ice_basal_fluxf90EfferentGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#EfferentGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="EfferentGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="200pt" height="32pt"
+ viewBox="0.00 0.00 200.00 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 195.52,-28.27 195.52,4 -4,4"/>
+<!-- Source File -->
+<g id="node1" class="node">
+<title>Source File</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Source File</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node2" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="191.52,-24.27 87.75,-24.27 87.75,0 191.52,0 191.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="139.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a file to a file which it depends on. A file
+is dependent upon another if the latter must be compiled before the former
+can be.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">Files dependent on this one</h3>
+          </div>
+          <div class="card-body">
+            <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: sourcefile~~rdb_ice_basal_flux.f90~~AfferentGraph Pages: 1 -->
+<svg id="sourcefilerdb_ice_basal_fluxf90AfferentGraph" width="586pt" height="112pt"
+ viewBox="0.00 0.00 586.00 112.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="sourcefile~~rdb_ice_basal_flux.f90~~AfferentGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 108.27)">
+<title>sourcefile~~rdb_ice_basal_flux.f90~~AfferentGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-108.27 581.83,-108.27 581.83,4 -4,4"/>
+<!-- sourcefile~rdb_ice_basal_flux.f90 -->
+<g id="sourcefile~~rdb_ice_basal_flux.f90~~AfferentGraph_node1" class="node">
+<title>sourcefile~rdb_ice_basal_flux.f90</title>
+<polygon fill="none" stroke="black" points="131.52,-64.27 0,-64.27 0,-40 131.52,-40 131.52,-64.27"/>
+<text xml:space="preserve" text-anchor="middle" x="65.76" y="-48.53" font-family="Helvetica,sans-Serif" font-size="10.50">rdb_ice_basal_flux.F90</text>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90 -->
+<g id="sourcefile~~rdb_ice_basal_flux.f90~~AfferentGraph_node2" class="node">
+<title>sourcefile~rdb_ocean_engine.f90</title>
+<g id="a_sourcefile~~rdb_ice_basal_flux.f90~~AfferentGraph_node2"><a xlink:href="../sourcefile/rdb_ocean_engine.f90.html" xlink:title="rdb_ocean_engine.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="299.79,-64.27 167.52,-64.27 167.52,-40 299.79,-40 299.79,-64.27"/>
+<text xml:space="preserve" text-anchor="middle" x="233.66" y="-48.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_engine.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_basal_flux.f90 -->
+<g id="sourcefile~~rdb_ice_basal_flux.f90~~AfferentGraph_edge1" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_basal_flux.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M167.09,-52.13C159.21,-52.13 151.11,-52.13 143.1,-52.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="143.36,-48.64 133.36,-52.14 143.36,-55.64 143.36,-48.64"/>
+</g>
+<!-- sourcefile~rdb_driver.f90 -->
+<g id="sourcefile~~rdb_ice_basal_flux.f90~~AfferentGraph_node3" class="node">
+<title>sourcefile~rdb_driver.f90</title>
+<g id="a_sourcefile~~rdb_ice_basal_flux.f90~~AfferentGraph_node3"><a xlink:href="../sourcefile/rdb_driver.f90.html" xlink:title="rdb_driver.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="426.44,-104.27 339.17,-104.27 339.17,-80 426.44,-80 426.44,-104.27"/>
+<text xml:space="preserve" text-anchor="middle" x="382.8" y="-88.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_driver.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90 -->
+<g id="sourcefile~~rdb_ice_basal_flux.f90~~AfferentGraph_edge2" class="edge">
+<title>sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M338.84,-80.46C324.24,-76.49 307.67,-71.98 292.11,-67.75"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="293.03,-64.38 282.47,-65.13 291.2,-71.13 293.03,-64.38"/>
+</g>
+<!-- sourcefile~rdb_handle.f90 -->
+<g id="sourcefile~~rdb_ice_basal_flux.f90~~AfferentGraph_node4" class="node">
+<title>sourcefile~rdb_handle.f90</title>
+<g id="a_sourcefile~~rdb_ice_basal_flux.f90~~AfferentGraph_node4"><a xlink:href="../sourcefile/rdb_handle.f90.html" xlink:title="rdb_handle.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="429.81,-24.27 335.79,-24.27 335.79,0 429.81,0 429.81,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="382.8" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_handle.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_handle.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90 -->
+<g id="sourcefile~~rdb_ice_basal_flux.f90~~AfferentGraph_edge3" class="edge">
+<title>sourcefile~rdb_handle.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M335.65,-24.68C321.74,-28.46 306.32,-32.65 291.79,-36.6"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="291.09,-33.17 282.36,-39.17 292.93,-39.92 291.09,-33.17"/>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90 -->
+<g id="sourcefile~~rdb_ice_basal_flux.f90~~AfferentGraph_node5" class="node">
+<title>sourcefile~rdb_ocean_api.f90</title>
+<g id="a_sourcefile~~rdb_ice_basal_flux.f90~~AfferentGraph_node5"><a xlink:href="../sourcefile/rdb_ocean_api.f90.html" xlink:title="rdb_ocean_api.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="577.83,-44.27 465.81,-44.27 465.81,-20 577.83,-20 577.83,-44.27"/>
+<text xml:space="preserve" text-anchor="middle" x="521.82" y="-28.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_api.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90 -->
+<g id="sourcefile~~rdb_ice_basal_flux.f90~~AfferentGraph_edge4" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M465.64,-35.99C421.89,-39.05 360.23,-43.36 311.62,-46.76"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="311.44,-43.26 301.7,-47.45 311.92,-50.24 311.44,-43.26"/>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_handle.f90 -->
+<g id="sourcefile~~rdb_ice_basal_flux.f90~~AfferentGraph_edge5" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_handle.f90</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M465.48,-24.06C457.51,-22.89 449.28,-21.69 441.27,-20.52"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="442.02,-17.1 431.62,-19.11 441.01,-24.02 442.02,-17.1"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#AfferentGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="AfferentGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="200pt" height="32pt"
+ viewBox="0.00 0.00 200.00 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 195.52,-28.27 195.52,4 -4,4"/>
+<!-- Source File -->
+<g id="node1" class="node">
+<title>Source File</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Source File</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node2" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="191.52,-24.27 87.75,-24.27 87.75,0 191.52,0 191.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="139.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a file to a file which it depends on. A file
+is dependent upon another if the latter must be compiled before the former
+can be.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+          </div>
+        </div>
+<br>
+      <section>
+        <h2><span class="anchor" id="src"></span>Source Code</h2>
+        <div class="hl codehilite"><pre><span></span><a id="ln-1" name="ln-1" href="#ln-1"></a><span class="c">!! Ocean -&gt; ice basal heat flux fb from above-freezing surface heat (PR 3c).</span>
+<a id="ln-2" name="ln-2" href="#ln-2"></a><span class="k">module </span><span class="n">rdb_ice_basal_flux</span>
+<a id="ln-3" name="ln-3" href="#ln-3"></a><span class="w">   </span><span class="c">!! fb = RHO_WATER*SEAWATER_CP*max(0, SST - T_f)*h_top/dt_therm [W/m^2],</span>
+<a id="ln-4" name="ln-4" href="#ln-4"></a><span class="w">   </span><span class="c">!! the complement of the frazil bank: a warm (above-freezing) ocean surface</span>
+<a id="ln-5" name="ln-5" href="#ln-5"></a><span class="w">   </span><span class="c">!! under ice melts the base (fb &gt; 0 -&gt; bmelt in ice_temp_sis2 TRAP #3);</span>
+<a id="ln-6" name="ln-6" href="#ln-6"></a><span class="w">   </span><span class="c">!! a supercooled surface grows it (that path is the frazil bank, PR 1/3b).</span>
+<a id="ln-7" name="ln-7" href="#ln-7"></a><span class="w">   </span><span class="c">!! Same RHO_WATER*SEAWATER_CP convention as ice_frazil_accumulate so growth</span>
+<a id="ln-8" name="ln-8" href="#ln-8"></a><span class="w">   </span><span class="c">!! and melt share one energy scale.</span>
+<a id="ln-9" name="ln-9" href="#ln-9"></a><span class="w">   </span><span class="c">!!</span>
+<a id="ln-10" name="ln-10" href="#ln-10"></a><span class="w">   </span><span class="c">!! NO CAP (v1): fb is the full above-freezing flux. The column's bottom-melt</span>
+<a id="ln-11" name="ln-11" href="#ln-11"></a><span class="w">   </span><span class="c">!! peel is self-limiting (clamps to available ice mass, spills the remainder</span>
+<a id="ln-12" name="ln-12" href="#ln-12"></a><span class="w">   </span><span class="c">!! to heat_to_ocn), so nothing is discarded and the heat budget closes.</span>
+<a id="ln-13" name="ln-13" href="#ln-13"></a><span class="w">   </span><span class="c">!!</span>
+<a id="ln-14" name="ln-14" href="#ln-14"></a><span class="w">   </span><span class="c">!! ICE-PRESENCE GATE (crucial): fb is ZERO on ice-free cells — no ice base,</span>
+<a id="ln-15" name="ln-15" href="#ln-15"></a><span class="w">   </span><span class="c">!! no basal flux. The gate mirrors ice_thermo_columns' own ice threshold</span>
+<a id="ln-16" name="ln-16" href="#ln-16"></a><span class="w">   </span><span class="c">!! `sum_cat m_ice &gt; ICE_RHO_ICE*H_VANISHED` so the column and the coupler</span>
+<a id="ln-17" name="ln-17" href="#ln-17"></a><span class="w">   </span><span class="c">!! agree EXACTLY on which cells exchange. Without it, a warm ice-free ocean</span>
+<a id="ln-18" name="ln-18" href="#ln-18"></a><span class="w">   </span><span class="c">!! cell (the normal open-ocean state, SST &gt; T_f) would compute a large</span>
+<a id="ln-19" name="ln-19" href="#ln-19"></a><span class="w">   </span><span class="c">!! fb &gt; 0 that the column then never consumes (m_ice = 0 =&gt; heat_to_ocn = 0),</span>
+<a id="ln-20" name="ln-20" href="#ln-20"></a><span class="w">   </span><span class="c">!! and the melt-side reduce kernel would inject a spurious Q_heat = -fb,</span>
+<a id="ln-21" name="ln-21" href="#ln-21"></a><span class="w">   </span><span class="c">!! cooling the open ocean by several degC per thermo step. The sample seam</span>
+<a id="ln-22" name="ln-22" href="#ln-22"></a><span class="w">   </span><span class="c">!! (sst_seam/ssurf_seam/tfw_seam) is STILL filled on all wet cells (harmless</span>
+<a id="ln-23" name="ln-23" href="#ln-23"></a><span class="w">   </span><span class="c">!! — the column only reads it where it has ice).</span>
+<a id="ln-24" name="ln-24" href="#ln-24"></a><span class="w">   </span><span class="c">!!</span>
+<a id="ln-25" name="ln-25" href="#ln-25"></a><span class="w">   </span><span class="c">!! One-step lag: reads the outer step's FINAL surface state (called post-dyn,</span>
+<a id="ln-26" name="ln-26" href="#ln-26"></a><span class="w">   </span><span class="c">!! pre-column, like ice_frazil_accumulate). Physical cells only; wet +</span>
+<a id="ln-27" name="ln-27" href="#ln-27"></a><span class="w">   </span><span class="c">!! non-vanished gate. Outer-shim + flat-impl (registry deref on host).</span>
+<a id="ln-28" name="ln-28" href="#ln-28"></a><span class="w">   </span><span class="c">!!</span>
+<a id="ln-29" name="ln-29" href="#ln-29"></a><span class="w">   </span><span class="c">!! ALSO fills the sample seam (sst_seam/ssurf_seam/tfw_seam) the column</span>
+<a id="ln-30" name="ln-30" href="#ln-30"></a><span class="w">   </span><span class="c">!! driver (rdb_ice_thermo_driver) reuses — one SST/SSS/T_f sample serves</span>
+<a id="ln-31" name="ln-31" href="#ln-31"></a><span class="w">   </span><span class="c">!! both fb and the column's ocean-side inputs, keeping them at the same</span>
+<a id="ln-32" name="ln-32" href="#ln-32"></a><span class="w">   </span><span class="c">!! one-step-lagged snapshot (physically consistent, PLAN_ICE_PR3c</span>
+<a id="ln-33" name="ln-33" href="#ln-33"></a><span class="w">   </span><span class="c">!! §"Ocean -&gt; ice basal heat flux").</span>
+<a id="ln-34" name="ln-34" href="#ln-34"></a><span class="w">   </span><span class="k">use </span><span class="n">rdb_constants</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">H_DIV_EPS</span><span class="p">,</span><span class="w"> </span><span class="n">wp</span><span class="p">,</span><span class="w"> </span><span class="n">RHO_WATER</span><span class="p">,</span><span class="w"> </span><span class="n">H_VANISHED</span><span class="p">,</span><span class="w"> </span><span class="n">NZ_STACK_MAX</span>
+<a id="ln-35" name="ln-35" href="#ln-35"></a><span class="w">   </span><span class="k">use </span><span class="n">rdb_grid</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">hgrid_t</span>
+<a id="ln-36" name="ln-36" href="#ln-36"></a><span class="w">   </span><span class="k">use </span><span class="n">rdb_multilayer_state</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">multilayer_state_t</span>
+<a id="ln-37" name="ln-37" href="#ln-37"></a><span class="w">   </span><span class="k">use </span><span class="n">rdb_eos</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">eos_t</span><span class="p">,</span><span class="w"> </span><span class="n">eos_freezing_point</span><span class="p">,</span><span class="w"> </span><span class="n">TS_CONS_ABS</span>
+<a id="ln-38" name="ln-38" href="#ln-38"></a><span class="w">   </span><span class="k">use </span><span class="n">rdb_teos10_convert</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">pt_from_ct</span><span class="p">,</span><span class="w"> </span><span class="n">sp_from_sr</span>
+<a id="ln-39" name="ln-39" href="#ln-39"></a><span class="w">   </span><span class="k">use </span><span class="n">rdb_ice_column</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">ICE_RHO_ICE</span>
+<a id="ln-40" name="ln-40" href="#ln-40"></a><span class="w">   </span><span class="k">use </span><span class="n">rdb_ice_state</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">ocean_sea_ice_t</span>
+<a id="ln-41" name="ln-41" href="#ln-41"></a><span class="w">   </span><span class="k">implicit none</span>
+<a id="ln-42" name="ln-42" href="#ln-42"></a><span class="k">   private</span>
+<a id="ln-43" name="ln-43" href="#ln-43"></a><span class="k">   public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ice_compute_basal_flux</span>
+<a id="ln-44" name="ln-44" href="#ln-44"></a><span class="k">contains</span>
+<a id="ln-45" name="ln-45" href="#ln-45"></a><span class="k">   pure subroutine </span><span class="n">ice_compute_basal_flux</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">eos</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">,</span><span class="w"> </span><span class="n">dt_therm</span><span class="p">)</span>
+<a id="ln-46" name="ln-46" href="#ln-46"></a><span class="w">      </span><span class="c">!! Outer shim (outer-shim + flat-impl pattern): dereference the</span>
+<a id="ln-47" name="ln-47" href="#ln-47"></a><span class="w">      </span><span class="c">!! tracer registry (`ms%tracers(idx)%c`) on the HOST and forward</span>
+<a id="ln-48" name="ln-48" href="#ln-48"></a><span class="w">      </span><span class="c">!! bare arrays to the device kernel — same rule as `ice_frazil_accumulate`</span>
+<a id="ln-49" name="ln-49" href="#ln-49"></a><span class="w">      </span><span class="c">!! / `ice_frazil_uptake`. No-op when either S or T is unregistered.</span>
+<a id="ln-50" name="ln-50" href="#ln-50"></a><span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">hgrid_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">grid</span>
+<a id="ln-51" name="ln-51" href="#ln-51"></a><span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">eos_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">eos</span>
+<a id="ln-52" name="ln-52" href="#ln-52"></a><span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">multilayer_state_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ms</span>
+<a id="ln-53" name="ln-53" href="#ln-53"></a><span class="w">         </span><span class="c">!! READ-ONLY: SST/SSS are sampled here, never written.</span>
+<a id="ln-54" name="ln-54" href="#ln-54"></a><span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_sea_ice_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ice</span>
+<a id="ln-55" name="ln-55" href="#ln-55"></a><span class="w">         </span><span class="c">!! Writes ice%fb and the sst_seam/ssurf_seam/tfw_seam sample seam.</span>
+<a id="ln-56" name="ln-56" href="#ln-56"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dt_therm</span>
+<a id="ln-57" name="ln-57" href="#ln-57"></a><span class="w">         </span><span class="c">!! Effective thermo timestep (s) — `ocean_dyn_t%therm_dt(dt)`.</span>
+<a id="ln-58" name="ln-58" href="#ln-58"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">idx_T</span><span class="p">,</span><span class="w"> </span><span class="n">idx_S</span>
+<a id="ln-59" name="ln-59" href="#ln-59"></a><span class="w">      </span><span class="n">idx_T</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">idx_temperature</span>
+<a id="ln-60" name="ln-60" href="#ln-60"></a><span class="w">      </span><span class="n">idx_S</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">idx_salinity</span>
+<a id="ln-61" name="ln-61" href="#ln-61"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">idx_T</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="p">.</span><span class="nb">or</span><span class="p">.</span><span class="w"> </span><span class="n">idx_S</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+<a id="ln-62" name="ln-62" href="#ln-62"></a><span class="k">      call </span><span class="n">ice_compute_basal_flux_impl</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">tracers</span><span class="p">(</span><span class="n">idx_T</span><span class="p">)%</span><span class="n">c</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">tracers</span><span class="p">(</span><span class="n">idx_S</span><span class="p">)%</span><span class="n">c</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-63" name="ln-63" href="#ln-63"></a><span class="w">                                       </span><span class="n">ms</span><span class="p">%</span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">wet_mask</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">m_ice</span><span class="p">,</span><span class="w"> </span><span class="n">eos</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-64" name="ln-64" href="#ln-64"></a><span class="w">                                       </span><span class="n">ice</span><span class="p">%</span><span class="n">fb</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">sst_seam</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">ssurf_seam</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">tfw_seam</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-65" name="ln-65" href="#ln-65"></a><span class="w">                                       </span><span class="n">dt_therm</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">ncat</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">nz_ml</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-66" name="ln-66" href="#ln-66"></a><span class="w">                                       </span><span class="n">grid</span><span class="p">%</span><span class="n">nx_total</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">ny_total</span><span class="p">)</span>
+<a id="ln-67" name="ln-67" href="#ln-67"></a><span class="w">   </span><span class="k">end subroutine </span><span class="n">ice_compute_basal_flux</span>
+<a id="ln-68" name="ln-68" href="#ln-68"></a>
+<a id="ln-69" name="ln-69" href="#ln-69"></a><span class="w">   </span><span class="k">pure subroutine </span><span class="n">ice_compute_basal_flux_impl</span><span class="p">(</span><span class="n">c_T</span><span class="p">,</span><span class="w"> </span><span class="n">c_S</span><span class="p">,</span><span class="w"> </span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="n">wet_mask</span><span class="p">,</span><span class="w"> </span><span class="n">m_ice</span><span class="p">,</span><span class="w"> </span><span class="n">eos</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-70" name="ln-70" href="#ln-70"></a><span class="w">                                               </span><span class="n">fb</span><span class="p">,</span><span class="w"> </span><span class="n">sst_seam</span><span class="p">,</span><span class="w"> </span><span class="n">ssurf_seam</span><span class="p">,</span><span class="w"> </span><span class="n">tfw_seam</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-71" name="ln-71" href="#ln-71"></a><span class="w">                                               </span><span class="n">dt_therm</span><span class="p">,</span><span class="w"> </span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="n">ncat</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<a id="ln-72" name="ln-72" href="#ln-72"></a><span class="w">      </span><span class="c">!! Device kernel over PHYSICAL cells (ghosts excluded — same</span>
+<a id="ln-73" name="ln-73" href="#ln-73"></a><span class="w">      </span><span class="c">!! physical-cells-only contract as `ice_frazil_accumulate_impl`).</span>
+<a id="ln-74" name="ln-74" href="#ln-74"></a><span class="w">      </span><span class="c">!! `fb`/`sst_seam`/`ssurf_seam`/`tfw_seam` are zeroed unconditionally</span>
+<a id="ln-75" name="ln-75" href="#ln-75"></a><span class="w">      </span><span class="c">!! first. The SAMPLE seam (sst_seam/ssurf_seam/tfw_seam) is filled on</span>
+<a id="ln-76" name="ln-76" href="#ln-76"></a><span class="w">      </span><span class="c">!! every wet, non-vanished cell (harmless — the column reads it only</span>
+<a id="ln-77" name="ln-77" href="#ln-77"></a><span class="w">      </span><span class="c">!! where it has ice). But `fb` is filled ONLY where BOTH the cell is</span>
+<a id="ln-78" name="ln-78" href="#ln-78"></a><span class="w">      </span><span class="c">!! wet+non-vanished AND it carries ice (`sum_cat m_ice &gt;</span>
+<a id="ln-79" name="ln-79" href="#ln-79"></a><span class="w">      </span><span class="c">!! ICE_RHO_ICE*H_VANISHED`, exactly ice_thermo_columns' own per-cat</span>
+<a id="ln-80" name="ln-80" href="#ln-80"></a><span class="w">      </span><span class="c">!! ice threshold, summed): no ice base ⇒ no basal flux. This keeps the</span>
+<a id="ln-81" name="ln-81" href="#ln-81"></a><span class="w">      </span><span class="c">!! coupler and the column in lockstep on which cells exchange, so an</span>
+<a id="ln-82" name="ln-82" href="#ln-82"></a><span class="w">      </span><span class="c">!! ice-free warm ocean cell (SST &gt; T_f, the normal open-ocean state)</span>
+<a id="ln-83" name="ln-83" href="#ln-83"></a><span class="w">      </span><span class="c">!! reports fb = 0 and the melt-side reduce kernel's `-fb` term is a</span>
+<a id="ln-84" name="ln-84" href="#ln-84"></a><span class="w">      </span><span class="c">!! harmless subtraction of zero (rather than a spurious ocean-cooling</span>
+<a id="ln-85" name="ln-85" href="#ln-85"></a><span class="w">      </span><span class="c">!! Q_heat = -fb).</span>
+<a id="ln-86" name="ln-86" href="#ln-86"></a><span class="w">      </span><span class="c">!!</span>
+<a id="ln-87" name="ln-87" href="#ln-87"></a><span class="w">      </span><span class="c">!! Decl-order: all integer dims declared before the explicit-shape</span>
+<a id="ln-88" name="ln-88" href="#ln-88"></a><span class="w">      </span><span class="c">!! arrays that use them. Inner `if` gate only (never a masked</span>
+<a id="ln-89" name="ln-89" href="#ln-89"></a><span class="w">      </span><span class="c">!! `do concurrent` header).</span>
+<a id="ln-90" name="ln-90" href="#ln-90"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="n">ncat</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span>
+<a id="ln-91" name="ln-91" href="#ln-91"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">c_T</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<a id="ln-92" name="ln-92" href="#ln-92"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">c_S</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<a id="ln-93" name="ln-93" href="#ln-93"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">h_layer</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<a id="ln-94" name="ln-94" href="#ln-94"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">wet_mask</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<a id="ln-95" name="ln-95" href="#ln-95"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">m_ice</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">ncat</span><span class="p">)</span>
+<a id="ln-96" name="ln-96" href="#ln-96"></a><span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">eos_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">eos</span>
+<a id="ln-97" name="ln-97" href="#ln-97"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">fb</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<a id="ln-98" name="ln-98" href="#ln-98"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">sst_seam</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<a id="ln-99" name="ln-99" href="#ln-99"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ssurf_seam</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<a id="ln-100" name="ln-100" href="#ln-100"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">tfw_seam</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<a id="ln-101" name="ln-101" href="#ln-101"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dt_therm</span>
+<a id="ln-102" name="ln-102" href="#ln-102"></a>
+<a id="ln-103" name="ln-103" href="#ln-103"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k_sfc</span><span class="p">,</span><span class="w"> </span><span class="n">cat</span><span class="p">,</span><span class="w"> </span><span class="n">i_lo</span><span class="p">,</span><span class="w"> </span><span class="n">i_hi</span><span class="p">,</span><span class="w"> </span><span class="n">j_lo</span><span class="p">,</span><span class="w"> </span><span class="n">j_hi</span>
+<a id="ln-104" name="ln-104" href="#ln-104"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">h</span><span class="p">,</span><span class="w"> </span><span class="n">sst</span><span class="p">,</span><span class="w"> </span><span class="n">s_surf</span><span class="p">,</span><span class="w"> </span><span class="n">tfw</span><span class="p">,</span><span class="w"> </span><span class="n">m_ice_tot</span><span class="p">,</span><span class="w"> </span><span class="n">t_excess</span>
+<a id="ln-105" name="ln-105" href="#ln-105"></a><span class="w">      </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">cons</span>
+<a id="ln-106" name="ln-106" href="#ln-106"></a>
+<a id="ln-107" name="ln-107" href="#ln-107"></a><span class="w">      </span><span class="n">cons</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">eos</span><span class="p">%</span><span class="n">ts_convention</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">TS_CONS_ABS</span>
+<a id="ln-108" name="ln-108" href="#ln-108"></a>
+<a id="ln-109" name="ln-109" href="#ln-109"></a><span class="w">      </span><span class="n">i_lo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nghost</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-110" name="ln-110" href="#ln-110"></a><span class="w">      </span><span class="n">i_hi</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nx</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">nghost</span>
+<a id="ln-111" name="ln-111" href="#ln-111"></a><span class="w">      </span><span class="n">j_lo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nghost</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-112" name="ln-112" href="#ln-112"></a><span class="w">      </span><span class="n">j_hi</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ny</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">nghost</span>
+<a id="ln-113" name="ln-113" href="#ln-113"></a>
+<a id="ln-114" name="ln-114" href="#ln-114"></a><span class="w">      </span><span class="k">do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">j</span><span class="o">=</span><span class="n">j_lo</span><span class="p">:</span><span class="n">j_hi</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="n">i_lo</span><span class="p">:</span><span class="n">i_hi</span><span class="p">)</span><span class="w"> </span><span class="n">local</span><span class="p">(</span><span class="n">k_sfc</span><span class="p">,</span><span class="w"> </span><span class="n">h</span><span class="p">,</span><span class="w"> </span><span class="n">sst</span><span class="p">,</span><span class="w"> </span><span class="n">s_surf</span><span class="p">,</span><span class="w"> </span><span class="n">tfw</span><span class="p">,</span><span class="w"> </span><span class="n">cat</span><span class="p">,</span><span class="w"> </span><span class="n">m_ice_tot</span><span class="p">,</span><span class="w"> </span><span class="n">t_excess</span><span class="p">)</span>
+<a id="ln-115" name="ln-115" href="#ln-115"></a><span class="w">         </span><span class="n">fb</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-116" name="ln-116" href="#ln-116"></a><span class="w">         </span><span class="n">sst_seam</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-117" name="ln-117" href="#ln-117"></a><span class="w">         </span><span class="n">ssurf_seam</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-118" name="ln-118" href="#ln-118"></a><span class="w">         </span><span class="n">tfw_seam</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-119" name="ln-119" href="#ln-119"></a><span class="w">         </span><span class="n">k_sfc</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">rdb_vl_first_live</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<a id="ln-120" name="ln-120" href="#ln-120"></a><span class="w">         </span><span class="n">h</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">h_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k_sfc</span><span class="p">)</span>
+<a id="ln-121" name="ln-121" href="#ln-121"></a><span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">wet_mask</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">rdb_vl_is_live</span><span class="p">(</span><span class="n">h</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-122" name="ln-122" href="#ln-122"></a><span class="k">            </span><span class="n">sst</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">c_T</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k_sfc</span><span class="p">)</span>
+<a id="ln-123" name="ln-123" href="#ln-123"></a><span class="w">            </span><span class="n">s_surf</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">c_S</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k_sfc</span><span class="p">)</span>
+<a id="ln-124" name="ln-124" href="#ln-124"></a><span class="w">            </span><span class="n">tfw</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">eos_freezing_point</span><span class="p">(</span><span class="n">eos</span><span class="p">,</span><span class="w"> </span><span class="n">s_surf</span><span class="p">,</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span>
+<a id="ln-125" name="ln-125" href="#ln-125"></a><span class="w">            </span><span class="c">! OCEAN-side available heat: model T, S, T_f (CT, SA, CT liquidus</span>
+<a id="ln-126" name="ln-126" href="#ln-126"></a><span class="w">            </span><span class="c">! under cons_abs) -- formed BEFORE the ice-boundary conversion.</span>
+<a id="ln-127" name="ln-127" href="#ln-127"></a><span class="w">            </span><span class="n">t_excess</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">max</span><span class="p">(</span><span class="mf">0.0_wp</span><span class="p">,</span><span class="w"> </span><span class="n">sst</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">tfw</span><span class="p">)</span>
+<a id="ln-128" name="ln-128" href="#ln-128"></a><span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">cons</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-129" name="ln-129" href="#ln-129"></a><span class="w">               </span><span class="c">! Ice-boundary conversion (IOC/SCOR/IAPSO 2010; McDougall &amp; Barker</span>
+<a id="ln-130" name="ln-130" href="#ln-130"></a><span class="w">               </span><span class="c">! 2011): the ice is theta/SP, so the seam carries theta, SP and</span>
+<a id="ln-131" name="ln-131" href="#ln-131"></a><span class="w">               </span><span class="c">! the theta freezing point.</span>
+<a id="ln-132" name="ln-132" href="#ln-132"></a><span class="w">               </span><span class="n">tfw</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">pt_from_ct</span><span class="p">(</span><span class="n">s_surf</span><span class="p">,</span><span class="w"> </span><span class="n">tfw</span><span class="p">)</span>
+<a id="ln-133" name="ln-133" href="#ln-133"></a><span class="w">               </span><span class="n">sst</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">pt_from_ct</span><span class="p">(</span><span class="n">s_surf</span><span class="p">,</span><span class="w"> </span><span class="n">sst</span><span class="p">)</span>
+<a id="ln-134" name="ln-134" href="#ln-134"></a><span class="w">               </span><span class="n">s_surf</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sp_from_sr</span><span class="p">(</span><span class="n">s_surf</span><span class="p">)</span>
+<a id="ln-135" name="ln-135" href="#ln-135"></a><span class="w">            </span><span class="k">end if</span>
+<a id="ln-136" name="ln-136" href="#ln-136"></a><span class="k">            </span><span class="n">sst_seam</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sst</span>
+<a id="ln-137" name="ln-137" href="#ln-137"></a><span class="w">            </span><span class="n">ssurf_seam</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">s_surf</span>
+<a id="ln-138" name="ln-138" href="#ln-138"></a><span class="w">            </span><span class="n">tfw_seam</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">tfw</span>
+<a id="ln-139" name="ln-139" href="#ln-139"></a><span class="w">            </span><span class="n">m_ice_tot</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<a id="ln-140" name="ln-140" href="#ln-140"></a><span class="w">            </span><span class="k">do </span><span class="n">cat</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ncat</span>
+<a id="ln-141" name="ln-141" href="#ln-141"></a><span class="w">               </span><span class="n">m_ice_tot</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">m_ice_tot</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">m_ice</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">cat</span><span class="p">)</span>
+<a id="ln-142" name="ln-142" href="#ln-142"></a><span class="w">            </span><span class="k">end do</span>
+<a id="ln-143" name="ln-143" href="#ln-143"></a><span class="k">            if</span><span class="w"> </span><span class="p">(</span><span class="n">m_ice_tot</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">ICE_RHO_ICE</span><span class="o">*</span><span class="n">H_VANISHED</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-144" name="ln-144" href="#ln-144"></a><span class="k">               </span><span class="n">fb</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">RHO_WATER</span><span class="o">*</span><span class="n">eos</span><span class="p">%</span><span class="n">c_p</span><span class="o">*</span><span class="n">t_excess</span><span class="o">*</span><span class="n">h</span><span class="o">/</span><span class="n">dt_therm</span>
+<a id="ln-145" name="ln-145" href="#ln-145"></a><span class="w">            </span><span class="k">end if</span>
+<a id="ln-146" name="ln-146" href="#ln-146"></a><span class="k">         end if</span>
+<a id="ln-147" name="ln-147" href="#ln-147"></a><span class="k">      end do</span>
+<a id="ln-148" name="ln-148" href="#ln-148"></a><span class="k">   end subroutine </span><span class="n">ice_compute_basal_flux_impl</span>
+<a id="ln-149" name="ln-149" href="#ln-149"></a>
+<a id="ln-150" name="ln-150" href="#ln-150"></a><span class="cp">#include "rdb_vanished_layer.inc"</span>
+<a id="ln-151" name="ln-151" href="#ln-151"></a>
+<a id="ln-152" name="ln-152" href="#ln-152"></a><span class="cp">#include "rdb_tracer_conc.inc"</span>
+<a id="ln-153" name="ln-153" href="#ln-153"></a>
+<a id="ln-154" name="ln-154" href="#ln-154"></a><span class="k">end module </span><span class="n">rdb_ice_basal_flux</span>
+</pre></div>
+
+      </section>
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-11-13 23:21 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

@@ -1,0 +1,1429 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>rdb_massless &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>rdb_massless
+      <small>Module</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.1% of total for modules and submodules.">92 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_massless.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_massless.f90.html'>rdb_massless.F90</a></li>
+            <li class="breadcrumb-item active" aria-current="page">rdb_massless</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+
+  <div class="row">
+    <div class="col-md-3">
+        <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/rdb_massless.html#variable-nzl~3">NZL</a>
+            <a class="list-group-item" href="../module/rdb_massless.html#variable-nzli~3">NZLI</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#subs-0"
+         aria-expanded="false" aria-controls="subs-0">
+         <h4 class="card-header bg-primary text-white">Subroutines</h4>
+      </a>
+      <div id="subs-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/rdb_massless.html#proc-massless_build_maps">massless_build_maps</a>
+            <a class="list-group-item" href="../module/rdb_massless.html#proc-massless_interp_back">massless_interp_back</a>
+            <a class="list-group-item" href="../module/rdb_massless.html#proc-massless_merge_fields">massless_merge_fields</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+
+
+  </div>
+
+    </div>
+
+    <div class="col-md-9" id='text'>
+      <p>Pure column helpers that merge vanished (sub-<code>H_VANISHED</code>) layers into a
+&ldquo;massive&rdquo; grid (<code>nzc &lt;= nz</code>) so the column solver never divides by a
+vanished thickness: thickness-weighted means onto the merged grid, plus
+the inverse interpolation of an interface quantity back to the original
+interfaces. Reference: Jackson, Hallberg &amp; Legg (2008), JPO 38, 1033.</p>
+<p>ORDERING (load-bearing): LOCAL SURFACE-DOWN indices — local <code>k=1</code> =
+surface, <code>k=nz</code> = bed; interfaces <code>K=1</code> (surface) &hellip; <code>K=nz+1</code> (bed).
+The consumer does the global(bed-up) &lt;-&gt; local(surface-down) flip; the
+helper never sees global indices.</p>
+<p>MERGE DIRECTION (do not invent a symmetric rule): walking surface-down, a
+merged layer opens only when the current cluster already has mass AND the
+incoming layer is massive (&gt; h_min). So a vanished layer folds into the
+preceding (surfaceward) massive layer; a leading surface run folds into
+the first massive layer beneath; a trailing bed run folds into the last
+massive layer above.</p>
+<p>GPU NOTE: <code>!$acc routine seq</code>, callable cross-module from the kappa-shear
+<code>do concurrent</code> column kernel. NVHPC will NOT inline across the module
+boundary, but these run once per column per compute (thermo cadence), so
+the divergence cost is acceptable. All arrays are fixed-size
+<code>NZ_STACK_MAX</code>(+1) explicit-shape locals (no descriptor walk, no alloc).</p>
+<br>          <div class="card mb-4">
+      <h3 class="card-header card-title bg-light">Uses</h3>
+      <div class="card-body">
+        <ul class="list-group list-group-flush">
+            <li class="list-group-item">
+              <ul class="list-inline">
+                  <li class="list-inline-item"><a href='rdb_constants.html'>rdb_constants</a></li>
+              </ul>
+            </li>
+            <li class="list-group-item">
+              <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: module~~rdb_massless~~UsesGraph Pages: 1 -->
+<svg id="modulerdb_masslessUsesGraph" width="310pt" height="32pt"
+ viewBox="0.00 0.00 310.00 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="module~~rdb_massless~~UsesGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 28.27)">
+<title>module~~rdb_massless~~UsesGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 305.56,-28.27 305.56,4 -4,4"/>
+<!-- module~rdb_massless -->
+<g id="module~~rdb_massless~~UsesGraph_node1" class="node">
+<title>module~rdb_massless</title>
+<polygon fill="none" stroke="black" points="301.56,-24.27 218.79,-24.27 218.79,0 301.56,0 301.56,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="260.17" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">rdb_massless</text>
+</g>
+<!-- module~rdb_constants -->
+<g id="module~~rdb_massless~~UsesGraph_node2" class="node">
+<title>module~rdb_constants</title>
+<g id="a_module~~rdb_massless~~UsesGraph_node2"><a xlink:href="../module/rdb_constants.html" xlink:title="rdb_constants">
+<polygon fill="#337ab7" stroke="#337ab7" points="182.79,-24.27 97.02,-24.27 97.02,0 182.79,0 182.79,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="139.91" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_constants</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_massless&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_massless~~UsesGraph_edge1" class="edge">
+<title>module~rdb_massless&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M218.47,-12.13C210.66,-12.13 202.37,-12.13 194.23,-12.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="194.4,-8.64 184.4,-12.14 194.4,-15.64 194.4,-8.64"/>
+</g>
+<!-- pic_types -->
+<g id="module~~rdb_massless~~UsesGraph_node3" class="node">
+<title>pic_types</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="61.02,-24.27 0,-24.27 0,0 61.02,0 61.02,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="30.51" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">pic_types</text>
+</g>
+<!-- module~rdb_constants&#45;&gt;pic_types -->
+<g id="module~~rdb_massless~~UsesGraph_edge2" class="edge">
+<title>module~rdb_constants&#45;&gt;pic_types</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M96.77,-12.13C88.79,-12.13 80.46,-12.13 72.52,-12.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="72.77,-8.64 62.77,-12.14 72.77,-15.64 72.77,-8.64"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#UsesGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="UsesGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="511pt" height="32pt"
+ viewBox="0.00 0.00 511.00 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 506.88,-28.27 506.88,4 -4,4"/>
+<!-- Module -->
+<g id="node1" class="node">
+<title>Module</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="54,-24.27 0,-24.27 0,0 54,0 54,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="27" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Module</text>
+</g>
+<!-- Submodule -->
+<g id="node2" class="node">
+<title>Submodule</title>
+<polygon fill="#5bc0de" stroke="#5bc0de" points="144.13,-24.27 71.87,-24.27 71.87,0 144.13,0 144.13,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="108" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Submodule</text>
+</g>
+<!-- Subroutine -->
+<g id="node3" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="231.63,-24.27 162.37,-24.27 162.37,0 231.63,0 231.63,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="197" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node4" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="306.26,-24.27 249.74,-24.27 249.74,0 306.26,0 306.26,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="278" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Program -->
+<g id="node5" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="381.26,-24.27 324.74,-24.27 324.74,0 381.26,0 381.26,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="353" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node6" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="502.88,-24.27 399.12,-24.27 399.12,0 502.88,0 502.88,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="451" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a submodule to the (sub)module which it is
+descended from. Dashed arrows point from a module or program unit to 
+modules which it uses.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+            </li>
+        </ul>
+      </div>
+    </div>
+
+          <div class="card">
+      <h3 class="card-header card-title bg-light">Used by</h3>
+      <div class="card-body">
+        <ul class="list-group list-group-flush">
+            <li class="list-group-item">
+              <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: module~~rdb_massless~~UsedByGraph Pages: 1 -->
+<svg id="modulerdb_masslessUsedByGraph" width="641pt" height="358pt"
+ viewBox="0.00 0.00 641.00 358.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="module~~rdb_massless~~UsedByGraph" class="graph" transform="scale(0.507249 0.507249) rotate(0) translate(4 701.39)">
+<title>module~~rdb_massless~~UsedByGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-701.39 1259.68,-701.39 1259.68,4 -4,4"/>
+<!-- module~rdb_massless -->
+<g id="module~~rdb_massless~~UsedByGraph_node1" class="node">
+<title>module~rdb_massless</title>
+<polygon fill="none" stroke="black" points="82.77,-513.39 0,-513.39 0,-489.12 82.77,-489.12 82.77,-513.39"/>
+<text xml:space="preserve" text-anchor="middle" x="41.38" y="-497.65" font-family="Helvetica,sans-Serif" font-size="10.50">rdb_massless</text>
+</g>
+<!-- module~rdb_ocean_kappa_shear -->
+<g id="module~~rdb_massless~~UsedByGraph_node2" class="node">
+<title>module~rdb_ocean_kappa_shear</title>
+<g id="a_module~~rdb_massless~~UsedByGraph_node2"><a xlink:href="../module/rdb_ocean_kappa_shear.html" xlink:title="rdb_ocean_kappa_shear">
+<polygon fill="#337ab7" stroke="#337ab7" points="260.04,-513.39 118.77,-513.39 118.77,-489.12 260.04,-489.12 260.04,-513.39"/>
+<text xml:space="preserve" text-anchor="middle" x="189.4" y="-497.65" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_kappa_shear</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_kappa_shear&#45;&gt;module~rdb_massless -->
+<g id="module~~rdb_massless~~UsedByGraph_edge1" class="edge">
+<title>module~rdb_ocean_kappa_shear&#45;&gt;module~rdb_massless</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M118.39,-501.25C110.32,-501.25 102.2,-501.25 94.43,-501.25"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="94.47,-497.75 84.47,-501.25 94.47,-504.75 94.47,-497.75"/>
+</g>
+<!-- module~rdb_ocean_dyn -->
+<g id="module~~rdb_massless~~UsedByGraph_node3" class="node">
+<title>module~rdb_ocean_dyn</title>
+<g id="a_module~~rdb_massless~~UsedByGraph_node3"><a xlink:href="../module/rdb_ocean_dyn.html" xlink:title="rdb_ocean_dyn">
+<polygon fill="#337ab7" stroke="#337ab7" points="388.56,-493.39 296.04,-493.39 296.04,-469.12 388.56,-469.12 388.56,-493.39"/>
+<text xml:space="preserve" text-anchor="middle" x="342.3" y="-477.65" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_dyn</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_dyn&#45;&gt;module~rdb_ocean_kappa_shear -->
+<g id="module~~rdb_massless~~UsedByGraph_edge2" class="edge">
+<title>module~rdb_ocean_dyn&#45;&gt;module~rdb_ocean_kappa_shear</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M295.62,-487.31C287.98,-488.32 279.87,-489.39 271.66,-490.48"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="271.4,-486.99 261.94,-491.77 272.31,-493.93 271.4,-486.99"/>
+</g>
+<!-- module~rdb_ocean_state -->
+<g id="module~~rdb_massless~~UsedByGraph_node4" class="node">
+<title>module~rdb_ocean_state</title>
+<g id="a_module~~rdb_massless~~UsedByGraph_node4"><a xlink:href="../module/rdb_ocean_state.html" xlink:title="rdb_ocean_state">
+<polygon fill="#337ab7" stroke="#337ab7" points="523.83,-533.39 424.56,-533.39 424.56,-509.12 523.83,-509.12 523.83,-533.39"/>
+<text xml:space="preserve" text-anchor="middle" x="474.19" y="-517.65" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_state</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_state&#45;&gt;module~rdb_ocean_kappa_shear -->
+<g id="module~~rdb_massless~~UsedByGraph_edge3" class="edge">
+<title>module~rdb_ocean_state&#45;&gt;module~rdb_ocean_kappa_shear</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M424.26,-517.79C382.32,-514.82 321.04,-510.49 271.74,-507"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="272.18,-503.53 261.96,-506.31 271.68,-510.51 272.18,-503.53"/>
+</g>
+<!-- module~rdb_ocean_state&#45;&gt;module~rdb_ocean_dyn -->
+<g id="module~~rdb_massless~~UsedByGraph_edge8" class="edge">
+<title>module~rdb_ocean_state&#45;&gt;module~rdb_ocean_dyn</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M432.45,-508.7C420.48,-505.02 407.23,-500.94 394.69,-497.08"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="395.93,-493.8 385.35,-494.2 393.87,-500.49 395.93,-493.8"/>
+</g>
+<!-- module~rdb_driver -->
+<g id="module~~rdb_massless~~UsedByGraph_node5" class="node">
+<title>module~rdb_driver</title>
+<g id="a_module~~rdb_massless~~UsedByGraph_node5"><a xlink:href="../module/rdb_driver.html" xlink:title="rdb_driver">
+<polygon fill="#337ab7" stroke="#337ab7" points="1127.53,-254.39 1061.26,-254.39 1061.26,-230.12 1127.53,-230.12 1127.53,-254.39"/>
+<text xml:space="preserve" text-anchor="middle" x="1094.4" y="-238.65" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_driver</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_driver&#45;&gt;module~rdb_ocean_dyn -->
+<g id="module~~rdb_massless~~UsedByGraph_edge4" class="edge">
+<title>module~rdb_driver&#45;&gt;module~rdb_ocean_dyn</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1091.72,-229.73C1085.2,-187.19 1057.41,-50.2 968.75,-39.25"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M966.75,-39.25C896.23,-30.54 874.17,-16.44 806.86,-39.25"/>
+</g>
+<!-- module~rdb_driver&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_massless~~UsedByGraph_edge9" class="edge">
+<title>module~rdb_driver&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M966.75,-39.25C840.63,-25.25 958.98,-213.5 876.87,-310.25 850.61,-341.19 606.38,-459.03 512.09,-503.83"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="510.78,-500.57 503.25,-508.02 513.78,-506.9 510.78,-500.57"/>
+</g>
+<!-- module~rdb_ocean_engine -->
+<g id="module~~rdb_massless~~UsedByGraph_node11" class="node">
+<title>module~rdb_ocean_engine</title>
+<g id="a_module~~rdb_massless~~UsedByGraph_node11"><a xlink:href="../module/rdb_ocean_engine.html" xlink:title="rdb_ocean_engine">
+<polygon fill="#337ab7" stroke="#337ab7" points="1022.64,-495.39 912.87,-495.39 912.87,-471.12 1022.64,-471.12 1022.64,-495.39"/>
+<text xml:space="preserve" text-anchor="middle" x="967.75" y="-479.65" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_engine</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_driver&#45;&gt;module~rdb_ocean_engine -->
+<g id="module~~rdb_massless~~UsedByGraph_edge29" class="edge">
+<title>module~rdb_driver&#45;&gt;module~rdb_ocean_engine</title>
+<path fill="none" stroke="#00ffc4" stroke-dasharray="5,2" d="M1086.87,-254.87C1066.85,-293.59 1006.09,-411.07 980.41,-460.72"/>
+<polygon fill="#00ffc4" stroke="#00ffc4" points="977.4,-458.92 975.91,-469.41 983.61,-462.14 977.4,-458.92"/>
+</g>
+<!-- module~rdb_handle -->
+<g id="module~~rdb_massless~~UsedByGraph_node6" class="node">
+<title>module~rdb_handle</title>
+<g id="a_module~~rdb_massless~~UsedByGraph_node6"><a xlink:href="../module/rdb_handle.html" xlink:title="rdb_handle">
+<polygon fill="#337ab7" stroke="#337ab7" points="1130.16,-535.39 1058.64,-535.39 1058.64,-511.12 1130.16,-511.12 1130.16,-535.39"/>
+<text xml:space="preserve" text-anchor="middle" x="1094.4" y="-519.65" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_handle</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_handle&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_massless~~UsedByGraph_edge10" class="edge">
+<title>module~rdb_handle&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1058.27,-533.54C980.16,-554.8 786.65,-598.63 630.34,-561.25"/>
+</g>
+<!-- module~rdb_handle&#45;&gt;module~rdb_ocean_engine -->
+<g id="module~~rdb_massless~~UsedByGraph_edge30" class="edge">
+<title>module~rdb_handle&#45;&gt;module~rdb_ocean_engine</title>
+<path fill="none" stroke="#00ffc4" stroke-dasharray="5,2" d="M1058.35,-512C1046.08,-508.07 1032.07,-503.57 1018.82,-499.32"/>
+<polygon fill="#00ffc4" stroke="#00ffc4" points="1019.96,-496.01 1009.37,-496.28 1017.82,-502.67 1019.96,-496.01"/>
+</g>
+<!-- module~rdb_ocean_api -->
+<g id="module~~rdb_massless~~UsedByGraph_node7" class="node">
+<title>module~rdb_ocean_api</title>
+<g id="a_module~~rdb_massless~~UsedByGraph_node7"><a xlink:href="../module/rdb_ocean_api.html" xlink:title="rdb_ocean_api">
+<polygon fill="#337ab7" stroke="#337ab7" points="1255.68,-515.39 1166.16,-515.39 1166.16,-491.12 1255.68,-491.12 1255.68,-515.39"/>
+<text xml:space="preserve" text-anchor="middle" x="1210.92" y="-499.65" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_api</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_ocean_dyn -->
+<g id="module~~rdb_massless~~UsedByGraph_edge5" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_ocean_dyn</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1209.96,-490.64C1209.39,-425.75 1197.12,-128.55 1022.64,-25.25 939.94,23.71 897.88,-8.41 806.86,-39.25"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M804.86,-39.25C774.15,-49.07 762.45,-41.59 734.85,-58.25 662.34,-102.03 541.89,-285.04 475.19,-337.25"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M473.19,-337.25C425.13,-373.49 380.85,-429.35 358.5,-459.75"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="355.71,-457.63 352.68,-467.79 361.38,-461.74 355.71,-457.63"/>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_handle -->
+<g id="module~~rdb_massless~~UsedByGraph_edge21" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_handle</title>
+<path fill="none" stroke="#ff7500" stroke-dasharray="5,2" d="M1165.97,-510.93C1158,-512.32 1149.66,-513.78 1141.62,-515.18"/>
+<polygon fill="#ff7500" stroke="#ff7500" points="1141.27,-511.69 1132.02,-516.86 1142.47,-518.58 1141.27,-511.69"/>
+</g>
+<!-- module~rdb_ocean_balance -->
+<g id="module~~rdb_massless~~UsedByGraph_node8" class="node">
+<title>module~rdb_ocean_balance</title>
+<g id="a_module~~rdb_massless~~UsedByGraph_node8"><a xlink:href="../module/rdb_ocean_balance.html" xlink:title="rdb_ocean_balance">
+<polygon fill="#337ab7" stroke="#337ab7" points="863.74,-693.39 747.97,-693.39 747.97,-669.12 863.74,-669.12 863.74,-693.39"/>
+<text xml:space="preserve" text-anchor="middle" x="805.86" y="-677.65" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_balance</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_ocean_balance -->
+<g id="module~~rdb_massless~~UsedByGraph_edge22" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_ocean_balance</title>
+<path fill="none" stroke="#9cff00" stroke-dasharray="5,2" d="M1093.4,-641.25C1024.38,-674.66 935.78,-682.45 875.5,-683.29"/>
+<polygon fill="#9cff00" stroke="#9cff00" points="875.7,-679.79 865.72,-683.36 875.75,-686.79 875.7,-679.79"/>
+</g>
+<!-- module~rdb_ocean_diag_derived -->
+<g id="module~~rdb_massless~~UsedByGraph_node9" class="node">
+<title>module~rdb_ocean_diag_derived</title>
+<g id="a_module~~rdb_massless~~UsedByGraph_node9"><a xlink:href="../module/rdb_ocean_diag_derived.html" xlink:title="rdb_ocean_diag_derived">
+<polygon fill="#337ab7" stroke="#337ab7" points="876.87,-533.39 734.85,-533.39 734.85,-509.12 876.87,-509.12 876.87,-533.39"/>
+<text xml:space="preserve" text-anchor="middle" x="805.86" y="-517.65" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_diag_derived</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_ocean_diag_derived -->
+<g id="module~~rdb_massless~~UsedByGraph_edge24" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_ocean_diag_derived</title>
+<path fill="none" stroke="#27ff00" stroke-dasharray="5,2" d="M1093.4,-483.25C1060.71,-480.47 1054.89,-498.26 1022.64,-504.25 978.83,-512.38 929.31,-516.63 888.77,-518.85"/>
+<polygon fill="#27ff00" stroke="#27ff00" points="888.64,-515.35 878.83,-519.35 888.99,-522.34 888.64,-515.35"/>
+</g>
+<!-- module~rdb_ocean_diag_fills -->
+<g id="module~~rdb_massless~~UsedByGraph_node10" class="node">
+<title>module~rdb_ocean_diag_fills</title>
+<g id="a_module~~rdb_massless~~UsedByGraph_node10"><a xlink:href="../module/rdb_ocean_diag_fills.html" xlink:title="rdb_ocean_diag_fills">
+<polygon fill="#337ab7" stroke="#337ab7" points="689.1,-533.39 569.58,-533.39 569.58,-509.12 689.1,-509.12 689.1,-533.39"/>
+<text xml:space="preserve" text-anchor="middle" x="629.34" y="-517.65" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_diag_fills</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_ocean_diag_fills -->
+<g id="module~~rdb_massless~~UsedByGraph_edge26" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_ocean_diag_fills</title>
+<path fill="none" stroke="#00ff4e" stroke-dasharray="5,2" d="M1165.8,-494.03C1144.61,-489.99 1118.79,-485.64 1095.4,-483.25"/>
+<path fill="none" stroke="#00ff4e" stroke-dasharray="5,2" d="M1093.4,-483.25C1060.76,-479.92 1055.1,-466.97 1022.64,-462.25 978.91,-455.9 743.64,-464.98 734.85,-467.25 706.94,-474.45 678.03,-490.13 657.72,-502.75"/>
+<polygon fill="#00ff4e" stroke="#00ff4e" points="656.02,-499.68 649.48,-508.01 659.79,-505.58 656.02,-499.68"/>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_ocean_engine -->
+<g id="module~~rdb_massless~~UsedByGraph_edge31" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_ocean_engine</title>
+<path fill="none" stroke="#00ffc4" stroke-dasharray="5,2" d="M1093.4,-483.25C1074.29,-481.62 1053.48,-481.12 1034.43,-481.16"/>
+<polygon fill="#00ffc4" stroke="#00ffc4" points="1034.62,-477.66 1024.65,-481.24 1034.68,-484.66 1034.62,-477.66"/>
+</g>
+<!-- module~rdb_ocean_ic_inject -->
+<g id="module~~rdb_massless~~UsedByGraph_node12" class="node">
+<title>module~rdb_ocean_ic_inject</title>
+<g id="a_module~~rdb_massless~~UsedByGraph_node12"><a xlink:href="../module/rdb_ocean_ic_inject.html" xlink:title="rdb_ocean_ic_inject">
+<polygon fill="#337ab7" stroke="#337ab7" points="864.12,-613.39 747.6,-613.39 747.6,-589.12 864.12,-589.12 864.12,-613.39"/>
+<text xml:space="preserve" text-anchor="middle" x="805.86" y="-597.65" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_ic_inject</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_ocean_ic_inject -->
+<g id="module~~rdb_massless~~UsedByGraph_edge32" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_ocean_ic_inject</title>
+<path fill="none" stroke="#00c4ff" stroke-dasharray="5,2" d="M1204.4,-515.55C1190.77,-544.15 1152.44,-614.76 1095.4,-641.25"/>
+<path fill="none" stroke="#00c4ff" stroke-dasharray="5,2" d="M1093.4,-641.25C1063.65,-655.07 1054.87,-626.39 1022.64,-620.25 974.08,-611 918.5,-606.24 875.91,-603.8"/>
+<polygon fill="#00c4ff" stroke="#00c4ff" points="876.22,-600.31 866.05,-603.27 875.84,-607.3 876.22,-600.31"/>
+</g>
+<!-- module~rdb_ocean_reinit -->
+<g id="module~~rdb_massless~~UsedByGraph_node13" class="node">
+<title>module~rdb_ocean_reinit</title>
+<g id="a_module~~rdb_massless~~UsedByGraph_node13"><a xlink:href="../module/rdb_ocean_reinit.html" xlink:title="rdb_ocean_reinit">
+<polygon fill="#337ab7" stroke="#337ab7" points="1017.76,-653.39 917.74,-653.39 917.74,-629.12 1017.76,-629.12 1017.76,-653.39"/>
+<text xml:space="preserve" text-anchor="middle" x="967.75" y="-637.65" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_reinit</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_ocean_reinit -->
+<g id="module~~rdb_massless~~UsedByGraph_edge35" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_ocean_reinit</title>
+<path fill="none" stroke="#004eff" stroke-dasharray="5,2" d="M1093.4,-641.25C1073.86,-650.33 1050.67,-652.34 1029.61,-651.42"/>
+<polygon fill="#004eff" stroke="#004eff" points="1029.9,-647.93 1019.69,-650.73 1029.42,-654.91 1029.9,-647.93"/>
+</g>
+<!-- module~rdb_ocean_balance&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_massless~~UsedByGraph_edge11" class="edge">
+<title>module~rdb_ocean_balance&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M756.14,-668.75C748.42,-665.26 740.98,-660.84 734.85,-655.25 707.53,-630.34 727.2,-603.98 698.85,-580.25 674.62,-559.97 661.05,-568.69 630.34,-561.25"/>
+</g>
+<!-- module~rdb_ocean_diag_derived&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_massless~~UsedByGraph_edge12" class="edge">
+<title>module~rdb_ocean_diag_derived&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M767.7,-533.87C724.55,-547.79 656.02,-567.47 630.34,-561.25"/>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M628.34,-561.25C596.63,-553.57 561.39,-544.41 532.71,-536.79"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="533.69,-533.43 523.13,-534.24 531.89,-540.2 533.69,-533.43"/>
+</g>
+<!-- module~rdb_ocean_diag_derived&#45;&gt;module~rdb_ocean_diag_fills -->
+<g id="module~~rdb_massless~~UsedByGraph_edge27" class="edge">
+<title>module~rdb_ocean_diag_derived&#45;&gt;module~rdb_ocean_diag_fills</title>
+<path fill="none" stroke="#00ff4e" stroke-dasharray="5,2" d="M734.38,-521.25C723.29,-521.25 711.82,-521.25 700.72,-521.25"/>
+<polygon fill="#00ff4e" stroke="#00ff4e" points="700.85,-517.75 690.85,-521.25 700.85,-524.75 700.85,-517.75"/>
+</g>
+<!-- module~rdb_ocean_diag_fills&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_massless~~UsedByGraph_edge13" class="edge">
+<title>module~rdb_ocean_diag_fills&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M569.13,-521.25C558.14,-521.25 546.64,-521.25 535.61,-521.25"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="535.84,-517.75 525.84,-521.25 535.84,-524.75 535.84,-517.75"/>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_dyn -->
+<g id="module~~rdb_massless~~UsedByGraph_edge6" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_dyn</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M942.43,-470.72C854.54,-426.24 554.52,-281.56 475.19,-337.25"/>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_massless~~UsedByGraph_edge14" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M912.69,-480.89C881.7,-479.96 842.07,-479.48 806.86,-481.25"/>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M804.86,-481.25C695.77,-486.74 667.66,-482.82 559.83,-500.25 550.48,-501.76 540.66,-503.79 531.14,-505.99"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="530.53,-502.53 521.62,-508.27 532.16,-509.34 530.53,-502.53"/>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_diag_derived -->
+<g id="module~~rdb_massless~~UsedByGraph_edge25" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_diag_derived</title>
+<path fill="none" stroke="#27ff00" stroke-dasharray="5,2" d="M913.96,-495.8C900.11,-499.09 885.03,-502.67 870.68,-506.08"/>
+<polygon fill="#27ff00" stroke="#27ff00" points="870.27,-502.58 861.35,-508.3 871.89,-509.39 870.27,-502.58"/>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_diag_fills -->
+<g id="module~~rdb_massless~~UsedByGraph_edge28" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_diag_fills</title>
+<path fill="none" stroke="#00ff4e" stroke-dasharray="5,2" d="M804.86,-481.25C761.3,-483.44 713.06,-495.25 678.36,-505.47"/>
+<polygon fill="#00ff4e" stroke="#00ff4e" points="677.6,-502.04 669.04,-508.28 679.63,-508.74 677.6,-502.04"/>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_ic_inject -->
+<g id="module~~rdb_massless~~UsedByGraph_edge33" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_ic_inject</title>
+<path fill="none" stroke="#00c4ff" stroke-dasharray="5,2" d="M949.64,-495.88C921.63,-516.55 865.82,-557.74 832.89,-582.04"/>
+<polygon fill="#00c4ff" stroke="#00c4ff" points="831.03,-579.06 825.07,-587.82 835.19,-584.69 831.03,-579.06"/>
+</g>
+<!-- module~rdb_ocean_setup -->
+<g id="module~~rdb_massless~~UsedByGraph_node14" class="node">
+<title>module~rdb_ocean_setup</title>
+<g id="a_module~~rdb_massless~~UsedByGraph_node14"><a xlink:href="../module/rdb_ocean_setup.html" xlink:title="rdb_ocean_setup">
+<polygon fill="#337ab7" stroke="#337ab7" points="680.47,-280.39 578.2,-280.39 578.2,-256.12 680.47,-256.12 680.47,-280.39"/>
+<text xml:space="preserve" text-anchor="middle" x="629.34" y="-264.65" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_setup -->
+<g id="module~~rdb_massless~~UsedByGraph_edge36" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_setup</title>
+<path fill="none" stroke="#2700ff" stroke-dasharray="5,2" d="M956.8,-470.63C941.29,-451.59 909.71,-415.19 876.87,-391.25 811.74,-343.77 725.53,-305.5 674.22,-284.89"/>
+<polygon fill="#2700ff" stroke="#2700ff" points="675.81,-281.76 665.22,-281.32 673.23,-288.27 675.81,-281.76"/>
+</g>
+<!-- module~rdb_ocean_ic_inject&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_massless~~UsedByGraph_edge15" class="edge">
+<title>module~rdb_ocean_ic_inject&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M748.19,-588.63C714,-580.93 669.61,-570.76 630.34,-561.25"/>
+</g>
+<!-- module~rdb_ocean_reinit&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_massless~~UsedByGraph_edge16" class="edge">
+<title>module~rdb_ocean_reinit&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M917.67,-647.64C868.61,-651.71 792.42,-651.64 734.85,-622.25 712.95,-611.07 719.6,-593.44 698.85,-580.25 672.19,-563.3 661.05,-568.69 630.34,-561.25"/>
+</g>
+<!-- module~rdb_ocean_reinit&#45;&gt;module~rdb_ocean_balance -->
+<g id="module~~rdb_massless~~UsedByGraph_edge23" class="edge">
+<title>module~rdb_ocean_reinit&#45;&gt;module~rdb_ocean_balance</title>
+<path fill="none" stroke="#9cff00" stroke-dasharray="5,2" d="M917.48,-653.58C901.97,-657.46 884.65,-661.79 868.4,-665.86"/>
+<polygon fill="#9cff00" stroke="#9cff00" points="867.68,-662.43 858.82,-668.25 869.37,-669.22 867.68,-662.43"/>
+</g>
+<!-- module~rdb_ocean_reinit&#45;&gt;module~rdb_ocean_ic_inject -->
+<g id="module~~rdb_massless~~UsedByGraph_edge34" class="edge">
+<title>module~rdb_ocean_reinit&#45;&gt;module~rdb_ocean_ic_inject</title>
+<path fill="none" stroke="#00c4ff" stroke-dasharray="5,2" d="M917.48,-628.92C901.97,-625.04 884.65,-620.71 868.4,-616.65"/>
+<polygon fill="#00c4ff" stroke="#00c4ff" points="869.37,-613.28 858.82,-614.25 867.68,-620.07 869.37,-613.28"/>
+</g>
+<!-- module~rdb_ocean_setup&#45;&gt;module~rdb_ocean_dyn -->
+<g id="module~~rdb_massless~~UsedByGraph_edge7" class="edge">
+<title>module~rdb_ocean_setup&#45;&gt;module~rdb_ocean_dyn</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M590.37,-280.78C558.04,-292.49 511.23,-311.95 475.19,-337.25"/>
+</g>
+<!-- module~rdb_ocean_setup&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_massless~~UsedByGraph_edge17" class="edge">
+<title>module~rdb_ocean_setup&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M616.76,-280.85C602.35,-296.9 577.49,-325.85 559.83,-353.25 528.02,-402.61 499.14,-465.51 484.77,-498.58"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="481.64,-497 480.91,-507.57 488.07,-499.76 481.64,-497"/>
+</g>
+<!-- module~rdb_ocean_state_restart -->
+<g id="module~~rdb_massless~~UsedByGraph_node15" class="node">
+<title>module~rdb_ocean_state_restart</title>
+<g id="a_module~~rdb_massless~~UsedByGraph_node15"><a xlink:href="../module/rdb_ocean_state_restart.html" xlink:title="rdb_ocean_state_restart">
+<polygon fill="#5bc0de" stroke="#5bc0de" points="698.85,-697.39 559.83,-697.39 559.83,-673.12 698.85,-673.12 698.85,-697.39"/>
+<text xml:space="preserve" text-anchor="middle" x="629.34" y="-681.65" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_state_restart</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_state_restart&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_massless~~UsedByGraph_edge18" class="edge">
+<title>module~rdb_ocean_state_restart&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#00ffff" d="M573.71,-672.7C568.76,-670.35 564.03,-667.56 559.83,-664.25 519.63,-632.6 494.51,-576.18 482.87,-544.49"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="486.18,-543.36 479.57,-535.09 479.58,-545.69 486.18,-543.36"/>
+</g>
+<!-- module~rdb_ocean_state_seed -->
+<g id="module~~rdb_massless~~UsedByGraph_node16" class="node">
+<title>module~rdb_ocean_state_seed</title>
+<g id="a_module~~rdb_massless~~UsedByGraph_node16"><a xlink:href="../module/rdb_ocean_state_seed.html" xlink:title="rdb_ocean_state_seed">
+<polygon fill="#5bc0de" stroke="#5bc0de" points="694.35,-655.39 564.33,-655.39 564.33,-631.12 694.35,-631.12 694.35,-655.39"/>
+<text xml:space="preserve" text-anchor="middle" x="629.34" y="-639.65" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_state_seed</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_state_seed&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_massless~~UsedByGraph_edge19" class="edge">
+<title>module~rdb_ocean_state_seed&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#00ffff" d="M576.01,-630.72C570.33,-628.35 564.81,-625.55 559.83,-622.25 528.74,-601.64 502.93,-566.32 488.27,-543.38"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="491.39,-541.76 483.15,-535.1 485.43,-545.45 491.39,-541.76"/>
+</g>
+<!-- module~rdb_ocean_state_topo -->
+<g id="module~~rdb_massless~~UsedByGraph_node17" class="node">
+<title>module~rdb_ocean_state_topo</title>
+<g id="a_module~~rdb_massless~~UsedByGraph_node17"><a xlink:href="../module/rdb_ocean_state_topo.html" xlink:title="rdb_ocean_state_topo">
+<polygon fill="#5bc0de" stroke="#5bc0de" points="693.6,-613.39 565.08,-613.39 565.08,-589.12 693.6,-589.12 693.6,-613.39"/>
+<text xml:space="preserve" text-anchor="middle" x="629.34" y="-597.65" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_state_topo</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_state_topo&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_massless~~UsedByGraph_edge20" class="edge">
+<title>module~rdb_ocean_state_topo&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#00ffff" d="M591.12,-588.71C580.8,-584.81 569.72,-580.22 559.83,-575.25 539.58,-565.08 518.07,-551.31 501.8,-540.23"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="503.86,-537.4 493.65,-534.58 499.88,-543.15 503.86,-537.4"/>
+</g>
+<!-- module~rdb_ocean_setup_bc -->
+<g id="module~~rdb_massless~~UsedByGraph_node18" class="node">
+<title>module~rdb_ocean_setup_bc</title>
+<g id="a_module~~rdb_massless~~UsedByGraph_node18"><a xlink:href="../module/rdb_ocean_setup_bc.html" xlink:title="rdb_ocean_setup_bc">
+<polygon fill="#5bc0de" stroke="#5bc0de" points="865.99,-175.39 745.72,-175.39 745.72,-151.12 865.99,-151.12 865.99,-175.39"/>
+<text xml:space="preserve" text-anchor="middle" x="805.86" y="-159.65" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_bc</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_setup_bc&#45;&gt;module~rdb_ocean_setup -->
+<g id="module~~rdb_massless~~UsedByGraph_edge37" class="edge">
+<title>module~rdb_ocean_setup_bc&#45;&gt;module~rdb_ocean_setup</title>
+<path fill="none" stroke="#2700ff" d="M754.21,-175.88C747.54,-178.28 740.91,-181.06 734.85,-184.25 702.51,-201.26 670.54,-228.99 650.64,-247.9"/>
+<polygon fill="#2700ff" stroke="#2700ff" points="648.22,-245.37 643.48,-254.84 653.1,-250.4 648.22,-245.37"/>
+</g>
+<!-- module~rdb_ocean_setup_bt -->
+<g id="module~~rdb_massless~~UsedByGraph_node19" class="node">
+<title>module~rdb_ocean_setup_bt</title>
+<g id="a_module~~rdb_massless~~UsedByGraph_node19"><a xlink:href="../module/rdb_ocean_setup_bt.html" xlink:title="rdb_ocean_setup_bt">
+<polygon fill="#5bc0de" stroke="#5bc0de" points="864.87,-133.39 746.85,-133.39 746.85,-109.12 864.87,-109.12 864.87,-133.39"/>
+<text xml:space="preserve" text-anchor="middle" x="805.86" y="-117.65" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_bt</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_setup_bt&#45;&gt;module~rdb_ocean_setup -->
+<g id="module~~rdb_massless~~UsedByGraph_edge38" class="edge">
+<title>module~rdb_ocean_setup_bt&#45;&gt;module~rdb_ocean_setup</title>
+<path fill="none" stroke="#2700ff" d="M751.01,-133.8C745.33,-136.17 739.82,-138.96 734.85,-142.25 693.67,-169.52 660.23,-217.84 643.01,-246.05"/>
+<polygon fill="#2700ff" stroke="#2700ff" points="640.09,-244.11 637.99,-254.5 646.11,-247.69 640.09,-244.11"/>
+</g>
+<!-- module~rdb_ocean_setup_cavity -->
+<g id="module~~rdb_massless~~UsedByGraph_node20" class="node">
+<title>module~rdb_ocean_setup_cavity</title>
+<g id="a_module~~rdb_massless~~UsedByGraph_node20"><a xlink:href="../module/rdb_ocean_setup_cavity.html" xlink:title="rdb_ocean_setup_cavity">
+<polygon fill="#5bc0de" stroke="#5bc0de" points="875.37,-91.39 736.35,-91.39 736.35,-67.12 875.37,-67.12 875.37,-91.39"/>
+<text xml:space="preserve" text-anchor="middle" x="805.86" y="-75.65" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_cavity</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_setup_cavity&#45;&gt;module~rdb_ocean_setup -->
+<g id="module~~rdb_massless~~UsedByGraph_edge39" class="edge">
+<title>module~rdb_ocean_setup_cavity&#45;&gt;module~rdb_ocean_setup</title>
+<path fill="none" stroke="#2700ff" d="M749.11,-91.78C744.04,-94.14 739.18,-96.93 734.85,-100.25 710.76,-118.69 714.87,-132.49 698.85,-158.25 679.88,-188.77 657.91,-224.02 644.07,-246.22"/>
+<polygon fill="#2700ff" stroke="#2700ff" points="641.28,-244.1 638.96,-254.43 647.22,-247.8 641.28,-244.1"/>
+</g>
+<!-- module~rdb_ocean_setup_grid -->
+<g id="module~~rdb_massless~~UsedByGraph_node21" class="node">
+<title>module~rdb_ocean_setup_grid</title>
+<g id="a_module~~rdb_massless~~UsedByGraph_node21"><a xlink:href="../module/rdb_ocean_setup_grid.html" xlink:title="rdb_ocean_setup_grid">
+<polygon fill="#5bc0de" stroke="#5bc0de" points="870.12,-301.39 741.6,-301.39 741.6,-277.12 870.12,-277.12 870.12,-301.39"/>
+<text xml:space="preserve" text-anchor="middle" x="805.86" y="-285.65" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_grid</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_setup_grid&#45;&gt;module~rdb_ocean_setup -->
+<g id="module~~rdb_massless~~UsedByGraph_edge40" class="edge">
+<title>module~rdb_ocean_setup_grid&#45;&gt;module~rdb_ocean_setup</title>
+<path fill="none" stroke="#2700ff" d="M741.36,-281.61C725.36,-279.69 708.21,-277.62 692.29,-275.71"/>
+<polygon fill="#2700ff" stroke="#2700ff" points="692.8,-272.24 682.45,-274.52 691.96,-279.19 692.8,-272.24"/>
+</g>
+<!-- module~rdb_ocean_setup_lateral -->
+<g id="module~~rdb_massless~~UsedByGraph_node22" class="node">
+<title>module~rdb_ocean_setup_lateral</title>
+<g id="a_module~~rdb_massless~~UsedByGraph_node22"><a xlink:href="../module/rdb_ocean_setup_lateral.html" xlink:title="rdb_ocean_setup_lateral">
+<polygon fill="#5bc0de" stroke="#5bc0de" points="876.87,-259.39 734.85,-259.39 734.85,-235.12 876.87,-235.12 876.87,-259.39"/>
+<text xml:space="preserve" text-anchor="middle" x="805.86" y="-243.65" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_lateral</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_setup_lateral&#45;&gt;module~rdb_ocean_setup -->
+<g id="module~~rdb_massless~~UsedByGraph_edge41" class="edge">
+<title>module~rdb_ocean_setup_lateral&#45;&gt;module~rdb_ocean_setup</title>
+<path fill="none" stroke="#2700ff" d="M734.38,-255.73C720.41,-257.41 705.85,-259.17 692.19,-260.81"/>
+<polygon fill="#2700ff" stroke="#2700ff" points="691.98,-257.31 682.47,-261.98 692.82,-264.26 691.98,-257.31"/>
+</g>
+<!-- module~rdb_ocean_setup_vmix -->
+<g id="module~~rdb_massless~~UsedByGraph_node23" class="node">
+<title>module~rdb_ocean_setup_vmix</title>
+<g id="a_module~~rdb_massless~~UsedByGraph_node23"><a xlink:href="../module/rdb_ocean_setup_vmix.html" xlink:title="rdb_ocean_setup_vmix">
+<polygon fill="#5bc0de" stroke="#5bc0de" points="872.37,-217.39 739.35,-217.39 739.35,-193.12 872.37,-193.12 872.37,-217.39"/>
+<text xml:space="preserve" text-anchor="middle" x="805.86" y="-201.65" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_vmix</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_setup_vmix&#45;&gt;module~rdb_ocean_setup -->
+<g id="module~~rdb_massless~~UsedByGraph_edge42" class="edge">
+<title>module~rdb_ocean_setup_vmix&#45;&gt;module~rdb_ocean_setup</title>
+<path fill="none" stroke="#2700ff" d="M760.59,-217.87C752.01,-220.5 743.11,-223.36 734.85,-226.25 713.15,-233.85 689.34,-243.33 669.93,-251.36"/>
+<polygon fill="#2700ff" stroke="#2700ff" points="668.63,-248.1 660.75,-255.19 671.33,-254.57 668.63,-248.1"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panmodulerdb_masslessUsedByGraph = svgPanZoom('#modulerdb_masslessUsedByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#UsedByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="UsedByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="511pt" height="32pt"
+ viewBox="0.00 0.00 511.00 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 506.88,-28.27 506.88,4 -4,4"/>
+<!-- Module -->
+<g id="node1" class="node">
+<title>Module</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="54,-24.27 0,-24.27 0,0 54,0 54,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="27" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Module</text>
+</g>
+<!-- Submodule -->
+<g id="node2" class="node">
+<title>Submodule</title>
+<polygon fill="#5bc0de" stroke="#5bc0de" points="144.13,-24.27 71.87,-24.27 71.87,0 144.13,0 144.13,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="108" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Submodule</text>
+</g>
+<!-- Subroutine -->
+<g id="node3" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="231.63,-24.27 162.37,-24.27 162.37,0 231.63,0 231.63,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="197" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node4" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="306.26,-24.27 249.74,-24.27 249.74,0 306.26,0 306.26,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="278" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Program -->
+<g id="node5" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="381.26,-24.27 324.74,-24.27 324.74,0 381.26,0 381.26,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="353" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node6" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="502.88,-24.27 399.12,-24.27 399.12,0 502.88,0 502.88,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="451" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a submodule to the (sub)module which it is
+descended from. Dashed arrows point from a module or program unit to 
+modules which it uses.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+            </li>
+        </ul>
+      </div>
+    </div>
+
+      <br>
+
+
+        <section>
+          <h2>Variables</h2>
+            <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nzl~3"></span>
+              integer,
+            </td>
+              <td>private,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>NZL</strong></td>
+<td> =</td>
+                <td>NZ_STACK_MAX</td>
+            <td>
+                <p>Layer-array dimension (must match the consumer&rsquo;s NZL).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nzli~3"></span>
+              integer,
+            </td>
+              <td>private,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>NZLI</strong></td>
+<td> =</td>
+                <td>NZ_STACK_MAX+1</td>
+            <td>
+                <p>Interface-array dimension (= NZL + 1).</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+        </section>
+        <br>
+
+
+
+
+
+
+        <section>
+          <h2>Subroutines</h2>
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-massless_build_maps"></span> <h3>public pure subroutine <a href='../proc/massless_build_maps.html'>massless_build_maps</a>(h, nz, h_min, nzc, hc, kc, kf)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Build the merged massive-layer grid and the maps <code>kc</code>, <code>kf</code>.
+<code>kc(k)</code> (k=1..nz) = merged-layer index original layer <code>k</code> folds into;
+<code>kc(nz+1) = nzc+1</code> is the bed sentinel. <code>kf(K)</code> = fractional position
+of original interface <code>K</code> inside merged layer <code>kc(K)</code> (0 = coincides
+with a merged interface -&gt; pure lookup; (0,1) = interior -&gt; linear
+blend in <code>massless_interp_back</code>).
+Identity case (no layer &lt; h_min): <code>nzc==nz</code>, <code>kc(k)==k</code>, <code>kf(k)==0</code>,
+<code>hc==h</code> bit-for-bit.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h~21"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h</strong>(NZL)</td>
+            <td>
+<p>Local surface-down layer thicknesses (m), &gt;= 0.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz~220"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_min~15"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_min</strong></td>
+            <td>
+<p>Merge threshold (H_VANISHED).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nzc~3"></span>
+              integer,
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nzc</strong></td>
+            <td>
+<p>Number of merged massive layers (&lt;= nz).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hc~12"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hc</strong>(NZL)</td>
+            <td>
+<p>Merged thicknesses (m), valid 1..nzc.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-kc~7"></span>
+              integer,
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>kc</strong>(NZLI)</td>
+            <td>
+<p>Layer/interface -&gt; merged index, valid 1..nz+1 (sentinel at nz+1).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-kf~5"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>kf</strong>(NZLI)</td>
+            <td>
+<p>Fractional interface weight, valid 1..nz+1.</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-massless_interp_back"></span> <h3>public pure subroutine <a href='../proc/massless_interp_back.html'>massless_interp_back</a>(qc, kc, kf, nz, q)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Inverse map: interpolate an interface quantity <code>qc(1:nzc+1)</code> on the
+merged grid back to the original <code>nz+1</code> interfaces. <code>kf==0</code> takes a
+pure lookup; interior interfaces take the linear blend between merged
+interfaces <code>kc(K)</code> and <code>kc(K)+1</code> (in range since <code>kf&gt;0</code> only when
+<code>kc(K) &lt; nzc+1</code>). Identity case: <code>kf==0</code> everywhere -&gt; <code>q==qc</code>.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-qc~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>qc</strong>(NZLI)</td>
+            <td>
+<p>Interface quantity on the merged grid (valid 1..nzc+1).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-kc~9"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>kc</strong>(NZLI)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-kf~6"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>kf</strong>(NZLI)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz~222"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-q~6"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>q</strong>(NZLI)</td>
+            <td>
+<p>Interface quantity on the original grid (filled 1..nz+1).</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-massless_merge_fields"></span> <h3>public pure subroutine <a href='../proc/massless_merge_fields.html'>massless_merge_fields</a>(h, kc, nz, nzc, u, v, t, s, uc, vc, tc, sc)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Thickness-weighted merged means for u, v, T, S — the solver receives
+MEANS, not integrals, and must not re-divide. Accumulation runs in the
+same surface-down <code>k</code> order as <code>massless_build_maps</code> so the
+column-integral conservation holds to round-off.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h~22"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h</strong>(NZL)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-kc~8"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>kc</strong>(NZLI)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz~221"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nzc~4"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nzc</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-u~22"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>u</strong>(NZL)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-v~9"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>v</strong>(NZL)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-t~27"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>t</strong>(NZL)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-s~22"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>s</strong>(NZL)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-uc~6"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>uc</strong>(NZL)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-vc~6"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>vc</strong>(NZL)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-tc~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>tc</strong>(NZL)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sc~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>sc</strong>(NZL)</td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+        </section>
+        <br>
+
+
+
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-11-13 23:21 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

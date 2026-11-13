@@ -1,0 +1,1559 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>redi_face_flux &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>redi_face_flux
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.0% of total for procedures.">49 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_redi.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_redi.f90.html'>rdb_ocean_redi.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ocean_redi.html'>rdb_ocean_redi</a></li>
+            <li class="breadcrumb-item active" aria-current="page">redi_face_flux</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/redi_face_flux.html#variable-til~2">TiL</a>
+            <a class="list-group-item" href="../proc/redi_face_flux.html#variable-tir~2">TiR</a>
+            <a class="list-group-item" href="../proc/redi_face_flux.html#variable-tll~2">TlL</a>
+            <a class="list-group-item" href="../proc/redi_face_flux.html#variable-tlr~2">TlR</a>
+            <a class="list-group-item" href="../proc/redi_face_flux.html#variable-all~2">aLL</a>
+            <a class="list-group-item" href="../proc/redi_face_flux.html#variable-alr~2">aLR</a>
+            <a class="list-group-item" href="../proc/redi_face_flux.html#variable-arl~2">aRL</a>
+            <a class="list-group-item" href="../proc/redi_face_flux.html#variable-arr~2">aRR</a>
+            <a class="list-group-item" href="../proc/redi_face_flux.html#variable-dtdiff">dtdiff</a>
+            <a class="list-group-item" href="../proc/redi_face_flux.html#variable-flx">flx</a>
+            <a class="list-group-item" href="../proc/redi_face_flux.html#variable-hcl">hcL</a>
+            <a class="list-group-item" href="../proc/redi_face_flux.html#variable-hcr">hcR</a>
+            <a class="list-group-item" href="../proc/redi_face_flux.html#variable-k~58">k</a>
+            <a class="list-group-item" href="../proc/redi_face_flux.html#variable-knat">knat</a>
+            <a class="list-group-item" href="../proc/redi_face_flux.html#variable-koff~2">koff</a>
+            <a class="list-group-item" href="../proc/redi_face_flux.html#variable-ks~11">ks</a>
+            <a class="list-group-item" href="../proc/redi_face_flux.html#variable-nk~14">nk</a>
+            <a class="list-group-item" href="../proc/redi_face_flux.html#variable-trcl">trcL</a>
+            <a class="list-group-item" href="../proc/redi_face_flux.html#variable-trcr">trcR</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/redi_face_flux.html#src">redi_face_flux</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>private pure subroutine redi_face_flux(nz, ns, nxc, nyc, nfa, nfb, h_layer, c_in, iL, jL, iR, jR, fa, fb, PoL, PoR, KoL, KoR, hEff, kb, kt, use_open, coef, is_left, dTr)  
+</h2>
+    
+
+    <p>Accumulate ONE C-grid face&rsquo;s neutral-surface tracer flux into the
+owning cell&rsquo;s <code>dTr</code>.  Builds the left/right tracer columns from the
+READ-ONLY snapshot <code>c_in</code> (the live <code>c</code> is also written by the
+loop — reading it would be a do-concurrent read-write race) and loops
+the <code>ns-1</code> neutral sublayers.  The per-face column locals live in this
+frame to keep the caller&rsquo;s loop-body footprint small.
+<code>is_left</code>: this cell is the LEFT (west/south) column ⇒ <code>+flx</code> into
+native layer <code>nz+1-KoL</code>; else the RIGHT column ⇒ <code>-flx</code> into
+<code>nz+1-KoR</code>.  <code>(iL,jL)</code>/<code>(iR,jR)</code> index the columns; <code>(fa,fb)</code> the faces.
+<code>kb..kt</code> is the face&rsquo;s Phase-A open window (<code>1..nz</code> off the z-level
+closed-face path): the tracer columns are reconstructed on it alone
+and the full-frame <code>Ko</code> are read in the window frame (<code>Ko - nz +
+kt</code>).  An empty window, or (<code>use_open</code>) one whose layers are no
+longer all live on both sides, contributes nothing — both cells of
+the face take the same decision from the same <code>h</code>.</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz~54"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ns~6"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ns</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nxc"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nxc</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nyc"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nyc</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nfa"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nfa</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nfb"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nfb</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_layer~17"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_layer</strong>(nxc,nyc,nz)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-c_in"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>c_in</strong>(nxc,nyc,nz)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-il"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>iL</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-jl"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>jL</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ir"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>iR</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-jr"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>jR</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-fa"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>fa</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-fb~5"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>fb</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-pol~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>PoL</strong>(nfa,nfb,ns)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-por~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>PoR</strong>(nfa,nfb,ns)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-kol~2"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>KoL</strong>(nfa,nfb,ns)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-kor~2"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>KoR</strong>(nfa,nfb,ns)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-heff~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hEff</strong>(nfa,nfb,ns-1)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-kb~13"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>kb</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-kt~24"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>kt</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-use_open"></span>
+              logical,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>use_open</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-coef~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>coef</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-is_left"></span>
+              logical,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>is_left</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dtr"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dTr</strong>(nz)</td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~redi_face_flux~~CallsGraph Pages: 1 -->
+<svg id="procredi_face_fluxCallsGraph" width="641pt" height="158pt"
+ viewBox="0.00 0.00 641.00 158.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~redi_face_flux~~CallsGraph" class="graph" transform="scale(0.996735 0.996735) rotate(0) translate(4 154.27)">
+<title>proc~~redi_face_flux~~CallsGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-154.27 639.1,-154.27 639.1,4 -4,4"/>
+<!-- proc~redi_face_flux -->
+<g id="proc~~redi_face_flux~~CallsGraph_node1" class="node">
+<title>proc~redi_face_flux</title>
+<polygon fill="none" stroke="black" points="85.02,-66.27 0,-66.27 0,-42 85.02,-42 85.02,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="42.51" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50">redi_face_flux</text>
+</g>
+<!-- proc~redi_sublayer_dt -->
+<g id="proc~~redi_face_flux~~CallsGraph_node2" class="node">
+<title>proc~redi_sublayer_dt</title>
+<g id="a_proc~~redi_face_flux~~CallsGraph_node2"><a xlink:href="../proc/redi_sublayer_dt.html" xlink:title="redi_sublayer_dT">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="228.91,-108.27 127.39,-108.27 127.39,-84 228.91,-84 228.91,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="178.15" y="-92.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">redi_sublayer_dT</text>
+</a>
+</g>
+</g>
+<!-- proc~redi_face_flux&#45;&gt;proc~redi_sublayer_dt -->
+<g id="proc~~redi_face_flux~~CallsGraph_edge1" class="edge">
+<title>proc~redi_face_flux&#45;&gt;proc~redi_sublayer_dt</title>
+<path fill="none" stroke="#ff0000" d="M83.61,-66.74C97.09,-70.97 112.3,-75.75 126.49,-80.21"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="125.05,-83.43 135.64,-83.09 127.15,-76.75 125.05,-83.43"/>
+</g>
+<!-- proc~redi_tracer_column -->
+<g id="proc~~redi_face_flux~~CallsGraph_node3" class="node">
+<title>proc~redi_tracer_column</title>
+<g id="a_proc~~redi_face_flux~~CallsGraph_node3"><a xlink:href="../proc/redi_tracer_column.html" xlink:title="redi_tracer_column">
+<polygon fill="#d9534f" stroke="#d9534f" points="235.29,-66.27 121.02,-66.27 121.02,-42 235.29,-42 235.29,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="178.15" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">redi_tracer_column</text>
+</a>
+</g>
+</g>
+<!-- proc~redi_face_flux&#45;&gt;proc~redi_tracer_column -->
+<g id="proc~~redi_face_flux~~CallsGraph_edge2" class="edge">
+<title>proc~redi_face_flux&#45;&gt;proc~redi_tracer_column</title>
+<path fill="none" stroke="#ff0000" d="M85.43,-54.13C93.03,-54.13 101.12,-54.13 109.24,-54.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="109.17,-57.64 119.17,-54.14 109.17,-50.64 109.17,-57.64"/>
+</g>
+<!-- rdb_vl_is_live -->
+<g id="proc~~redi_face_flux~~CallsGraph_node4" class="node">
+<title>rdb_vl_is_live</title>
+<polygon fill="#777777" stroke="#777777" points="218.79,-24.27 137.52,-24.27 137.52,0 218.79,0 218.79,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="178.15" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_vl_is_live</text>
+</g>
+<!-- proc~redi_face_flux&#45;&gt;rdb_vl_is_live -->
+<g id="proc~~redi_face_flux~~CallsGraph_edge3" class="edge">
+<title>proc~redi_face_flux&#45;&gt;rdb_vl_is_live</title>
+<path fill="none" stroke="#ff0000" d="M83.61,-41.53C97.09,-37.3 112.3,-32.52 126.49,-28.06"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="127.15,-31.52 135.64,-25.18 125.05,-24.84 127.15,-31.52"/>
+</g>
+<!-- proc~redi_ppm_ave -->
+<g id="proc~~redi_face_flux~~CallsGraph_node6" class="node">
+<title>proc~redi_ppm_ave</title>
+<g id="a_proc~~redi_face_flux~~CallsGraph_node6"><a xlink:href="../proc/redi_ppm_ave.html" xlink:title="redi_ppm_ave">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="375.43,-150.27 289.66,-150.27 289.66,-126 375.43,-126 375.43,-150.27"/>
+<text xml:space="preserve" text-anchor="middle" x="332.55" y="-134.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">redi_ppm_ave</text>
+</a>
+</g>
+</g>
+<!-- proc~redi_sublayer_dt&#45;&gt;proc~redi_ppm_ave -->
+<g id="proc~~redi_face_flux~~CallsGraph_edge4" class="edge">
+<title>proc~redi_sublayer_dt&#45;&gt;proc~redi_ppm_ave</title>
+<path fill="none" stroke="#ff0000" d="M224.88,-108.74C241.8,-113.4 261.11,-118.72 278.62,-123.55"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="277.21,-126.79 287.78,-126.07 279.07,-120.04 277.21,-126.79"/>
+</g>
+<!-- proc~redi_signum1 -->
+<g id="proc~~redi_face_flux~~CallsGraph_node7" class="node">
+<title>proc~redi_signum1</title>
+<g id="a_proc~~redi_face_flux~~CallsGraph_node7"><a xlink:href="../proc/redi_signum1.html" xlink:title="redi_signum1">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="373.93,-108.27 291.16,-108.27 291.16,-84 373.93,-84 373.93,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="332.55" y="-92.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">redi_signum1</text>
+</a>
+</g>
+</g>
+<!-- proc~redi_sublayer_dt&#45;&gt;proc~redi_signum1 -->
+<g id="proc~~redi_face_flux~~CallsGraph_edge5" class="edge">
+<title>proc~redi_sublayer_dt&#45;&gt;proc~redi_signum1</title>
+<path fill="none" stroke="#ff0000" d="M229.05,-96.13C245.12,-96.13 262.96,-96.13 279.2,-96.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="279.18,-99.64 289.18,-96.14 279.18,-92.64 279.18,-99.64"/>
+</g>
+<!-- proc~redi_interface_scalar -->
+<g id="proc~~redi_face_flux~~CallsGraph_node5" class="node">
+<title>proc~redi_interface_scalar</title>
+<g id="a_proc~~redi_face_flux~~CallsGraph_node5"><a xlink:href="../proc/redi_interface_scalar.html" xlink:title="redi_interface_scalar">
+<polygon fill="#d9534f" stroke="#d9534f" points="393.81,-66.27 271.29,-66.27 271.29,-42 393.81,-42 393.81,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="332.55" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">redi_interface_scalar</text>
+</a>
+</g>
+</g>
+<!-- proc~redi_tracer_column&#45;&gt;proc~redi_interface_scalar -->
+<g id="proc~~redi_face_flux~~CallsGraph_edge6" class="edge">
+<title>proc~redi_tracer_column&#45;&gt;proc~redi_interface_scalar</title>
+<path fill="none" stroke="#00ff00" d="M235.47,-54.13C243.31,-54.13 251.45,-54.13 259.52,-54.13"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="259.35,-57.64 269.35,-54.14 259.35,-50.64 259.35,-57.64"/>
+</g>
+<!-- proc~redi_tracer_column&#45;&gt;proc~redi_signum1 -->
+<g id="proc~~redi_face_flux~~CallsGraph_edge7" class="edge">
+<title>proc~redi_tracer_column&#45;&gt;proc~redi_signum1</title>
+<path fill="none" stroke="#00ff00" d="M224.88,-66.74C242.15,-71.5 261.92,-76.95 279.71,-81.85"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="278.75,-85.21 289.32,-84.5 280.61,-78.47 278.75,-85.21"/>
+</g>
+<!-- rdb_vl_column_conc -->
+<g id="proc~~redi_face_flux~~CallsGraph_node8" class="node">
+<title>rdb_vl_column_conc</title>
+<polygon fill="#777777" stroke="#777777" points="392.31,-24.27 272.79,-24.27 272.79,0 392.31,0 392.31,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="332.55" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_vl_column_conc</text>
+</g>
+<!-- proc~redi_tracer_column&#45;&gt;rdb_vl_column_conc -->
+<g id="proc~~redi_face_flux~~CallsGraph_edge8" class="edge">
+<title>proc~redi_tracer_column&#45;&gt;rdb_vl_column_conc</title>
+<path fill="none" stroke="#00ff00" d="M224.88,-41.53C240.7,-37.17 258.62,-32.23 275.2,-27.67"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="275.69,-31.16 284.4,-25.13 273.83,-24.41 275.69,-31.16"/>
+</g>
+<!-- proc~redi_plm_diff -->
+<g id="proc~~redi_face_flux~~CallsGraph_node9" class="node">
+<title>proc~redi_plm_diff</title>
+<g id="a_proc~~redi_face_flux~~CallsGraph_node9"><a xlink:href="../proc/redi_plm_diff.html" xlink:title="redi_plm_diff">
+<polygon fill="#d9534f" stroke="#d9534f" points="516.33,-87.27 436.56,-87.27 436.56,-63 516.33,-63 516.33,-87.27"/>
+<text xml:space="preserve" text-anchor="middle" x="476.44" y="-71.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">redi_plm_diff</text>
+</a>
+</g>
+</g>
+<!-- proc~redi_interface_scalar&#45;&gt;proc~redi_plm_diff -->
+<g id="proc~~redi_face_flux~~CallsGraph_edge9" class="edge">
+<title>proc~redi_interface_scalar&#45;&gt;proc~redi_plm_diff</title>
+<path fill="none" stroke="#ff0000" d="M394.14,-63.1C404.54,-64.64 415.24,-66.22 425.32,-67.72"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="424.5,-71.13 434.9,-69.13 425.52,-64.21 424.5,-71.13"/>
+</g>
+<!-- proc~redi_ppm_edge -->
+<g id="proc~~redi_face_flux~~CallsGraph_node10" class="node">
+<title>proc~redi_ppm_edge</title>
+<g id="a_proc~~redi_face_flux~~CallsGraph_node10"><a xlink:href="../proc/redi_ppm_edge.html" xlink:title="redi_ppm_edge">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="523.08,-45.27 429.81,-45.27 429.81,-21 523.08,-21 523.08,-45.27"/>
+<text xml:space="preserve" text-anchor="middle" x="476.44" y="-29.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">redi_ppm_edge</text>
+</a>
+</g>
+</g>
+<!-- proc~redi_interface_scalar&#45;&gt;proc~redi_ppm_edge -->
+<g id="proc~~redi_face_flux~~CallsGraph_edge10" class="edge">
+<title>proc~redi_interface_scalar&#45;&gt;proc~redi_ppm_edge</title>
+<path fill="none" stroke="#ff0000" d="M394.14,-45.17C402.23,-43.97 410.5,-42.75 418.52,-41.56"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="418.78,-45.06 428.16,-40.13 417.75,-38.14 418.78,-45.06"/>
+</g>
+<!-- proc~redi_fv_diff -->
+<g id="proc~~redi_face_flux~~CallsGraph_node11" class="node">
+<title>proc~redi_fv_diff</title>
+<g id="a_proc~~redi_face_flux~~CallsGraph_node11"><a xlink:href="../proc/redi_fv_diff.html" xlink:title="redi_fv_diff">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="631.72,-108.27 562.45,-108.27 562.45,-84 631.72,-84 631.72,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="597.09" y="-92.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">redi_fv_diff</text>
+</a>
+</g>
+</g>
+<!-- proc~redi_plm_diff&#45;&gt;proc~redi_fv_diff -->
+<g id="proc~~redi_face_flux~~CallsGraph_edge11" class="edge">
+<title>proc~redi_plm_diff&#45;&gt;proc~redi_fv_diff</title>
+<path fill="none" stroke="#ff0000" d="M516.62,-82.07C527.66,-84.02 539.75,-86.16 551.1,-88.17"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="550.18,-91.56 560.64,-89.86 551.4,-84.67 550.18,-91.56"/>
+</g>
+<!-- proc~redi_signum -->
+<g id="proc~~redi_face_flux~~CallsGraph_node12" class="node">
+<title>proc~redi_signum</title>
+<g id="a_proc~~redi_face_flux~~CallsGraph_node12"><a xlink:href="../proc/redi_signum.html" xlink:title="redi_signum">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="635.1,-66.27 559.08,-66.27 559.08,-42 635.1,-42 635.1,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="597.09" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">redi_signum</text>
+</a>
+</g>
+</g>
+<!-- proc~redi_plm_diff&#45;&gt;proc~redi_signum -->
+<g id="proc~~redi_face_flux~~CallsGraph_edge12" class="edge">
+<title>proc~redi_plm_diff&#45;&gt;proc~redi_signum</title>
+<path fill="none" stroke="#ff0000" d="M516.62,-68.2C526.64,-66.43 537.52,-64.5 547.92,-62.66"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="548.24,-66.16 557.48,-60.97 547.02,-59.27 548.24,-66.16"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocredi_face_fluxCallsGraph = svgPanZoom('#procredi_face_fluxCallsGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~redi_face_flux~~CalledByGraph Pages: 1 -->
+<svg id="procredi_face_fluxCalledByGraph" width="641pt" height="49pt"
+ viewBox="0.00 0.00 641.00 49.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~redi_face_flux~~CalledByGraph" class="graph" transform="scale(0.662436 0.662436) rotate(0) translate(4 70.27)">
+<title>proc~~redi_face_flux~~CalledByGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-70.27 963.64,-70.27 963.64,4 -4,4"/>
+<!-- proc~redi_face_flux -->
+<g id="proc~~redi_face_flux~~CalledByGraph_node1" class="node">
+<title>proc~redi_face_flux</title>
+<polygon fill="none" stroke="black" points="959.64,-45.27 874.62,-45.27 874.62,-21 959.64,-21 959.64,-45.27"/>
+<text xml:space="preserve" text-anchor="middle" x="917.13" y="-29.53" font-family="Helvetica,sans-Serif" font-size="10.50">redi_face_flux</text>
+</g>
+<!-- proc~redi_apply_flux_impl -->
+<g id="proc~~redi_face_flux~~CalledByGraph_node2" class="node">
+<title>proc~redi_apply_flux_impl</title>
+<g id="a_proc~~redi_face_flux~~CalledByGraph_node2"><a xlink:href="../proc/redi_apply_flux_impl.html" xlink:title="redi_apply_flux_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="838.62,-45.27 719.1,-45.27 719.1,-21 838.62,-21 838.62,-45.27"/>
+<text xml:space="preserve" text-anchor="middle" x="778.86" y="-29.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">redi_apply_flux_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~redi_apply_flux_impl&#45;&gt;proc~redi_face_flux -->
+<g id="proc~~redi_face_flux~~CalledByGraph_edge1" class="edge">
+<title>proc~redi_apply_flux_impl&#45;&gt;proc~redi_face_flux</title>
+<path fill="none" stroke="#ff0000" d="M838.84,-33.13C846.86,-33.13 855.06,-33.13 862.97,-33.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="862.79,-36.64 872.79,-33.14 862.79,-29.64 862.79,-36.64"/>
+</g>
+<!-- proc~redi_apply_flux -->
+<g id="proc~~redi_face_flux~~CalledByGraph_node3" class="node">
+<title>proc~redi_apply_flux</title>
+<g id="a_proc~~redi_face_flux~~CalledByGraph_node3"><a xlink:href="../proc/redi_apply_flux.html" xlink:title="redi_apply_flux">
+<polygon fill="#d9534f" stroke="#d9534f" points="683.1,-45.27 592.08,-45.27 592.08,-21 683.1,-21 683.1,-45.27"/>
+<text xml:space="preserve" text-anchor="middle" x="637.59" y="-29.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">redi_apply_flux</text>
+</a>
+</g>
+</g>
+<!-- proc~redi_apply_flux&#45;&gt;proc~redi_apply_flux_impl -->
+<g id="proc~~redi_face_flux~~CalledByGraph_edge2" class="edge">
+<title>proc~redi_apply_flux&#45;&gt;proc~redi_apply_flux_impl</title>
+<path fill="none" stroke="#ff0000" d="M683.42,-33.13C691.04,-33.13 699.12,-33.13 707.21,-33.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="707.11,-36.64 717.11,-33.14 707.11,-29.64 707.11,-36.64"/>
+</g>
+<!-- proc~apply_deferred_tracer_step -->
+<g id="proc~~redi_face_flux~~CalledByGraph_node4" class="node">
+<title>proc~apply_deferred_tracer_step</title>
+<g id="a_proc~~redi_face_flux~~CalledByGraph_node4"><a xlink:href="../proc/apply_deferred_tracer_step.html" xlink:title="apply_deferred_tracer_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="556.08,-66.27 399.06,-66.27 399.06,-42 556.08,-42 556.08,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="477.57" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">apply_deferred_tracer_step</text>
+</a>
+</g>
+</g>
+<!-- proc~apply_deferred_tracer_step&#45;&gt;proc~redi_apply_flux -->
+<g id="proc~~redi_face_flux~~CalledByGraph_edge3" class="edge">
+<title>proc~apply_deferred_tracer_step&#45;&gt;proc~redi_apply_flux</title>
+<path fill="none" stroke="#ff0000" d="M556.19,-43.82C564.37,-42.73 572.57,-41.64 580.44,-40.6"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="580.74,-44.09 590.19,-39.3 579.82,-37.15 580.74,-44.09"/>
+</g>
+<!-- proc~run_continuity_chain -->
+<g id="proc~~redi_face_flux~~CalledByGraph_node5" class="node">
+<title>proc~run_continuity_chain</title>
+<g id="a_proc~~redi_face_flux~~CalledByGraph_node5"><a xlink:href="../proc/run_continuity_chain.html" xlink:title="run_continuity_chain">
+<polygon fill="#d9534f" stroke="#d9534f" points="538.45,-24.27 416.68,-24.27 416.68,0 538.45,0 538.45,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="477.57" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_continuity_chain</text>
+</a>
+</g>
+</g>
+<!-- proc~run_continuity_chain&#45;&gt;proc~redi_apply_flux -->
+<g id="proc~~redi_face_flux~~CalledByGraph_edge4" class="edge">
+<title>proc~run_continuity_chain&#45;&gt;proc~redi_apply_flux</title>
+<path fill="none" stroke="#ff0000" d="M538.76,-20.13C552.53,-21.96 567.1,-23.9 580.68,-25.7"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="579.93,-29.14 590.3,-26.98 580.85,-22.2 579.93,-29.14"/>
+</g>
+<!-- proc~ocean_dyn_step_split -->
+<g id="proc~~redi_face_flux~~CalledByGraph_node6" class="node">
+<title>proc~ocean_dyn_step_split</title>
+<g id="a_proc~~redi_face_flux~~CalledByGraph_node6"><a xlink:href="../proc/ocean_dyn_step_split.html" xlink:title="ocean_dyn_step_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="236.04,-45.27 112.02,-45.27 112.02,-21 236.04,-21 236.04,-45.27"/>
+<text xml:space="preserve" text-anchor="middle" x="174.03" y="-29.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step_split</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step_split&#45;&gt;proc~apply_deferred_tracer_step -->
+<g id="proc~~redi_face_flux~~CalledByGraph_edge5" class="edge">
+<title>proc~ocean_dyn_step_split&#45;&gt;proc~apply_deferred_tracer_step</title>
+<path fill="none" stroke="#ff0000" d="M236.41,-37.41C279.78,-40.43 338.58,-44.52 387.14,-47.91"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="386.88,-51.4 397.1,-48.6 387.37,-44.41 386.88,-51.4"/>
+</g>
+<!-- proc~run_stage_split -->
+<g id="proc~~redi_face_flux~~CalledByGraph_node7" class="node">
+<title>proc~run_stage_split</title>
+<g id="a_proc~~redi_face_flux~~CalledByGraph_node7"><a xlink:href="../proc/run_stage_split.html" xlink:title="run_stage_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="363.06,-25.27 272.04,-25.27 272.04,-1 363.06,-1 363.06,-25.27"/>
+<text xml:space="preserve" text-anchor="middle" x="317.55" y="-9.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage_split</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step_split&#45;&gt;proc~run_stage_split -->
+<g id="proc~~redi_face_flux~~CalledByGraph_edge8" class="edge">
+<title>proc~ocean_dyn_step_split&#45;&gt;proc~run_stage_split</title>
+<path fill="none" stroke="#00ffff" d="M236.28,-24.48C244.31,-23.34 252.51,-22.19 260.45,-21.06"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="260.93,-24.53 270.35,-19.66 259.96,-17.6 260.93,-24.53"/>
+</g>
+<!-- proc~run_stage_split&#45;&gt;proc~run_continuity_chain -->
+<g id="proc~~redi_face_flux~~CalledByGraph_edge6" class="edge">
+<title>proc~run_stage_split&#45;&gt;proc~run_continuity_chain</title>
+<path fill="none" stroke="#00ffff" d="M363.41,-12.85C376.37,-12.77 390.85,-12.68 405,-12.59"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="404.76,-16.09 414.74,-12.53 404.72,-9.09 404.76,-16.09"/>
+</g>
+<!-- proc~engine_step -->
+<g id="proc~~redi_face_flux~~CalledByGraph_node8" class="node">
+<title>proc~engine_step</title>
+<g id="a_proc~~redi_face_flux~~CalledByGraph_node8"><a xlink:href="../proc/engine_step.html" xlink:title="engine_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="76.02,-45.27 0,-45.27 0,-21 76.02,-21 76.02,-45.27"/>
+<text xml:space="preserve" text-anchor="middle" x="38.01" y="-29.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~ocean_dyn_step_split -->
+<g id="proc~~redi_face_flux~~CalledByGraph_edge7" class="edge">
+<title>proc~engine_step&#45;&gt;proc~ocean_dyn_step_split</title>
+<path fill="none" stroke="#ff0000" d="M76.34,-33.13C83.9,-33.13 92.1,-33.13 100.41,-33.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="100.25,-36.64 110.25,-33.14 100.25,-29.64 100.25,-36.64"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocredi_face_fluxCalledByGraph = svgPanZoom('#procredi_face_fluxCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-til~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>TiL</strong>(NZ_STACK_MAX+1)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-tir~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>TiR</strong>(NZ_STACK_MAX+1)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-tll~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>TlL</strong>(NZ_STACK_MAX)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-tlr~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>TlR</strong>(NZ_STACK_MAX)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-all~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>aLL</strong>(NZ_STACK_MAX)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-alr~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>aLR</strong>(NZ_STACK_MAX)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-arl~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>aRL</strong>(NZ_STACK_MAX)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-arr~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>aRR</strong>(NZ_STACK_MAX)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dtdiff"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dtdiff</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-flx"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>flx</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hcl"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hcL</strong>(NZ_STACK_MAX)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hcr"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hcR</strong>(NZ_STACK_MAX)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-k~58"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>k</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-knat"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>knat</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-koff~2"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>koff</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ks~11"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ks</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nk~14"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nk</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-trcl"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>trcL</strong>(NZ_STACK_MAX)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-trcr"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>trcR</strong>(NZ_STACK_MAX)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">pure subroutine </span><span class="n">redi_face_flux</span><span class="p">(</span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">ns</span><span class="p">,</span><span class="w"> </span><span class="n">nxc</span><span class="p">,</span><span class="w"> </span><span class="n">nyc</span><span class="p">,</span><span class="w"> </span><span class="n">nfa</span><span class="p">,</span><span class="w"> </span><span class="n">nfb</span><span class="p">,</span><span class="w"> </span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="n">c_in</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                  </span><span class="n">iL</span><span class="p">,</span><span class="w"> </span><span class="n">jL</span><span class="p">,</span><span class="w"> </span><span class="n">iR</span><span class="p">,</span><span class="w"> </span><span class="n">jR</span><span class="p">,</span><span class="w"> </span><span class="n">fa</span><span class="p">,</span><span class="w"> </span><span class="n">fb</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                  </span><span class="n">PoL</span><span class="p">,</span><span class="w"> </span><span class="n">PoR</span><span class="p">,</span><span class="w"> </span><span class="n">KoL</span><span class="p">,</span><span class="w"> </span><span class="n">KoR</span><span class="p">,</span><span class="w"> </span><span class="n">hEff</span><span class="p">,</span><span class="w"> </span><span class="n">kb</span><span class="p">,</span><span class="w"> </span><span class="n">kt</span><span class="p">,</span><span class="w"> </span><span class="n">use_open</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                  </span><span class="n">coef</span><span class="p">,</span><span class="w"> </span><span class="n">is_left</span><span class="p">,</span><span class="w"> </span><span class="n">dTr</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!$acc routine seq</span>
+<span class="w">      </span><span class="c">!! Accumulate ONE C-grid face's neutral-surface tracer flux into the</span>
+<span class="w">      </span><span class="c">!! owning cell's `dTr`.  Builds the left/right tracer columns from the</span>
+<span class="w">      </span><span class="c">!! READ-ONLY snapshot `c_in` (the live `c` is also written by the</span>
+<span class="w">      </span><span class="c">!! loop — reading it would be a do-concurrent read-write race) and loops</span>
+<span class="w">      </span><span class="c">!! the `ns-1` neutral sublayers.  The per-face column locals live in this</span>
+<span class="w">      </span><span class="c">!! frame to keep the caller's loop-body footprint small.</span>
+<span class="w">      </span><span class="c">!! `is_left`: this cell is the LEFT (west/south) column ⇒ `+flx` into</span>
+<span class="w">      </span><span class="c">!! native layer `nz+1-KoL`; else the RIGHT column ⇒ `-flx` into</span>
+<span class="w">      </span><span class="c">!! `nz+1-KoR`.  `(iL,jL)`/`(iR,jR)` index the columns; `(fa,fb)` the faces.</span>
+<span class="w">      </span><span class="c">!! `kb..kt` is the face's Phase-A open window (`1..nz` off the z-level</span>
+<span class="w">      </span><span class="c">!! closed-face path): the tracer columns are reconstructed on it alone</span>
+<span class="w">      </span><span class="c">!! and the full-frame `Ko` are read in the window frame (`Ko - nz +</span>
+<span class="w">      </span><span class="c">!! kt`).  An empty window, or (`use_open`) one whose layers are no</span>
+<span class="w">      </span><span class="c">!! longer all live on both sides, contributes nothing — both cells of</span>
+<span class="w">      </span><span class="c">!! the face take the same decision from the same `h`.</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">ns</span><span class="p">,</span><span class="w"> </span><span class="n">nxc</span><span class="p">,</span><span class="w"> </span><span class="n">nyc</span><span class="p">,</span><span class="w"> </span><span class="n">nfa</span><span class="p">,</span><span class="w"> </span><span class="n">nfb</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">iL</span><span class="p">,</span><span class="w"> </span><span class="n">jL</span><span class="p">,</span><span class="w"> </span><span class="n">iR</span><span class="p">,</span><span class="w"> </span><span class="n">jR</span><span class="p">,</span><span class="w"> </span><span class="n">fa</span><span class="p">,</span><span class="w"> </span><span class="n">fb</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">h_layer</span><span class="p">(</span><span class="n">nxc</span><span class="p">,</span><span class="w"> </span><span class="n">nyc</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">),</span><span class="w"> </span><span class="n">c_in</span><span class="p">(</span><span class="n">nxc</span><span class="p">,</span><span class="w"> </span><span class="n">nyc</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">PoL</span><span class="p">(</span><span class="n">nfa</span><span class="p">,</span><span class="w"> </span><span class="n">nfb</span><span class="p">,</span><span class="w"> </span><span class="n">ns</span><span class="p">),</span><span class="w"> </span><span class="n">PoR</span><span class="p">(</span><span class="n">nfa</span><span class="p">,</span><span class="w"> </span><span class="n">nfb</span><span class="p">,</span><span class="w"> </span><span class="n">ns</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">KoL</span><span class="p">(</span><span class="n">nfa</span><span class="p">,</span><span class="w"> </span><span class="n">nfb</span><span class="p">,</span><span class="w"> </span><span class="n">ns</span><span class="p">),</span><span class="w"> </span><span class="n">KoR</span><span class="p">(</span><span class="n">nfa</span><span class="p">,</span><span class="w"> </span><span class="n">nfb</span><span class="p">,</span><span class="w"> </span><span class="n">ns</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">hEff</span><span class="p">(</span><span class="n">nfa</span><span class="p">,</span><span class="w"> </span><span class="n">nfb</span><span class="p">,</span><span class="w"> </span><span class="n">ns</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">kb</span><span class="p">,</span><span class="w"> </span><span class="n">kt</span>
+<span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">use_open</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">coef</span>
+<span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">is_left</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dTr</span><span class="p">(</span><span class="n">nz</span><span class="p">)</span>
+
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">k</span><span class="p">,</span><span class="w"> </span><span class="n">ks</span><span class="p">,</span><span class="w"> </span><span class="n">knat</span><span class="p">,</span><span class="w"> </span><span class="n">nk</span><span class="p">,</span><span class="w"> </span><span class="n">koff</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">hcL</span><span class="p">(</span><span class="n">NZ_STACK_MAX</span><span class="p">),</span><span class="w"> </span><span class="n">trcL</span><span class="p">(</span><span class="n">NZ_STACK_MAX</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">hcR</span><span class="p">(</span><span class="n">NZ_STACK_MAX</span><span class="p">),</span><span class="w"> </span><span class="n">trcR</span><span class="p">(</span><span class="n">NZ_STACK_MAX</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">TlL</span><span class="p">(</span><span class="n">NZ_STACK_MAX</span><span class="p">),</span><span class="w"> </span><span class="n">TiL</span><span class="p">(</span><span class="n">NZ_STACK_MAX</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="k">aLL</span><span class="p">(</span><span class="n">NZ_STACK_MAX</span><span class="p">),</span><span class="w"> </span><span class="n">aRL</span><span class="p">(</span><span class="n">NZ_STACK_MAX</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">TlR</span><span class="p">(</span><span class="n">NZ_STACK_MAX</span><span class="p">),</span><span class="w"> </span><span class="n">TiR</span><span class="p">(</span><span class="n">NZ_STACK_MAX</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="n">aLR</span><span class="p">(</span><span class="n">NZ_STACK_MAX</span><span class="p">),</span><span class="w"> </span><span class="n">aRR</span><span class="p">(</span><span class="n">NZ_STACK_MAX</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dtdiff</span><span class="p">,</span><span class="w"> </span><span class="n">flx</span>
+
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">kt</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">kb</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="n">use_open</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">kb</span><span class="p">,</span><span class="w"> </span><span class="n">kt</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="p">(</span><span class="n">rdb_vl_is_live</span><span class="p">(</span><span class="n">h_layer</span><span class="p">(</span><span class="n">iL</span><span class="p">,</span><span class="w"> </span><span class="n">jL</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">))</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                       </span><span class="n">rdb_vl_is_live</span><span class="p">(</span><span class="n">h_layer</span><span class="p">(</span><span class="n">iR</span><span class="p">,</span><span class="w"> </span><span class="n">jR</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">))))</span><span class="w"> </span><span class="k">return</span>
+<span class="k">         end do</span>
+<span class="k">      end if</span>
+<span class="k">      </span><span class="n">nk</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">kt</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">kb</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">      </span><span class="n">koff</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nz</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">kt</span>
+<span class="w">      </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span>
+<span class="w">         </span><span class="n">hcL</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">h_layer</span><span class="p">(</span><span class="n">iL</span><span class="p">,</span><span class="w"> </span><span class="n">jL</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">         </span><span class="n">trcL</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">c_in</span><span class="p">(</span><span class="n">iL</span><span class="p">,</span><span class="w"> </span><span class="n">jL</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">         </span><span class="n">hcR</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">h_layer</span><span class="p">(</span><span class="n">iR</span><span class="p">,</span><span class="w"> </span><span class="n">jR</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">         </span><span class="n">trcR</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">c_in</span><span class="p">(</span><span class="n">iR</span><span class="p">,</span><span class="w"> </span><span class="n">jR</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end do</span>
+<span class="k">      call </span><span class="n">redi_tracer_column</span><span class="p">(</span><span class="n">kb</span><span class="p">,</span><span class="w"> </span><span class="n">kt</span><span class="p">,</span><span class="w"> </span><span class="n">hcL</span><span class="p">,</span><span class="w"> </span><span class="n">trcL</span><span class="p">,</span><span class="w"> </span><span class="n">TlL</span><span class="p">,</span><span class="w"> </span><span class="n">TiL</span><span class="p">,</span><span class="w"> </span><span class="k">aLL</span><span class="p">,</span><span class="w"> </span><span class="n">aRL</span><span class="p">)</span>
+<span class="w">      </span><span class="k">call </span><span class="n">redi_tracer_column</span><span class="p">(</span><span class="n">kb</span><span class="p">,</span><span class="w"> </span><span class="n">kt</span><span class="p">,</span><span class="w"> </span><span class="n">hcR</span><span class="p">,</span><span class="w"> </span><span class="n">trcR</span><span class="p">,</span><span class="w"> </span><span class="n">TlR</span><span class="p">,</span><span class="w"> </span><span class="n">TiR</span><span class="p">,</span><span class="w"> </span><span class="n">aLR</span><span class="p">,</span><span class="w"> </span><span class="n">aRR</span><span class="p">)</span>
+<span class="w">      </span><span class="k">do </span><span class="n">ks</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ns</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">hEff</span><span class="p">(</span><span class="n">fa</span><span class="p">,</span><span class="w"> </span><span class="n">fb</span><span class="p">,</span><span class="w"> </span><span class="n">ks</span><span class="p">)</span><span class="w"> </span><span class="o">/=</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="w">            </span><span class="c">! A filler layer (h &lt;= H_VANISHED) refuses deposits (c storage), so a</span>
+<span class="w">            </span><span class="c">! flux paired with one on EITHER end is dropped on BOTH ends: each</span>
+<span class="w">            </span><span class="c">! cell takes the same decision and the live side cannot lose tracer.</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="p">(</span><span class="n">rdb_vl_is_live</span><span class="p">(</span><span class="n">h_layer</span><span class="p">(</span><span class="n">iL</span><span class="p">,</span><span class="w"> </span><span class="n">jL</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">KoL</span><span class="p">(</span><span class="n">fa</span><span class="p">,</span><span class="w"> </span><span class="n">fb</span><span class="p">,</span><span class="w"> </span><span class="n">ks</span><span class="p">)))</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                       </span><span class="n">rdb_vl_is_live</span><span class="p">(</span><span class="n">h_layer</span><span class="p">(</span><span class="n">iR</span><span class="p">,</span><span class="w"> </span><span class="n">jR</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">KoR</span><span class="p">(</span><span class="n">fa</span><span class="p">,</span><span class="w"> </span><span class="n">fb</span><span class="p">,</span><span class="w"> </span><span class="n">ks</span><span class="p">)))))</span><span class="w"> </span><span class="k">cycle</span>
+<span class="k">            </span><span class="n">dtdiff</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">redi_sublayer_dT</span><span class="p">(</span><span class="n">nk</span><span class="p">,</span><span class="w"> </span><span class="n">KoL</span><span class="p">(</span><span class="n">fa</span><span class="p">,</span><span class="w"> </span><span class="n">fb</span><span class="p">,</span><span class="w"> </span><span class="n">ks</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">koff</span><span class="p">,</span><span class="w"> </span><span class="n">KoL</span><span class="p">(</span><span class="n">fa</span><span class="p">,</span><span class="w"> </span><span class="n">fb</span><span class="p">,</span><span class="w"> </span><span class="n">ks</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">koff</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="n">KoR</span><span class="p">(</span><span class="n">fa</span><span class="p">,</span><span class="w"> </span><span class="n">fb</span><span class="p">,</span><span class="w"> </span><span class="n">ks</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">koff</span><span class="p">,</span><span class="w"> </span><span class="n">KoR</span><span class="p">(</span><span class="n">fa</span><span class="p">,</span><span class="w"> </span><span class="n">fb</span><span class="p">,</span><span class="w"> </span><span class="n">ks</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">koff</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="n">PoL</span><span class="p">(</span><span class="n">fa</span><span class="p">,</span><span class="w"> </span><span class="n">fb</span><span class="p">,</span><span class="w"> </span><span class="n">ks</span><span class="p">),</span><span class="w"> </span><span class="n">PoL</span><span class="p">(</span><span class="n">fa</span><span class="p">,</span><span class="w"> </span><span class="n">fb</span><span class="p">,</span><span class="w"> </span><span class="n">ks</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="n">PoR</span><span class="p">(</span><span class="n">fa</span><span class="p">,</span><span class="w"> </span><span class="n">fb</span><span class="p">,</span><span class="w"> </span><span class="n">ks</span><span class="p">),</span><span class="w"> </span><span class="n">PoR</span><span class="p">(</span><span class="n">fa</span><span class="p">,</span><span class="w"> </span><span class="n">fb</span><span class="p">,</span><span class="w"> </span><span class="n">ks</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="n">TlL</span><span class="p">,</span><span class="w"> </span><span class="n">TiL</span><span class="p">,</span><span class="w"> </span><span class="k">aLL</span><span class="p">,</span><span class="w"> </span><span class="n">aRL</span><span class="p">,</span><span class="w"> </span><span class="n">TlR</span><span class="p">,</span><span class="w"> </span><span class="n">TiR</span><span class="p">,</span><span class="w"> </span><span class="n">aLR</span><span class="p">,</span><span class="w"> </span><span class="n">aRR</span><span class="p">)</span>
+<span class="w">            </span><span class="n">flx</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dtdiff</span><span class="o">*</span><span class="n">hEff</span><span class="p">(</span><span class="n">fa</span><span class="p">,</span><span class="w"> </span><span class="n">fb</span><span class="p">,</span><span class="w"> </span><span class="n">ks</span><span class="p">)</span><span class="o">*</span><span class="n">coef</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">is_left</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               </span><span class="n">knat</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nz</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">KoL</span><span class="p">(</span><span class="n">fa</span><span class="p">,</span><span class="w"> </span><span class="n">fb</span><span class="p">,</span><span class="w"> </span><span class="n">ks</span><span class="p">)</span>
+<span class="w">               </span><span class="n">dTr</span><span class="p">(</span><span class="n">knat</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dTr</span><span class="p">(</span><span class="n">knat</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">flx</span>
+<span class="w">            </span><span class="k">else</span>
+<span class="k">               </span><span class="n">knat</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nz</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">KoR</span><span class="p">(</span><span class="n">fa</span><span class="p">,</span><span class="w"> </span><span class="n">fb</span><span class="p">,</span><span class="w"> </span><span class="n">ks</span><span class="p">)</span>
+<span class="w">               </span><span class="n">dTr</span><span class="p">(</span><span class="n">knat</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dTr</span><span class="p">(</span><span class="n">knat</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">flx</span>
+<span class="w">            </span><span class="k">end if</span>
+<span class="k">         end if</span>
+<span class="k">      end do</span>
+<span class="k">   end subroutine </span><span class="n">redi_face_flux</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-11-13 23:21 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

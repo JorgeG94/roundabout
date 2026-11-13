@@ -1,0 +1,838 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>bound_salinity_top_impl &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>bound_salinity_top_impl
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.0% of total for procedures.">15 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_surface_flux.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_surface_flux.f90.html'>rdb_ocean_surface_flux.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ocean_surface_flux.html'>rdb_ocean_surface_flux</a></li>
+            <li class="breadcrumb-item active" aria-current="page">bound_salinity_top_impl</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/bound_salinity_top_impl.html#variable-i~676">i</a>
+            <a class="list-group-item" href="../proc/bound_salinity_top_impl.html#variable-j~594">j</a>
+            <a class="list-group-item" href="../proc/bound_salinity_top_impl.html#variable-kt~37">kt</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/bound_salinity_top_impl.html#src">bound_salinity_top_impl</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>public pure subroutine bound_salinity_top_impl(c, h_layer, wet_mask, s_min, k_top, nz, nx, ny)  
+</h2>
+    
+
+    <p><code>S &lt;- max(S, s_min)</code> on the first live layer of every wet column,
+on the stored concentration.  NON-CONSERVING: the salt it creates is not
+mirrored into <code>salt_budget_surface</code>, and it acts only where the
+ice-ocean salt exchange (or anything else) drove S below the floor.
+A vanished layer (<code>h &lt;= H_DIV_EPS</code>) is skipped.</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-c~108"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>c</strong>(nx,ny,nz)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_layer~137"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_layer</strong>(nx,ny,nz)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-wet_mask~39"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>wet_mask</strong>(nx,ny)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-s_min"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>s_min</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-k_top~12"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>k_top</strong>(nx,ny)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz~503"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx~604"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny~604"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~bound_salinity_top_impl~~CallsGraph Pages: 1 -->
+<svg id="procbound_salinity_top_implCallsGraph" width="276pt" height="74pt"
+ viewBox="0.00 0.00 276.00 74.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~bound_salinity_top_impl~~CallsGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 70.27)">
+<title>proc~~bound_salinity_top_impl~~CallsGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-70.27 272.29,-70.27 272.29,4 -4,4"/>
+<!-- proc~bound_salinity_top_impl -->
+<g id="proc~~bound_salinity_top_impl~~CallsGraph_node1" class="node">
+<title>proc~bound_salinity_top_impl</title>
+<polygon fill="none" stroke="black" points="139.02,-45.27 0,-45.27 0,-21 139.02,-21 139.02,-45.27"/>
+<text xml:space="preserve" text-anchor="middle" x="69.51" y="-29.53" font-family="Helvetica,sans-Serif" font-size="10.50">bound_salinity_top_impl</text>
+</g>
+<!-- local -->
+<g id="proc~~bound_salinity_top_impl~~CallsGraph_node2" class="node">
+<title>local</title>
+<polygon fill="#777777" stroke="#777777" points="248.66,-66.27 194.66,-66.27 194.66,-42 248.66,-42 248.66,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="221.66" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">local</text>
+</g>
+<!-- proc~bound_salinity_top_impl&#45;&gt;local -->
+<g id="proc~~bound_salinity_top_impl~~CallsGraph_edge1" class="edge">
+<title>proc~bound_salinity_top_impl&#45;&gt;local</title>
+<path fill="none" stroke="#ff0000" d="M139.43,-42.77C154.58,-44.89 170.06,-47.06 183.39,-48.92"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="182.6,-52.35 192.98,-50.26 183.57,-45.41 182.6,-52.35"/>
+</g>
+<!-- rdb_vl_first_live -->
+<g id="proc~~bound_salinity_top_impl~~CallsGraph_node3" class="node">
+<title>rdb_vl_first_live</title>
+<polygon fill="#777777" stroke="#777777" points="268.29,-24.27 175.02,-24.27 175.02,0 268.29,0 268.29,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="221.66" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_vl_first_live</text>
+</g>
+<!-- proc~bound_salinity_top_impl&#45;&gt;rdb_vl_first_live -->
+<g id="proc~~bound_salinity_top_impl~~CallsGraph_edge2" class="edge">
+<title>proc~bound_salinity_top_impl&#45;&gt;rdb_vl_first_live</title>
+<path fill="none" stroke="#ff0000" d="M139.43,-23.5C147.51,-22.37 155.69,-21.22 163.58,-20.12"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="163.98,-23.6 173.4,-18.74 163.01,-16.66 163.98,-23.6"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~bound_salinity_top_impl~~CalledByGraph Pages: 1 -->
+<svg id="procbound_salinity_top_implCalledByGraph" width="641pt" height="78pt"
+ viewBox="0.00 0.00 641.00 78.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~bound_salinity_top_impl~~CalledByGraph" class="graph" transform="scale(0.668321 0.668321) rotate(0) translate(4 112.27)">
+<title>proc~~bound_salinity_top_impl~~CalledByGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-112.27 955.12,-112.27 955.12,4 -4,4"/>
+<!-- proc~bound_salinity_top_impl -->
+<g id="proc~~bound_salinity_top_impl~~CalledByGraph_node1" class="node">
+<title>proc~bound_salinity_top_impl</title>
+<polygon fill="none" stroke="black" points="951.12,-66.27 812.1,-66.27 812.1,-42 951.12,-42 951.12,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="881.61" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50">bound_salinity_top_impl</text>
+</g>
+<!-- proc~ocean_surface_flux_apply_tracers -->
+<g id="proc~~bound_salinity_top_impl~~CalledByGraph_node2" class="node">
+<title>proc~ocean_surface_flux_apply_tracers</title>
+<g id="a_proc~~bound_salinity_top_impl~~CalledByGraph_node2"><a xlink:href="../proc/ocean_surface_flux_apply_tracers.html" xlink:title="ocean_surface_flux_apply_tracers">
+<polygon fill="#d9534f" stroke="#d9534f" points="776.1,-66.27 584.58,-66.27 584.58,-42 776.1,-42 776.1,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="680.34" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_surface_flux_apply_tracers</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_surface_flux_apply_tracers&#45;&gt;proc~bound_salinity_top_impl -->
+<g id="proc~~bound_salinity_top_impl~~CalledByGraph_edge1" class="edge">
+<title>proc~ocean_surface_flux_apply_tracers&#45;&gt;proc~bound_salinity_top_impl</title>
+<path fill="none" stroke="#ff0000" d="M776.6,-54.13C784.53,-54.13 792.5,-54.13 800.31,-54.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="800.09,-57.64 810.09,-54.14 800.09,-50.64 800.09,-57.64"/>
+</g>
+<!-- proc~apply_deferred_thermo -->
+<g id="proc~~bound_salinity_top_impl~~CalledByGraph_node3" class="node">
+<title>proc~apply_deferred_thermo</title>
+<g id="a_proc~~bound_salinity_top_impl~~CalledByGraph_node3"><a xlink:href="../proc/apply_deferred_thermo.html" xlink:title="apply_deferred_thermo">
+<polygon fill="#d9534f" stroke="#d9534f" points="548.58,-66.27 412.56,-66.27 412.56,-42 548.58,-42 548.58,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="480.57" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">apply_deferred_thermo</text>
+</a>
+</g>
+</g>
+<!-- proc~apply_deferred_thermo&#45;&gt;proc~ocean_surface_flux_apply_tracers -->
+<g id="proc~~bound_salinity_top_impl~~CalledByGraph_edge2" class="edge">
+<title>proc~apply_deferred_thermo&#45;&gt;proc~ocean_surface_flux_apply_tracers</title>
+<path fill="none" stroke="#ff0000" d="M549.08,-54.13C556.76,-54.13 564.72,-54.13 572.76,-54.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="572.62,-57.64 582.62,-54.14 572.62,-50.64 572.62,-57.64"/>
+</g>
+<!-- proc~run_stage -->
+<g id="proc~~bound_salinity_top_impl~~CalledByGraph_node4" class="node">
+<title>proc~run_stage</title>
+<g id="a_proc~~bound_salinity_top_impl~~CalledByGraph_node4"><a xlink:href="../proc/run_stage.html" xlink:title="run_stage">
+<polygon fill="#d9534f" stroke="#d9534f" points="512.58,-108.27 448.56,-108.27 448.56,-84 512.58,-84 512.58,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="480.57" y="-92.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage</text>
+</a>
+</g>
+</g>
+<!-- proc~run_stage&#45;&gt;proc~ocean_surface_flux_apply_tracers -->
+<g id="proc~~bound_salinity_top_impl~~CalledByGraph_edge3" class="edge">
+<title>proc~run_stage&#45;&gt;proc~ocean_surface_flux_apply_tracers</title>
+<path fill="none" stroke="#ff0000" d="M512.91,-89.48C538.64,-84.01 576.07,-76.07 608.92,-69.09"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="609.33,-72.58 618.38,-67.08 607.87,-65.73 609.33,-72.58"/>
+</g>
+<!-- proc~run_stage_split -->
+<g id="proc~~bound_salinity_top_impl~~CalledByGraph_node5" class="node">
+<title>proc~run_stage_split</title>
+<g id="a_proc~~bound_salinity_top_impl~~CalledByGraph_node5"><a xlink:href="../proc/run_stage_split.html" xlink:title="run_stage_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="526.08,-24.27 435.06,-24.27 435.06,0 526.08,0 526.08,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="480.57" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage_split</text>
+</a>
+</g>
+</g>
+<!-- proc~run_stage_split&#45;&gt;proc~ocean_surface_flux_apply_tracers -->
+<g id="proc~~bound_salinity_top_impl~~CalledByGraph_edge4" class="edge">
+<title>proc~run_stage_split&#45;&gt;proc~ocean_surface_flux_apply_tracers</title>
+<path fill="none" stroke="#ff0000" d="M526.45,-21.67C550.79,-26.83 581.42,-33.34 608.87,-39.17"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="608.02,-42.57 618.53,-41.22 609.47,-35.72 608.02,-42.57"/>
+</g>
+<!-- proc~ocean_dyn_step -->
+<g id="proc~~bound_salinity_top_impl~~CalledByGraph_node6" class="node">
+<title>proc~ocean_dyn_step</title>
+<g id="a_proc~~bound_salinity_top_impl~~CalledByGraph_node6"><a xlink:href="../proc/ocean_dyn_step.html" xlink:title="ocean_dyn_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="363.06,-108.27 266.04,-108.27 266.04,-84 363.06,-84 363.06,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="314.55" y="-92.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step&#45;&gt;proc~run_stage -->
+<g id="proc~~bound_salinity_top_impl~~CalledByGraph_edge6" class="edge">
+<title>proc~ocean_dyn_step&#45;&gt;proc~run_stage</title>
+<path fill="none" stroke="#00ff00" d="M363.43,-96.13C386.78,-96.13 414.63,-96.13 437.2,-96.13"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="436.95,-99.64 446.95,-96.14 436.95,-92.64 436.95,-99.64"/>
+</g>
+<!-- proc~ocean_dyn_step_split -->
+<g id="proc~~bound_salinity_top_impl~~CalledByGraph_node7" class="node">
+<title>proc~ocean_dyn_step_split</title>
+<g id="a_proc~~bound_salinity_top_impl~~CalledByGraph_node7"><a xlink:href="../proc/ocean_dyn_step_split.html" xlink:title="ocean_dyn_step_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="376.56,-66.27 252.54,-66.27 252.54,-42 376.56,-42 376.56,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="314.55" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step_split</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step_split&#45;&gt;proc~apply_deferred_thermo -->
+<g id="proc~~bound_salinity_top_impl~~CalledByGraph_edge5" class="edge">
+<title>proc~ocean_dyn_step_split&#45;&gt;proc~apply_deferred_thermo</title>
+<path fill="none" stroke="#ff0000" d="M376.62,-54.13C384.49,-54.13 392.62,-54.13 400.72,-54.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="400.59,-57.64 410.59,-54.14 400.59,-50.64 400.59,-57.64"/>
+</g>
+<!-- proc~ocean_dyn_step_split&#45;&gt;proc~run_stage_split -->
+<g id="proc~~bound_salinity_top_impl~~CalledByGraph_edge7" class="edge">
+<title>proc~ocean_dyn_step_split&#45;&gt;proc~run_stage_split</title>
+<path fill="none" stroke="#0000ff" d="M364.76,-41.53C383.3,-36.79 404.51,-31.35 423.62,-26.46"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="424.3,-29.9 433.12,-24.03 422.57,-23.12 424.3,-29.9"/>
+</g>
+<!-- proc~engine_step -->
+<g id="proc~~bound_salinity_top_impl~~CalledByGraph_node8" class="node">
+<title>proc~engine_step</title>
+<g id="a_proc~~bound_salinity_top_impl~~CalledByGraph_node8"><a xlink:href="../proc/engine_step.html" xlink:title="engine_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="216.54,-87.27 140.52,-87.27 140.52,-63 216.54,-63 216.54,-87.27"/>
+<text xml:space="preserve" text-anchor="middle" x="178.53" y="-71.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~ocean_dyn_step -->
+<g id="proc~~bound_salinity_top_impl~~CalledByGraph_edge8" class="edge">
+<title>proc~engine_step&#45;&gt;proc~ocean_dyn_step</title>
+<path fill="none" stroke="#ff0000" d="M216.86,-80.98C228.6,-82.82 241.87,-84.9 254.72,-86.92"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="253.95,-90.34 264.37,-88.43 255.04,-83.42 253.95,-90.34"/>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~ocean_dyn_step_split -->
+<g id="proc~~bound_salinity_top_impl~~CalledByGraph_edge9" class="edge">
+<title>proc~engine_step&#45;&gt;proc~ocean_dyn_step_split</title>
+<path fill="none" stroke="#00ffff" d="M216.86,-69.29C224.42,-68.1 232.62,-66.82 240.93,-65.51"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="241.45,-68.98 250.78,-63.97 240.36,-62.06 241.45,-68.98"/>
+</g>
+<!-- proc~driver_run_ocean -->
+<g id="proc~~bound_salinity_top_impl~~CalledByGraph_node9" class="node">
+<title>proc~driver_run_ocean</title>
+<g id="a_proc~~bound_salinity_top_impl~~CalledByGraph_node9"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<polygon fill="#d9534f" stroke="#d9534f" points="104.52,-108.27 0,-108.27 0,-84 104.52,-84 104.52,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="52.26" y="-92.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_step -->
+<g id="proc~~bound_salinity_top_impl~~CalledByGraph_edge10" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_step</title>
+<path fill="none" stroke="#ff0000" d="M104.88,-87.41C112.86,-86.06 121.07,-84.68 128.98,-83.34"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="129.5,-86.8 138.78,-81.68 128.34,-79.9 129.5,-86.8"/>
+</g>
+<!-- proc~rdb_ocean_step -->
+<g id="proc~~bound_salinity_top_impl~~CalledByGraph_node10" class="node">
+<title>proc~rdb_ocean_step</title>
+<g id="a_proc~~bound_salinity_top_impl~~CalledByGraph_node10"><a xlink:href="../proc/rdb_ocean_step.html" xlink:title="rdb_ocean_step">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="100.02,-66.27 4.5,-66.27 4.5,-42 100.02,-42 100.02,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="52.26" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_step</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_step&#45;&gt;proc~engine_step -->
+<g id="proc~~bound_salinity_top_impl~~CalledByGraph_edge11" class="edge">
+<title>proc~rdb_ocean_step&#45;&gt;proc~engine_step</title>
+<path fill="none" stroke="#ff0000" d="M100.24,-62.07C109.62,-63.66 119.5,-65.33 128.93,-66.92"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="128.22,-70.35 138.67,-68.57 129.39,-63.45 128.22,-70.35"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocbound_salinity_top_implCalledByGraph = svgPanZoom('#procbound_salinity_top_implCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-i~676"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>i</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-j~594"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>j</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-kt~37"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>kt</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">pure subroutine </span><span class="n">bound_salinity_top_impl</span><span class="p">(</span><span class="n">c</span><span class="p">,</span><span class="w"> </span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="n">wet_mask</span><span class="p">,</span><span class="w"> </span><span class="n">s_min</span><span class="p">,</span><span class="w"> </span><span class="n">k_top</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! `S &lt;- max(S, s_min)` on the first live layer of every wet column,</span>
+<span class="w">      </span><span class="c">!! on the stored concentration.  NON-CONSERVING: the salt it creates is not</span>
+<span class="w">      </span><span class="c">!! mirrored into `salt_budget_surface`, and it acts only where the</span>
+<span class="w">      </span><span class="c">!! ice-ocean salt exchange (or anything else) drove S below the floor.</span>
+<span class="w">      </span><span class="c">!! A vanished layer (`h &lt;= H_DIV_EPS`) is skipped.</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">c</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">h_layer</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">wet_mask</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">s_min</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">k_top</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">kt</span>
+<span class="w">      </span><span class="k">do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nx</span><span class="p">)</span><span class="w"> </span><span class="n">local</span><span class="p">(</span><span class="n">kt</span><span class="p">)</span>
+<span class="w">         </span><span class="n">kt</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">rdb_vl_first_live</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k_top</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">))</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">wet_mask</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">h_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">kt</span><span class="p">)</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">H_DIV_EPS</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            </span><span class="n">c</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">kt</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">max</span><span class="p">(</span><span class="n">c</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">kt</span><span class="p">),</span><span class="w"> </span><span class="n">s_min</span><span class="p">)</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">      end do</span>
+<span class="k">   end subroutine </span><span class="n">bound_salinity_top_impl</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-11-13 23:21 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

@@ -1,0 +1,1612 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>tracer_advect_zonal_one_impl &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>tracer_advect_zonal_one_impl
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.1% of total for procedures.">120 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_continuity.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_continuity.f90.html'>rdb_continuity.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_continuity.html'>rdb_continuity</a></li>
+            <li class="breadcrumb-item active" aria-current="page">tracer_advect_zonal_one_impl</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/tracer_advect_zonal_one_impl.html#variable-tr_0">Tr_0</a>
+            <a class="list-group-item" href="../proc/tracer_advect_zonal_one_impl.html#variable-tr_face">Tr_face</a>
+            <a class="list-group-item" href="../proc/tracer_advect_zonal_one_impl.html#variable-tr_left">Tr_left</a>
+            <a class="list-group-item" href="../proc/tracer_advect_zonal_one_impl.html#variable-tr_m1">Tr_m1</a>
+            <a class="list-group-item" href="../proc/tracer_advect_zonal_one_impl.html#variable-tr_m2">Tr_m2</a>
+            <a class="list-group-item" href="../proc/tracer_advect_zonal_one_impl.html#variable-tr_p1">Tr_p1</a>
+            <a class="list-group-item" href="../proc/tracer_advect_zonal_one_impl.html#variable-tr_p2">Tr_p2</a>
+            <a class="list-group-item" href="../proc/tracer_advect_zonal_one_impl.html#variable-tr_right">Tr_right</a>
+            <a class="list-group-item" href="../proc/tracer_advect_zonal_one_impl.html#variable-dh_0~5">dh_0</a>
+            <a class="list-group-item" href="../proc/tracer_advect_zonal_one_impl.html#variable-dh_m1~5">dh_m1</a>
+            <a class="list-group-item" href="../proc/tracer_advect_zonal_one_impl.html#variable-dh_p1~5">dh_p1</a>
+            <a class="list-group-item" href="../proc/tracer_advect_zonal_one_impl.html#variable-div_f">div_f</a>
+            <a class="list-group-item" href="../proc/tracer_advect_zonal_one_impl.html#variable-div_m">div_m</a>
+            <a class="list-group-item" href="../proc/tracer_advect_zonal_one_impl.html#variable-dt_b">dt_b</a>
+            <a class="list-group-item" href="../proc/tracer_advect_zonal_one_impl.html#variable-h_new~8">h_new</a>
+            <a class="list-group-item" href="../proc/tracer_advect_zonal_one_impl.html#variable-hc~6">hc</a>
+            <a class="list-group-item" href="../proc/tracer_advect_zonal_one_impl.html#variable-hf~6">hf</a>
+            <a class="list-group-item" href="../proc/tracer_advect_zonal_one_impl.html#variable-i~180">i</a>
+            <a class="list-group-item" href="../proc/tracer_advect_zonal_one_impl.html#variable-ic~9">ic</a>
+            <a class="list-group-item" href="../proc/tracer_advect_zonal_one_impl.html#variable-j~179">j</a>
+            <a class="list-group-item" href="../proc/tracer_advect_zonal_one_impl.html#variable-k~142">k</a>
+            <a class="list-group-item" href="../proc/tracer_advect_zonal_one_impl.html#variable-mass_x">mass_x</a>
+            <a class="list-group-item" href="../proc/tracer_advect_zonal_one_impl.html#variable-use_h3">use_h3</a>
+            <a class="list-group-item" href="../proc/tracer_advect_zonal_one_impl.html#variable-wm">wm</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/tracer_advect_zonal_one_impl.html#src">tracer_advect_zonal_one_impl</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>private pure subroutine tracer_advect_zonal_one_impl(nx, ny, nz, dt, iareaT, wet_T, h_before, h_after, c, mass_flux_x, Tr_face_left_x, Tr_face_right_x, budget_adv, budget_w, h3, h_floor)  
+</h2>
+    
+
+    <p>Zonal half of <code>tracer_advect_one_impl</code>.  Same three-pass
+pattern (PPM reconstruction → upwind pick into tracer mass
+flux → forward-Euler update) but only the x-direction half.
+Reads the input <code>h</code> for the Tr = c/h reconstruction.  The
+tracer transport <code>mass_flux_x·Tr_face</code> inherits <code>dy_cu</code>, and
+the divergence closes with <code>iareaT</code> (= <code>inv_dx</code> on uniform).
+Mirror-T at land neighbours (C2): a held land column&rsquo;s tracer
+is reflected to the local cell so the wet-side face value is
+unbiased; bit-identical for all-wet (<code>wet_T≡1</code>).</p>
+<p>Optional <code>budget_adv</code>: when present, a separate <code>do concurrent</code>
+loop accumulates <code>−dt·(Tr_face_left_x(i+1)−Tr_face_left_x(i))·iareaT</code>
+into <code>budget_adv</code> (same divergence written to <code>c</code>).  The
+prognostic c update loop is UNCHANGED — byte-identical when
+<code>budget_adv</code> is absent.  Used by the console salt/heat closure.</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx~175"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny~175"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz~152"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dt~71"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dt</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-iareat~6"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>iareaT</strong>(nx,ny)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-wet_t~7"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>wet_T</strong>(nx,ny)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_before~5"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_before</strong>(nx,ny,nz)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_after~5"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_after</strong>(nx,ny,nz)</td>
+            <td>
+                <p>The thickness continuity wrote for THIS direction (the <code>h⁺</code> of the
+<code>h⁻ → h⁺</code> pair; <code>h_before</code> is the <code>h⁻</code>).  Retained for the pair&rsquo;s
+contract; the update divides by the UNFLOORED <code>h⁺</code> recomputed from
+the fluxes (see the update loop).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-c~14"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>c</strong>(nx,ny,nz)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-mass_flux_x~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>mass_flux_x</strong>(nx+1,ny,nz)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-tr_face_left_x"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>Tr_face_left_x</strong>(nx+1,ny,nz)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-tr_face_right_x"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>Tr_face_right_x</strong>(nx+1,ny,nz)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-budget_adv"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>budget_adv</strong>(nx,ny,nz)</td>
+            <td>
+                <p>Per-cell accumulator for the horizontal-advection budget
+(same sign/units as c).  When present, the zonal-flux
+divergence is added (+=) here after the prognostic update.
+Absent ⇒ inert (byte-identical to the pre-feature build).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-budget_w~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>budget_w</strong></td>
+            <td>
+                <p>Bookkeeping weight on the <code>budget_adv</code> increment (absent ⇒ 1,
+bit-identical).  A caller writing OUTSIDE an RK2 stage (the GM
+operator, after the stage average) passes the reciprocal of the
+console&rsquo;s per-step weight, <code>1/ocean_budget_stage_weight</code>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h3~4"></span>
+              logical,
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h3</strong></td>
+            <td>
+                <p><code>.true.</code> selects the <code>ppm_h3</code> flux (see <code>ppm_h3_face_flux</code>).
+Absent or <code>.false.</code> ⇒ the PPM path below, textually unchanged.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_floor~9"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_floor</strong></td>
+            <td>
+                <p>Angstrom floor (m) the paired continuity stored as <code>max(h⁺, h_floor)</code>.</p>
+<blockquote>
+<p>0 ⇒ where the floor binds the update divides by the floored
+thickness and dilutes c, so Sum(h·c) is unchanged by the floor
+(KEEP-CONTENT semantics; the injected water carries no tracer).
+Absent or 0 ⇒ the loop below is textually unchanged.</p>
+</blockquote>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~tracer_advect_zonal_one_impl~~CallsGraph Pages: 1 -->
+<svg id="proctracer_advect_zonal_one_implCallsGraph" width="328pt" height="200pt"
+ viewBox="0.00 0.00 328.00 200.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~tracer_advect_zonal_one_impl~~CallsGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 196.27)">
+<title>proc~~tracer_advect_zonal_one_impl~~CallsGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-196.27 324.04,-196.27 324.04,4 -4,4"/>
+<!-- proc~tracer_advect_zonal_one_impl -->
+<g id="proc~~tracer_advect_zonal_one_impl~~CallsGraph_node1" class="node">
+<title>proc~tracer_advect_zonal_one_impl</title>
+<polygon fill="none" stroke="black" points="172.77,-108.27 0,-108.27 0,-84 172.77,-84 172.77,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="86.39" y="-92.54" font-family="Helvetica,sans-Serif" font-size="10.50">tracer_advect_zonal_one_impl</text>
+</g>
+<!-- local -->
+<g id="proc~~tracer_advect_zonal_one_impl~~CallsGraph_node2" class="node">
+<title>local</title>
+<polygon fill="#777777" stroke="#777777" points="291.41,-192.27 237.41,-192.27 237.41,-168 291.41,-168 291.41,-192.27"/>
+<text xml:space="preserve" text-anchor="middle" x="264.41" y="-176.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">local</text>
+</g>
+<!-- proc~tracer_advect_zonal_one_impl&#45;&gt;local -->
+<g id="proc~~tracer_advect_zonal_one_impl~~CallsGraph_edge1" class="edge">
+<title>proc~tracer_advect_zonal_one_impl&#45;&gt;local</title>
+<path fill="none" stroke="#ff0000" d="M109.83,-108.75C133.92,-122.06 173.48,-143.25 208.77,-159.13 214.45,-161.69 220.53,-164.22 226.51,-166.6"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="225.04,-169.78 235.63,-170.13 227.57,-163.26 225.04,-169.78"/>
+</g>
+<!-- proc~ppm_cell_limiter -->
+<g id="proc~~tracer_advect_zonal_one_impl~~CallsGraph_node3" class="node">
+<title>proc~ppm_cell_limiter</title>
+<g id="a_proc~~tracer_advect_zonal_one_impl~~CallsGraph_node3"><a xlink:href="../proc/ppm_cell_limiter.html" xlink:title="ppm_cell_limiter">
+<polygon fill="#d9534f" stroke="#d9534f" points="314.04,-150.27 214.77,-150.27 214.77,-126 314.04,-126 314.04,-150.27"/>
+<text xml:space="preserve" text-anchor="middle" x="264.41" y="-134.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ppm_cell_limiter</text>
+</a>
+</g>
+</g>
+<!-- proc~tracer_advect_zonal_one_impl&#45;&gt;proc~ppm_cell_limiter -->
+<g id="proc~~tracer_advect_zonal_one_impl~~CallsGraph_edge2" class="edge">
+<title>proc~tracer_advect_zonal_one_impl&#45;&gt;proc~ppm_cell_limiter</title>
+<path fill="none" stroke="#ff0000" d="M140.2,-108.74C160.1,-113.49 182.89,-118.92 203.41,-123.82"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="202.53,-127.21 213.07,-126.12 204.15,-120.4 202.53,-127.21"/>
+</g>
+<!-- proc~ppm_h3_face_flux -->
+<g id="proc~~tracer_advect_zonal_one_impl~~CallsGraph_node4" class="node">
+<title>proc~ppm_h3_face_flux</title>
+<g id="a_proc~~tracer_advect_zonal_one_impl~~CallsGraph_node4"><a xlink:href="../proc/ppm_h3_face_flux.html" xlink:title="ppm_h3_face_flux">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="318.17,-108.27 210.65,-108.27 210.65,-84 318.17,-84 318.17,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="264.41" y="-92.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ppm_h3_face_flux</text>
+</a>
+</g>
+</g>
+<!-- proc~tracer_advect_zonal_one_impl&#45;&gt;proc~ppm_h3_face_flux -->
+<g id="proc~~tracer_advect_zonal_one_impl~~CallsGraph_edge3" class="edge">
+<title>proc~tracer_advect_zonal_one_impl&#45;&gt;proc~ppm_h3_face_flux</title>
+<path fill="none" stroke="#ff0000" d="M173.07,-96.14C181.85,-96.14 190.66,-96.14 199.15,-96.14"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="198.98,-99.64 208.98,-96.14 198.98,-92.64 198.98,-99.64"/>
+</g>
+<!-- proc~ppm_limited_slope -->
+<g id="proc~~tracer_advect_zonal_one_impl~~CallsGraph_node5" class="node">
+<title>proc~ppm_limited_slope</title>
+<g id="a_proc~~tracer_advect_zonal_one_impl~~CallsGraph_node5"><a xlink:href="../proc/ppm_limited_slope.html" xlink:title="ppm_limited_slope">
+<polygon fill="#d9534f" stroke="#d9534f" points="320.04,-66.27 208.77,-66.27 208.77,-42 320.04,-42 320.04,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="264.41" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ppm_limited_slope</text>
+</a>
+</g>
+</g>
+<!-- proc~tracer_advect_zonal_one_impl&#45;&gt;proc~ppm_limited_slope -->
+<g id="proc~~tracer_advect_zonal_one_impl~~CallsGraph_edge4" class="edge">
+<title>proc~tracer_advect_zonal_one_impl&#45;&gt;proc~ppm_limited_slope</title>
+<path fill="none" stroke="#ff0000" d="M140.2,-83.53C158.91,-79.07 180.16,-74 199.68,-69.34"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="200.24,-72.8 209.16,-67.08 198.62,-66 200.24,-72.8"/>
+</g>
+<!-- proc~ppm_mirror_h -->
+<g id="proc~~tracer_advect_zonal_one_impl~~CallsGraph_node6" class="node">
+<title>proc~ppm_mirror_h</title>
+<g id="a_proc~~tracer_advect_zonal_one_impl~~CallsGraph_node6"><a xlink:href="../proc/ppm_mirror_h.html" xlink:title="ppm_mirror_h">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="307.29,-24.27 221.52,-24.27 221.52,0 307.29,0 307.29,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="264.41" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ppm_mirror_h</text>
+</a>
+</g>
+</g>
+<!-- proc~tracer_advect_zonal_one_impl&#45;&gt;proc~ppm_mirror_h -->
+<g id="proc~~tracer_advect_zonal_one_impl~~CallsGraph_edge5" class="edge">
+<title>proc~tracer_advect_zonal_one_impl&#45;&gt;proc~ppm_mirror_h</title>
+<path fill="none" stroke="#ff0000" d="M109.83,-83.52C133.92,-70.21 173.48,-49.02 208.77,-33.13 211.91,-31.72 215.18,-30.31 218.49,-28.93"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="219.7,-32.22 227.66,-25.23 217.08,-25.73 219.7,-32.22"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~tracer_advect_zonal_one_impl~~CalledByGraph Pages: 1 -->
+<svg id="proctracer_advect_zonal_one_implCalledByGraph" width="641pt" height="69pt"
+ viewBox="0.00 0.00 641.00 69.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~tracer_advect_zonal_one_impl~~CalledByGraph" class="graph" transform="scale(0.590979 0.590979) rotate(0) translate(4 112.27)">
+<title>proc~~tracer_advect_zonal_one_impl~~CalledByGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-112.27 1080.64,-112.27 1080.64,4 -4,4"/>
+<!-- proc~tracer_advect_zonal_one_impl -->
+<g id="proc~~tracer_advect_zonal_one_impl~~CalledByGraph_node1" class="node">
+<title>proc~tracer_advect_zonal_one_impl</title>
+<polygon fill="none" stroke="black" points="1076.64,-45.27 903.87,-45.27 903.87,-21 1076.64,-21 1076.64,-45.27"/>
+<text xml:space="preserve" text-anchor="middle" x="990.25" y="-29.53" font-family="Helvetica,sans-Serif" font-size="10.50">tracer_advect_zonal_one_impl</text>
+</g>
+<!-- proc~gm_tracer_advect_x -->
+<g id="proc~~tracer_advect_zonal_one_impl~~CalledByGraph_node2" class="node">
+<title>proc~gm_tracer_advect_x</title>
+<g id="a_proc~~tracer_advect_zonal_one_impl~~CalledByGraph_node2"><a xlink:href="../proc/gm_tracer_advect_x.html" xlink:title="gm_tracer_advect_x">
+<polygon fill="#d9534f" stroke="#d9534f" points="867.87,-24.27 749.1,-24.27 749.1,0 867.87,0 867.87,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="808.48" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">gm_tracer_advect_x</text>
+</a>
+</g>
+</g>
+<!-- proc~gm_tracer_advect_x&#45;&gt;proc~tracer_advect_zonal_one_impl -->
+<g id="proc~~tracer_advect_zonal_one_impl~~CalledByGraph_edge1" class="edge">
+<title>proc~gm_tracer_advect_x&#45;&gt;proc~tracer_advect_zonal_one_impl</title>
+<path fill="none" stroke="#ff0000" d="M868.35,-19.01C876.09,-19.92 884.19,-20.86 892.36,-21.82"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="891.68,-25.26 902.02,-22.94 892.49,-18.31 891.68,-25.26"/>
+</g>
+<!-- proc~tracer_advect_zonal -->
+<g id="proc~~tracer_advect_zonal_one_impl~~CalledByGraph_node3" class="node">
+<title>proc~tracer_advect_zonal</title>
+<g id="a_proc~~tracer_advect_zonal_one_impl~~CalledByGraph_node3"><a xlink:href="../proc/tracer_advect_zonal.html" xlink:title="tracer_advect_zonal">
+<polygon fill="#d9534f" stroke="#d9534f" points="867.87,-66.27 749.1,-66.27 749.1,-42 867.87,-42 867.87,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="808.48" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">tracer_advect_zonal</text>
+</a>
+</g>
+</g>
+<!-- proc~tracer_advect_zonal&#45;&gt;proc~tracer_advect_zonal_one_impl -->
+<g id="proc~~tracer_advect_zonal_one_impl~~CalledByGraph_edge2" class="edge">
+<title>proc~tracer_advect_zonal&#45;&gt;proc~tracer_advect_zonal_one_impl</title>
+<path fill="none" stroke="#ff0000" d="M868.35,-47.26C876.09,-46.35 884.19,-45.41 892.36,-44.45"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="892.49,-47.96 902.02,-43.33 891.68,-41.01 892.49,-47.96"/>
+</g>
+<!-- proc~continuity_gm_apply -->
+<g id="proc~~tracer_advect_zonal_one_impl~~CalledByGraph_node4" class="node">
+<title>proc~continuity_gm_apply</title>
+<g id="a_proc~~tracer_advect_zonal_one_impl~~CalledByGraph_node4"><a xlink:href="../proc/continuity_gm_apply.html" xlink:title="continuity_gm_apply">
+<polygon fill="#d9534f" stroke="#d9534f" points="520.45,-24.27 399.43,-24.27 399.43,0 520.45,0 520.45,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="459.94" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">continuity_gm_apply</text>
+</a>
+</g>
+</g>
+<!-- proc~continuity_gm_apply&#45;&gt;proc~gm_tracer_advect_x -->
+<g id="proc~~tracer_advect_zonal_one_impl~~CalledByGraph_edge3" class="edge">
+<title>proc~continuity_gm_apply&#45;&gt;proc~gm_tracer_advect_x</title>
+<path fill="none" stroke="#ff0000" d="M520.91,-12.13C581.22,-12.13 674.13,-12.13 737.71,-12.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="737.32,-15.64 747.32,-12.14 737.32,-8.64 737.32,-15.64"/>
+</g>
+<!-- proc~continuity_tracer_step_split -->
+<g id="proc~~tracer_advect_zonal_one_impl~~CalledByGraph_node5" class="node">
+<title>proc~continuity_tracer_step_split</title>
+<g id="a_proc~~tracer_advect_zonal_one_impl~~CalledByGraph_node5"><a xlink:href="../proc/continuity_tracer_step_split.html" xlink:title="continuity_tracer_step_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="713.1,-66.27 556.83,-66.27 556.83,-42 713.1,-42 713.1,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="634.96" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">continuity_tracer_step_split</text>
+</a>
+</g>
+</g>
+<!-- proc~continuity_tracer_step_split&#45;&gt;proc~tracer_advect_zonal -->
+<g id="proc~~tracer_advect_zonal_one_impl~~CalledByGraph_edge4" class="edge">
+<title>proc~continuity_tracer_step_split&#45;&gt;proc~tracer_advect_zonal</title>
+<path fill="none" stroke="#00ffff" d="M713.45,-54.13C721.44,-54.13 729.53,-54.13 737.43,-54.13"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="737.34,-57.64 747.34,-54.14 737.34,-50.64 737.34,-57.64"/>
+</g>
+<!-- proc~run_continuity_chain -->
+<g id="proc~~tracer_advect_zonal_one_impl~~CalledByGraph_node6" class="node">
+<title>proc~run_continuity_chain</title>
+<g id="a_proc~~tracer_advect_zonal_one_impl~~CalledByGraph_node6"><a xlink:href="../proc/run_continuity_chain.html" xlink:title="run_continuity_chain">
+<polygon fill="#d9534f" stroke="#d9534f" points="520.83,-66.27 399.06,-66.27 399.06,-42 520.83,-42 520.83,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="459.94" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_continuity_chain</text>
+</a>
+</g>
+</g>
+<!-- proc~run_continuity_chain&#45;&gt;proc~continuity_tracer_step_split -->
+<g id="proc~~tracer_advect_zonal_one_impl~~CalledByGraph_edge6" class="edge">
+<title>proc~run_continuity_chain&#45;&gt;proc~continuity_tracer_step_split</title>
+<path fill="none" stroke="#00ffff" d="M520.97,-54.13C528.74,-54.13 536.81,-54.13 544.92,-54.13"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="544.85,-57.64 554.85,-54.14 544.85,-50.64 544.85,-57.64"/>
+</g>
+<!-- proc~run_gm_step -->
+<g id="proc~~tracer_advect_zonal_one_impl~~CalledByGraph_node7" class="node">
+<title>proc~run_gm_step</title>
+<g id="a_proc~~tracer_advect_zonal_one_impl~~CalledByGraph_node7"><a xlink:href="../proc/run_gm_step.html" xlink:title="run_gm_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="357.43,-24.27 277.66,-24.27 277.66,0 357.43,0 357.43,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="317.55" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_gm_step</text>
+</a>
+</g>
+</g>
+<!-- proc~run_gm_step&#45;&gt;proc~continuity_gm_apply -->
+<g id="proc~~tracer_advect_zonal_one_impl~~CalledByGraph_edge5" class="edge">
+<title>proc~run_gm_step&#45;&gt;proc~continuity_gm_apply</title>
+<path fill="none" stroke="#ff0000" d="M357.66,-12.13C367.07,-12.13 377.42,-12.13 387.8,-12.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="387.51,-15.64 397.51,-12.14 387.51,-8.64 387.51,-15.64"/>
+</g>
+<!-- proc~run_stage -->
+<g id="proc~~tracer_advect_zonal_one_impl~~CalledByGraph_node8" class="node">
+<title>proc~run_stage</title>
+<g id="a_proc~~tracer_advect_zonal_one_impl~~CalledByGraph_node8"><a xlink:href="../proc/run_stage.html" xlink:title="run_stage">
+<polygon fill="#d9534f" stroke="#d9534f" points="491.95,-108.27 427.93,-108.27 427.93,-84 491.95,-84 491.95,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="459.94" y="-92.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage</text>
+</a>
+</g>
+</g>
+<!-- proc~run_stage&#45;&gt;proc~continuity_tracer_step_split -->
+<g id="proc~~tracer_advect_zonal_one_impl~~CalledByGraph_edge7" class="edge">
+<title>proc~run_stage&#45;&gt;proc~continuity_tracer_step_split</title>
+<path fill="none" stroke="#00ffff" d="M492.28,-88.53C514.27,-83.19 544.44,-75.87 571.28,-69.35"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="571.8,-72.83 580.69,-67.07 570.15,-66.03 571.8,-72.83"/>
+</g>
+<!-- proc~ocean_dyn_step -->
+<g id="proc~~tracer_advect_zonal_one_impl~~CalledByGraph_node9" class="node">
+<title>proc~ocean_dyn_step</title>
+<g id="a_proc~~tracer_advect_zonal_one_impl~~CalledByGraph_node9"><a xlink:href="../proc/ocean_dyn_step.html" xlink:title="ocean_dyn_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="222.54,-108.27 125.52,-108.27 125.52,-84 222.54,-84 222.54,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="174.03" y="-92.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step&#45;&gt;proc~run_stage -->
+<g id="proc~~tracer_advect_zonal_one_impl~~CalledByGraph_edge10" class="edge">
+<title>proc~ocean_dyn_step&#45;&gt;proc~run_stage</title>
+<path fill="none" stroke="#0000ff" d="M222.87,-96.13C276.97,-96.13 364.26,-96.13 416.18,-96.13"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="416.12,-99.64 426.12,-96.14 416.12,-92.64 416.12,-99.64"/>
+</g>
+<!-- proc~ocean_dyn_step_split -->
+<g id="proc~~tracer_advect_zonal_one_impl~~CalledByGraph_node10" class="node">
+<title>proc~ocean_dyn_step_split</title>
+<g id="a_proc~~tracer_advect_zonal_one_impl~~CalledByGraph_node10"><a xlink:href="../proc/ocean_dyn_step_split.html" xlink:title="ocean_dyn_step_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="236.04,-66.27 112.02,-66.27 112.02,-42 236.04,-42 236.04,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="174.03" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step_split</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step_split&#45;&gt;proc~run_gm_step -->
+<g id="proc~~tracer_advect_zonal_one_impl~~CalledByGraph_edge9" class="edge">
+<title>proc~ocean_dyn_step_split&#45;&gt;proc~run_gm_step</title>
+<path fill="none" stroke="#00ff00" d="M217.49,-41.53C232.97,-36.94 250.61,-31.7 266.68,-26.94"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="267.46,-30.35 276.05,-24.15 265.47,-23.64 267.46,-30.35"/>
+</g>
+<!-- proc~run_stage_split -->
+<g id="proc~~tracer_advect_zonal_one_impl~~CalledByGraph_node11" class="node">
+<title>proc~run_stage_split</title>
+<g id="a_proc~~tracer_advect_zonal_one_impl~~CalledByGraph_node11"><a xlink:href="../proc/run_stage_split.html" xlink:title="run_stage_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="363.06,-66.27 272.04,-66.27 272.04,-42 363.06,-42 363.06,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="317.55" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage_split</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step_split&#45;&gt;proc~run_stage_split -->
+<g id="proc~~tracer_advect_zonal_one_impl~~CalledByGraph_edge13" class="edge">
+<title>proc~ocean_dyn_step_split&#45;&gt;proc~run_stage_split</title>
+<path fill="none" stroke="#0000ff" d="M236.28,-54.13C244.31,-54.13 252.51,-54.13 260.45,-54.13"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="260.33,-57.64 270.33,-54.14 260.33,-50.64 260.33,-57.64"/>
+</g>
+<!-- proc~run_stage_split&#45;&gt;proc~run_continuity_chain -->
+<g id="proc~~tracer_advect_zonal_one_impl~~CalledByGraph_edge8" class="edge">
+<title>proc~run_stage_split&#45;&gt;proc~run_continuity_chain</title>
+<path fill="none" stroke="#ff0000" d="M363.36,-54.13C370.99,-54.13 379.09,-54.13 387.22,-54.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="387.17,-57.64 397.17,-54.14 387.17,-50.64 387.17,-57.64"/>
+</g>
+<!-- proc~engine_step -->
+<g id="proc~~tracer_advect_zonal_one_impl~~CalledByGraph_node12" class="node">
+<title>proc~engine_step</title>
+<g id="a_proc~~tracer_advect_zonal_one_impl~~CalledByGraph_node12"><a xlink:href="../proc/engine_step.html" xlink:title="engine_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="76.02,-87.27 0,-87.27 0,-63 76.02,-63 76.02,-87.27"/>
+<text xml:space="preserve" text-anchor="middle" x="38.01" y="-71.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~ocean_dyn_step -->
+<g id="proc~~tracer_advect_zonal_one_impl~~CalledByGraph_edge11" class="edge">
+<title>proc~engine_step&#45;&gt;proc~ocean_dyn_step</title>
+<path fill="none" stroke="#ff0000" d="M76.34,-80.98C88.08,-82.82 101.35,-84.9 114.2,-86.92"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="113.43,-90.34 123.85,-88.43 114.52,-83.42 113.43,-90.34"/>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~ocean_dyn_step_split -->
+<g id="proc~~tracer_advect_zonal_one_impl~~CalledByGraph_edge12" class="edge">
+<title>proc~engine_step&#45;&gt;proc~ocean_dyn_step_split</title>
+<path fill="none" stroke="#00ff00" d="M76.34,-69.29C83.9,-68.1 92.1,-66.82 100.41,-65.51"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="100.93,-68.98 110.26,-63.97 99.84,-62.06 100.93,-68.98"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panproctracer_advect_zonal_one_implCalledByGraph = svgPanZoom('#proctracer_advect_zonal_one_implCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-tr_0"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>Tr_0</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-tr_face"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>Tr_face</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-tr_left"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>Tr_left</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-tr_m1"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>Tr_m1</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-tr_m2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>Tr_m2</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-tr_p1"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>Tr_p1</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-tr_p2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>Tr_p2</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-tr_right"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>Tr_right</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dh_0~5"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dh_0</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dh_m1~5"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dh_m1</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dh_p1~5"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dh_p1</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-div_f"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>div_f</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-div_m"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>div_m</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dt_b"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dt_b</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_new~8"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_new</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hc~6"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hc</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hf~6"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hf</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-i~180"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>i</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ic~9"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ic</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-j~179"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>j</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-k~142"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>k</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-mass_x"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>mass_x</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-use_h3"></span>
+              logical,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>use_h3</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-wm"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>wm</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">pure subroutine </span><span class="n">tracer_advect_zonal_one_impl</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">dt</span><span class="p">,</span><span class="w"> </span><span class="n">iareaT</span><span class="p">,</span><span class="w"> </span><span class="n">wet_T</span><span class="p">,</span><span class="w"> </span><span class="n">h_before</span><span class="p">,</span><span class="w"> </span><span class="n">h_after</span><span class="p">,</span><span class="w"> </span><span class="n">c</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                </span><span class="n">mass_flux_x</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                </span><span class="n">Tr_face_left_x</span><span class="p">,</span><span class="w"> </span><span class="n">Tr_face_right_x</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                </span><span class="n">budget_adv</span><span class="p">,</span><span class="w"> </span><span class="n">budget_w</span><span class="p">,</span><span class="w"> </span><span class="n">h3</span><span class="p">,</span><span class="w"> </span><span class="n">h_floor</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! Zonal half of `tracer_advect_one_impl`.  Same three-pass</span>
+<span class="w">      </span><span class="c">!! pattern (PPM reconstruction → upwind pick into tracer mass</span>
+<span class="w">      </span><span class="c">!! flux → forward-Euler update) but only the x-direction half.</span>
+<span class="w">      </span><span class="c">!! Reads the input `h` for the Tr = c/h reconstruction.  The</span>
+<span class="w">      </span><span class="c">!! tracer transport `mass_flux_x·Tr_face` inherits `dy_cu`, and</span>
+<span class="w">      </span><span class="c">!! the divergence closes with `iareaT` (= `inv_dx` on uniform).</span>
+<span class="w">      </span><span class="c">!! Mirror-T at land neighbours (C2): a held land column's tracer</span>
+<span class="w">      </span><span class="c">!! is reflected to the local cell so the wet-side face value is</span>
+<span class="w">      </span><span class="c">!! unbiased; bit-identical for all-wet (`wet_T≡1`).</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! Optional `budget_adv`: when present, a separate `do concurrent`</span>
+<span class="w">      </span><span class="c">!! loop accumulates `−dt·(Tr_face_left_x(i+1)−Tr_face_left_x(i))·iareaT`</span>
+<span class="w">      </span><span class="c">!! into `budget_adv` (same divergence written to `c`).  The</span>
+<span class="w">      </span><span class="c">!! prognostic c update loop is UNCHANGED — byte-identical when</span>
+<span class="w">      </span><span class="c">!! `budget_adv` is absent.  Used by the console salt/heat closure.</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dt</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">iareaT</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">wet_T</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">h_before</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">h_after</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! The thickness continuity wrote for THIS direction (the `h⁺` of the</span>
+<span class="w">         </span><span class="c">!! `h⁻ → h⁺` pair; `h_before` is the `h⁻`).  Retained for the pair's</span>
+<span class="w">         </span><span class="c">!! contract; the update divides by the UNFLOORED `h⁺` recomputed from</span>
+<span class="w">         </span><span class="c">!! the fluxes (see the update loop).</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">c</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">mass_flux_x</span><span class="p">(</span><span class="n">nx</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">Tr_face_left_x</span><span class="p">(</span><span class="n">nx</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">Tr_face_right_x</span><span class="p">(</span><span class="n">nx</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">budget_adv</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! Per-cell accumulator for the horizontal-advection budget</span>
+<span class="w">         </span><span class="c">!! (same sign/units as c).  When present, the zonal-flux</span>
+<span class="w">         </span><span class="c">!! divergence is added (+=) here after the prognostic update.</span>
+<span class="w">         </span><span class="c">!! Absent ⇒ inert (byte-identical to the pre-feature build).</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">budget_w</span>
+<span class="w">         </span><span class="c">!! Bookkeeping weight on the `budget_adv` increment (absent ⇒ 1,</span>
+<span class="w">         </span><span class="c">!! bit-identical).  A caller writing OUTSIDE an RK2 stage (the GM</span>
+<span class="w">         </span><span class="c">!! operator, after the stage average) passes the reciprocal of the</span>
+<span class="w">         </span><span class="c">!! console's per-step weight, `1/ocean_budget_stage_weight`.</span>
+<span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">h3</span>
+<span class="w">         </span><span class="c">!! `.true.` selects the `ppm_h3` flux (see `ppm_h3_face_flux`).</span>
+<span class="w">         </span><span class="c">!! Absent or `.false.` ⇒ the PPM path below, textually unchanged.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">h_floor</span>
+<span class="w">         </span><span class="c">!! Angstrom floor (m) the paired continuity stored as `max(h⁺, h_floor)`.</span>
+<span class="w">         </span><span class="c">!! &gt; 0 ⇒ where the floor binds the update divides by the floored</span>
+<span class="w">         </span><span class="c">!! thickness and dilutes c, so Sum(h·c) is unchanged by the floor</span>
+<span class="w">         </span><span class="c">!! (KEEP-CONTENT semantics; the injected water carries no tracer).</span>
+<span class="w">         </span><span class="c">!! Absent or 0 ⇒ the loop below is textually unchanged.</span>
+
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">div_m</span><span class="p">,</span><span class="w"> </span><span class="n">div_f</span><span class="p">,</span><span class="w"> </span><span class="n">h_new</span><span class="p">,</span><span class="w"> </span><span class="n">hf</span>
+<span class="w">      </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">use_h3</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">Tr_m2</span><span class="p">,</span><span class="w"> </span><span class="n">Tr_m1</span><span class="p">,</span><span class="w"> </span><span class="n">Tr_0</span><span class="p">,</span><span class="w"> </span><span class="n">Tr_p1</span><span class="p">,</span><span class="w"> </span><span class="n">Tr_p2</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dh_m1</span><span class="p">,</span><span class="w"> </span><span class="n">dh_0</span><span class="p">,</span><span class="w"> </span><span class="n">dh_p1</span><span class="p">,</span><span class="w"> </span><span class="n">Tr_left</span><span class="p">,</span><span class="w"> </span><span class="n">Tr_right</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">mass_x</span><span class="p">,</span><span class="w"> </span><span class="n">Tr_face</span><span class="p">,</span><span class="w"> </span><span class="n">dt_b</span><span class="p">,</span><span class="w"> </span><span class="n">hc</span><span class="p">,</span><span class="w"> </span><span class="n">wm</span>
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ic</span>
+
+<span class="w">      </span><span class="n">hf</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">h_floor</span><span class="p">))</span><span class="w"> </span><span class="n">hf</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">h_floor</span>
+<span class="w">      </span><span class="n">use_h3</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">false</span><span class="p">.</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">h3</span><span class="p">))</span><span class="w"> </span><span class="n">use_h3</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">h3</span>
+
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">use_h3</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="w">         </span><span class="c">! ppm_h3: Huynh 3rd-order edges, CW84 limiter, swept-volume flux.</span>
+<span class="w">         </span><span class="c">! Interior faces need cells i-2..i+1; the two faces next to each</span>
+<span class="w">         </span><span class="c">! wall fall back to the first-order upwind cell value.</span>
+<span class="w">         </span><span class="k">do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">k</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">3</span><span class="p">:</span><span class="n">nx</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">            </span><span class="n">local</span><span class="p">(</span><span class="n">Tr_m1</span><span class="p">,</span><span class="w"> </span><span class="n">Tr_0</span><span class="p">,</span><span class="w"> </span><span class="n">Tr_p1</span><span class="p">,</span><span class="w"> </span><span class="n">mass_x</span><span class="p">,</span><span class="w"> </span><span class="n">hc</span><span class="p">,</span><span class="w"> </span><span class="n">wm</span><span class="p">,</span><span class="w"> </span><span class="n">ic</span><span class="p">)</span>
+<span class="w">            </span><span class="n">mass_x</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">mass_flux_x</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">mass_x</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               </span><span class="n">ic</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">            </span><span class="k">else</span>
+<span class="k">               </span><span class="n">ic</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">i</span>
+<span class="w">            </span><span class="k">end if</span>
+<span class="k">            </span><span class="n">hc</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">h_before</span><span class="p">(</span><span class="n">ic</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">            </span><span class="n">Tr_0</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">c</span><span class="p">(</span><span class="n">ic</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">            </span><span class="n">Tr_m1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ppm_mirror_h</span><span class="p">(</span><span class="n">c</span><span class="p">(</span><span class="n">ic</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">),</span><span class="w"> </span><span class="n">Tr_0</span><span class="p">,</span><span class="w"> </span><span class="n">wet_T</span><span class="p">(</span><span class="n">ic</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">))</span>
+<span class="w">            </span><span class="n">Tr_p1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ppm_mirror_h</span><span class="p">(</span><span class="n">c</span><span class="p">(</span><span class="n">ic</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">),</span><span class="w"> </span><span class="n">Tr_0</span><span class="p">,</span><span class="w"> </span><span class="n">wet_T</span><span class="p">(</span><span class="n">ic</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">))</span>
+<span class="w">            </span><span class="n">wm</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">wet_T</span><span class="p">(</span><span class="n">ic</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="o">*</span><span class="n">wet_T</span><span class="p">(</span><span class="n">ic</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="o">*</span><span class="n">wet_T</span><span class="p">(</span><span class="n">ic</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span>
+<span class="w">            </span><span class="n">Tr_face_left_x</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ppm_h3_face_flux</span><span class="p">(</span><span class="n">Tr_m1</span><span class="p">,</span><span class="w"> </span><span class="n">Tr_0</span><span class="p">,</span><span class="w"> </span><span class="n">Tr_p1</span><span class="p">,</span><span class="w"> </span><span class="n">wm</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                                       </span><span class="n">mass_x</span><span class="p">,</span><span class="w"> </span><span class="nb">abs</span><span class="p">(</span><span class="n">mass_x</span><span class="p">)</span><span class="o">*</span><span class="n">dt</span><span class="o">*</span><span class="n">iareaT</span><span class="p">(</span><span class="n">ic</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="o">/</span><span class="n">hc</span><span class="p">)</span>
+<span class="w">         </span><span class="k">end do</span>
+<span class="w">         </span><span class="c">! Upwind faces next to each wall: 1:2 and nx:nx+1, disjoint from the</span>
+<span class="w">         </span><span class="c">! interior 3:nx-1 (and together the whole 1:nx+1 when nx &lt;= 3).</span>
+<span class="w">         </span><span class="k">do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">k</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="nb">min</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">))</span><span class="w"> </span><span class="n">local</span><span class="p">(</span><span class="n">mass_x</span><span class="p">,</span><span class="w"> </span><span class="n">ic</span><span class="p">)</span>
+<span class="w">            </span><span class="n">mass_x</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">mass_flux_x</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">mass_x</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               </span><span class="n">ic</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">            </span><span class="k">else</span>
+<span class="k">               </span><span class="n">ic</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">i</span>
+<span class="w">            </span><span class="k">end if</span>
+<span class="k">            </span><span class="n">ic</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">max</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="nb">min</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ic</span><span class="p">))</span>
+<span class="w">            </span><span class="n">Tr_face_left_x</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">mass_x</span><span class="o">*</span><span class="p">(</span><span class="n">c</span><span class="p">(</span><span class="n">ic</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">))</span>
+<span class="w">         </span><span class="k">end do</span>
+<span class="k">         do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">k</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="nb">max</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">):</span><span class="n">nx</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="n">local</span><span class="p">(</span><span class="n">mass_x</span><span class="p">,</span><span class="w"> </span><span class="n">ic</span><span class="p">)</span>
+<span class="w">            </span><span class="n">mass_x</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">mass_flux_x</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">mass_x</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               </span><span class="n">ic</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">            </span><span class="k">else</span>
+<span class="k">               </span><span class="n">ic</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">i</span>
+<span class="w">            </span><span class="k">end if</span>
+<span class="k">            </span><span class="n">ic</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">max</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="nb">min</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ic</span><span class="p">))</span>
+<span class="w">            </span><span class="n">Tr_face_left_x</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">mass_x</span><span class="o">*</span><span class="p">(</span><span class="n">c</span><span class="p">(</span><span class="n">ic</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">))</span>
+<span class="w">         </span><span class="k">end do</span>
+<span class="k">      else</span>
+<span class="k">         do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">k</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">3</span><span class="p">:</span><span class="n">nx</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">2</span><span class="p">)</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">            </span><span class="n">local</span><span class="p">(</span><span class="n">Tr_m2</span><span class="p">,</span><span class="w"> </span><span class="n">Tr_m1</span><span class="p">,</span><span class="w"> </span><span class="n">Tr_0</span><span class="p">,</span><span class="w"> </span><span class="n">Tr_p1</span><span class="p">,</span><span class="w"> </span><span class="n">Tr_p2</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                  </span><span class="n">dh_m1</span><span class="p">,</span><span class="w"> </span><span class="n">dh_0</span><span class="p">,</span><span class="w"> </span><span class="n">dh_p1</span><span class="p">,</span><span class="w"> </span><span class="n">Tr_left</span><span class="p">,</span><span class="w"> </span><span class="n">Tr_right</span><span class="p">)</span>
+<span class="w">            </span><span class="n">Tr_0</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">c</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">            </span><span class="n">Tr_m1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ppm_mirror_h</span><span class="p">(</span><span class="n">c</span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">),</span><span class="w"> </span><span class="n">Tr_0</span><span class="p">,</span><span class="w"> </span><span class="n">wet_T</span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">))</span>
+<span class="w">            </span><span class="n">Tr_p1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ppm_mirror_h</span><span class="p">(</span><span class="n">c</span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">),</span><span class="w"> </span><span class="n">Tr_0</span><span class="p">,</span><span class="w"> </span><span class="n">wet_T</span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">))</span>
+<span class="w">            </span><span class="n">Tr_m2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ppm_mirror_h</span><span class="p">(</span><span class="n">c</span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">),</span><span class="w"> </span><span class="n">Tr_m1</span><span class="p">,</span><span class="w"> </span><span class="n">wet_T</span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">))</span>
+<span class="w">            </span><span class="n">Tr_p2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ppm_mirror_h</span><span class="p">(</span><span class="n">c</span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">),</span><span class="w"> </span><span class="n">Tr_p1</span><span class="p">,</span><span class="w"> </span><span class="n">wet_T</span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">))</span>
+<span class="w">            </span><span class="k">call </span><span class="n">ppm_limited_slope</span><span class="p">(</span><span class="n">Tr_m2</span><span class="p">,</span><span class="w"> </span><span class="n">Tr_m1</span><span class="p">,</span><span class="w"> </span><span class="n">Tr_0</span><span class="p">,</span><span class="w"> </span><span class="n">dh_m1</span><span class="p">)</span>
+<span class="w">            </span><span class="k">call </span><span class="n">ppm_limited_slope</span><span class="p">(</span><span class="n">Tr_m1</span><span class="p">,</span><span class="w"> </span><span class="n">Tr_0</span><span class="p">,</span><span class="w"> </span><span class="n">Tr_p1</span><span class="p">,</span><span class="w"> </span><span class="n">dh_0</span><span class="p">)</span>
+<span class="w">            </span><span class="k">call </span><span class="n">ppm_limited_slope</span><span class="p">(</span><span class="n">Tr_0</span><span class="p">,</span><span class="w"> </span><span class="n">Tr_p1</span><span class="p">,</span><span class="w"> </span><span class="n">Tr_p2</span><span class="p">,</span><span class="w"> </span><span class="n">dh_p1</span><span class="p">)</span>
+<span class="w">            </span><span class="n">dh_0</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dh_0</span><span class="o">*</span><span class="n">wet_T</span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="o">*</span><span class="n">wet_T</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="o">*</span><span class="n">wet_T</span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span>
+<span class="w">            </span><span class="n">Tr_left</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="p">(</span><span class="n">Tr_m1</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">Tr_0</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="p">(</span><span class="n">dh_0</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">dh_m1</span><span class="p">)</span><span class="o">/</span><span class="mf">6.0_wp</span>
+<span class="w">            </span><span class="n">Tr_right</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="p">(</span><span class="n">Tr_0</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">Tr_p1</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="p">(</span><span class="n">dh_p1</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">dh_0</span><span class="p">)</span><span class="o">/</span><span class="mf">6.0_wp</span>
+<span class="w">            </span><span class="k">call </span><span class="n">ppm_cell_limiter</span><span class="p">(</span><span class="n">Tr_0</span><span class="p">,</span><span class="w"> </span><span class="n">Tr_left</span><span class="p">,</span><span class="w"> </span><span class="n">Tr_right</span><span class="p">)</span>
+<span class="w">            </span><span class="n">Tr_face_right_x</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Tr_left</span>
+<span class="w">            </span><span class="n">Tr_face_left_x</span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Tr_right</span>
+<span class="w">         </span><span class="k">end do</span>
+<span class="k">         do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">k</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ny</span><span class="p">)</span>
+<span class="w">            </span><span class="n">Tr_face_left_x</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">c</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">            </span><span class="n">Tr_face_right_x</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">c</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">            </span><span class="n">Tr_face_left_x</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">c</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">            </span><span class="n">Tr_face_right_x</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">c</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">            </span><span class="n">Tr_face_left_x</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">c</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">            </span><span class="n">Tr_face_right_x</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">c</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">            </span><span class="n">Tr_face_right_x</span><span class="p">(</span><span class="n">nx</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">c</span><span class="p">(</span><span class="n">nx</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">            </span><span class="n">Tr_face_left_x</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">c</span><span class="p">(</span><span class="n">nx</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">            </span><span class="n">Tr_face_right_x</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">c</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">            </span><span class="n">Tr_face_left_x</span><span class="p">(</span><span class="n">nx</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">c</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">            </span><span class="n">Tr_face_right_x</span><span class="p">(</span><span class="n">nx</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">c</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">         </span><span class="k">end do</span>
+
+<span class="k">         do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">k</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nx</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="n">local</span><span class="p">(</span><span class="n">mass_x</span><span class="p">,</span><span class="w"> </span><span class="n">Tr_face</span><span class="p">)</span>
+<span class="w">            </span><span class="n">mass_x</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">mass_flux_x</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">mass_x</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               </span><span class="n">Tr_face</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Tr_face_left_x</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">            </span><span class="k">else</span>
+<span class="k">               </span><span class="n">Tr_face</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">Tr_face_right_x</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span>
+<span class="w">            </span><span class="k">end if</span>
+<span class="k">            </span><span class="n">Tr_face_left_x</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">mass_x</span><span class="o">*</span><span class="n">Tr_face</span>
+<span class="w">         </span><span class="k">end do</span>
+<span class="k">      end if</span>
+
+<span class="w">      </span><span class="c">! Concentration update, c+ = c + dt*(c*div(Phi) - div(F))/h+, algebraically</span>
+<span class="w">      </span><span class="c">! (c h- - dt div F)/h+ with h+ = h- - dt div(Phi) (Griffies et al. 2020;</span>
+<span class="w">      </span><span class="c">! Adcroft &amp; Hallberg 2006).  h+ is the UNFLOORED thickness continuity</span>
+<span class="w">      </span><span class="c">! computes from the same fluxes, so a uniform c is reproduced to round-off</span>
+<span class="w">      </span><span class="c">! whatever h does; a layer left empty (h+ &lt;= H_DIV_EPS) keeps its c.</span>
+<span class="w">      </span><span class="c">! With an Angstrom floor (hf &gt; 0) that binds, continuity STORES hf &gt; h+:</span>
+<span class="w">      </span><span class="c">! c is then formed against the stored hf, (h- c - dt div F)/hf, so the</span>
+<span class="w">      </span><span class="c">! floor dilutes c and leaves the content h*c alone (no tracer is created</span>
+<span class="w">      </span><span class="c">! with the injected water).  An overdrawn cell (h+ &lt;= H_DIV_EPS) is not</span>
+<span class="w">      </span><span class="c">! physical content: it keeps c, so the floor creates at most hf*c there.</span>
+<span class="w">      </span><span class="k">do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">k</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nx</span><span class="p">)</span><span class="w"> </span><span class="n">local</span><span class="p">(</span><span class="n">div_m</span><span class="p">,</span><span class="w"> </span><span class="n">div_f</span><span class="p">,</span><span class="w"> </span><span class="n">h_new</span><span class="p">)</span>
+<span class="w">         </span><span class="n">div_m</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">mass_flux_x</span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">mass_flux_x</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">))</span><span class="o">*</span><span class="n">iareaT</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span>
+<span class="w">         </span><span class="n">h_new</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">h_before</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">dt</span><span class="o">*</span><span class="n">div_m</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">hf</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">h_new</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">H_DIV_EPS</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">h_new</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">hf</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="w">            </span><span class="c">! Angstrom floor binds: continuity stored hf, not h_new.  Divide by</span>
+<span class="w">            </span><span class="c">! the stored thickness so h*c is unchanged by the floor.  Only for</span>
+<span class="w">            </span><span class="c">! H_DIV_EPS &lt; h_new &lt; hf: an overdrawn cell (h_new &lt;= H_DIV_EPS)</span>
+<span class="w">            </span><span class="c">! is not physical content (c*h_new/hf would blow c up as h_new</span>
+<span class="w">            </span><span class="c">! goes negative), so it falls through, c is kept (bounded), and the</span>
+<span class="w">            </span><span class="c">! floor then creates at most hf*c per floored cell.</span>
+<span class="w">            </span><span class="n">div_f</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">Tr_face_left_x</span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">Tr_face_left_x</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">))</span><span class="o">*</span><span class="n">iareaT</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span>
+<span class="w">            </span><span class="n">c</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">c</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="p">(</span><span class="n">c</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="o">*</span><span class="p">(</span><span class="n">h_before</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">hf</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">dt</span><span class="o">*</span><span class="n">div_f</span><span class="p">)</span><span class="o">/</span><span class="n">hf</span>
+<span class="w">         </span><span class="k">else if</span><span class="w"> </span><span class="p">(</span><span class="n">h_new</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">H_DIV_EPS</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            </span><span class="n">div_f</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">Tr_face_left_x</span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">Tr_face_left_x</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">))</span><span class="o">*</span><span class="n">iareaT</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span>
+<span class="w">            </span><span class="n">c</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">c</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">dt</span><span class="o">*</span><span class="p">(</span><span class="n">c</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="o">*</span><span class="n">div_m</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">div_f</span><span class="p">)</span><span class="o">/</span><span class="n">h_new</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">      end do</span>
+
+<span class="w">      </span><span class="c">! Budget accumulator: separate guarded loop so the prognostic update above</span>
+<span class="w">      </span><span class="c">! is UNCHANGED (byte-identical when budget_adv is absent).  Mirrors the</span>
+<span class="w">      </span><span class="c">! same divergence that was just applied to c — the console uses it to</span>
+<span class="w">      </span><span class="c">! close the salt/heat conservation residual.</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">budget_adv</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         </span><span class="n">dt_b</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dt</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">budget_w</span><span class="p">))</span><span class="w"> </span><span class="n">dt_b</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dt</span><span class="o">*</span><span class="n">budget_w</span>
+<span class="w">         </span><span class="k">do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">k</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nx</span><span class="p">)</span>
+<span class="w">            </span><span class="n">budget_adv</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">budget_adv</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">dt_b</span><span class="o">*</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                  </span><span class="p">(</span><span class="n">Tr_face_left_x</span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">Tr_face_left_x</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">))</span><span class="o">*</span><span class="n">iareaT</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span>
+<span class="w">         </span><span class="k">end do</span>
+<span class="k">      end if</span>
+<span class="k">   end subroutine </span><span class="n">tracer_advect_zonal_one_impl</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-11-13 23:21 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

@@ -1,0 +1,1760 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>ocean_slopes_pass_y &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>ocean_slopes_pass_y
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.1% of total for procedures.">75 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_isopycnal_slopes.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_isopycnal_slopes.f90.html'>rdb_ocean_isopycnal_slopes.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ocean_isopycnal_slopes.html'>rdb_ocean_isopycnal_slopes</a></li>
+            <li class="breadcrumb-item active" aria-current="page">ocean_slopes_pass_y</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/ocean_slopes_pass_y.html#variable-drdja">drdjA</a>
+            <a class="list-group-item" href="../proc/ocean_slopes_pass_y.html#variable-drdjb">drdjB</a>
+            <a class="list-group-item" href="../proc/ocean_slopes_pass_y.html#variable-drdkl~2">drdkL</a>
+            <a class="list-group-item" href="../proc/ocean_slopes_pass_y.html#variable-drdkr~2">drdkR</a>
+            <a class="list-group-item" href="../proc/ocean_slopes_pass_y.html#variable-drds~4">drds</a>
+            <a class="list-group-item" href="../proc/ocean_slopes_pass_y.html#variable-drdt~4">drdt</a>
+            <a class="list-group-item" href="../proc/ocean_slopes_pass_y.html#variable-drdy">drdy</a>
+            <a class="list-group-item" href="../proc/ocean_slopes_pass_y.html#variable-drdz~2">drdz</a>
+            <a class="list-group-item" href="../proc/ocean_slopes_pass_y.html#variable-dsv_ds~6">dsv_ds</a>
+            <a class="list-group-item" href="../proc/ocean_slopes_pass_y.html#variable-dsv_dt~6">dsv_dt</a>
+            <a class="list-group-item" href="../proc/ocean_slopes_pass_y.html#variable-dzal~2">dzaL</a>
+            <a class="list-group-item" href="../proc/ocean_slopes_pass_y.html#variable-dzar~2">dzaR</a>
+            <a class="list-group-item" href="../proc/ocean_slopes_pass_y.html#variable-g_rho0~3">g_rho0</a>
+            <a class="list-group-item" href="../proc/ocean_slopes_pass_y.html#variable-haa~2">haA</a>
+            <a class="list-group-item" href="../proc/ocean_slopes_pass_y.html#variable-hab~2">haB</a>
+            <a class="list-group-item" href="../proc/ocean_slopes_pass_y.html#variable-hal~2">haL</a>
+            <a class="list-group-item" href="../proc/ocean_slopes_pass_y.html#variable-har~2">haR</a>
+            <a class="list-group-item" href="../proc/ocean_slopes_pass_y.html#variable-hg2a~2">hg2A</a>
+            <a class="list-group-item" href="../proc/ocean_slopes_pass_y.html#variable-hg2b~2">hg2B</a>
+            <a class="list-group-item" href="../proc/ocean_slopes_pass_y.html#variable-hg2l~2">hg2L</a>
+            <a class="list-group-item" href="../proc/ocean_slopes_pass_y.html#variable-hg2r~2">hg2R</a>
+            <a class="list-group-item" href="../proc/ocean_slopes_pass_y.html#variable-i~455">i</a>
+            <a class="list-group-item" href="../proc/ocean_slopes_pass_y.html#variable-j~425">j</a>
+            <a class="list-group-item" href="../proc/ocean_slopes_pass_y.html#variable-js~3">js</a>
+            <a class="list-group-item" href="../proc/ocean_slopes_pass_y.html#variable-k~299">k</a>
+            <a class="list-group-item" href="../proc/ocean_slopes_pass_y.html#variable-ka~6">ka</a>
+            <a class="list-group-item" href="../proc/ocean_slopes_pass_y.html#variable-kb~20">kb</a>
+            <a class="list-group-item" href="../proc/ocean_slopes_pass_y.html#variable-mag2~2">mag2</a>
+            <a class="list-group-item" href="../proc/ocean_slopes_pass_y.html#variable-mask~10">mask</a>
+            <a class="list-group-item" href="../proc/ocean_slopes_pass_y.html#variable-presn">presN</a>
+            <a class="list-group-item" href="../proc/ocean_slopes_pass_y.html#variable-press">presS</a>
+            <a class="list-group-item" href="../proc/ocean_slopes_pass_y.html#variable-pres_v">pres_v</a>
+            <a class="list-group-item" href="../proc/ocean_slopes_pass_y.html#variable-rho_v">rho_v</a>
+            <a class="list-group-item" href="../proc/ocean_slopes_pass_y.html#variable-s_v">s_v</a>
+            <a class="list-group-item" href="../proc/ocean_slopes_pass_y.html#variable-slope~9">slope</a>
+            <a class="list-group-item" href="../proc/ocean_slopes_pass_y.html#variable-t_v">t_v</a>
+            <a class="list-group-item" href="../proc/ocean_slopes_pass_y.html#variable-wta~2">wtA</a>
+            <a class="list-group-item" href="../proc/ocean_slopes_pass_y.html#variable-wtb~2">wtB</a>
+            <a class="list-group-item" href="../proc/ocean_slopes_pass_y.html#variable-wtl~2">wtL</a>
+            <a class="list-group-item" href="../proc/ocean_slopes_pass_y.html#variable-wtr~2">wtR</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/ocean_slopes_pass_y.html#src">ocean_slopes_pass_y</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>private pure subroutine ocean_slopes_pass_y(nx, ny, nz, eos, rho0, min_dz, h_layer, t_fill, s_fill, e_int, idyCv, wet_v, slope_y, n2_v)  
+</h2>
+    
+
+    <p>v-face slope + N² pass — mirror of <code>pass_x</code> with v-staggering.
+The v-face at (i,j) sits between cells (i,j-1) and (i,j); pairs
+columns <code>js=j-1</code> (south) and <code>j</code> (north), loop <code>j=2:ny</code>.</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx~456"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny~456"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz~338"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-eos~57"></span>
+              type(<a href='../type/eos_t.html'>eos_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>eos</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-rho0~59"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>rho0</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-min_dz~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>min_dz</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_layer~102"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_layer</strong>(nx,ny,nz)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-t_fill~6"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>t_fill</strong>(nx,ny,nz)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-s_fill~6"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>s_fill</strong>(nx,ny,nz)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-e_int~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>e_int</strong>(nx,ny,nz+1)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-idycv~25"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>idyCv</strong>(nx,ny+1)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-wet_v~12"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>wet_v</strong>(nx,ny+1)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-slope_y~9"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>slope_y</strong>(nx,ny+1,nz+1)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n2_v~8"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>n2_v</strong>(nx,ny+1,nz+1)</td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~ocean_slopes_pass_y~~CallsGraph Pages: 1 -->
+<svg id="prococean_slopes_pass_yCallsGraph" width="641pt" height="85pt"
+ viewBox="0.00 0.00 641.00 85.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~ocean_slopes_pass_y~~CallsGraph" class="graph" transform="scale(0.728724 0.728724) rotate(0) translate(4 112.27)">
+<title>proc~~ocean_slopes_pass_y~~CallsGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-112.27 875.62,-112.27 875.62,4 -4,4"/>
+<!-- proc~ocean_slopes_pass_y -->
+<g id="proc~~ocean_slopes_pass_y~~CallsGraph_node1" class="node">
+<title>proc~ocean_slopes_pass_y</title>
+<polygon fill="none" stroke="black" points="124.02,-66.27 0,-66.27 0,-42 124.02,-42 124.02,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="62.01" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50">ocean_slopes_pass_y</text>
+</g>
+<!-- local -->
+<g id="proc~~ocean_slopes_pass_y~~CallsGraph_node2" class="node">
+<title>local</title>
+<polygon fill="#777777" stroke="#777777" points="265.53,-108.27 211.53,-108.27 211.53,-84 265.53,-84 265.53,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="238.53" y="-92.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">local</text>
+</g>
+<!-- proc~ocean_slopes_pass_y&#45;&gt;local -->
+<g id="proc~~ocean_slopes_pass_y~~CallsGraph_edge1" class="edge">
+<title>proc~ocean_slopes_pass_y&#45;&gt;local</title>
+<path fill="none" stroke="#ff0000" d="M115.37,-66.74C142.76,-73.33 175.64,-81.24 200.39,-87.2"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="199.47,-90.57 210.01,-89.51 201.1,-83.77 199.47,-90.57"/>
+</g>
+<!-- proc~eos_density_specvol_derivs -->
+<g id="proc~~ocean_slopes_pass_y~~CallsGraph_node3" class="node">
+<title>proc~eos_density_specvol_derivs</title>
+<g id="a_proc~~ocean_slopes_pass_y~~CallsGraph_node3"><a xlink:href="../proc/eos_density_specvol_derivs.html" xlink:title="eos_density_specvol_derivs">
+<polygon fill="#d9534f" stroke="#d9534f" points="317.04,-66.27 160.02,-66.27 160.02,-42 317.04,-42 317.04,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="238.53" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">eos_density_specvol_derivs</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_slopes_pass_y&#45;&gt;proc~eos_density_specvol_derivs -->
+<g id="proc~~ocean_slopes_pass_y~~CallsGraph_edge2" class="edge">
+<title>proc~ocean_slopes_pass_y&#45;&gt;proc~eos_density_specvol_derivs</title>
+<path fill="none" stroke="#ff0000" d="M124.05,-54.13C131.87,-54.13 139.99,-54.13 148.14,-54.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="148.14,-57.64 158.14,-54.14 148.14,-50.64 148.14,-57.64"/>
+</g>
+<!-- proc~pressure_above_x -->
+<g id="proc~~ocean_slopes_pass_y~~CallsGraph_node4" class="node">
+<title>proc~pressure_above_x</title>
+<g id="a_proc~~ocean_slopes_pass_y~~CallsGraph_node4"><a xlink:href="../proc/pressure_above_x.html" xlink:title="pressure_above_x">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="291.54,-24.27 185.52,-24.27 185.52,0 291.54,0 291.54,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="238.53" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">pressure_above_x</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_slopes_pass_y&#45;&gt;proc~pressure_above_x -->
+<g id="proc~~ocean_slopes_pass_y~~CallsGraph_edge3" class="edge">
+<title>proc~ocean_slopes_pass_y&#45;&gt;proc~pressure_above_x</title>
+<path fill="none" stroke="#ff0000" d="M115.37,-41.53C133.84,-37.09 154.8,-32.05 174.08,-27.41"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="174.83,-30.82 183.73,-25.08 173.19,-24.02 174.83,-30.82"/>
+</g>
+<!-- proc~roquet_rho_point -->
+<g id="proc~~ocean_slopes_pass_y~~CallsGraph_node5" class="node">
+<title>proc~roquet_rho_point</title>
+<g id="a_proc~~ocean_slopes_pass_y~~CallsGraph_node5"><a xlink:href="../proc/roquet_rho_point.html" xlink:title="roquet_rho_point">
+<polygon fill="#d9534f" stroke="#d9534f" points="454.56,-87.27 353.04,-87.27 353.04,-63 454.56,-63 454.56,-87.27"/>
+<text xml:space="preserve" text-anchor="middle" x="403.8" y="-71.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">roquet_rho_point</text>
+</a>
+</g>
+</g>
+<!-- proc~eos_density_specvol_derivs&#45;&gt;proc~roquet_rho_point -->
+<g id="proc~~ocean_slopes_pass_y~~CallsGraph_edge4" class="edge">
+<title>proc~eos_density_specvol_derivs&#45;&gt;proc~roquet_rho_point</title>
+<path fill="none" stroke="#00ff00" d="M317.34,-64.14C325.4,-65.18 333.5,-66.22 341.34,-67.23"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="340.74,-70.68 351.11,-68.49 341.63,-63.74 340.74,-70.68"/>
+</g>
+<!-- proc~roquet_spv_point -->
+<g id="proc~~ocean_slopes_pass_y~~CallsGraph_node6" class="node">
+<title>proc~roquet_spv_point</title>
+<g id="a_proc~~ocean_slopes_pass_y~~CallsGraph_node6"><a xlink:href="../proc/roquet_spv_point.html" xlink:title="roquet_spv_point">
+<polygon fill="#d9534f" stroke="#d9534f" points="454.56,-45.27 353.04,-45.27 353.04,-21 454.56,-21 454.56,-45.27"/>
+<text xml:space="preserve" text-anchor="middle" x="403.8" y="-29.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">roquet_spv_point</text>
+</a>
+</g>
+</g>
+<!-- proc~eos_density_specvol_derivs&#45;&gt;proc~roquet_spv_point -->
+<g id="proc~~ocean_slopes_pass_y~~CallsGraph_edge5" class="edge">
+<title>proc~eos_density_specvol_derivs&#45;&gt;proc~roquet_spv_point</title>
+<path fill="none" stroke="#00ff00" d="M317.34,-44.13C325.4,-43.09 333.5,-42.05 341.34,-41.04"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="341.63,-44.53 351.11,-39.78 340.74,-37.59 341.63,-44.53"/>
+</g>
+<!-- proc~roquet_model_ct_derivs -->
+<g id="proc~~ocean_slopes_pass_y~~CallsGraph_node7" class="node">
+<title>proc~roquet_model_ct_derivs</title>
+<g id="a_proc~~ocean_slopes_pass_y~~CallsGraph_node7"><a xlink:href="../proc/roquet_model_ct_derivs.html" xlink:title="roquet_model_ct_derivs">
+<polygon fill="#d9534f" stroke="#d9534f" points="628.08,-66.27 490.56,-66.27 490.56,-42 628.08,-42 628.08,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="559.32" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">roquet_model_ct_derivs</text>
+</a>
+</g>
+</g>
+<!-- proc~roquet_rho_point&#45;&gt;proc~roquet_model_ct_derivs -->
+<g id="proc~~ocean_slopes_pass_y~~CallsGraph_edge6" class="edge">
+<title>proc~roquet_rho_point&#45;&gt;proc~roquet_model_ct_derivs</title>
+<path fill="none" stroke="#ff0000" d="M454.64,-68.32C462.47,-67.25 470.72,-66.12 479.01,-64.98"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="479.38,-68.47 488.81,-63.64 478.43,-61.53 479.38,-68.47"/>
+</g>
+<!-- proc~roquet_spv_point&#45;&gt;proc~roquet_model_ct_derivs -->
+<g id="proc~~ocean_slopes_pass_y~~CallsGraph_edge7" class="edge">
+<title>proc~roquet_spv_point&#45;&gt;proc~roquet_model_ct_derivs</title>
+<path fill="none" stroke="#00ffff" d="M454.64,-39.95C462.47,-41.02 470.72,-42.15 479.01,-43.29"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="478.43,-46.74 488.81,-44.63 479.38,-39.8 478.43,-46.74"/>
+</g>
+<!-- proc~ct_from_pt_derivs -->
+<g id="proc~~ocean_slopes_pass_y~~CallsGraph_node8" class="node">
+<title>proc~ct_from_pt_derivs</title>
+<g id="a_proc~~ocean_slopes_pass_y~~CallsGraph_node8"><a xlink:href="../proc/ct_from_pt_derivs.html" xlink:title="ct_from_pt_derivs">
+<polygon fill="#d9534f" stroke="#d9534f" points="768.6,-66.27 664.08,-66.27 664.08,-42 768.6,-42 768.6,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="716.34" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ct_from_pt_derivs</text>
+</a>
+</g>
+</g>
+<!-- proc~roquet_model_ct_derivs&#45;&gt;proc~ct_from_pt_derivs -->
+<g id="proc~~ocean_slopes_pass_y~~CallsGraph_edge8" class="edge">
+<title>proc~roquet_model_ct_derivs&#45;&gt;proc~ct_from_pt_derivs</title>
+<path fill="none" stroke="#ff0000" d="M628.31,-54.13C636.29,-54.13 644.41,-54.13 652.32,-54.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="652.2,-57.64 662.2,-54.14 652.2,-50.64 652.2,-57.64"/>
+</g>
+<!-- proc~ct_from_pt -->
+<g id="proc~~ocean_slopes_pass_y~~CallsGraph_node9" class="node">
+<title>proc~ct_from_pt</title>
+<g id="a_proc~~ocean_slopes_pass_y~~CallsGraph_node9"><a xlink:href="../proc/ct_from_pt.html" xlink:title="ct_from_pt">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="871.62,-66.27 804.6,-66.27 804.6,-42 871.62,-42 871.62,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="838.11" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ct_from_pt</text>
+</a>
+</g>
+</g>
+<!-- proc~ct_from_pt_derivs&#45;&gt;proc~ct_from_pt -->
+<g id="proc~~ocean_slopes_pass_y~~CallsGraph_edge9" class="edge">
+<title>proc~ct_from_pt_derivs&#45;&gt;proc~ct_from_pt</title>
+<path fill="none" stroke="#ff0000" d="M768.83,-54.13C776.83,-54.13 785.03,-54.13 792.85,-54.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="792.84,-57.64 802.84,-54.14 792.84,-50.64 792.84,-57.64"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprococean_slopes_pass_yCallsGraph = svgPanZoom('#prococean_slopes_pass_yCallsGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~ocean_slopes_pass_y~~CalledByGraph Pages: 1 -->
+<svg id="prococean_slopes_pass_yCalledByGraph" width="641pt" height="45pt"
+ viewBox="0.00 0.00 641.00 45.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~ocean_slopes_pass_y~~CalledByGraph" class="graph" transform="scale(0.610395 0.610395) rotate(0) translate(4 70.27)">
+<title>proc~~ocean_slopes_pass_y~~CalledByGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-70.27 1046.14,-70.27 1046.14,4 -4,4"/>
+<!-- proc~ocean_slopes_pass_y -->
+<g id="proc~~ocean_slopes_pass_y~~CalledByGraph_node1" class="node">
+<title>proc~ocean_slopes_pass_y</title>
+<polygon fill="none" stroke="black" points="1042.14,-45.27 918.12,-45.27 918.12,-21 1042.14,-21 1042.14,-45.27"/>
+<text xml:space="preserve" text-anchor="middle" x="980.13" y="-29.53" font-family="Helvetica,sans-Serif" font-size="10.50">ocean_slopes_pass_y</text>
+</g>
+<!-- proc~ocean_slopes_compute_impl -->
+<g id="proc~~ocean_slopes_pass_y~~CalledByGraph_node2" class="node">
+<title>proc~ocean_slopes_compute_impl</title>
+<g id="a_proc~~ocean_slopes_pass_y~~CalledByGraph_node2"><a xlink:href="../proc/ocean_slopes_compute_impl.html" xlink:title="ocean_slopes_compute_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="882.12,-45.27 717.6,-45.27 717.6,-21 882.12,-21 882.12,-45.27"/>
+<text xml:space="preserve" text-anchor="middle" x="799.86" y="-29.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_slopes_compute_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_slopes_compute_impl&#45;&gt;proc~ocean_slopes_pass_y -->
+<g id="proc~~ocean_slopes_pass_y~~CalledByGraph_edge1" class="edge">
+<title>proc~ocean_slopes_compute_impl&#45;&gt;proc~ocean_slopes_pass_y</title>
+<path fill="none" stroke="#ff0000" d="M882.43,-33.13C890.44,-33.13 898.53,-33.13 906.44,-33.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="906.36,-36.64 916.36,-33.14 906.36,-29.64 906.36,-36.64"/>
+</g>
+<!-- proc~ocean_slopes_compute -->
+<g id="proc~~ocean_slopes_pass_y~~CalledByGraph_node3" class="node">
+<title>proc~ocean_slopes_compute</title>
+<g id="a_proc~~ocean_slopes_pass_y~~CalledByGraph_node3"><a xlink:href="../proc/ocean_slopes_compute.html" xlink:title="ocean_slopes_compute">
+<polygon fill="#d9534f" stroke="#d9534f" points="681.6,-45.27 545.58,-45.27 545.58,-21 681.6,-21 681.6,-45.27"/>
+<text xml:space="preserve" text-anchor="middle" x="613.59" y="-29.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_slopes_compute</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_slopes_compute&#45;&gt;proc~ocean_slopes_compute_impl -->
+<g id="proc~~ocean_slopes_pass_y~~CalledByGraph_edge2" class="edge">
+<title>proc~ocean_slopes_compute&#45;&gt;proc~ocean_slopes_compute_impl</title>
+<path fill="none" stroke="#ff0000" d="M681.9,-33.13C689.72,-33.13 697.81,-33.13 705.9,-33.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="705.81,-36.64 715.81,-33.14 705.81,-29.64 705.81,-36.64"/>
+</g>
+<!-- proc~ocean_dyn_step_split -->
+<g id="proc~~ocean_slopes_pass_y~~CalledByGraph_node4" class="node">
+<title>proc~ocean_dyn_step_split</title>
+<g id="a_proc~~ocean_slopes_pass_y~~CalledByGraph_node4"><a xlink:href="../proc/ocean_dyn_step_split.html" xlink:title="ocean_dyn_step_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="509.58,-66.27 385.56,-66.27 385.56,-42 509.58,-42 509.58,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="447.57" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step_split</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step_split&#45;&gt;proc~ocean_slopes_compute -->
+<g id="proc~~ocean_slopes_pass_y~~CalledByGraph_edge3" class="edge">
+<title>proc~ocean_dyn_step_split&#45;&gt;proc~ocean_slopes_compute</title>
+<path fill="none" stroke="#ff0000" d="M509.64,-46.32C517.51,-45.31 525.64,-44.27 533.74,-43.23"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="534.15,-46.71 543.62,-41.96 533.26,-39.76 534.15,-46.71"/>
+</g>
+<!-- proc~run_stage -->
+<g id="proc~~ocean_slopes_pass_y~~CalledByGraph_node5" class="node">
+<title>proc~run_stage</title>
+<g id="a_proc~~ocean_slopes_pass_y~~CalledByGraph_node5"><a xlink:href="../proc/run_stage.html" xlink:title="run_stage">
+<polygon fill="#d9534f" stroke="#d9534f" points="479.58,-24.27 415.56,-24.27 415.56,0 479.58,0 479.58,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="447.57" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage</text>
+</a>
+</g>
+</g>
+<!-- proc~run_stage&#45;&gt;proc~ocean_slopes_compute -->
+<g id="proc~~ocean_slopes_pass_y~~CalledByGraph_edge4" class="edge">
+<title>proc~run_stage&#45;&gt;proc~ocean_slopes_compute</title>
+<path fill="none" stroke="#ff0000" d="M479.81,-16.13C495.27,-18.11 514.7,-20.6 533.89,-23.06"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="533.26,-26.51 543.63,-24.31 534.15,-19.56 533.26,-26.51"/>
+</g>
+<!-- proc~engine_step -->
+<g id="proc~~ocean_slopes_pass_y~~CalledByGraph_node6" class="node">
+<title>proc~engine_step</title>
+<g id="a_proc~~ocean_slopes_pass_y~~CalledByGraph_node6"><a xlink:href="../proc/engine_step.html" xlink:title="engine_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="216.54,-45.27 140.52,-45.27 140.52,-21 216.54,-21 216.54,-45.27"/>
+<text xml:space="preserve" text-anchor="middle" x="178.53" y="-29.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~ocean_dyn_step_split -->
+<g id="proc~~ocean_slopes_pass_y~~CalledByGraph_edge5" class="edge">
+<title>proc~engine_step&#45;&gt;proc~ocean_dyn_step_split</title>
+<path fill="none" stroke="#ff0000" d="M216.94,-36.08C257.51,-39.27 323.26,-44.44 374.03,-48.43"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="373.52,-51.9 383.77,-49.2 374.07,-44.92 373.52,-51.9"/>
+</g>
+<!-- proc~ocean_dyn_step -->
+<g id="proc~~ocean_slopes_pass_y~~CalledByGraph_node7" class="node">
+<title>proc~ocean_dyn_step</title>
+<g id="a_proc~~ocean_slopes_pass_y~~CalledByGraph_node7"><a xlink:href="../proc/ocean_dyn_step.html" xlink:title="ocean_dyn_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="349.56,-25.27 252.54,-25.27 252.54,-1 349.56,-1 349.56,-25.27"/>
+<text xml:space="preserve" text-anchor="middle" x="301.05" y="-9.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~ocean_dyn_step -->
+<g id="proc~~ocean_slopes_pass_y~~CalledByGraph_edge9" class="edge">
+<title>proc~engine_step&#45;&gt;proc~ocean_dyn_step</title>
+<path fill="none" stroke="#00ffff" d="M217,-26.92C224.7,-25.64 232.98,-24.27 241.22,-22.9"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="241.59,-26.38 250.88,-21.29 240.45,-19.48 241.59,-26.38"/>
+</g>
+<!-- proc~ocean_dyn_step&#45;&gt;proc~run_stage -->
+<g id="proc~~ocean_slopes_pass_y~~CalledByGraph_edge6" class="edge">
+<title>proc~ocean_dyn_step&#45;&gt;proc~run_stage</title>
+<path fill="none" stroke="#00ffff" d="M349.77,-12.8C367.27,-12.68 386.96,-12.55 403.98,-12.43"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="403.79,-15.93 413.77,-12.36 403.74,-8.93 403.79,-15.93"/>
+</g>
+<!-- proc~driver_run_ocean -->
+<g id="proc~~ocean_slopes_pass_y~~CalledByGraph_node8" class="node">
+<title>proc~driver_run_ocean</title>
+<g id="a_proc~~ocean_slopes_pass_y~~CalledByGraph_node8"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<polygon fill="#d9534f" stroke="#d9534f" points="104.52,-66.27 0,-66.27 0,-42 104.52,-42 104.52,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="52.26" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_step -->
+<g id="proc~~ocean_slopes_pass_y~~CalledByGraph_edge7" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_step</title>
+<path fill="none" stroke="#ff0000" d="M104.88,-45.41C112.86,-44.06 121.07,-42.68 128.98,-41.34"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="129.5,-44.8 138.78,-39.68 128.34,-37.9 129.5,-44.8"/>
+</g>
+<!-- proc~rdb_ocean_step -->
+<g id="proc~~ocean_slopes_pass_y~~CalledByGraph_node9" class="node">
+<title>proc~rdb_ocean_step</title>
+<g id="a_proc~~ocean_slopes_pass_y~~CalledByGraph_node9"><a xlink:href="../proc/rdb_ocean_step.html" xlink:title="rdb_ocean_step">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="100.02,-24.27 4.5,-24.27 4.5,0 100.02,0 100.02,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="52.26" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_step</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_step&#45;&gt;proc~engine_step -->
+<g id="proc~~ocean_slopes_pass_y~~CalledByGraph_edge8" class="edge">
+<title>proc~rdb_ocean_step&#45;&gt;proc~engine_step</title>
+<path fill="none" stroke="#ff0000" d="M100.24,-20.07C109.62,-21.66 119.5,-23.33 128.93,-24.92"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="128.22,-28.35 138.67,-26.57 129.39,-21.45 128.22,-28.35"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprococean_slopes_pass_yCalledByGraph = svgPanZoom('#prococean_slopes_pass_yCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-drdja"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>drdjA</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-drdjb"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>drdjB</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-drdkl~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>drdkL</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-drdkr~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>drdkR</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-drds~4"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>drds</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-drdt~4"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>drdt</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-drdy"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>drdy</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-drdz~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>drdz</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dsv_ds~6"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dsv_ds</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dsv_dt~6"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dsv_dt</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dzal~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dzaL</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dzar~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dzaR</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-g_rho0~3"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>g_rho0</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-haa~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>haA</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hab~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>haB</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hal~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>haL</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-har~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>haR</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hg2a~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hg2A</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hg2b~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hg2B</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hg2l~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hg2L</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hg2r~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hg2R</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-i~455"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>i</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-j~425"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>j</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-js~3"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>js</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-k~299"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>k</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ka~6"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ka</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-kb~20"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>kb</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-mag2~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>mag2</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-mask~10"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>mask</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-presn"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>presN</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-press"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>presS</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-pres_v"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>pres_v</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-rho_v"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>rho_v</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-s_v"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>s_v</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-slope~9"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>slope</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-t_v"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>t_v</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-wta~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>wtA</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-wtb~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>wtB</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-wtl~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>wtL</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-wtr~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>wtR</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">pure subroutine </span><span class="n">ocean_slopes_pass_y</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">eos</span><span class="p">,</span><span class="w"> </span><span class="n">rho0</span><span class="p">,</span><span class="w"> </span><span class="n">min_dz</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                       </span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="n">t_fill</span><span class="p">,</span><span class="w"> </span><span class="n">s_fill</span><span class="p">,</span><span class="w"> </span><span class="n">e_int</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                       </span><span class="n">idyCv</span><span class="p">,</span><span class="w"> </span><span class="n">wet_v</span><span class="p">,</span><span class="w"> </span><span class="n">slope_y</span><span class="p">,</span><span class="w"> </span><span class="n">n2_v</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! v-face slope + N² pass — mirror of `pass_x` with v-staggering.</span>
+<span class="w">      </span><span class="c">!! The v-face at (i,j) sits between cells (i,j-1) and (i,j); pairs</span>
+<span class="w">      </span><span class="c">!! columns `js=j-1` (south) and `j` (north), loop `j=2:ny`.</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">eos_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">eos</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">rho0</span><span class="p">,</span><span class="w"> </span><span class="n">min_dz</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">h_layer</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">t_fill</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">s_fill</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">e_int</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">idyCv</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">wet_v</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">slope_y</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">n2_v</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">,</span><span class="w"> </span><span class="n">js</span><span class="p">,</span><span class="w"> </span><span class="n">ka</span><span class="p">,</span><span class="w"> </span><span class="n">kb</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">pres_v</span><span class="p">,</span><span class="w"> </span><span class="n">t_v</span><span class="p">,</span><span class="w"> </span><span class="n">s_v</span><span class="p">,</span><span class="w"> </span><span class="n">rho_v</span><span class="p">,</span><span class="w"> </span><span class="n">dsv_dt</span><span class="p">,</span><span class="w"> </span><span class="n">dsv_ds</span><span class="p">,</span><span class="w"> </span><span class="n">drdt</span><span class="p">,</span><span class="w"> </span><span class="n">drds</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">drdjA</span><span class="p">,</span><span class="w"> </span><span class="n">drdjB</span><span class="p">,</span><span class="w"> </span><span class="n">drdkL</span><span class="p">,</span><span class="w"> </span><span class="n">drdkR</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">hg2A</span><span class="p">,</span><span class="w"> </span><span class="n">hg2B</span><span class="p">,</span><span class="w"> </span><span class="n">hg2L</span><span class="p">,</span><span class="w"> </span><span class="n">hg2R</span><span class="p">,</span><span class="w"> </span><span class="n">haA</span><span class="p">,</span><span class="w"> </span><span class="n">haB</span><span class="p">,</span><span class="w"> </span><span class="n">haL</span><span class="p">,</span><span class="w"> </span><span class="n">haR</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dzaL</span><span class="p">,</span><span class="w"> </span><span class="n">dzaR</span><span class="p">,</span><span class="w"> </span><span class="n">wtA</span><span class="p">,</span><span class="w"> </span><span class="n">wtB</span><span class="p">,</span><span class="w"> </span><span class="n">wtL</span><span class="p">,</span><span class="w"> </span><span class="n">wtR</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">drdy</span><span class="p">,</span><span class="w"> </span><span class="n">drdz</span><span class="p">,</span><span class="w"> </span><span class="n">mag2</span><span class="p">,</span><span class="w"> </span><span class="n">slope</span><span class="p">,</span><span class="w"> </span><span class="n">presS</span><span class="p">,</span><span class="w"> </span><span class="n">presN</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">g_rho0</span><span class="p">,</span><span class="w"> </span><span class="n">mask</span>
+
+<span class="w">      </span><span class="n">g_rho0</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">GRAVITY</span><span class="o">/</span><span class="n">rho0</span>
+
+<span class="w">      </span><span class="k">do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ny</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">         </span><span class="n">slope_y</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">         </span><span class="n">slope_y</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">         </span><span class="n">n2_v</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">         </span><span class="n">n2_v</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">      </span><span class="k">end do</span>
+<span class="k">      do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">k</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nz</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nx</span><span class="p">)</span>
+<span class="w">         </span><span class="n">slope_y</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">         </span><span class="n">slope_y</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">         </span><span class="n">n2_v</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">         </span><span class="n">n2_v</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">      </span><span class="k">end do</span>
+
+<span class="k">      do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">k</span><span class="o">=</span><span class="mi">2</span><span class="p">:</span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="o">=</span><span class="mi">2</span><span class="p">:</span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nx</span><span class="p">)</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">         </span><span class="n">local</span><span class="p">(</span><span class="n">js</span><span class="p">,</span><span class="w"> </span><span class="n">ka</span><span class="p">,</span><span class="w"> </span><span class="n">kb</span><span class="p">,</span><span class="w"> </span><span class="n">pres_v</span><span class="p">,</span><span class="w"> </span><span class="n">t_v</span><span class="p">,</span><span class="w"> </span><span class="n">s_v</span><span class="p">,</span><span class="w"> </span><span class="n">rho_v</span><span class="p">,</span><span class="w"> </span><span class="n">dsv_dt</span><span class="p">,</span><span class="w"> </span><span class="n">dsv_ds</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">               </span><span class="n">drdt</span><span class="p">,</span><span class="w"> </span><span class="n">drds</span><span class="p">,</span><span class="w"> </span><span class="n">drdjA</span><span class="p">,</span><span class="w"> </span><span class="n">drdjB</span><span class="p">,</span><span class="w"> </span><span class="n">drdkL</span><span class="p">,</span><span class="w"> </span><span class="n">drdkR</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">               </span><span class="n">hg2A</span><span class="p">,</span><span class="w"> </span><span class="n">hg2B</span><span class="p">,</span><span class="w"> </span><span class="n">hg2L</span><span class="p">,</span><span class="w"> </span><span class="n">hg2R</span><span class="p">,</span><span class="w"> </span><span class="n">haA</span><span class="p">,</span><span class="w"> </span><span class="n">haB</span><span class="p">,</span><span class="w"> </span><span class="n">haL</span><span class="p">,</span><span class="w"> </span><span class="n">haR</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">               </span><span class="n">dzaL</span><span class="p">,</span><span class="w"> </span><span class="n">dzaR</span><span class="p">,</span><span class="w"> </span><span class="n">wtA</span><span class="p">,</span><span class="w"> </span><span class="n">wtB</span><span class="p">,</span><span class="w"> </span><span class="n">wtL</span><span class="p">,</span><span class="w"> </span><span class="n">wtR</span><span class="p">,</span><span class="w"> </span><span class="n">drdy</span><span class="p">,</span><span class="w"> </span><span class="n">drdz</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">               </span><span class="n">mag2</span><span class="p">,</span><span class="w"> </span><span class="n">slope</span><span class="p">,</span><span class="w"> </span><span class="n">presS</span><span class="p">,</span><span class="w"> </span><span class="n">presN</span><span class="p">,</span><span class="w"> </span><span class="n">mask</span><span class="p">)</span>
+<span class="w">         </span><span class="n">js</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">j</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">         </span><span class="n">ka</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">k</span>
+<span class="w">         </span><span class="n">kb</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">k</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span>
+
+<span class="w">         </span><span class="n">presS</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">pressure_above_x</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">js</span><span class="p">,</span><span class="w"> </span><span class="n">ka</span><span class="p">,</span><span class="w"> </span><span class="n">rho0</span><span class="p">)</span>
+<span class="w">         </span><span class="n">presN</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">pressure_above_x</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">ka</span><span class="p">,</span><span class="w"> </span><span class="n">rho0</span><span class="p">)</span>
+<span class="w">         </span><span class="n">pres_v</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="p">(</span><span class="n">presS</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">presN</span><span class="p">)</span>
+
+<span class="w">         </span><span class="n">t_v</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.25_wp</span><span class="o">*</span><span class="p">((</span><span class="n">t_fill</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">js</span><span class="p">,</span><span class="w"> </span><span class="n">ka</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">t_fill</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">ka</span><span class="p">))</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                        </span><span class="p">(</span><span class="n">t_fill</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">js</span><span class="p">,</span><span class="w"> </span><span class="n">kb</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">t_fill</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">kb</span><span class="p">)))</span>
+<span class="w">         </span><span class="n">s_v</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.25_wp</span><span class="o">*</span><span class="p">((</span><span class="n">s_fill</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">js</span><span class="p">,</span><span class="w"> </span><span class="n">ka</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">s_fill</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">ka</span><span class="p">))</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                        </span><span class="p">(</span><span class="n">s_fill</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">js</span><span class="p">,</span><span class="w"> </span><span class="n">kb</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">s_fill</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">kb</span><span class="p">)))</span>
+
+<span class="w">         </span><span class="k">call </span><span class="n">eos_density_specvol_derivs</span><span class="p">(</span><span class="n">eos</span><span class="p">,</span><span class="w"> </span><span class="n">t_v</span><span class="p">,</span><span class="w"> </span><span class="n">s_v</span><span class="p">,</span><span class="w"> </span><span class="n">pres_v</span><span class="p">,</span><span class="w"> </span><span class="n">rho_v</span><span class="p">,</span><span class="w"> </span><span class="n">dsv_dt</span><span class="p">,</span><span class="w"> </span><span class="n">dsv_ds</span><span class="p">)</span>
+<span class="w">         </span><span class="n">drdt</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">-</span><span class="p">(</span><span class="n">rho_v</span><span class="o">*</span><span class="n">rho_v</span><span class="p">)</span><span class="o">*</span><span class="n">dsv_dt</span>
+<span class="w">         </span><span class="n">drds</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">-</span><span class="p">(</span><span class="n">rho_v</span><span class="o">*</span><span class="n">rho_v</span><span class="p">)</span><span class="o">*</span><span class="n">dsv_ds</span>
+
+<span class="w">         </span><span class="n">drdjA</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">drdt</span><span class="o">*</span><span class="p">(</span><span class="n">t_fill</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">ka</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">t_fill</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">js</span><span class="p">,</span><span class="w"> </span><span class="n">ka</span><span class="p">))</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                 </span><span class="n">drds</span><span class="o">*</span><span class="p">(</span><span class="n">s_fill</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">ka</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">s_fill</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">js</span><span class="p">,</span><span class="w"> </span><span class="n">ka</span><span class="p">))</span>
+<span class="w">         </span><span class="n">drdjB</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">drdt</span><span class="o">*</span><span class="p">(</span><span class="n">t_fill</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">kb</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">t_fill</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">js</span><span class="p">,</span><span class="w"> </span><span class="n">kb</span><span class="p">))</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                 </span><span class="n">drds</span><span class="o">*</span><span class="p">(</span><span class="n">s_fill</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">kb</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">s_fill</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">js</span><span class="p">,</span><span class="w"> </span><span class="n">kb</span><span class="p">))</span>
+
+<span class="w">         </span><span class="n">drdkL</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">drdt</span><span class="o">*</span><span class="p">(</span><span class="n">t_fill</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">js</span><span class="p">,</span><span class="w"> </span><span class="n">kb</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">t_fill</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">js</span><span class="p">,</span><span class="w"> </span><span class="n">ka</span><span class="p">))</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                 </span><span class="n">drds</span><span class="o">*</span><span class="p">(</span><span class="n">s_fill</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">js</span><span class="p">,</span><span class="w"> </span><span class="n">kb</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">s_fill</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">js</span><span class="p">,</span><span class="w"> </span><span class="n">ka</span><span class="p">))</span>
+<span class="w">         </span><span class="n">drdkR</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">drdt</span><span class="o">*</span><span class="p">(</span><span class="n">t_fill</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">kb</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">t_fill</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">ka</span><span class="p">))</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                 </span><span class="n">drds</span><span class="o">*</span><span class="p">(</span><span class="n">s_fill</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">kb</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">s_fill</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">ka</span><span class="p">))</span>
+
+<span class="w">         </span><span class="n">hg2A</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">h_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">js</span><span class="p">,</span><span class="w"> </span><span class="n">ka</span><span class="p">)</span><span class="o">*</span><span class="n">h_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">ka</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">H_DIV_EPS</span><span class="o">*</span><span class="n">H_DIV_EPS</span>
+<span class="w">         </span><span class="n">hg2B</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">h_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">js</span><span class="p">,</span><span class="w"> </span><span class="n">kb</span><span class="p">)</span><span class="o">*</span><span class="n">h_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">kb</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">H_DIV_EPS</span><span class="o">*</span><span class="n">H_DIV_EPS</span>
+<span class="w">         </span><span class="n">hg2L</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">h_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">js</span><span class="p">,</span><span class="w"> </span><span class="n">ka</span><span class="p">)</span><span class="o">*</span><span class="n">h_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">js</span><span class="p">,</span><span class="w"> </span><span class="n">kb</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">H_DIV_EPS</span><span class="o">*</span><span class="n">H_DIV_EPS</span>
+<span class="w">         </span><span class="n">hg2R</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">h_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">ka</span><span class="p">)</span><span class="o">*</span><span class="n">h_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">kb</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">H_DIV_EPS</span><span class="o">*</span><span class="n">H_DIV_EPS</span>
+<span class="w">         </span><span class="n">haA</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="p">(</span><span class="n">h_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">js</span><span class="p">,</span><span class="w"> </span><span class="n">ka</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">h_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">ka</span><span class="p">))</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">H_DIV_EPS</span>
+<span class="w">         </span><span class="n">haB</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="p">(</span><span class="n">h_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">js</span><span class="p">,</span><span class="w"> </span><span class="n">kb</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">h_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">kb</span><span class="p">))</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">H_DIV_EPS</span>
+<span class="w">         </span><span class="n">haL</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="p">(</span><span class="n">h_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">js</span><span class="p">,</span><span class="w"> </span><span class="n">ka</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">h_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">js</span><span class="p">,</span><span class="w"> </span><span class="n">kb</span><span class="p">))</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">H_DIV_EPS</span>
+<span class="w">         </span><span class="n">haR</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="p">(</span><span class="n">h_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">ka</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">h_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">kb</span><span class="p">))</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">H_DIV_EPS</span>
+<span class="w">         </span><span class="n">dzaL</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">max</span><span class="p">(</span><span class="n">haL</span><span class="p">,</span><span class="w"> </span><span class="n">min_dz</span><span class="p">)</span>
+<span class="w">         </span><span class="n">dzaR</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">max</span><span class="p">(</span><span class="n">haR</span><span class="p">,</span><span class="w"> </span><span class="n">min_dz</span><span class="p">)</span>
+<span class="w">         </span><span class="n">wtA</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">hg2A</span><span class="o">*</span><span class="n">haB</span>
+<span class="w">         </span><span class="n">wtB</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">hg2B</span><span class="o">*</span><span class="n">haA</span>
+<span class="w">         </span><span class="n">wtL</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">hg2L</span><span class="o">*</span><span class="p">(</span><span class="n">haR</span><span class="o">*</span><span class="n">dzaR</span><span class="p">)</span>
+<span class="w">         </span><span class="n">wtR</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">hg2R</span><span class="o">*</span><span class="p">(</span><span class="n">haL</span><span class="o">*</span><span class="n">dzaL</span><span class="p">)</span>
+
+<span class="w">         </span><span class="n">drdz</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">((</span><span class="n">wtL</span><span class="o">*</span><span class="n">drdkL</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="p">(</span><span class="n">wtR</span><span class="o">*</span><span class="n">drdkR</span><span class="p">))</span><span class="o">/</span><span class="p">((</span><span class="n">dzaL</span><span class="o">*</span><span class="n">wtL</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="p">(</span><span class="n">dzaR</span><span class="o">*</span><span class="n">wtR</span><span class="p">))</span>
+
+<span class="w">         </span><span class="n">drdy</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">((</span><span class="n">wtA</span><span class="o">*</span><span class="n">drdjA</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">wtB</span><span class="o">*</span><span class="n">drdjB</span><span class="p">)</span><span class="o">/</span><span class="p">(</span><span class="n">wtA</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">wtB</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                 </span><span class="n">drdz</span><span class="o">*</span><span class="p">(</span><span class="n">e_int</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">js</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">e_int</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)))</span><span class="o">*</span><span class="n">idyCv</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span>
+
+<span class="w">         </span><span class="n">mag2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">drdy</span><span class="o">*</span><span class="n">drdy</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">drdz</span><span class="o">*</span><span class="n">drdz</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">mag2</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            </span><span class="n">slope</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">drdy</span><span class="o">/</span><span class="nb">sqrt</span><span class="p">(</span><span class="n">mag2</span><span class="p">)</span>
+<span class="w">         </span><span class="k">else</span>
+<span class="k">            </span><span class="n">slope</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">         </span><span class="k">end if</span>
+
+<span class="k">         </span><span class="n">mask</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">wet_v</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span>
+<span class="w">         </span><span class="n">slope_y</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">slope</span><span class="o">*</span><span class="n">mask</span>
+<span class="w">         </span><span class="n">n2_v</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">g_rho0</span><span class="o">*</span><span class="n">drdz</span><span class="o">*</span><span class="n">mask</span>
+<span class="w">      </span><span class="k">end do</span>
+<span class="k">   end subroutine </span><span class="n">ocean_slopes_pass_y</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-11-13 23:21 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

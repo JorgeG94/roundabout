@@ -1,0 +1,2466 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>ice_transport_step &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>ice_transport_step
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.0% of total for procedures.">58 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ice_transport.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ice_transport.f90.html'>rdb_ice_transport.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ice_transport.html'>rdb_ice_transport</a></li>
+            <li class="breadcrumb-item active" aria-current="page">ice_transport_step</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/ice_transport_step.html#variable-dt_adv">dt_adv</a>
+            <a class="list-group-item" href="../proc/ice_transport_step.html#variable-n~34">n</a>
+            <a class="list-group-item" href="../proc/ice_transport_step.html#variable-nghost~54">nghost</a>
+            <a class="list-group-item" href="../proc/ice_transport_step.html#variable-nx~390">nx</a>
+            <a class="list-group-item" href="../proc/ice_transport_step.html#variable-ny~390">ny</a>
+            <a class="list-group-item" href="../proc/ice_transport_step.html#variable-nz~303">nz</a>
+            <a class="list-group-item" href="../proc/ice_transport_step.html#variable-vglob">vglob</a>
+            <a class="list-group-item" href="../proc/ice_transport_step.html#variable-vmax~4">vmax</a>
+            <a class="list-group-item" href="../proc/ice_transport_step.html#variable-wall_e~5">wall_e</a>
+            <a class="list-group-item" href="../proc/ice_transport_step.html#variable-wall_n~5">wall_n</a>
+            <a class="list-group-item" href="../proc/ice_transport_step.html#variable-wall_s~5">wall_s</a>
+            <a class="list-group-item" href="../proc/ice_transport_step.html#variable-wall_w~5">wall_w</a>
+            <a class="list-group-item" href="../proc/ice_transport_step.html#variable-x4">x4</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/ice_transport_step.html#src">ice_transport_step</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>public  subroutine ice_transport_step(grid, metrics, ms, ice, dt, adv_substeps, roll_factor, ok, bc)  
+</h2>
+    
+
+    <p>Entry point (host orchestration; kernels inside).  Outer-shim +
+flat-impl: every phase below dispatches to a <code>pure</code> <code>_impl</code>
+kernel; this routine only sequences them and owns the
+host-visible <code>ok</code> fail-loud signal.</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-grid~230"></span>
+              type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>grid</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-metrics~58"></span>
+              type(<a href='../type/ocean_metrics_t.html'>ocean_metrics_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>metrics</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ms~93"></span>
+              type(<a href='../type/multilayer_state_t.html'>multilayer_state_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ms</strong></td>
+            <td>
+                <p>face velocities the v1 sampler reads.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ice~27"></span>
+              type(<a href='../type/ocean_sea_ice_t.html'>ocean_sea_ice_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ice</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dt~105"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dt</strong></td>
+            <td>
+                <p>The thermo-step dt (cadence = the ice slow step).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-adv_substeps"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>adv_substeps</strong></td>
+            <td>
+                <p>SIS2 <code>NSTEPS_ADV</code> (<code>&amp;ocean_ice_nml adv_substeps</code>), &gt;= 1.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-roll_factor"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>roll_factor</strong></td>
+            <td>
+                <p>SIS2 <code>SEA_ICE_ROLL_FACTOR</code> (<code>&amp;ocean_ice_nml roll_factor</code>).
+0 disables rolling.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ok~41"></span>
+              logical,
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ok</strong></td>
+            <td>
+                <p><code>.false.</code> =&gt; the caller (driver) must abort fail-loud
+(conservation/positivity violation, or a compress-time
+consistency failure SIS2 would FATAL on).  Rank-uniform.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-bc~27"></span>
+              type(<a href='../type/ocean_bc_state_t.html'>ocean_bc_state_t</a>),
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>bc</strong></td>
+            <td>
+                <p>Edge policy (<code>periodic_x/_y</code>, <code>has_*</code>).  Present (the engine
+always passes it): X4 per substep and walls only on a physical,
+non-periodic edge.  Absent (the single-tile unit-test seam):
+no exchange and every tile edge is a wall, as before.</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~ice_transport_step~~CallsGraph Pages: 1 -->
+<svg id="procice_transport_stepCallsGraph" width="641pt" height="840pt"
+ viewBox="0.00 0.00 641.00 840.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~ice_transport_step~~CallsGraph" class="graph" transform="scale(0.491417 0.491417) rotate(0) translate(4 1706.27)">
+<title>proc~~ice_transport_step~~CallsGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-1706.27 1300.39,-1706.27 1300.39,4 -4,4"/>
+<!-- proc~ice_transport_step -->
+<g id="proc~~ice_transport_step~~CallsGraph_node1" class="node">
+<title>proc~ice_transport_step</title>
+<polygon fill="none" stroke="black" points="109.02,-499.27 0,-499.27 0,-475 109.02,-475 109.02,-499.27"/>
+<text xml:space="preserve" text-anchor="middle" x="54.51" y="-483.53" font-family="Helvetica,sans-Serif" font-size="10.50">ice_transport_step</text>
+</g>
+<!-- proc~halo_allreduce_max -->
+<g id="proc~~ice_transport_step~~CallsGraph_node2" class="node">
+<title>proc~halo_allreduce_max</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node2"><a xlink:href="../proc/halo_allreduce_max.html" xlink:title="halo_allreduce_max">
+<polygon fill="#d9534f" stroke="#d9534f" points="526.56,-1115.27 408.54,-1115.27 408.54,-1091 526.56,-1091 526.56,-1115.27"/>
+<text xml:space="preserve" text-anchor="middle" x="467.55" y="-1099.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">halo_allreduce_max</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_transport_step&#45;&gt;proc~halo_allreduce_max -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge1" class="edge">
+<title>proc~ice_transport_step&#45;&gt;proc~halo_allreduce_max</title>
+<path fill="none" stroke="#ff0000" d="M57.66,-499.64C65.13,-541.1 92.42,-677.1 145.02,-777.13 225.42,-930.06 241.39,-987.65 386.04,-1082.13 389.74,-1084.55 393.71,-1086.7 397.83,-1088.59"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="396.33,-1091.76 406.91,-1092.24 398.94,-1085.26 396.33,-1091.76"/>
+</g>
+<!-- proc~ice_adjust_categories -->
+<g id="proc~~ice_transport_step~~CallsGraph_node3" class="node">
+<title>proc~ice_adjust_categories</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node3"><a xlink:href="../proc/ice_adjust_categories.html" xlink:title="ice_adjust_categories">
+<polygon fill="#d9534f" stroke="#d9534f" points="310.66,-439.27 184.39,-439.27 184.39,-415 310.66,-415 310.66,-439.27"/>
+<text xml:space="preserve" text-anchor="middle" x="247.53" y="-423.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_adjust_categories</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_transport_step&#45;&gt;proc~ice_adjust_categories -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge2" class="edge">
+<title>proc~ice_transport_step&#45;&gt;proc~ice_adjust_categories</title>
+<path fill="none" stroke="#ff0000" d="M95.55,-474.56C124.72,-465.4 164.44,-452.92 195.82,-443.06"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="196.6,-446.49 205.09,-440.15 194.51,-439.81 196.6,-446.49"/>
+</g>
+<!-- proc~ice_cas_to_ist_impl -->
+<g id="proc~~ice_transport_step~~CallsGraph_node4" class="node">
+<title>proc~ice_cas_to_ist_impl</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node4"><a xlink:href="../proc/ice_cas_to_ist_impl.html" xlink:title="ice_cas_to_ist_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="303.54,-358.27 191.52,-358.27 191.52,-334 303.54,-334 303.54,-358.27"/>
+<text xml:space="preserve" text-anchor="middle" x="247.53" y="-342.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_cas_to_ist_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_transport_step&#45;&gt;proc~ice_cas_to_ist_impl -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge3" class="edge">
+<title>proc~ice_transport_step&#45;&gt;proc~ice_cas_to_ist_impl</title>
+<path fill="none" stroke="#ff0000" d="M67.57,-474.76C84.15,-458.09 115.32,-428.01 145.02,-406.13 166.36,-390.42 192.07,-375.26 212.28,-364.11"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="213.85,-367.24 220.96,-359.38 210.5,-361.09 213.85,-367.24"/>
+</g>
+<!-- proc~ice_compress_impl -->
+<g id="proc~~ice_transport_step~~CallsGraph_node5" class="node">
+<title>proc~ice_compress_impl</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node5"><a xlink:href="../proc/ice_compress_impl.html" xlink:title="ice_compress_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="1083.12,-726.27 971.1,-726.27 971.1,-702 1083.12,-702 1083.12,-726.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1027.11" y="-710.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_compress_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_transport_step&#45;&gt;proc~ice_compress_impl -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge4" class="edge">
+<title>proc~ice_transport_step&#45;&gt;proc~ice_compress_impl</title>
+<path fill="none" stroke="#ff0000" d="M61.41,-499.56C73.51,-523.59 103.51,-576.45 145.02,-603.13 268.45,-682.49 319.81,-678.13 466.55,-678.13 466.55,-678.13 466.55,-678.13 658.95,-678.13 764.28,-678.13 885.8,-692.99 959.24,-703.62"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="958.7,-707.08 969.11,-705.06 959.72,-700.15 958.7,-707.08"/>
+</g>
+<!-- proc~ice_ist_to_cas_impl -->
+<g id="proc~~ice_transport_step~~CallsGraph_node6" class="node">
+<title>proc~ice_ist_to_cas_impl</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node6"><a xlink:href="../proc/ice_ist_to_cas_impl.html" xlink:title="ice_ist_to_cas_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="303.54,-258.27 191.52,-258.27 191.52,-234 303.54,-234 303.54,-258.27"/>
+<text xml:space="preserve" text-anchor="middle" x="247.53" y="-242.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_ist_to_cas_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_transport_step&#45;&gt;proc~ice_ist_to_cas_impl -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge5" class="edge">
+<title>proc~ice_transport_step&#45;&gt;proc~ice_ist_to_cas_impl</title>
+<path fill="none" stroke="#ff0000" d="M56.86,-474.72C61.54,-437.82 80.52,-327.97 145.02,-272.13 155.01,-263.48 167.51,-257.65 180.29,-253.73"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="180.81,-257.21 189.57,-251.26 179.01,-250.45 180.81,-257.21"/>
+</g>
+<!-- proc~ice_max_speed_impl -->
+<g id="proc~~ice_transport_step~~CallsGraph_node7" class="node">
+<title>proc~ice_max_speed_impl</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node7"><a xlink:href="../proc/ice_max_speed_impl.html" xlink:title="ice_max_speed_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="308.41,-594.27 186.64,-594.27 186.64,-570 308.41,-570 308.41,-594.27"/>
+<text xml:space="preserve" text-anchor="middle" x="247.53" y="-578.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_max_speed_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_transport_step&#45;&gt;proc~ice_max_speed_impl -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge6" class="edge">
+<title>proc~ice_transport_step&#45;&gt;proc~ice_max_speed_impl</title>
+<path fill="none" stroke="#ff0000" d="M80.88,-499.75C114.36,-516.4 173.49,-545.81 211.3,-564.62"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="209.5,-567.63 220.01,-568.94 212.61,-561.36 209.5,-567.63"/>
+</g>
+<!-- proc~ice_pass_x -->
+<g id="proc~~ice_transport_step~~CallsGraph_node8" class="node">
+<title>proc~ice_pass_x</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node8"><a xlink:href="../proc/ice_pass_x.html" xlink:title="ice_pass_x">
+<polygon fill="#d9534f" stroke="#d9534f" points="867.23,-499.27 799.46,-499.27 799.46,-475 867.23,-475 867.23,-499.27"/>
+<text xml:space="preserve" text-anchor="middle" x="833.34" y="-483.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_pass_x</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_transport_step&#45;&gt;proc~ice_pass_x -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge7" class="edge">
+<title>proc~ice_transport_step&#45;&gt;proc~ice_pass_x</title>
+<path fill="none" stroke="#ff0000" d="M109.52,-487.13C255.14,-487.13 653.91,-487.13 787.82,-487.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="787.69,-490.64 797.69,-487.14 787.69,-483.64 787.69,-490.64"/>
+</g>
+<!-- proc~ice_pass_y -->
+<g id="proc~~ice_transport_step~~CallsGraph_node9" class="node">
+<title>proc~ice_pass_y</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node9"><a xlink:href="../proc/ice_pass_y.html" xlink:title="ice_pass_y">
+<polygon fill="#d9534f" stroke="#d9534f" points="867.23,-234.27 799.46,-234.27 799.46,-210 867.23,-210 867.23,-234.27"/>
+<text xml:space="preserve" text-anchor="middle" x="833.34" y="-218.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_pass_y</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_transport_step&#45;&gt;proc~ice_pass_y -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge8" class="edge">
+<title>proc~ice_transport_step&#45;&gt;proc~ice_pass_y</title>
+<path fill="none" stroke="#ff0000" d="M58.31,-474.88C66.07,-444 90.93,-362.73 145.02,-325.13 198.08,-288.25 643.65,-240.97 787.65,-226.52"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="787.95,-230.01 797.56,-225.53 787.26,-223.04 787.95,-230.01"/>
+</g>
+<!-- proc~ice_sample_velocity_impl -->
+<g id="proc~~ice_transport_step~~CallsGraph_node10" class="node">
+<title>proc~ice_sample_velocity_impl</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node10"><a xlink:href="../proc/ice_sample_velocity_impl.html" xlink:title="ice_sample_velocity_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="320.79,-216.27 174.27,-216.27 174.27,-192 320.79,-192 320.79,-216.27"/>
+<text xml:space="preserve" text-anchor="middle" x="247.53" y="-200.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_sample_velocity_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_transport_step&#45;&gt;proc~ice_sample_velocity_impl -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge9" class="edge">
+<title>proc~ice_transport_step&#45;&gt;proc~ice_sample_velocity_impl</title>
+<path fill="none" stroke="#ff0000" d="M55.69,-474.68C57.01,-432.47 67.34,-293.65 145.02,-225.13 150.42,-220.37 156.62,-216.58 163.23,-213.58"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="164.4,-216.88 172.48,-210.03 161.89,-210.34 164.4,-216.88"/>
+</g>
+<!-- proc~ocean_halo_exchange_ice_transport -->
+<g id="proc~~ice_transport_step~~CallsGraph_node11" class="node">
+<title>proc~ocean_halo_exchange_ice_transport</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node11"><a xlink:href="../proc/ocean_halo_exchange_ice_transport.html" xlink:title="ocean_halo_exchange_ice_transport">
+<polygon fill="#d9534f" stroke="#d9534f" points="350.04,-1199.27 145.02,-1199.27 145.02,-1175 350.04,-1175 350.04,-1199.27"/>
+<text xml:space="preserve" text-anchor="middle" x="247.53" y="-1183.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_halo_exchange_ice_transport</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_transport_step&#45;&gt;proc~ocean_halo_exchange_ice_transport -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge10" class="edge">
+<title>proc~ice_transport_step&#45;&gt;proc~ocean_halo_exchange_ice_transport</title>
+<path fill="none" stroke="#ff0000" d="M56.74,-499.54C62.43,-554.82 88.46,-783.91 145.02,-963.13 169.28,-1040.01 212.97,-1125.33 234.24,-1164.83"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="231.15,-1166.48 239,-1173.59 237.3,-1163.13 231.15,-1166.48"/>
+</g>
+<!-- proc~ocean_halo_is_decomposed -->
+<g id="proc~~ice_transport_step~~CallsGraph_node12" class="node">
+<title>proc~ocean_halo_is_decomposed</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node12"><a xlink:href="../proc/ocean_halo_is_decomposed.html" xlink:title="ocean_halo_is_decomposed">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="547.94,-749.27 387.17,-749.27 387.17,-725 547.94,-725 547.94,-749.27"/>
+<text xml:space="preserve" text-anchor="middle" x="467.55" y="-733.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_halo_is_decomposed</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_transport_step&#45;&gt;proc~ocean_halo_is_decomposed -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge11" class="edge">
+<title>proc~ice_transport_step&#45;&gt;proc~ocean_halo_is_decomposed</title>
+<path fill="none" stroke="#ff0000" d="M56.82,-499.58C61.35,-535.97 79.9,-642.72 145.02,-692.13 180.29,-718.9 293.37,-729.76 375.47,-734.16"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="375.16,-737.65 385.33,-734.66 375.52,-730.66 375.16,-737.65"/>
+</g>
+<!-- proc~ocean_halo_is_init -->
+<g id="proc~~ice_transport_step~~CallsGraph_node13" class="node">
+<title>proc~ocean_halo_is_init</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node13"><a xlink:href="../proc/ocean_halo_is_init.html" xlink:title="ocean_halo_is_init">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="301.66,-174.27 193.39,-174.27 193.39,-150 301.66,-150 301.66,-174.27"/>
+<text xml:space="preserve" text-anchor="middle" x="247.53" y="-158.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_halo_is_init</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_transport_step&#45;&gt;proc~ocean_halo_is_init -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge12" class="edge">
+<title>proc~ice_transport_step&#45;&gt;proc~ocean_halo_is_init</title>
+<path fill="none" stroke="#ff0000" d="M55.02,-474.72C53.91,-428.45 56.59,-264.57 145.02,-183.13 155.26,-173.71 168.57,-168.06 182.17,-164.77"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="182.47,-168.28 191.6,-162.9 181.11,-161.41 182.47,-168.28"/>
+</g>
+<!-- proc~ok_all_ranks -->
+<g id="proc~~ice_transport_step~~CallsGraph_node14" class="node">
+<title>proc~ok_all_ranks</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node14"><a xlink:href="../proc/ok_all_ranks.html" xlink:title="ok_all_ranks">
+<polygon fill="#d9534f" stroke="#d9534f" points="285.91,-768.27 209.14,-768.27 209.14,-744 285.91,-744 285.91,-768.27"/>
+<text xml:space="preserve" text-anchor="middle" x="247.53" y="-752.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ok_all_ranks</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_transport_step&#45;&gt;proc~ok_all_ranks -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge13" class="edge">
+<title>proc~ice_transport_step&#45;&gt;proc~ok_all_ranks</title>
+<path fill="none" stroke="#ff0000" d="M56.2,-499.69C59.11,-539.77 73.77,-665.82 145.02,-730.13 159.33,-743.06 179.2,-749.73 197.56,-753.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="196.83,-756.55 207.24,-754.61 197.89,-749.63 196.83,-756.55"/>
+</g>
+<!-- allreduce -->
+<g id="proc~~ice_transport_step~~CallsGraph_node15" class="node">
+<title>allreduce</title>
+<polygon fill="#777777" stroke="#777777" points="688.46,-1117.27 627.44,-1117.27 627.44,-1093 688.46,-1093 688.46,-1117.27"/>
+<text xml:space="preserve" text-anchor="middle" x="657.95" y="-1101.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">allreduce</text>
+</g>
+<!-- proc~halo_allreduce_max&#45;&gt;allreduce -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge14" class="edge">
+<title>proc~halo_allreduce_max&#45;&gt;allreduce</title>
+<path fill="none" stroke="#ff0000" d="M526.87,-1103.75C555.64,-1104.06 589.66,-1104.42 615.69,-1104.7"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="615.49,-1108.2 625.53,-1104.8 615.57,-1101.2 615.49,-1108.2"/>
+</g>
+<!-- proc~comm_env_compute_comm -->
+<g id="proc~~ice_transport_step~~CallsGraph_node17" class="node">
+<title>proc~comm_env_compute_comm</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node17"><a xlink:href="../proc/comm_env_compute_comm.html" xlink:title="comm_env_compute_comm">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="1107.87,-1114.27 946.35,-1114.27 946.35,-1090 1107.87,-1090 1107.87,-1114.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1027.11" y="-1098.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">comm_env_compute_comm</text>
+</a>
+</g>
+</g>
+<!-- proc~halo_allreduce_max&#45;&gt;proc~comm_env_compute_comm -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge15" class="edge">
+<title>proc~halo_allreduce_max&#45;&gt;proc~comm_env_compute_comm</title>
+<path fill="none" stroke="#ff0000" d="M521.01,-1115.75C540.94,-1119.94 563.92,-1124.07 585.06,-1126.13 705.64,-1137.92 845.38,-1126.02 934.7,-1115.18"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="934.88,-1118.68 944.37,-1113.98 934.02,-1111.73 934.88,-1118.68"/>
+</g>
+<!-- proc~ice_adjust_categories_impl -->
+<g id="proc~~ice_transport_step~~CallsGraph_node19" class="node">
+<title>proc~ice_adjust_categories_impl</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node19"><a xlink:href="../proc/ice_adjust_categories_impl.html" xlink:title="ice_adjust_categories_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="544.94,-418.27 390.17,-418.27 390.17,-394 544.94,-394 544.94,-418.27"/>
+<text xml:space="preserve" text-anchor="middle" x="467.55" y="-402.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_adjust_categories_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_adjust_categories&#45;&gt;proc~ice_adjust_categories_impl -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge16" class="edge">
+<title>proc~ice_adjust_categories&#45;&gt;proc~ice_adjust_categories_impl</title>
+<path fill="none" stroke="#ff7500" d="M311.01,-421.12C332,-419.1 355.82,-416.8 378.4,-414.63"/>
+<polygon fill="#ff7500" stroke="#ff7500" points="378.6,-418.12 388.22,-413.68 377.93,-411.16 378.6,-418.12"/>
+</g>
+<!-- local -->
+<g id="proc~~ice_transport_step~~CallsGraph_node16" class="node">
+<title>local</title>
+<polygon fill="#777777" stroke="#777777" points="1252.38,-354.27 1198.38,-354.27 1198.38,-330 1252.38,-330 1252.38,-354.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1225.38" y="-338.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">local</text>
+</g>
+<!-- proc~ice_cas_to_ist_impl&#45;&gt;local -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge17" class="edge">
+<title>proc~ice_cas_to_ist_impl&#45;&gt;local</title>
+<path fill="none" stroke="#ffeb00" d="M303.83,-336.81C382.18,-324.44 530.07,-304.13 656.95,-304.13 656.95,-304.13 656.95,-304.13 834.34,-304.13 964.26,-304.13 1117.37,-325.28 1186.79,-336.02"/>
+<polygon fill="#ffeb00" stroke="#ffeb00" points="1186.07,-339.45 1196.49,-337.54 1187.15,-332.53 1186.07,-339.45"/>
+</g>
+<!-- proc~ice_compress_impl&#45;&gt;local -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge18" class="edge">
+<title>proc~ice_compress_impl&#45;&gt;local</title>
+<path fill="none" stroke="#9cff00" d="M1057.02,-701.53C1076.83,-691.56 1102.32,-675.85 1118.37,-655.13 1189.43,-563.43 1214.37,-421.32 1221.72,-365.64"/>
+<polygon fill="#9cff00" stroke="#9cff00" points="1225.15,-366.41 1222.91,-356.05 1218.2,-365.54 1225.15,-366.41"/>
+</g>
+<!-- proc~ice_compress_cell_inline -->
+<g id="proc~~ice_transport_step~~CallsGraph_node22" class="node">
+<title>proc~ice_compress_cell_inline</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node22"><a xlink:href="../proc/ice_compress_cell_inline.html" xlink:title="ice_compress_cell_inline">
+<polygon fill="#d9534f" stroke="#d9534f" points="1296.39,-726.27 1154.37,-726.27 1154.37,-702 1296.39,-702 1296.39,-726.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1225.38" y="-710.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_compress_cell_inline</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_compress_impl&#45;&gt;proc~ice_compress_cell_inline -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge19" class="edge">
+<title>proc~ice_compress_impl&#45;&gt;proc~ice_compress_cell_inline</title>
+<path fill="none" stroke="#9cff00" d="M1083.57,-714.13C1101.94,-714.13 1122.79,-714.13 1142.71,-714.13"/>
+<polygon fill="#9cff00" stroke="#9cff00" points="1142.47,-717.64 1152.47,-714.14 1142.47,-710.64 1142.47,-717.64"/>
+</g>
+<!-- reduce -->
+<g id="proc~~ice_transport_step~~CallsGraph_node41" class="node">
+<title>reduce</title>
+<polygon fill="#777777" stroke="#777777" points="1252.38,-684.27 1198.38,-684.27 1198.38,-660 1252.38,-660 1252.38,-684.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1225.38" y="-668.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">reduce</text>
+</g>
+<!-- proc~ice_compress_impl&#45;&gt;reduce -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge20" class="edge">
+<title>proc~ice_compress_impl&#45;&gt;reduce</title>
+<path fill="none" stroke="#9cff00" d="M1083.57,-702.27C1116.69,-695.18 1157.87,-686.37 1187.12,-680.11"/>
+<polygon fill="#9cff00" stroke="#9cff00" points="1187.57,-683.59 1196.62,-678.08 1186.1,-676.75 1187.57,-683.59"/>
+</g>
+<!-- proc~ice_max_speed_impl&#45;&gt;reduce -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge21" class="edge">
+<title>proc~ice_max_speed_impl&#45;&gt;reduce</title>
+<path fill="none" stroke="#00ff4e" d="M308.66,-589.48C428.05,-603.86 703.54,-635.97 935.85,-655.13 1025.77,-662.56 1131.71,-667.94 1186.81,-670.49"/>
+<polygon fill="#00ff4e" stroke="#00ff4e" points="1186.43,-673.97 1196.58,-670.93 1186.75,-666.98 1186.43,-673.97"/>
+</g>
+<!-- proc~ice_cat_flux_x_impl -->
+<g id="proc~~ice_transport_step~~CallsGraph_node20" class="node">
+<title>proc~ice_cat_flux_x_impl</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node20"><a xlink:href="../proc/ice_cat_flux_x_impl.html" xlink:title="ice_cat_flux_x_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="1083.87,-192.27 970.35,-192.27 970.35,-168 1083.87,-168 1083.87,-192.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1027.11" y="-176.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_cat_flux_x_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_pass_x&#45;&gt;proc~ice_cat_flux_x_impl -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge22" class="edge">
+<title>proc~ice_pass_x&#45;&gt;proc~ice_cat_flux_x_impl</title>
+<path fill="none" stroke="#00ffc4" d="M834.75,-474.55C836.93,-429.84 850.59,-277.31 935.85,-201.13 942.51,-195.18 950.54,-190.82 959.01,-187.65"/>
+<polygon fill="#00ffc4" stroke="#00ffc4" points="959.99,-191.01 968.48,-184.68 957.89,-184.33 959.99,-191.01"/>
+</g>
+<!-- proc~ice_gather_flux_x_impl -->
+<g id="proc~~ice_transport_step~~CallsGraph_node23" class="node">
+<title>proc~ice_gather_flux_x_impl</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node23"><a xlink:href="../proc/ice_gather_flux_x_impl.html" xlink:title="ice_gather_flux_x_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="1093.25,-604.27 960.98,-604.27 960.98,-580 1093.25,-580 1093.25,-604.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1027.11" y="-588.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_gather_flux_x_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_pass_x&#45;&gt;proc~ice_gather_flux_x_impl -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge23" class="edge">
+<title>proc~ice_pass_x&#45;&gt;proc~ice_gather_flux_x_impl</title>
+<path fill="none" stroke="#00ffc4" d="M845.53,-499.5C862.98,-517.99 898.54,-552.65 935.85,-571.13 940.35,-573.36 945.1,-575.36 949.96,-577.15"/>
+<polygon fill="#00ffc4" stroke="#00ffc4" points="948.72,-580.43 959.31,-580.27 950.93,-573.79 948.72,-580.43"/>
+</g>
+<!-- proc~ice_gather_flux_x_layer_impl -->
+<g id="proc~~ice_transport_step~~CallsGraph_node24" class="node">
+<title>proc~ice_gather_flux_x_layer_impl</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node24"><a xlink:href="../proc/ice_gather_flux_x_layer_impl.html" xlink:title="ice_gather_flux_x_layer_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="1109.37,-562.27 944.85,-562.27 944.85,-538 1109.37,-538 1109.37,-562.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1027.11" y="-546.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_gather_flux_x_layer_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_pass_x&#45;&gt;proc~ice_gather_flux_x_layer_impl -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge24" class="edge">
+<title>proc~ice_pass_x&#45;&gt;proc~ice_gather_flux_x_layer_impl</title>
+<path fill="none" stroke="#00ffc4" d="M861.03,-499.59C881.25,-508.67 909.88,-520.8 935.85,-529.13 942.03,-531.12 948.51,-533 955.03,-534.76"/>
+<polygon fill="#00ffc4" stroke="#00ffc4" points="953.99,-538.1 964.55,-537.22 955.75,-531.33 953.99,-538.1"/>
+</g>
+<!-- proc~ice_mask_snow_by_ice_impl -->
+<g id="proc~~ice_transport_step~~CallsGraph_node28" class="node">
+<title>proc~ice_mask_snow_by_ice_impl</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node28"><a xlink:href="../proc/ice_mask_snow_by_ice_impl.html" xlink:title="ice_mask_snow_by_ice_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="1107.5,-436.27 946.73,-436.27 946.73,-412 1107.5,-412 1107.5,-436.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1027.11" y="-420.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_mask_snow_by_ice_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_pass_x&#45;&gt;proc~ice_mask_snow_by_ice_impl -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge25" class="edge">
+<title>proc~ice_pass_x&#45;&gt;proc~ice_mask_snow_by_ice_impl</title>
+<path fill="none" stroke="#00ffc4" d="M861.03,-474.68C881.25,-465.6 909.88,-453.47 935.85,-445.13 942.03,-443.15 948.51,-441.27 955.03,-439.51"/>
+<polygon fill="#00ffc4" stroke="#00ffc4" points="955.75,-442.94 964.55,-437.05 953.99,-436.17 955.75,-442.94"/>
+</g>
+<!-- proc~ice_mass_update_x_impl -->
+<g id="proc~~ice_transport_step~~CallsGraph_node29" class="node">
+<title>proc~ice_mass_update_x_impl</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node29"><a xlink:href="../proc/ice_mass_update_x_impl.html" xlink:title="ice_mass_update_x_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="1098.5,-646.27 955.73,-646.27 955.73,-622 1098.5,-622 1098.5,-646.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1027.11" y="-630.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_mass_update_x_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_pass_x&#45;&gt;proc~ice_mass_update_x_impl -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge26" class="edge">
+<title>proc~ice_pass_x&#45;&gt;proc~ice_mass_update_x_impl</title>
+<path fill="none" stroke="#00ffc4" d="M840.56,-499.44C854.13,-524.96 888.98,-583.71 935.85,-613.13 938.75,-614.96 941.8,-616.62 944.94,-618.14"/>
+<polygon fill="#00ffc4" stroke="#00ffc4" points="943.3,-621.25 953.87,-621.94 946.04,-614.81 943.3,-621.25"/>
+</g>
+<!-- proc~ice_ride_update_x_impl -->
+<g id="proc~~ice_transport_step~~CallsGraph_node31" class="node">
+<title>proc~ice_ride_update_x_impl</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node31"><a xlink:href="../proc/ice_ride_update_x_impl.html" xlink:title="ice_ride_update_x_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="1095.12,-520.27 959.1,-520.27 959.1,-496 1095.12,-496 1095.12,-520.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1027.11" y="-504.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_ride_update_x_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_pass_x&#45;&gt;proc~ice_ride_update_x_impl -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge27" class="edge">
+<title>proc~ice_pass_x&#45;&gt;proc~ice_ride_update_x_impl</title>
+<path fill="none" stroke="#00ffc4" d="M867.31,-490.75C889.33,-493.16 919.28,-496.44 947.24,-499.5"/>
+<polygon fill="#00ffc4" stroke="#00ffc4" points="946.84,-502.97 957.16,-500.58 947.6,-496.02 946.84,-502.97"/>
+</g>
+<!-- proc~ice_ride_update_x_layer_impl -->
+<g id="proc~~ice_transport_step~~CallsGraph_node32" class="node">
+<title>proc~ice_ride_update_x_layer_impl</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node32"><a xlink:href="../proc/ice_ride_update_x_layer_impl.html" xlink:title="ice_ride_update_x_layer_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="1111.25,-478.27 942.98,-478.27 942.98,-454 1111.25,-454 1111.25,-478.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1027.11" y="-462.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_ride_update_x_layer_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_pass_x&#45;&gt;proc~ice_ride_update_x_layer_impl -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge28" class="edge">
+<title>proc~ice_pass_x&#45;&gt;proc~ice_ride_update_x_layer_impl</title>
+<path fill="none" stroke="#00ffc4" d="M867.31,-483.52C885.25,-481.56 908.46,-479.02 931.57,-476.49"/>
+<polygon fill="#00ffc4" stroke="#00ffc4" points="931.82,-479.98 941.38,-475.41 931.05,-473.02 931.82,-479.98"/>
+</g>
+<!-- proc~ice_validity_reduce_impl -->
+<g id="proc~~ice_transport_step~~CallsGraph_node35" class="node">
+<title>proc~ice_validity_reduce_impl</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node35"><a xlink:href="../proc/ice_validity_reduce_impl.html" xlink:title="ice_validity_reduce_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="1097.75,-394.27 956.48,-394.27 956.48,-370 1097.75,-370 1097.75,-394.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1027.11" y="-378.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_validity_reduce_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_pass_x&#45;&gt;proc~ice_validity_reduce_impl -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge29" class="edge">
+<title>proc~ice_pass_x&#45;&gt;proc~ice_validity_reduce_impl</title>
+<path fill="none" stroke="#00ffc4" d="M845.53,-474.77C862.98,-456.28 898.54,-421.62 935.85,-403.13 939.17,-401.49 942.61,-399.98 946.15,-398.57"/>
+<polygon fill="#00ffc4" stroke="#00ffc4" points="947.27,-401.89 955.51,-395.22 944.91,-395.3 947.27,-401.89"/>
+</g>
+<!-- proc~ice_cat_flux_y_impl -->
+<g id="proc~~ice_transport_step~~CallsGraph_node21" class="node">
+<title>proc~ice_cat_flux_y_impl</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node21"><a xlink:href="../proc/ice_cat_flux_y_impl.html" xlink:title="ice_cat_flux_y_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="1083.87,-24.27 970.35,-24.27 970.35,0 1083.87,0 1083.87,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1027.11" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_cat_flux_y_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_pass_y&#45;&gt;proc~ice_cat_flux_y_impl -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge30" class="edge">
+<title>proc~ice_pass_y&#45;&gt;proc~ice_cat_flux_y_impl</title>
+<path fill="none" stroke="#00c4ff" d="M837.22,-209.66C845.77,-175.56 874.33,-80.22 935.85,-33.13 942.69,-27.9 950.62,-23.94 958.88,-20.94"/>
+<polygon fill="#00c4ff" stroke="#00c4ff" points="959.9,-24.29 968.42,-17.98 957.83,-17.6 959.9,-24.29"/>
+</g>
+<!-- proc~ice_gather_flux_y_impl -->
+<g id="proc~~ice_transport_step~~CallsGraph_node25" class="node">
+<title>proc~ice_gather_flux_y_impl</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node25"><a xlink:href="../proc/ice_gather_flux_y_impl.html" xlink:title="ice_gather_flux_y_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="1093.25,-108.27 960.98,-108.27 960.98,-84 1093.25,-84 1093.25,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1027.11" y="-92.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_gather_flux_y_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_pass_y&#45;&gt;proc~ice_gather_flux_y_impl -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge31" class="edge">
+<title>proc~ice_pass_y&#45;&gt;proc~ice_gather_flux_y_impl</title>
+<path fill="none" stroke="#00c4ff" d="M842.74,-209.53C858.32,-187.22 893.93,-140.88 935.85,-117.13 940.42,-114.55 945.3,-112.27 950.32,-110.28"/>
+<polygon fill="#00c4ff" stroke="#00c4ff" points="951.11,-113.72 959.37,-107.08 948.78,-107.12 951.11,-113.72"/>
+</g>
+<!-- proc~ice_gather_flux_y_layer_impl -->
+<g id="proc~~ice_transport_step~~CallsGraph_node26" class="node">
+<title>proc~ice_gather_flux_y_layer_impl</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node26"><a xlink:href="../proc/ice_gather_flux_y_layer_impl.html" xlink:title="ice_gather_flux_y_layer_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="1109.37,-66.27 944.85,-66.27 944.85,-42 1109.37,-42 1109.37,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1027.11" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_gather_flux_y_layer_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_pass_y&#45;&gt;proc~ice_gather_flux_y_layer_impl -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge32" class="edge">
+<title>proc~ice_pass_y&#45;&gt;proc~ice_gather_flux_y_layer_impl</title>
+<path fill="none" stroke="#00c4ff" d="M839.25,-209.55C851.13,-180.83 884.31,-110.21 935.85,-75.13 937.7,-73.88 939.61,-72.7 941.57,-71.59"/>
+<polygon fill="#00c4ff" stroke="#00c4ff" points="942.97,-74.8 950.41,-67.26 939.89,-68.51 942.97,-74.8"/>
+</g>
+<!-- proc~ice_pass_y&#45;&gt;proc~ice_mask_snow_by_ice_impl -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge33" class="edge">
+<title>proc~ice_pass_y&#45;&gt;proc~ice_mask_snow_by_ice_impl</title>
+<path fill="none" stroke="#00c4ff" d="M837.52,-234.57C846.65,-267.65 876.22,-358.35 935.85,-403.13 937.22,-404.16 938.63,-405.14 940.07,-406.07"/>
+<polygon fill="#00c4ff" stroke="#00c4ff" points="938.29,-409.09 948.74,-410.83 941.66,-402.95 938.29,-409.09"/>
+</g>
+<!-- proc~ice_mass_update_y_impl -->
+<g id="proc~~ice_transport_step~~CallsGraph_node30" class="node">
+<title>proc~ice_mass_update_y_impl</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node30"><a xlink:href="../proc/ice_mass_update_y_impl.html" xlink:title="ice_mass_update_y_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="1098.5,-150.27 955.73,-150.27 955.73,-126 1098.5,-126 1098.5,-150.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1027.11" y="-134.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_mass_update_y_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_pass_y&#45;&gt;proc~ice_mass_update_y_impl -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge34" class="edge">
+<title>proc~ice_pass_y&#45;&gt;proc~ice_mass_update_y_impl</title>
+<path fill="none" stroke="#00c4ff" d="M850.66,-209.64C869.99,-195.42 903.65,-172.45 935.85,-159.13 940.41,-157.25 945.16,-155.52 950.01,-153.93"/>
+<polygon fill="#00c4ff" stroke="#00c4ff" points="950.73,-157.37 959.27,-151.1 948.69,-150.67 950.73,-157.37"/>
+</g>
+<!-- proc~ice_ride_update_y_impl -->
+<g id="proc~~ice_transport_step~~CallsGraph_node33" class="node">
+<title>proc~ice_ride_update_y_impl</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node33"><a xlink:href="../proc/ice_ride_update_y_impl.html" xlink:title="ice_ride_update_y_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="1095.12,-234.27 959.1,-234.27 959.1,-210 1095.12,-210 1095.12,-234.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1027.11" y="-218.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_ride_update_y_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_pass_y&#45;&gt;proc~ice_ride_update_y_impl -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge35" class="edge">
+<title>proc~ice_pass_y&#45;&gt;proc~ice_ride_update_y_impl</title>
+<path fill="none" stroke="#00c4ff" d="M867.31,-222.13C889.33,-222.13 919.28,-222.13 947.24,-222.13"/>
+<polygon fill="#00c4ff" stroke="#00c4ff" points="947.15,-225.64 957.15,-222.14 947.15,-218.64 947.15,-225.64"/>
+</g>
+<!-- proc~ice_ride_update_y_layer_impl -->
+<g id="proc~~ice_transport_step~~CallsGraph_node34" class="node">
+<title>proc~ice_ride_update_y_layer_impl</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node34"><a xlink:href="../proc/ice_ride_update_y_layer_impl.html" xlink:title="ice_ride_update_y_layer_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="1111.25,-276.27 942.98,-276.27 942.98,-252 1111.25,-252 1111.25,-276.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1027.11" y="-260.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_ride_update_y_layer_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_pass_y&#45;&gt;proc~ice_ride_update_y_layer_impl -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge36" class="edge">
+<title>proc~ice_pass_y&#45;&gt;proc~ice_ride_update_y_layer_impl</title>
+<path fill="none" stroke="#00c4ff" d="M867.31,-229.36C892.01,-234.77 926.69,-242.36 957.34,-249.07"/>
+<polygon fill="#00c4ff" stroke="#00c4ff" points="956.43,-252.46 966.94,-251.18 957.92,-245.62 956.43,-252.46"/>
+</g>
+<!-- proc~ice_pass_y&#45;&gt;proc~ice_validity_reduce_impl -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge37" class="edge">
+<title>proc~ice_pass_y&#45;&gt;proc~ice_validity_reduce_impl</title>
+<path fill="none" stroke="#00c4ff" d="M849.39,-234.69C882.58,-262.38 962.28,-328.88 1002.31,-362.28"/>
+<polygon fill="#00c4ff" stroke="#00c4ff" points="1000.05,-364.95 1009.97,-368.67 1004.53,-359.57 1000.05,-364.95"/>
+</g>
+<!-- proc~ice_halo_centre_flat -->
+<g id="proc~~ice_transport_step~~CallsGraph_node27" class="node">
+<title>proc~ice_halo_centre_flat</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node27"><a xlink:href="../proc/ice_halo_centre_flat.html" xlink:title="ice_halo_centre_flat">
+<polygon fill="#d9534f" stroke="#d9534f" points="526.19,-1346.27 408.92,-1346.27 408.92,-1322 526.19,-1322 526.19,-1346.27"/>
+<text xml:space="preserve" text-anchor="middle" x="467.55" y="-1330.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_halo_centre_flat</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_halo_exchange_ice_transport&#45;&gt;proc~ice_halo_centre_flat -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge38" class="edge">
+<title>proc~ocean_halo_exchange_ice_transport&#45;&gt;proc~ice_halo_centre_flat</title>
+<path fill="none" stroke="#2700ff" d="M263.18,-1199.67C287.67,-1220.31 338.9,-1262.15 386.04,-1292.13 399.82,-1300.9 415.63,-1309.45 429.57,-1316.52"/>
+<polygon fill="#2700ff" stroke="#2700ff" points="427.94,-1319.62 438.45,-1320.95 431.06,-1313.35 427.94,-1319.62"/>
+</g>
+<!-- proc~ocean_fold_wrap_centre_flat -->
+<g id="proc~~ice_transport_step~~CallsGraph_node36" class="node">
+<title>proc~ocean_fold_wrap_centre_flat</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node36"><a xlink:href="../proc/ocean_fold_wrap_centre_flat.html" xlink:title="ocean_fold_wrap_centre_flat">
+<polygon fill="#d9534f" stroke="#d9534f" points="549.06,-936.27 386.04,-936.27 386.04,-912 549.06,-912 549.06,-936.27"/>
+<text xml:space="preserve" text-anchor="middle" x="467.55" y="-920.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_fold_wrap_centre_flat</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_halo_exchange_ice_transport&#45;&gt;proc~ocean_fold_wrap_centre_flat -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge39" class="edge">
+<title>proc~ocean_halo_exchange_ice_transport&#45;&gt;proc~ocean_fold_wrap_centre_flat</title>
+<path fill="none" stroke="#2700ff" d="M258.75,-1174.8C293.15,-1133.31 404.97,-998.42 448.75,-945.61"/>
+<polygon fill="#2700ff" stroke="#2700ff" points="451.44,-947.84 455.13,-937.91 446.05,-943.38 451.44,-947.84"/>
+</g>
+<!-- proc~oh_count_suppress_off -->
+<g id="proc~~ice_transport_step~~CallsGraph_node37" class="node">
+<title>proc~oh_count_suppress_off</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node37"><a xlink:href="../proc/oh_count_suppress_off.html" xlink:title="oh_count_suppress_off">
+<polygon fill="#d9534f" stroke="#d9534f" points="533.31,-1157.27 401.79,-1157.27 401.79,-1133 533.31,-1133 533.31,-1157.27"/>
+<text xml:space="preserve" text-anchor="middle" x="467.55" y="-1141.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">oh_count_suppress_off</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_halo_exchange_ice_transport&#45;&gt;proc~oh_count_suppress_off -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge40" class="edge">
+<title>proc~ocean_halo_exchange_ice_transport&#45;&gt;proc~oh_count_suppress_off</title>
+<path fill="none" stroke="#2700ff" d="M313.94,-1174.53C337.98,-1169.9 365.41,-1164.62 390.31,-1159.82"/>
+<polygon fill="#2700ff" stroke="#2700ff" points="390.92,-1163.27 400.07,-1157.94 389.59,-1156.4 390.92,-1163.27"/>
+</g>
+<!-- proc~oh_count_suppress_on -->
+<g id="proc~~ice_transport_step~~CallsGraph_node38" class="node">
+<title>proc~oh_count_suppress_on</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node38"><a xlink:href="../proc/oh_count_suppress_on.html" xlink:title="oh_count_suppress_on">
+<polygon fill="#d9534f" stroke="#d9534f" points="532.94,-1241.27 402.17,-1241.27 402.17,-1217 532.94,-1217 532.94,-1241.27"/>
+<text xml:space="preserve" text-anchor="middle" x="467.55" y="-1225.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">oh_count_suppress_on</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_halo_exchange_ice_transport&#45;&gt;proc~oh_count_suppress_on -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge41" class="edge">
+<title>proc~ocean_halo_exchange_ice_transport&#45;&gt;proc~oh_count_suppress_on</title>
+<path fill="none" stroke="#2700ff" d="M313.94,-1199.74C338.09,-1204.39 365.65,-1209.7 390.65,-1214.51"/>
+<polygon fill="#2700ff" stroke="#2700ff" points="389.97,-1217.95 400.45,-1216.4 391.29,-1211.07 389.97,-1217.95"/>
+</g>
+<!-- proc~profiler_start -->
+<g id="proc~~ice_transport_step~~CallsGraph_node39" class="node">
+<title>proc~profiler_start</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node39"><a xlink:href="../proc/profiler_start.html" xlink:title="profiler_start">
+<polygon fill="#d9534f" stroke="#d9534f" points="507.06,-1283.27 428.04,-1283.27 428.04,-1259 507.06,-1259 507.06,-1283.27"/>
+<text xml:space="preserve" text-anchor="middle" x="467.55" y="-1267.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">profiler_start</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_halo_exchange_ice_transport&#45;&gt;proc~profiler_start -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge42" class="edge">
+<title>proc~ocean_halo_exchange_ice_transport&#45;&gt;proc~profiler_start</title>
+<path fill="none" stroke="#2700ff" d="M272.34,-1199.59C299.35,-1213.36 344.98,-1235.5 386.04,-1250.13 395.83,-1253.63 406.48,-1256.81 416.73,-1259.59"/>
+<polygon fill="#2700ff" stroke="#2700ff" points="415.62,-1262.92 426.18,-1262.06 417.39,-1256.14 415.62,-1262.92"/>
+</g>
+<!-- proc~profiler_stop -->
+<g id="proc~~ice_transport_step~~CallsGraph_node40" class="node">
+<title>proc~profiler_stop</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node40"><a xlink:href="../proc/profiler_stop.html" xlink:title="profiler_stop">
+<polygon fill="#d9534f" stroke="#d9534f" points="506.31,-1199.27 428.79,-1199.27 428.79,-1175 506.31,-1175 506.31,-1199.27"/>
+<text xml:space="preserve" text-anchor="middle" x="467.55" y="-1183.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">profiler_stop</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_halo_exchange_ice_transport&#45;&gt;proc~profiler_stop -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge43" class="edge">
+<title>proc~ocean_halo_exchange_ice_transport&#45;&gt;proc~profiler_stop</title>
+<path fill="none" stroke="#2700ff" d="M350.52,-1187.13C373.66,-1187.13 397.23,-1187.13 417.03,-1187.13"/>
+<polygon fill="#2700ff" stroke="#2700ff" points="417.01,-1190.64 427.01,-1187.14 417.01,-1183.64 417.01,-1190.64"/>
+</g>
+<!-- proc~ok_all_ranks&#45;&gt;proc~ocean_halo_is_decomposed -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge45" class="edge">
+<title>proc~ok_all_ranks&#45;&gt;proc~ocean_halo_is_decomposed</title>
+<path fill="none" stroke="#ff0075" d="M286.01,-752.87C310.62,-750.72 343.95,-747.82 375.27,-745.09"/>
+<polygon fill="#ff0075" stroke="#ff0075" points="375.53,-748.58 385.19,-744.23 374.92,-741.61 375.53,-748.58"/>
+</g>
+<!-- proc~halo_allreduce_min -->
+<g id="proc~~ice_transport_step~~CallsGraph_node18" class="node">
+<title>proc~halo_allreduce_min</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node18"><a xlink:href="../proc/halo_allreduce_min.html" xlink:title="halo_allreduce_min">
+<polygon fill="#d9534f" stroke="#d9534f" points="525.06,-1073.27 410.04,-1073.27 410.04,-1049 525.06,-1049 525.06,-1073.27"/>
+<text xml:space="preserve" text-anchor="middle" x="467.55" y="-1057.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">halo_allreduce_min</text>
+</a>
+</g>
+</g>
+<!-- proc~ok_all_ranks&#45;&gt;proc~halo_allreduce_min -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge44" class="edge">
+<title>proc~ok_all_ranks&#45;&gt;proc~halo_allreduce_min</title>
+<path fill="none" stroke="#ff0075" d="M257.35,-768.47C290.56,-814.93 408.38,-979.76 451.01,-1039.4"/>
+<polygon fill="#ff0075" stroke="#ff0075" points="448.08,-1041.32 456.74,-1047.42 453.78,-1037.25 448.08,-1041.32"/>
+</g>
+<!-- comm_world -->
+<g id="proc~~ice_transport_step~~CallsGraph_node42" class="node">
+<title>comm_world</title>
+<polygon fill="#777777" stroke="#777777" points="1265.27,-1114.27 1185.5,-1114.27 1185.5,-1090 1265.27,-1090 1265.27,-1114.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1225.38" y="-1098.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">comm_world</text>
+</g>
+<!-- proc~comm_env_compute_comm&#45;&gt;comm_world -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge46" class="edge">
+<title>proc~comm_env_compute_comm&#45;&gt;comm_world</title>
+<path fill="none" stroke="#ff7100" d="M1108.22,-1102.13C1130.38,-1102.13 1153.8,-1102.13 1173.76,-1102.13"/>
+<polygon fill="#ff7100" stroke="#ff7100" points="1173.56,-1105.64 1183.56,-1102.14 1173.56,-1098.64 1173.56,-1105.64"/>
+</g>
+<!-- proc~halo_allreduce_min&#45;&gt;allreduce -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge47" class="edge">
+<title>proc~halo_allreduce_min&#45;&gt;allreduce</title>
+<path fill="none" stroke="#ffaa00" d="M522.54,-1073.74C552.22,-1080.68 588.46,-1089.14 615.83,-1095.53"/>
+<polygon fill="#ffaa00" stroke="#ffaa00" points="614.96,-1098.92 625.5,-1097.79 616.55,-1092.11 614.96,-1098.92"/>
+</g>
+<!-- proc~halo_allreduce_min&#45;&gt;proc~comm_env_compute_comm -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge48" class="edge">
+<title>proc~halo_allreduce_min&#45;&gt;proc~comm_env_compute_comm</title>
+<path fill="none" stroke="#ffaa00" d="M525.34,-1065.31C621.91,-1072.41 818.93,-1086.9 934.98,-1095.43"/>
+<polygon fill="#ffaa00" stroke="#ffaa00" points="934.56,-1098.91 944.79,-1096.15 935.07,-1091.93 934.56,-1098.91"/>
+</g>
+<!-- proc~ice_adjust_categories_impl&#45;&gt;local -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge49" class="edge">
+<title>proc~ice_adjust_categories_impl&#45;&gt;local</title>
+<path fill="none" stroke="#ffe200" d="M545.39,-398.02C637.94,-388.41 798.15,-372.3 935.85,-361.13 1025.82,-353.84 1131.74,-347.42 1186.83,-344.24"/>
+<polygon fill="#ffe200" stroke="#ffe200" points="1186.81,-347.75 1196.59,-343.69 1186.41,-340.76 1186.81,-347.75"/>
+</g>
+<!-- proc~ice_cat_flux_x_impl&#45;&gt;local -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge50" class="edge">
+<title>proc~ice_cat_flux_x_impl&#45;&gt;local</title>
+<path fill="none" stroke="#e2ff00" d="M1084.03,-186.78C1096.01,-189.9 1108.12,-194.46 1118.37,-201.13 1164.28,-231.04 1197.8,-288.01 1213.82,-319.61"/>
+<polygon fill="#e2ff00" stroke="#e2ff00" points="1210.53,-320.85 1218.08,-328.29 1216.81,-317.77 1210.53,-320.85"/>
+</g>
+<!-- proc~ppm_cell_limiter -->
+<g id="proc~~ice_transport_step~~CallsGraph_node55" class="node">
+<title>proc~ppm_cell_limiter</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node55"><a xlink:href="../proc/ppm_cell_limiter.html" xlink:title="ppm_cell_limiter">
+<polygon fill="#d9534f" stroke="#d9534f" points="1275.02,-150.27 1175.75,-150.27 1175.75,-126 1275.02,-126 1275.02,-150.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1225.38" y="-134.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ppm_cell_limiter</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_cat_flux_x_impl&#45;&gt;proc~ppm_cell_limiter -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge51" class="edge">
+<title>proc~ice_cat_flux_x_impl&#45;&gt;proc~ppm_cell_limiter</title>
+<path fill="none" stroke="#e2ff00" d="M1084.35,-168.1C1109.42,-162.74 1138.97,-156.41 1164.45,-150.96"/>
+<polygon fill="#e2ff00" stroke="#e2ff00" points="1164.94,-154.43 1173.98,-148.92 1163.47,-147.59 1164.94,-154.43"/>
+</g>
+<!-- proc~ppm_limit_pos -->
+<g id="proc~~ice_transport_step~~CallsGraph_node56" class="node">
+<title>proc~ppm_limit_pos</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node56"><a xlink:href="../proc/ppm_limit_pos.html" xlink:title="ppm_limit_pos">
+<polygon fill="#d9534f" stroke="#d9534f" points="1269.39,-108.27 1181.37,-108.27 1181.37,-84 1269.39,-84 1269.39,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1225.38" y="-92.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ppm_limit_pos</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_cat_flux_x_impl&#45;&gt;proc~ppm_limit_pos -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge52" class="edge">
+<title>proc~ice_cat_flux_x_impl&#45;&gt;proc~ppm_limit_pos</title>
+<path fill="none" stroke="#e2ff00" d="M1084.2,-172.87C1096.04,-169.79 1108.05,-165.39 1118.37,-159.13 1139.39,-146.38 1133.76,-130.54 1154.37,-117.13 1159.42,-113.85 1165.01,-111.06 1170.76,-108.69"/>
+<polygon fill="#e2ff00" stroke="#e2ff00" points="1171.59,-112.12 1179.78,-105.4 1169.19,-105.54 1171.59,-112.12"/>
+</g>
+<!-- proc~ppm_limited_slope -->
+<g id="proc~~ice_transport_step~~CallsGraph_node57" class="node">
+<title>proc~ppm_limited_slope</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node57"><a xlink:href="../proc/ppm_limited_slope.html" xlink:title="ppm_limited_slope">
+<polygon fill="#d9534f" stroke="#d9534f" points="1281.02,-66.27 1169.75,-66.27 1169.75,-42 1281.02,-42 1281.02,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1225.38" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ppm_limited_slope</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_cat_flux_x_impl&#45;&gt;proc~ppm_limited_slope -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge53" class="edge">
+<title>proc~ice_cat_flux_x_impl&#45;&gt;proc~ppm_limited_slope</title>
+<path fill="none" stroke="#e2ff00" d="M1083.91,-175.6C1096.3,-172.42 1108.63,-167.3 1118.37,-159.13 1149.51,-133.05 1124.07,-102.18 1154.37,-75.13 1156.04,-73.65 1157.81,-72.26 1159.66,-70.98"/>
+<polygon fill="#e2ff00" stroke="#e2ff00" points="1161.24,-74.1 1168.17,-66.08 1157.75,-68.03 1161.24,-74.1"/>
+</g>
+<!-- proc~ppm_mirror_h -->
+<g id="proc~~ice_transport_step~~CallsGraph_node58" class="node">
+<title>proc~ppm_mirror_h</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node58"><a xlink:href="../proc/ppm_mirror_h.html" xlink:title="ppm_mirror_h">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="1268.27,-24.27 1182.5,-24.27 1182.5,0 1268.27,0 1268.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1225.38" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ppm_mirror_h</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_cat_flux_x_impl&#45;&gt;proc~ppm_mirror_h -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge54" class="edge">
+<title>proc~ice_cat_flux_x_impl&#45;&gt;proc~ppm_mirror_h</title>
+<path fill="none" stroke="#e2ff00" d="M1084.21,-176.59C1096.73,-173.38 1109.05,-168.01 1118.37,-159.13 1160.56,-118.99 1113.46,-74.59 1154.37,-33.13 1159.28,-28.16 1165.33,-24.35 1171.79,-21.44"/>
+<polygon fill="#e2ff00" stroke="#e2ff00" points="1172.61,-24.86 1180.76,-18.09 1170.17,-18.31 1172.61,-24.86"/>
+</g>
+<!-- proc~volcfl_face -->
+<g id="proc~~ice_transport_step~~CallsGraph_node59" class="node">
+<title>proc~volcfl_face</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node59"><a xlink:href="../proc/volcfl_face.html" xlink:title="volcfl_face">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="1259.64,-192.27 1191.12,-192.27 1191.12,-168 1259.64,-168 1259.64,-192.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1225.38" y="-176.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">volcfl_face</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_cat_flux_x_impl&#45;&gt;proc~volcfl_face -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge55" class="edge">
+<title>proc~ice_cat_flux_x_impl&#45;&gt;proc~volcfl_face</title>
+<path fill="none" stroke="#e2ff00" d="M1084.35,-180.13C1114.62,-180.13 1151.43,-180.13 1179.71,-180.13"/>
+<polygon fill="#e2ff00" stroke="#e2ff00" points="1179.36,-183.64 1189.36,-180.14 1179.36,-176.64 1179.36,-183.64"/>
+</g>
+<!-- proc~ice_cat_flux_y_impl&#45;&gt;local -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge56" class="edge">
+<title>proc~ice_cat_flux_y_impl&#45;&gt;local</title>
+<path fill="none" stroke="#aaff00" d="M1084.17,-15.13C1096.85,-18.32 1109.24,-23.84 1118.37,-33.13 1171.89,-87.6 1129.19,-129.04 1154.37,-201.13 1169.72,-245.1 1195.65,-293 1211.28,-320.12"/>
+<polygon fill="#aaff00" stroke="#aaff00" points="1208.08,-321.59 1216.14,-328.46 1214.13,-318.06 1208.08,-321.59"/>
+</g>
+<!-- proc~ice_cat_flux_y_impl&#45;&gt;proc~ppm_cell_limiter -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge57" class="edge">
+<title>proc~ice_cat_flux_y_impl&#45;&gt;proc~ppm_cell_limiter</title>
+<path fill="none" stroke="#aaff00" d="M1083.91,-16.67C1096.3,-19.85 1108.63,-24.97 1118.37,-33.13 1149.51,-59.22 1124.07,-90.09 1154.37,-117.13 1157.68,-120.09 1161.4,-122.63 1165.35,-124.82"/>
+<polygon fill="#aaff00" stroke="#aaff00" points="1163.62,-127.87 1174.16,-128.91 1166.56,-121.52 1163.62,-127.87"/>
+</g>
+<!-- proc~ice_cat_flux_y_impl&#45;&gt;proc~ppm_limit_pos -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge58" class="edge">
+<title>proc~ice_cat_flux_y_impl&#45;&gt;proc~ppm_limit_pos</title>
+<path fill="none" stroke="#aaff00" d="M1084.2,-19.4C1096.04,-22.48 1108.05,-26.88 1118.37,-33.13 1139.39,-45.89 1133.76,-61.73 1154.37,-75.13 1159.42,-78.42 1165.01,-81.21 1170.76,-83.58"/>
+<polygon fill="#aaff00" stroke="#aaff00" points="1169.19,-86.73 1179.78,-86.87 1171.59,-80.15 1169.19,-86.73"/>
+</g>
+<!-- proc~ice_cat_flux_y_impl&#45;&gt;proc~ppm_limited_slope -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge59" class="edge">
+<title>proc~ice_cat_flux_y_impl&#45;&gt;proc~ppm_limited_slope</title>
+<path fill="none" stroke="#aaff00" d="M1084.35,-24.17C1107.43,-29.11 1134.31,-34.86 1158.32,-40"/>
+<polygon fill="#aaff00" stroke="#aaff00" points="1157.49,-43.4 1168,-42.07 1158.96,-36.56 1157.49,-43.4"/>
+</g>
+<!-- proc~ice_cat_flux_y_impl&#45;&gt;proc~ppm_mirror_h -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge60" class="edge">
+<title>proc~ice_cat_flux_y_impl&#45;&gt;proc~ppm_mirror_h</title>
+<path fill="none" stroke="#aaff00" d="M1084.35,-12.13C1111.49,-12.13 1143.88,-12.13 1170.68,-12.13"/>
+<polygon fill="#aaff00" stroke="#aaff00" points="1170.66,-15.64 1180.66,-12.14 1170.66,-8.64 1170.66,-15.64"/>
+</g>
+<!-- proc~ice_cat_flux_y_impl&#45;&gt;proc~volcfl_face -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge61" class="edge">
+<title>proc~ice_cat_flux_y_impl&#45;&gt;proc~volcfl_face</title>
+<path fill="none" stroke="#aaff00" d="M1084.21,-15.68C1096.73,-18.89 1109.05,-24.26 1118.37,-33.13 1160.56,-73.28 1113.46,-117.68 1154.37,-159.13 1161.29,-166.15 1170.45,-170.84 1179.86,-173.97"/>
+<polygon fill="#aaff00" stroke="#aaff00" points="1178.86,-177.32 1189.43,-176.58 1180.7,-170.57 1178.86,-177.32"/>
+</g>
+<!-- interface~ocean_halo_centre -->
+<g id="proc~~ice_transport_step~~CallsGraph_node46" class="node">
+<title>interface~ocean_halo_centre</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node46"><a xlink:href="../interface/ocean_halo_centre.html" xlink:title="ocean_halo_centre">
+<polygon fill="#a7506f" stroke="#a7506f" points="713.96,-1367.27 601.94,-1367.27 601.94,-1343 713.96,-1343 713.96,-1367.27"/>
+<text xml:space="preserve" text-anchor="middle" x="657.95" y="-1351.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_halo_centre</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_halo_centre_flat&#45;&gt;interface~ocean_halo_centre -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge62" class="edge">
+<title>proc~ice_halo_centre_flat&#45;&gt;interface~ocean_halo_centre</title>
+<path fill="none" stroke="#00ffa9" d="M526.61,-1340.61C546.77,-1342.85 569.53,-1345.39 590.33,-1347.71"/>
+<polygon fill="#00ffa9" stroke="#00ffa9" points="589.82,-1351.17 600.15,-1348.8 590.6,-1344.22 589.82,-1351.17"/>
+</g>
+<!-- proc~ice_ride_update_x_impl&#45;&gt;local -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge63" class="edge">
+<title>proc~ice_ride_update_x_impl&#45;&gt;local</title>
+<path fill="none" stroke="#0071ff" d="M1095.41,-498.17C1103.52,-495.35 1111.39,-491.75 1118.37,-487.13 1165.14,-456.22 1198.51,-397.2 1214.23,-364.81"/>
+<polygon fill="#0071ff" stroke="#0071ff" points="1217.32,-366.46 1218.4,-355.92 1210.98,-363.49 1217.32,-366.46"/>
+</g>
+<!-- proc~ice_ride_update_x_layer_impl&#45;&gt;local -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge64" class="edge">
+<title>proc~ice_ride_update_x_layer_impl&#45;&gt;local</title>
+<path fill="none" stroke="#0038ff" d="M1098.98,-453.6C1105.72,-451.24 1112.3,-448.45 1118.37,-445.13 1155.98,-424.6 1189.63,-387.03 1208.49,-363.38"/>
+<polygon fill="#0038ff" stroke="#0038ff" points="1211.1,-365.72 1214.48,-355.68 1205.58,-361.42 1211.1,-365.72"/>
+</g>
+<!-- proc~ice_ride_update_y_impl&#45;&gt;local -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge65" class="edge">
+<title>proc~ice_ride_update_y_impl&#45;&gt;local</title>
+<path fill="none" stroke="#0000ff" d="M1095.6,-233.69C1103.5,-236.24 1111.27,-239.35 1118.37,-243.13 1155.09,-262.71 1188.57,-298.26 1207.7,-321.01"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="1204.75,-322.93 1213.8,-328.44 1210.16,-318.49 1204.75,-322.93"/>
+</g>
+<!-- proc~ice_ride_update_y_layer_impl&#45;&gt;local -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge66" class="edge">
+<title>proc~ice_ride_update_y_layer_impl&#45;&gt;local</title>
+<path fill="none" stroke="#3800ff" d="M1077.82,-276.76C1091.14,-280.6 1105.44,-285.15 1118.37,-290.13 1143.61,-299.88 1171.01,-313.4 1191.62,-324.21"/>
+<polygon fill="#3800ff" stroke="#3800ff" points="1189.93,-327.27 1200.4,-328.87 1193.21,-321.09 1189.93,-327.27"/>
+</g>
+<!-- proc~ice_validity_reduce_impl&#45;&gt;reduce -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge67" class="edge">
+<title>proc~ice_validity_reduce_impl&#45;&gt;reduce</title>
+<path fill="none" stroke="#7100ff" d="M1098.01,-391.02C1105.41,-394.04 1112.4,-397.98 1118.37,-403.13 1194.36,-468.72 1216.32,-595.98 1222.29,-648.54"/>
+<polygon fill="#7100ff" stroke="#7100ff" points="1218.77,-648.58 1223.28,-658.17 1225.74,-647.86 1218.77,-648.58"/>
+</g>
+<!-- interface~fold_north_centre -->
+<g id="proc~~ice_transport_step~~CallsGraph_node43" class="node">
+<title>interface~fold_north_centre</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node43"><a xlink:href="../interface/fold_north_centre.html" xlink:title="fold_north_centre">
+<polygon fill="#a7506f" stroke="#a7506f" points="710.21,-915.27 605.69,-915.27 605.69,-891 710.21,-891 710.21,-915.27"/>
+<text xml:space="preserve" text-anchor="middle" x="657.95" y="-899.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">fold_north_centre</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_fold_wrap_centre_flat&#45;&gt;interface~fold_north_centre -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge68" class="edge">
+<title>proc~ocean_fold_wrap_centre_flat&#45;&gt;interface~fold_north_centre</title>
+<path fill="none" stroke="#aa00ff" d="M549.54,-915.11C564.49,-913.44 579.9,-911.72 594.21,-910.13"/>
+<polygon fill="#aa00ff" stroke="#aa00ff" points="594.36,-913.63 603.91,-909.05 593.59,-906.68 594.36,-913.63"/>
+</g>
+<!-- interface~ocean_fold_pack -->
+<g id="proc~~ice_transport_step~~CallsGraph_node44" class="node">
+<title>interface~ocean_fold_pack</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node44"><a xlink:href="../interface/ocean_fold_pack.html" xlink:title="ocean_fold_pack">
+<polygon fill="#a7506f" stroke="#a7506f" points="708.33,-768.27 607.56,-768.27 607.56,-744 708.33,-744 708.33,-768.27"/>
+<text xml:space="preserve" text-anchor="middle" x="657.95" y="-752.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_fold_pack</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_fold_wrap_centre_flat&#45;&gt;interface~ocean_fold_pack -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge69" class="edge">
+<title>proc~ocean_fold_wrap_centre_flat&#45;&gt;interface~ocean_fold_pack</title>
+<path fill="none" stroke="#aa00ff" d="M478.1,-911.54C496.77,-887.47 540.23,-834.14 585.06,-798.13 596.24,-789.15 609.55,-780.83 621.67,-773.99"/>
+<polygon fill="#aa00ff" stroke="#aa00ff" points="623.06,-777.22 630.16,-769.35 619.7,-771.08 623.06,-777.22"/>
+</g>
+<!-- interface~ocean_fold_unpack -->
+<g id="proc~~ice_transport_step~~CallsGraph_node45" class="node">
+<title>interface~ocean_fold_unpack</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node45"><a xlink:href="../interface/ocean_fold_unpack.html" xlink:title="ocean_fold_unpack">
+<polygon fill="#a7506f" stroke="#a7506f" points="715.08,-831.27 600.81,-831.27 600.81,-807 715.08,-807 715.08,-831.27"/>
+<text xml:space="preserve" text-anchor="middle" x="657.95" y="-815.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_fold_unpack</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_fold_wrap_centre_flat&#45;&gt;interface~ocean_fold_unpack -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge70" class="edge">
+<title>proc~ocean_fold_wrap_centre_flat&#45;&gt;interface~ocean_fold_unpack</title>
+<path fill="none" stroke="#aa00ff" d="M482.6,-911.53C503.51,-893.36 544.73,-859.84 585.06,-840.13 588.33,-838.54 591.75,-837.04 595.24,-835.63"/>
+<polygon fill="#aa00ff" stroke="#aa00ff" points="596.27,-838.98 604.43,-832.23 593.84,-832.42 596.27,-838.98"/>
+</g>
+<!-- proc~ocean_fold_begin -->
+<g id="proc~~ice_transport_step~~CallsGraph_node51" class="node">
+<title>proc~ocean_fold_begin</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node51"><a xlink:href="../proc/ocean_fold_begin.html" xlink:title="ocean_fold_begin">
+<polygon fill="#d9534f" stroke="#d9534f" points="710.58,-999.27 605.31,-999.27 605.31,-975 710.58,-975 710.58,-999.27"/>
+<text xml:space="preserve" text-anchor="middle" x="657.95" y="-983.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_fold_begin</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_fold_wrap_centre_flat&#45;&gt;proc~ocean_fold_begin -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge71" class="edge">
+<title>proc~ocean_fold_wrap_centre_flat&#45;&gt;proc~ocean_fold_begin</title>
+<path fill="none" stroke="#aa00ff" d="M501.76,-936.72C524.97,-945.37 556.75,-956.91 585.06,-966.13 590.41,-967.88 596,-969.63 601.61,-971.34"/>
+<polygon fill="#aa00ff" stroke="#aa00ff" points="600.3,-974.6 610.88,-974.13 602.31,-967.9 600.3,-974.6"/>
+</g>
+<!-- proc~ocean_fold_end -->
+<g id="proc~~ice_transport_step~~CallsGraph_node52" class="node">
+<title>proc~ocean_fold_end</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node52"><a xlink:href="../proc/ocean_fold_end.html" xlink:title="ocean_fold_end">
+<polygon fill="#d9534f" stroke="#d9534f" points="705.71,-957.27 610.19,-957.27 610.19,-933 705.71,-933 705.71,-957.27"/>
+<text xml:space="preserve" text-anchor="middle" x="657.95" y="-941.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_fold_end</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_fold_wrap_centre_flat&#45;&gt;proc~ocean_fold_end -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge72" class="edge">
+<title>proc~ocean_fold_wrap_centre_flat&#45;&gt;proc~ocean_fold_end</title>
+<path fill="none" stroke="#aa00ff" d="M549.54,-933.16C566.07,-935.01 583.16,-936.91 598.7,-938.64"/>
+<polygon fill="#aa00ff" stroke="#aa00ff" points="597.89,-942.07 608.22,-939.7 598.67,-935.12 597.89,-942.07"/>
+</g>
+<!-- proc~ocean_fold_exchange -->
+<g id="proc~~ice_transport_step~~CallsGraph_node53" class="node">
+<title>proc~ocean_fold_exchange</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node53"><a xlink:href="../proc/ocean_fold_exchange.html" xlink:title="ocean_fold_exchange">
+<polygon fill="#d9534f" stroke="#d9534f" points="896.85,-1197.27 769.83,-1197.27 769.83,-1173 896.85,-1173 896.85,-1197.27"/>
+<text xml:space="preserve" text-anchor="middle" x="833.34" y="-1181.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_fold_exchange</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_fold_wrap_centre_flat&#45;&gt;proc~ocean_fold_exchange -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge73" class="edge">
+<title>proc~ocean_fold_wrap_centre_flat&#45;&gt;proc~ocean_fold_exchange</title>
+<path fill="none" stroke="#aa00ff" d="M484.26,-936.58C506.18,-953.68 547.49,-984.97 585.06,-1008.13 647.25,-1046.49 671.87,-1040.99 730.83,-1084.13 763.48,-1108.03 795.64,-1142.36 814.74,-1164.21"/>
+<polygon fill="#aa00ff" stroke="#aa00ff" points="811.92,-1166.3 821.1,-1171.59 817.23,-1161.73 811.92,-1166.3"/>
+</g>
+<!-- proc~ocean_fold_is_distributed -->
+<g id="proc~~ice_transport_step~~CallsGraph_node54" class="node">
+<title>proc~ocean_fold_is_distributed</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node54"><a xlink:href="../proc/ocean_fold_is_distributed.html" xlink:title="ocean_fold_is_distributed">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="730.83,-873.27 585.06,-873.27 585.06,-849 730.83,-849 730.83,-873.27"/>
+<text xml:space="preserve" text-anchor="middle" x="657.95" y="-857.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_fold_is_distributed</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_fold_wrap_centre_flat&#45;&gt;proc~ocean_fold_is_distributed -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge74" class="edge">
+<title>proc~ocean_fold_wrap_centre_flat&#45;&gt;proc~ocean_fold_is_distributed</title>
+<path fill="none" stroke="#aa00ff" d="M501.76,-911.55C524.97,-902.9 556.75,-891.36 585.06,-882.13 590.41,-880.39 596,-878.64 601.61,-876.93"/>
+<polygon fill="#aa00ff" stroke="#aa00ff" points="602.31,-880.37 610.88,-874.14 600.3,-873.67 602.31,-880.37"/>
+</g>
+<!-- proc~find_or_create_region -->
+<g id="proc~~ice_transport_step~~CallsGraph_node47" class="node">
+<title>proc~find_or_create_region</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node47"><a xlink:href="../proc/find_or_create_region.html" xlink:title="find_or_create_region">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="721.08,-1283.27 594.81,-1283.27 594.81,-1259 721.08,-1259 721.08,-1283.27"/>
+<text xml:space="preserve" text-anchor="middle" x="657.95" y="-1267.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">find_or_create_region</text>
+</a>
+</g>
+</g>
+<!-- proc~profiler_start&#45;&gt;proc~find_or_create_region -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge75" class="edge">
+<title>proc~profiler_start&#45;&gt;proc~find_or_create_region</title>
+<path fill="none" stroke="#ff00aa" d="M507.13,-1271.13C528.98,-1271.13 557.05,-1271.13 582.97,-1271.13"/>
+<polygon fill="#ff00aa" stroke="#ff00aa" points="582.8,-1274.64 592.8,-1271.14 582.8,-1267.64 582.8,-1274.64"/>
+</g>
+<!-- proc~get_wall_time -->
+<g id="proc~~ice_transport_step~~CallsGraph_node48" class="node">
+<title>proc~get_wall_time</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node48"><a xlink:href="../proc/get_wall_time.html" xlink:title="get_wall_time">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="700.08,-1241.27 615.81,-1241.27 615.81,-1217 700.08,-1217 700.08,-1241.27"/>
+<text xml:space="preserve" text-anchor="middle" x="657.95" y="-1225.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">get_wall_time</text>
+</a>
+</g>
+</g>
+<!-- proc~profiler_start&#45;&gt;proc~get_wall_time -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge76" class="edge">
+<title>proc~profiler_start&#45;&gt;proc~get_wall_time</title>
+<path fill="none" stroke="#ff00aa" d="M507.13,-1262.53C535.22,-1256.27 573.59,-1247.72 604.47,-1240.83"/>
+<polygon fill="#ff00aa" stroke="#ff00aa" points="605,-1244.3 614,-1238.71 603.48,-1237.47 605,-1244.3"/>
+</g>
+<!-- proc~nvtx_range_push -->
+<g id="proc~~ice_transport_step~~CallsGraph_node50" class="node">
+<title>proc~nvtx_range_push</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node50"><a xlink:href="../proc/nvtx_range_push.html" xlink:title="nvtx_range_push">
+<polygon fill="#d9534f" stroke="#d9534f" points="708.71,-1325.27 607.19,-1325.27 607.19,-1301 708.71,-1301 708.71,-1325.27"/>
+<text xml:space="preserve" text-anchor="middle" x="657.95" y="-1309.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">nvtx_range_push</text>
+</a>
+</g>
+</g>
+<!-- proc~profiler_start&#45;&gt;proc~nvtx_range_push -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge77" class="edge">
+<title>proc~profiler_start&#45;&gt;proc~nvtx_range_push</title>
+<path fill="none" stroke="#ff00aa" d="M507.13,-1279.74C532.71,-1285.44 566.82,-1293.04 596.03,-1299.55"/>
+<polygon fill="#ff00aa" stroke="#ff00aa" points="594.96,-1302.9 605.48,-1301.66 596.48,-1296.07 594.96,-1302.9"/>
+</g>
+<!-- proc~profiler_stop&#45;&gt;proc~get_wall_time -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge78" class="edge">
+<title>proc~profiler_stop&#45;&gt;proc~get_wall_time</title>
+<path fill="none" stroke="#ff0071" d="M506.67,-1195.63C534.83,-1201.91 573.49,-1210.53 604.54,-1217.45"/>
+<polygon fill="#ff0071" stroke="#ff0071" points="603.61,-1220.83 614.13,-1219.59 605.13,-1214 603.61,-1220.83"/>
+</g>
+<!-- proc~nvtx_range_pop -->
+<g id="proc~~ice_transport_step~~CallsGraph_node49" class="node">
+<title>proc~nvtx_range_pop</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node49"><a xlink:href="../proc/nvtx_range_pop.html" xlink:title="nvtx_range_pop">
+<polygon fill="#d9534f" stroke="#d9534f" points="706.08,-1199.27 609.81,-1199.27 609.81,-1175 706.08,-1175 706.08,-1199.27"/>
+<text xml:space="preserve" text-anchor="middle" x="657.95" y="-1183.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">nvtx_range_pop</text>
+</a>
+</g>
+</g>
+<!-- proc~profiler_stop&#45;&gt;proc~nvtx_range_pop -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge79" class="edge">
+<title>proc~profiler_stop&#45;&gt;proc~nvtx_range_pop</title>
+<path fill="none" stroke="#ff0071" d="M506.67,-1187.13C532.99,-1187.13 568.48,-1187.13 598.36,-1187.13"/>
+<polygon fill="#ff0071" stroke="#ff0071" points="598,-1190.64 608,-1187.14 598,-1183.64 598,-1190.64"/>
+</g>
+<!-- proc~fold_north_centre_2d -->
+<g id="proc~~ice_transport_step~~CallsGraph_node62" class="node">
+<title>proc~fold_north_centre_2d</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node62"><a xlink:href="../proc/fold_north_centre_2d.html" xlink:title="fold_north_centre_2d">
+<polygon fill="#d9534f" stroke="#d9534f" points="894.98,-932.27 771.71,-932.27 771.71,-908 894.98,-908 894.98,-932.27"/>
+<text xml:space="preserve" text-anchor="middle" x="833.34" y="-916.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">fold_north_centre_2d</text>
+</a>
+</g>
+</g>
+<!-- interface~fold_north_centre&#45;&gt;proc~fold_north_centre_2d -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge80" class="edge">
+<title>interface~fold_north_centre&#45;&gt;proc~fold_north_centre_2d</title>
+<path fill="none" stroke="#ff5400" stroke-dasharray="5,2" d="M710.5,-908.19C726.07,-909.72 743.47,-911.42 760.13,-913.06"/>
+<polygon fill="#ff5400" stroke="#ff5400" points="759.71,-916.53 770.01,-914.02 760.4,-909.56 759.71,-916.53"/>
+</g>
+<!-- proc~fold_north_centre_3d -->
+<g id="proc~~ice_transport_step~~CallsGraph_node63" class="node">
+<title>proc~fold_north_centre_3d</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node63"><a xlink:href="../proc/fold_north_centre_3d.html" xlink:title="fold_north_centre_3d">
+<polygon fill="#d9534f" stroke="#d9534f" points="894.98,-890.27 771.71,-890.27 771.71,-866 894.98,-866 894.98,-890.27"/>
+<text xml:space="preserve" text-anchor="middle" x="833.34" y="-874.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">fold_north_centre_3d</text>
+</a>
+</g>
+</g>
+<!-- interface~fold_north_centre&#45;&gt;proc~fold_north_centre_3d -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge81" class="edge">
+<title>interface~fold_north_centre&#45;&gt;proc~fold_north_centre_3d</title>
+<path fill="none" stroke="#ff5400" stroke-dasharray="5,2" d="M710.5,-895.7C726.07,-893.46 743.47,-890.95 760.13,-888.55"/>
+<polygon fill="#ff5400" stroke="#ff5400" points="760.62,-892.01 770.01,-887.12 759.62,-885.08 760.62,-892.01"/>
+</g>
+<!-- proc~ocean_fold_pack_2d -->
+<g id="proc~~ice_transport_step~~CallsGraph_node65" class="node">
+<title>proc~ocean_fold_pack_2d</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node65"><a xlink:href="../proc/ocean_fold_pack_2d.html" xlink:title="ocean_fold_pack_2d">
+<polygon fill="#d9534f" stroke="#d9534f" points="893.1,-768.27 773.58,-768.27 773.58,-744 893.1,-744 893.1,-768.27"/>
+<text xml:space="preserve" text-anchor="middle" x="833.34" y="-752.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_fold_pack_2d</text>
+</a>
+</g>
+</g>
+<!-- interface~ocean_fold_pack&#45;&gt;proc~ocean_fold_pack_2d -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge82" class="edge">
+<title>interface~ocean_fold_pack&#45;&gt;proc~ocean_fold_pack_2d</title>
+<path fill="none" stroke="#ffaa00" stroke-dasharray="5,2" d="M708.63,-756.13C725.21,-756.13 744.01,-756.13 761.86,-756.13"/>
+<polygon fill="#ffaa00" stroke="#ffaa00" points="761.61,-759.64 771.61,-756.14 761.61,-752.64 761.61,-759.64"/>
+</g>
+<!-- proc~ocean_fold_pack_3d -->
+<g id="proc~~ice_transport_step~~CallsGraph_node66" class="node">
+<title>proc~ocean_fold_pack_3d</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node66"><a xlink:href="../proc/ocean_fold_pack_3d.html" xlink:title="ocean_fold_pack_3d">
+<polygon fill="#d9534f" stroke="#d9534f" points="1086.87,-768.27 967.35,-768.27 967.35,-744 1086.87,-744 1086.87,-768.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1027.11" y="-752.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_fold_pack_3d</text>
+</a>
+</g>
+</g>
+<!-- interface~ocean_fold_pack&#45;&gt;proc~ocean_fold_pack_3d -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge83" class="edge">
+<title>interface~ocean_fold_pack&#45;&gt;proc~ocean_fold_pack_3d</title>
+<path fill="none" stroke="#ffaa00" stroke-dasharray="5,2" d="M708.6,-744.4C726.81,-740.64 747.65,-736.98 766.83,-735.13 825.68,-729.46 840.93,-730.27 899.85,-735.13 918.1,-736.64 937.68,-739.35 955.85,-742.34"/>
+<polygon fill="#ffaa00" stroke="#ffaa00" points="955.01,-745.75 965.46,-743.97 956.18,-738.85 955.01,-745.75"/>
+</g>
+<!-- proc~ocean_fold_unpack_2d -->
+<g id="proc~~ice_transport_step~~CallsGraph_node67" class="node">
+<title>proc~ocean_fold_unpack_2d</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node67"><a xlink:href="../proc/ocean_fold_unpack_2d.html" xlink:title="ocean_fold_unpack_2d">
+<polygon fill="#d9534f" stroke="#d9534f" points="899.85,-848.27 766.83,-848.27 766.83,-824 899.85,-824 899.85,-848.27"/>
+<text xml:space="preserve" text-anchor="middle" x="833.34" y="-832.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_fold_unpack_2d</text>
+</a>
+</g>
+</g>
+<!-- interface~ocean_fold_unpack&#45;&gt;proc~ocean_fold_unpack_2d -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge84" class="edge">
+<title>interface~ocean_fold_unpack&#45;&gt;proc~ocean_fold_unpack_2d</title>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M715.24,-824.65C727.99,-825.9 741.74,-827.25 755.18,-828.57"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="754.57,-832.03 764.86,-829.52 755.25,-825.06 754.57,-832.03"/>
+</g>
+<!-- proc~ocean_fold_unpack_3d -->
+<g id="proc~~ice_transport_step~~CallsGraph_node68" class="node">
+<title>proc~ocean_fold_unpack_3d</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node68"><a xlink:href="../proc/ocean_fold_unpack_3d.html" xlink:title="ocean_fold_unpack_3d">
+<polygon fill="#d9534f" stroke="#d9534f" points="1093.62,-810.27 960.6,-810.27 960.6,-786 1093.62,-786 1093.62,-810.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1027.11" y="-794.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_fold_unpack_3d</text>
+</a>
+</g>
+</g>
+<!-- interface~ocean_fold_unpack&#45;&gt;proc~ocean_fold_unpack_3d -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge85" class="edge">
+<title>interface~ocean_fold_unpack&#45;&gt;proc~ocean_fold_unpack_3d</title>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M715.51,-815.9C778.01,-812.33 879.04,-806.55 948.81,-802.56"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="948.87,-806.06 958.65,-801.99 948.47,-799.07 948.87,-806.06"/>
+</g>
+<!-- proc~ocean_halo_centre_2d -->
+<g id="proc~~ice_transport_step~~CallsGraph_node69" class="node">
+<title>proc~ocean_halo_centre_2d</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node69"><a xlink:href="../proc/ocean_halo_centre_2d.html" xlink:title="ocean_halo_centre_2d">
+<polygon fill="#d9534f" stroke="#d9534f" points="898.73,-1660.27 767.96,-1660.27 767.96,-1636 898.73,-1636 898.73,-1660.27"/>
+<text xml:space="preserve" text-anchor="middle" x="833.34" y="-1644.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_halo_centre_2d</text>
+</a>
+</g>
+</g>
+<!-- interface~ocean_halo_centre&#45;&gt;proc~ocean_halo_centre_2d -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge86" class="edge">
+<title>interface~ocean_halo_centre&#45;&gt;proc~ocean_halo_centre_2d</title>
+<path fill="none" stroke="#aaff00" stroke-dasharray="5,2" d="M666.4,-1367.72C693.19,-1412.99 784.85,-1567.88 819.2,-1625.93"/>
+<polygon fill="#aaff00" stroke="#aaff00" points="816.04,-1627.47 824.15,-1634.29 822.07,-1623.9 816.04,-1627.47"/>
+</g>
+<!-- proc~ocean_halo_centre_3d -->
+<g id="proc~~ice_transport_step~~CallsGraph_node70" class="node">
+<title>proc~ocean_halo_centre_3d</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node70"><a xlink:href="../proc/ocean_halo_centre_3d.html" xlink:title="ocean_halo_centre_3d">
+<polygon fill="#d9534f" stroke="#d9534f" points="898.73,-1367.27 767.96,-1367.27 767.96,-1343 898.73,-1343 898.73,-1367.27"/>
+<text xml:space="preserve" text-anchor="middle" x="833.34" y="-1351.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_halo_centre_3d</text>
+</a>
+</g>
+</g>
+<!-- interface~ocean_halo_centre&#45;&gt;proc~ocean_halo_centre_3d -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge87" class="edge">
+<title>interface~ocean_halo_centre&#45;&gt;proc~ocean_halo_centre_3d</title>
+<path fill="none" stroke="#aaff00" stroke-dasharray="5,2" d="M714.28,-1355.13C727.66,-1355.13 742.18,-1355.13 756.32,-1355.13"/>
+<polygon fill="#aaff00" stroke="#aaff00" points="756.03,-1358.64 766.03,-1355.14 756.03,-1351.64 756.03,-1358.64"/>
+</g>
+<!-- proc~grow_buffers -->
+<g id="proc~~ice_transport_step~~CallsGraph_node64" class="node">
+<title>proc~grow_buffers</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node64"><a xlink:href="../proc/grow_buffers.html" xlink:title="grow_buffers">
+<polygon fill="#d9534f" stroke="#d9534f" points="873.23,-974.27 793.46,-974.27 793.46,-950 873.23,-950 873.23,-974.27"/>
+<text xml:space="preserve" text-anchor="middle" x="833.34" y="-958.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">grow_buffers</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_fold_begin&#45;&gt;proc~grow_buffers -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge88" class="edge">
+<title>proc~ocean_fold_begin&#45;&gt;proc~grow_buffers</title>
+<path fill="none" stroke="#00ffff" d="M710.97,-979.63C733.4,-976.4 759.53,-972.63 781.79,-969.42"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="782.14,-972.91 791.54,-968.02 781.14,-965.98 782.14,-972.91"/>
+</g>
+<!-- to_string -->
+<g id="proc~~ice_transport_step~~CallsGraph_node71" class="node">
+<title>to_string</title>
+<polygon fill="#777777" stroke="#777777" points="861.98,-1058.27 804.71,-1058.27 804.71,-1034 861.98,-1034 861.98,-1058.27"/>
+<text xml:space="preserve" text-anchor="middle" x="833.34" y="-1042.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">to_string</text>
+</g>
+<!-- proc~ocean_fold_begin&#45;&gt;to_string -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge89" class="edge">
+<title>proc~ocean_fold_begin&#45;&gt;to_string</title>
+<path fill="none" stroke="#00ffff" d="M693.84,-999.71C714.92,-1007.24 742.36,-1016.91 766.83,-1025.13 775.43,-1028.03 784.69,-1031.05 793.46,-1033.87"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="792.2,-1037.14 802.79,-1036.86 794.33,-1030.48 792.2,-1037.14"/>
+</g>
+<!-- warning -->
+<g id="proc~~ice_transport_step~~CallsGraph_node73" class="node">
+<title>warning</title>
+<polygon fill="#777777" stroke="#777777" points="860.48,-1016.27 806.21,-1016.27 806.21,-992 860.48,-992 860.48,-1016.27"/>
+<text xml:space="preserve" text-anchor="middle" x="833.34" y="-1000.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">warning</text>
+</g>
+<!-- proc~ocean_fold_begin&#45;&gt;warning -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge90" class="edge">
+<title>proc~ocean_fold_begin&#45;&gt;warning</title>
+<path fill="none" stroke="#00ffff" d="M710.97,-992.24C737.89,-994.87 770.14,-998.04 794.64,-1000.44"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="794.18,-1003.91 804.47,-1001.4 794.86,-996.94 794.18,-1003.91"/>
+</g>
+<!-- proc~ocean_fold_exchange&#45;&gt;proc~comm_env_compute_comm -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge93" class="edge">
+<title>proc~ocean_fold_exchange&#45;&gt;proc~comm_env_compute_comm</title>
+<path fill="none" stroke="#0054ff" d="M873.74,-1172.51C882.68,-1168.84 891.87,-1164.38 899.85,-1159.13 918.76,-1146.7 916.07,-1134.12 935.85,-1123.13 938.53,-1121.65 941.3,-1120.27 944.15,-1118.98"/>
+<polygon fill="#0054ff" stroke="#0054ff" points="945.34,-1122.28 953.32,-1115.31 942.74,-1115.78 945.34,-1122.28"/>
+</g>
+<!-- comm_irecv_real_sp_array_n -->
+<g id="proc~~ice_transport_step~~CallsGraph_node60" class="node">
+<title>comm_irecv_real_sp_array_n</title>
+<polygon fill="#777777" stroke="#777777" points="1109.37,-1198.27 944.85,-1198.27 944.85,-1174 1109.37,-1174 1109.37,-1198.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1027.11" y="-1182.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">comm_irecv_real_sp_array_n</text>
+</g>
+<!-- proc~ocean_fold_exchange&#45;&gt;comm_irecv_real_sp_array_n -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge91" class="edge">
+<title>proc~ocean_fold_exchange&#45;&gt;comm_irecv_real_sp_array_n</title>
+<path fill="none" stroke="#0054ff" d="M897.13,-1185.46C908.76,-1185.52 921.12,-1185.59 933.42,-1185.65"/>
+<polygon fill="#0054ff" stroke="#0054ff" points="933.13,-1189.15 943.15,-1185.7 933.17,-1182.15 933.13,-1189.15"/>
+</g>
+<!-- comm_isend_real_sp_array_n -->
+<g id="proc~~ice_transport_step~~CallsGraph_node61" class="node">
+<title>comm_isend_real_sp_array_n</title>
+<polygon fill="#777777" stroke="#777777" points="1110.87,-1156.27 943.35,-1156.27 943.35,-1132 1110.87,-1132 1110.87,-1156.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1027.11" y="-1140.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">comm_isend_real_sp_array_n</text>
+</g>
+<!-- proc~ocean_fold_exchange&#45;&gt;comm_isend_real_sp_array_n -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge92" class="edge">
+<title>proc~ocean_fold_exchange&#45;&gt;comm_isend_real_sp_array_n</title>
+<path fill="none" stroke="#0054ff" d="M893.18,-1172.56C912.97,-1168.32 935.24,-1163.56 955.82,-1159.16"/>
+<polygon fill="#0054ff" stroke="#0054ff" points="956.52,-1162.59 965.57,-1157.08 955.06,-1155.75 956.52,-1162.59"/>
+</g>
+<!-- waitall -->
+<g id="proc~~ice_transport_step~~CallsGraph_node72" class="node">
+<title>waitall</title>
+<polygon fill="#777777" stroke="#777777" points="1054.11,-1240.27 1000.11,-1240.27 1000.11,-1216 1054.11,-1216 1054.11,-1240.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1027.11" y="-1224.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">waitall</text>
+</g>
+<!-- proc~ocean_fold_exchange&#45;&gt;waitall -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge94" class="edge">
+<title>proc~ocean_fold_exchange&#45;&gt;waitall</title>
+<path fill="none" stroke="#0054ff" d="M890.58,-1197.75C922.25,-1204.85 960.92,-1213.52 988.83,-1219.78"/>
+<polygon fill="#0054ff" stroke="#0054ff" points="987.71,-1223.11 998.23,-1221.88 989.24,-1216.28 987.71,-1223.11"/>
+</g>
+<!-- proc~ocean_fold_pack_2d&#45;&gt;proc~ocean_fold_pack_3d -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge95" class="edge">
+<title>proc~ocean_fold_pack_2d&#45;&gt;proc~ocean_fold_pack_3d</title>
+<path fill="none" stroke="#00ff24" d="M893.44,-756.13C913.04,-756.13 935.05,-756.13 955.42,-756.13"/>
+<polygon fill="#00ff24" stroke="#00ff24" points="955.36,-759.64 965.36,-756.14 955.36,-752.64 955.36,-759.64"/>
+</g>
+<!-- proc~ocean_fold_pack_3d&#45;&gt;local -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge96" class="edge">
+<title>proc~ocean_fold_pack_3d&#45;&gt;local</title>
+<path fill="none" stroke="#00ff91" d="M1087.12,-751.93C1098.65,-748.65 1109.81,-743.41 1118.37,-735.13 1145.87,-708.58 1202.62,-446.12 1219.53,-365.54"/>
+<polygon fill="#00ff91" stroke="#00ff91" points="1222.88,-366.61 1221.5,-356.11 1216.03,-365.18 1222.88,-366.61"/>
+</g>
+<!-- proc~fold_stagger_family -->
+<g id="proc~~ice_transport_step~~CallsGraph_node76" class="node">
+<title>proc~fold_stagger_family</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node76"><a xlink:href="../proc/fold_stagger_family.html" xlink:title="fold_stagger_family">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="1283.27,-768.27 1167.5,-768.27 1167.5,-744 1283.27,-744 1283.27,-768.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1225.38" y="-752.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">fold_stagger_family</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_fold_pack_3d&#45;&gt;proc~fold_stagger_family -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge97" class="edge">
+<title>proc~ocean_fold_pack_3d&#45;&gt;proc~fold_stagger_family</title>
+<path fill="none" stroke="#00ff91" d="M1087.26,-756.13C1108.79,-756.13 1133.31,-756.13 1155.61,-756.13"/>
+<polygon fill="#00ff91" stroke="#00ff91" points="1155.52,-759.64 1165.52,-756.14 1155.52,-752.64 1155.52,-759.64"/>
+</g>
+<!-- proc~fold_stagger_nrows -->
+<g id="proc~~ice_transport_step~~CallsGraph_node77" class="node">
+<title>proc~fold_stagger_nrows</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node77"><a xlink:href="../proc/fold_stagger_nrows.html" xlink:title="fold_stagger_nrows">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="1282.14,-810.27 1168.62,-810.27 1168.62,-786 1282.14,-786 1282.14,-810.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1225.38" y="-794.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">fold_stagger_nrows</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_fold_pack_3d&#45;&gt;proc~fold_stagger_nrows -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge98" class="edge">
+<title>proc~ocean_fold_pack_3d&#45;&gt;proc~fold_stagger_nrows</title>
+<path fill="none" stroke="#00ff91" d="M1087,-768.74C1109.12,-773.47 1134.43,-778.89 1157.25,-783.77"/>
+<polygon fill="#00ff91" stroke="#00ff91" points="1156.24,-787.13 1166.75,-785.8 1157.7,-780.29 1156.24,-787.13"/>
+</g>
+<!-- proc~ocean_fold_unpack_2d&#45;&gt;proc~ocean_fold_unpack_3d -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge99" class="edge">
+<title>proc~ocean_fold_unpack_2d&#45;&gt;proc~ocean_fold_unpack_3d</title>
+<path fill="none" stroke="#00ffff" d="M897.93,-823.53C915,-820.15 933.63,-816.46 951.25,-812.97"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="951.75,-816.44 960.88,-811.06 950.39,-809.57 951.75,-816.44"/>
+</g>
+<!-- proc~ocean_fold_unpack_3d&#45;&gt;local -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge100" class="edge">
+<title>proc~ocean_fold_unpack_3d&#45;&gt;local</title>
+<path fill="none" stroke="#0091ff" d="M1093.75,-792C1102.91,-788.69 1111.51,-783.93 1118.37,-777.13 1125.96,-769.63 1198.58,-454.71 1219.04,-365.48"/>
+<polygon fill="#0091ff" stroke="#0091ff" points="1222.41,-366.45 1221.23,-355.92 1215.58,-364.88 1222.41,-366.45"/>
+</g>
+<!-- proc~ocean_fold_unpack_3d&#45;&gt;proc~fold_stagger_family -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge101" class="edge">
+<title>proc~ocean_fold_unpack_3d&#45;&gt;proc~fold_stagger_family</title>
+<path fill="none" stroke="#0091ff" d="M1087,-785.53C1108.73,-780.88 1133.54,-775.57 1156.04,-770.76"/>
+<polygon fill="#0091ff" stroke="#0091ff" points="1156.69,-774.2 1165.74,-768.68 1155.23,-767.35 1156.69,-774.2"/>
+</g>
+<!-- proc~ocean_fold_unpack_3d&#45;&gt;proc~fold_stagger_nrows -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge102" class="edge">
+<title>proc~ocean_fold_unpack_3d&#45;&gt;proc~fold_stagger_nrows</title>
+<path fill="none" stroke="#0091ff" d="M1094.01,-798.13C1114.21,-798.13 1136.47,-798.13 1156.78,-798.13"/>
+<polygon fill="#0091ff" stroke="#0091ff" points="1156.65,-801.64 1166.65,-798.14 1156.65,-794.64 1156.65,-801.64"/>
+</g>
+<!-- proc~ocean_halo_centre_2d_impl -->
+<g id="proc~~ice_transport_step~~CallsGraph_node82" class="node">
+<title>proc~ocean_halo_centre_2d_impl</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node82"><a xlink:href="../proc/ocean_halo_centre_2d_impl.html" xlink:title="ocean_halo_centre_2d_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="1106.75,-1702.27 947.48,-1702.27 947.48,-1678 1106.75,-1678 1106.75,-1702.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1027.11" y="-1686.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_halo_centre_2d_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_halo_centre_2d&#45;&gt;proc~ocean_halo_centre_2d_impl -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge103" class="edge">
+<title>proc~ocean_halo_centre_2d&#45;&gt;proc~ocean_halo_centre_2d_impl</title>
+<path fill="none" stroke="#0024ff" d="M891.88,-1660.74C912.55,-1665.26 936.06,-1670.41 957.57,-1675.12"/>
+<polygon fill="#0024ff" stroke="#0024ff" points="956.62,-1678.5 967.13,-1677.22 958.12,-1671.66 956.62,-1678.5"/>
+</g>
+<!-- proc~oh_count_centre_2d -->
+<g id="proc~~ice_transport_step~~CallsGraph_node84" class="node">
+<title>proc~oh_count_centre_2d</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node84"><a xlink:href="../proc/oh_count_centre_2d.html" xlink:title="oh_count_centre_2d">
+<polygon fill="#d9534f" stroke="#d9534f" points="1086.12,-1660.27 968.1,-1660.27 968.1,-1636 1086.12,-1636 1086.12,-1660.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1027.11" y="-1644.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">oh_count_centre_2d</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_halo_centre_2d&#45;&gt;proc~oh_count_centre_2d -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge104" class="edge">
+<title>proc~ocean_halo_centre_2d&#45;&gt;proc~oh_count_centre_2d</title>
+<path fill="none" stroke="#0024ff" d="M899,-1648.13C917.46,-1648.13 937.65,-1648.13 956.4,-1648.13"/>
+<polygon fill="#0024ff" stroke="#0024ff" points="956.34,-1651.64 966.34,-1648.14 956.34,-1644.64 956.34,-1651.64"/>
+</g>
+<!-- proc~ocean_halo_centre_3d&#45;&gt;proc~comm_env_compute_comm -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge107" class="edge">
+<title>proc~ocean_halo_centre_3d&#45;&gt;proc~comm_env_compute_comm</title>
+<path fill="none" stroke="#4800ff" d="M839.8,-1342.78C851.06,-1317.27 877.68,-1256.89 899.85,-1206.13 915.94,-1169.29 904.97,-1148.89 935.85,-1123.13 936.96,-1122.21 938.11,-1121.32 939.28,-1120.47"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="940.8,-1123.64 947.52,-1115.45 937.16,-1117.67 940.8,-1123.64"/>
+</g>
+<!-- proc~ocean_halo_centre_3d&#45;&gt;comm_irecv_real_sp_array_n -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge105" class="edge">
+<title>proc~ocean_halo_centre_3d&#45;&gt;comm_irecv_real_sp_array_n</title>
+<path fill="none" stroke="#4800ff" d="M839.05,-1342.89C850.72,-1314.26 883.87,-1242.63 935.85,-1207.13 937.64,-1205.91 939.5,-1204.76 941.41,-1203.67"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="942.54,-1207.01 949.94,-1199.44 939.43,-1200.74 942.54,-1207.01"/>
+</g>
+<!-- proc~ocean_halo_centre_3d&#45;&gt;comm_isend_real_sp_array_n -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge106" class="edge">
+<title>proc~ocean_halo_centre_3d&#45;&gt;comm_isend_real_sp_array_n</title>
+<path fill="none" stroke="#4800ff" d="M839.41,-1342.64C855.19,-1304.27 904.32,-1189.32 935.85,-1165.13 937.21,-1164.09 938.61,-1163.1 940.04,-1162.16"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="941.64,-1165.28 948.67,-1157.35 938.23,-1159.16 941.64,-1165.28"/>
+</g>
+<!-- proc~ocean_halo_centre_3d&#45;&gt;waitall -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge117" class="edge">
+<title>proc~ocean_halo_centre_3d&#45;&gt;waitall</title>
+<path fill="none" stroke="#4800ff" d="M842.47,-1342.76C857.87,-1320.37 893.56,-1273.22 935.85,-1249.13 951.87,-1240.01 971.62,-1234.85 988.57,-1231.93"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="988.9,-1235.42 998.27,-1230.47 987.86,-1228.49 988.9,-1235.42"/>
+</g>
+<!-- proc~ew_rank_east -->
+<g id="proc~~ice_transport_step~~CallsGraph_node74" class="node">
+<title>proc~ew_rank_east</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node74"><a xlink:href="../proc/ew_rank_east.html" xlink:title="ew_rank_east">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="1068.87,-1408.27 985.35,-1408.27 985.35,-1384 1068.87,-1384 1068.87,-1408.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1027.11" y="-1392.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ew_rank_east</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_halo_centre_3d&#45;&gt;proc~ew_rank_east -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge108" class="edge">
+<title>proc~ocean_halo_centre_3d&#45;&gt;proc~ew_rank_east</title>
+<path fill="none" stroke="#4800ff" d="M893.18,-1367.71C918.96,-1373.23 948.96,-1379.64 973.93,-1384.98"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="973.02,-1388.36 983.54,-1387.03 974.49,-1381.52 973.02,-1388.36"/>
+</g>
+<!-- proc~ew_rank_west -->
+<g id="proc~~ice_transport_step~~CallsGraph_node75" class="node">
+<title>proc~ew_rank_west</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node75"><a xlink:href="../proc/ew_rank_west.html" xlink:title="ew_rank_west">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="1069.62,-1366.27 984.6,-1366.27 984.6,-1342 1069.62,-1342 1069.62,-1366.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1027.11" y="-1350.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ew_rank_west</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_halo_centre_3d&#45;&gt;proc~ew_rank_west -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge109" class="edge">
+<title>proc~ocean_halo_centre_3d&#45;&gt;proc~ew_rank_west</title>
+<path fill="none" stroke="#4800ff" d="M899,-1354.8C923.09,-1354.67 950.13,-1354.53 973.06,-1354.41"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="972.81,-1357.91 982.79,-1354.36 972.77,-1350.91 972.81,-1357.91"/>
+</g>
+<!-- proc~needs_flags -->
+<g id="proc~~ice_transport_step~~CallsGraph_node78" class="node">
+<title>proc~needs_flags</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node78"><a xlink:href="../proc/needs_flags.html" xlink:title="needs_flags">
+<polygon fill="#d9534f" stroke="#d9534f" points="1064.37,-1324.27 989.85,-1324.27 989.85,-1300 1064.37,-1300 1064.37,-1324.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1027.11" y="-1308.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">needs_flags</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_halo_centre_3d&#45;&gt;proc~needs_flags -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge110" class="edge">
+<title>proc~ocean_halo_centre_3d&#45;&gt;proc~needs_flags</title>
+<path fill="none" stroke="#4800ff" d="M890.58,-1342.52C918.53,-1336.26 951.93,-1328.77 978.58,-1322.79"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="979.08,-1326.27 988.08,-1320.66 977.55,-1319.44 979.08,-1326.27"/>
+</g>
+<!-- proc~ns_rank_north -->
+<g id="proc~~ice_transport_step~~CallsGraph_node79" class="node">
+<title>proc~ns_rank_north</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node79"><a xlink:href="../proc/ns_rank_north.html" xlink:title="ns_rank_north">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="1070.37,-1282.27 983.85,-1282.27 983.85,-1258 1070.37,-1258 1070.37,-1282.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1027.11" y="-1266.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ns_rank_north</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_halo_centre_3d&#45;&gt;proc~ns_rank_north -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge111" class="edge">
+<title>proc~ocean_halo_centre_3d&#45;&gt;proc~ns_rank_north</title>
+<path fill="none" stroke="#4800ff" d="M850.29,-1342.68C869.53,-1328.25 903.36,-1304.7 935.85,-1291.13 947.33,-1286.34 960.11,-1282.53 972.36,-1279.54"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="972.96,-1282.99 981.93,-1277.36 971.4,-1276.17 972.96,-1282.99"/>
+</g>
+<!-- proc~ns_rank_south -->
+<g id="proc~~ice_transport_step~~CallsGraph_node80" class="node">
+<title>proc~ns_rank_south</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node80"><a xlink:href="../proc/ns_rank_south.html" xlink:title="ns_rank_south">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="1070.75,-1618.27 983.48,-1618.27 983.48,-1594 1070.75,-1594 1070.75,-1618.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1027.11" y="-1602.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ns_rank_south</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_halo_centre_3d&#45;&gt;proc~ns_rank_south -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge112" class="edge">
+<title>proc~ocean_halo_centre_3d&#45;&gt;proc~ns_rank_south</title>
+<path fill="none" stroke="#4800ff" d="M835.95,-1367.68C841.63,-1406.55 864.43,-1525.96 935.85,-1585.13 946.01,-1593.55 958.92,-1598.73 971.77,-1601.88"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="971.01,-1605.3 981.5,-1603.86 972.4,-1598.44 971.01,-1605.3"/>
+</g>
+<!-- proc~ocean_halo_buffers_ensure_nz -->
+<g id="proc~~ice_transport_step~~CallsGraph_node81" class="node">
+<title>proc~ocean_halo_buffers_ensure_nz</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node81"><a xlink:href="../proc/ocean_halo_buffers_ensure_nz.html" xlink:title="ocean_halo_buffers_ensure_nz">
+<polygon fill="#d9534f" stroke="#d9534f" points="1114.25,-1576.27 939.98,-1576.27 939.98,-1552 1114.25,-1552 1114.25,-1576.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1027.11" y="-1560.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_halo_buffers_ensure_nz</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_halo_centre_3d&#45;&gt;proc~ocean_halo_buffers_ensure_nz -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge113" class="edge">
+<title>proc~ocean_halo_centre_3d&#45;&gt;proc~ocean_halo_buffers_ensure_nz</title>
+<path fill="none" stroke="#4800ff" d="M837.24,-1367.55C845.84,-1401.47 874.53,-1496.31 935.85,-1543.13 937.21,-1544.17 938.61,-1545.16 940.05,-1546.1"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="938.25,-1549.1 948.69,-1550.9 941.65,-1542.98 938.25,-1549.1"/>
+</g>
+<!-- proc~ocean_periodic_wrap_centre_3d -->
+<g id="proc~~ice_transport_step~~CallsGraph_node83" class="node">
+<title>proc~ocean_periodic_wrap_centre_3d</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node83"><a xlink:href="../proc/ocean_periodic_wrap_centre_3d.html" xlink:title="ocean_periodic_wrap_centre_3d">
+<polygon fill="#d9534f" stroke="#d9534f" points="1118.37,-1534.27 935.85,-1534.27 935.85,-1510 1118.37,-1510 1118.37,-1534.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1027.11" y="-1518.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_periodic_wrap_centre_3d</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_halo_centre_3d&#45;&gt;proc~ocean_periodic_wrap_centre_3d -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge114" class="edge">
+<title>proc~ocean_halo_centre_3d&#45;&gt;proc~ocean_periodic_wrap_centre_3d</title>
+<path fill="none" stroke="#4800ff" d="M839.27,-1367.63C851.2,-1396.17 884.49,-1466.31 935.85,-1501.13 937.7,-1502.39 939.61,-1503.57 941.57,-1504.68"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="939.9,-1507.75 950.42,-1509 942.97,-1501.46 939.9,-1507.75"/>
+</g>
+<!-- proc~oh_count_centre_3d -->
+<g id="proc~~ice_transport_step~~CallsGraph_node85" class="node">
+<title>proc~oh_count_centre_3d</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node85"><a xlink:href="../proc/oh_count_centre_3d.html" xlink:title="oh_count_centre_3d">
+<polygon fill="#d9534f" stroke="#d9534f" points="1086.12,-1492.27 968.1,-1492.27 968.1,-1468 1086.12,-1468 1086.12,-1492.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1027.11" y="-1476.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">oh_count_centre_3d</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_halo_centre_3d&#45;&gt;proc~oh_count_centre_3d -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge115" class="edge">
+<title>proc~ocean_halo_centre_3d&#45;&gt;proc~oh_count_centre_3d</title>
+<path fill="none" stroke="#4800ff" d="M842.77,-1367.62C858.4,-1389.71 894.08,-1435.61 935.85,-1459.13 942.44,-1462.85 949.66,-1465.91 957.05,-1468.43"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="955.91,-1471.74 966.5,-1471.3 957.95,-1465.04 955.91,-1471.74"/>
+</g>
+<!-- proc~oh_count_msgs -->
+<g id="proc~~ice_transport_step~~CallsGraph_node86" class="node">
+<title>proc~oh_count_msgs</title>
+<g id="a_proc~~ice_transport_step~~CallsGraph_node86"><a xlink:href="../proc/oh_count_msgs.html" xlink:title="oh_count_msgs">
+<polygon fill="#d9534f" stroke="#d9534f" points="1073.75,-1450.27 980.48,-1450.27 980.48,-1426 1073.75,-1426 1073.75,-1450.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1027.11" y="-1434.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">oh_count_msgs</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_halo_centre_3d&#45;&gt;proc~oh_count_msgs -->
+<g id="proc~~ice_transport_step~~CallsGraph_edge116" class="edge">
+<title>proc~ocean_halo_centre_3d&#45;&gt;proc~oh_count_msgs</title>
+<path fill="none" stroke="#4800ff" d="M851.04,-1367.67C870.46,-1381.67 903.93,-1404.07 935.85,-1417.13 946.35,-1421.43 957.91,-1424.95 969.15,-1427.8"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="968.23,-1431.18 978.76,-1430.08 969.84,-1424.37 968.23,-1431.18"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocice_transport_stepCallsGraph = svgPanZoom('#procice_transport_stepCallsGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~ice_transport_step~~CalledByGraph Pages: 1 -->
+<svg id="procice_transport_stepCalledByGraph" width="493pt" height="74pt"
+ viewBox="0.00 0.00 493.00 74.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~ice_transport_step~~CalledByGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 70.27)">
+<title>proc~~ice_transport_step~~CalledByGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-70.27 488.83,-70.27 488.83,4 -4,4"/>
+<!-- proc~ice_transport_step -->
+<g id="proc~~ice_transport_step~~CalledByGraph_node1" class="node">
+<title>proc~ice_transport_step</title>
+<polygon fill="none" stroke="black" points="484.83,-45.27 375.81,-45.27 375.81,-21 484.83,-21 484.83,-45.27"/>
+<text xml:space="preserve" text-anchor="middle" x="430.32" y="-29.53" font-family="Helvetica,sans-Serif" font-size="10.50">ice_transport_step</text>
+</g>
+<!-- proc~engine_step_ice -->
+<g id="proc~~ice_transport_step~~CalledByGraph_node2" class="node">
+<title>proc~engine_step_ice</title>
+<g id="a_proc~~ice_transport_step~~CalledByGraph_node2"><a xlink:href="../proc/engine_step_ice.html" xlink:title="engine_step_ice">
+<polygon fill="#d9534f" stroke="#d9534f" points="339.81,-45.27 242.79,-45.27 242.79,-21 339.81,-21 339.81,-45.27"/>
+<text xml:space="preserve" text-anchor="middle" x="291.3" y="-29.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step_ice</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_step_ice&#45;&gt;proc~ice_transport_step -->
+<g id="proc~~ice_transport_step~~CalledByGraph_edge1" class="edge">
+<title>proc~engine_step_ice&#45;&gt;proc~ice_transport_step</title>
+<path fill="none" stroke="#ff0000" d="M340.22,-33.13C347.99,-33.13 356.14,-33.13 364.23,-33.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="364.06,-36.64 374.06,-33.14 364.06,-29.64 364.06,-36.64"/>
+</g>
+<!-- proc~driver_run_ocean -->
+<g id="proc~~ice_transport_step~~CalledByGraph_node3" class="node">
+<title>proc~driver_run_ocean</title>
+<g id="a_proc~~ice_transport_step~~CalledByGraph_node3"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<polygon fill="#d9534f" stroke="#d9534f" points="206.79,-66.27 102.27,-66.27 102.27,-42 206.79,-42 206.79,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="154.53" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_step_ice -->
+<g id="proc~~ice_transport_step~~CalledByGraph_edge2" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_step_ice</title>
+<path fill="none" stroke="#ff0000" d="M207.25,-46.08C215.12,-44.85 223.29,-43.58 231.31,-42.33"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="231.64,-45.82 240.98,-40.82 230.56,-38.9 231.64,-45.82"/>
+</g>
+<!-- proc~rdb_ocean_step -->
+<g id="proc~~ice_transport_step~~CalledByGraph_node4" class="node">
+<title>proc~rdb_ocean_step</title>
+<g id="a_proc~~ice_transport_step~~CalledByGraph_node4"><a xlink:href="../proc/rdb_ocean_step.html" xlink:title="rdb_ocean_step">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="202.29,-24.27 106.77,-24.27 106.77,0 202.29,0 202.29,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="154.53" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_step</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_step&#45;&gt;proc~engine_step_ice -->
+<g id="proc~~ice_transport_step~~CalledByGraph_edge3" class="edge">
+<title>proc~rdb_ocean_step&#45;&gt;proc~engine_step_ice</title>
+<path fill="none" stroke="#ff0000" d="M202.67,-19.48C211.94,-20.92 221.78,-22.46 231.39,-23.95"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="230.59,-27.37 241.01,-25.45 231.67,-20.46 230.59,-27.37"/>
+</g>
+<!-- proc~driver_run -->
+<g id="proc~~ice_transport_step~~CalledByGraph_node5" class="node">
+<title>proc~driver_run</title>
+<g id="a_proc~~ice_transport_step~~CalledByGraph_node5"><a xlink:href="../proc/driver_run.html" xlink:title="driver_run">
+<polygon fill="#d9534f" stroke="#d9534f" points="66.27,-66.27 0,-66.27 0,-42 66.27,-42 66.27,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="33.13" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run&#45;&gt;proc~driver_run_ocean -->
+<g id="proc~~ice_transport_step~~CalledByGraph_edge4" class="edge">
+<title>proc~driver_run&#45;&gt;proc~driver_run_ocean</title>
+<path fill="none" stroke="#ff0000" d="M66.76,-54.13C74.26,-54.13 82.48,-54.13 90.79,-54.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="90.58,-57.64 100.58,-54.14 90.58,-50.64 90.58,-57.64"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dt_adv"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dt_adv</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n~34"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>n</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nghost~54"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nghost</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx~390"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny~390"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz~303"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-vglob"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>vglob</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-vmax~4"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>vmax</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-wall_e~5"></span>
+              logical,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>wall_e</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-wall_n~5"></span>
+              logical,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>wall_n</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-wall_s~5"></span>
+              logical,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>wall_s</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-wall_w~5"></span>
+              logical,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>wall_w</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-x4"></span>
+              logical,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>x4</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">subroutine </span><span class="n">ice_transport_step</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">,</span><span class="w"> </span><span class="n">dt</span><span class="p">,</span><span class="w"> </span><span class="n">adv_substeps</span><span class="p">,</span><span class="w"> </span><span class="n">roll_factor</span><span class="p">,</span><span class="w"> </span><span class="n">ok</span><span class="p">,</span><span class="w"> </span><span class="n">bc</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! Entry point (host orchestration; kernels inside).  Outer-shim +</span>
+<span class="w">      </span><span class="c">!! flat-impl: every phase below dispatches to a `pure` `_impl`</span>
+<span class="w">      </span><span class="c">!! kernel; this routine only sequences them and owns the</span>
+<span class="w">      </span><span class="c">!! host-visible `ok` fail-loud signal.</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">hgrid_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">grid</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_metrics_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">metrics</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">multilayer_state_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ms</span>
+<span class="w">         </span><span class="c">!! READ-ONLY: `wet_mask` (physical-cell gate) + the surface-layer</span>
+<span class="w">         </span><span class="c">!! face velocities the v1 sampler reads.</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_sea_ice_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ice</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dt</span>
+<span class="w">         </span><span class="c">!! The thermo-step dt (cadence = the ice slow step).</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">adv_substeps</span>
+<span class="w">         </span><span class="c">!! SIS2 `NSTEPS_ADV` (`&amp;ocean_ice_nml adv_substeps`), &gt;= 1.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">roll_factor</span>
+<span class="w">         </span><span class="c">!! SIS2 `SEA_ICE_ROLL_FACTOR` (`&amp;ocean_ice_nml roll_factor`).</span>
+<span class="w">         </span><span class="c">!! 0 disables rolling.</span>
+<span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ok</span>
+<span class="w">         </span><span class="c">!! `.false.` =&gt; the caller (driver) must abort fail-loud</span>
+<span class="w">         </span><span class="c">!! (conservation/positivity violation, or a compress-time</span>
+<span class="w">         </span><span class="c">!! consistency failure SIS2 would FATAL on).  Rank-uniform.</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_bc_state_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">bc</span>
+<span class="w">         </span><span class="c">!! Edge policy (`periodic_x/_y`, `has_*`).  Present (the engine</span>
+<span class="w">         </span><span class="c">!! always passes it): X4 per substep and walls only on a physical,</span>
+<span class="w">         </span><span class="c">!! non-periodic edge.  Absent (the single-tile unit-test seam):</span>
+<span class="w">         </span><span class="c">!! no exchange and every tile edge is a wall, as before.</span>
+
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="n">n</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dt_adv</span><span class="p">,</span><span class="w"> </span><span class="n">vmax</span><span class="p">,</span><span class="w"> </span><span class="n">vglob</span>
+<span class="w">      </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">wall_w</span><span class="p">,</span><span class="w"> </span><span class="n">wall_e</span><span class="p">,</span><span class="w"> </span><span class="n">wall_s</span><span class="p">,</span><span class="w"> </span><span class="n">wall_n</span><span class="p">,</span><span class="w"> </span><span class="n">x4</span>
+
+<span class="w">      </span><span class="n">ok</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">true</span><span class="p">.</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">is_init</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="n">ice</span><span class="p">%</span><span class="n">ncat</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+
+<span class="k">      </span><span class="n">nx</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">nx_total</span>
+<span class="w">      </span><span class="n">ny</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">ny_total</span>
+<span class="w">      </span><span class="n">nz</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">nz_ml</span>
+<span class="w">      </span><span class="n">nghost</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">nghost</span>
+<span class="w">      </span><span class="n">wall_w</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">true</span><span class="p">.</span>
+<span class="w">      </span><span class="n">wall_e</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">true</span><span class="p">.</span>
+<span class="w">      </span><span class="n">wall_s</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">true</span><span class="p">.</span>
+<span class="w">      </span><span class="n">wall_n</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">true</span><span class="p">.</span>
+<span class="w">      </span><span class="n">x4</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">false</span><span class="p">.</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">bc</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         </span><span class="n">wall_w</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">bc</span><span class="p">%</span><span class="n">has_west</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="p">.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">bc</span><span class="p">%</span><span class="n">periodic_x</span>
+<span class="w">         </span><span class="n">wall_e</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">bc</span><span class="p">%</span><span class="n">has_east</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="p">.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">bc</span><span class="p">%</span><span class="n">periodic_x</span>
+<span class="w">         </span><span class="n">wall_s</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">bc</span><span class="p">%</span><span class="n">has_south</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="p">.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">bc</span><span class="p">%</span><span class="n">periodic_y</span>
+<span class="w">         </span><span class="c">! A tripolar north edge is topologically connected (folded), not</span>
+<span class="w">         </span><span class="c">! a solid boundary -- `bc%north_fold` is the fold-seam twin of</span>
+<span class="w">         </span><span class="c">! `periodic_y` here, and must be excluded from the wall test the</span>
+<span class="w">         </span><span class="c">! same way.  Missing this made `vhtot_work` at the exact</span>
+<span class="w">         </span><span class="c">! fold-line face (`nghost+ny_phys+1`) get force-zeroed every</span>
+<span class="w">         </span><span class="c">! substep regardless of the (now fold-exchanged) ghost data, so</span>
+<span class="w">         </span><span class="c">! category transport could never cross the seam at all: any</span>
+<span class="w">         </span><span class="c">! poleward convergence simply piled up against this phantom wall</span>
+<span class="w">         </span><span class="c">! with no outlet, which is the dominant mechanism behind the</span>
+<span class="w">         </span><span class="c">! fold-row ice growing without bound (CLAUDE.md fold-seam fix).</span>
+<span class="w">         </span><span class="n">wall_n</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">bc</span><span class="p">%</span><span class="n">has_north</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="p">.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">bc</span><span class="p">%</span><span class="n">periodic_y</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="p">.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">bc</span><span class="p">%</span><span class="n">north_fold</span>
+<span class="w">         </span><span class="n">x4</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ocean_halo_is_init</span><span class="p">()</span>
+<span class="w">      </span><span class="k">end if</span>
+
+<span class="w">      </span><span class="c">! ---- Phase 0: sample the ocean surface-layer velocity onto the</span>
+<span class="w">      </span><span class="c">! ice C-grid faces (v1 interim filler).  PR 5: skipped when EVP</span>
+<span class="w">      </span><span class="c">! dynamics is on — ice_evp_step (driver, runs BEFORE this call)</span>
+<span class="w">      </span><span class="c">! already wrote u_ice/v_ice directly; the sampler would clobber</span>
+<span class="w">      </span><span class="c">! them with the ocean surface velocity. ----</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">dynamics</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">ice_sample_velocity_impl</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">u_face_x_layer</span><span class="p">(:,</span><span class="w"> </span><span class="p">:,</span><span class="w"> </span><span class="n">nz</span><span class="p">),</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">v_face_y_layer</span><span class="p">(:,</span><span class="w"> </span><span class="p">:,</span><span class="w"> </span><span class="n">nz</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                       </span><span class="n">metrics</span><span class="p">%</span><span class="n">wet_u</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">%</span><span class="n">wet_v</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">u_ice</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">v_ice</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end if</span>
+
+<span class="w">      </span><span class="c">! ---- Zero-velocity exact no-op (D6): the CAS&lt;-&gt;IST round trip</span>
+<span class="w">      </span><span class="c">! re-derives part_size by division and would otherwise perturb</span>
+<span class="w">      </span><span class="c">! last bits even under zero flow. ----</span>
+<span class="w">      </span><span class="k">call </span><span class="n">ice_max_speed_impl</span><span class="p">(</span><span class="n">ice</span><span class="p">%</span><span class="n">u_ice</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">v_ice</span><span class="p">,</span><span class="w"> </span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">vmax</span><span class="p">)</span>
+<span class="w">      </span><span class="c">! Rank-uniform: a rank that skips the round trip while another</span>
+<span class="w">      </span><span class="c">! enters the substep exchanges deadlocks.  A max is exact.</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">ocean_halo_is_decomposed</span><span class="p">())</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">halo_allreduce_max</span><span class="p">(</span><span class="n">vmax</span><span class="p">,</span><span class="w"> </span><span class="n">vglob</span><span class="p">)</span>
+<span class="w">         </span><span class="n">vmax</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">vglob</span>
+<span class="w">      </span><span class="k">end if</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="n">vmax</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+
+<span class="w">      </span><span class="c">! ---- Phase 1: IST -&gt; CAS ----</span>
+<span class="w">      </span><span class="k">call </span><span class="n">ice_ist_to_cas_impl</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">wet_mask</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">part_size</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">m_ice</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">m_snow</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                               </span><span class="n">ice</span><span class="p">%</span><span class="n">mca_ice</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">mca_snow</span><span class="p">,</span><span class="w"> </span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">ncat</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+
+<span class="w">      </span><span class="c">! ---- Phase 2: adv_substeps advective iterations, x-pass then y-pass ----</span>
+<span class="w">      </span><span class="n">dt_adv</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dt</span><span class="o">/</span><span class="kt">real</span><span class="p">(</span><span class="nb">max</span><span class="p">(</span><span class="n">adv_substeps</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="n">wp</span><span class="p">)</span>
+<span class="w">      </span><span class="k">do </span><span class="n">n</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">adv_substeps</span>
+<span class="w">         </span><span class="c">! X4: seam ghosts of the CAS masses + riding tracers (and, on one</span>
+<span class="w">         </span><span class="c">! periodic rank, the wrap) before this substep's stencils read them.</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">x4</span><span class="p">)</span><span class="w"> </span><span class="k">call </span><span class="n">ocean_halo_exchange_ice_transport</span><span class="p">(</span><span class="n">ice</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">bc</span><span class="p">)</span>
+<span class="w">         </span><span class="k">call </span><span class="n">ice_pass_x</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">,</span><span class="w"> </span><span class="n">dt_adv</span><span class="p">,</span><span class="w"> </span><span class="n">wall_w</span><span class="p">,</span><span class="w"> </span><span class="n">wall_e</span><span class="p">,</span><span class="w"> </span><span class="n">ok</span><span class="p">)</span>
+<span class="w">         </span><span class="k">call </span><span class="n">ok_all_ranks</span><span class="p">(</span><span class="n">ok</span><span class="p">)</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">ok</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+<span class="k">         call </span><span class="n">ice_pass_y</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">,</span><span class="w"> </span><span class="n">dt_adv</span><span class="p">,</span><span class="w"> </span><span class="n">wall_s</span><span class="p">,</span><span class="w"> </span><span class="n">wall_n</span><span class="p">,</span><span class="w"> </span><span class="n">ok</span><span class="p">)</span>
+<span class="w">         </span><span class="k">call </span><span class="n">ok_all_ranks</span><span class="p">(</span><span class="n">ok</span><span class="p">)</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">ok</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+<span class="k">      end do</span>
+
+<span class="w">      </span><span class="c">! ---- Phase 3: CAS -&gt; IST ----</span>
+<span class="w">      </span><span class="k">call </span><span class="n">ice_cas_to_ist_impl</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">wet_mask</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">%</span><span class="n">areaT</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">mca_ice</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">mca_snow</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                               </span><span class="n">ice</span><span class="p">%</span><span class="n">part_size</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">m_ice</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">m_snow</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">mh_lim</span><span class="p">,</span><span class="w"> </span><span class="n">roll_factor</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                               </span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">ncat</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+
+<span class="w">      </span><span class="c">! ---- Phase 4: compress_ice ----</span>
+<span class="w">      </span><span class="k">call </span><span class="n">ice_compress_impl</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">wet_mask</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">part_size</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">m_ice</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">m_snow</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                             </span><span class="n">ice</span><span class="p">%</span><span class="n">enth_ice</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">enth_snow</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">sal_ice</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">mh_lim</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                             </span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">ncat</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">%</span><span class="n">nk_ice</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">ok</span><span class="p">)</span>
+<span class="w">      </span><span class="k">call </span><span class="n">ok_all_ranks</span><span class="p">(</span><span class="n">ok</span><span class="p">)</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">ok</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+
+<span class="w">      </span><span class="c">! ---- Phase 5: recategorize (PR 4a, unchanged) ----</span>
+<span class="w">      </span><span class="k">call </span><span class="n">ice_adjust_categories</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">,</span><span class="w"> </span><span class="n">ice</span><span class="p">)</span>
+<span class="w">   </span><span class="k">end subroutine </span><span class="n">ice_transport_step</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-11-13 23:21 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

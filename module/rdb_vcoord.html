@@ -1,0 +1,2725 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>rdb_vcoord &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>rdb_vcoord
+      <small>Module</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.7% of total for modules and submodules.">519 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_vcoord.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_vcoord.f90.html'>rdb_vcoord.F90</a></li>
+            <li class="breadcrumb-item active" aria-current="page">rdb_vcoord</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+
+  <div class="row">
+    <div class="col-md-3">
+        <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/rdb_vcoord.html#variable-stretch_log">STRETCH_LOG</a>
+            <a class="list-group-item" href="../module/rdb_vcoord.html#variable-stretch_uniform">STRETCH_UNIFORM</a>
+            <a class="list-group-item" href="../module/rdb_vcoord.html#variable-vcoord_hmin_inert">VCOORD_HMIN_INERT</a>
+            <a class="list-group-item" href="../module/rdb_vcoord.html#variable-vcoord_hmin_keepalive">VCOORD_HMIN_KEEPALIVE</a>
+            <a class="list-group-item" href="../module/rdb_vcoord.html#variable-vcoord_hmin_unused">VCOORD_HMIN_UNUSED</a>
+            <a class="list-group-item" href="../module/rdb_vcoord.html#variable-zfixed_dz_err_count">ZFIXED_DZ_ERR_COUNT</a>
+            <a class="list-group-item" href="../module/rdb_vcoord.html#variable-zfixed_dz_err_profile">ZFIXED_DZ_ERR_PROFILE</a>
+            <a class="list-group-item" href="../module/rdb_vcoord.html#variable-zfixed_dz_err_too_deep">ZFIXED_DZ_ERR_TOO_DEEP</a>
+            <a class="list-group-item" href="../module/rdb_vcoord.html#variable-zfixed_dz_err_value">ZFIXED_DZ_ERR_VALUE</a>
+            <a class="list-group-item" href="../module/rdb_vcoord.html#variable-zfixed_dz_ok">ZFIXED_DZ_OK</a>
+            <a class="list-group-item" href="../module/rdb_vcoord.html#variable-zfixed_profile_invalid">ZFIXED_PROFILE_INVALID</a>
+            <a class="list-group-item" href="../module/rdb_vcoord.html#variable-zfixed_profile_list">ZFIXED_PROFILE_LIST</a>
+            <a class="list-group-item" href="../module/rdb_vcoord.html#variable-zfixed_profile_tanh">ZFIXED_PROFILE_TANH</a>
+            <a class="list-group-item" href="../module/rdb_vcoord.html#variable-zfixed_profile_uniform">ZFIXED_PROFILE_UNIFORM</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#types-0"
+         aria-expanded="false" aria-controls="types-0">
+         <h4 class="card-header bg-primary text-white">Derived Types</h4>
+      </a>
+      <div id="types-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/rdb_vcoord.html#type-vcoord_t">vcoord_t</a>
+        </div>
+      </div>
+    </div>
+
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#funcs-0"
+         aria-expanded="false" aria-controls="funcs-0">
+         <h4 class="card-header bg-primary text-white">Functions</h4>
+      </a>
+      <div id="funcs-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/rdb_vcoord.html#proc-parse_remap_method">parse_remap_method</a>
+            <a class="list-group-item" href="../module/rdb_vcoord.html#proc-parse_stretching_mode">parse_stretching_mode</a>
+            <a class="list-group-item" href="../module/rdb_vcoord.html#proc-parse_vcoord_type">parse_vcoord_type</a>
+            <a class="list-group-item" href="../module/rdb_vcoord.html#proc-parse_z_fixed_profile">parse_z_fixed_profile</a>
+            <a class="list-group-item" href="../module/rdb_vcoord.html#proc-vcoord_h_min_is_coherent">vcoord_h_min_is_coherent</a>
+            <a class="list-group-item" href="../module/rdb_vcoord.html#proc-vcoord_h_min_role">vcoord_h_min_role</a>
+            <a class="list-group-item" href="../module/rdb_vcoord.html#proc-vcoord_needs_remap">vcoord_needs_remap</a>
+        </div>
+      </div>
+    </div>
+
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#subs-0"
+         aria-expanded="false" aria-controls="subs-0">
+         <h4 class="card-header bg-primary text-white">Subroutines</h4>
+      </a>
+      <div id="subs-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/rdb_vcoord.html#proc-vcoord_target_dz_column">vcoord_target_dz_column</a>
+            <a class="list-group-item" href="../module/rdb_vcoord.html#proc-vcoord_target_dz_column_zstar_full">vcoord_target_dz_column_zstar_full</a>
+            <a class="list-group-item" href="../module/rdb_vcoord.html#proc-z_fixed_nominal_dz">z_fixed_nominal_dz</a>
+            <a class="list-group-item" href="../module/rdb_vcoord.html#proc-zstar_full_build_column">zstar_full_build_column</a>
+            <a class="list-group-item" href="../module/rdb_vcoord.html#proc-vcoord_cleanup">vcoord_cleanup</a>
+            <a class="list-group-item" href="../module/rdb_vcoord.html#proc-vcoord_enter_data">vcoord_enter_data</a>
+            <a class="list-group-item" href="../module/rdb_vcoord.html#proc-vcoord_exit_data">vcoord_exit_data</a>
+            <a class="list-group-item" href="../module/rdb_vcoord.html#proc-vcoord_init">vcoord_init</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+
+
+  </div>
+
+    </div>
+
+    <div class="col-md-9" id='text'>
+      <p>Defines <code>vcoord_t</code>, a lightweight config type for the vertical coordinate.
+Type-bound procedures dispatch via <code>select case</code> on an integer enum (no
+runtime polymorphism) so the type is GPU-safe.</p>
+<p>Implemented (<code>VCOORD_*</code>):
+  - SIGMA       — pure terrain-following (no remap).
+  - ZSIGMA      — smoothstep blend sigma (shallow) → fixed z-levels (deep);
+                  reduces sigma PGE on steep bathymetry. Conservative remap.
+  - ZSTAR       — z<em>-lite SSH-tracking: a global <code>z_ref</code> stretched per column
+                  by H/z_ref(nz) so sum(dz)=H, relative spacing preserved as
+                  η changes (no sigma distortion at large SSH).
+  - ZSTAR_FULL  — per-column z_ref from local bathymetry (vanishing layers).
+  - ZSTAR_SIGMA — smoothstep blend of sigma (shallow) and z</em>-lite (deep).</p>
+<br>          <div class="card mb-4">
+      <h3 class="card-header card-title bg-light">Uses</h3>
+      <div class="card-body">
+        <ul class="list-group list-group-flush">
+            <li class="list-group-item">
+              <ul class="list-inline">
+                  <li class="list-inline-item">pic_logger</li>
+                  <li class="list-inline-item"><a href='rdb_constants.html'>rdb_constants</a></li>
+                  <li class="list-inline-item">pic_strings</li>
+              </ul>
+            </li>
+            <li class="list-group-item">
+              <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: module~~rdb_vcoord~~UsesGraph Pages: 1 -->
+<svg id="modulerdb_vcoordUsesGraph" width="298pt" height="116pt"
+ viewBox="0.00 0.00 298.00 116.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="module~~rdb_vcoord~~UsesGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 112.27)">
+<title>module~~rdb_vcoord~~UsesGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-112.27 294.31,-112.27 294.31,4 -4,4"/>
+<!-- module~rdb_vcoord -->
+<g id="module~~rdb_vcoord~~UsesGraph_node1" class="node">
+<title>module~rdb_vcoord</title>
+<polygon fill="none" stroke="black" points="290.31,-66.27 218.79,-66.27 218.79,-42 290.31,-42 290.31,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="254.55" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50">rdb_vcoord</text>
+</g>
+<!-- module~rdb_constants -->
+<g id="module~~rdb_vcoord~~UsesGraph_node2" class="node">
+<title>module~rdb_constants</title>
+<g id="a_module~~rdb_vcoord~~UsesGraph_node2"><a xlink:href="../module/rdb_constants.html" xlink:title="rdb_constants">
+<polygon fill="#337ab7" stroke="#337ab7" points="182.79,-108.27 97.02,-108.27 97.02,-84 182.79,-84 182.79,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="139.91" y="-92.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_constants</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_vcoord&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_vcoord~~UsesGraph_edge1" class="edge">
+<title>module~rdb_vcoord&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M219.75,-66.74C208.95,-70.76 196.82,-75.29 185.38,-79.55"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="184.24,-76.24 176.1,-83.01 186.69,-82.8 184.24,-76.24"/>
+</g>
+<!-- pic_logger -->
+<g id="module~~rdb_vcoord~~UsesGraph_node3" class="node">
+<title>pic_logger</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="173.41,-66.27 106.4,-66.27 106.4,-42 173.41,-42 173.41,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="139.91" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">pic_logger</text>
+</g>
+<!-- module~rdb_vcoord&#45;&gt;pic_logger -->
+<g id="module~~rdb_vcoord~~UsesGraph_edge2" class="edge">
+<title>module~rdb_vcoord&#45;&gt;pic_logger</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M218.53,-54.13C207.88,-54.13 196.05,-54.13 184.9,-54.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="185.12,-50.64 175.12,-54.14 185.12,-57.64 185.12,-50.64"/>
+</g>
+<!-- pic_strings -->
+<g id="module~~rdb_vcoord~~UsesGraph_node4" class="node">
+<title>pic_strings</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="173.79,-24.27 106.02,-24.27 106.02,0 173.79,0 173.79,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="139.91" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">pic_strings</text>
+</g>
+<!-- module~rdb_vcoord&#45;&gt;pic_strings -->
+<g id="module~~rdb_vcoord~~UsesGraph_edge3" class="edge">
+<title>module~rdb_vcoord&#45;&gt;pic_strings</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M219.75,-41.53C208.64,-37.39 196.12,-32.72 184.39,-28.35"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="185.91,-25.18 175.32,-24.97 183.47,-31.74 185.91,-25.18"/>
+</g>
+<!-- pic_types -->
+<g id="module~~rdb_vcoord~~UsesGraph_node5" class="node">
+<title>pic_types</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="61.02,-108.27 0,-108.27 0,-84 61.02,-84 61.02,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="30.51" y="-92.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">pic_types</text>
+</g>
+<!-- module~rdb_constants&#45;&gt;pic_types -->
+<g id="module~~rdb_vcoord~~UsesGraph_edge4" class="edge">
+<title>module~rdb_constants&#45;&gt;pic_types</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M96.77,-96.14C88.79,-96.14 80.46,-96.14 72.52,-96.14"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="72.77,-92.64 62.77,-96.14 72.77,-99.64 72.77,-92.64"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#UsesGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="UsesGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="511pt" height="32pt"
+ viewBox="0.00 0.00 511.00 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 506.88,-28.27 506.88,4 -4,4"/>
+<!-- Module -->
+<g id="node1" class="node">
+<title>Module</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="54,-24.27 0,-24.27 0,0 54,0 54,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="27" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Module</text>
+</g>
+<!-- Submodule -->
+<g id="node2" class="node">
+<title>Submodule</title>
+<polygon fill="#5bc0de" stroke="#5bc0de" points="144.13,-24.27 71.87,-24.27 71.87,0 144.13,0 144.13,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="108" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Submodule</text>
+</g>
+<!-- Subroutine -->
+<g id="node3" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="231.63,-24.27 162.37,-24.27 162.37,0 231.63,0 231.63,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="197" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node4" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="306.26,-24.27 249.74,-24.27 249.74,0 306.26,0 306.26,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="278" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Program -->
+<g id="node5" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="381.26,-24.27 324.74,-24.27 324.74,0 381.26,0 381.26,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="353" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node6" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="502.88,-24.27 399.12,-24.27 399.12,0 502.88,0 502.88,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="451" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a submodule to the (sub)module which it is
+descended from. Dashed arrows point from a module or program unit to 
+modules which it uses.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+            </li>
+        </ul>
+      </div>
+    </div>
+
+          <div class="card">
+      <h3 class="card-header card-title bg-light">Used by</h3>
+      <div class="card-body">
+        <ul class="list-group list-group-flush">
+            <li class="list-group-item">
+              <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: module~~rdb_vcoord~~UsedByGraph Pages: 1 -->
+<svg id="modulerdb_vcoordUsedByGraph" width="641pt" height="269pt"
+ viewBox="0.00 0.00 641.00 269.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="module~~rdb_vcoord~~UsedByGraph" class="graph" transform="scale(0.426211 0.426211) rotate(0) translate(4 627.6)">
+<title>module~~rdb_vcoord~~UsedByGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-627.6 1499.95,-627.6 1499.95,4 -4,4"/>
+<!-- module~rdb_vcoord -->
+<g id="module~~rdb_vcoord~~UsedByGraph_node1" class="node">
+<title>module~rdb_vcoord</title>
+<polygon fill="none" stroke="black" points="71.52,-269.75 0,-269.75 0,-245.48 71.52,-245.48 71.52,-269.75"/>
+<text xml:space="preserve" text-anchor="middle" x="35.76" y="-254.02" font-family="Helvetica,sans-Serif" font-size="10.50">rdb_vcoord</text>
+</g>
+<!-- module~rdb_ocean_engine -->
+<g id="module~~rdb_vcoord~~UsedByGraph_node2" class="node">
+<title>module~rdb_ocean_engine</title>
+<g id="a_module~~rdb_vcoord~~UsedByGraph_node2"><a xlink:href="../module/rdb_ocean_engine.html" xlink:title="rdb_ocean_engine">
+<polygon fill="#337ab7" stroke="#337ab7" points="1262.91,-226.75 1153.14,-226.75 1153.14,-202.48 1262.91,-202.48 1262.91,-226.75"/>
+<text xml:space="preserve" text-anchor="middle" x="1208.02" y="-211.02" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_engine</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_vcoord -->
+<g id="module~~rdb_vcoord~~UsedByGraph_edge1" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_vcoord</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1045.13,-255.62C1013.78,-260.55 1002.05,-252.83 975.12,-269.62 952.79,-283.53 962.25,-304.07 939.12,-316.62 842.23,-369.16 801.84,-342.66 691.84,-335.62"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M689.84,-335.62C619.44,-331.71 605.49,-309.3 536.32,-295.62"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M534.32,-295.62C391.75,-267.42 354.82,-254.15 209.53,-257.62"/>
+</g>
+<!-- module~rdb_ocean_setup -->
+<g id="module~~rdb_vcoord~~UsedByGraph_node3" class="node">
+<title>module~rdb_ocean_setup</title>
+<g id="a_module~~rdb_vcoord~~UsedByGraph_node3"><a xlink:href="../module/rdb_ocean_setup.html" xlink:title="rdb_ocean_setup">
+<polygon fill="#337ab7" stroke="#337ab7" points="920.74,-425.75 818.47,-425.75 818.47,-401.48 920.74,-401.48 920.74,-425.75"/>
+<text xml:space="preserve" text-anchor="middle" x="869.61" y="-410.02" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_setup -->
+<g id="module~~rdb_vcoord~~UsedByGraph_edge10" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_setup</title>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M1186.78,-227.25C1168.64,-238.51 1141.24,-255.38 1117.14,-269.62 1054.58,-306.58 1037.8,-313.86 975.12,-350.62 949.83,-365.44 921.35,-382.65 900.52,-395.33"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="898.96,-392.18 892.24,-400.37 902.6,-398.15 898.96,-392.18"/>
+</g>
+<!-- module~rdb_ocean_stability_audit -->
+<g id="module~~rdb_vcoord~~UsedByGraph_node4" class="node">
+<title>module~rdb_ocean_stability_audit</title>
+<g id="a_module~~rdb_vcoord~~UsedByGraph_node4"><a xlink:href="../module/rdb_ocean_stability_audit.html" xlink:title="rdb_ocean_stability_audit">
+<polygon fill="#337ab7" stroke="#337ab7" points="764.1,-229.75 617.58,-229.75 617.58,-205.48 764.1,-205.48 764.1,-229.75"/>
+<text xml:space="preserve" text-anchor="middle" x="690.84" y="-214.02" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_stability_audit</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_stability_audit -->
+<g id="module~~rdb_vcoord~~UsedByGraph_edge17" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_stability_audit</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M1045.13,-255.62C941.09,-271.59 818.8,-249.39 748.8,-232.81"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="750.04,-229.5 739.5,-230.56 748.39,-236.31 750.04,-229.5"/>
+</g>
+<!-- module~rdb_ocean_vcoord -->
+<g id="module~~rdb_vcoord~~UsedByGraph_node5" class="node">
+<title>module~rdb_ocean_vcoord</title>
+<g id="a_module~~rdb_vcoord~~UsedByGraph_node5"><a xlink:href="../module/rdb_ocean_vcoord.html" xlink:title="rdb_ocean_vcoord">
+<polygon fill="#337ab7" stroke="#337ab7" points="263.42,-309.75 153.65,-309.75 153.65,-285.48 263.42,-285.48 263.42,-309.75"/>
+<text xml:space="preserve" text-anchor="middle" x="208.53" y="-294.02" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_vcoord</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_vcoord -->
+<g id="module~~rdb_vcoord~~UsedByGraph_edge20" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_vcoord</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M534.32,-295.62C475.89,-284.06 459.85,-297.07 400.3,-295.62"/>
+</g>
+<!-- module~rdb_ocean_diag_fills -->
+<g id="module~~rdb_vcoord~~UsedByGraph_node11" class="node">
+<title>module~rdb_ocean_diag_fills</title>
+<g id="a_module~~rdb_vcoord~~UsedByGraph_node11"><a xlink:href="../module/rdb_ocean_diag_fills.html" xlink:title="rdb_ocean_diag_fills">
+<polygon fill="#337ab7" stroke="#337ab7" points="929.37,-307.75 809.85,-307.75 809.85,-283.48 929.37,-283.48 929.37,-307.75"/>
+<text xml:space="preserve" text-anchor="middle" x="869.61" y="-292.02" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_diag_fills</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_diag_fills -->
+<g id="module~~rdb_vcoord~~UsedByGraph_edge27" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_diag_fills</title>
+<path fill="none" stroke="#9cff00" stroke-dasharray="5,2" d="M1045.13,-255.62C1005.66,-261.68 961.85,-271.73 928,-280.24"/>
+<polygon fill="#9cff00" stroke="#9cff00" points="927.21,-276.83 918.39,-282.68 928.94,-283.61 927.21,-276.83"/>
+</g>
+<!-- module~rdb_ocean_dyn -->
+<g id="module~~rdb_vcoord~~UsedByGraph_node12" class="node">
+<title>module~rdb_ocean_dyn</title>
+<g id="a_module~~rdb_vcoord~~UsedByGraph_node12"><a xlink:href="../module/rdb_ocean_dyn.html" xlink:title="rdb_ocean_dyn">
+<polygon fill="#337ab7" stroke="#337ab7" points="581.58,-347.75 489.06,-347.75 489.06,-323.48 581.58,-323.48 581.58,-347.75"/>
+<text xml:space="preserve" text-anchor="middle" x="535.32" y="-332.02" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_dyn</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_dyn -->
+<g id="module~~rdb_vcoord~~UsedByGraph_edge30" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_dyn</title>
+<path fill="none" stroke="#27ff00" stroke-dasharray="5,2" d="M689.84,-335.62C657.91,-333.57 622.16,-333.44 593.2,-333.89"/>
+<polygon fill="#27ff00" stroke="#27ff00" points="593.5,-330.38 583.56,-334.06 593.62,-337.38 593.5,-330.38"/>
+</g>
+<!-- module~rdb_ocean_state -->
+<g id="module~~rdb_vcoord~~UsedByGraph_node20" class="node">
+<title>module~rdb_ocean_state</title>
+<g id="a_module~~rdb_vcoord~~UsedByGraph_node20"><a xlink:href="../module/rdb_ocean_state.html" xlink:title="rdb_ocean_state">
+<polygon fill="#337ab7" stroke="#337ab7" points="740.47,-187.75 641.2,-187.75 641.2,-163.48 740.47,-163.48 740.47,-187.75"/>
+<text xml:space="preserve" text-anchor="middle" x="690.84" y="-172.02" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_state</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_vcoord~~UsedByGraph_edge39" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#ff0075" stroke-dasharray="5,2" d="M1167.4,-227.16C1135.32,-236.74 1088.78,-249.32 1047.13,-255.62"/>
+<path fill="none" stroke="#ff0075" stroke-dasharray="5,2" d="M1045.13,-255.62C991.38,-263.74 991.06,-210.65 939.12,-194.62 877.48,-175.59 803.29,-172.32 752.35,-172.89"/>
+<polygon fill="#ff0075" stroke="#ff0075" points="752.34,-169.39 742.4,-173.06 752.46,-176.39 752.34,-169.39"/>
+</g>
+<!-- module~rdb_ocean_diag_derived -->
+<g id="module~~rdb_vcoord~~UsedByGraph_node22" class="node">
+<title>module~rdb_ocean_diag_derived</title>
+<g id="a_module~~rdb_vcoord~~UsedByGraph_node22"><a xlink:href="../module/rdb_ocean_diag_derived.html" xlink:title="rdb_ocean_diag_derived">
+<polygon fill="#337ab7" stroke="#337ab7" points="1117.14,-187.75 975.12,-187.75 975.12,-163.48 1117.14,-163.48 1117.14,-187.75"/>
+<text xml:space="preserve" text-anchor="middle" x="1046.13" y="-172.02" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_diag_derived</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_diag_derived -->
+<g id="module~~rdb_vcoord~~UsedByGraph_edge49" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_diag_derived</title>
+<path fill="none" stroke="#ffda00" stroke-dasharray="5,2" d="M1155.55,-202.06C1140.93,-198.5 1124.85,-194.57 1109.66,-190.87"/>
+<polygon fill="#ffda00" stroke="#ffda00" points="1110.79,-187.54 1100.25,-188.57 1109.14,-194.34 1110.79,-187.54"/>
+</g>
+<!-- module~rdb_ocean_ic_inject -->
+<g id="module~~rdb_vcoord~~UsedByGraph_node23" class="node">
+<title>module~rdb_ocean_ic_inject</title>
+<g id="a_module~~rdb_vcoord~~UsedByGraph_node23"><a xlink:href="../module/rdb_ocean_ic_inject.html" xlink:title="rdb_ocean_ic_inject">
+<polygon fill="#337ab7" stroke="#337ab7" points="1104.39,-65.75 987.87,-65.75 987.87,-41.48 1104.39,-41.48 1104.39,-65.75"/>
+<text xml:space="preserve" text-anchor="middle" x="1046.13" y="-50.02" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_ic_inject</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_ic_inject -->
+<g id="module~~rdb_vcoord~~UsedByGraph_edge51" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_ic_inject</title>
+<path fill="none" stroke="#48ff00" stroke-dasharray="5,2" d="M1202.47,-202.03C1191.9,-174.62 1163.05,-109.21 1117.14,-74.62 1115.78,-73.59 1114.37,-72.61 1112.91,-71.69"/>
+<polygon fill="#48ff00" stroke="#48ff00" points="1114.62,-68.63 1104.16,-66.94 1111.28,-74.78 1114.62,-68.63"/>
+</g>
+<!-- module~rdb_ocean_setup&#45;&gt;module~rdb_vcoord -->
+<g id="module~~rdb_vcoord~~UsedByGraph_edge2" class="edge">
+<title>module~rdb_ocean_setup&#45;&gt;module~rdb_vcoord</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M398.3,-375.62C267.17,-363.41 225.96,-376.2 107.52,-318.62 87.42,-308.84 68.45,-291.91 55.23,-278.37"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="57.85,-276.05 48.45,-271.16 52.75,-280.84 57.85,-276.05"/>
+</g>
+<!-- module~rdb_ocean_setup&#45;&gt;module~rdb_ocean_vcoord -->
+<g id="module~~rdb_vcoord~~UsedByGraph_edge22" class="edge">
+<title>module~rdb_ocean_setup&#45;&gt;module~rdb_ocean_vcoord</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M689.84,-375.62C562.98,-354.01 528.33,-388.57 400.3,-375.62"/>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M398.3,-375.62C338.21,-370.02 274.58,-337.39 238.68,-316.14"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="240.55,-313.19 230.18,-311 236.93,-319.17 240.55,-313.19"/>
+</g>
+<!-- module~rdb_ocean_setup&#45;&gt;module~rdb_ocean_dyn -->
+<g id="module~~rdb_vcoord~~UsedByGraph_edge31" class="edge">
+<title>module~rdb_ocean_setup&#45;&gt;module~rdb_ocean_dyn</title>
+<path fill="none" stroke="#27ff00" stroke-dasharray="5,2" d="M818.16,-401.56C782.92,-393.44 734.7,-382.91 691.84,-375.62"/>
+<path fill="none" stroke="#27ff00" stroke-dasharray="5,2" d="M689.84,-375.62C655.29,-369.73 617.16,-359.82 587.54,-351.33"/>
+<polygon fill="#27ff00" stroke="#27ff00" points="588.66,-348.01 578.09,-348.58 586.71,-354.73 588.66,-348.01"/>
+</g>
+<!-- module~rdb_ocean_setup&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_vcoord~~UsedByGraph_edge42" class="edge">
+<title>module~rdb_ocean_setup&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#ff0075" stroke-dasharray="5,2" d="M857.88,-401.28C843.01,-383.62 816.17,-349.61 800.1,-316.62 775.72,-266.56 803.64,-235.82 764.1,-196.62 760.3,-192.85 755.86,-189.75 751.1,-187.2"/>
+<polygon fill="#ff0075" stroke="#ff0075" points="752.88,-184.16 742.32,-183.32 750.05,-190.56 752.88,-184.16"/>
+</g>
+<!-- module~rdb_ocean_stability_audit&#45;&gt;module~rdb_vcoord -->
+<g id="module~~rdb_vcoord~~UsedByGraph_edge3" class="edge">
+<title>module~rdb_ocean_stability_audit&#45;&gt;module~rdb_vcoord</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M617.25,-222.52C547.54,-227.37 439.28,-235.25 345.54,-243.62 285.01,-249.02 270,-251.65 209.53,-257.62"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M207.53,-257.62C165.32,-258.62 117.23,-258.51 82.86,-258.21"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="83.31,-254.72 73.27,-258.12 83.24,-261.72 83.31,-254.72"/>
+</g>
+<!-- module~rdb_ocean_vcoord&#45;&gt;module~rdb_vcoord -->
+<g id="module~~rdb_vcoord~~UsedByGraph_edge4" class="edge">
+<title>module~rdb_ocean_vcoord&#45;&gt;module~rdb_vcoord</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M153.97,-285.07C131.14,-279.72 104.78,-273.55 82.84,-268.41"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="83.83,-265.05 73.29,-266.17 82.23,-271.86 83.83,-265.05"/>
+</g>
+<!-- proc~validate_config -->
+<g id="module~~rdb_vcoord~~UsedByGraph_node6" class="node">
+<title>proc~validate_config</title>
+<g id="a_module~~rdb_vcoord~~UsedByGraph_node6"><a xlink:href="../proc/validate_config.html" xlink:title="validate_config">
+<polygon fill="#d9534f" stroke="#d9534f" points="254.79,-229.75 162.27,-229.75 162.27,-205.48 254.79,-205.48 254.79,-229.75"/>
+<text xml:space="preserve" text-anchor="middle" x="208.53" y="-214.02" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">validate_config</text>
+</a>
+</g>
+</g>
+<!-- proc~validate_config&#45;&gt;module~rdb_vcoord -->
+<g id="module~~rdb_vcoord~~UsedByGraph_edge5" class="edge">
+<title>proc~validate_config&#45;&gt;module~rdb_vcoord</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M162.22,-228.23C137.71,-233.97 107.51,-241.05 82.88,-246.81"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="82.41,-243.33 73.47,-249.02 84,-250.15 82.41,-243.33"/>
+</g>
+<!-- proc~zfixed_cavity_nu_h_below_envelope -->
+<g id="module~~rdb_vcoord~~UsedByGraph_node7" class="node">
+<title>proc~zfixed_cavity_nu_h_below_envelope</title>
+<g id="a_module~~rdb_vcoord~~UsedByGraph_node7"><a xlink:href="../proc/zfixed_cavity_nu_h_below_envelope.html" xlink:title="zfixed_cavity_nu_h_below_envelope">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="309.54,-187.75 107.52,-187.75 107.52,-163.48 309.54,-163.48 309.54,-187.75"/>
+<text xml:space="preserve" text-anchor="middle" x="208.53" y="-172.02" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">zfixed_cavity_nu_h_below_envelope</text>
+</a>
+</g>
+</g>
+<!-- proc~zfixed_cavity_nu_h_below_envelope&#45;&gt;module~rdb_vcoord -->
+<g id="module~~rdb_vcoord~~UsedByGraph_edge6" class="edge">
+<title>proc~zfixed_cavity_nu_h_below_envelope&#45;&gt;module~rdb_vcoord</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M128.72,-188.18C121.38,-190.53 114.2,-193.31 107.52,-196.62 87.48,-206.52 68.51,-223.44 55.27,-236.95"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="52.81,-234.46 48.48,-244.13 57.89,-239.27 52.81,-234.46"/>
+</g>
+<!-- module~rdb_driver -->
+<g id="module~~rdb_vcoord~~UsedByGraph_node8" class="node">
+<title>module~rdb_driver</title>
+<g id="a_module~~rdb_vcoord~~UsedByGraph_node8"><a xlink:href="../module/rdb_driver.html" xlink:title="rdb_driver">
+<polygon fill="#337ab7" stroke="#337ab7" points="1367.8,-149.75 1301.53,-149.75 1301.53,-125.48 1367.8,-125.48 1367.8,-149.75"/>
+<text xml:space="preserve" text-anchor="middle" x="1334.67" y="-134.02" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_driver</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_driver&#45;&gt;module~rdb_ocean_engine -->
+<g id="module~~rdb_vcoord~~UsedByGraph_edge7" class="edge">
+<title>module~rdb_driver&#45;&gt;module~rdb_ocean_engine</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1317.92,-150.2C1303.92,-161.07 1282.69,-176.84 1262.91,-188.62 1258.02,-191.53 1252.74,-194.39 1247.48,-197.08"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1246.25,-193.79 1238.84,-201.36 1249.35,-200.06 1246.25,-193.79"/>
+</g>
+<!-- module~rdb_driver&#45;&gt;module~rdb_ocean_dyn -->
+<g id="module~~rdb_vcoord~~UsedByGraph_edge28" class="edge">
+<title>module~rdb_driver&#45;&gt;module~rdb_ocean_dyn</title>
+<path fill="none" stroke="#27ff00" stroke-dasharray="5,2" d="M1327.44,-149.79C1310.81,-181.63 1262.98,-269.25 1209.02,-331.62"/>
+<path fill="none" stroke="#27ff00" stroke-dasharray="5,2" d="M1207.02,-331.62C1124,-427.59 1220.03,-528.34 1117.14,-602.62 1065.96,-639.56 1035.98,-619.37 975.12,-602.62 796.84,-553.54 619.48,-408.79 558.52,-355.56"/>
+<polygon fill="#27ff00" stroke="#27ff00" points="561.02,-353.09 551.2,-349.11 556.39,-358.35 561.02,-353.09"/>
+</g>
+<!-- module~rdb_driver&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_vcoord~~UsedByGraph_edge34" class="edge">
+<title>module~rdb_driver&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#ff0075" stroke-dasharray="5,2" d="M1301.08,-135.87C1275.9,-134.89 1240.21,-134.27 1209.02,-136.62"/>
+</g>
+<!-- module~rdb_handle -->
+<g id="module~~rdb_vcoord~~UsedByGraph_node9" class="node">
+<title>module~rdb_handle</title>
+<g id="a_module~~rdb_vcoord~~UsedByGraph_node9"><a xlink:href="../module/rdb_handle.html" xlink:title="rdb_handle">
+<polygon fill="#337ab7" stroke="#337ab7" points="1370.43,-107.75 1298.91,-107.75 1298.91,-83.48 1370.43,-83.48 1370.43,-107.75"/>
+<text xml:space="preserve" text-anchor="middle" x="1334.67" y="-92.02" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_handle</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_handle&#45;&gt;module~rdb_ocean_engine -->
+<g id="module~~rdb_vcoord~~UsedByGraph_edge8" class="edge">
+<title>module~rdb_handle&#45;&gt;module~rdb_ocean_engine</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1308.79,-108.23C1305.21,-110.7 1301.78,-113.51 1298.91,-116.62 1274.64,-142.9 1288.39,-163.5 1262.91,-188.62 1260.09,-191.4 1256.91,-193.93 1253.54,-196.22"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1251.82,-193.17 1245.01,-201.29 1255.39,-199.19 1251.82,-193.17"/>
+</g>
+<!-- module~rdb_handle&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_vcoord~~UsedByGraph_edge35" class="edge">
+<title>module~rdb_handle&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#ff0075" stroke-dasharray="5,2" d="M1308.17,-108.06C1283.49,-119.12 1244.69,-133.93 1209.02,-136.62"/>
+<path fill="none" stroke="#ff0075" stroke-dasharray="5,2" d="M1207.02,-136.62C1103.87,-144.39 1077.53,-131.27 975.12,-116.62 928.22,-109.9 917.76,-90.94 870.61,-95.62"/>
+</g>
+<!-- module~rdb_ocean_api -->
+<g id="module~~rdb_vcoord~~UsedByGraph_node10" class="node">
+<title>module~rdb_ocean_api</title>
+<g id="a_module~~rdb_vcoord~~UsedByGraph_node10"><a xlink:href="../module/rdb_ocean_api.html" xlink:title="rdb_ocean_api">
+<polygon fill="#337ab7" stroke="#337ab7" points="1495.95,-107.75 1406.43,-107.75 1406.43,-83.48 1495.95,-83.48 1495.95,-107.75"/>
+<text xml:space="preserve" text-anchor="middle" x="1451.19" y="-92.02" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_api</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_ocean_engine -->
+<g id="module~~rdb_vcoord~~UsedByGraph_edge9" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_ocean_engine</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1449.44,-108.24C1446.03,-152.04 1427.86,-296.66 1335.67,-331.62"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1333.67,-331.62C1320.55,-336.59 1258.8,-270.38 1227.42,-235.43"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1230.07,-233.14 1220.8,-228.01 1224.85,-237.8 1230.07,-233.14"/>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_handle -->
+<g id="module~~rdb_vcoord~~UsedByGraph_edge24" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_handle</title>
+<path fill="none" stroke="#ff7500" stroke-dasharray="5,2" d="M1406.24,-95.62C1398.36,-95.62 1390.12,-95.62 1382.17,-95.62"/>
+<polygon fill="#ff7500" stroke="#ff7500" points="1382.31,-92.12 1372.31,-95.62 1382.31,-99.12 1382.31,-92.12"/>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_ocean_diag_fills -->
+<g id="module~~rdb_vcoord~~UsedByGraph_edge25" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_ocean_diag_fills</title>
+<path fill="none" stroke="#9cff00" stroke-dasharray="5,2" d="M1333.67,-331.62C1303.69,-342.98 1294.72,-321.63 1262.91,-317.62 1150.83,-303.46 1019.59,-298.41 940.88,-296.61"/>
+<polygon fill="#9cff00" stroke="#9cff00" points="941.25,-293.12 931.17,-296.4 941.1,-300.12 941.25,-293.12"/>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_ocean_dyn -->
+<g id="module~~rdb_vcoord~~UsedByGraph_edge29" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_ocean_dyn</title>
+<path fill="none" stroke="#27ff00" stroke-dasharray="5,2" d="M1333.67,-331.62C1307.99,-341.99 1227.28,-310.79 1209.02,-331.62"/>
+</g>
+<!-- module~rdb_ocean_balance -->
+<g id="module~~rdb_vcoord~~UsedByGraph_node21" class="node">
+<title>module~rdb_ocean_balance</title>
+<g id="a_module~~rdb_vcoord~~UsedByGraph_node21"><a xlink:href="../module/rdb_ocean_balance.html" xlink:title="rdb_ocean_balance">
+<polygon fill="#337ab7" stroke="#337ab7" points="1104.01,-107.75 988.24,-107.75 988.24,-83.48 1104.01,-83.48 1104.01,-107.75"/>
+<text xml:space="preserve" text-anchor="middle" x="1046.13" y="-92.02" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_balance</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_ocean_balance -->
+<g id="module~~rdb_vcoord~~UsedByGraph_edge46" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_ocean_balance</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1333.67,-55.62C1300.91,-53.98 1295.14,-70.48 1262.91,-76.62 1214.18,-85.9 1158.38,-90.66 1115.73,-93.09"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1115.66,-89.59 1105.86,-93.62 1116.03,-96.58 1115.66,-89.59"/>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_ocean_diag_derived -->
+<g id="module~~rdb_vcoord~~UsedByGraph_edge48" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_ocean_diag_derived</title>
+<path fill="none" stroke="#ffda00" stroke-dasharray="5,2" d="M1333.67,-55.62C1316.08,-54.81 1310.99,-61.81 1298.91,-74.62 1273.26,-101.8 1293.29,-128.84 1262.91,-150.62 1224.64,-178.04 1172.38,-184.67 1128.88,-184.25"/>
+<polygon fill="#ffda00" stroke="#ffda00" points="1129.03,-180.75 1118.95,-184.02 1128.87,-187.75 1129.03,-180.75"/>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_ocean_ic_inject -->
+<g id="module~~rdb_vcoord~~UsedByGraph_edge50" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_ocean_ic_inject</title>
+<path fill="none" stroke="#48ff00" stroke-dasharray="5,2" d="M1426.43,-83C1403.81,-72.05 1368.46,-57.63 1335.67,-55.62"/>
+<path fill="none" stroke="#48ff00" stroke-dasharray="5,2" d="M1333.67,-55.62C1300.93,-53.6 1295.37,-39.33 1262.91,-34.62 1214.63,-27.6 1201.73,-30.3 1153.14,-34.62 1141.02,-35.69 1128.21,-37.45 1115.85,-39.47"/>
+<polygon fill="#48ff00" stroke="#48ff00" points="1115.41,-36 1106.14,-41.14 1116.59,-42.9 1115.41,-36"/>
+</g>
+<!-- module~rdb_ocean_reinit -->
+<g id="module~~rdb_vcoord~~UsedByGraph_node24" class="node">
+<title>module~rdb_ocean_reinit</title>
+<g id="a_module~~rdb_vcoord~~UsedByGraph_node24"><a xlink:href="../module/rdb_ocean_reinit.html" xlink:title="rdb_ocean_reinit">
+<polygon fill="#337ab7" stroke="#337ab7" points="1258.03,-67.75 1158.01,-67.75 1158.01,-43.48 1258.03,-43.48 1258.03,-67.75"/>
+<text xml:space="preserve" text-anchor="middle" x="1208.02" y="-52.02" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_reinit</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_ocean_reinit -->
+<g id="module~~rdb_vcoord~~UsedByGraph_edge53" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_ocean_reinit</title>
+<path fill="none" stroke="#00ff91" stroke-dasharray="5,2" d="M1333.67,-55.62C1312.89,-54.58 1290.13,-54.32 1269.81,-54.4"/>
+<polygon fill="#00ff91" stroke="#00ff91" points="1269.98,-50.9 1260,-54.47 1270.03,-57.9 1269.98,-50.9"/>
+</g>
+<!-- module~rdb_ocean_diag_fills&#45;&gt;module~rdb_ocean_vcoord -->
+<g id="module~~rdb_vcoord~~UsedByGraph_edge18" class="edge">
+<title>module~rdb_ocean_diag_fills&#45;&gt;module~rdb_ocean_vcoord</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M809.35,-289.22C734.6,-282.12 602.13,-272.75 489.06,-281.62 449.25,-284.74 440.24,-295.5 400.3,-295.62"/>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M398.3,-295.62C357.35,-294.62 311.4,-295.07 275.08,-295.8"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="275.08,-292.29 265.16,-296.01 275.23,-299.29 275.08,-292.29"/>
+</g>
+<!-- module~rdb_ocean_diag_fills&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_vcoord~~UsedByGraph_edge38" class="edge">
+<title>module~rdb_ocean_diag_fills&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#ff0075" stroke-dasharray="5,2" d="M852.88,-283.03C838.66,-271.44 817.38,-253.52 800.1,-236.62 783,-219.89 784.36,-209.33 764.1,-196.62 760.12,-194.12 755.82,-191.9 751.39,-189.95"/>
+<polygon fill="#ff0075" stroke="#ff0075" points="752.86,-186.76 742.27,-186.39 750.31,-193.28 752.86,-186.76"/>
+</g>
+<!-- module~rdb_ocean_dyn&#45;&gt;module~rdb_ocean_vcoord -->
+<g id="module~~rdb_vcoord~~UsedByGraph_edge19" class="edge">
+<title>module~rdb_ocean_dyn&#45;&gt;module~rdb_ocean_vcoord</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M508.8,-323.13C482.32,-311.36 439.39,-295.51 400.3,-295.62"/>
+</g>
+<!-- module~rdb_ocean_remap -->
+<g id="module~~rdb_vcoord~~UsedByGraph_node13" class="node">
+<title>module~rdb_ocean_remap</title>
+<g id="a_module~~rdb_vcoord~~UsedByGraph_node13"><a xlink:href="../module/rdb_ocean_remap.html" xlink:title="rdb_ocean_remap">
+<polygon fill="#337ab7" stroke="#337ab7" points="453.06,-347.75 345.54,-347.75 345.54,-323.48 453.06,-323.48 453.06,-347.75"/>
+<text xml:space="preserve" text-anchor="middle" x="399.3" y="-332.02" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_remap</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_dyn&#45;&gt;module~rdb_ocean_remap -->
+<g id="module~~rdb_vcoord~~UsedByGraph_edge33" class="edge">
+<title>module~rdb_ocean_dyn&#45;&gt;module~rdb_ocean_remap</title>
+<path fill="none" stroke="#00ff4e" stroke-dasharray="5,2" d="M488.57,-335.62C480.84,-335.62 472.69,-335.62 464.59,-335.62"/>
+<polygon fill="#00ff4e" stroke="#00ff4e" points="464.74,-332.12 454.74,-335.62 464.74,-339.12 464.74,-332.12"/>
+</g>
+<!-- module~rdb_ocean_remap&#45;&gt;module~rdb_ocean_vcoord -->
+<g id="module~~rdb_vcoord~~UsedByGraph_edge21" class="edge">
+<title>module~rdb_ocean_remap&#45;&gt;module~rdb_ocean_vcoord</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M345.21,-324.93C323.38,-320.53 297.87,-315.4 274.9,-310.78"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="275.83,-307.39 265.34,-308.85 274.45,-314.26 275.83,-307.39"/>
+</g>
+<!-- module~rdb_ocean_setup_bc -->
+<g id="module~~rdb_vcoord~~UsedByGraph_node14" class="node">
+<title>module~rdb_ocean_setup_bc</title>
+<g id="a_module~~rdb_vcoord~~UsedByGraph_node14"><a xlink:href="../module/rdb_ocean_setup_bc.html" xlink:title="rdb_ocean_setup_bc">
+<polygon fill="#5bc0de" stroke="#5bc0de" points="1106.26,-425.75 985.99,-425.75 985.99,-401.48 1106.26,-401.48 1106.26,-425.75"/>
+<text xml:space="preserve" text-anchor="middle" x="1046.13" y="-410.02" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_bc</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_setup_bc&#45;&gt;module~rdb_ocean_setup -->
+<g id="module~~rdb_vcoord~~UsedByGraph_edge11" class="edge">
+<title>module~rdb_ocean_setup_bc&#45;&gt;module~rdb_ocean_setup</title>
+<path fill="none" stroke="#ffff00" d="M985.56,-413.62C968.39,-413.62 949.62,-413.62 932.32,-413.62"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="932.71,-410.12 922.71,-413.62 932.71,-417.12 932.71,-410.12"/>
+</g>
+<!-- module~rdb_ocean_setup_bt -->
+<g id="module~~rdb_vcoord~~UsedByGraph_node15" class="node">
+<title>module~rdb_ocean_setup_bt</title>
+<g id="a_module~~rdb_vcoord~~UsedByGraph_node15"><a xlink:href="../module/rdb_ocean_setup_bt.html" xlink:title="rdb_ocean_setup_bt">
+<polygon fill="#5bc0de" stroke="#5bc0de" points="1105.14,-383.75 987.12,-383.75 987.12,-359.48 1105.14,-359.48 1105.14,-383.75"/>
+<text xml:space="preserve" text-anchor="middle" x="1046.13" y="-368.02" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_bt</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_setup_bt&#45;&gt;module~rdb_ocean_setup -->
+<g id="module~~rdb_vcoord~~UsedByGraph_edge12" class="edge">
+<title>module~rdb_ocean_setup_bt&#45;&gt;module~rdb_ocean_setup</title>
+<path fill="none" stroke="#ffff00" d="M992.77,-384.22C973.71,-388.8 952,-394.03 932.21,-398.79"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="931.51,-395.36 922.61,-401.1 933.15,-402.17 931.51,-395.36"/>
+</g>
+<!-- module~rdb_ocean_setup_cavity -->
+<g id="module~~rdb_vcoord~~UsedByGraph_node16" class="node">
+<title>module~rdb_ocean_setup_cavity</title>
+<g id="a_module~~rdb_vcoord~~UsedByGraph_node16"><a xlink:href="../module/rdb_ocean_setup_cavity.html" xlink:title="rdb_ocean_setup_cavity">
+<polygon fill="#5bc0de" stroke="#5bc0de" points="1115.64,-593.75 976.62,-593.75 976.62,-569.48 1115.64,-569.48 1115.64,-593.75"/>
+<text xml:space="preserve" text-anchor="middle" x="1046.13" y="-578.02" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_cavity</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_setup_cavity&#45;&gt;module~rdb_ocean_setup -->
+<g id="module~~rdb_vcoord~~UsedByGraph_edge13" class="edge">
+<title>module~rdb_ocean_setup_cavity&#45;&gt;module~rdb_ocean_setup</title>
+<path fill="none" stroke="#ffff00" d="M990.31,-569.12C984.93,-566.75 979.76,-563.94 975.12,-560.62 929.37,-527.81 896.33,-468.57 880.71,-436.21"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="883.98,-434.92 876.57,-427.35 877.63,-437.89 883.98,-434.92"/>
+</g>
+<!-- module~rdb_ocean_setup_grid -->
+<g id="module~~rdb_vcoord~~UsedByGraph_node17" class="node">
+<title>module~rdb_ocean_setup_grid</title>
+<g id="a_module~~rdb_vcoord~~UsedByGraph_node17"><a xlink:href="../module/rdb_ocean_setup_grid.html" xlink:title="rdb_ocean_setup_grid">
+<polygon fill="#5bc0de" stroke="#5bc0de" points="1110.39,-551.75 981.87,-551.75 981.87,-527.48 1110.39,-527.48 1110.39,-551.75"/>
+<text xml:space="preserve" text-anchor="middle" x="1046.13" y="-536.02" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_grid</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_setup_grid&#45;&gt;module~rdb_ocean_setup -->
+<g id="module~~rdb_vcoord~~UsedByGraph_edge14" class="edge">
+<title>module~rdb_ocean_setup_grid&#45;&gt;module~rdb_ocean_setup</title>
+<path fill="none" stroke="#ffff00" d="M992.66,-527.04C986.55,-524.66 980.56,-521.88 975.12,-518.62 938.27,-496.55 905.03,-458.59 886.36,-434.87"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="889.3,-432.94 880.43,-427.15 883.75,-437.21 889.3,-432.94"/>
+</g>
+<!-- module~rdb_ocean_setup_lateral -->
+<g id="module~~rdb_vcoord~~UsedByGraph_node18" class="node">
+<title>module~rdb_ocean_setup_lateral</title>
+<g id="a_module~~rdb_vcoord~~UsedByGraph_node18"><a xlink:href="../module/rdb_ocean_setup_lateral.html" xlink:title="rdb_ocean_setup_lateral">
+<polygon fill="#5bc0de" stroke="#5bc0de" points="1117.14,-509.75 975.12,-509.75 975.12,-485.48 1117.14,-485.48 1117.14,-509.75"/>
+<text xml:space="preserve" text-anchor="middle" x="1046.13" y="-494.02" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_lateral</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_setup_lateral&#45;&gt;module~rdb_ocean_setup -->
+<g id="module~~rdb_vcoord~~UsedByGraph_edge15" class="edge">
+<title>module~rdb_ocean_setup_lateral&#45;&gt;module~rdb_ocean_setup</title>
+<path fill="none" stroke="#ffff00" d="M997.47,-485.08C989.88,-482.58 982.2,-479.75 975.12,-476.62 947.49,-464.38 918.2,-446.21 897.68,-432.53"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="899.85,-429.78 889.61,-427.07 895.93,-435.57 899.85,-429.78"/>
+</g>
+<!-- module~rdb_ocean_setup_vmix -->
+<g id="module~~rdb_vcoord~~UsedByGraph_node19" class="node">
+<title>module~rdb_ocean_setup_vmix</title>
+<g id="a_module~~rdb_vcoord~~UsedByGraph_node19"><a xlink:href="../module/rdb_ocean_setup_vmix.html" xlink:title="rdb_ocean_setup_vmix">
+<polygon fill="#5bc0de" stroke="#5bc0de" points="1112.64,-467.75 979.62,-467.75 979.62,-443.48 1112.64,-443.48 1112.64,-467.75"/>
+<text xml:space="preserve" text-anchor="middle" x="1046.13" y="-452.02" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_vmix</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_setup_vmix&#45;&gt;module~rdb_ocean_setup -->
+<g id="module~~rdb_vcoord~~UsedByGraph_edge16" class="edge">
+<title>module~rdb_ocean_setup_vmix&#45;&gt;module~rdb_ocean_setup</title>
+<path fill="none" stroke="#ffff00" d="M992.77,-443.01C973.71,-438.43 952,-433.2 932.21,-428.44"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="933.15,-425.07 922.61,-426.13 931.51,-431.87 933.15,-425.07"/>
+</g>
+<!-- module~rdb_ocean_state&#45;&gt;module~rdb_ocean_vcoord -->
+<g id="module~~rdb_vcoord~~UsedByGraph_edge23" class="edge">
+<title>module~rdb_ocean_state&#45;&gt;module~rdb_ocean_vcoord</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M641.14,-187.99C552.82,-210.42 366.45,-257.76 270.09,-282.23"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="269.37,-278.8 260.54,-284.66 271.1,-285.59 269.37,-278.8"/>
+</g>
+<!-- module~rdb_ocean_state&#45;&gt;module~rdb_ocean_dyn -->
+<g id="module~~rdb_vcoord~~UsedByGraph_edge32" class="edge">
+<title>module~rdb_ocean_state&#45;&gt;module~rdb_ocean_dyn</title>
+<path fill="none" stroke="#27ff00" stroke-dasharray="5,2" d="M640.83,-182.79C632.26,-185.9 624.04,-190.32 617.58,-196.62 579.84,-233.41 614.68,-268.59 581.58,-309.62 579.55,-312.13 577.21,-314.45 574.69,-316.57"/>
+<polygon fill="#27ff00" stroke="#27ff00" points="572.91,-313.54 566.8,-322.2 576.97,-319.24 572.91,-313.54"/>
+</g>
+<!-- module~rdb_ocean_balance&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_vcoord~~UsedByGraph_edge36" class="edge">
+<title>module~rdb_ocean_balance&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#ff0075" stroke-dasharray="5,2" d="M988.01,-92.78C953.86,-91.78 909.65,-91.74 870.61,-95.62"/>
+<path fill="none" stroke="#ff0075" stroke-dasharray="5,2" d="M868.61,-95.62C811.5,-101.29 752.11,-134.84 718.77,-156.66"/>
+<polygon fill="#ff0075" stroke="#ff0075" points="716.91,-153.69 710.55,-162.16 720.81,-159.51 716.91,-153.69"/>
+</g>
+<!-- module~rdb_ocean_diag_derived&#45;&gt;module~rdb_ocean_diag_fills -->
+<g id="module~~rdb_vcoord~~UsedByGraph_edge26" class="edge">
+<title>module~rdb_ocean_diag_derived&#45;&gt;module~rdb_ocean_diag_fills</title>
+<path fill="none" stroke="#9cff00" stroke-dasharray="5,2" d="M1026.78,-188.23C996.15,-209.3 934.39,-251.76 898.39,-276.51"/>
+<polygon fill="#9cff00" stroke="#9cff00" points="896.48,-273.58 890.22,-282.13 900.44,-279.35 896.48,-273.58"/>
+</g>
+<!-- module~rdb_ocean_diag_derived&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_vcoord~~UsedByGraph_edge37" class="edge">
+<title>module~rdb_ocean_diag_derived&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#ff0075" stroke-dasharray="5,2" d="M1002.69,-163.08C993.26,-159.43 983.56,-154.95 975.12,-149.62 956.25,-137.7 958.48,-125.72 939.12,-114.62 911.71,-98.89 902.05,-92.49 870.61,-95.62"/>
+</g>
+<!-- module~rdb_ocean_ic_inject&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_vcoord~~UsedByGraph_edge40" class="edge">
+<title>module~rdb_ocean_ic_inject&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#ff0075" stroke-dasharray="5,2" d="M1009.69,-41C966.5,-26.41 896.13,-5.39 870.61,-13.62"/>
+</g>
+<!-- module~rdb_ocean_reinit&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_vcoord~~UsedByGraph_edge41" class="edge">
+<title>module~rdb_ocean_reinit&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#ff0075" stroke-dasharray="5,2" d="M1176.04,-43.08C1115.74,-20.56 979.01,21.31 870.61,-13.62"/>
+<path fill="none" stroke="#ff0075" stroke-dasharray="5,2" d="M868.61,-13.62C838.32,-23.45 826.26,-16.46 800.1,-34.62 754.74,-66.1 719.91,-122.44 703.04,-153.52"/>
+<polygon fill="#ff0075" stroke="#ff0075" points="700.12,-151.56 698.54,-162.04 706.31,-154.83 700.12,-151.56"/>
+</g>
+<!-- module~rdb_ocean_reinit&#45;&gt;module~rdb_ocean_balance -->
+<g id="module~~rdb_vcoord~~UsedByGraph_edge47" class="edge">
+<title>module~rdb_ocean_reinit&#45;&gt;module~rdb_ocean_balance</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1157.75,-67.94C1142.24,-71.82 1124.92,-76.16 1108.67,-80.22"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1107.95,-76.79 1099.09,-82.62 1109.64,-83.59 1107.95,-76.79"/>
+</g>
+<!-- module~rdb_ocean_reinit&#45;&gt;module~rdb_ocean_ic_inject -->
+<g id="module~~rdb_vcoord~~UsedByGraph_edge52" class="edge">
+<title>module~rdb_ocean_reinit&#45;&gt;module~rdb_ocean_ic_inject</title>
+<path fill="none" stroke="#48ff00" stroke-dasharray="5,2" d="M1157.75,-55C1144.5,-54.83 1129.92,-54.65 1115.82,-54.48"/>
+<polygon fill="#48ff00" stroke="#48ff00" points="1116.21,-50.98 1106.17,-54.35 1116.12,-57.98 1116.21,-50.98"/>
+</g>
+<!-- module~rdb_ocean_state_restart -->
+<g id="module~~rdb_vcoord~~UsedByGraph_node25" class="node">
+<title>module~rdb_ocean_state_restart</title>
+<g id="a_module~~rdb_vcoord~~UsedByGraph_node25"><a xlink:href="../module/rdb_ocean_state_restart.html" xlink:title="rdb_ocean_state_restart">
+<polygon fill="#5bc0de" stroke="#5bc0de" points="939.12,-67.75 800.1,-67.75 800.1,-43.48 939.12,-43.48 939.12,-67.75"/>
+<text xml:space="preserve" text-anchor="middle" x="869.61" y="-52.02" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_state_restart</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_state_restart&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_vcoord~~UsedByGraph_edge43" class="edge">
+<title>module~rdb_ocean_state_restart&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#ff0075" d="M828.38,-68.18C818.8,-71.9 808.84,-76.39 800.1,-81.62 765.7,-102.18 731.75,-134.06 711.29,-154.89"/>
+<polygon fill="#ff0075" stroke="#ff0075" points="708.87,-152.36 704.44,-161.98 713.9,-157.22 708.87,-152.36"/>
+</g>
+<!-- module~rdb_ocean_state_seed -->
+<g id="module~~rdb_vcoord~~UsedByGraph_node26" class="node">
+<title>module~rdb_ocean_state_seed</title>
+<g id="a_module~~rdb_vcoord~~UsedByGraph_node26"><a xlink:href="../module/rdb_ocean_state_seed.html" xlink:title="rdb_ocean_state_seed">
+<polygon fill="#5bc0de" stroke="#5bc0de" points="934.62,-227.75 804.6,-227.75 804.6,-203.48 934.62,-203.48 934.62,-227.75"/>
+<text xml:space="preserve" text-anchor="middle" x="869.61" y="-212.02" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_state_seed</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_state_seed&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_vcoord~~UsedByGraph_edge44" class="edge">
+<title>module~rdb_ocean_state_seed&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#ff0075" d="M813.16,-203.07C793.69,-198.66 771.73,-193.69 751.89,-189.21"/>
+<polygon fill="#ff0075" stroke="#ff0075" points="752.81,-185.83 742.29,-187.03 751.27,-192.65 752.81,-185.83"/>
+</g>
+<!-- module~rdb_ocean_state_topo -->
+<g id="module~~rdb_vcoord~~UsedByGraph_node27" class="node">
+<title>module~rdb_ocean_state_topo</title>
+<g id="a_module~~rdb_vcoord~~UsedByGraph_node27"><a xlink:href="../module/rdb_ocean_state_topo.html" xlink:title="rdb_ocean_state_topo">
+<polygon fill="#5bc0de" stroke="#5bc0de" points="933.87,-147.75 805.35,-147.75 805.35,-123.48 933.87,-123.48 933.87,-147.75"/>
+<text xml:space="preserve" text-anchor="middle" x="869.61" y="-132.02" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_state_topo</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_state_topo&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_vcoord~~UsedByGraph_edge45" class="edge">
+<title>module~rdb_ocean_state_topo&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#ff0075" d="M813.16,-148.16C793.69,-152.57 771.73,-157.54 751.89,-162.03"/>
+<polygon fill="#ff0075" stroke="#ff0075" points="751.27,-158.58 742.29,-164.2 752.81,-165.41 751.27,-158.58"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panmodulerdb_vcoordUsedByGraph = svgPanZoom('#modulerdb_vcoordUsedByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#UsedByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="UsedByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="511pt" height="32pt"
+ viewBox="0.00 0.00 511.00 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 506.88,-28.27 506.88,4 -4,4"/>
+<!-- Module -->
+<g id="node1" class="node">
+<title>Module</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="54,-24.27 0,-24.27 0,0 54,0 54,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="27" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Module</text>
+</g>
+<!-- Submodule -->
+<g id="node2" class="node">
+<title>Submodule</title>
+<polygon fill="#5bc0de" stroke="#5bc0de" points="144.13,-24.27 71.87,-24.27 71.87,0 144.13,0 144.13,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="108" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Submodule</text>
+</g>
+<!-- Subroutine -->
+<g id="node3" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="231.63,-24.27 162.37,-24.27 162.37,0 231.63,0 231.63,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="197" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node4" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="306.26,-24.27 249.74,-24.27 249.74,0 306.26,0 306.26,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="278" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Program -->
+<g id="node5" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="381.26,-24.27 324.74,-24.27 324.74,0 381.26,0 381.26,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="353" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node6" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="502.88,-24.27 399.12,-24.27 399.12,0 502.88,0 502.88,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="451" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a submodule to the (sub)module which it is
+descended from. Dashed arrows point from a module or program unit to 
+modules which it uses.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+            </li>
+        </ul>
+      </div>
+    </div>
+
+      <br>
+
+
+        <section>
+          <h2>Variables</h2>
+            <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-stretch_log"></span>
+              integer,
+            </td>
+              <td>public,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>STRETCH_LOG</strong></td>
+<td> =</td>
+                <td>1</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-stretch_uniform"></span>
+              integer,
+            </td>
+              <td>public,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>STRETCH_UNIFORM</strong></td>
+<td> =</td>
+                <td>0</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-vcoord_hmin_inert"></span>
+              integer,
+            </td>
+              <td>public,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>VCOORD_HMIN_INERT</strong></td>
+<td> =</td>
+                <td>0</td>
+            <td>
+                <p>Geometric families (ZSTAR_FULL / Z_FIXED): <code>zstar_h_min</code> is the
+anti-zero thickness of below-bed FILLER layers, which are meant to
+read as vanished downstream ⇒ must stay &lt;= <code>H_VANISHED</code>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-vcoord_hmin_keepalive"></span>
+              integer,
+            </td>
+              <td>public,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>VCOORD_HMIN_KEEPALIVE</strong></td>
+<td> =</td>
+                <td>1</td>
+            <td>
+                <p>Density families (RHO / HYCOM): collapsed layers carry tracer mass
+and must SURVIVE the remap drain ⇒ that path floors at
+<code>max(zstar_h_min, 2*H_VANISHED)</code> on purpose.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-vcoord_hmin_unused"></span>
+              integer,
+            </td>
+              <td>public,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>VCOORD_HMIN_UNUSED</strong></td>
+<td> =</td>
+                <td>2</td>
+            <td>
+                <p>Every other family never reads <code>zstar_h_min</code>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-zfixed_dz_err_count"></span>
+              integer,
+            </td>
+              <td>public,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>ZFIXED_DZ_ERR_COUNT</strong></td>
+<td> =</td>
+                <td>1</td>
+            <td>
+                <p>List length (leading positive entries) is not <code>nz</code>, or a positive
+entry follows an unset one.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-zfixed_dz_err_profile"></span>
+              integer,
+            </td>
+              <td>public,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>ZFIXED_DZ_ERR_PROFILE</strong></td>
+<td> =</td>
+                <td>4</td>
+            <td>
+                <p>Unrecognised profile code.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-zfixed_dz_err_too_deep"></span>
+              integer,
+            </td>
+              <td>public,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>ZFIXED_DZ_ERR_TOO_DEEP</strong></td>
+<td> =</td>
+                <td>3</td>
+            <td>
+                <p>tanh: <code>nz*dz_top &gt;= h_ref</code> — no room to stretch.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-zfixed_dz_err_value"></span>
+              integer,
+            </td>
+              <td>public,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>ZFIXED_DZ_ERR_VALUE</strong></td>
+<td> =</td>
+                <td>2</td>
+            <td>
+                <p>A tanh parameter is out of range (<code>dz_top &lt;= 0</code>, <code>width &lt;= 0</code>,
+<code>center</code> outside <code>[0, 1]</code>) or <code>h_ref &lt;= 0</code>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-zfixed_dz_ok"></span>
+              integer,
+            </td>
+              <td>public,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>ZFIXED_DZ_OK</strong></td>
+<td> =</td>
+                <td>0</td>
+            <td>
+                <p><code>z_fixed_nominal_dz</code> status: profile built.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-zfixed_profile_invalid"></span>
+              integer,
+            </td>
+              <td>public,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>ZFIXED_PROFILE_INVALID</strong></td>
+<td> =</td>
+                <td>-1</td>
+            <td>
+                <p>Unrecognised <code>z_fixed_profile</code> string.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-zfixed_profile_list"></span>
+              integer,
+            </td>
+              <td>public,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>ZFIXED_PROFILE_LIST</strong></td>
+<td> =</td>
+                <td>1</td>
+            <td>
+                <p>Explicit nominal thicknesses, <code>&amp;vcoord_nml z_fixed_dz</code>, surface first.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-zfixed_profile_tanh"></span>
+              integer,
+            </td>
+              <td>public,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>ZFIXED_PROFILE_TANH</strong></td>
+<td> =</td>
+                <td>2</td>
+            <td>
+                <p>Hyperbolic-tangent stretching from <code>z_fixed_dz_top</code> at the surface.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-zfixed_profile_uniform"></span>
+              integer,
+            </td>
+              <td>public,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>ZFIXED_PROFILE_UNIFORM</strong></td>
+<td> =</td>
+                <td>0</td>
+            <td>
+                <p><code>max_depth/nz</code> everywhere — the historical (and default) layering.</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+        </section>
+        <br>
+
+
+
+
+        <section>
+          <h2>Derived Types</h2>
+              <div class="card">
+    <div class="card-header codesum">
+      <span class="anchor" id="type-vcoord_t"></span>
+      <h3>
+        type, public&nbsp;::&nbsp;
+        <a href='../type/vcoord_t.html'>vcoord_t</a>
+        
+      </h3>
+    </div>
+    <div class="card-body">
+      
+
+        <h4>Components</h4>
+          <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-blend_width"></span>
+              real(kind=wp),
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>blend_width</strong></td>
+<td> =</td>
+                <td>50.0_wp</td>
+            <td>
+<p>Width of the blending zone (m)</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-coord_type"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>coord_type</strong></td>
+<td> =</td>
+                <td>VCOORD_SIGMA</td>
+            <td>
+<p>Vertical coordinate type (VCOORD_SIGMA, VCOORD_ZSIGMA, etc.)</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-depth_transition"></span>
+              real(kind=wp),
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>depth_transition</strong></td>
+<td> =</td>
+                <td>100.0_wp</td>
+            <td>
+<p>Depth (m) where sigma-to-z blending begins</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dsig_target"></span>
+              real(kind=wp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>dsig_target</strong>(:)</td>
+                <td></td>
+                <td></td>
+            <td>
+<p>(nz) Target sigma-like layer fractions, sum = 1.0</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz~68"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz</strong></td>
+<td> =</td>
+                <td>0</td>
+            <td>
+<p>Number of vertical layers</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-remap_method"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>remap_method</strong></td>
+<td> =</td>
+                <td>REMAP_PPM</td>
+            <td>
+<p>Remap reconstruction order (REMAP_PCM/PLM/PPM/PPM_H4/PQM). Default PPM.
+PQM falls back to PPM for nz &lt; 5 (see <code>remap_column_pqm</code>).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-z_ref"></span>
+              real(kind=wp),
+            </td>
+              <td>public,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>z_ref</strong>(:)</td>
+                <td></td>
+                <td></td>
+            <td>
+<p>(nz+1) Reference interface depths for z-levels (m, positive down).
+Only allocated for coord types that use z-levels.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-zstar_h_min"></span>
+              real(kind=wp),
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>zstar_h_min</strong></td>
+<td> =</td>
+                <td>1.0e-4_wp</td>
+            <td>
+<p>Vanishing-layer floor (m).  Layers that would land below the
+local bed get clipped to this thickness rather than going to zero.
+Deliberately BELOW <code>H_VANISHED</code> (1.5e-4): these are inert filler
+layers that downstream h-dividing kernels are MEANT to skip, so
+the floor is anti-zero armour, not a positivity floor.  See
+<code>vcoord_h_min_role</code> for the other contract the same knob carries
+on the density (RHO/HYCOM) families.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-zstar_h_surf_target"></span>
+              real(kind=wp),
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>zstar_h_surf_target</strong></td>
+<td> =</td>
+                <td>0.0_wp</td>
+            <td>
+<p>Target physical thickness of the surface layer (m).
+0 =&gt; auto: uniform per-column (falls back to lite behaviour
+per column).  Set &gt; 0 to anchor the surface layer at a
+fixed thickness regardless of total depth H.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-zstar_n_surf"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>zstar_n_surf</strong></td>
+<td> =</td>
+                <td>0</td>
+            <td>
+<p>Number of &ldquo;fine&rdquo; near-surface layers using stretching.
+0 =&gt; auto (use max(1, nz/3))</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-zstar_stretching"></span>
+              integer,
+            </td>
+              <td>public</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>zstar_stretching</strong></td>
+<td> =</td>
+                <td>1</td>
+            <td>
+<p>Surface-concentration stretching: 1=log, 0=uniform</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+
+
+        <h4>Type-Bound Procedures</h4>
+        <table class="table table-striped varlist">
+          <tbody>
+              <tr>
+                <td>  procedure, public, non_overridable ::
+  <strong><a href='../type/vcoord_t.html#boundprocedure-cleanup'>cleanup</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/vcoord_cleanup.html'>vcoord_cleanup</a></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure, public, non_overridable ::
+  <strong><a href='../type/vcoord_t.html#boundprocedure-enter_data~8'>enter_data</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/vcoord_enter_data.html'>vcoord_enter_data</a></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure, public, non_overridable ::
+  <strong><a href='../type/vcoord_t.html#boundprocedure-exit_data~8'>exit_data</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/vcoord_exit_data.html'>vcoord_exit_data</a></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure, public, non_overridable ::
+  <strong><a href='../type/vcoord_t.html#boundprocedure-init~10'>init</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/vcoord_init.html'>vcoord_init</a></td>
+                  <td></td>
+              </tr>
+              <tr>
+                <td>  procedure, public, non_overridable ::
+  <strong><a href='../type/vcoord_t.html#boundprocedure-needs_remap'>needs_remap</a></strong> => <a href='/home/runner/work/roundabout/roundabout/docs/fpm-ford/proc/vcoord_needs_remap.html'>vcoord_needs_remap</a></td>
+                  <td></td>
+              </tr>
+          </tbody>
+        </table>
+    </div>
+  </div>
+
+        </section>
+        <br>
+
+        <section>
+          <h2>Functions</h2>
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-parse_remap_method"></span> <h3>public pure function <a href='../proc/parse_remap_method.html'>parse_remap_method</a>(str) result(method)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Convert a namelist string to a REMAP_* constant.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-str~6"></span>
+              character(len=*),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>str</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <h4>
+    Return Value
+    <small>integer</small>
+    </h4>
+    
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-parse_stretching_mode"></span> <h3>public pure function <a href='../proc/parse_stretching_mode.html'>parse_stretching_mode</a>(str) result(mode)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Convert a namelist string to a STRETCH_* constant.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-str~5"></span>
+              character(len=*),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>str</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <h4>
+    Return Value
+    <small>integer</small>
+    </h4>
+    
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-parse_vcoord_type"></span> <h3>public pure function <a href='../proc/parse_vcoord_type.html'>parse_vcoord_type</a>(str, default_code) result(coord_type)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Convert a namelist string to a <code>VCOORD_*</code> constant (shared by coastal
+and ocean backends). Unrecognised ⇒ <code>default_code</code> if given, else
+<code>VCOORD_SIGMA</code>. Ocean callers pass <code>default_code = VCOORD_EULERIAN_Z</code>.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-str~4"></span>
+              character(len=*),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>str</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-default_code"></span>
+              integer,
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>default_code</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <h4>
+    Return Value
+    <small>integer</small>
+    </h4>
+    
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-parse_z_fixed_profile"></span> <h3>public pure function <a href='../proc/parse_z_fixed_profile.html'>parse_z_fixed_profile</a>(str) result(code)  
+</h3></div>
+    <div class="card-body">
+          
+  <p><code>&amp;vcoord_nml z_fixed_profile</code> string -&gt; <code>ZFIXED_PROFILE_*</code> code
+(<code>ZFIXED_PROFILE_INVALID</code> for anything else — the caller fails loud).</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-str~7"></span>
+              character(len=*),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>str</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <h4>
+    Return Value
+    <small>integer</small>
+    </h4>
+    
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-vcoord_h_min_is_coherent"></span> <h3>public pure function <a href='../proc/vcoord_h_min_is_coherent.html'>vcoord_h_min_is_coherent</a>(coord_type, h_min) result(ok)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Is <code>zstar_h_min</code> coherent with the contract <code>coord_type</code> gives it?</p><a href="../proc/vcoord_h_min_is_coherent.html" class="pull-right"><emph>Read more&hellip;</emph></a>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-coord_type~5"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>coord_type</strong></td>
+            <td>
+<p><code>VCOORD_*</code> code (from <code>parse_vcoord_type</code>).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_min~5"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_min</strong></td>
+            <td>
+<p>The configured <code>&amp;vcoord_nml zstar_h_min</code> (m).</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <h4>
+    Return Value
+    <small>logical</small>
+    </h4>
+    
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-vcoord_h_min_role"></span> <h3>public pure function <a href='../proc/vcoord_h_min_role.html'>vcoord_h_min_role</a>(coord_type) result(role)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Which of the TWO contracts <code>zstar_h_min</code> carries for <code>coord_type</code>.</p><a href="../proc/vcoord_h_min_role.html" class="pull-right"><emph>Read more&hellip;</emph></a>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-coord_type~4"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>coord_type</strong></td>
+            <td>
+<p><code>VCOORD_*</code> code (from <code>parse_vcoord_type</code>).</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <h4>
+    Return Value
+    <small>integer</small>
+    </h4>
+    
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-vcoord_needs_remap"></span> <h3>private pure function <a href='../proc/vcoord_needs_remap.html'>vcoord_needs_remap</a>(self) result(needs_remap)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Returns <code>.true.</code> if this coordinate type requires conservative
+vertical remapping after the barotropic step.  Pure sigma does
+not — layers are simply rescaled by dsig(k) * H.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-self~2"></span>
+              class(<a href='../type/vcoord_t.html'>vcoord_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>self</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <h4>
+    Return Value
+    <small>logical</small>
+    </h4>
+    
+
+    </div>
+  </div>
+
+        </section>
+        <br>
+
+        <section>
+          <h2>Subroutines</h2>
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-vcoord_target_dz_column"></span> <h3>public pure subroutine <a href='../proc/vcoord_target_dz_column.html'>vcoord_target_dz_column</a>(coord_type, nz, H, dsig, z_ref, depth_transition, blend_width, dz)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Compute target layer thicknesses for a single water column.
+Pure, called from <code>do concurrent</code> (one thread per column).</p><a href="../proc/vcoord_target_dz_column.html" class="pull-right"><emph>Read more&hellip;</emph></a>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-coord_type~3"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>coord_type</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz~70"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>H</strong></td>
+            <td>
+<p>Total water depth at this column (m)</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dsig"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dsig</strong>(nz)</td>
+            <td>
+<p>Reference sigma fractions (sum = 1), ROMS-ordered: dsig(1) bottom,
+dsig(nz) surface. Currently uniform 1/nz.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-z_ref~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>z_ref</strong>(0:nz)</td>
+            <td>
+<p>Reference z-level interface depths (m, positive down).
+<code>z_ref(0) = 0</code> is the surface; <code>z_ref(nz)</code> is the deepest
+reference interface.  Used for VCOORD_ZSIGMA and VCOORD_ZSTAR.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-depth_transition~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>depth_transition</strong></td>
+            <td>
+<p>Depth (m) below which blending begins</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-blend_width~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>blend_width</strong></td>
+            <td>
+<p>Width of the blending zone (m)</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dz"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dz</strong>(nz)</td>
+            <td>
+<p>Output target layer thicknesses, ROMS-ordered (sum = H,
+<code>dz(1)</code> = bottom, <code>dz(nz)</code> = surface)</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-vcoord_target_dz_column_zstar_full"></span> <h3>public pure subroutine <a href='../proc/vcoord_target_dz_column_zstar_full.html'>vcoord_target_dz_column_zstar_full</a>(nz, H, z_ref_col, h_min, dz)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Compute target layer thicknesses for VCOORD_ZSTAR_FULL.
+Inputs: z_ref_col(0:nz) local reference (top-down, 0=surface, nz=h_bed);
+H current total depth (m) = h_bed + η; h_min vanishing-layer floor (m).
+Output: dz(1:nz) ROMS-ordered (dz(1) bottom, dz(nz) surface),
+sum(dz) = H exactly, vanishing rows set to h_min.
+Surface layer absorbs η; if H &lt; h_bed the deepest layers clip to h_min
+and the surface is trimmed to keep sum = H.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz~72"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>H</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-z_ref_col~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>z_ref_col</strong>(0:nz)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_min~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_min</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dz~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dz</strong>(nz)</td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-z_fixed_nominal_dz"></span> <h3>public pure subroutine <a href='../proc/z_fixed_nominal_dz.html'>z_fixed_nominal_dz</a>(profile, nz, h_ref, dz_list, dz_top, center, width, dz, ierr)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Nominal layer thicknesses of a <code>VCOORD_Z_FIXED</code> column, SURFACE
+FIRST (<code>dz(1)</code> is the top layer) — the order MOM6 writes
+<code>ALE_COORDINATE_CONFIG = "PARAM:..."</code> lists and <code>vgrid</code> files in.
+The caller flips to the bottom-up state convention.</p><a href="../proc/z_fixed_nominal_dz.html" class="pull-right"><emph>Read more&hellip;</emph></a>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-profile"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>profile</strong></td>
+            <td>
+<p><code>ZFIXED_PROFILE_*</code> code.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz~73"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz</strong></td>
+            <td>
+<p>Number of layers.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_ref"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_ref</strong></td>
+            <td>
+<p>Reference column depth (m) — <code>&amp;ocean_topo_nml max_depth</code>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dz_list"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dz_list</strong>(:)</td>
+            <td>
+<p><code>&amp;vcoord_nml z_fixed_dz</code> (m), surface first; <code>&lt;= 0</code> = unset.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dz_top"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dz_top</strong></td>
+            <td>
+<p>tanh: surface-layer thickness (m).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-center"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>center</strong></td>
+            <td>
+<p>tanh: transition centre as a fraction of the index span <code>[0, 1]</code>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-width~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>width</strong></td>
+            <td>
+<p>tanh: transition width as a fraction of the index span (<code>&gt; 0</code>).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dz~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dz</strong>(nz)</td>
+            <td>
+<p>Nominal thicknesses (m), surface first.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ierr~25"></span>
+              integer,
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ierr</strong></td>
+            <td>
+<p><code>ZFIXED_DZ_*</code> status.</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-zstar_full_build_column"></span> <h3>public pure subroutine <a href='../proc/zstar_full_build_column.html'>zstar_full_build_column</a>(nz, h_bed, h_surf_target, n_surf, stretching, z_ref_col)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Build a per-column reference z-level pattern for VCOORD_ZSTAR_FULL.
+Output <code>z_ref_col(0:nz)</code> monotonically increasing (positive-down),
+z_ref_col(0)=0 surface, z_ref_col(nz)=h_bed. Built top-down; the caller
+handles ROMS ordering. Top <code>n_surf_use</code> layers use the stretching mode
+(log/uniform) toward h_surf_target; below that uniform to the bed;
+degenerate (h_bed≤0, nz≤0) ⇒ uniform.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz~71"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_bed"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_bed</strong></td>
+            <td>
+<p>Local bed depth (m, positive down).  Must be &gt; 0 in normal use.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_surf_target"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_surf_target</strong></td>
+            <td>
+<p>Target thickness of the surface layer (m).  ≤ 0 means &ldquo;auto&rdquo;
+and falls back to uniform spacing.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n_surf"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>n_surf</strong></td>
+            <td>
+<p>Number of fine near-surface layers.  ≤ 0 means auto.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-stretching"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>stretching</strong></td>
+            <td>
+<p>STRETCH_LOG or STRETCH_UNIFORM</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-z_ref_col"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>z_ref_col</strong>(0:nz)</td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-vcoord_cleanup"></span> <h3>private  subroutine <a href='../proc/vcoord_cleanup.html'>vcoord_cleanup</a>(self)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Deallocate all arrays.  Safe to call on uninitialised instances.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-self~5"></span>
+              class(<a href='../type/vcoord_t.html'>vcoord_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>self</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-vcoord_enter_data"></span> <h3>private  subroutine <a href='../proc/vcoord_enter_data.html'>vcoord_enter_data</a>(self)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Map read-only coordinate arrays to GPU.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-self~3"></span>
+              class(<a href='../type/vcoord_t.html'>vcoord_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>self</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-vcoord_exit_data"></span> <h3>private  subroutine <a href='../proc/vcoord_exit_data.html'>vcoord_exit_data</a>(self)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Unmap coordinate arrays from GPU.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-self~4"></span>
+              class(<a href='../type/vcoord_t.html'>vcoord_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>self</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-vcoord_init"></span> <h3>private  subroutine <a href='../proc/vcoord_init.html'>vcoord_init</a>(self, nz, coord_type, remap_method)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Initialise a vertical coordinate definition. Allocates + populates
+<code>dsig_target</code> for the given type. Unknown types: error stop.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-self"></span>
+              class(<a href='../type/vcoord_t.html'>vcoord_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>self</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz~69"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz</strong></td>
+            <td>
+<p>Number of vertical layers</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-coord_type~2"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>coord_type</strong></td>
+            <td>
+<p>Coordinate type constant (VCOORD_SIGMA, etc.)</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-remap_method~2"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>remap_method</strong></td>
+            <td>
+<p>Remapping method constant (REMAP_PLM, etc.)</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+        </section>
+        <br>
+
+
+
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-11-13 23:21 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

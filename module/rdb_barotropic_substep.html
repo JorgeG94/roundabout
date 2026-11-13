@@ -1,0 +1,3450 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>rdb_barotropic_substep &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>rdb_barotropic_substep
+      <small>Module</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 1.4% of total for modules and submodules.">1053 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_barotropic_substep.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_barotropic_substep.f90.html'>rdb_barotropic_substep.F90</a></li>
+            <li class="breadcrumb-item active" aria-current="page">rdb_barotropic_substep</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+
+  <div class="row">
+    <div class="col-md-3">
+        <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/rdb_barotropic_substep.html#variable-ch_gbuf">ch_gbuf</a>
+            <a class="list-group-item" href="../module/rdb_barotropic_substep.html#variable-ch_lbuf">ch_lbuf</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#funcs-0"
+         aria-expanded="false" aria-controls="funcs-0">
+         <h4 class="card-header bg-primary text-white">Functions</h4>
+      </a>
+      <div id="funcs-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/rdb_barotropic_substep.html#proc-chapman_line_sum">chapman_line_sum</a>
+        </div>
+      </div>
+    </div>
+
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#subs-0"
+         aria-expanded="false" aria-controls="subs-0">
+         <h4 class="card-header bg-primary text-white">Subroutines</h4>
+      </a>
+      <div id="subs-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/rdb_barotropic_substep.html#proc-barotropic_substep_linear">barotropic_substep_linear</a>
+            <a class="list-group-item" href="../module/rdb_barotropic_substep.html#proc-barotropic_substep_nonlinear">barotropic_substep_nonlinear</a>
+            <a class="list-group-item" href="../module/rdb_barotropic_substep.html#proc-barotropic_substep_nonlinear_interior">barotropic_substep_nonlinear_interior</a>
+            <a class="list-group-item" href="../module/rdb_barotropic_substep.html#proc-chapman_setup_corner">chapman_setup_corner</a>
+            <a class="list-group-item" href="../module/rdb_barotropic_substep.html#proc-chapman_workspace_cleanup">chapman_workspace_cleanup</a>
+            <a class="list-group-item" href="../module/rdb_barotropic_substep.html#proc-chapman_edge_mean">chapman_edge_mean</a>
+            <a class="list-group-item" href="../module/rdb_barotropic_substep.html#proc-chapman_workspace_ensure">chapman_workspace_ensure</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+
+
+  </div>
+
+    </div>
+
+    <div class="col-md-9" id='text'>
+      <p>Two kernels:</p>
+<p><code>barotropic_substep_linear</code>  — linearized shallow-water with closed
+    walls, no Coriolis, no advection.  Used by the
+    <code>test_ocean_barotropic_substep</code> analytic checks (rest state, constant
+    forcing, gravity-wave standing mode) and as the unit-test
+    anchor for the dynamics.  Not called by the production
+    split driver.</p>
+<p><code>barotropic_substep_nonlinear</code>   — production substep with
+    free-surface continuity (<code>(H_ref + η)</code> face thickness),
+    Coriolis (<code>(ζ + f)·v_perp</code> Sadourny enstrophy-conserving),
+    and vector-invariant advection.  Called by the split RK2
+    driver inside each outer baroclinic step.</p>
+<p>Both kernels read <code>force_u</code>, <code>force_v</code> as constant slow forcing
+for the inner substeps and write the time-mean (sum / n_steps)
+back into <code>bt_eta</code>, <code>bt_work%bt_ubt</code>, <code>bt_work%bt_vbt</code> on exit.
+Per-substep running sums land in <code>bt_work%eta_sum</code>, <code>bt_work%ubt_sum</code>,
+<code>bt_work%vbt_sum</code>.  The nonlinear path additionally uses
+<code>bt_work%bt_zeta_corner</code>, <code>bt_work%bt_ke_centre</code>, <code>bt_eta_new</code> as
+per-substep scratch.</p>
+<p>Closed-wall convention on the outer boundary:
+  * u_bt at i=1 and i=nx+1 (array edges) stay at zero
+  * v_bt at j=1 and j=ny+1 (array edges) stay at zero
+  * u_bt at i=nghost+1 and i=nghost+nx_phys+1 (physical walls)
+    stay at zero — slow continuity closes here, so the
+    barotropic substep must too or <code>sum_k(h_layer)</code> drifts from <code>H+bt_eta</code>
+  * v_bt at j=nghost+1 and j=nghost+ny_phys+1 (physical walls)
+    stay at zero — same reason
+  * ζ at the outer corner ring is clamped to zero so (ζ+f)·v
+    reduces to the f-plane Coriolis term there</p>
+<p>Stability: Forward-Backward Euler ordering — η update first
+(consumes u^n, v^n), then u/v updates (consume the just-updated
+η).  Stable on the gravity-wave eigenmode for
+<code>dt_inner · √(g·H) / dx ≤ 1</code>.</p>
+<p>Performance footgun (still relevant): the η-update do-concurrent
+uses four distinct <code>local()</code> face-thickness variables
+(h_face_E/W/N/S) rather than reusing a single <code>h_face</code>.  gfortran
+15.1 + <code>-O3 -funroll-loops</code> was observed to corrupt the flux
+divergence when h_face was reused across <code>if/else</code> branches.
+See <code>feedback_gfortran_local_reassign.md</code> in claude memory.</p>
+<br>          <div class="card mb-4">
+      <h3 class="card-header card-title bg-light">Uses</h3>
+      <div class="card-body">
+        <ul class="list-group list-group-flush">
+            <li class="list-group-item">
+              <ul class="list-inline">
+                  <li class="list-inline-item"><a href='rdb_ocean_boundary_types.html'>rdb_ocean_boundary_types</a></li>
+                  <li class="list-inline-item"><a href='rdb_halo.html'>rdb_halo</a></li>
+                  <li class="list-inline-item"><a href='rdb_barotropic_workstate.html'>rdb_barotropic_workstate</a></li>
+                  <li class="list-inline-item"><a href='rdb_ocean_halo_counters.html'>rdb_ocean_halo_counters</a></li>
+                  <li class="list-inline-item"><a href='rdb_constants.html'>rdb_constants</a></li>
+                  <li class="list-inline-item"><a href='rdb_ocean_metrics.html'>rdb_ocean_metrics</a></li>
+                  <li class="list-inline-item"><a href='rdb_bt_cont_type.html'>rdb_bt_cont_type</a></li>
+                  <li class="list-inline-item"><a href='rdb_profiler.html'>rdb_profiler</a></li>
+                  <li class="list-inline-item"><a href='rdb_ocean_fold_exchange.html'>rdb_ocean_fold_exchange</a></li>
+                  <li class="list-inline-item"><a href='rdb_grid.html'>rdb_grid</a></li>
+                  <li class="list-inline-item"><a href='rdb_ocean_halo.html'>rdb_ocean_halo</a></li>
+              </ul>
+            </li>
+            <li class="list-group-item">
+              <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: module~~rdb_barotropic_substep~~UsesGraph Pages: 1 -->
+<svg id="modulerdb_barotropic_substepUsesGraph" width="641pt" height="602pt"
+ viewBox="0.00 0.00 641.00 602.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="module~~rdb_barotropic_substep~~UsesGraph" class="graph" transform="scale(0.406739 0.406739) rotate(0) translate(4 1476.28)">
+<title>module~~rdb_barotropic_substep~~UsesGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-1476.28 1571.95,-1476.28 1571.95,4 -4,4"/>
+<!-- module~rdb_barotropic_substep -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_node1" class="node">
+<title>module~rdb_barotropic_substep</title>
+<polygon fill="none" stroke="black" points="1567.95,-465.42 1432.68,-465.42 1432.68,-441.15 1567.95,-441.15 1567.95,-465.42"/>
+<text xml:space="preserve" text-anchor="middle" x="1500.31" y="-449.68" font-family="Helvetica,sans-Serif" font-size="10.50">rdb_barotropic_substep</text>
+</g>
+<!-- module~rdb_barotropic_workstate -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_node2" class="node">
+<title>module~rdb_barotropic_workstate</title>
+<g id="a_module~~rdb_barotropic_substep~~UsesGraph_node2"><a xlink:href="../module/rdb_barotropic_workstate.html" xlink:title="rdb_barotropic_workstate">
+<polygon fill="#337ab7" stroke="#337ab7" points="518.58,-1102.42 372.81,-1102.42 372.81,-1078.15 518.58,-1078.15 518.58,-1102.42"/>
+<text xml:space="preserve" text-anchor="middle" x="445.69" y="-1086.68" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_barotropic_workstate</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_barotropic_substep&#45;&gt;module~rdb_barotropic_workstate -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge1" class="edge">
+<title>module~rdb_barotropic_substep&#45;&gt;module~rdb_barotropic_workstate</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1148.52,-1244.28C1074.42,-1232.31 1052.29,-1263.12 979.63,-1244.28"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M977.63,-1244.28C922.13,-1229.9 919.57,-1201.58 868.62,-1175.28 801.93,-1140.86 785.36,-1128.67 712.35,-1111.28 652.5,-1097.03 583.14,-1091.92 530.3,-1090.3"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="530.55,-1086.8 520.46,-1090.03 530.36,-1093.8 530.55,-1086.8"/>
+</g>
+<!-- module~rdb_bt_cont_type -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_node3" class="node">
+<title>module~rdb_bt_cont_type</title>
+<g id="a_module~~rdb_barotropic_substep~~UsesGraph_node3"><a xlink:href="../module/rdb_bt_cont_type.html" xlink:title="rdb_bt_cont_type">
+<polygon fill="#337ab7" stroke="#337ab7" points="684.6,-1144.42 582.33,-1144.42 582.33,-1120.15 684.6,-1120.15 684.6,-1144.42"/>
+<text xml:space="preserve" text-anchor="middle" x="633.46" y="-1128.68" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_bt_cont_type</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_barotropic_substep&#45;&gt;module~rdb_bt_cont_type -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge2" class="edge">
+<title>module~rdb_barotropic_substep&#45;&gt;module~rdb_bt_cont_type</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M977.63,-1244.28C865.23,-1221.77 738.25,-1174.25 674.92,-1148.95"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="676.57,-1145.84 665.98,-1145.36 673.95,-1152.34 676.57,-1145.84"/>
+</g>
+<!-- module~rdb_constants -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_node4" class="node">
+<title>module~rdb_constants</title>
+<g id="a_module~~rdb_barotropic_substep~~UsesGraph_node4"><a xlink:href="../module/rdb_constants.html" xlink:title="rdb_constants">
+<polygon fill="#337ab7" stroke="#337ab7" points="186.54,-812.42 100.77,-812.42 100.77,-788.15 186.54,-788.15 186.54,-812.42"/>
+<text xml:space="preserve" text-anchor="middle" x="143.66" y="-796.68" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_constants</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_barotropic_substep&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge3" class="edge">
+<title>module~rdb_barotropic_substep&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1320.54,-86.28C1135.11,31.72 560.81,-255.41 372.81,-369.28 353.19,-381.17 355.65,-393.18 336.81,-406.28 315.16,-421.34 301.36,-411.81 282.55,-430.28"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M280.55,-430.28C177.27,-528.36 152.1,-711.52 146.3,-776.59"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="142.82,-776.22 145.5,-786.47 149.8,-776.78 142.82,-776.22"/>
+</g>
+<!-- module~rdb_grid -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_node5" class="node">
+<title>module~rdb_grid</title>
+<g id="a_module~~rdb_barotropic_substep~~UsesGraph_node5"><a xlink:href="../module/rdb_grid.html" xlink:title="rdb_grid">
+<polygon fill="#337ab7" stroke="#337ab7" points="309.43,-872.42 253.66,-872.42 253.66,-848.15 309.43,-848.15 309.43,-872.42"/>
+<text xml:space="preserve" text-anchor="middle" x="281.55" y="-856.68" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_grid</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_barotropic_substep&#45;&gt;module~rdb_grid -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge4" class="edge">
+<title>module~rdb_barotropic_substep&#45;&gt;module~rdb_grid</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1498.37,-465.77C1491.17,-557.73 1441.91,-1129.62 1322.54,-1244.28"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1320.54,-1244.28C1215.46,-1345.23 1184.11,-1118.12 1052.64,-1055.28 878.29,-971.96 827.43,-926.1 634.46,-936.28"/>
+</g>
+<!-- module~rdb_halo -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_node6" class="node">
+<title>module~rdb_halo</title>
+<g id="a_module~~rdb_barotropic_substep~~UsesGraph_node6"><a xlink:href="../module/rdb_halo.html" xlink:title="rdb_halo">
+<polygon fill="#337ab7" stroke="#337ab7" points="1350.55,-716.42 1292.53,-716.42 1292.53,-692.15 1350.55,-692.15 1350.55,-716.42"/>
+<text xml:space="preserve" text-anchor="middle" x="1321.54" y="-700.68" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_halo</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_barotropic_substep&#45;&gt;module~rdb_halo -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge5" class="edge">
+<title>module~rdb_barotropic_substep&#45;&gt;module~rdb_halo</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1490.55,-465.73C1462.33,-505.79 1373.64,-631.74 1337.79,-682.63"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1335.13,-680.33 1332.24,-690.52 1340.86,-684.36 1335.13,-680.33"/>
+</g>
+<!-- module~rdb_ocean_boundary_types -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_node7" class="node">
+<title>module~rdb_ocean_boundary_types</title>
+<g id="a_module~~rdb_barotropic_substep~~UsesGraph_node7"><a xlink:href="../module/rdb_ocean_boundary_types.html" xlink:title="rdb_ocean_boundary_types">
+<polygon fill="#337ab7" stroke="#337ab7" points="712.35,-1026.42 554.58,-1026.42 554.58,-1002.15 712.35,-1002.15 712.35,-1026.42"/>
+<text xml:space="preserve" text-anchor="middle" x="633.46" y="-1010.68" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_boundary_types</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_barotropic_substep&#45;&gt;module~rdb_ocean_boundary_types -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge6" class="edge">
+<title>module~rdb_barotropic_substep&#45;&gt;module~rdb_ocean_boundary_types</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1320.54,-1244.28C1266.05,-1296.63 1225.11,-1256.4 1150.52,-1244.28"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1148.52,-1244.28C996.58,-1219.61 1012.07,-1096.12 868.62,-1040.28 823.04,-1022.54 768.94,-1015.7 724.24,-1013.45"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="724.44,-1009.96 714.3,-1013.03 724.14,-1016.95 724.44,-1009.96"/>
+</g>
+<!-- module~rdb_ocean_fold_exchange -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_node8" class="node">
+<title>module~rdb_ocean_fold_exchange</title>
+<g id="a_module~~rdb_barotropic_substep~~UsesGraph_node8"><a xlink:href="../module/rdb_ocean_fold_exchange.html" xlink:title="rdb_ocean_fold_exchange">
+<polygon fill="#337ab7" stroke="#337ab7" points="1396.68,-291.42 1246.41,-291.42 1246.41,-267.15 1396.68,-267.15 1396.68,-291.42"/>
+<text xml:space="preserve" text-anchor="middle" x="1321.54" y="-275.68" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_fold_exchange</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_barotropic_substep&#45;&gt;module~rdb_ocean_fold_exchange -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge7" class="edge">
+<title>module~rdb_barotropic_substep&#45;&gt;module~rdb_ocean_fold_exchange</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1494.06,-441C1481.44,-412.88 1446.68,-343.36 1396.68,-305.28 1392.36,-302 1387.6,-299.1 1382.63,-296.56"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1384.15,-293.41 1373.59,-292.45 1381.24,-299.78 1384.15,-293.41"/>
+</g>
+<!-- module~rdb_ocean_halo -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_node9" class="node">
+<title>module~rdb_ocean_halo</title>
+<g id="a_module~~rdb_barotropic_substep~~UsesGraph_node9"><a xlink:href="../module/rdb_ocean_halo.html" xlink:title="rdb_ocean_halo">
+<polygon fill="#337ab7" stroke="#337ab7" points="1369.68,-580.42 1273.41,-580.42 1273.41,-556.15 1369.68,-556.15 1369.68,-580.42"/>
+<text xml:space="preserve" text-anchor="middle" x="1321.54" y="-564.68" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_halo</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_barotropic_substep&#45;&gt;module~rdb_ocean_halo -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge8" class="edge">
+<title>module~rdb_barotropic_substep&#45;&gt;module~rdb_ocean_halo</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1480.06,-465.81C1448.98,-486.03 1387.58,-525.98 1351.3,-549.58"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1349.52,-546.56 1343.04,-554.95 1353.33,-552.43 1349.52,-546.56"/>
+</g>
+<!-- module~rdb_ocean_halo_counters -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_node10" class="node">
+<title>module~rdb_ocean_halo_counters</title>
+<g id="a_module~~rdb_barotropic_substep~~UsesGraph_node10"><a xlink:href="../module/rdb_ocean_halo_counters.html" xlink:title="rdb_ocean_halo_counters">
+<polygon fill="#337ab7" stroke="#337ab7" points="1052.64,-442.42 904.62,-442.42 904.62,-418.15 1052.64,-418.15 1052.64,-442.42"/>
+<text xml:space="preserve" text-anchor="middle" x="978.63" y="-426.68" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_halo_counters</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_barotropic_substep&#45;&gt;module~rdb_ocean_halo_counters -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge9" class="edge">
+<title>module~rdb_barotropic_substep&#45;&gt;module~rdb_ocean_halo_counters</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1432.44,-450.32C1338.37,-446.16 1167.01,-438.58 1064.21,-434.03"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1064.6,-430.54 1054.46,-433.6 1064.29,-437.53 1064.6,-430.54"/>
+</g>
+<!-- module~rdb_ocean_metrics -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_node11" class="node">
+<title>module~rdb_ocean_metrics</title>
+<g id="a_module~~rdb_barotropic_substep~~UsesGraph_node11"><a xlink:href="../module/rdb_ocean_metrics.html" xlink:title="rdb_ocean_metrics">
+<polygon fill="#337ab7" stroke="#337ab7" points="689.85,-480.42 577.08,-480.42 577.08,-456.15 689.85,-456.15 689.85,-480.42"/>
+<text xml:space="preserve" text-anchor="middle" x="633.46" y="-464.68" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_metrics</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_barotropic_substep&#45;&gt;module~rdb_ocean_metrics -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge10" class="edge">
+<title>module~rdb_barotropic_substep&#45;&gt;module~rdb_ocean_metrics</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1497.31,-440.73C1488.23,-388.09 1445.85,-183.47 1322.54,-86.28"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1320.54,-86.28C1162.9,37.96 1078.22,-161.52 904.62,-262.28 853.14,-292.16 714.92,-402.97 658.72,-448.53"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="656.56,-445.78 651,-454.8 660.97,-451.21 656.56,-445.78"/>
+</g>
+<!-- module~rdb_profiler -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_node12" class="node">
+<title>module~rdb_profiler</title>
+<g id="a_module~~rdb_barotropic_substep~~UsesGraph_node12"><a xlink:href="../module/rdb_profiler.html" xlink:title="rdb_profiler">
+<polygon fill="#337ab7" stroke="#337ab7" points="318.06,-1296.42 245.04,-1296.42 245.04,-1272.15 318.06,-1272.15 318.06,-1296.42"/>
+<text xml:space="preserve" text-anchor="middle" x="281.55" y="-1280.68" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_profiler</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_barotropic_substep&#45;&gt;module~rdb_profiler -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge11" class="edge">
+<title>module~rdb_barotropic_substep&#45;&gt;module~rdb_profiler</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1320.54,-1244.28C1194.06,-1375.53 1161.91,-1472.28 979.63,-1472.28 979.63,-1472.28 979.63,-1472.28 807.48,-1472.28 782.17,-1472.28 447.72,-1346.75 326.25,-1300.84"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="327.86,-1297.71 317.27,-1297.45 325.38,-1304.26 327.86,-1297.71"/>
+</g>
+<!-- module~rdb_barotropic_workstate&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge13" class="edge">
+<title>module~rdb_barotropic_workstate&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M372.51,-1078.31C336.25,-1071.17 297,-1061.34 282.55,-1050.28"/>
+</g>
+<!-- module~rdb_barotropic_workstate&#45;&gt;module~rdb_grid -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge14" class="edge">
+<title>module~rdb_barotropic_workstate&#45;&gt;module~rdb_grid</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M427.47,-1077.73C411.86,-1065.76 388.91,-1046.57 372.81,-1026.28 336.15,-980.08 306.46,-916.89 292.04,-883.37"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="295.29,-882.07 288.17,-874.22 288.84,-884.79 295.29,-882.07"/>
+</g>
+<!-- iso_fortran_env -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_node13" class="node">
+<title>iso_fortran_env</title>
+<g id="a_module~~rdb_barotropic_substep~~UsesGraph_node13"><a xlink:href="http://fortranwiki.org/fortran/show/iso_fortran_env" xlink:title="iso_fortran_env">
+<polygon fill="#337ab7" stroke="#337ab7" points="190.29,-1100.42 97.02,-1100.42 97.02,-1076.15 190.29,-1076.15 190.29,-1100.42"/>
+<text xml:space="preserve" text-anchor="middle" x="143.66" y="-1084.68" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">iso_fortran_env</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_barotropic_workstate&#45;&gt;iso_fortran_env -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge12" class="edge">
+<title>module~rdb_barotropic_workstate&#45;&gt;iso_fortran_env</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M372.44,-1083.97C344.23,-1082.91 311.71,-1083.45 282.55,-1088.28"/>
+</g>
+<!-- module~rdb_mem_report -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_node19" class="node">
+<title>module~rdb_mem_report</title>
+<g id="a_module~~rdb_barotropic_substep~~UsesGraph_node19"><a xlink:href="../module/rdb_mem_report.html" xlink:title="rdb_mem_report">
+<polygon fill="#337ab7" stroke="#337ab7" points="331.56,-792.42 231.54,-792.42 231.54,-768.15 331.56,-768.15 331.56,-792.42"/>
+<text xml:space="preserve" text-anchor="middle" x="281.55" y="-776.68" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_mem_report</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_barotropic_workstate&#45;&gt;module~rdb_mem_report -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge15" class="edge">
+<title>module~rdb_barotropic_workstate&#45;&gt;module~rdb_mem_report</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M443.26,-1077.79C437.71,-1034.67 413.92,-890.15 336.81,-806.28 334.3,-803.55 331.44,-801.08 328.38,-798.85"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="330.36,-795.96 320.02,-793.64 326.66,-801.9 330.36,-795.96"/>
+</g>
+<!-- module~rdb_bt_cont_type&#45;&gt;module~rdb_barotropic_workstate -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge16" class="edge">
+<title>module~rdb_bt_cont_type&#45;&gt;module~rdb_barotropic_workstate</title>
+<path fill="none" stroke="#ff8b00" stroke-dasharray="5,2" d="M582.19,-1120.92C561.14,-1116.16 536.36,-1110.56 513.79,-1105.45"/>
+<polygon fill="#ff8b00" stroke="#ff8b00" points="514.57,-1102.04 504.05,-1103.25 513.03,-1108.87 514.57,-1102.04"/>
+</g>
+<!-- module~rdb_bt_cont_type&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge17" class="edge">
+<title>module~rdb_bt_cont_type&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#ff8b00" stroke-dasharray="5,2" d="M581.97,-1138.33C527.61,-1142.6 439.92,-1142.87 372.81,-1111.28 352.05,-1101.51 355.65,-1087.39 336.81,-1074.28 315.16,-1059.23 303.5,-1066.3 282.55,-1050.28"/>
+</g>
+<!-- pic_types -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_node31" class="node">
+<title>pic_types</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="61.02,-812.42 0,-812.42 0,-788.15 61.02,-788.15 61.02,-812.42"/>
+<text xml:space="preserve" text-anchor="middle" x="30.51" y="-796.68" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">pic_types</text>
+</g>
+<!-- module~rdb_constants&#45;&gt;pic_types -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge18" class="edge">
+<title>module~rdb_constants&#45;&gt;pic_types</title>
+<path fill="none" stroke="#e7ff00" stroke-dasharray="5,2" d="M100.32,-800.28C91.28,-800.28 81.74,-800.28 72.74,-800.28"/>
+<polygon fill="#e7ff00" stroke="#e7ff00" points="72.82,-796.78 62.82,-800.28 72.82,-803.78 72.82,-796.78"/>
+</g>
+<!-- module~rdb_grid&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge19" class="edge">
+<title>module~rdb_grid&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#5cff00" stroke-dasharray="5,2" d="M253.38,-848.29C233.41,-839.47 205.98,-827.36 183.67,-817.51"/>
+<polygon fill="#5cff00" stroke="#5cff00" points="185.13,-814.33 174.57,-813.49 182.31,-820.73 185.13,-814.33"/>
+</g>
+<!-- module~rdb_halo&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge22" class="edge">
+<title>module~rdb_halo&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#00ff2e" stroke-dasharray="5,2" d="M1318.38,-716.63C1305.73,-787 1238.98,-1136.03 1150.52,-1187.28"/>
+<path fill="none" stroke="#00ff2e" stroke-dasharray="5,2" d="M1148.52,-1187.28C1073.81,-1230.58 455.92,-1162.73 372.81,-1139.28 302.4,-1119.42 273.35,-1120.29 226.29,-1064.28 165.39,-991.81 149.87,-874.21 145.96,-824.11"/>
+<polygon fill="#00ff2e" stroke="#00ff2e" points="149.45,-823.89 145.28,-814.15 142.47,-824.36 149.45,-823.89"/>
+</g>
+<!-- module~rdb_halo&#45;&gt;iso_fortran_env -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge20" class="edge">
+<title>module~rdb_halo&#45;&gt;iso_fortran_env</title>
+<path fill="none" stroke="#00ff2e" stroke-dasharray="5,2" d="M1320.67,-716.65C1320.96,-812.58 1310.09,-1434.28 979.63,-1434.28 979.63,-1434.28 979.63,-1434.28 807.48,-1434.28 548.06,-1434.28 425.47,-1546.5 226.29,-1380.28 184.33,-1345.27 156.73,-1174.93 147.8,-1111.84"/>
+<polygon fill="#00ff2e" stroke="#00ff2e" points="151.31,-1111.66 146.47,-1102.23 144.37,-1112.61 151.31,-1111.66"/>
+</g>
+<!-- module~rdb_comm_env -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_node14" class="node">
+<title>module~rdb_comm_env</title>
+<g id="a_module~~rdb_barotropic_substep~~UsesGraph_node14"><a xlink:href="../module/rdb_comm_env.html" xlink:title="rdb_comm_env">
+<polygon fill="#337ab7" stroke="#337ab7" points="1196.16,-716.42 1102.89,-716.42 1102.89,-692.15 1196.16,-692.15 1196.16,-716.42"/>
+<text xml:space="preserve" text-anchor="middle" x="1149.52" y="-700.68" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_comm_env</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_halo&#45;&gt;module~rdb_comm_env -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge21" class="edge">
+<title>module~rdb_halo&#45;&gt;module~rdb_comm_env</title>
+<path fill="none" stroke="#00ff2e" stroke-dasharray="5,2" d="M1292.09,-704.28C1269.16,-704.28 1236.18,-704.28 1207.82,-704.28"/>
+<polygon fill="#00ff2e" stroke="#00ff2e" points="1207.91,-700.78 1197.91,-704.28 1207.91,-707.78 1207.91,-700.78"/>
+</g>
+<!-- module~rdb_decomp -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_node15" class="node">
+<title>module~rdb_decomp</title>
+<g id="a_module~~rdb_barotropic_substep~~UsesGraph_node15"><a xlink:href="../module/rdb_decomp.html" xlink:title="rdb_decomp">
+<polygon fill="#337ab7" stroke="#337ab7" points="1188.66,-560.42 1110.39,-560.42 1110.39,-536.15 1188.66,-536.15 1188.66,-560.42"/>
+<text xml:space="preserve" text-anchor="middle" x="1149.52" y="-544.68" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_decomp</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_halo&#45;&gt;module~rdb_decomp -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge23" class="edge">
+<title>module~rdb_halo&#45;&gt;module~rdb_decomp</title>
+<path fill="none" stroke="#00ff2e" stroke-dasharray="5,2" d="M1306.92,-691.78C1277.57,-664.85 1208.17,-601.17 1172.51,-568.46"/>
+<polygon fill="#00ff2e" stroke="#00ff2e" points="1175.07,-566.05 1165.33,-561.87 1170.33,-571.21 1175.07,-566.05"/>
+</g>
+<!-- module~rdb_efp -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_node16" class="node">
+<title>module~rdb_efp</title>
+<g id="a_module~~rdb_barotropic_substep~~UsesGraph_node16"><a xlink:href="../module/rdb_efp.html" xlink:title="rdb_efp">
+<polygon fill="#337ab7" stroke="#337ab7" points="472.69,-1220.42 418.69,-1220.42 418.69,-1196.15 472.69,-1196.15 472.69,-1220.42"/>
+<text xml:space="preserve" text-anchor="middle" x="445.69" y="-1204.68" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_efp</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_halo&#45;&gt;module~rdb_efp -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge24" class="edge">
+<title>module~rdb_halo&#45;&gt;module~rdb_efp</title>
+<path fill="none" stroke="#00ff2e" stroke-dasharray="5,2" d="M1148.52,-1187.28C1033.3,-1250.97 612.85,-1222.13 484.29,-1211.57"/>
+<polygon fill="#00ff2e" stroke="#00ff2e" points="484.89,-1208.11 474.63,-1210.76 484.31,-1215.08 484.89,-1208.11"/>
+</g>
+<!-- pic_logger -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_node28" class="node">
+<title>pic_logger</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="177.16,-364.42 110.15,-364.42 110.15,-340.15 177.16,-340.15 177.16,-364.42"/>
+<text xml:space="preserve" text-anchor="middle" x="143.66" y="-348.68" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">pic_logger</text>
+</g>
+<!-- module~rdb_halo&#45;&gt;pic_logger -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge25" class="edge">
+<title>module~rdb_halo&#45;&gt;pic_logger</title>
+<path fill="none" stroke="#00ff2e" stroke-dasharray="5,2" d="M1292.57,-691.79C1246.97,-670.64 1155.03,-624.6 1088.64,-569.28 1069.75,-553.55 1071.94,-542.52 1052.64,-527.28 994.6,-481.46 964.08,-495.25 904.62,-451.28 886.17,-437.64 885.95,-429.32 868.62,-414.28 803.69,-357.94 790.96,-335.1 712.35,-300.28 573.42,-238.75 521.98,-231.34 372.81,-260.28 299.8,-274.45 220.54,-311.91 177.32,-334.43"/>
+<polygon fill="#00ff2e" stroke="#00ff2e" points="175.94,-331.2 168.73,-338.96 179.21,-337.39 175.94,-331.2"/>
+</g>
+<!-- pic_mpi_lib -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_node29" class="node">
+<title>pic_mpi_lib</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="1014.01,-716.42 943.24,-716.42 943.24,-692.15 1014.01,-692.15 1014.01,-716.42"/>
+<text xml:space="preserve" text-anchor="middle" x="978.63" y="-700.68" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">pic_mpi_lib</text>
+</g>
+<!-- module~rdb_halo&#45;&gt;pic_mpi_lib -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge26" class="edge">
+<title>module~rdb_halo&#45;&gt;pic_mpi_lib</title>
+<path fill="none" stroke="#00ff2e" stroke-dasharray="5,2" d="M1292.23,-711.21C1270.11,-716.24 1238.51,-722.63 1210.41,-725.28 1156.53,-730.38 1142.52,-730.43 1088.64,-725.28 1067.63,-723.28 1044.65,-719.15 1025.22,-715.07"/>
+<polygon fill="#00ff2e" stroke="#00ff2e" points="1026.24,-711.71 1015.72,-713.02 1024.76,-718.55 1026.24,-711.71"/>
+</g>
+<!-- module~rdb_ocean_boundary_types&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge28" class="edge">
+<title>module~rdb_ocean_boundary_types&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#00ffb9" stroke-dasharray="5,2" d="M581.6,-1026.9C544.48,-1035.43 492.81,-1045.9 446.69,-1050.28"/>
+</g>
+<!-- module~rdb_ocean_boundary_types&#45;&gt;module~rdb_grid -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge29" class="edge">
+<title>module~rdb_ocean_boundary_types&#45;&gt;module~rdb_grid</title>
+<path fill="none" stroke="#00ffb9" stroke-dasharray="5,2" d="M554.28,-1006.2C500.5,-998.04 428.94,-981.89 372.81,-950.28 342.18,-933.04 314.81,-902.54 298.45,-881.88"/>
+<polygon fill="#00ffb9" stroke="#00ffb9" points="301.33,-879.89 292.46,-874.1 295.78,-884.16 301.33,-879.89"/>
+</g>
+<!-- module~rdb_ocean_boundary_types&#45;&gt;iso_fortran_env -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge27" class="edge">
+<title>module~rdb_ocean_boundary_types&#45;&gt;iso_fortran_env</title>
+<path fill="none" stroke="#00ffb9" stroke-dasharray="5,2" d="M619.23,-1026.75C601.7,-1044.03 571.08,-1077.04 554.58,-1111.28 522.95,-1176.95 569.16,-1218.8 518.58,-1271.28 495.65,-1295.08 475.03,-1273.28 446.69,-1290.28"/>
+<path fill="none" stroke="#00ffb9" stroke-dasharray="5,2" d="M444.69,-1290.28C415.81,-1307.62 401.84,-1297.2 372.81,-1314.28 332.91,-1337.77 324.41,-1386.06 282.55,-1366.28"/>
+<path fill="none" stroke="#00ffb9" stroke-dasharray="5,2" d="M280.55,-1366.28C257.45,-1355.37 244.07,-1365.63 226.29,-1347.28 161.41,-1280.33 148.06,-1162.28 145.33,-1112.02"/>
+<polygon fill="#00ffb9" stroke="#00ffb9" points="148.84,-1112.12 144.91,-1102.28 141.85,-1112.43 148.84,-1112.12"/>
+</g>
+<!-- module~rdb_ocean_boundary_types&#45;&gt;module~rdb_mem_report -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge30" class="edge">
+<title>module~rdb_ocean_boundary_types&#45;&gt;module~rdb_mem_report</title>
+<path fill="none" stroke="#00ffb9" stroke-dasharray="5,2" d="M629.62,-1001.83C620.49,-964.82 588.38,-854.7 518.58,-799.28 492.7,-778.74 478.4,-789.61 446.69,-780.28"/>
+</g>
+<!-- module~rdb_ocean_status -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_node24" class="node">
+<title>module~rdb_ocean_status</title>
+<g id="a_module~~rdb_barotropic_substep~~UsesGraph_node24"><a xlink:href="../module/rdb_ocean_status.html" xlink:title="rdb_ocean_status">
+<polygon fill="#337ab7" stroke="#337ab7" points="497.95,-638.42 393.43,-638.42 393.43,-614.15 497.95,-614.15 497.95,-638.42"/>
+<text xml:space="preserve" text-anchor="middle" x="445.69" y="-622.68" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_status</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_boundary_types&#45;&gt;module~rdb_ocean_status -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge31" class="edge">
+<title>module~rdb_ocean_boundary_types&#45;&gt;module~rdb_ocean_status</title>
+<path fill="none" stroke="#00ffb9" stroke-dasharray="5,2" d="M627.42,-1001.91C614.55,-970.18 579.75,-883.16 554.58,-809.28 536.76,-756.98 548.33,-736.85 518.58,-690.28 507.26,-672.56 489.69,-656.79 474.75,-645.34"/>
+<polygon fill="#00ffb9" stroke="#00ffb9" points="477.22,-642.81 467.09,-639.69 473.06,-648.44 477.22,-642.81"/>
+</g>
+<!-- module~rdb_ocean_tide_astro -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_node25" class="node">
+<title>module~rdb_ocean_tide_astro</title>
+<g id="a_module~~rdb_barotropic_substep~~UsesGraph_node25"><a xlink:href="../module/rdb_ocean_tide_astro.html" xlink:title="rdb_ocean_tide_astro">
+<polygon fill="#337ab7" stroke="#337ab7" points="508.08,-1262.42 383.31,-1262.42 383.31,-1238.15 508.08,-1238.15 508.08,-1262.42"/>
+<text xml:space="preserve" text-anchor="middle" x="445.69" y="-1246.68" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_tide_astro</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_boundary_types&#45;&gt;module~rdb_ocean_tide_astro -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge32" class="edge">
+<title>module~rdb_ocean_boundary_types&#45;&gt;module~rdb_ocean_tide_astro</title>
+<path fill="none" stroke="#00ffb9" stroke-dasharray="5,2" d="M619.9,-1026.64C602.84,-1044.06 572.45,-1077.49 554.58,-1111.28 528.95,-1159.76 557.58,-1190.74 518.58,-1229.28 517.96,-1229.9 517.31,-1230.5 516.66,-1231.08"/>
+<polygon fill="#00ffb9" stroke="#00ffb9" points="514.7,-1228.18 508.57,-1236.83 518.75,-1233.89 514.7,-1228.18"/>
+</g>
+<!-- pic_ascii -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_node27" class="node">
+<title>pic_ascii</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="171.91,-1416.42 115.4,-1416.42 115.4,-1392.15 171.91,-1392.15 171.91,-1416.42"/>
+<text xml:space="preserve" text-anchor="middle" x="143.66" y="-1400.68" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">pic_ascii</text>
+</g>
+<!-- module~rdb_ocean_boundary_types&#45;&gt;pic_ascii -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge33" class="edge">
+<title>module~rdb_ocean_boundary_types&#45;&gt;pic_ascii</title>
+<path fill="none" stroke="#00ffb9" stroke-dasharray="5,2" d="M619.05,-1026.66C601.31,-1043.85 570.44,-1076.74 554.58,-1111.28 518.17,-1190.58 573.42,-1236.41 518.58,-1304.28 435.93,-1406.58 261.12,-1410.91 183.36,-1407.28"/>
+<polygon fill="#00ffb9" stroke="#00ffb9" points="183.86,-1403.8 173.69,-1406.75 183.48,-1410.79 183.86,-1403.8"/>
+</g>
+<!-- module~rdb_ocean_boundary_types&#45;&gt;pic_logger -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge34" class="edge">
+<title>module~rdb_ocean_boundary_types&#45;&gt;pic_logger</title>
+<path fill="none" stroke="#00ffb9" stroke-dasharray="5,2" d="M629.61,-1001.66C620.17,-962.39 586.6,-840.51 518.58,-766.28 468.21,-711.32 430.31,-730.73 372.81,-683.28 353.85,-667.64 353.29,-659.53 336.81,-641.28 313.36,-615.33 306.02,-610.22 282.55,-584.28"/>
+</g>
+<!-- module~rdb_ocean_fold_exchange&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge36" class="edge">
+<title>module~rdb_ocean_fold_exchange&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#00b9ff" stroke-dasharray="5,2" d="M977.63,-276.28C929.54,-271.75 596.93,-353.05 554.58,-376.28 535.01,-387.02 538.9,-402.07 518.58,-411.28 470.66,-433.02 320.61,-393.95 282.55,-430.28"/>
+</g>
+<!-- module~rdb_ocean_fold_exchange&#45;&gt;module~rdb_comm_env -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge35" class="edge">
+<title>module~rdb_ocean_fold_exchange&#45;&gt;module~rdb_comm_env</title>
+<path fill="none" stroke="#00b9ff" stroke-dasharray="5,2" d="M1317.06,-291.84C1306.45,-330.14 1273.55,-448.85 1246.41,-547.28 1230.36,-605.49 1249.98,-632.68 1210.41,-678.28 1208,-681.07 1205.23,-683.56 1202.24,-685.8"/>
+<polygon fill="#00b9ff" stroke="#00b9ff" points="1200.63,-682.68 1194.01,-690.95 1204.34,-688.61 1200.63,-682.68"/>
+</g>
+<!-- module~rdb_ocean_fold_exchange&#45;&gt;module~rdb_decomp -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge37" class="edge">
+<title>module~rdb_ocean_fold_exchange&#45;&gt;module~rdb_decomp</title>
+<path fill="none" stroke="#00b9ff" stroke-dasharray="5,2" d="M1312.57,-291.9C1285.8,-334.26 1198.87,-471.8 1164.6,-526.02"/>
+<polygon fill="#00b9ff" stroke="#00b9ff" points="1161.67,-524.1 1159.29,-534.42 1167.59,-527.84 1161.67,-524.1"/>
+</g>
+<!-- module~rdb_error_ring -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_node17" class="node">
+<title>module~rdb_error_ring</title>
+<g id="a_module~~rdb_barotropic_substep~~UsesGraph_node17"><a xlink:href="../module/rdb_error_ring.html" xlink:title="rdb_error_ring">
+<polygon fill="#337ab7" stroke="#337ab7" points="325.18,-364.42 237.91,-364.42 237.91,-340.15 325.18,-340.15 325.18,-364.42"/>
+<text xml:space="preserve" text-anchor="middle" x="281.55" y="-348.68" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_error_ring</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_fold_exchange&#45;&gt;module~rdb_error_ring -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge38" class="edge">
+<title>module~rdb_ocean_fold_exchange&#45;&gt;module~rdb_error_ring</title>
+<path fill="none" stroke="#00b9ff" stroke-dasharray="5,2" d="M1246.02,-278.33C1216.3,-278.31 1181.78,-278.74 1150.52,-280.28"/>
+<path fill="none" stroke="#00b9ff" stroke-dasharray="5,2" d="M1148.52,-280.28C1073.53,-283.98 1052.88,-292.8 979.63,-276.28"/>
+<path fill="none" stroke="#00b9ff" stroke-dasharray="5,2" d="M977.63,-276.28C925.27,-264.48 920.98,-236.13 868.62,-224.28 684.44,-182.61 633.95,-298.67 446.69,-274.28"/>
+<path fill="none" stroke="#00b9ff" stroke-dasharray="5,2" d="M444.69,-274.28C411.45,-268.87 402.5,-282.38 372.81,-298.28 354.94,-307.85 354.05,-315.62 336.81,-326.28 331.99,-329.26 326.78,-332.15 321.56,-334.84"/>
+<polygon fill="#00b9ff" stroke="#00b9ff" points="320.37,-331.53 312.96,-339.1 323.47,-337.8 320.37,-331.53"/>
+</g>
+<!-- module~rdb_ocean_fold -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_node21" class="node">
+<title>module~rdb_ocean_fold</title>
+<g id="a_module~~rdb_barotropic_substep~~UsesGraph_node21"><a xlink:href="../module/rdb_ocean_fold.html" xlink:title="rdb_ocean_fold">
+<polygon fill="#337ab7" stroke="#337ab7" points="492.33,-482.42 399.06,-482.42 399.06,-458.15 492.33,-458.15 492.33,-482.42"/>
+<text xml:space="preserve" text-anchor="middle" x="445.69" y="-466.68" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_fold</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_fold_exchange&#45;&gt;module~rdb_ocean_fold -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge39" class="edge">
+<title>module~rdb_ocean_fold_exchange&#45;&gt;module~rdb_ocean_fold</title>
+<path fill="none" stroke="#00b9ff" stroke-dasharray="5,2" d="M1148.52,-280.28C1017.69,-293.56 634.92,-411.09 496.98,-454.37"/>
+<polygon fill="#00b9ff" stroke="#00b9ff" points="496.25,-450.93 487.76,-457.27 498.35,-457.61 496.25,-450.93"/>
+</g>
+<!-- module~rdb_ocean_fold_plan -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_node22" class="node">
+<title>module~rdb_ocean_fold_plan</title>
+<g id="a_module~~rdb_barotropic_substep~~UsesGraph_node22"><a xlink:href="../module/rdb_ocean_fold_plan.html" xlink:title="rdb_ocean_fold_plan">
+<polygon fill="#337ab7" stroke="#337ab7" points="1210.41,-252.42 1088.64,-252.42 1088.64,-228.15 1210.41,-228.15 1210.41,-252.42"/>
+<text xml:space="preserve" text-anchor="middle" x="1149.52" y="-236.68" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_fold_plan</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_fold_exchange&#45;&gt;module~rdb_ocean_fold_plan -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge40" class="edge">
+<title>module~rdb_ocean_fold_exchange&#45;&gt;module~rdb_ocean_fold_plan</title>
+<path fill="none" stroke="#00b9ff" stroke-dasharray="5,2" d="M1265.81,-266.73C1250.12,-263.13 1232.84,-259.17 1216.54,-255.43"/>
+<polygon fill="#00b9ff" stroke="#00b9ff" points="1217.45,-252.04 1206.92,-253.22 1215.88,-258.87 1217.45,-252.04"/>
+</g>
+<!-- module~rdb_ocean_fold_exchange&#45;&gt;module~rdb_ocean_status -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge41" class="edge">
+<title>module~rdb_ocean_fold_exchange&#45;&gt;module~rdb_ocean_status</title>
+<path fill="none" stroke="#00b9ff" stroke-dasharray="5,2" d="M1245.91,-289.3C1194.01,-300.27 1127.43,-323.09 1088.64,-370.28 1031.57,-439.72 1113.75,-503.37 1052.64,-569.28 1029.84,-593.87 1010.92,-576.23 979.63,-588.28"/>
+<path fill="none" stroke="#00b9ff" stroke-dasharray="5,2" d="M977.63,-588.28C819.05,-653.04 611.77,-643.94 509.44,-633.99"/>
+<polygon fill="#00b9ff" stroke="#00b9ff" points="509.9,-630.52 499.6,-633 509.19,-637.49 509.9,-630.52"/>
+</g>
+<!-- module~rdb_ocean_fold_exchange&#45;&gt;pic_logger -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge42" class="edge">
+<title>module~rdb_ocean_fold_exchange&#45;&gt;pic_logger</title>
+<path fill="none" stroke="#00b9ff" stroke-dasharray="5,2" d="M1304.58,-266.68C1248.75,-223.49 1055.49,-81.61 868.62,-34.28 781.24,-12.15 330.11,-85.18 282.55,-114.28"/>
+<path fill="none" stroke="#00b9ff" stroke-dasharray="5,2" d="M280.55,-114.28C258.32,-126.89 244.54,-115.4 226.29,-133.28 211.68,-147.61 169.4,-275.36 152.13,-328.87"/>
+<polygon fill="#00b9ff" stroke="#00b9ff" points="148.86,-327.63 149.13,-338.22 155.52,-329.77 148.86,-327.63"/>
+</g>
+<!-- module~rdb_ocean_fold_exchange&#45;&gt;pic_mpi_lib -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge43" class="edge">
+<title>module~rdb_ocean_fold_exchange&#45;&gt;pic_mpi_lib</title>
+<path fill="none" stroke="#00b9ff" stroke-dasharray="5,2" d="M1306.22,-291.71C1285.47,-309.57 1245.68,-343.32 1210.41,-370.28 1157.77,-410.53 1125.99,-401.56 1088.64,-456.28 1050.97,-511.49 1080.59,-541.58 1052.64,-602.28 1038.63,-632.71 1015.09,-663.4 998.54,-683.05"/>
+<polygon fill="#00b9ff" stroke="#00b9ff" points="995.9,-680.75 992.03,-690.61 1001.21,-685.32 995.9,-680.75"/>
+</g>
+<!-- pic_strings -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_node30" class="node">
+<title>pic_strings</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="177.54,-206.42 109.77,-206.42 109.77,-182.15 177.54,-182.15 177.54,-206.42"/>
+<text xml:space="preserve" text-anchor="middle" x="143.66" y="-190.68" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">pic_strings</text>
+</g>
+<!-- module~rdb_ocean_fold_exchange&#45;&gt;pic_strings -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge44" class="edge">
+<title>module~rdb_ocean_fold_exchange&#45;&gt;pic_strings</title>
+<path fill="none" stroke="#00b9ff" stroke-dasharray="5,2" d="M1314.45,-266.83C1299.92,-238.23 1260.72,-166.98 1210.41,-123.28 1150.9,-71.6 1128.38,-64.11 1052.64,-42.28 952.19,-13.34 561.49,9.52 446.69,-4.28"/>
+<path fill="none" stroke="#00b9ff" stroke-dasharray="5,2" d="M444.69,-4.28C366.25,-12.28 353.34,-41.56 282.55,-76.28"/>
+<path fill="none" stroke="#00b9ff" stroke-dasharray="5,2" d="M280.55,-76.28C256.88,-87.9 247.5,-84.62 226.29,-100.28 198.8,-120.59 174.12,-151.67 159.27,-172.47"/>
+<polygon fill="#00b9ff" stroke="#00b9ff" points="156.51,-170.32 153.67,-180.52 162.25,-174.32 156.51,-170.32"/>
+</g>
+<!-- module~rdb_ocean_halo&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge46" class="edge">
+<title>module~rdb_ocean_halo&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#002eff" stroke-dasharray="5,2" d="M1312.55,-580.51C1269.02,-647.06 1062.14,-962.95 1052.64,-970.28 962.16,-1040.19 922.69,-1038.25 809.48,-1054.28"/>
+</g>
+<!-- module~rdb_ocean_halo&#45;&gt;module~rdb_ocean_halo_counters -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge49" class="edge">
+<title>module~rdb_ocean_halo&#45;&gt;module~rdb_ocean_halo_counters</title>
+<path fill="none" stroke="#002eff" stroke-dasharray="5,2" d="M1148.52,-470.28C1121.65,-459.74 1091.24,-451.49 1063.7,-445.29"/>
+<polygon fill="#002eff" stroke="#002eff" points="1064.49,-441.88 1053.98,-443.16 1063,-448.71 1064.49,-441.88"/>
+</g>
+<!-- module~rdb_ocean_halo&#45;&gt;module~rdb_comm_env -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge45" class="edge">
+<title>module~rdb_ocean_halo&#45;&gt;module~rdb_comm_env</title>
+<path fill="none" stroke="#002eff" stroke-dasharray="5,2" d="M1310.82,-580.69C1292.97,-602.8 1252.87,-649.41 1210.41,-678.28 1205.9,-681.35 1200.97,-684.18 1195.94,-686.76"/>
+<polygon fill="#002eff" stroke="#002eff" points="1194.47,-683.58 1186.94,-691.03 1197.48,-689.9 1194.47,-683.58"/>
+</g>
+<!-- module~rdb_ocean_halo&#45;&gt;module~rdb_decomp -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge47" class="edge">
+<title>module~rdb_ocean_halo&#45;&gt;module~rdb_decomp</title>
+<path fill="none" stroke="#002eff" stroke-dasharray="5,2" d="M1273.18,-562.71C1250.49,-560.04 1223.31,-556.85 1200.31,-554.14"/>
+<polygon fill="#002eff" stroke="#002eff" points="1200.89,-550.68 1190.55,-552.99 1200.07,-557.64 1200.89,-550.68"/>
+</g>
+<!-- module~rdb_ocean_halo&#45;&gt;module~rdb_error_ring -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge48" class="edge">
+<title>module~rdb_ocean_halo&#45;&gt;module~rdb_error_ring</title>
+<path fill="none" stroke="#002eff" stroke-dasharray="5,2" d="M1148.52,-470.28C1047.31,-430.57 1003.07,-497.44 904.62,-451.28 883.85,-441.54 887.54,-427.26 868.62,-414.28 775.31,-350.26 746.2,-332.2 634.46,-314.28"/>
+<path fill="none" stroke="#002eff" stroke-dasharray="5,2" d="M632.46,-314.28C552.86,-286.06 530.05,-287.86 446.69,-274.28"/>
+</g>
+<!-- module~rdb_ocean_periodic -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_node23" class="node">
+<title>module~rdb_ocean_periodic</title>
+<g id="a_module~~rdb_barotropic_substep~~UsesGraph_node23"><a xlink:href="../module/rdb_ocean_periodic.html" xlink:title="rdb_ocean_periodic">
+<polygon fill="#337ab7" stroke="#337ab7" points="866.74,-870.42 750.22,-870.42 750.22,-846.15 866.74,-846.15 866.74,-870.42"/>
+<text xml:space="preserve" text-anchor="middle" x="808.48" y="-854.68" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_periodic</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_halo&#45;&gt;module~rdb_ocean_periodic -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge50" class="edge">
+<title>module~rdb_ocean_halo&#45;&gt;module~rdb_ocean_periodic</title>
+<path fill="none" stroke="#002eff" stroke-dasharray="5,2" d="M1303.76,-580.86C1274.43,-602.09 1211.16,-644.68 1150.52,-664.28"/>
+<path fill="none" stroke="#002eff" stroke-dasharray="5,2" d="M1148.52,-664.28C1045.07,-697.74 995.85,-624.13 904.62,-683.28 850.31,-718.5 824.56,-795.78 814.64,-834.78"/>
+<polygon fill="#002eff" stroke="#002eff" points="811.28,-833.77 812.36,-844.31 818.09,-835.4 811.28,-833.77"/>
+</g>
+<!-- module~rdb_ocean_halo&#45;&gt;module~rdb_ocean_status -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge51" class="edge">
+<title>module~rdb_ocean_halo&#45;&gt;module~rdb_ocean_status</title>
+<path fill="none" stroke="#002eff" stroke-dasharray="5,2" d="M1272.96,-569.54C1185.67,-572.07 1006.4,-578.4 979.63,-588.28"/>
+</g>
+<!-- module~rdb_ocean_halo&#45;&gt;pic_logger -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge52" class="edge">
+<title>module~rdb_ocean_halo&#45;&gt;pic_logger</title>
+<path fill="none" stroke="#002eff" stroke-dasharray="5,2" d="M1303.03,-555.96C1273.09,-535.43 1209.61,-494.13 1150.52,-470.28"/>
+<path fill="none" stroke="#002eff" stroke-dasharray="5,2" d="M1148.52,-470.28C1101.69,-451.38 1096.59,-434.17 1052.64,-409.28 994.91,-376.6 582.14,-161.31 518.58,-142.28 467.98,-127.14 328.49,-88.23 282.55,-114.28"/>
+</g>
+<!-- module~rdb_ocean_halo&#45;&gt;pic_mpi_lib -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge53" class="edge">
+<title>module~rdb_ocean_halo&#45;&gt;pic_mpi_lib</title>
+<path fill="none" stroke="#002eff" stroke-dasharray="5,2" d="M1148.52,-664.28C1107.57,-677.53 1059.73,-688.45 1025.44,-695.51"/>
+<polygon fill="#002eff" stroke="#002eff" points="1024.95,-692.04 1015.85,-697.46 1026.34,-698.9 1024.95,-692.04"/>
+</g>
+<!-- module~rdb_ocean_halo&#45;&gt;pic_strings -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge54" class="edge">
+<title>module~rdb_ocean_halo&#45;&gt;pic_strings</title>
+<path fill="none" stroke="#002eff" stroke-dasharray="5,2" d="M1309.08,-555.74C1289.52,-534.53 1248.15,-490.58 1210.41,-456.28 1143.59,-395.55 1133.29,-368.89 1052.64,-328.28 991.98,-297.74 962.07,-326.51 904.62,-290.28 883.54,-276.99 887.06,-264.05 868.62,-247.28 775.19,-162.31 753.82,-127.57 634.46,-86.28"/>
+<path fill="none" stroke="#002eff" stroke-dasharray="5,2" d="M632.46,-86.28C551.8,-45.82 536.48,4.87 446.69,-4.28"/>
+</g>
+<!-- module~rdb_ocean_halo_counters&#45;&gt;iso_fortran_env -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge55" class="edge">
+<title>module~rdb_ocean_halo_counters&#45;&gt;iso_fortran_env</title>
+<path fill="none" stroke="#5c00ff" stroke-dasharray="5,2" d="M964.66,-442.66C947.59,-459.85 918.16,-492.75 904.62,-527.28 847.23,-673.7 916.61,-729.53 868.62,-879.28 825.84,-1012.79 810.05,-1052.74 712.35,-1153.28 642.08,-1225.6 611.35,-1231.77 518.58,-1271.28 488.18,-1284.23 475.03,-1273.28 446.69,-1290.28"/>
+</g>
+<!-- module~rdb_ocean_halo_counters&#45;&gt;pic_strings -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge56" class="edge">
+<title>module~rdb_ocean_halo_counters&#45;&gt;pic_strings</title>
+<path fill="none" stroke="#5c00ff" stroke-dasharray="5,2" d="M966.91,-417.86C951.41,-399.39 922.63,-363.1 904.62,-328.28 882.15,-284.84 899.59,-262.14 868.62,-224.28 792.12,-130.79 747.38,-129.21 634.46,-86.28"/>
+</g>
+<!-- module~rdb_ocean_metrics&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge58" class="edge">
+<title>module~rdb_ocean_metrics&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#e700ff" stroke-dasharray="5,2" d="M444.69,-510.28C416.11,-528.1 395.59,-509.47 372.81,-534.28 326.73,-584.46 382.52,-632.77 336.81,-683.28 319.67,-702.23 303.44,-687.57 282.55,-702.28"/>
+<path fill="none" stroke="#e700ff" stroke-dasharray="5,2" d="M280.55,-702.28C260.19,-716.63 247.83,-703.78 226.29,-716.28 199.03,-732.11 174.86,-759.56 160.03,-778.76"/>
+<polygon fill="#e700ff" stroke="#e700ff" points="157.25,-776.63 154.06,-786.73 162.85,-780.82 157.25,-776.63"/>
+</g>
+<!-- module~rdb_ocean_metrics&#45;&gt;module~rdb_grid -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge60" class="edge">
+<title>module~rdb_ocean_metrics&#45;&gt;module~rdb_grid</title>
+<path fill="none" stroke="#e700ff" stroke-dasharray="5,2" d="M577.29,-480.77C569.11,-484.24 561.21,-488.66 554.58,-494.28 528.49,-516.39 545.05,-540.64 518.58,-562.28 466.29,-605.04 418,-555.08 372.81,-605.28 313.56,-671.12 376.34,-722.03 336.81,-801.28 329.51,-815.93 317.47,-829.56 306.58,-840.03"/>
+<polygon fill="#e700ff" stroke="#e700ff" points="304.34,-837.34 299.33,-846.68 309.07,-842.5 304.34,-837.34"/>
+</g>
+<!-- module~rdb_ocean_metrics&#45;&gt;iso_fortran_env -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge57" class="edge">
+<title>module~rdb_ocean_metrics&#45;&gt;iso_fortran_env</title>
+<path fill="none" stroke="#e700ff" stroke-dasharray="5,2" d="M576.72,-477.99C568.2,-481.78 560.35,-487.03 554.58,-494.28 501.8,-560.69 568.26,-805.53 518.58,-874.28 477.14,-931.63 434.98,-904.51 372.81,-938.28 296.26,-979.87 212.05,-1039.05 170.61,-1069.13"/>
+<polygon fill="#e700ff" stroke="#e700ff" points="168.74,-1066.17 162.72,-1074.89 172.86,-1071.82 168.74,-1066.17"/>
+</g>
+<!-- module~rdb_ocean_metrics&#45;&gt;module~rdb_error_ring -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge59" class="edge">
+<title>module~rdb_ocean_metrics&#45;&gt;module~rdb_error_ring</title>
+<path fill="none" stroke="#e700ff" stroke-dasharray="5,2" d="M615.27,-455.67C598.94,-443.35 574.06,-423.67 554.58,-404.28 501.36,-351.32 521.15,-283.98 446.69,-274.28"/>
+</g>
+<!-- module~rdb_io_netcdf -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_node18" class="node">
+<title>module~rdb_io_netcdf</title>
+<g id="a_module~~rdb_barotropic_substep~~UsesGraph_node18"><a xlink:href="../module/rdb_io_netcdf.html" xlink:title="rdb_io_netcdf">
+<polygon fill="#337ab7" stroke="#337ab7" points="487.45,-208.42 403.93,-208.42 403.93,-184.15 487.45,-184.15 487.45,-208.42"/>
+<text xml:space="preserve" text-anchor="middle" x="445.69" y="-192.68" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_io_netcdf</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_metrics&#45;&gt;module~rdb_io_netcdf -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge61" class="edge">
+<title>module~rdb_ocean_metrics&#45;&gt;module~rdb_io_netcdf</title>
+<path fill="none" stroke="#e700ff" stroke-dasharray="5,2" d="M610.68,-455.86C592.94,-444.63 568.61,-426.47 554.58,-404.28 519.32,-348.53 552.73,-316.72 518.58,-260.28 507.76,-242.41 490.36,-226.72 475.39,-215.36"/>
+<polygon fill="#e700ff" stroke="#e700ff" points="477.83,-212.81 467.69,-209.75 473.71,-218.46 477.83,-212.81"/>
+</g>
+<!-- module~rdb_ocean_metrics&#45;&gt;module~rdb_mem_report -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge62" class="edge">
+<title>module~rdb_ocean_metrics&#45;&gt;module~rdb_mem_report</title>
+<path fill="none" stroke="#e700ff" stroke-dasharray="5,2" d="M444.69,-510.28C408.89,-532.6 394.04,-535.82 372.81,-572.28 331.33,-643.54 387.34,-689.12 336.81,-754.28 334.8,-756.88 332.47,-759.22 329.92,-761.35"/>
+<polygon fill="#e700ff" stroke="#e700ff" points="328.11,-758.34 321.84,-766.88 332.07,-764.12 328.11,-758.34"/>
+</g>
+<!-- module~rdb_ocean_bipolar -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_node20" class="node">
+<title>module~rdb_ocean_bipolar</title>
+<g id="a_module~~rdb_barotropic_substep~~UsesGraph_node20"><a xlink:href="../module/rdb_ocean_bipolar.html" xlink:title="rdb_ocean_bipolar">
+<polygon fill="#337ab7" stroke="#337ab7" points="336.81,-674.42 226.29,-674.42 226.29,-650.15 336.81,-650.15 336.81,-674.42"/>
+<text xml:space="preserve" text-anchor="middle" x="281.55" y="-658.68" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_bipolar</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_metrics&#45;&gt;module~rdb_ocean_bipolar -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge63" class="edge">
+<title>module~rdb_ocean_metrics&#45;&gt;module~rdb_ocean_bipolar</title>
+<path fill="none" stroke="#e700ff" stroke-dasharray="5,2" d="M577.04,-479.89C524.36,-491.06 452.34,-506.76 446.69,-510.28"/>
+<path fill="none" stroke="#e700ff" stroke-dasharray="5,2" d="M444.69,-510.28C416.11,-528.1 396.83,-510.67 372.81,-534.28 338.53,-567.99 368.93,-600.51 336.81,-636.28 334.37,-639 331.58,-641.47 328.58,-643.69"/>
+<polygon fill="#e700ff" stroke="#e700ff" points="326.99,-640.56 320.4,-648.86 330.72,-646.48 326.99,-640.56"/>
+</g>
+<!-- module~rdb_ocean_metrics&#45;&gt;module~rdb_ocean_fold -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge64" class="edge">
+<title>module~rdb_ocean_metrics&#45;&gt;module~rdb_ocean_fold</title>
+<path fill="none" stroke="#e700ff" stroke-dasharray="5,2" d="M576.73,-468.88C553.78,-469.13 527.21,-469.42 504.09,-469.67"/>
+<polygon fill="#e700ff" stroke="#e700ff" points="504.18,-466.16 494.22,-469.77 504.25,-473.16 504.18,-466.16"/>
+</g>
+<!-- module~rdb_ocean_metrics&#45;&gt;module~rdb_ocean_status -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge65" class="edge">
+<title>module~rdb_ocean_metrics&#45;&gt;module~rdb_ocean_status</title>
+<path fill="none" stroke="#e700ff" stroke-dasharray="5,2" d="M576.87,-479.71C568.64,-483.31 560.85,-488.05 554.58,-494.28 519.31,-529.37 553.41,-564.76 518.58,-600.28 515.48,-603.45 511.97,-606.22 508.2,-608.67"/>
+<polygon fill="#e700ff" stroke="#e700ff" points="506.8,-605.44 499.74,-613.34 510.19,-611.57 506.8,-605.44"/>
+</g>
+<!-- netcdf -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_node26" class="node">
+<title>netcdf</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="308.55,-166.42 254.55,-166.42 254.55,-142.15 308.55,-142.15 308.55,-166.42"/>
+<text xml:space="preserve" text-anchor="middle" x="281.55" y="-150.68" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">netcdf</text>
+</g>
+<!-- module~rdb_ocean_metrics&#45;&gt;netcdf -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge66" class="edge">
+<title>module~rdb_ocean_metrics&#45;&gt;netcdf</title>
+<path fill="none" stroke="#e700ff" stroke-dasharray="5,2" d="M444.69,-156.28C407.8,-132.05 355.29,-136.75 320.12,-144.03"/>
+<polygon fill="#e700ff" stroke="#e700ff" points="319.36,-140.61 310.38,-146.23 320.9,-147.44 319.36,-140.61"/>
+</g>
+<!-- module~rdb_ocean_metrics&#45;&gt;pic_logger -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge67" class="edge">
+<title>module~rdb_ocean_metrics&#45;&gt;pic_logger</title>
+<path fill="none" stroke="#e700ff" stroke-dasharray="5,2" d="M609.44,-455.73C591.46,-444.65 567.44,-426.77 554.58,-404.28 503.44,-314.85 587.6,-251.77 518.58,-175.28 496.44,-150.75 474.32,-174.43 446.69,-156.28"/>
+<path fill="none" stroke="#e700ff" stroke-dasharray="5,2" d="M444.69,-156.28C436.92,-151.18 290.49,-109.43 282.55,-114.28"/>
+</g>
+<!-- module~rdb_ocean_metrics&#45;&gt;pic_strings -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge68" class="edge">
+<title>module~rdb_ocean_metrics&#45;&gt;pic_strings</title>
+<path fill="none" stroke="#e700ff" stroke-dasharray="5,2" d="M609.32,-455.79C591.28,-444.75 567.22,-426.89 554.58,-404.28 497.23,-301.69 574.71,-245.56 518.58,-142.28 498.43,-105.21 483.79,-100.38 446.69,-80.28"/>
+</g>
+<!-- module~rdb_profiler&#45;&gt;iso_fortran_env -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge69" class="edge">
+<title>module~rdb_profiler&#45;&gt;iso_fortran_env</title>
+<path fill="none" stroke="#ff008b" stroke-dasharray="5,2" d="M245.28,-1271.68C238.41,-1268.1 231.68,-1263.67 226.29,-1258.28 183.84,-1215.87 160.33,-1147.05 150.4,-1111.38"/>
+<polygon fill="#ff008b" stroke="#ff008b" points="153.88,-1110.86 147.93,-1102.1 147.12,-1112.66 153.88,-1110.86"/>
+</g>
+<!-- module~rdb_profiler&#45;&gt;pic_logger -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge70" class="edge">
+<title>module~rdb_profiler&#45;&gt;pic_logger</title>
+<path fill="none" stroke="#ff008b" stroke-dasharray="5,2" d="M271.33,-1271.9C258.69,-1254.18 236.41,-1220.11 226.29,-1187.28 172.67,-1013.32 207.96,-960.46 190.29,-779.28 175.29,-625.55 154.68,-440.97 147.36,-376.17"/>
+<polygon fill="#ff008b" stroke="#ff008b" points="150.86,-375.9 146.25,-366.35 143.9,-376.68 150.86,-375.9"/>
+</g>
+<!-- module~rdb_comm_env&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge72" class="edge">
+<title>module~rdb_comm_env&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#ff5000" stroke-dasharray="5,2" d="M1143.48,-716.71C1118.26,-776.6 999.52,-1033.32 809.48,-1054.28"/>
+<path fill="none" stroke="#ff5000" stroke-dasharray="5,2" d="M807.48,-1054.28C648.69,-1076.66 606.3,-1034.78 446.69,-1050.28"/>
+</g>
+<!-- module~rdb_comm_env&#45;&gt;iso_fortran_env -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge71" class="edge">
+<title>module~rdb_comm_env&#45;&gt;iso_fortran_env</title>
+<path fill="none" stroke="#ff5000" stroke-dasharray="5,2" d="M1146.67,-716.91C1140.21,-757.43 1115.52,-886.44 1052.64,-970.28 937.18,-1124.23 456.54,-1448.5 282.55,-1366.28"/>
+</g>
+<!-- module~rdb_comm_env&#45;&gt;pic_mpi_lib -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge73" class="edge">
+<title>module~rdb_comm_env&#45;&gt;pic_mpi_lib</title>
+<path fill="none" stroke="#ff5000" stroke-dasharray="5,2" d="M1102.82,-704.28C1078.89,-704.28 1049.67,-704.28 1025.69,-704.28"/>
+<polygon fill="#ff5000" stroke="#ff5000" points="1025.9,-700.78 1015.9,-704.28 1025.9,-707.78 1025.9,-700.78"/>
+</g>
+<!-- module~rdb_config -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_node35" class="node">
+<title>module~rdb_config</title>
+<g id="a_module~~rdb_barotropic_substep~~UsesGraph_node35"><a xlink:href="../module/rdb_config.html" xlink:title="rdb_config">
+<polygon fill="#337ab7" stroke="#337ab7" points="1012.51,-560.42 944.74,-560.42 944.74,-536.15 1012.51,-536.15 1012.51,-560.42"/>
+<text xml:space="preserve" text-anchor="middle" x="978.63" y="-544.68" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_config</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_decomp&#45;&gt;module~rdb_config -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge74" class="edge">
+<title>module~rdb_decomp&#45;&gt;module~rdb_config</title>
+<path fill="none" stroke="#ffa100" stroke-dasharray="5,2" d="M1110.2,-548.28C1084.68,-548.28 1051.06,-548.28 1024.32,-548.28"/>
+<polygon fill="#ffa100" stroke="#ffa100" points="1024.47,-544.78 1014.47,-548.28 1024.47,-551.78 1024.47,-544.78"/>
+</g>
+<!-- module~rdb_efp&#45;&gt;iso_fortran_env -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge76" class="edge">
+<title>module~rdb_efp&#45;&gt;iso_fortran_env</title>
+<path fill="none" stroke="#fff100" stroke-dasharray="5,2" d="M418.32,-1211.93C375.33,-1216.58 288.69,-1220.45 226.29,-1187.28 193.88,-1170.06 169.37,-1134 156.02,-1110.48"/>
+<polygon fill="#fff100" stroke="#fff100" points="159.26,-1109.11 151.41,-1102 153.11,-1112.46 159.26,-1109.11"/>
+</g>
+<!-- ieee_arithmetic -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_node32" class="node">
+<title>ieee_arithmetic</title>
+<g id="a_module~~rdb_barotropic_substep~~UsesGraph_node32"><a xlink:href="http://fortranwiki.org/fortran/show/ieee_arithmetic" xlink:title="ieee_arithmetic">
+<polygon fill="#337ab7" stroke="#337ab7" points="328.93,-1178.42 234.16,-1178.42 234.16,-1154.15 328.93,-1154.15 328.93,-1178.42"/>
+<text xml:space="preserve" text-anchor="middle" x="281.55" y="-1162.68" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ieee_arithmetic</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_efp&#45;&gt;ieee_arithmetic -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge75" class="edge">
+<title>module~rdb_efp&#45;&gt;ieee_arithmetic</title>
+<path fill="none" stroke="#fff100" stroke-dasharray="5,2" d="M418.28,-1201.44C397.24,-1195.99 367,-1188.16 340.4,-1181.27"/>
+<polygon fill="#fff100" stroke="#fff100" points="341.29,-1177.88 330.73,-1178.76 339.53,-1184.66 341.29,-1177.88"/>
+</g>
+<!-- module~rdb_error_ring&#45;&gt;pic_logger -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge77" class="edge">
+<title>module~rdb_error_ring&#45;&gt;pic_logger</title>
+<path fill="none" stroke="#bbff00" stroke-dasharray="5,2" d="M237.55,-352.28C222.06,-352.28 204.56,-352.28 188.96,-352.28"/>
+<polygon fill="#bbff00" stroke="#bbff00" points="188.98,-348.78 178.98,-352.28 188.98,-355.78 188.98,-348.78"/>
+</g>
+<!-- module~rdb_io_netcdf&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge80" class="edge">
+<title>module~rdb_io_netcdf&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#6bff00" stroke-dasharray="5,2" d="M422.12,-208.84C368.87,-238.64 238.97,-312.55 226.29,-331.28 175.97,-405.68 152.25,-691.8 146.23,-776.52"/>
+<polygon fill="#6bff00" stroke="#6bff00" points="142.75,-776.19 145.55,-786.41 149.73,-776.67 142.75,-776.19"/>
+</g>
+<!-- module~rdb_io_netcdf&#45;&gt;iso_fortran_env -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge79" class="edge">
+<title>module~rdb_io_netcdf&#45;&gt;iso_fortran_env</title>
+<path fill="none" stroke="#6bff00" stroke-dasharray="5,2" d="M437.96,-208.86C423.34,-236.81 388.73,-306.55 372.81,-369.28 353.74,-444.43 383.82,-654.64 336.81,-716.28 304.85,-758.19 261.1,-719.71 226.29,-759.28 185.49,-805.67 156.71,-997.22 147.67,-1064.66"/>
+<polygon fill="#6bff00" stroke="#6bff00" points="144.24,-1063.88 146.41,-1074.25 151.18,-1064.79 144.24,-1063.88"/>
+</g>
+<!-- module~rdb_io_netcdf&#45;&gt;module~rdb_error_ring -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge81" class="edge">
+<title>module~rdb_io_netcdf&#45;&gt;module~rdb_error_ring</title>
+<path fill="none" stroke="#6bff00" stroke-dasharray="5,2" d="M430.12,-208.75C415.41,-221.45 392.17,-241.84 372.81,-260.28 347.78,-284.13 320.08,-312.71 302.05,-331.62"/>
+<polygon fill="#6bff00" stroke="#6bff00" points="299.66,-329.06 295.31,-338.72 304.73,-333.88 299.66,-329.06"/>
+</g>
+<!-- module~rdb_io_netcdf&#45;&gt;netcdf -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge82" class="edge">
+<title>module~rdb_io_netcdf&#45;&gt;netcdf</title>
+<path fill="none" stroke="#6bff00" stroke-dasharray="5,2" d="M403.78,-185.69C377.91,-178.98 344.74,-170.39 319.64,-163.89"/>
+<polygon fill="#6bff00" stroke="#6bff00" points="320.75,-160.56 310.19,-161.44 318.99,-167.34 320.75,-160.56"/>
+</g>
+<!-- module~rdb_io_netcdf&#45;&gt;pic_logger -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge83" class="edge">
+<title>module~rdb_io_netcdf&#45;&gt;pic_logger</title>
+<path fill="none" stroke="#6bff00" stroke-dasharray="5,2" d="M280.55,-194.28C255.82,-200.71 246.02,-197.05 226.29,-213.28 188.15,-244.65 163.8,-298.82 152.35,-329.45"/>
+<polygon fill="#6bff00" stroke="#6bff00" points="149.18,-327.92 149.11,-338.52 155.77,-330.28 149.18,-327.92"/>
+</g>
+<!-- module~rdb_io_netcdf&#45;&gt;pic_strings -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge84" class="edge">
+<title>module~rdb_io_netcdf&#45;&gt;pic_strings</title>
+<path fill="none" stroke="#6bff00" stroke-dasharray="5,2" d="M403.66,-189.89C370.45,-186.1 322.74,-183.85 282.55,-194.28"/>
+<path fill="none" stroke="#6bff00" stroke-dasharray="5,2" d="M280.55,-194.28C250.81,-202.01 216.16,-201.87 189.29,-199.88"/>
+<polygon fill="#6bff00" stroke="#6bff00" points="189.69,-196.4 179.43,-199.02 189.09,-203.37 189.69,-196.4"/>
+</g>
+<!-- iso_c_binding -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_node33" class="node">
+<title>iso_c_binding</title>
+<g id="a_module~~rdb_barotropic_substep~~UsesGraph_node33"><a xlink:href="http://fortranwiki.org/fortran/show/iso_c_binding" xlink:title="iso_c_binding">
+<polygon fill="#337ab7" stroke="#337ab7" points="322.93,-246.42 240.16,-246.42 240.16,-222.15 322.93,-222.15 322.93,-246.42"/>
+<text xml:space="preserve" text-anchor="middle" x="281.55" y="-230.68" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">iso_c_binding</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_io_netcdf&#45;&gt;iso_c_binding -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge78" class="edge">
+<title>module~rdb_io_netcdf&#45;&gt;iso_c_binding</title>
+<path fill="none" stroke="#6bff00" stroke-dasharray="5,2" d="M403.78,-205.87C382.67,-210.82 356.71,-216.91 334.23,-222.17"/>
+<polygon fill="#6bff00" stroke="#6bff00" points="333.58,-218.73 324.65,-224.42 335.18,-225.54 333.58,-218.73"/>
+</g>
+<!-- module~rdb_mem_report&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge86" class="edge">
+<title>module~rdb_mem_report&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#1aff00" stroke-dasharray="5,2" d="M231.1,-787.56C220.29,-789.15 208.8,-790.84 197.85,-792.46"/>
+<polygon fill="#1aff00" stroke="#1aff00" points="197.56,-788.96 188.17,-793.88 198.58,-795.89 197.56,-788.96"/>
+</g>
+<!-- module~rdb_mem_report&#45;&gt;iso_fortran_env -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge85" class="edge">
+<title>module~rdb_mem_report&#45;&gt;iso_fortran_env</title>
+<path fill="none" stroke="#1aff00" stroke-dasharray="5,2" d="M243.45,-792.83C237.04,-796.36 230.95,-800.78 226.29,-806.28 160.55,-883.89 147.69,-1011.85 145.22,-1064.51"/>
+<polygon fill="#1aff00" stroke="#1aff00" points="141.73,-1064.3 144.86,-1074.42 148.72,-1064.56 141.73,-1064.3"/>
+</g>
+<!-- module~rdb_mem_report&#45;&gt;pic_logger -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge87" class="edge">
+<title>module~rdb_mem_report&#45;&gt;pic_logger</title>
+<path fill="none" stroke="#1aff00" stroke-dasharray="5,2" d="M272.02,-767.65C260.21,-749.65 238.9,-715.23 226.29,-683.28 182.55,-572.45 157.12,-431.24 148.25,-375.97"/>
+<polygon fill="#1aff00" stroke="#1aff00" points="151.72,-375.5 146.71,-366.17 144.8,-376.59 151.72,-375.5"/>
+</g>
+<!-- module~rdb_mem_report&#45;&gt;pic_strings -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge88" class="edge">
+<title>module~rdb_mem_report&#45;&gt;pic_strings</title>
+<path fill="none" stroke="#1aff00" stroke-dasharray="5,2" d="M271.39,-767.88C258.83,-750.14 236.64,-716.04 226.29,-683.28 178.92,-533.33 223.34,-485.03 190.29,-331.28 181.48,-290.29 164.7,-244.39 154.13,-217.48"/>
+<polygon fill="#1aff00" stroke="#1aff00" points="157.41,-216.26 150.45,-208.27 150.91,-218.86 157.41,-216.26"/>
+</g>
+<!-- module~rdb_ocean_bipolar&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge89" class="edge">
+<title>module~rdb_ocean_bipolar&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#00ff35" stroke-dasharray="5,2" d="M247.7,-674.82C240.23,-678.51 232.63,-683.01 226.29,-688.28 195.51,-713.89 170.26,-753.52 156.35,-778.13"/>
+<polygon fill="#00ff35" stroke="#00ff35" points="153.42,-776.2 151.67,-786.65 159.55,-779.57 153.42,-776.2"/>
+</g>
+<!-- module~rdb_ocean_fold&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge90" class="edge">
+<title>module~rdb_ocean_fold&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#00ff86" stroke-dasharray="5,2" d="M398.59,-480.15C389.14,-483.92 379.91,-489.12 372.81,-496.28 338.95,-530.41 370.26,-563.76 336.81,-598.28 300.14,-636.14 265.43,-605.99 226.29,-641.28 184.44,-679.02 160.89,-743.22 150.73,-777.36"/>
+<polygon fill="#00ff86" stroke="#00ff86" points="147.46,-776.05 148.1,-786.63 154.2,-777.96 147.46,-776.05"/>
+</g>
+<!-- module~rdb_ocean_periodic&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge91" class="edge">
+<title>module~rdb_ocean_periodic&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#00d6ff" stroke-dasharray="5,2" d="M768.97,-870.81C761.58,-874.38 754.3,-878.82 748.35,-884.28 723.74,-906.88 738.57,-929.57 712.35,-950.28 655.33,-995.35 621.89,-965.88 554.58,-993.28 504.35,-1013.73 500.68,-1045.16 446.69,-1050.28"/>
+<path fill="none" stroke="#00d6ff" stroke-dasharray="5,2" d="M444.69,-1050.28C372.97,-1057.25 339.98,-1093.81 282.55,-1050.28"/>
+<path fill="none" stroke="#00d6ff" stroke-dasharray="5,2" d="M280.55,-1050.28C202.53,-991.16 163.87,-873.77 150.38,-823.75"/>
+<polygon fill="#00d6ff" stroke="#00d6ff" points="153.83,-823.09 147.93,-814.28 147.05,-824.84 153.83,-823.09"/>
+</g>
+<!-- module~rdb_ocean_periodic&#45;&gt;module~rdb_grid -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge92" class="edge">
+<title>module~rdb_ocean_periodic&#45;&gt;module~rdb_grid</title>
+<path fill="none" stroke="#00d6ff" stroke-dasharray="5,2" d="M778.57,-870.9C768.95,-875.12 758.18,-879.88 748.35,-884.28 697.57,-907.04 689.77,-930.2 634.46,-936.28"/>
+<path fill="none" stroke="#00d6ff" stroke-dasharray="5,2" d="M632.46,-936.28C517.1,-948.98 383.9,-902.74 320.23,-876.77"/>
+<polygon fill="#00d6ff" stroke="#00d6ff" points="321.87,-873.66 311.3,-873.06 319.19,-880.13 321.87,-873.66"/>
+</g>
+<!-- module~rdb_ocean_periodic&#45;&gt;module~rdb_ocean_boundary_types -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge94" class="edge">
+<title>module~rdb_ocean_periodic&#45;&gt;module~rdb_ocean_boundary_types</title>
+<path fill="none" stroke="#00d6ff" stroke-dasharray="5,2" d="M766.71,-870.84C759.92,-874.35 753.44,-878.76 748.35,-884.28 715.19,-920.24 747.13,-953.89 712.35,-988.28 709.33,-991.27 705.97,-993.91 702.37,-996.24"/>
+<polygon fill="#00d6ff" stroke="#00d6ff" points="700.79,-993.12 693.73,-1001.02 704.18,-999.25 700.79,-993.12"/>
+</g>
+<!-- module~rdb_multilayer_state -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_node36" class="node">
+<title>module~rdb_multilayer_state</title>
+<g id="a_module~~rdb_barotropic_substep~~UsesGraph_node36"><a xlink:href="../module/rdb_multilayer_state.html" xlink:title="rdb_multilayer_state">
+<polygon fill="#337ab7" stroke="#337ab7" points="693.6,-800.42 573.33,-800.42 573.33,-776.15 693.6,-776.15 693.6,-800.42"/>
+<text xml:space="preserve" text-anchor="middle" x="633.46" y="-784.68" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_multilayer_state</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_periodic&#45;&gt;module~rdb_multilayer_state -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge93" class="edge">
+<title>module~rdb_ocean_periodic&#45;&gt;module~rdb_multilayer_state</title>
+<path fill="none" stroke="#00d6ff" stroke-dasharray="5,2" d="M776.55,-845.77C748.47,-834.41 706.83,-817.56 675.88,-805.04"/>
+<polygon fill="#00d6ff" stroke="#00d6ff" points="677.41,-801.88 666.82,-801.38 674.78,-808.37 677.41,-801.88"/>
+</g>
+<!-- module~rdb_ocean_tide_astro&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge96" class="edge">
+<title>module~rdb_ocean_tide_astro&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#0035ff" stroke-dasharray="5,2" d="M383.11,-1249.04C333.74,-1244.63 266.32,-1230.35 226.29,-1187.28 201.05,-1160.13 160.3,-903.41 148.17,-823.75"/>
+<polygon fill="#0035ff" stroke="#0035ff" points="151.66,-823.4 146.7,-814.04 144.74,-824.45 151.66,-823.4"/>
+</g>
+<!-- module~rdb_calendar -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_node34" class="node">
+<title>module~rdb_calendar</title>
+<g id="a_module~~rdb_barotropic_substep~~UsesGraph_node34"><a xlink:href="../module/rdb_calendar.html" xlink:title="rdb_calendar">
+<polygon fill="#337ab7" stroke="#337ab7" points="322.56,-1338.42 240.54,-1338.42 240.54,-1314.15 322.56,-1314.15 322.56,-1338.42"/>
+<text xml:space="preserve" text-anchor="middle" x="281.55" y="-1322.68" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_calendar</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_tide_astro&#45;&gt;module~rdb_calendar -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge95" class="edge">
+<title>module~rdb_ocean_tide_astro&#45;&gt;module~rdb_calendar</title>
+<path fill="none" stroke="#0035ff" stroke-dasharray="5,2" d="M402.6,-1262.87C392.55,-1266.59 382.06,-1271.08 372.81,-1276.28 354.9,-1286.36 354.6,-1295.01 336.81,-1305.28 334.64,-1306.54 332.39,-1307.74 330.08,-1308.9"/>
+<polygon fill="#0035ff" stroke="#0035ff" points="328.74,-1305.66 321.12,-1313.02 331.67,-1312.02 328.74,-1305.66"/>
+</g>
+<!-- module~rdb_calendar&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge98" class="edge">
+<title>module~rdb_calendar&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M240.23,-1316.38C234.91,-1313.56 230.02,-1309.93 226.29,-1305.28 192.83,-1263.55 198.8,-1120.09 190.29,-1067.28 175.8,-977.34 157.11,-870.61 148.87,-824.02"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="152.33,-823.51 147.14,-814.27 145.44,-824.73 152.33,-823.51"/>
+</g>
+<!-- module~rdb_calendar&#45;&gt;iso_fortran_env -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge97" class="edge">
+<title>module~rdb_calendar&#45;&gt;iso_fortran_env</title>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M240.23,-1315.22C235.11,-1312.57 230.27,-1309.3 226.29,-1305.28 171.9,-1250.38 153.18,-1155.77 147.21,-1111.9"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="150.72,-1111.7 146.01,-1102.21 143.77,-1112.56 150.72,-1111.7"/>
+</g>
+<!-- module~rdb_calendar&#45;&gt;pic_ascii -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge99" class="edge">
+<title>module~rdb_calendar&#45;&gt;pic_ascii</title>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M258.72,-1338.82C236.43,-1351.61 201.6,-1371.6 176.3,-1386.12"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="174.68,-1383.02 167.75,-1391.03 178.16,-1389.09 174.68,-1383.02"/>
+</g>
+<!-- module~rdb_config&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge100" class="edge">
+<title>module~rdb_config&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M944.33,-536.71C910.78,-525.92 857.26,-511.09 809.48,-508.28"/>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M807.48,-508.28C730.72,-503.78 709.84,-493.07 634.46,-508.28"/>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M632.46,-508.28C549.68,-524.99 524.77,-516.08 446.69,-548.28"/>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M444.69,-548.28C414.61,-560.7 396.91,-540.41 372.81,-562.28 331.26,-599.99 375.53,-642.68 336.81,-683.28 319.18,-701.78 303.44,-687.57 282.55,-702.28"/>
+</g>
+<!-- module~rdb_config&#45;&gt;module~rdb_error_ring -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge101" class="edge">
+<title>module~rdb_config&#45;&gt;module~rdb_error_ring</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M944.25,-539.78C931.29,-535.63 916.7,-529.87 904.62,-522.28 854.28,-490.67 861.3,-457.4 809.48,-428.28"/>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M807.48,-428.28C727.2,-383.17 725.39,-328.87 634.46,-314.28"/>
+</g>
+<!-- module~rdb_config&#45;&gt;module~rdb_ocean_status -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge106" class="edge">
+<title>module~rdb_config&#45;&gt;module~rdb_ocean_status</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M632.46,-508.28C597.54,-515.33 582.5,-505.15 554.58,-527.28 526.86,-549.27 544.79,-574.52 518.58,-598.28 514.11,-602.33 509,-605.82 503.6,-608.83"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="502.43,-605.5 495.01,-613.05 505.52,-611.78 502.43,-605.5"/>
+</g>
+<!-- module~rdb_config&#45;&gt;pic_ascii -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge107" class="edge">
+<title>module~rdb_config&#45;&gt;pic_ascii</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M968.5,-560.92C952.41,-583.94 919.31,-634.84 904.62,-683.28 854.74,-847.74 943.3,-913.5 868.62,-1068.28 778.06,-1255.98 706.36,-1289.9 518.58,-1380.28 400.59,-1437.07 356.83,-1427.61 226.29,-1417.28 212.24,-1416.17 196.95,-1414 183.44,-1411.74"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="184.05,-1408.3 173.6,-1410.03 182.85,-1415.19 184.05,-1408.3"/>
+</g>
+<!-- module~rdb_config&#45;&gt;pic_logger -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge108" class="edge">
+<title>module~rdb_config&#45;&gt;pic_logger</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M807.48,-428.28C738.85,-389.71 712.19,-402.82 634.46,-390.28"/>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M632.46,-390.28C581.65,-382.09 569.84,-373.97 518.58,-369.28 454.06,-363.39 437.09,-361.22 372.81,-369.28 331.73,-374.44 323.83,-395.37 282.55,-392.28"/>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M280.55,-392.28C248,-389.05 212.59,-378.38 186.08,-368.87"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="187.31,-365.59 176.72,-365.42 184.89,-372.16 187.31,-365.59"/>
+</g>
+<!-- module~rdb_config&#45;&gt;pic_strings -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge109" class="edge">
+<title>module~rdb_config&#45;&gt;pic_strings</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M968.83,-535.7C951.28,-511.03 910.03,-455.15 868.62,-414.28 698.38,-246.3 657,-194.18 446.69,-80.28"/>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M444.69,-80.28C380.76,-46.99 347.27,-44.54 282.55,-76.28"/>
+</g>
+<!-- module~rdb_ice_enthalpy -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_node37" class="node">
+<title>module~rdb_ice_enthalpy</title>
+<g id="a_module~~rdb_barotropic_substep~~UsesGraph_node37"><a xlink:href="../module/rdb_ice_enthalpy.html" xlink:title="rdb_ice_enthalpy">
+<polygon fill="#337ab7" stroke="#337ab7" points="684.6,-560.42 582.33,-560.42 582.33,-536.15 684.6,-536.15 684.6,-560.42"/>
+<text xml:space="preserve" text-anchor="middle" x="633.46" y="-544.68" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_enthalpy</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_config&#45;&gt;module~rdb_ice_enthalpy -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge102" class="edge">
+<title>module~rdb_config&#45;&gt;module~rdb_ice_enthalpy</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M807.48,-508.28C784.46,-506.93 729.24,-520.83 687.33,-532.61"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="686.56,-529.19 677.9,-535.29 688.48,-535.92 686.56,-529.19"/>
+</g>
+<!-- module~rdb_ice_init -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_node38" class="node">
+<title>module~rdb_ice_init</title>
+<g id="a_module~~rdb_barotropic_substep~~UsesGraph_node38"><a xlink:href="../module/rdb_ice_init.html" xlink:title="rdb_ice_init">
+<polygon fill="#337ab7" stroke="#337ab7" points="844.62,-699.42 772.35,-699.42 772.35,-675.15 844.62,-675.15 844.62,-699.42"/>
+<text xml:space="preserve" text-anchor="middle" x="808.48" y="-683.68" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_init</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_config&#45;&gt;module~rdb_ice_init -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge103" class="edge">
+<title>module~rdb_config&#45;&gt;module~rdb_ice_init</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M962.41,-560.86C933.02,-585.16 868.28,-638.68 833.2,-667.68"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="831.19,-664.8 825.71,-673.87 835.65,-670.19 831.19,-664.8"/>
+</g>
+<!-- module~rdb_nml_schema -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_node39" class="node">
+<title>module~rdb_nml_schema</title>
+<g id="a_module~~rdb_barotropic_substep~~UsesGraph_node39"><a xlink:href="../module/rdb_nml_schema.html" xlink:title="rdb_nml_schema">
+<polygon fill="#337ab7" stroke="#337ab7" points="496.83,-402.42 394.56,-402.42 394.56,-378.15 496.83,-378.15 496.83,-402.42"/>
+<text xml:space="preserve" text-anchor="middle" x="445.69" y="-386.68" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_nml_schema</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_config&#45;&gt;module~rdb_nml_schema -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge104" class="edge">
+<title>module~rdb_config&#45;&gt;module~rdb_nml_schema</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M632.46,-390.28C591.52,-383.68 544.84,-383.71 508.52,-385.38"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="508.42,-381.88 498.62,-385.89 508.79,-388.87 508.42,-381.88"/>
+</g>
+<!-- module~rdb_ocean_bulk_flux -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_node40" class="node">
+<title>module~rdb_ocean_bulk_flux</title>
+<g id="a_module~~rdb_barotropic_substep~~UsesGraph_node40"><a xlink:href="../module/rdb_ocean_bulk_flux.html" xlink:title="rdb_ocean_bulk_flux">
+<polygon fill="#337ab7" stroke="#337ab7" points="868.62,-560.42 748.35,-560.42 748.35,-536.15 868.62,-536.15 868.62,-560.42"/>
+<text xml:space="preserve" text-anchor="middle" x="808.48" y="-544.68" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_bulk_flux</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_config&#45;&gt;module~rdb_ocean_bulk_flux -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge105" class="edge">
+<title>module~rdb_config&#45;&gt;module~rdb_ocean_bulk_flux</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M944.41,-548.28C926.07,-548.28 902.56,-548.28 880.32,-548.28"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="880.36,-544.78 870.36,-548.28 880.36,-551.78 880.36,-544.78"/>
+</g>
+<!-- module~rdb_multilayer_state&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge111" class="edge">
+<title>module~rdb_multilayer_state&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M584.06,-775.76C573.96,-772.16 563.63,-767.7 554.58,-762.28 535.7,-750.98 537.46,-739.59 518.58,-728.28 489.68,-710.98 479.89,-709.99 446.69,-704.28"/>
+</g>
+<!-- module~rdb_multilayer_state&#45;&gt;module~rdb_grid -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge114" class="edge">
+<title>module~rdb_multilayer_state&#45;&gt;module~rdb_grid</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M611.41,-800.89C577.93,-819.89 509.88,-854.28 446.69,-860.28"/>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M444.69,-860.28C402.64,-864.28 354.17,-863.59 321.26,-862.34"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="321.53,-858.84 311.39,-861.92 321.23,-865.84 321.53,-858.84"/>
+</g>
+<!-- module~rdb_multilayer_state&#45;&gt;iso_fortran_env -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge110" class="edge">
+<title>module~rdb_multilayer_state&#45;&gt;iso_fortran_env</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M625.08,-800.85C592.85,-854.04 458.19,-1059.15 282.55,-1088.28"/>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M280.55,-1088.28C254.9,-1091.62 226.29,-1092.09 201.97,-1091.55"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="202.37,-1088.06 192.28,-1091.27 202.17,-1095.06 202.37,-1088.06"/>
+</g>
+<!-- module~rdb_multilayer_state&#45;&gt;module~rdb_efp -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge112" class="edge">
+<title>module~rdb_multilayer_state&#45;&gt;module~rdb_efp</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M627.43,-800.66C614.59,-832.4 579.84,-919.44 554.58,-993.28 536.83,-1045.16 543.26,-1062.32 518.58,-1111.28 504.29,-1139.62 481.76,-1168.37 465.73,-1187.13"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="463.16,-1184.76 459.23,-1194.6 468.44,-1189.36 463.16,-1184.76"/>
+</g>
+<!-- module~rdb_multilayer_state&#45;&gt;module~rdb_error_ring -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge113" class="edge">
+<title>module~rdb_multilayer_state&#45;&gt;module~rdb_error_ring</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M606.14,-775.68C588.4,-765.7 566.2,-750 554.58,-729.28 452.93,-548.01 652.78,-301.12 446.69,-274.28"/>
+</g>
+<!-- module~rdb_multilayer_state&#45;&gt;module~rdb_mem_report -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge115" class="edge">
+<title>module~rdb_multilayer_state&#45;&gt;module~rdb_mem_report</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M573.13,-792.93C536.05,-794.08 487.73,-792.36 446.69,-780.28"/>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M444.69,-780.28C411.99,-770.66 373.93,-770.14 342.91,-772.27"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="343.02,-768.75 333.33,-773.04 343.58,-775.73 343.02,-768.75"/>
+</g>
+<!-- module~rdb_multilayer_state&#45;&gt;pic_logger -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge117" class="edge">
+<title>module~rdb_multilayer_state&#45;&gt;pic_logger</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M614.12,-775.79C597.87,-764.39 573.8,-746.72 554.58,-729.28 537.11,-713.43 538.61,-702.74 518.58,-690.28 461.21,-654.63 433.69,-676.55 372.81,-647.28 328.72,-626.09 315.46,-620.48 282.55,-584.28"/>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M280.55,-584.28C220.04,-517.4 173.45,-419.3 154.24,-375.22"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="157.51,-373.96 150.36,-366.15 151.08,-376.72 157.51,-373.96"/>
+</g>
+<!-- module~rdb_tracer -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_node41" class="node">
+<title>module~rdb_tracer</title>
+<g id="a_module~~rdb_barotropic_substep~~UsesGraph_node41"><a xlink:href="../module/rdb_tracer.html" xlink:title="rdb_tracer">
+<polygon fill="#337ab7" stroke="#337ab7" points="479.2,-832.42 412.18,-832.42 412.18,-808.15 479.2,-808.15 479.2,-832.42"/>
+<text xml:space="preserve" text-anchor="middle" x="445.69" y="-816.68" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_tracer</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_multilayer_state&#45;&gt;module~rdb_tracer -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge116" class="edge">
+<title>module~rdb_multilayer_state&#45;&gt;module~rdb_tracer</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M572.92,-798.54C546.26,-803.13 515.37,-808.45 490.83,-812.68"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="490.44,-809.2 481.17,-814.34 491.62,-816.1 490.44,-809.2"/>
+</g>
+<!-- module~rdb_ice_enthalpy&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge118" class="edge">
+<title>module~rdb_ice_enthalpy&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M582.1,-538.53C543.63,-533.35 490.03,-531.14 446.69,-548.28"/>
+</g>
+<!-- module~rdb_ice_init&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge119" class="edge">
+<title>module~rdb_ice_init&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M786.06,-699.85C767.33,-710.06 739.03,-723.66 712.35,-729.28 643.74,-743.76 623.93,-739.64 554.58,-729.28 538.03,-726.81 534.81,-722.33 518.58,-718.28 487,-710.41 478.77,-709.8 446.69,-704.28"/>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M444.69,-704.28C409.08,-698.79 312.01,-681.53 282.55,-702.28"/>
+</g>
+<!-- module~rdb_ice_init&#45;&gt;module~rdb_grid -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge120" class="edge">
+<title>module~rdb_ice_init&#45;&gt;module~rdb_grid</title>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M801.66,-699.72C789.17,-724.89 757.26,-781.81 712.35,-809.28 609.8,-872.03 566.38,-848.91 446.69,-860.28"/>
+</g>
+<!-- module~rdb_ice_init&#45;&gt;module~rdb_ocean_metrics -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge125" class="edge">
+<title>module~rdb_ice_init&#45;&gt;module~rdb_ocean_metrics</title>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M801.2,-674.92C790.32,-653.47 767.32,-607.96 748.35,-569.28 732.07,-536.09 740.08,-518.74 712.35,-494.28 708.74,-491.1 704.73,-488.31 700.49,-485.85"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="702.1,-482.75 691.59,-481.4 698.97,-489.01 702.1,-482.75"/>
+</g>
+<!-- module~rdb_ice_init&#45;&gt;module~rdb_multilayer_state -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge124" class="edge">
+<title>module~rdb_ice_init&#45;&gt;module~rdb_multilayer_state</title>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M794.67,-699.81C777.3,-716.17 744.74,-744.8 712.35,-762.28 705.85,-765.79 698.8,-768.94 691.67,-771.74"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="690.47,-768.45 682.29,-775.19 692.89,-775.02 690.47,-768.45"/>
+</g>
+<!-- module~rdb_ice_init&#45;&gt;module~rdb_ice_enthalpy -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge122" class="edge">
+<title>module~rdb_ice_init&#45;&gt;module~rdb_ice_enthalpy</title>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M791.83,-674.7C761.59,-650.41 694.96,-596.89 658.86,-567.89"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="661.13,-565.22 651.14,-561.68 656.75,-570.68 661.13,-565.22"/>
+</g>
+<!-- module~rdb_ice_column -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_node42" class="node">
+<title>module~rdb_ice_column</title>
+<g id="a_module~~rdb_barotropic_substep~~UsesGraph_node42"><a xlink:href="../module/rdb_ice_column.html" xlink:title="rdb_ice_column">
+<polygon fill="#337ab7" stroke="#337ab7" points="681.22,-678.42 585.7,-678.42 585.7,-654.15 681.22,-654.15 681.22,-678.42"/>
+<text xml:space="preserve" text-anchor="middle" x="633.46" y="-662.68" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_column</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ice_init&#45;&gt;module~rdb_ice_column -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge121" class="edge">
+<title>module~rdb_ice_init&#45;&gt;module~rdb_ice_column</title>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M772.05,-682.98C749.32,-680.22 719.25,-676.57 693.02,-673.39"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="693.52,-669.93 683.17,-672.2 692.67,-676.87 693.52,-669.93"/>
+</g>
+<!-- module~rdb_ice_state -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_node43" class="node">
+<title>module~rdb_ice_state</title>
+<g id="a_module~~rdb_barotropic_substep~~UsesGraph_node43"><a xlink:href="../module/rdb_ice_state.html" xlink:title="rdb_ice_state">
+<polygon fill="#337ab7" stroke="#337ab7" points="674.47,-720.42 592.45,-720.42 592.45,-696.15 674.47,-696.15 674.47,-720.42"/>
+<text xml:space="preserve" text-anchor="middle" x="633.46" y="-704.68" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_state</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ice_init&#45;&gt;module~rdb_ice_state -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge123" class="edge">
+<title>module~rdb_ice_init&#45;&gt;module~rdb_ice_state</title>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M772.05,-691.58C747.2,-694.6 713.59,-698.68 685.81,-702.05"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="685.7,-698.54 676.2,-703.22 686.55,-705.49 685.7,-698.54"/>
+</g>
+<!-- module~rdb_nml_schema&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge126" class="edge">
+<title>module~rdb_nml_schema&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M394.46,-397.13C353.02,-403.74 298.54,-415.02 282.55,-430.28"/>
+</g>
+<!-- module~rdb_nml_schema&#45;&gt;module~rdb_error_ring -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge127" class="edge">
+<title>module~rdb_nml_schema&#45;&gt;module~rdb_error_ring</title>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M394.28,-378.47C375.95,-374.17 355.16,-369.3 336.54,-364.94"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="337.56,-361.58 327.03,-362.71 335.97,-368.4 337.56,-361.58"/>
+</g>
+<!-- module~rdb_nml_schema&#45;&gt;pic_logger -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge128" class="edge">
+<title>module~rdb_nml_schema&#45;&gt;pic_logger</title>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M394.23,-393.16C362.2,-394.42 319.89,-395.07 282.55,-392.28"/>
+</g>
+<!-- module~rdb_ocean_bulk_flux&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge129" class="edge">
+<title>module~rdb_ocean_bulk_flux&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M759.91,-560.91C744.82,-564.34 727.99,-567.58 712.35,-569.28 642.64,-576.89 624.38,-576.01 554.58,-569.28 505.96,-564.6 492.12,-530.31 446.69,-548.28"/>
+</g>
+<!-- module~rdb_ocean_bulk_flux&#45;&gt;module~rdb_ice_enthalpy -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge130" class="edge">
+<title>module~rdb_ocean_bulk_flux&#45;&gt;module~rdb_ice_enthalpy</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M747.94,-548.28C731.26,-548.28 713.1,-548.28 696.29,-548.28"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="696.42,-544.78 686.42,-548.28 696.42,-551.78 696.42,-544.78"/>
+</g>
+<!-- module~rdb_tracer&#45;&gt;module~rdb_constants -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge132" class="edge">
+<title>module~rdb_tracer&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M411.76,-813.58C378.09,-808.24 324.87,-804.06 282.55,-820.28"/>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M280.55,-820.28C249.73,-832.1 212.5,-825.29 184.81,-816.54"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="185.98,-813.24 175.39,-813.35 183.73,-819.87 185.98,-813.24"/>
+</g>
+<!-- module~rdb_tracer&#45;&gt;module~rdb_grid -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge133" class="edge">
+<title>module~rdb_tracer&#45;&gt;module~rdb_grid</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M411.88,-828.38C385.53,-834.88 348.48,-844.02 320.79,-850.85"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="320.27,-847.37 311.4,-853.17 321.95,-854.17 320.27,-847.37"/>
+</g>
+<!-- module~rdb_tracer&#45;&gt;iso_fortran_env -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge131" class="edge">
+<title>module~rdb_tracer&#45;&gt;iso_fortran_env</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M280.55,-820.28C256.69,-829.43 244.18,-821.04 226.29,-839.28 163.75,-903.09 149.12,-1015.55 145.7,-1064.46"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="142.22,-1064.01 145.13,-1074.2 149.21,-1064.42 142.22,-1064.01"/>
+</g>
+<!-- module~rdb_tracer&#45;&gt;module~rdb_mem_report -->
+<g id="module~~rdb_barotropic_substep~~UsesGraph_edge134" class="edge">
+<title>module~rdb_tracer&#45;&gt;module~rdb_mem_report</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M411.88,-812.19C392.07,-807.3 366.21,-800.92 342.83,-795.16"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="343.96,-791.83 333.41,-792.83 342.28,-798.62 343.96,-791.83"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panmodulerdb_barotropic_substepUsesGraph = svgPanZoom('#modulerdb_barotropic_substepUsesGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#UsesGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="UsesGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="511pt" height="32pt"
+ viewBox="0.00 0.00 511.00 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 506.88,-28.27 506.88,4 -4,4"/>
+<!-- Module -->
+<g id="node1" class="node">
+<title>Module</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="54,-24.27 0,-24.27 0,0 54,0 54,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="27" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Module</text>
+</g>
+<!-- Submodule -->
+<g id="node2" class="node">
+<title>Submodule</title>
+<polygon fill="#5bc0de" stroke="#5bc0de" points="144.13,-24.27 71.87,-24.27 71.87,0 144.13,0 144.13,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="108" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Submodule</text>
+</g>
+<!-- Subroutine -->
+<g id="node3" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="231.63,-24.27 162.37,-24.27 162.37,0 231.63,0 231.63,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="197" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node4" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="306.26,-24.27 249.74,-24.27 249.74,0 306.26,0 306.26,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="278" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Program -->
+<g id="node5" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="381.26,-24.27 324.74,-24.27 324.74,0 381.26,0 381.26,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="353" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node6" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="502.88,-24.27 399.12,-24.27 399.12,0 502.88,0 502.88,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="451" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a submodule to the (sub)module which it is
+descended from. Dashed arrows point from a module or program unit to 
+modules which it uses.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+            </li>
+        </ul>
+      </div>
+    </div>
+
+          <div class="card">
+      <h3 class="card-header card-title bg-light">Used by</h3>
+      <div class="card-body">
+        <ul class="list-group list-group-flush">
+            <li class="list-group-item">
+              <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: module~~rdb_barotropic_substep~~UsedByGraph Pages: 1 -->
+<svg id="modulerdb_barotropic_substepUsedByGraph" width="641pt" height="290pt"
+ viewBox="0.00 0.00 641.00 290.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="module~~rdb_barotropic_substep~~UsedByGraph" class="graph" transform="scale(0.497505 0.497505) rotate(0) translate(4 579.44)">
+<title>module~~rdb_barotropic_substep~~UsedByGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-579.44 1284.43,-579.44 1284.43,4 -4,4"/>
+<!-- module~rdb_barotropic_substep -->
+<g id="module~~rdb_barotropic_substep~~UsedByGraph_node1" class="node">
+<title>module~rdb_barotropic_substep</title>
+<polygon fill="none" stroke="black" points="135.27,-226.89 0,-226.89 0,-202.62 135.27,-202.62 135.27,-226.89"/>
+<text xml:space="preserve" text-anchor="middle" x="67.64" y="-211.15" font-family="Helvetica,sans-Serif" font-size="10.50">rdb_barotropic_substep</text>
+</g>
+<!-- module~rdb_ocean_bt_wide -->
+<g id="module~~rdb_barotropic_substep~~UsedByGraph_node2" class="node">
+<title>module~rdb_ocean_bt_wide</title>
+<g id="a_module~~rdb_barotropic_substep~~UsedByGraph_node2"><a xlink:href="../module/rdb_ocean_bt_wide.html" xlink:title="rdb_ocean_bt_wide">
+<polygon fill="#337ab7" stroke="#337ab7" points="284.79,-206.89 171.27,-206.89 171.27,-182.62 284.79,-182.62 284.79,-206.89"/>
+<text xml:space="preserve" text-anchor="middle" x="228.03" y="-191.15" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_bt_wide</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_bt_wide&#45;&gt;module~rdb_barotropic_substep -->
+<g id="module~~rdb_barotropic_substep~~UsedByGraph_edge1" class="edge">
+<title>module~rdb_ocean_bt_wide&#45;&gt;module~rdb_barotropic_substep</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M171.19,-201.8C163.29,-202.8 155.05,-203.84 146.82,-204.88"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="146.63,-201.38 137.15,-206.1 147.51,-208.32 146.63,-201.38"/>
+</g>
+<!-- module~rdb_ocean_dyn -->
+<g id="module~~rdb_barotropic_substep~~UsedByGraph_node3" class="node">
+<title>module~rdb_ocean_dyn</title>
+<g id="a_module~~rdb_barotropic_substep~~UsedByGraph_node3"><a xlink:href="../module/rdb_ocean_dyn.html" xlink:title="rdb_ocean_dyn">
+<polygon fill="#337ab7" stroke="#337ab7" points="413.31,-206.89 320.79,-206.89 320.79,-182.62 413.31,-182.62 413.31,-206.89"/>
+<text xml:space="preserve" text-anchor="middle" x="367.05" y="-191.15" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_dyn</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_dyn&#45;&gt;module~rdb_barotropic_substep -->
+<g id="module~~rdb_barotropic_substep~~UsedByGraph_edge2" class="edge">
+<title>module~rdb_ocean_dyn&#45;&gt;module~rdb_barotropic_substep</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M339.17,-207.36C312.02,-218.94 268.55,-234.38 229.03,-234.75"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M227.03,-234.75C200.71,-235 172.13,-232.31 146.58,-228.83"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="147.35,-225.41 136.95,-227.46 146.36,-232.34 147.35,-225.41"/>
+</g>
+<!-- module~rdb_ocean_dyn&#45;&gt;module~rdb_ocean_bt_wide -->
+<g id="module~~rdb_barotropic_substep~~UsedByGraph_edge4" class="edge">
+<title>module~rdb_ocean_dyn&#45;&gt;module~rdb_ocean_bt_wide</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M320.42,-194.75C312.7,-194.75 304.53,-194.75 296.39,-194.75"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="296.46,-191.25 286.46,-194.75 296.46,-198.25 296.46,-191.25"/>
+</g>
+<!-- module~rdb_ocean_engine -->
+<g id="module~~rdb_barotropic_substep~~UsedByGraph_node4" class="node">
+<title>module~rdb_ocean_engine</title>
+<g id="a_module~~rdb_barotropic_substep~~UsedByGraph_node4"><a xlink:href="../module/rdb_ocean_engine.html" xlink:title="rdb_ocean_engine">
+<polygon fill="#337ab7" stroke="#337ab7" points="1047.39,-369.89 937.62,-369.89 937.62,-345.62 1047.39,-345.62 1047.39,-369.89"/>
+<text xml:space="preserve" text-anchor="middle" x="992.5" y="-354.15" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_engine</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_barotropic_substep -->
+<g id="module~~rdb_barotropic_substep~~UsedByGraph_edge3" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_barotropic_substep</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M497.94,-234.75C383.04,-201.88 348.54,-233.63 229.03,-234.75"/>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_dyn -->
+<g id="module~~rdb_barotropic_substep~~UsedByGraph_edge7" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_dyn</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M829.61,-355.75C674.17,-341.67 648.3,-283.23 499.94,-234.75"/>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M497.94,-234.75C471.48,-227.18 442.17,-218.21 418.1,-210.68"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="419.47,-207.44 408.88,-207.78 417.37,-214.12 419.47,-207.44"/>
+</g>
+<!-- module~rdb_ocean_setup -->
+<g id="module~~rdb_barotropic_substep~~UsedByGraph_node8" class="node">
+<title>module~rdb_ocean_setup</title>
+<g id="a_module~~rdb_barotropic_substep~~UsedByGraph_node8"><a xlink:href="../module/rdb_ocean_setup.html" xlink:title="rdb_ocean_setup">
+<polygon fill="#337ab7" stroke="#337ab7" points="705.23,-247.89 602.96,-247.89 602.96,-223.62 705.23,-223.62 705.23,-247.89"/>
+<text xml:space="preserve" text-anchor="middle" x="654.09" y="-232.15" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_setup -->
+<g id="module~~rdb_barotropic_substep~~UsedByGraph_edge14" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_setup</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M937.37,-359.16C906.35,-359.45 866.72,-358.93 831.61,-355.75"/>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M829.61,-355.75C795.03,-352.62 716.49,-288.8 677.67,-255.54"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="680.15,-253.05 670.29,-249.16 675.57,-258.35 680.15,-253.05"/>
+</g>
+<!-- module~rdb_ocean_state -->
+<g id="module~~rdb_barotropic_substep~~UsedByGraph_node9" class="node">
+<title>module~rdb_ocean_state</title>
+<g id="a_module~~rdb_barotropic_substep~~UsedByGraph_node9"><a xlink:href="../module/rdb_ocean_state.html" xlink:title="rdb_ocean_state">
+<polygon fill="#337ab7" stroke="#337ab7" points="548.58,-286.89 449.31,-286.89 449.31,-262.62 548.58,-262.62 548.58,-286.89"/>
+<text xml:space="preserve" text-anchor="middle" x="498.94" y="-271.15" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_state</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_barotropic_substep~~UsedByGraph_edge26" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M829.61,-355.75C750.36,-348.57 727,-429.83 655.09,-395.75"/>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M653.09,-395.75C624.54,-382.22 611.11,-393.92 584.58,-376.75 552.92,-356.26 527.11,-320.2 512.63,-296.9"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="515.73,-295.26 507.58,-288.5 509.73,-298.87 515.73,-295.26"/>
+</g>
+<!-- module~rdb_ocean_diag_derived -->
+<g id="module~~rdb_barotropic_substep~~UsedByGraph_node11" class="node">
+<title>module~rdb_ocean_diag_derived</title>
+<g id="a_module~~rdb_barotropic_substep~~UsedByGraph_node11"><a xlink:href="../module/rdb_ocean_diag_derived.html" xlink:title="rdb_ocean_diag_derived">
+<polygon fill="#337ab7" stroke="#337ab7" points="901.62,-407.89 759.6,-407.89 759.6,-383.62 901.62,-383.62 901.62,-407.89"/>
+<text xml:space="preserve" text-anchor="middle" x="830.61" y="-392.15" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_diag_derived</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_diag_derived -->
+<g id="module~~rdb_barotropic_substep~~UsedByGraph_edge36" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_diag_derived</title>
+<path fill="none" stroke="#ff6d00" stroke-dasharray="5,2" d="M938.71,-370.3C924.86,-373.59 909.78,-377.17 895.43,-380.59"/>
+<polygon fill="#ff6d00" stroke="#ff6d00" points="895.02,-377.09 886.1,-382.8 896.64,-383.9 895.02,-377.09"/>
+</g>
+<!-- module~rdb_ocean_diag_fills -->
+<g id="module~~rdb_barotropic_substep~~UsedByGraph_node12" class="node">
+<title>module~rdb_ocean_diag_fills</title>
+<g id="a_module~~rdb_barotropic_substep~~UsedByGraph_node12"><a xlink:href="../module/rdb_ocean_diag_fills.html" xlink:title="rdb_ocean_diag_fills">
+<polygon fill="#337ab7" stroke="#337ab7" points="713.85,-367.89 594.33,-367.89 594.33,-343.62 713.85,-343.62 713.85,-367.89"/>
+<text xml:space="preserve" text-anchor="middle" x="654.09" y="-352.15" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_diag_fills</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_diag_fills -->
+<g id="module~~rdb_barotropic_substep~~UsedByGraph_edge39" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_diag_fills</title>
+<path fill="none" stroke="#ffda00" stroke-dasharray="5,2" d="M829.61,-355.75C795.48,-352.66 757.44,-352.3 725.61,-352.86"/>
+<polygon fill="#ffda00" stroke="#ffda00" points="725.62,-349.36 715.69,-353.08 725.77,-356.36 725.62,-349.36"/>
+</g>
+<!-- module~rdb_ocean_ic_inject -->
+<g id="module~~rdb_barotropic_substep~~UsedByGraph_node13" class="node">
+<title>module~rdb_ocean_ic_inject</title>
+<g id="a_module~~rdb_barotropic_substep~~UsedByGraph_node13"><a xlink:href="../module/rdb_ocean_ic_inject.html" xlink:title="rdb_ocean_ic_inject">
+<polygon fill="#337ab7" stroke="#337ab7" points="888.87,-487.89 772.35,-487.89 772.35,-463.62 888.87,-463.62 888.87,-487.89"/>
+<text xml:space="preserve" text-anchor="middle" x="830.61" y="-472.15" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_ic_inject</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_ic_inject -->
+<g id="module~~rdb_barotropic_substep~~UsedByGraph_edge41" class="edge">
+<title>module~rdb_ocean_engine&#45;&gt;module~rdb_ocean_ic_inject</title>
+<path fill="none" stroke="#b6ff00" stroke-dasharray="5,2" d="M974.39,-370.38C946.38,-391.05 890.57,-432.24 857.64,-456.55"/>
+<polygon fill="#b6ff00" stroke="#b6ff00" points="855.78,-453.56 849.82,-462.32 859.94,-459.19 855.78,-453.56"/>
+</g>
+<!-- module~rdb_driver -->
+<g id="module~~rdb_barotropic_substep~~UsedByGraph_node5" class="node">
+<title>module~rdb_driver</title>
+<g id="a_module~~rdb_barotropic_substep~~UsedByGraph_node5"><a xlink:href="../module/rdb_driver.html" xlink:title="rdb_driver">
+<polygon fill="#337ab7" stroke="#337ab7" points="1152.29,-165.89 1086.02,-165.89 1086.02,-141.62 1152.29,-141.62 1152.29,-165.89"/>
+<text xml:space="preserve" text-anchor="middle" x="1119.15" y="-150.15" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_driver</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_driver&#45;&gt;module~rdb_ocean_dyn -->
+<g id="module~~rdb_barotropic_substep~~UsedByGraph_edge5" class="edge">
+<title>module~rdb_driver&#45;&gt;module~rdb_ocean_dyn</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M1102.68,-141.16C1051.4,-101.03 883.22,17.54 759.6,-46.75 723.72,-65.41 690.49,-176.19 655.09,-195.75"/>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M653.09,-195.75C593.04,-227.8 567.77,-190.08 499.94,-195.75"/>
+</g>
+<!-- module~rdb_driver&#45;&gt;module~rdb_ocean_engine -->
+<g id="module~~rdb_barotropic_substep~~UsedByGraph_edge10" class="edge">
+<title>module~rdb_driver&#45;&gt;module~rdb_ocean_engine</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M1110.54,-166.21C1090.03,-199.78 1033.36,-292.52 1007.14,-335.43"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="1004.19,-333.55 1001.96,-343.91 1010.16,-337.2 1004.19,-333.55"/>
+</g>
+<!-- module~rdb_driver&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_barotropic_substep~~UsedByGraph_edge21" class="edge">
+<title>module~rdb_driver&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M653.09,-195.75C625.44,-211.04 613.12,-201.19 584.58,-214.75 562.14,-225.42 539.31,-242.01 523.03,-255.04"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="520.94,-252.23 515.42,-261.27 525.37,-257.64 520.94,-252.23"/>
+</g>
+<!-- module~rdb_handle -->
+<g id="module~~rdb_barotropic_substep~~UsedByGraph_node6" class="node">
+<title>module~rdb_handle</title>
+<g id="a_module~~rdb_barotropic_substep~~UsedByGraph_node6"><a xlink:href="../module/rdb_handle.html" xlink:title="rdb_handle">
+<polygon fill="#337ab7" stroke="#337ab7" points="1154.91,-369.89 1083.39,-369.89 1083.39,-345.62 1154.91,-345.62 1154.91,-369.89"/>
+<text xml:space="preserve" text-anchor="middle" x="1119.15" y="-354.15" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_handle</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_handle&#45;&gt;module~rdb_ocean_engine -->
+<g id="module~~rdb_barotropic_substep~~UsedByGraph_edge11" class="edge">
+<title>module~rdb_handle&#45;&gt;module~rdb_ocean_engine</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M1083.1,-357.75C1075.57,-357.75 1067.39,-357.75 1059.13,-357.75"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="1059.38,-354.25 1049.38,-357.75 1059.38,-361.25 1059.38,-354.25"/>
+</g>
+<!-- module~rdb_handle&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_barotropic_substep~~UsedByGraph_edge22" class="edge">
+<title>module~rdb_handle&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M1082.94,-368.45C1071.62,-371.83 1058.99,-375.52 1047.39,-378.75 982.9,-396.72 968.03,-408.24 901.62,-416.75 839.01,-424.78 822.41,-423 759.6,-416.75 712.46,-412.06 697.94,-415.97 655.09,-395.75"/>
+</g>
+<!-- module~rdb_ocean_api -->
+<g id="module~~rdb_barotropic_substep~~UsedByGraph_node7" class="node">
+<title>module~rdb_ocean_api</title>
+<g id="a_module~~rdb_barotropic_substep~~UsedByGraph_node7"><a xlink:href="../module/rdb_ocean_api.html" xlink:title="rdb_ocean_api">
+<polygon fill="#337ab7" stroke="#337ab7" points="1280.43,-349.89 1190.91,-349.89 1190.91,-325.62 1280.43,-325.62 1280.43,-349.89"/>
+<text xml:space="preserve" text-anchor="middle" x="1235.67" y="-334.15" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_api</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_ocean_dyn -->
+<g id="module~~rdb_barotropic_substep~~UsedByGraph_edge6" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_ocean_dyn</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M1232.13,-325.13C1224.84,-291.27 1201.35,-196.72 1154.91,-132.75 1118.63,-82.78 1103.91,-69.62 1047.39,-44.75 930,6.89 882.4,13.23 759.6,-23.75 627.06,-63.67 637.89,-184.22 499.94,-195.75"/>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M497.94,-195.75C474.17,-197.01 447.9,-197.07 425.25,-196.69"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="425.35,-193.19 415.28,-196.49 425.21,-200.19 425.35,-193.19"/>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_ocean_engine -->
+<g id="module~~rdb_barotropic_substep~~UsedByGraph_edge12" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_ocean_engine</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M1118.15,-317.75C1086.28,-317.54 1051.92,-329.56 1027.36,-340.48"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="1026.12,-337.2 1018.52,-344.58 1029.06,-343.55 1026.12,-337.2"/>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_handle -->
+<g id="module~~rdb_barotropic_substep~~UsedByGraph_edge13" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_handle</title>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M1190.72,-345.43C1182.75,-346.82 1174.41,-348.28 1166.37,-349.68"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="1166.02,-346.19 1156.77,-351.36 1167.22,-353.08 1166.02,-346.19"/>
+</g>
+<!-- module~rdb_ocean_balance -->
+<g id="module~~rdb_barotropic_substep~~UsedByGraph_node10" class="node">
+<title>module~rdb_ocean_balance</title>
+<g id="a_module~~rdb_barotropic_substep~~UsedByGraph_node10"><a xlink:href="../module/rdb_ocean_balance.html" xlink:title="rdb_ocean_balance">
+<polygon fill="#337ab7" stroke="#337ab7" points="888.5,-567.89 772.73,-567.89 772.73,-543.62 888.5,-543.62 888.5,-567.89"/>
+<text xml:space="preserve" text-anchor="middle" x="830.61" y="-552.15" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_balance</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_ocean_balance -->
+<g id="module~~rdb_barotropic_substep~~UsedByGraph_edge33" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_ocean_balance</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1118.15,-473.75C1082.37,-494.82 1085.57,-518.42 1047.39,-534.75 1001.01,-554.59 944.05,-559.42 900.3,-559.51"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="900.45,-556.01 890.42,-559.44 900.4,-563.01 900.45,-556.01"/>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_ocean_diag_derived -->
+<g id="module~~rdb_barotropic_substep~~UsedByGraph_edge35" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_ocean_diag_derived</title>
+<path fill="none" stroke="#ff6d00" stroke-dasharray="5,2" d="M1228.51,-350.38C1214.07,-378.4 1175.06,-445.55 1120.15,-473.75"/>
+<path fill="none" stroke="#ff6d00" stroke-dasharray="5,2" d="M1118.15,-473.75C1107.54,-479.2 962.55,-436.02 883,-411.66"/>
+<polygon fill="#ff6d00" stroke="#ff6d00" points="884.26,-408.39 873.68,-408.8 882.21,-415.08 884.26,-408.39"/>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_ocean_diag_fills -->
+<g id="module~~rdb_barotropic_substep~~UsedByGraph_edge37" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_ocean_diag_fills</title>
+<path fill="none" stroke="#ffda00" stroke-dasharray="5,2" d="M1190.66,-326.55C1169.49,-322.07 1143.66,-317.91 1120.15,-317.75"/>
+<path fill="none" stroke="#ffda00" stroke-dasharray="5,2" d="M1118.15,-317.75C958.44,-316.69 918.51,-325.81 759.6,-341.75 748.53,-342.86 736.84,-344.23 725.43,-345.68"/>
+<polygon fill="#ffda00" stroke="#ffda00" points="725.12,-342.19 715.65,-346.95 726.02,-349.13 725.12,-342.19"/>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_ocean_ic_inject -->
+<g id="module~~rdb_barotropic_substep~~UsedByGraph_edge40" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_ocean_ic_inject</title>
+<path fill="none" stroke="#b6ff00" stroke-dasharray="5,2" d="M1118.15,-473.75C1082.44,-494.18 973.26,-489.05 900.45,-482.85"/>
+<polygon fill="#b6ff00" stroke="#b6ff00" points="900.87,-479.38 890.61,-481.99 900.26,-486.35 900.87,-479.38"/>
+</g>
+<!-- module~rdb_ocean_reinit -->
+<g id="module~~rdb_barotropic_substep~~UsedByGraph_node14" class="node">
+<title>module~rdb_ocean_reinit</title>
+<g id="a_module~~rdb_barotropic_substep~~UsedByGraph_node14"><a xlink:href="../module/rdb_ocean_reinit.html" xlink:title="rdb_ocean_reinit">
+<polygon fill="#337ab7" stroke="#337ab7" points="1042.52,-525.89 942.5,-525.89 942.5,-501.62 1042.52,-501.62 1042.52,-525.89"/>
+<text xml:space="preserve" text-anchor="middle" x="992.5" y="-510.15" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_reinit</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_api&#45;&gt;module~rdb_ocean_reinit -->
+<g id="module~~rdb_barotropic_substep~~UsedByGraph_edge43" class="edge">
+<title>module~rdb_ocean_api&#45;&gt;module~rdb_ocean_reinit</title>
+<path fill="none" stroke="#48ff00" stroke-dasharray="5,2" d="M1118.15,-473.75C1098.1,-484.05 1074.88,-492.37 1053.95,-498.71"/>
+<polygon fill="#48ff00" stroke="#48ff00" points="1052.99,-495.34 1044.38,-501.5 1054.96,-502.06 1052.99,-495.34"/>
+</g>
+<!-- module~rdb_ocean_setup&#45;&gt;module~rdb_ocean_dyn -->
+<g id="module~~rdb_barotropic_substep~~UsedByGraph_edge8" class="edge">
+<title>module~rdb_ocean_setup&#45;&gt;module~rdb_ocean_dyn</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M616.32,-223.13C578.59,-210.72 522.33,-193.88 499.94,-195.75"/>
+</g>
+<!-- module~rdb_ocean_setup&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_barotropic_substep~~UsedByGraph_edge29" class="edge">
+<title>module~rdb_ocean_setup&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M603.79,-248.31C589.79,-251.87 574.38,-255.8 559.82,-259.5"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="559.18,-256.05 550.36,-261.91 560.91,-262.84 559.18,-256.05"/>
+</g>
+<!-- module~rdb_ocean_state&#45;&gt;module~rdb_ocean_dyn -->
+<g id="module~~rdb_barotropic_substep~~UsedByGraph_edge9" class="edge">
+<title>module~rdb_ocean_state&#45;&gt;module~rdb_ocean_dyn</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M473.45,-262.24C465.64,-258.1 457.04,-253.37 449.31,-248.75 430.77,-237.67 410.53,-224.23 394.89,-213.53"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="397.27,-210.92 387.05,-208.12 393.3,-216.68 397.27,-210.92"/>
+</g>
+<!-- module~rdb_ocean_balance&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_barotropic_substep~~UsedByGraph_edge23" class="edge">
+<title>module~rdb_ocean_balance&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M776.54,-568.38C722.44,-577.94 638.96,-583.12 584.58,-540.75 507.96,-481.05 499.44,-351.78 499.35,-298.47"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="502.84,-298.74 499.44,-288.7 495.84,-298.67 502.84,-298.74"/>
+</g>
+<!-- module~rdb_ocean_diag_derived&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_barotropic_substep~~UsedByGraph_edge24" class="edge">
+<title>module~rdb_ocean_diag_derived&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M767.4,-408.35C732.74,-412.36 689.72,-412.17 655.09,-395.75"/>
+</g>
+<!-- module~rdb_ocean_diag_derived&#45;&gt;module~rdb_ocean_diag_fills -->
+<g id="module~~rdb_barotropic_substep~~UsedByGraph_edge38" class="edge">
+<title>module~rdb_ocean_diag_derived&#45;&gt;module~rdb_ocean_diag_fills</title>
+<path fill="none" stroke="#ffda00" stroke-dasharray="5,2" d="M774.87,-383.21C757.81,-379.3 738.83,-374.94 721.09,-370.88"/>
+<polygon fill="#ffda00" stroke="#ffda00" points="721.94,-367.48 711.41,-368.66 720.38,-374.31 721.94,-367.48"/>
+</g>
+<!-- module~rdb_ocean_diag_fills&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_barotropic_substep~~UsedByGraph_edge25" class="edge">
+<title>module~rdb_ocean_diag_fills&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M615.49,-343.13C605.27,-339.26 594.34,-334.7 584.58,-329.75 564.13,-319.38 542.48,-305.24 526.19,-293.9"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="528.22,-291.05 518.04,-288.13 524.18,-296.76 528.22,-291.05"/>
+</g>
+<!-- module~rdb_ocean_ic_inject&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_barotropic_substep~~UsedByGraph_edge27" class="edge">
+<title>module~rdb_ocean_ic_inject&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M787.17,-463.21C777.74,-459.56 768.04,-455.08 759.6,-449.75 740.73,-437.83 742.96,-425.86 723.6,-414.75 696.19,-399.03 683.64,-409.29 655.09,-395.75"/>
+</g>
+<!-- module~rdb_ocean_reinit&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_barotropic_substep~~UsedByGraph_edge28" class="edge">
+<title>module~rdb_ocean_reinit&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M942.27,-523.82C891.69,-531.28 813.01,-534.49 759.6,-496.75 727.09,-473.78 753.68,-440.81 723.6,-414.75 699.72,-394.06 683.64,-409.29 655.09,-395.75"/>
+</g>
+<!-- module~rdb_ocean_reinit&#45;&gt;module~rdb_ocean_balance -->
+<g id="module~~rdb_barotropic_substep~~UsedByGraph_edge34" class="edge">
+<title>module~rdb_ocean_reinit&#45;&gt;module~rdb_ocean_balance</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M943.53,-526.35C926.77,-530.76 907.77,-535.75 890.24,-540.35"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="889.8,-536.85 881.01,-542.78 891.57,-543.62 889.8,-536.85"/>
+</g>
+<!-- module~rdb_ocean_reinit&#45;&gt;module~rdb_ocean_ic_inject -->
+<g id="module~~rdb_barotropic_substep~~UsedByGraph_edge42" class="edge">
+<title>module~rdb_ocean_reinit&#45;&gt;module~rdb_ocean_ic_inject</title>
+<path fill="none" stroke="#b6ff00" stroke-dasharray="5,2" d="M942.23,-502.04C927.53,-498.55 911.21,-494.67 895.71,-490.99"/>
+<polygon fill="#b6ff00" stroke="#b6ff00" points="896.62,-487.61 886.08,-488.7 895,-494.42 896.62,-487.61"/>
+</g>
+<!-- module~rdb_ocean_setup_bc -->
+<g id="module~~rdb_barotropic_substep~~UsedByGraph_node15" class="node">
+<title>module~rdb_ocean_setup_bc</title>
+<g id="a_module~~rdb_barotropic_substep~~UsedByGraph_node15"><a xlink:href="../module/rdb_ocean_setup_bc.html" xlink:title="rdb_ocean_setup_bc">
+<polygon fill="#5bc0de" stroke="#5bc0de" points="890.75,-121.89 770.48,-121.89 770.48,-97.62 890.75,-97.62 890.75,-121.89"/>
+<text xml:space="preserve" text-anchor="middle" x="830.61" y="-106.15" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_bc</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_setup_bc&#45;&gt;module~rdb_ocean_setup -->
+<g id="module~~rdb_barotropic_substep~~UsedByGraph_edge15" class="edge">
+<title>module~rdb_ocean_setup_bc&#45;&gt;module~rdb_ocean_setup</title>
+<path fill="none" stroke="#0066ff" d="M772.36,-122.25C767.76,-124.61 763.42,-127.42 759.6,-130.75 730.52,-156.12 751.75,-183.37 723.6,-209.75 720.35,-212.8 716.71,-215.5 712.84,-217.88"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="711.38,-214.7 704.21,-222.5 714.68,-220.88 711.38,-214.7"/>
+</g>
+<!-- module~rdb_ocean_setup_bt -->
+<g id="module~~rdb_barotropic_substep~~UsedByGraph_node16" class="node">
+<title>module~rdb_ocean_setup_bt</title>
+<g id="a_module~~rdb_barotropic_substep~~UsedByGraph_node16"><a xlink:href="../module/rdb_ocean_setup_bt.html" xlink:title="rdb_ocean_setup_bt">
+<polygon fill="#5bc0de" stroke="#5bc0de" points="889.62,-79.89 771.6,-79.89 771.6,-55.62 889.62,-55.62 889.62,-79.89"/>
+<text xml:space="preserve" text-anchor="middle" x="830.61" y="-64.15" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_bt</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_setup_bt&#45;&gt;module~rdb_ocean_setup -->
+<g id="module~~rdb_barotropic_substep~~UsedByGraph_edge16" class="edge">
+<title>module~rdb_ocean_setup_bt&#45;&gt;module~rdb_ocean_setup</title>
+<path fill="none" stroke="#0066ff" d="M771.18,-80.08C766.94,-82.48 763.01,-85.34 759.6,-88.75 719.97,-128.47 761.79,-168.65 723.6,-209.75 720.92,-212.64 717.89,-215.2 714.63,-217.49"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="713.08,-214.34 706.24,-222.43 716.63,-220.37 713.08,-214.34"/>
+</g>
+<!-- module~rdb_ocean_setup_cavity -->
+<g id="module~~rdb_barotropic_substep~~UsedByGraph_node17" class="node">
+<title>module~rdb_ocean_setup_cavity</title>
+<g id="a_module~~rdb_barotropic_substep~~UsedByGraph_node17"><a xlink:href="../module/rdb_ocean_setup_cavity.html" xlink:title="rdb_ocean_setup_cavity">
+<polygon fill="#5bc0de" stroke="#5bc0de" points="900.12,-289.89 761.1,-289.89 761.1,-265.62 900.12,-265.62 900.12,-289.89"/>
+<text xml:space="preserve" text-anchor="middle" x="830.61" y="-274.15" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_cavity</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_setup_cavity&#45;&gt;module~rdb_ocean_setup -->
+<g id="module~~rdb_barotropic_substep~~UsedByGraph_edge17" class="edge">
+<title>module~rdb_ocean_setup_cavity&#45;&gt;module~rdb_ocean_setup</title>
+<path fill="none" stroke="#0066ff" d="M777.25,-265.15C758.19,-260.56 736.48,-255.34 716.69,-250.58"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="717.63,-247.2 707.09,-248.27 715.99,-254.01 717.63,-247.2"/>
+</g>
+<!-- module~rdb_ocean_setup_grid -->
+<g id="module~~rdb_barotropic_substep~~UsedByGraph_node18" class="node">
+<title>module~rdb_ocean_setup_grid</title>
+<g id="a_module~~rdb_barotropic_substep~~UsedByGraph_node18"><a xlink:href="../module/rdb_ocean_setup_grid.html" xlink:title="rdb_ocean_setup_grid">
+<polygon fill="#5bc0de" stroke="#5bc0de" points="894.87,-247.89 766.35,-247.89 766.35,-223.62 894.87,-223.62 894.87,-247.89"/>
+<text xml:space="preserve" text-anchor="middle" x="830.61" y="-232.15" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_grid</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_setup_grid&#45;&gt;module~rdb_ocean_setup -->
+<g id="module~~rdb_barotropic_substep~~UsedByGraph_edge18" class="edge">
+<title>module~rdb_ocean_setup_grid&#45;&gt;module~rdb_ocean_setup</title>
+<path fill="none" stroke="#0066ff" d="M766.11,-235.75C750.11,-235.75 732.96,-235.75 717.04,-235.75"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="717.21,-232.25 707.21,-235.75 717.21,-239.25 717.21,-232.25"/>
+</g>
+<!-- module~rdb_ocean_setup_lateral -->
+<g id="module~~rdb_barotropic_substep~~UsedByGraph_node19" class="node">
+<title>module~rdb_ocean_setup_lateral</title>
+<g id="a_module~~rdb_barotropic_substep~~UsedByGraph_node19"><a xlink:href="../module/rdb_ocean_setup_lateral.html" xlink:title="rdb_ocean_setup_lateral">
+<polygon fill="#5bc0de" stroke="#5bc0de" points="901.62,-205.89 759.6,-205.89 759.6,-181.62 901.62,-181.62 901.62,-205.89"/>
+<text xml:space="preserve" text-anchor="middle" x="830.61" y="-190.15" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_lateral</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_setup_lateral&#45;&gt;module~rdb_ocean_setup -->
+<g id="module~~rdb_barotropic_substep~~UsedByGraph_edge19" class="edge">
+<title>module~rdb_ocean_setup_lateral&#45;&gt;module~rdb_ocean_setup</title>
+<path fill="none" stroke="#0066ff" d="M777.25,-206.35C758.19,-210.94 736.48,-216.17 716.69,-220.93"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="715.99,-217.5 707.09,-223.24 717.63,-224.3 715.99,-217.5"/>
+</g>
+<!-- module~rdb_ocean_setup_vmix -->
+<g id="module~~rdb_barotropic_substep~~UsedByGraph_node20" class="node">
+<title>module~rdb_ocean_setup_vmix</title>
+<g id="a_module~~rdb_barotropic_substep~~UsedByGraph_node20"><a xlink:href="../module/rdb_ocean_setup_vmix.html" xlink:title="rdb_ocean_setup_vmix">
+<polygon fill="#5bc0de" stroke="#5bc0de" points="897.12,-163.89 764.1,-163.89 764.1,-139.62 897.12,-139.62 897.12,-163.89"/>
+<text xml:space="preserve" text-anchor="middle" x="830.61" y="-148.15" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_vmix</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_setup_vmix&#45;&gt;module~rdb_ocean_setup -->
+<g id="module~~rdb_barotropic_substep~~UsedByGraph_edge20" class="edge">
+<title>module~rdb_ocean_setup_vmix&#45;&gt;module~rdb_ocean_setup</title>
+<path fill="none" stroke="#0066ff" d="M777.11,-164.27C771,-166.66 765.02,-169.46 759.6,-172.75 739.98,-184.65 742.78,-197.16 723.6,-209.75 718.55,-213.07 713.01,-216.05 707.35,-218.7"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="706.27,-215.36 698.47,-222.54 709.04,-221.79 706.27,-215.36"/>
+</g>
+<!-- module~rdb_ocean_state_restart -->
+<g id="module~~rdb_barotropic_substep~~UsedByGraph_node21" class="node">
+<title>module~rdb_ocean_state_restart</title>
+<g id="a_module~~rdb_barotropic_substep~~UsedByGraph_node21"><a xlink:href="../module/rdb_ocean_state_restart.html" xlink:title="rdb_ocean_state_restart">
+<polygon fill="#5bc0de" stroke="#5bc0de" points="723.6,-531.89 584.58,-531.89 584.58,-507.62 723.6,-507.62 723.6,-531.89"/>
+<text xml:space="preserve" text-anchor="middle" x="654.09" y="-516.15" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_state_restart</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_state_restart&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_barotropic_substep~~UsedByGraph_edge30" class="edge">
+<title>module~rdb_ocean_state_restart&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#cc00ff" d="M596.49,-507.22C592.17,-504.87 588.12,-502.07 584.58,-498.75 525.97,-443.76 507.61,-344.08 502.14,-298.57"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="505.63,-298.32 501.08,-288.76 498.67,-299.07 505.63,-298.32"/>
+</g>
+<!-- module~rdb_ocean_state_seed -->
+<g id="module~~rdb_barotropic_substep~~UsedByGraph_node22" class="node">
+<title>module~rdb_ocean_state_seed</title>
+<g id="a_module~~rdb_barotropic_substep~~UsedByGraph_node22"><a xlink:href="../module/rdb_ocean_state_seed.html" xlink:title="rdb_ocean_state_seed">
+<polygon fill="#5bc0de" stroke="#5bc0de" points="719.1,-489.89 589.08,-489.89 589.08,-465.62 719.1,-465.62 719.1,-489.89"/>
+<text xml:space="preserve" text-anchor="middle" x="654.09" y="-474.15" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_state_seed</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_state_seed&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_barotropic_substep~~UsedByGraph_edge31" class="edge">
+<title>module~rdb_ocean_state_seed&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#cc00ff" d="M597.43,-465.28C592.8,-462.92 588.43,-460.1 584.58,-456.75 535.5,-414.01 512.98,-336.75 504.4,-298.1"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="507.86,-297.55 502.39,-288.48 501.01,-298.98 507.86,-297.55"/>
+</g>
+<!-- module~rdb_ocean_state_topo -->
+<g id="module~~rdb_barotropic_substep~~UsedByGraph_node23" class="node">
+<title>module~rdb_ocean_state_topo</title>
+<g id="a_module~~rdb_barotropic_substep~~UsedByGraph_node23"><a xlink:href="../module/rdb_ocean_state_topo.html" xlink:title="rdb_ocean_state_topo">
+<polygon fill="#5bc0de" stroke="#5bc0de" points="718.35,-447.89 589.83,-447.89 589.83,-423.62 718.35,-423.62 718.35,-447.89"/>
+<text xml:space="preserve" text-anchor="middle" x="654.09" y="-432.15" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_state_topo</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ocean_state_topo&#45;&gt;module~rdb_ocean_state -->
+<g id="module~~rdb_barotropic_substep~~UsedByGraph_edge32" class="edge">
+<title>module~rdb_ocean_state_topo&#45;&gt;module~rdb_ocean_state</title>
+<path fill="none" stroke="#cc00ff" d="M607.34,-423.16C599.24,-419.64 591.27,-415.24 584.58,-409.75 547.19,-379.09 521.4,-327.36 508.8,-297.63"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="512.08,-296.39 505.06,-288.45 505.6,-299.04 512.08,-296.39"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panmodulerdb_barotropic_substepUsedByGraph = svgPanZoom('#modulerdb_barotropic_substepUsedByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#UsedByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="UsedByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="511pt" height="32pt"
+ viewBox="0.00 0.00 511.00 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 506.88,-28.27 506.88,4 -4,4"/>
+<!-- Module -->
+<g id="node1" class="node">
+<title>Module</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="54,-24.27 0,-24.27 0,0 54,0 54,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="27" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Module</text>
+</g>
+<!-- Submodule -->
+<g id="node2" class="node">
+<title>Submodule</title>
+<polygon fill="#5bc0de" stroke="#5bc0de" points="144.13,-24.27 71.87,-24.27 71.87,0 144.13,0 144.13,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="108" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Submodule</text>
+</g>
+<!-- Subroutine -->
+<g id="node3" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="231.63,-24.27 162.37,-24.27 162.37,0 231.63,0 231.63,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="197" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node4" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="306.26,-24.27 249.74,-24.27 249.74,0 306.26,0 306.26,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="278" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Program -->
+<g id="node5" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="381.26,-24.27 324.74,-24.27 324.74,0 381.26,0 381.26,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="353" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node6" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="502.88,-24.27 399.12,-24.27 399.12,0 502.88,0 502.88,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="451" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a submodule to the (sub)module which it is
+descended from. Dashed arrows point from a module or program unit to 
+modules which it uses.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+            </li>
+        </ul>
+      </div>
+    </div>
+
+      <br>
+
+
+        <section>
+          <h2>Variables</h2>
+            <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ch_gbuf"></span>
+              real(kind=wp),
+            </td>
+              <td>private,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>ch_gbuf</strong>(:)</td>
+                <td></td>
+                <td></td>
+            <td>
+                <p>Chapman edge line after the cross-rank sum (host only).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ch_lbuf"></span>
+              real(kind=wp),
+            </td>
+              <td>private,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>ch_lbuf</strong>(:)</td>
+                <td></td>
+                <td></td>
+            <td>
+                <p>Chapman edge line at GLOBAL index (device-mapped; host mirror).</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+        </section>
+        <br>
+
+
+
+
+
+        <section>
+          <h2>Functions</h2>
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-chapman_line_sum"></span> <h3>private pure function <a href='../proc/chapman_line_sum.html'>chapman_line_sum</a>(x, n) result(s)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Sequential, in-index-order sum of the global edge line.  ONE
+non-inlined instance serves every Chapman edge and the end-of-call
+refresh, so the summation order is a single compiled order that
+cannot differ between call sites or rank counts.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-x~30"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>x</strong>(n)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n~51"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>n</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <h4>
+    Return Value
+    <small>real(kind=wp)</small>
+    </h4>
+    
+
+    </div>
+  </div>
+
+        </section>
+        <br>
+
+        <section>
+          <h2>Subroutines</h2>
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-barotropic_substep_linear"></span> <h3>public pure subroutine <a href='../proc/barotropic_substep_linear.html'>barotropic_substep_linear</a>(grid, metrics, bt_work, force_u, force_v, n_steps, dt_inner, eta_forcing)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Public only for the unit-test suite (no production module imports it);
+ignore when developing production code in other modules.
+Linearized barotropic-substep kernel.  Forward-Euler steps
+the barotropic state (eta, ubt, vbt) at dt_inner for n_steps
+against the constant slow forcing <code>force_u</code>, <code>force_v</code> (each
+at the same C-grid location as ubt, vbt).  Accumulates the
+per-step running sums into <code>ubt_sum</code>, <code>vbt_sum</code>, <code>eta_sum</code>;
+at the end divides by <code>n_steps</code> and stores the time-mean
+back into <code>bt_eta</code>, <code>bt_ubt</code>, <code>bt_vbt</code> for the caller.</p><a href="../proc/barotropic_substep_linear.html" class="pull-right"><emph>Read more&hellip;</emph></a>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-grid~305"></span>
+              type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>grid</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-metrics~79"></span>
+              type(<a href='../type/ocean_metrics_t.html'>ocean_metrics_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>metrics</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-bt_work~22"></span>
+              type(<a href='../type/barotropic_workstate_t.html'>barotropic_workstate_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>bt_work</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-force_u~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>force_u</strong>(grid%nx_total+1,grid%ny_total)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-force_v~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>force_v</strong>(grid%nx_total,grid%ny_total+1)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n_steps~4"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>n_steps</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dt_inner~5"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dt_inner</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-eta_forcing~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>eta_forcing</strong>(grid%nx_total,grid%ny_total)</td>
+            <td>
+<p>Optional equilibrium-tide elevation (m); when present the PGF
+drives grad(eta - eta_forcing).  Absent =&gt; bit-identical.</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-barotropic_substep_nonlinear"></span> <h3>public  subroutine <a href='../proc/barotropic_substep_nonlinear.html'>barotropic_substep_nonlinear</a>(grid, bt_work, force_u, force_v, n_steps, dt_inner, bt_eta, bt_H_ref, bt_eta_new, bt_ke_centre, eta_sum, bt_eta_end, bt_ubt, bt_ubt_prev, bt_rem_u, ubt_sum, uhbt_sum, bt_uhbt, bt_ubt_end, bt_vbt, bt_vbt_prev, bt_rem_v, vbt_sum, vhbt_sum, bt_vhbt, bt_vbt_end, bt_zeta_corner, f_corner, area_cu, area_cv, dx_cu, dx_cv, dy_cu, dy_cv, iarea_bu, iarea_t, idx_cu, idy_cv, bc, t, eta_forcing, bt_halo)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Nonlinear barotropic substep.  Same time-mean accumulator
+pattern as <code>barotropic_substep_linear</code> but the per-substep
+dynamics include the three barotropic nonlinearities that
+matter for MOM6-grade physics:</p><a href="../proc/barotropic_substep_nonlinear.html" class="pull-right"><emph>Read more&hellip;</emph></a>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-grid~306"></span>
+              type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>grid</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-bt_work~23"></span>
+              type(<a href='../type/barotropic_workstate_t.html'>barotropic_workstate_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>bt_work</strong></td>
+            <td>
+<p>Carries scalars (g_bt, bebt, wetdry_enable, use_bt_cont_type,
+use_upstream_h_face, bt_substep_drag, wd_<em>) and the BTCL_u/v,
+h_face_up_x/y, wd_</em> arrays that are NOT promoted.  The
+22 fast-loop 2D arrays below replace the bt_work%<field> and
+cor%<field> derefs; bt_work itself is still needed here.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-force_u~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>force_u</strong>(grid%nx_total+1,grid%ny_total)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-force_v~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>force_v</strong>(grid%nx_total,grid%ny_total+1)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n_steps~5"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>n_steps</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dt_inner~6"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dt_inner</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-bt_eta~5"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>bt_eta</strong>(grid%nx_total,grid%ny_total)</td>
+            <td>
+<p>Barotropic SSH at cell centres; read+written every substep.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-bt_h_ref~5"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>bt_H_ref</strong>(grid%nx_total,grid%ny_total)</td>
+            <td>
+<p>Reference column thickness (m); read-only inside the fast loop.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-bt_eta_new"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>bt_eta_new</strong>(grid%nx_total,grid%ny_total)</td>
+            <td>
+<p>Per-substep η^{n+1} Jacobi scratch; written in Pass 1, read in η-swap.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-bt_ke_centre"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>bt_ke_centre</strong>(grid%nx_total,grid%ny_total)</td>
+            <td>
+<p>Barotropic KE at cell centres; written in Pass 1, read in Pass 2b/2c.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-eta_sum"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>eta_sum</strong>(grid%nx_total,grid%ny_total)</td>
+            <td>
+<p>η time-mean accumulator; zeroed at entry, accumulated each substep.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-bt_eta_end~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>bt_eta_end</strong>(grid%nx_total,grid%ny_total)</td>
+            <td>
+<p>End-of-loop η snapshot (before time-mean overwrite).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-bt_ubt~5"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>bt_ubt</strong>(grid%nx_total+1,grid%ny_total)</td>
+            <td>
+<p>Depth-mean u at east faces; read+written every substep.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-bt_ubt_prev~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>bt_ubt_prev</strong>(grid%nx_total+1,grid%ny_total)</td>
+            <td>
+<p>u^{n-1} BEBT projection snapshot; read+written when bebt &gt; 0.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-bt_rem_u~5"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>bt_rem_u</strong>(grid%nx_total+1,grid%ny_total)</td>
+            <td>
+<p>BT-substep multiplicative drag factor at u-faces; read-only.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ubt_sum"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ubt_sum</strong>(grid%nx_total+1,grid%ny_total)</td>
+            <td>
+<p>u time-mean accumulator; zeroed at entry, accumulated each substep.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-uhbt_sum"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>uhbt_sum</strong>(grid%nx_total+1,grid%ny_total)</td>
+            <td>
+<p>Depth-integrated u transport accumulator; zeroed and accumulated.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-bt_uhbt~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>bt_uhbt</strong>(grid%nx_total+1,grid%ny_total)</td>
+            <td>
+<p>Time-mean east-face transport (m²/s); written at loop end.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-bt_ubt_end~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>bt_ubt_end</strong>(grid%nx_total+1,grid%ny_total)</td>
+            <td>
+<p>End-of-loop u snapshot (before time-mean overwrite).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-bt_vbt~5"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>bt_vbt</strong>(grid%nx_total,grid%ny_total+1)</td>
+            <td>
+<p>Depth-mean v at north faces; read+written every substep.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-bt_vbt_prev~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>bt_vbt_prev</strong>(grid%nx_total,grid%ny_total+1)</td>
+            <td>
+<p>v^{n-1} BEBT projection snapshot; read+written when bebt &gt; 0.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-bt_rem_v~5"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>bt_rem_v</strong>(grid%nx_total,grid%ny_total+1)</td>
+            <td>
+<p>BT-substep multiplicative drag factor at v-faces; read-only.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-vbt_sum"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>vbt_sum</strong>(grid%nx_total,grid%ny_total+1)</td>
+            <td>
+<p>v time-mean accumulator; zeroed at entry, accumulated each substep.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-vhbt_sum"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>vhbt_sum</strong>(grid%nx_total,grid%ny_total+1)</td>
+            <td>
+<p>Depth-integrated v transport accumulator; zeroed and accumulated.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-bt_vhbt~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>bt_vhbt</strong>(grid%nx_total,grid%ny_total+1)</td>
+            <td>
+<p>Time-mean north-face transport (m²/s); written at loop end.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-bt_vbt_end~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>bt_vbt_end</strong>(grid%nx_total,grid%ny_total+1)</td>
+            <td>
+<p>End-of-loop v snapshot (before time-mean overwrite).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-bt_zeta_corner"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>bt_zeta_corner</strong>(grid%nx_total+1,grid%ny_total+1)</td>
+            <td>
+<p>Barotropic relative vorticity at corners; written in Pass 1, read in Pass 2b/2c.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-f_corner~16"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>f_corner</strong>(grid%nx_total+1,grid%ny_total+1)</td>
+            <td>
+<p>Coriolis parameter at corners (from coriolis_adv_t%f_corner); read-only.
+Passed explicitly so a wide-halo caller (Phase 3c) can supply a
+wide f_corner without touching the arithmetic body.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-area_cu"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>area_cu</strong>(grid%nx_total+1,grid%ny_total)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-area_cv"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>area_cv</strong>(grid%nx_total,grid%ny_total+1)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dx_cu"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dx_cu</strong>(grid%nx_total+1,grid%ny_total)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dx_cv~14"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dx_cv</strong>(grid%nx_total,grid%ny_total+1)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dy_cu~14"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dy_cu</strong>(grid%nx_total+1,grid%ny_total)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dy_cv"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dy_cv</strong>(grid%nx_total,grid%ny_total+1)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-iarea_bu"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>iarea_bu</strong>(grid%nx_total+1,grid%ny_total+1)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-iarea_t~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>iarea_t</strong>(grid%nx_total,grid%ny_total)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-idx_cu~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>idx_cu</strong>(grid%nx_total+1,grid%ny_total)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-idy_cv~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>idy_cv</strong>(grid%nx_total,grid%ny_total+1)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-bc~39"></span>
+              type(<a href='../type/ocean_bc_state_t.html'>ocean_bc_state_t</a>),
+            </td>
+<td>intent(inout),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>bc</strong></td>
+            <td>
+<p><code>intent(inout)</code> so the routine can update the persistent
+<code>eta_old_chapman_*</code> scalars used by the OBC_CHAPMAN
+radiation BC.  Other BC types (WALL/OPEN/CLAMPED/TIDAL)
+treat <code>bc</code> as read-only — the inout intent is for the
+Chapman state lifecycle.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-t~52"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>t</strong></td>
+            <td>
+<p>Outer-step wall time (s) used to evaluate the per-edge
+tidal constituent table for OBC_TIDAL.  Treated as a
+constant across the barotropic substeps (tidal periods are
+orders of magnitude longer than the inner dt).  Absent
+⇒ t = 0; the OBC_TIDAL formula degenerates to OBC_OPEN.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-eta_forcing~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>eta_forcing</strong>(grid%nx_total,grid%ny_total)</td>
+            <td>
+<p>Optional equilibrium-tide elevation (m); when present the PGF
+drives grad(eta - eta_forcing).  Absent =&gt; bit-identical.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-bt_halo~3"></span>
+              integer,
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>bt_halo</strong></td>
+            <td>
+<p>Wide-halo march-in width (Phase 3c).  When &gt; 0 the caller has
+supplied wide shadow arrays and <code>grid</code> has nghost = nghost + bt_halo.
+The mid-substep u exchange is absorbed and the per-substep group
+exchange is replaced by one wide exchange every <code>bt_halo/2</code> substeps.
+Absent or 0 =&gt; v1 per-substep exchange path (bit-identical).</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-barotropic_substep_nonlinear_interior"></span> <h3>public  subroutine <a href='../proc/barotropic_substep_nonlinear_interior.html'>barotropic_substep_nonlinear_interior</a>(grid, metrics, bt_work, f_corner, n_steps, dt_inner, bc, t, eta_forcing)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Interior (normal-width) entry point for the nonlinear barotropic
+fast loop.  Unpacks the <code>bt_work</code> fast-loop arrays and forwards them
+to <code>barotropic_substep_nonlinear</code> (bt_halo=0), so the ~20-array
+plumbing lives here once instead of at every call site.  The optional
+<code>bc</code>/<code>t</code>/<code>eta_forcing</code> propagate by absence (F2018 15.5.2.13), so this
+single entry reproduces the former present()-branch call variants
+bit-for-bit.  See <code>bt_wide_substep</code> for the wide-halo march-in twin.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-grid~307"></span>
+              type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>grid</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-metrics~80"></span>
+              type(<a href='../type/ocean_metrics_t.html'>ocean_metrics_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>metrics</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-bt_work~24"></span>
+              type(<a href='../type/barotropic_workstate_t.html'>barotropic_workstate_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>bt_work</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-f_corner~17"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>f_corner</strong>(grid%nx_total+1,grid%ny_total+1)</td>
+            <td>
+<p>Coriolis at corners (<code>coriolis_adv_t%f_corner</code>); forwarded read-only.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n_steps~6"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>n_steps</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dt_inner~7"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dt_inner</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-bc~40"></span>
+              type(<a href='../type/ocean_bc_state_t.html'>ocean_bc_state_t</a>),
+            </td>
+<td>intent(inout),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>bc</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-t~53"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>t</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-eta_forcing~5"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>eta_forcing</strong>(grid%nx_total,grid%ny_total)</td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-chapman_setup_corner"></span> <h3>public  subroutine <a href='../proc/chapman_setup_corner.html'>chapman_setup_corner</a>(grid, bt_H_ref, idx_cu, bc)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Configure-time (static data): latch <code>bt_H_ref</code> and <code>idx_cu</code> at the
+GLOBAL south-west corner cell (the Chapman phase-speed scale) into
+<code>bc</code>, delivered to every rank from the rank that owns it (all
+others add +0).  The substep then reads two scalars.  COLLECTIVE
+when decomposed: every rank must call it.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-grid~304"></span>
+              type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>grid</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-bt_h_ref~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>bt_H_ref</strong>(grid%nx_total,grid%ny_total)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-idx_cu~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>idx_cu</strong>(grid%nx_total+1,grid%ny_total)</td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-bc~38"></span>
+              type(<a href='../type/ocean_bc_state_t.html'>ocean_bc_state_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>bc</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-chapman_workspace_cleanup"></span> <h3>public  subroutine <a href='../proc/chapman_workspace_cleanup.html'>chapman_workspace_cleanup</a>()  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Release the Chapman line buffers (device mirror first).</p>
+
+  <h4>Arguments</h4>
+    <em>None</em>
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-chapman_edge_mean"></span> <h3>private  subroutine <a href='../proc/chapman_edge_mean.html'>chapman_edge_mean</a>(n, mean)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Global Chapman edge mean from the line already written at its
+GLOBAL index into <code>ch_lbuf(1:n)</code> (device) by the caller&rsquo;s kernel:
+pull the line, ONE collective sums it (exactly one nonzero addend
+per slot; identity on one rank), then <code>chapman_line_sum</code> and the
+division by the global count <code>n</code>.  The mean is the same expression
+for every edge, split or not, at any rank count.
+COLLECTIVE: all ranks must call it, in the same order.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n~52"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>n</strong></td>
+            <td>
+
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-mean"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>mean</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+              <div class="card">
+    <div class="card-header codesum"><span class="anchor" id="proc-chapman_workspace_ensure"></span> <h3>private  subroutine <a href='../proc/chapman_workspace_ensure.html'>chapman_workspace_ensure</a>(n)  
+</h3></div>
+    <div class="card-body">
+          
+  <p>Lazy-allocate the persistent Chapman line buffers (host + device
+mirror for <code>ch_lbuf</code>, host-only <code>ch_gbuf</code>) to at least <code>n</code> entries.
+Released by <code>chapman_workspace_cleanup</code>.</p>
+
+  <h4>Arguments</h4>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n~50"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>n</strong></td>
+            <td>
+
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+
+    </div>
+  </div>
+
+        </section>
+        <br>
+
+
+
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-11-13 23:21 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

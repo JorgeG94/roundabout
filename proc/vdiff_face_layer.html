@@ -1,0 +1,963 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>vdiff_face_layer &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>vdiff_face_layer
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.0% of total for procedures.">44 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_vdiff.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_vdiff.f90.html'>rdb_ocean_vdiff.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ocean_vdiff.html'>rdb_ocean_vdiff</a></li>
+            <li class="breadcrumb-item active" aria-current="page">vdiff_face_layer</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/vdiff_face_layer.html#variable-eps_hvel~2">EPS_HVEL</a>
+            <a class="list-group-item" href="../proc/vdiff_face_layer.html#variable-botfn">botfn</a>
+            <a class="list-group-item" href="../proc/vdiff_face_layer.html#variable-h_arith">h_arith</a>
+            <a class="list-group-item" href="../proc/vdiff_face_layer.html#variable-h_delta">h_delta</a>
+            <a class="list-group-item" href="../proc/vdiff_face_layer.html#variable-h_harm">h_harm</a>
+            <a class="list-group-item" href="../proc/vdiff_face_layer.html#variable-z2~2">z2</a>
+            <a class="list-group-item" href="../proc/vdiff_face_layer.html#variable-z_clear">z_clear</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/vdiff_face_layer.html#src">vdiff_face_layer</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>private pure subroutine vdiff_face_layer(hl_c, hr_c, u_k, k, kb, hvel_mom6, hvel_harmonic, hvel_upwind, zlevel_faces, d_min, i_hbbl, zacc, zcol_l, zcol_r, hvel, zint)  
+</h2>
+    
+
+    <p>Face thickness <code>hvel</code> (MOM6 <code>hvel</code>) and normalized height above the
+bed <code>zint</code> (MOM6 <code>z_i</code>, the TOP interface of layer k) of layer k of
+one face column, advancing the upward accumulators <code>zacc</code> /
+<code>zcol_l</code> / <code>zcol_r</code>.  Called for k = 1, 2, &hellip;, nz in order by
+<code>diffuse_velocity_columns_impl</code>.  k = 1 is the BED (MOM6 counts
+from the surface), so the height accumulates UPWARD.</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hl_c"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hl_c</strong></td>
+            <td>
+                <p>The two abutting cells&rsquo; thickness of layer k.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hr_c"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hr_c</strong></td>
+            <td>
+                <p>The two abutting cells&rsquo; thickness of layer k.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-u_k~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>u_k</strong></td>
+            <td>
+                <p>Face velocity of layer k (u^n), for the upwind blend&rsquo;s sign test.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-k~191"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>k</strong></td>
+            <td>
+                <p>Layer index and the face&rsquo;s static first-live bed layer.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-kb~15"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>kb</strong></td>
+            <td>
+                <p>Layer index and the face&rsquo;s static first-live bed layer.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hvel_mom6~3"></span>
+              logical,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hvel_mom6</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hvel_harmonic~3"></span>
+              logical,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hvel_harmonic</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hvel_upwind~3"></span>
+              logical,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hvel_upwind</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-zlevel_faces~6"></span>
+              logical,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>zlevel_faces</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-d_min~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>d_min</strong></td>
+            <td>
+                <p>Shallower of the two column depths (<code>z_clear</code> branch only).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-i_hbbl~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>i_hbbl</strong></td>
+            <td>
+                <p>1 / (height-above-bed normaliser).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-zacc~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>zacc</strong></td>
+            <td>
+                <p>Upward accumulators: harmonic height above the live bed, and the
+two columns&rsquo; interface heights (<code>z_clear</code> branch).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-zcol_l~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>zcol_l</strong></td>
+            <td>
+                <p>Upward accumulators: harmonic height above the live bed, and the
+two columns&rsquo; interface heights (<code>z_clear</code> branch).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-zcol_r~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>zcol_r</strong></td>
+            <td>
+                <p>Upward accumulators: harmonic height above the live bed, and the
+two columns&rsquo; interface heights (<code>z_clear</code> branch).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hvel"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hvel</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-zint"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>zint</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~vdiff_face_layer~~CalledByGraph Pages: 1 -->
+<svg id="procvdiff_face_layerCalledByGraph" width="641pt" height="44pt"
+ viewBox="0.00 0.00 641.00 44.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~vdiff_face_layer~~CalledByGraph" class="graph" transform="scale(0.586518 0.586518) rotate(0) translate(4 70.27)">
+<title>proc~~vdiff_face_layer~~CalledByGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-70.27 1088.89,-70.27 1088.89,4 -4,4"/>
+<!-- proc~vdiff_face_layer -->
+<g id="proc~~vdiff_face_layer~~CalledByGraph_node1" class="node">
+<title>proc~vdiff_face_layer</title>
+<polygon fill="none" stroke="black" points="1084.89,-44.27 989.37,-44.27 989.37,-20 1084.89,-20 1084.89,-44.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1037.13" y="-28.53" font-family="Helvetica,sans-Serif" font-size="10.50">vdiff_face_layer</text>
+</g>
+<!-- proc~diffuse_velocity_columns_impl -->
+<g id="proc~~vdiff_face_layer~~CalledByGraph_node2" class="node">
+<title>proc~diffuse_velocity_columns_impl</title>
+<g id="a_proc~~vdiff_face_layer~~CalledByGraph_node2"><a xlink:href="../proc/diffuse_velocity_columns_impl.html" xlink:title="diffuse_velocity_columns_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="953.37,-44.27 780.6,-44.27 780.6,-20 953.37,-20 953.37,-44.27"/>
+<text xml:space="preserve" text-anchor="middle" x="866.98" y="-28.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">diffuse_velocity_columns_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~diffuse_velocity_columns_impl&#45;&gt;proc~vdiff_face_layer -->
+<g id="proc~~vdiff_face_layer~~CalledByGraph_edge1" class="edge">
+<title>proc~diffuse_velocity_columns_impl&#45;&gt;proc~vdiff_face_layer</title>
+<path fill="none" stroke="#ff0000" d="M953.54,-32.13C961.62,-32.13 969.68,-32.13 977.43,-32.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="977.39,-35.64 987.39,-32.14 977.39,-28.64 977.39,-35.64"/>
+</g>
+<!-- proc~vdiff_apply_momentum -->
+<g id="proc~~vdiff_face_layer~~CalledByGraph_node3" class="node">
+<title>proc~vdiff_apply_momentum</title>
+<g id="a_proc~~vdiff_face_layer~~CalledByGraph_node3"><a xlink:href="../proc/vdiff_apply_momentum.html" xlink:title="vdiff_apply_momentum">
+<polygon fill="#d9534f" stroke="#d9534f" points="744.6,-44.27 607.83,-44.27 607.83,-20 744.6,-20 744.6,-44.27"/>
+<text xml:space="preserve" text-anchor="middle" x="676.21" y="-28.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vdiff_apply_momentum</text>
+</a>
+</g>
+</g>
+<!-- proc~vdiff_apply_momentum&#45;&gt;proc~diffuse_velocity_columns_impl -->
+<g id="proc~~vdiff_face_layer~~CalledByGraph_edge2" class="edge">
+<title>proc~vdiff_apply_momentum&#45;&gt;proc~diffuse_velocity_columns_impl</title>
+<path fill="none" stroke="#ff0000" d="M745.1,-32.13C752.86,-32.13 760.88,-32.13 768.92,-32.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="768.78,-35.64 778.78,-32.14 768.78,-28.64 768.78,-35.64"/>
+</g>
+<!-- proc~visc_rem_precompute -->
+<g id="proc~~vdiff_face_layer~~CalledByGraph_node4" class="node">
+<title>proc~visc_rem_precompute</title>
+<g id="a_proc~~vdiff_face_layer~~CalledByGraph_node4"><a xlink:href="../proc/visc_rem_precompute.html" xlink:title="visc_rem_precompute">
+<polygon fill="#d9534f" stroke="#d9534f" points="571.83,-24.27 444.06,-24.27 444.06,0 571.83,0 571.83,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="507.94" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">visc_rem_precompute</text>
+</a>
+</g>
+</g>
+<!-- proc~visc_rem_precompute&#45;&gt;proc~vdiff_apply_momentum -->
+<g id="proc~~vdiff_face_layer~~CalledByGraph_edge3" class="edge">
+<title>proc~visc_rem_precompute&#45;&gt;proc~vdiff_apply_momentum</title>
+<path fill="none" stroke="#ff0000" d="M572.28,-19.75C580.08,-20.69 588.12,-21.66 596.11,-22.62"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="595.5,-26.07 605.85,-23.79 596.34,-19.12 595.5,-26.07"/>
+</g>
+<!-- proc~vmix_apply_in_stage -->
+<g id="proc~~vdiff_face_layer~~CalledByGraph_node5" class="node">
+<title>proc~vmix_apply_in_stage</title>
+<g id="a_proc~~vdiff_face_layer~~CalledByGraph_node5"><a xlink:href="../proc/vmix_apply_in_stage.html" xlink:title="vmix_apply_in_stage">
+<polygon fill="#d9534f" stroke="#d9534f" points="408.06,-64.27 287.04,-64.27 287.04,-40 408.06,-40 408.06,-64.27"/>
+<text xml:space="preserve" text-anchor="middle" x="347.55" y="-48.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vmix_apply_in_stage</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_apply_in_stage&#45;&gt;proc~vdiff_apply_momentum -->
+<g id="proc~~vdiff_face_layer~~CalledByGraph_edge4" class="edge">
+<title>proc~vmix_apply_in_stage&#45;&gt;proc~vdiff_apply_momentum</title>
+<path fill="none" stroke="#ff0000" d="M408.47,-48.47C461.22,-45.24 538.42,-40.51 596.22,-36.97"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="596.22,-40.48 605.99,-36.37 595.8,-33.49 596.22,-40.48"/>
+</g>
+<!-- proc~vmix_apply_in_stage&#45;&gt;proc~visc_rem_precompute -->
+<g id="proc~~vdiff_face_layer~~CalledByGraph_edge6" class="edge">
+<title>proc~vmix_apply_in_stage&#45;&gt;proc~visc_rem_precompute</title>
+<path fill="none" stroke="#ff0000" d="M398.23,-39.59C413.49,-35.74 430.46,-31.45 446.36,-27.43"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="446.86,-30.92 455.7,-25.08 445.15,-24.13 446.86,-30.92"/>
+</g>
+<!-- proc~run_stage -->
+<g id="proc~~vdiff_face_layer~~CalledByGraph_node6" class="node">
+<title>proc~run_stage</title>
+<g id="a_proc~~vdiff_face_layer~~CalledByGraph_node6"><a xlink:href="../proc/run_stage.html" xlink:title="run_stage">
+<polygon fill="#d9534f" stroke="#d9534f" points="237.54,-66.27 173.52,-66.27 173.52,-42 237.54,-42 237.54,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="205.53" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage</text>
+</a>
+</g>
+</g>
+<!-- proc~run_stage&#45;&gt;proc~vmix_apply_in_stage -->
+<g id="proc~~vdiff_face_layer~~CalledByGraph_edge7" class="edge">
+<title>proc~run_stage&#45;&gt;proc~vmix_apply_in_stage</title>
+<path fill="none" stroke="#00ffff" d="M237.95,-53.69C249.12,-53.53 262.18,-53.34 275.31,-53.15"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="275.35,-56.65 285.29,-53.01 275.25,-49.65 275.35,-56.65"/>
+</g>
+<!-- proc~run_stage_split -->
+<g id="proc~~vdiff_face_layer~~CalledByGraph_node7" class="node">
+<title>proc~run_stage_split</title>
+<g id="a_proc~~vdiff_face_layer~~CalledByGraph_node7"><a xlink:href="../proc/run_stage_split.html" xlink:title="run_stage_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="251.04,-24.27 160.02,-24.27 160.02,0 251.04,0 251.04,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="205.53" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage_split</text>
+</a>
+</g>
+</g>
+<!-- proc~run_stage_split&#45;&gt;proc~visc_rem_precompute -->
+<g id="proc~~vdiff_face_layer~~CalledByGraph_edge5" class="edge">
+<title>proc~run_stage_split&#45;&gt;proc~visc_rem_precompute</title>
+<path fill="none" stroke="#ff0000" d="M251.51,-12.13C299.21,-12.13 375.36,-12.13 432.13,-12.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="432.05,-15.64 442.05,-12.14 432.05,-8.64 432.05,-15.64"/>
+</g>
+<!-- proc~run_stage_split&#45;&gt;proc~vmix_apply_in_stage -->
+<g id="proc~~vdiff_face_layer~~CalledByGraph_edge8" class="edge">
+<title>proc~run_stage_split&#45;&gt;proc~vmix_apply_in_stage</title>
+<path fill="none" stroke="#00ffff" d="M250.45,-24.68C263.61,-28.44 278.21,-32.61 291.97,-36.54"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="290.75,-39.84 301.33,-39.22 292.68,-33.1 290.75,-39.84"/>
+</g>
+<!-- proc~ocean_dyn_step -->
+<g id="proc~~vdiff_face_layer~~CalledByGraph_node8" class="node">
+<title>proc~ocean_dyn_step</title>
+<g id="a_proc~~vdiff_face_layer~~CalledByGraph_node8"><a xlink:href="../proc/ocean_dyn_step.html" xlink:title="ocean_dyn_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="110.52,-66.27 13.5,-66.27 13.5,-42 110.52,-42 110.52,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="62.01" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step&#45;&gt;proc~run_stage -->
+<g id="proc~~vdiff_face_layer~~CalledByGraph_edge9" class="edge">
+<title>proc~ocean_dyn_step&#45;&gt;proc~run_stage</title>
+<path fill="none" stroke="#ff0000" d="M110.92,-54.13C127.44,-54.13 145.82,-54.13 161.89,-54.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="161.61,-57.64 171.61,-54.14 161.61,-50.64 161.61,-57.64"/>
+</g>
+<!-- proc~ocean_dyn_step_split -->
+<g id="proc~~vdiff_face_layer~~CalledByGraph_node9" class="node">
+<title>proc~ocean_dyn_step_split</title>
+<g id="a_proc~~vdiff_face_layer~~CalledByGraph_node9"><a xlink:href="../proc/ocean_dyn_step_split.html" xlink:title="ocean_dyn_step_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="124.02,-24.27 0,-24.27 0,0 124.02,0 124.02,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="62.01" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step_split</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step_split&#45;&gt;proc~run_stage_split -->
+<g id="proc~~vdiff_face_layer~~CalledByGraph_edge10" class="edge">
+<title>proc~ocean_dyn_step_split&#45;&gt;proc~run_stage_split</title>
+<path fill="none" stroke="#00ffff" d="M124.26,-12.13C132.29,-12.13 140.49,-12.13 148.43,-12.13"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="148.31,-15.64 158.31,-12.14 148.31,-8.64 148.31,-15.64"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocvdiff_face_layerCalledByGraph = svgPanZoom('#procvdiff_face_layerCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-eps_hvel~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private,</td>
+            <td>
+parameter               
+            </td>
+            <td>::</td>
+            <td><strong>EPS_HVEL</strong></td>
+<td> =</td>
+                <td>1.0e-30_wp</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-botfn"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>botfn</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_arith"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_arith</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_delta"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_delta</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_harm"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_harm</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-z2~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>z2</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-z_clear"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>z_clear</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">pure subroutine </span><span class="n">vdiff_face_layer</span><span class="p">(</span><span class="n">hl_c</span><span class="p">,</span><span class="w"> </span><span class="n">hr_c</span><span class="p">,</span><span class="w"> </span><span class="n">u_k</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">,</span><span class="w"> </span><span class="n">kb</span><span class="p">,</span><span class="w"> </span><span class="n">hvel_mom6</span><span class="p">,</span><span class="w"> </span><span class="n">hvel_harmonic</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                    </span><span class="n">hvel_upwind</span><span class="p">,</span><span class="w"> </span><span class="n">zlevel_faces</span><span class="p">,</span><span class="w"> </span><span class="n">d_min</span><span class="p">,</span><span class="w"> </span><span class="n">i_hbbl</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                    </span><span class="n">zacc</span><span class="p">,</span><span class="w"> </span><span class="n">zcol_l</span><span class="p">,</span><span class="w"> </span><span class="n">zcol_r</span><span class="p">,</span><span class="w"> </span><span class="n">hvel</span><span class="p">,</span><span class="w"> </span><span class="n">zint</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! Face thickness `hvel` (MOM6 `hvel`) and normalized height above the</span>
+<span class="w">      </span><span class="c">!! bed `zint` (MOM6 `z_i`, the TOP interface of layer k) of layer k of</span>
+<span class="w">      </span><span class="c">!! one face column, advancing the upward accumulators `zacc` /</span>
+<span class="w">      </span><span class="c">!! `zcol_l` / `zcol_r`.  Called for k = 1, 2, ..., nz in order by</span>
+<span class="w">      </span><span class="c">!! `diffuse_velocity_columns_impl`.  k = 1 is the BED (MOM6 counts</span>
+<span class="w">      </span><span class="c">!! from the surface), so the height accumulates UPWARD.</span>
+<span class="w">      </span><span class="c">!$acc routine seq</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">hl_c</span><span class="p">,</span><span class="w"> </span><span class="n">hr_c</span>
+<span class="w">         </span><span class="c">!! The two abutting cells' thickness of layer k.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">u_k</span>
+<span class="w">         </span><span class="c">!! Face velocity of layer k (u^n), for the upwind blend's sign test.</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">k</span><span class="p">,</span><span class="w"> </span><span class="n">kb</span>
+<span class="w">         </span><span class="c">!! Layer index and the face's static first-live bed layer.</span>
+<span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">hvel_mom6</span><span class="p">,</span><span class="w"> </span><span class="n">hvel_harmonic</span><span class="p">,</span><span class="w"> </span><span class="n">hvel_upwind</span><span class="p">,</span><span class="w"> </span><span class="n">zlevel_faces</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">d_min</span>
+<span class="w">         </span><span class="c">!! Shallower of the two column depths (`z_clear` branch only).</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i_hbbl</span>
+<span class="w">         </span><span class="c">!! 1 / (height-above-bed normaliser).</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">zacc</span><span class="p">,</span><span class="w"> </span><span class="n">zcol_l</span><span class="p">,</span><span class="w"> </span><span class="n">zcol_r</span>
+<span class="w">         </span><span class="c">!! Upward accumulators: harmonic height above the live bed, and the</span>
+<span class="w">         </span><span class="c">!! two columns' interface heights (`z_clear` branch).</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">hvel</span><span class="p">,</span><span class="w"> </span><span class="n">zint</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">parameter</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">EPS_HVEL</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0e-30_wp</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">h_harm</span><span class="p">,</span><span class="w"> </span><span class="n">h_arith</span><span class="p">,</span><span class="w"> </span><span class="n">h_delta</span><span class="p">,</span><span class="w"> </span><span class="n">z_clear</span><span class="p">,</span><span class="w"> </span><span class="n">z2</span><span class="p">,</span><span class="w"> </span><span class="n">botfn</span>
+
+<span class="w">      </span><span class="c">! Not read off `hvel_mom6` (configure guarantees `hvel_mom6`</span>
+<span class="w">      </span><span class="c">! whenever `bbl_glue`, the only other reader).</span>
+<span class="w">      </span><span class="n">zint</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">hvel_mom6</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="p">.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">hvel_harmonic</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="w">         </span><span class="c">! MOM6 vertvisc_coef, HARMONIC_VISC = False branch.  `zcol_*` is</span>
+<span class="w">         </span><span class="c">! the height of the TOP of layer k in each cell; `z_clear` is the</span>
+<span class="w">         </span><span class="c">! height of the higher of the two above the SHALLOWER bed</span>
+<span class="w">         </span><span class="c">! (`-d_min`), so a face layer below the shallower bed of a step</span>
+<span class="w">         </span><span class="c">! sits at z_clear &lt;= 0 and only `zh` (harmonic, ~0 against a</span>
+<span class="w">         </span><span class="c">! filler) lifts it.  `harm_BL_val = 0` (MOM6 HARMONIC_BL_SCALE</span>
+<span class="w">         </span><span class="c">! default) ⇒ `z2_wt = 1`.</span>
+<span class="w">         </span><span class="n">h_harm</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">2.0_wp</span><span class="o">*</span><span class="n">hl_c</span><span class="o">*</span><span class="n">hr_c</span><span class="o">/</span><span class="p">(</span><span class="n">hl_c</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">hr_c</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">EPS_HVEL</span><span class="p">)</span>
+<span class="w">         </span><span class="n">h_arith</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="p">(</span><span class="n">hl_c</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">hr_c</span><span class="p">)</span>
+<span class="w">         </span><span class="n">h_delta</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">hr_c</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">hl_c</span>
+<span class="w">         </span><span class="n">zcol_l</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">zcol_l</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">hl_c</span>
+<span class="w">         </span><span class="n">zcol_r</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">zcol_r</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">hr_c</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">k</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="n">kb</span><span class="p">)</span><span class="w"> </span><span class="n">zacc</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">zacc</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">h_harm</span>
+<span class="w">         </span><span class="n">z_clear</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">max</span><span class="p">(</span><span class="n">zcol_l</span><span class="p">,</span><span class="w"> </span><span class="n">zcol_r</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">d_min</span>
+<span class="w">         </span><span class="n">zint</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">max</span><span class="p">(</span><span class="n">zacc</span><span class="p">,</span><span class="w"> </span><span class="n">z_clear</span><span class="p">)</span><span class="o">*</span><span class="n">i_hbbl</span>
+<span class="w">         </span><span class="n">hvel</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">h_arith</span>
+<span class="w">         </span><span class="c">! Flow from the THIN side to the THICK side: near the bed the</span>
+<span class="w">         </span><span class="c">! face takes the harmonic (thin-side) thickness, so a</span>
+<span class="w">         </span><span class="c">! near-massless layer cannot be drained through a thick face.</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">u_k</span><span class="o">*</span><span class="n">h_delta</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            </span><span class="n">z2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">zint</span>
+<span class="w">            </span><span class="n">botfn</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0_wp</span><span class="o">/</span><span class="p">(</span><span class="mf">1.0_wp</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">0.09_wp</span><span class="o">*</span><span class="n">z2</span><span class="o">*</span><span class="n">z2</span><span class="o">*</span><span class="n">z2</span><span class="o">*</span><span class="n">z2</span><span class="o">*</span><span class="n">z2</span><span class="o">*</span><span class="n">z2</span><span class="p">)</span>
+<span class="w">            </span><span class="n">hvel</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="mf">1.0_wp</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">botfn</span><span class="p">)</span><span class="o">*</span><span class="n">h_arith</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">botfn</span><span class="o">*</span><span class="n">h_harm</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">      else if</span><span class="w"> </span><span class="p">(</span><span class="n">hvel_mom6</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         </span><span class="n">h_harm</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">2.0_wp</span><span class="o">*</span><span class="n">hl_c</span><span class="o">*</span><span class="n">hr_c</span><span class="o">/</span><span class="p">(</span><span class="n">hl_c</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">hr_c</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">EPS_HVEL</span><span class="p">)</span>
+<span class="w">         </span><span class="n">h_arith</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="p">(</span><span class="n">hl_c</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">hr_c</span><span class="p">)</span>
+<span class="w">         </span><span class="n">h_delta</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">hr_c</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">hl_c</span>
+<span class="w">         </span><span class="n">hvel</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">h_harm</span>
+<span class="w">         </span><span class="c">! Upwind bias: only when the flow runs from the THICK side to the</span>
+<span class="w">         </span><span class="c">! THIN side does the near-bed face take the arithmetic (donor)</span>
+<span class="w">         </span><span class="c">! thickness.  Without this the harmonic mean over-suppresses</span>
+<span class="w">         </span><span class="c">! asymmetrically -- the reason bare-harmonic attempts regressed</span>
+<span class="w">         </span><span class="c">! (LAGRANGIAN_PGF_BUG.md 6.2).</span>
+<span class="w">         </span><span class="c">!</span>
+<span class="w">         </span><span class="c">! `hvel_upwind = .false.` disables the blend (pure harmonic hvel).</span>
+<span class="w">         </span><span class="c">! The sign test keys on u itself, so at (near-)rest it flip-flops</span>
+<span class="w">         </span><span class="c">! faces between harmonic and arithmetic on ROUNDOFF-sign</span>
+<span class="w">         </span><span class="c">! velocities, collapsing the BBL glue at whichever faces flip —</span>
+<span class="w">         </span><span class="c">! measured ×200-800/stage residual amplification on the rest-state</span>
+<span class="w">         </span><span class="c">! reproducer (PGF_BUG.md §9.8).  MOM6 carries the same test and the</span>
+<span class="w">         </span><span class="c">! same hazard; it never bites there only because its state stays</span>
+<span class="w">         </span><span class="c">! at 1e-14.</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">hvel_upwind</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">u_k</span><span class="o">*</span><span class="n">h_delta</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            </span><span class="n">z2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">zacc</span>
+<span class="w">            </span><span class="n">botfn</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1.0_wp</span><span class="o">/</span><span class="p">(</span><span class="mf">1.0_wp</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mf">0.09_wp</span><span class="o">*</span><span class="n">z2</span><span class="o">*</span><span class="n">z2</span><span class="o">*</span><span class="n">z2</span><span class="o">*</span><span class="n">z2</span><span class="o">*</span><span class="n">z2</span><span class="o">*</span><span class="n">z2</span><span class="p">)</span>
+<span class="w">            </span><span class="n">hvel</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="mf">1.0_wp</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">botfn</span><span class="p">)</span><span class="o">*</span><span class="n">h_harm</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">botfn</span><span class="o">*</span><span class="n">h_arith</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="w">         </span><span class="c">! Height above the LIVE bed: the inert fillers below `kb` do not</span>
+<span class="w">         </span><span class="c">! count (bit-identical at kb = 1).</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">k</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="n">kb</span><span class="p">)</span><span class="w"> </span><span class="n">zacc</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">zacc</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">h_harm</span><span class="o">*</span><span class="n">i_hbbl</span>
+<span class="w">         </span><span class="n">zint</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">zacc</span>
+<span class="w">      </span><span class="k">else</span>
+<span class="k">         </span><span class="n">hvel</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="p">(</span><span class="n">hl_c</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">hr_c</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end if</span>
+<span class="w">      </span><span class="c">! z-level partial steps: the face column is the OVERLAP of the two</span>
+<span class="w">      </span><span class="c">! cell columns, so its thickness is the min.  A filler on either side</span>
+<span class="w">      </span><span class="c">! then reads at or below H_VANISHED and the coupling gates cut it out</span>
+<span class="w">      </span><span class="c">! of the solve.</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">zlevel_faces</span><span class="p">)</span><span class="w"> </span><span class="n">hvel</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">min</span><span class="p">(</span><span class="n">hl_c</span><span class="p">,</span><span class="w"> </span><span class="n">hr_c</span><span class="p">)</span>
+<span class="w">   </span><span class="k">end subroutine </span><span class="n">vdiff_face_layer</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-11-13 23:21 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

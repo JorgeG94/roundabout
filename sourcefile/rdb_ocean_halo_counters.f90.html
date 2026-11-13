@@ -1,0 +1,1498 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>rdb_ocean_halo_counters.F90 &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>rdb_ocean_halo_counters.F90
+      <small>Source File</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.2% of total for source files.">130 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_halo_counters.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+            <li class="breadcrumb-item active" aria-current="page">rdb_ocean_halo_counters.F90</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+        <div id="sidebar">
+      <h3>Contents</h3>
+  
+  
+  
+  
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#mods-0"
+         aria-expanded="false" aria-controls="mods-0">
+         <h4 class="card-header bg-primary text-white">Modules</h4>
+      </a>
+      <div id="mods-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/rdb_ocean_halo_counters.html">rdb_ocean_halo_counters</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../sourcefile/rdb_ocean_halo_counters.f90.html#src">rdb_ocean_halo_counters.F90</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    <div class="col-md-9" id='text'>
+      <p>Ocean halo-exchange counters — backend-agnostic bookkeeping module.</p>
+<p>Provides deterministic per-category exchange counters that are
+incremented at SEMANTIC call sites (NOT deep inside primitives) to
+give a load-independent gate for halo-exchange profiling and testing.</p>
+<h1 id="double-count-prevention">DOUBLE-COUNT PREVENTION</h1>
+<p>The 3d wrappers (<code>centre_3d</code>, <code>face_x_3d</code>, <code>face_y_3d</code>) now perform
+batched single-message exchanges (no per-layer 2d loop).  The grouped
+<code>bt_group_2d</code> and <code>ocean_halo_exchange_ml_state</code> wrappers call the
+primitives internally.
+Suppression is NESTING-SAFE via a depth counter (<code>oh_suppress_depth</code>):
+each call to <code>oh_count_suppress_on()</code> increments the depth, and each
+<code>oh_count_suppress_off()</code> decrements it (floored at 0).  Increment
+routines check <code>oh_suppress_depth &gt; 0</code> before bumping their counter.
+This handles multi-level nesting: ml_state suppress_on → outer depth
+still positive, so inner 3d counters stay suppressed inside ml_state.</p>
+<p>CATEGORIES (9 semantic counters, disjoint and additive):
+  oh_cnt_bt_group    — ocean_halo_bt_group_2d grouped exchange
+  oh_cnt_bt_u_mid    — mid-substep bt_ubt face_x exchange (BT Pass-2b→2c)
+  oh_cnt_ml_state    — ocean_halo_exchange_ml_state whole-ML-state exchange
+  oh_cnt_centre_2d   — standalone centre_2d primitive
+  oh_cnt_centre_3d   — standalone centre_3d primitive (batched)
+  oh_cnt_face_x_2d   — standalone face_x_2d primitive
+  oh_cnt_face_x_3d   — standalone face_x_3d primitive (batched)
+  oh_cnt_face_y_2d   — standalone face_y_2d primitive
+  oh_cnt_face_y_3d   — standalone face_y_3d primitive (batched)</p>
+<p>MESSAGE COUNTER (oh_cnt_msgs):
+  Total MPI ISENDs posted by the ocean halo MPI backend.  NOT subject
+  to the suppress depth — messages are physical MPI operations regardless
+  of semantic grouping, so suppression does not apply.  Incremented in
+  <code>rdb_ocean_halo</code> on the decomposed axes only; an undecomposed axis posts
+  no messages, so this stays zero in non-MPI builds.</p>
+<p>All counters are host-side scalars (never inside a do concurrent /
+OpenACC region); they are pure integer bookkeeping.
+No MPI dependency — compiled in BOTH MPI and single-process configs.</p>
+      <br>
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">Files dependent on this one</h3>
+          </div>
+          <div class="card-body">
+            <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph Pages: 1 -->
+<svg id="sourcefilerdb_ocean_halo_countersf90AfferentGraph" width="641pt" height="293pt"
+ viewBox="0.00 0.00 641.00 293.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph" class="graph" transform="scale(0.32738 0.32738) rotate(0) translate(4 891.26)">
+<title>sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-891.26 1953.97,-891.26 1953.97,4 -4,4"/>
+<!-- sourcefile~rdb_ocean_halo_counters.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_node1" class="node">
+<title>sourcefile~rdb_ocean_halo_counters.f90</title>
+<polygon fill="none" stroke="black" points="170.52,-562.13 0,-562.13 0,-537.87 170.52,-537.87 170.52,-562.13"/>
+<text xml:space="preserve" text-anchor="middle" x="85.26" y="-546.4" font-family="Helvetica,sans-Serif" font-size="10.50">rdb_ocean_halo_counters.F90</text>
+</g>
+<!-- sourcefile~rdb_barotropic_substep.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_node2" class="node">
+<title>sourcefile~rdb_barotropic_substep.f90</title>
+<g id="a_sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_node2"><a xlink:href="../sourcefile/rdb_barotropic_substep.f90.html" xlink:title="rdb_barotropic_substep.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="522.81,-356.13 365.04,-356.13 365.04,-331.87 522.81,-331.87 522.81,-356.13"/>
+<text xml:space="preserve" text-anchor="middle" x="443.93" y="-340.4" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_barotropic_substep.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_barotropic_substep.f90&#45;&gt;sourcefile~rdb_ocean_halo_counters.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge1" class="edge">
+<title>sourcefile~rdb_barotropic_substep.f90&#45;&gt;sourcefile~rdb_ocean_halo_counters.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M397.23,-331.4C359.27,-323.71 305.39,-319.5 266.53,-344"/>
+</g>
+<!-- sourcefile~rdb_ocean_halo.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_node4" class="node">
+<title>sourcefile~rdb_ocean_halo.f90</title>
+<g id="a_sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_node4"><a xlink:href="../sourcefile/rdb_ocean_halo.f90.html" xlink:title="rdb_ocean_halo.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="324.54,-562.13 206.52,-562.13 206.52,-537.87 324.54,-537.87 324.54,-562.13"/>
+<text xml:space="preserve" text-anchor="middle" x="265.53" y="-546.4" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_halo.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_barotropic_substep.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge12" class="edge">
+<title>sourcefile~rdb_barotropic_substep.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M432.16,-356.58C402.81,-390.85 321.19,-486.17 284.64,-528.86"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="281.99,-526.57 278.14,-536.44 287.3,-531.12 281.99,-526.57"/>
+</g>
+<!-- sourcefile~rdb_ocean_console_stats.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_node3" class="node">
+<title>sourcefile~rdb_ocean_console_stats.f90</title>
+<g id="a_sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_node3"><a xlink:href="../sourcefile/rdb_ocean_console_stats.f90.html" xlink:title="rdb_ocean_console_stats.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="527.31,-256.13 360.54,-256.13 360.54,-231.87 527.31,-231.87 527.31,-256.13"/>
+<text xml:space="preserve" text-anchor="middle" x="443.93" y="-240.4" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_console_stats.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_console_stats.f90&#45;&gt;sourcefile~rdb_ocean_halo_counters.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge2" class="edge">
+<title>sourcefile~rdb_ocean_console_stats.f90&#45;&gt;sourcefile~rdb_ocean_halo_counters.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M419.12,-256.58C384.83,-274.89 319.83,-310.39 266.53,-344"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M264.53,-344C187.08,-392.84 124.82,-485.62 99.07,-527.95"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="96.22,-525.89 94.1,-536.27 102.23,-529.48 96.22,-525.89"/>
+</g>
+<!-- sourcefile~rdb_ocean_halo.f90&#45;&gt;sourcefile~rdb_ocean_halo_counters.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge3" class="edge">
+<title>sourcefile~rdb_ocean_halo.f90&#45;&gt;sourcefile~rdb_ocean_halo_counters.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M206.16,-550C198.5,-550 190.49,-550 182.41,-550"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="182.47,-546.5 172.47,-550 182.47,-553.5 182.47,-546.5"/>
+</g>
+<!-- sourcefile~rdb_ocean_halo_state.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_node5" class="node">
+<title>sourcefile~rdb_ocean_halo_state.f90</title>
+<g id="a_sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_node5"><a xlink:href="../sourcefile/rdb_ocean_halo_state.f90.html" xlink:title="rdb_ocean_halo_state.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="715.08,-642.13 564.81,-642.13 564.81,-617.87 715.08,-617.87 715.08,-642.13"/>
+<text xml:space="preserve" text-anchor="middle" x="639.95" y="-626.4" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_halo_state.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_halo_state.f90&#45;&gt;sourcefile~rdb_ocean_halo_counters.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge4" class="edge">
+<title>sourcefile~rdb_ocean_halo_state.f90&#45;&gt;sourcefile~rdb_ocean_halo_counters.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M564.6,-620.71C478.35,-609.74 331.93,-590.5 206.52,-571 193.68,-569 180.08,-566.76 166.84,-564.5"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="167.76,-561.1 157.31,-562.86 166.57,-568 167.76,-561.1"/>
+</g>
+<!-- sourcefile~rdb_ocean_halo_state.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge22" class="edge">
+<title>sourcefile~rdb_ocean_halo_state.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M600.2,-617.49C588.28,-613.42 575.18,-608.73 563.31,-604 509.59,-582.57 502.73,-548.18 444.93,-550"/>
+</g>
+<!-- sourcefile~rdb_continuity.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_node6" class="node">
+<title>sourcefile~rdb_continuity.f90</title>
+<g id="a_sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_node6"><a xlink:href="../sourcefile/rdb_continuity.f90.html" xlink:title="rdb_continuity.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="694.08,-562.13 585.81,-562.13 585.81,-537.87 694.08,-537.87 694.08,-562.13"/>
+<text xml:space="preserve" text-anchor="middle" x="639.95" y="-546.4" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_continuity.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_continuity.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge13" class="edge">
+<title>sourcefile~rdb_continuity.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M585.4,-549.09C546.43,-548.66 492.4,-548.5 444.93,-550"/>
+</g>
+<!-- sourcefile~rdb_driver.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_node7" class="node">
+<title>sourcefile~rdb_driver.f90</title>
+<g id="a_sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_node7"><a xlink:href="../sourcefile/rdb_driver.f90.html" xlink:title="rdb_driver.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1798.58,-126.14 1711.31,-126.14 1711.31,-101.86 1798.58,-101.86 1798.58,-126.14"/>
+<text xml:space="preserve" text-anchor="middle" x="1754.94" y="-110.4" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_driver.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_console_stats.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge8" class="edge">
+<title>sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_console_stats.f90</title>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M1733.46,-101.58C1682.7,-72.04 1546.26,0 1422.4,0 1422.4,0 1422.4,0 832.34,0 707.21,0 665.3,-10.5 563.31,-83 511.51,-119.82 473.23,-186.38 455.64,-221.27"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="452.6,-219.52 451.33,-230.04 458.88,-222.61 452.6,-219.52"/>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_node16" class="node">
+<title>sourcefile~rdb_ocean_dyn.f90</title>
+<g id="a_sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_node16"><a xlink:href="../sourcefile/rdb_ocean_dyn.f90.html" xlink:title="rdb_ocean_dyn.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="890.85,-375.13 775.83,-375.13 775.83,-350.87 890.85,-350.87 890.85,-375.13"/>
+<text xml:space="preserve" text-anchor="middle" x="833.34" y="-359.4" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_dyn.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge48" class="edge">
+<title>sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90</title>
+<path fill="none" stroke="#00a9ff" stroke-dasharray="5,2" d="M1711.12,-114C1681.76,-114 1641.92,-114 1606.8,-114"/>
+<path fill="none" stroke="#00a9ff" stroke-dasharray="5,2" d="M1604.8,-114C1397.93,-114 1336.13,-89.58 1141.62,-160 1022.73,-203.04 904.16,-300.72 856.36,-342.94"/>
+<polygon fill="#00a9ff" stroke="#00a9ff" points="854.28,-340.11 849.15,-349.38 858.94,-345.33 854.28,-340.11"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_node17" class="node">
+<title>sourcefile~rdb_ocean_engine.f90</title>
+<g id="a_sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_node17"><a xlink:href="../sourcefile/rdb_ocean_engine.f90.html" xlink:title="rdb_ocean_engine.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1671.93,-532.13 1539.66,-532.13 1539.66,-507.87 1671.93,-507.87 1671.93,-532.13"/>
+<text xml:space="preserve" text-anchor="middle" x="1605.8" y="-516.4" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_engine.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge53" class="edge">
+<title>sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90</title>
+<path fill="none" stroke="#0054ff" stroke-dasharray="5,2" d="M1749.37,-126.6C1728.56,-184.02 1642.51,-421.46 1615.17,-496.89"/>
+<polygon fill="#0054ff" stroke="#0054ff" points="1611.94,-495.53 1611.82,-506.13 1618.52,-497.92 1611.94,-495.53"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_node31" class="node">
+<title>sourcefile~rdb_ocean_state.f90</title>
+<g id="a_sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_node31"><a xlink:href="../sourcefile/rdb_ocean_state.f90.html" xlink:title="rdb_ocean_state.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1088.75,-572.13 966.98,-572.13 966.98,-547.87 1088.75,-547.87 1088.75,-572.13"/>
+<text xml:space="preserve" text-anchor="middle" x="1027.86" y="-556.4" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_state.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge71" class="edge">
+<title>sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M1604.8,-114C1521.99,-114 1504.85,-159.63 1422.4,-152"/>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M1420.4,-152C1271.84,-138.25 1216.3,-209.84 1141.62,-339 1097.5,-415.29 1163.29,-467.36 1105.62,-534 1103.18,-536.82 1100.42,-539.33 1097.44,-541.58"/>
+<polygon fill="#ff00bf" stroke="#ff00bf" points="1095.83,-538.46 1089.19,-546.72 1099.53,-544.4 1095.83,-538.46"/>
+</g>
+<!-- sourcefile~rdb_ice_evp.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_node8" class="node">
+<title>sourcefile~rdb_ice_evp.f90</title>
+<g id="a_sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_node8"><a xlink:href="../sourcefile/rdb_ice_evp.f90.html" xlink:title="rdb_ice_evp.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1076.75,-633.13 978.98,-633.13 978.98,-608.87 1076.75,-608.87 1076.75,-633.13"/>
+<text xml:space="preserve" text-anchor="middle" x="1027.86" y="-617.4" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_evp.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ice_evp.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge14" class="edge">
+<title>sourcefile~rdb_ice_evp.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M978.68,-616.89C894.29,-609.46 714.36,-592.52 563.31,-571 510.41,-563.46 498.34,-548.32 444.93,-550"/>
+</g>
+<!-- sourcefile~rdb_ice_ocean_coupler.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_node9" class="node">
+<title>sourcefile~rdb_ice_ocean_coupler.f90</title>
+<g id="a_sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_node9"><a xlink:href="../sourcefile/rdb_ice_ocean_coupler.f90.html" xlink:title="rdb_ice_ocean_coupler.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1105.62,-732.13 950.1,-732.13 950.1,-707.87 1105.62,-707.87 1105.62,-732.13"/>
+<text xml:space="preserve" text-anchor="middle" x="1027.86" y="-716.4" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_ocean_coupler.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ice_ocean_coupler.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge26" class="edge">
+<title>sourcefile~rdb_ice_ocean_coupler.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M949.71,-729.3C914.01,-731.25 871.39,-730.22 834.34,-720"/>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M832.34,-720C797.21,-710.31 786.14,-715.2 752.58,-701 720.66,-687.5 687.59,-665.25 665.81,-649.25"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="667.96,-646.49 657.85,-643.3 663.76,-652.09 667.96,-646.49"/>
+</g>
+<!-- sourcefile~rdb_ice_transport.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_node10" class="node">
+<title>sourcefile~rdb_ice_transport.f90</title>
+<g id="a_sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_node10"><a xlink:href="../sourcefile/rdb_ice_transport.f90.html" xlink:title="rdb_ice_transport.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="896.85,-772.13 769.83,-772.13 769.83,-747.87 896.85,-747.87 896.85,-772.13"/>
+<text xml:space="preserve" text-anchor="middle" x="833.34" y="-756.4" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_transport.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ice_transport.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge15" class="edge">
+<title>sourcefile~rdb_ice_transport.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M786.09,-772.54C733.8,-786.26 654.19,-805.62 640.95,-800"/>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M638.95,-800C509.48,-745.05 585.5,-545.57 444.93,-550"/>
+</g>
+<!-- sourcefile~rdb_ice_transport.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge27" class="edge">
+<title>sourcefile~rdb_ice_transport.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M782.38,-747.41C772.16,-743.83 761.74,-739.4 752.58,-734 714.5,-711.56 678.64,-674.19 658.28,-650.89"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="661.17,-648.88 652,-643.57 655.85,-653.44 661.17,-648.88"/>
+</g>
+<!-- sourcefile~rdb_ice_transport.f90&#45;&gt;sourcefile~rdb_continuity.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge35" class="edge">
+<title>sourcefile~rdb_ice_transport.f90&#45;&gt;sourcefile~rdb_continuity.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M808.92,-747.53C791.33,-737.12 767.76,-720.83 752.58,-701 725.89,-666.14 742.82,-644.2 716.58,-609 704.66,-593.01 687.34,-579.07 672.28,-568.76"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="674.33,-565.92 664.05,-563.35 670.49,-571.77 674.33,-565.92"/>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_node11" class="node">
+<title>sourcefile~rdb_ocean_api.f90</title>
+<g id="a_sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_node11"><a xlink:href="../sourcefile/rdb_ocean_api.f90.html" xlink:title="rdb_ocean_api.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1949.97,-512.13 1837.95,-512.13 1837.95,-487.87 1949.97,-487.87 1949.97,-512.13"/>
+<text xml:space="preserve" text-anchor="middle" x="1893.96" y="-496.4" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_api.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge16" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1420.4,-880C1246.66,-889.87 1202.58,-869.75 1028.86,-880"/>
+</g>
+<!-- sourcefile~rdb_ocean_balance.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_node12" class="node">
+<title>sourcefile~rdb_ocean_balance.f90</title>
+<g id="a_sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_node12"><a xlink:href="../sourcefile/rdb_ocean_balance.f90.html" xlink:title="rdb_ocean_balance.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1291.52,-852.13 1153.25,-852.13 1153.25,-827.87 1291.52,-827.87 1291.52,-852.13"/>
+<text xml:space="preserve" text-anchor="middle" x="1222.38" y="-836.4" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_balance.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_balance.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge41" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_balance.f90</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M1604.8,-840C1594.53,-838.51 1432.76,-879.41 1422.4,-880"/>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M1420.4,-880C1367.64,-883 1308.37,-868.46 1268.75,-856.07"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="1269.89,-852.77 1259.3,-853.04 1267.75,-859.43 1269.89,-852.77"/>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge49" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90</title>
+<path fill="none" stroke="#00a9ff" stroke-dasharray="5,2" d="M1891.86,-487.4C1886.19,-425.33 1858.32,-152.55 1801.95,-93 1740,-27.56 1696.91,-38 1606.8,-38 1606.8,-38 1606.8,-38 1221.38,-38 1086.71,-38 1049.31,-81.93 950.1,-173 896.49,-222.21 859.09,-301.9 843.08,-340.55"/>
+<polygon fill="#00a9ff" stroke="#00a9ff" points="840.03,-338.74 839.53,-349.32 846.52,-341.36 840.03,-338.74"/>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge55" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90</title>
+<path fill="none" stroke="#0054ff" stroke-dasharray="5,2" d="M1890.67,-512.38C1879.31,-571.98 1826.68,-827.05 1755.94,-840"/>
+<path fill="none" stroke="#0054ff" stroke-dasharray="5,2" d="M1753.94,-840C1624.6,-863.68 1608.73,-621.81 1606.96,-543.78"/>
+<polygon fill="#0054ff" stroke="#0054ff" points="1610.46,-543.81 1606.8,-533.86 1603.46,-543.92 1610.46,-543.81"/>
+</g>
+<!-- sourcefile~rdb_ocean_reinit.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_node20" class="node">
+<title>sourcefile~rdb_ocean_reinit.f90</title>
+<g id="a_sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_node20"><a xlink:href="../sourcefile/rdb_ocean_reinit.f90.html" xlink:title="rdb_ocean_reinit.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1482.66,-852.13 1360.14,-852.13 1360.14,-827.87 1482.66,-827.87 1482.66,-852.13"/>
+<text xml:space="preserve" text-anchor="middle" x="1421.4" y="-836.4" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_reinit.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_reinit.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge59" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_reinit.f90</title>
+<path fill="none" stroke="#aa00ff" stroke-dasharray="5,2" d="M1604.8,-840C1568.62,-834.7 1527.98,-834.18 1494.26,-835.2"/>
+<polygon fill="#aa00ff" stroke="#aa00ff" points="1494.48,-831.69 1484.62,-835.55 1494.74,-838.69 1494.48,-831.69"/>
+</g>
+<!-- sourcefile~rdb_handle.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_node24" class="node">
+<title>sourcefile~rdb_handle.f90</title>
+<g id="a_sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_node24"><a xlink:href="../sourcefile/rdb_handle.f90.html" xlink:title="rdb_handle.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1801.95,-532.13 1707.93,-532.13 1707.93,-507.87 1801.95,-507.87 1801.95,-532.13"/>
+<text xml:space="preserve" text-anchor="middle" x="1754.94" y="-516.4" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_handle.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_handle.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge70" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_handle.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1837.62,-508.08C1829.65,-509.24 1821.42,-510.44 1813.41,-511.61"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1813.15,-508.11 1803.76,-513.02 1814.16,-515.04 1813.15,-508.11"/>
+</g>
+<!-- sourcefile~rdb_ocean_diag_derived.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_node32" class="node">
+<title>sourcefile~rdb_ocean_diag_derived.f90</title>
+<g id="a_sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_node32"><a xlink:href="../sourcefile/rdb_ocean_diag_derived.f90.html" xlink:title="rdb_ocean_diag_derived.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1503.66,-631.13 1339.14,-631.13 1339.14,-606.87 1503.66,-606.87 1503.66,-631.13"/>
+<text xml:space="preserve" text-anchor="middle" x="1421.4" y="-615.4" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_diag_derived.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_diag_derived.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge83" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_diag_derived.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1753.94,-840C1689.61,-851.78 1671.5,-849.49 1606.8,-840"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1604.8,-840C1530.97,-829.18 1551.67,-763.12 1503.66,-706 1483.78,-682.34 1459.4,-656.64 1442.56,-639.35"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1445.51,-637.36 1436.01,-632.67 1440.51,-642.26 1445.51,-637.36"/>
+</g>
+<!-- sourcefile~rdb_ocean_diag_fills.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_node33" class="node">
+<title>sourcefile~rdb_ocean_diag_fills.f90</title>
+<g id="a_sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_node33"><a xlink:href="../sourcefile/rdb_ocean_diag_fills.f90.html" xlink:title="rdb_ocean_diag_fills.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1293.39,-490.13 1151.37,-490.13 1151.37,-465.87 1293.39,-465.87 1293.39,-490.13"/>
+<text xml:space="preserve" text-anchor="middle" x="1222.38" y="-474.4" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_diag_fills.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge85" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90</title>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M1837.6,-498.18C1719.65,-494.31 1443.14,-485.22 1304.97,-480.68"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="1305.27,-477.19 1295.16,-480.36 1305.04,-484.19 1305.27,-477.19"/>
+</g>
+<!-- sourcefile~rdb_ocean_ic_inject.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_node34" class="node">
+<title>sourcefile~rdb_ocean_ic_inject.f90</title>
+<g id="a_sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_node34"><a xlink:href="../sourcefile/rdb_ocean_ic_inject.f90.html" xlink:title="rdb_ocean_ic_inject.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1291.89,-772.13 1152.87,-772.13 1152.87,-747.87 1291.89,-747.87 1291.89,-772.13"/>
+<text xml:space="preserve" text-anchor="middle" x="1222.38" y="-756.4" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_ic_inject.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_ic_inject.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge88" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_ic_inject.f90</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M1604.8,-840C1600.93,-839.43 1403.56,-797.93 1294.31,-774.93"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="1295.04,-771.51 1284.53,-772.88 1293.6,-778.36 1295.04,-771.51"/>
+</g>
+<!-- sourcefile~rdb_ocean_balance.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge17" class="edge">
+<title>sourcefile~rdb_ocean_balance.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1179.43,-852.6C1140.75,-863.29 1081.53,-877.3 1028.86,-880"/>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1026.86,-880C819.03,-890.66 752.1,-901.55 563.31,-814 436.07,-754.99 323.68,-623.1 282.86,-571.39"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="285.71,-569.36 276.8,-563.62 280.19,-573.66 285.71,-569.36"/>
+</g>
+<!-- sourcefile~rdb_ocean_balance.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge73" class="edge">
+<title>sourcefile~rdb_ocean_balance.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M1159.18,-827.51C1152.55,-824.04 1146.47,-819.63 1141.62,-814 1078.67,-740.93 1162.33,-678.02 1105.62,-600 1098.86,-590.7 1089.29,-583.39 1079.18,-577.7"/>
+<polygon fill="#ff00bf" stroke="#ff00bf" points="1080.84,-574.62 1070.34,-573.23 1077.69,-580.87 1080.84,-574.62"/>
+</g>
+<!-- sourcefile~rdb_ocean_bt_wide.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_node13" class="node">
+<title>sourcefile~rdb_ocean_bt_wide.f90</title>
+<g id="a_sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_node13"><a xlink:href="../sourcefile/rdb_ocean_bt_wide.f90.html" xlink:title="rdb_ocean_bt_wide.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="707.96,-376.13 571.94,-376.13 571.94,-351.87 707.96,-351.87 707.96,-376.13"/>
+<text xml:space="preserve" text-anchor="middle" x="639.95" y="-360.4" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_bt_wide.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_bt_wide.f90&#45;&gt;sourcefile~rdb_barotropic_substep.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge5" class="edge">
+<title>sourcefile~rdb_ocean_bt_wide.f90&#45;&gt;sourcefile~rdb_barotropic_substep.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M571.63,-357.06C559.65,-355.83 547,-354.52 534.51,-353.23"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="534.92,-349.76 524.62,-352.21 534.21,-356.72 534.92,-349.76"/>
+</g>
+<!-- sourcefile~rdb_ocean_bt_wide.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge18" class="edge">
+<title>sourcefile~rdb_ocean_bt_wide.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M588.41,-376.6C579.57,-380.1 570.81,-384.5 563.31,-390 491.96,-442.29 533.34,-547.21 444.93,-550"/>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M442.93,-550C407.74,-551.11 368.59,-551.22 336.13,-551.01"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="336.48,-547.51 326.45,-550.93 336.43,-554.51 336.48,-547.51"/>
+</g>
+<!-- sourcefile~rdb_ocean_bulk_forcing.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_node14" class="node">
+<title>sourcefile~rdb_ocean_bulk_forcing.f90</title>
+<g id="a_sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_node14"><a xlink:href="../sourcefile/rdb_ocean_bulk_forcing.f90.html" xlink:title="rdb_ocean_bulk_forcing.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="913.35,-532.13 753.33,-532.13 753.33,-507.87 913.35,-507.87 913.35,-532.13"/>
+<text xml:space="preserve" text-anchor="middle" x="833.34" y="-516.4" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_bulk_forcing.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_bulk_forcing.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge19" class="edge">
+<title>sourcefile~rdb_ocean_bulk_forcing.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M752.95,-509.53C718.43,-506.6 677.58,-505.34 640.95,-510"/>
+</g>
+<!-- sourcefile~rdb_ocean_bulk_forcing.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge28" class="edge">
+<title>sourcefile~rdb_ocean_bulk_forcing.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M810.38,-532.62C776.49,-552.1 711.29,-589.57 672.4,-611.92"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="670.88,-608.76 663.96,-616.77 674.37,-614.83 670.88,-608.76"/>
+</g>
+<!-- sourcefile~rdb_ocean_data_forcing.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_node15" class="node">
+<title>sourcefile~rdb_ocean_data_forcing.f90</title>
+<g id="a_sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_node15"><a xlink:href="../sourcefile/rdb_ocean_data_forcing.f90.html" xlink:title="rdb_ocean_data_forcing.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="914.1,-692.13 752.58,-692.13 752.58,-667.87 914.1,-667.87 914.1,-692.13"/>
+<text xml:space="preserve" text-anchor="middle" x="833.34" y="-676.4" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_data_forcing.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_data_forcing.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge29" class="edge">
+<title>sourcefile~rdb_ocean_data_forcing.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M784.04,-667.38C758.54,-660.72 727.03,-652.49 700.08,-645.45"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="701.25,-642.14 690.69,-643 699.48,-648.91 701.25,-642.14"/>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_barotropic_substep.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge6" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_barotropic_substep.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M775.48,-351.18C756.8,-347.84 735.88,-344.66 716.58,-343 656.06,-337.81 587.67,-338.1 534.65,-339.66"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="534.64,-336.16 524.75,-339.98 534.86,-343.16 534.64,-336.16"/>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_console_stats.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge9" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_console_stats.f90</title>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M822.81,-350.67C804.83,-328.49 763.47,-282.34 716.58,-263 660.68,-239.95 592.83,-235.19 538.92,-236.19"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="539.05,-232.69 529.15,-236.45 539.24,-239.69 539.05,-232.69"/>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge20" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M775.66,-374.18C723.87,-384.55 653.49,-399.09 640.95,-404"/>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M638.95,-404C605.56,-417.06 593.5,-412.68 563.31,-432 500.73,-472.04 519.18,-547.66 444.93,-550"/>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge30" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M775.46,-373.92C766.82,-377.76 758.75,-382.97 752.58,-390 698.47,-451.64 759.61,-501.18 716.58,-571 706.33,-587.63 689.59,-601.41 674.47,-611.46"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="672.72,-608.42 666.12,-616.71 676.45,-614.34 672.72,-608.42"/>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_continuity.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge36" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_continuity.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M775.44,-374.45C766.91,-378.24 758.88,-383.28 752.58,-390 710.39,-434.98 758.66,-478.92 716.58,-524 713.07,-527.76 709,-530.97 704.6,-533.72"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="703.08,-530.56 695.87,-538.32 706.35,-536.75 703.08,-530.56"/>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_bt_wide.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge43" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_bt_wide.f90</title>
+<path fill="none" stroke="#00ff55" stroke-dasharray="5,2" d="M775.43,-363.3C758,-363.39 738.51,-363.49 719.89,-363.59"/>
+<polygon fill="#00ff55" stroke="#00ff55" points="719.93,-360.09 709.94,-363.64 719.96,-367.09 719.93,-360.09"/>
+</g>
+<!-- sourcefile~rdb_ocean_ke_probe.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_node18" class="node">
+<title>sourcefile~rdb_ocean_ke_probe.f90</title>
+<g id="a_sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_node18"><a xlink:href="../sourcefile/rdb_ocean_ke_probe.f90.html" xlink:title="rdb_ocean_ke_probe.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="712.08,-216.13 567.81,-216.13 567.81,-191.87 712.08,-191.87 712.08,-216.13"/>
+<text xml:space="preserve" text-anchor="middle" x="639.95" y="-200.4" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_ke_probe.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_ke_probe.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge56" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_ke_probe.f90</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M824.7,-350.43C808.18,-324.29 766.59,-263.69 716.58,-230 711.54,-226.61 706.02,-223.61 700.32,-220.98"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="701.91,-217.86 691.34,-217.22 699.21,-224.31 701.91,-217.86"/>
+</g>
+<!-- sourcefile~rdb_ocean_redi.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_node19" class="node">
+<title>sourcefile~rdb_ocean_redi.f90</title>
+<g id="a_sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_node19"><a xlink:href="../sourcefile/rdb_ocean_redi.f90.html" xlink:title="rdb_ocean_redi.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="697.83,-465.13 582.06,-465.13 582.06,-440.87 697.83,-440.87 697.83,-465.13"/>
+<text xml:space="preserve" text-anchor="middle" x="639.95" y="-449.4" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_redi.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_redi.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge57" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_redi.f90</title>
+<path fill="none" stroke="#5400ff" stroke-dasharray="5,2" d="M786.52,-375.59C775.11,-379.51 763.14,-384.32 752.58,-390 734.73,-399.61 733.89,-407.45 716.58,-418 706,-424.45 694.03,-430.5 682.79,-435.69"/>
+<polygon fill="#5400ff" stroke="#5400ff" points="681.38,-432.49 673.69,-439.78 684.25,-438.88 681.38,-432.49"/>
+</g>
+<!-- sourcefile~rdb_ocean_sss_restore.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_node22" class="node">
+<title>sourcefile~rdb_ocean_sss_restore.f90</title>
+<g id="a_sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_node22"><a xlink:href="../sourcefile/rdb_ocean_sss_restore.f90.html" xlink:title="rdb_ocean_sss_restore.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="716.58,-296.13 563.31,-296.13 563.31,-271.87 716.58,-271.87 716.58,-296.13"/>
+<text xml:space="preserve" text-anchor="middle" x="639.95" y="-280.4" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_sss_restore.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_sss_restore.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge67" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_sss_restore.f90</title>
+<path fill="none" stroke="#ff00aa" stroke-dasharray="5,2" d="M806.91,-350.48C783.66,-339.25 748.19,-322.63 716.58,-310 708.24,-306.67 699.28,-303.36 690.56,-300.27"/>
+<polygon fill="#ff00aa" stroke="#ff00aa" points="691.72,-296.97 681.12,-297 689.42,-303.58 691.72,-296.97"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_barotropic_substep.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge7" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_barotropic_substep.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1603.35,-507.6C1596.13,-447.71 1561.9,-189.17 1503.66,-138 1343.79,2.47 1241.67,-76 1028.86,-76 1028.86,-76 1028.86,-76 832.34,-76 703.66,-76 655.88,-93.62 563.31,-183 534.68,-210.65 550.11,-232.38 527.31,-265 511.26,-287.96 487.82,-309.65 470.04,-324.47"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="468.04,-321.59 462.5,-330.61 472.46,-327.01 468.04,-321.59"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge21" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1539.22,-522.07C1504.43,-522.46 1461,-521.84 1422.4,-518"/>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1420.4,-518C1361.94,-512.19 1360.2,-470.96 1303.14,-457 1233.41,-439.95 1211.09,-438.91 1141.62,-457 1086.07,-471.47 1085.64,-511.52 1028.86,-520"/>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1026.86,-520C976.25,-526.13 964.86,-503.69 914.1,-499 793.11,-487.83 761.48,-494.67 640.95,-510"/>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M638.95,-510C551.39,-519.27 532.92,-546.95 444.93,-550"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge31" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1221.38,-720C1134.16,-714.47 1116.14,-755.62 1028.86,-760"/>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1026.86,-760C1005.04,-761.1 855.4,-725.81 834.34,-720"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_evp.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge38" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_evp.f90</title>
+<path fill="none" stroke="#ffaa00" stroke-dasharray="5,2" d="M1597.95,-532.52C1577.18,-569.07 1510.9,-675.81 1422.4,-720"/>
+<path fill="none" stroke="#ffaa00" stroke-dasharray="5,2" d="M1420.4,-720C1342.06,-759.11 1310.77,-725.54 1223.38,-720"/>
+<path fill="none" stroke="#ffaa00" stroke-dasharray="5,2" d="M1221.38,-720C1183.09,-717.57 1175.98,-704.06 1141.62,-687 1140.56,-686.47 1093.04,-658.63 1060.03,-639.28"/>
+<polygon fill="#ffaa00" stroke="#ffaa00" points="1062.03,-636.39 1051.63,-634.35 1058.49,-642.43 1062.03,-636.39"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_ocean_coupler.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge39" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_ocean_coupler.f90</title>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M1221.38,-720C1187.36,-717.84 1149.9,-717.41 1117.13,-717.66"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="1117.23,-714.16 1107.26,-717.76 1117.3,-721.16 1117.23,-714.16"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_transport.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge40" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_transport.f90</title>
+<path fill="none" stroke="#aaff00" stroke-dasharray="5,2" d="M1026.86,-760C987.85,-761.96 944.34,-762.13 908.57,-761.74"/>
+<polygon fill="#aaff00" stroke="#aaff00" points="908.8,-758.24 898.76,-761.61 908.71,-765.24 908.8,-758.24"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_bulk_forcing.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge44" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_bulk_forcing.f90</title>
+<path fill="none" stroke="#00ffa9" stroke-dasharray="5,2" d="M1026.86,-520C993.74,-524.95 957.06,-526.02 924.67,-525.5"/>
+<polygon fill="#00ffa9" stroke="#00ffa9" points="925,-522 914.92,-525.28 924.84,-529 925,-522"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_data_forcing.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge46" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_data_forcing.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1026.86,-680C994.07,-674.87 957.76,-673.72 925.58,-674.23"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="925.82,-670.73 915.9,-674.45 925.97,-677.73 925.82,-670.73"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge50" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90</title>
+<path fill="none" stroke="#00a9ff" stroke-dasharray="5,2" d="M1420.4,-442C1396.28,-433.17 1051.6,-389.85 902.38,-371.38"/>
+<polygon fill="#00a9ff" stroke="#00a9ff" points="902.98,-367.92 892.63,-370.17 902.13,-374.87 902.98,-367.92"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_node21" class="node">
+<title>sourcefile~rdb_ocean_setup.f90</title>
+<g id="a_sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_node21"><a xlink:href="../sourcefile/rdb_ocean_setup.f90.html" xlink:title="rdb_ocean_setup.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1284.77,-372.13 1160,-372.13 1160,-347.87 1284.77,-347.87 1284.77,-372.13"/>
+<text xml:space="preserve" text-anchor="middle" x="1222.38" y="-356.4" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge60" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90</title>
+<path fill="none" stroke="#ff00ff" stroke-dasharray="5,2" d="M1577.96,-507.46C1542.71,-491.24 1478.67,-462.61 1422.4,-442"/>
+<path fill="none" stroke="#ff00ff" stroke-dasharray="5,2" d="M1420.4,-442C1385.57,-429.24 1371.43,-441.25 1339.14,-423 1319.17,-411.71 1322.61,-398.13 1303.14,-386 1297.52,-382.5 1291.37,-379.42 1285.07,-376.72"/>
+<polygon fill="#ff00ff" stroke="#ff00ff" points="1286.38,-373.48 1275.8,-373.1 1283.83,-380 1286.38,-373.48"/>
+</g>
+<!-- sourcefile~rdb_ocean_sw_chl.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_node23" class="node">
+<title>sourcefile~rdb_ocean_sw_chl.f90</title>
+<g id="a_sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_node23"><a xlink:href="../sourcefile/rdb_ocean_sw_chl.f90.html" xlink:title="rdb_ocean_sw_chl.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="898.35,-650.13 768.33,-650.13 768.33,-625.87 898.35,-625.87 898.35,-650.13"/>
+<text xml:space="preserve" text-anchor="middle" x="833.34" y="-634.4" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_sw_chl.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_sw_chl.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge68" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_sw_chl.f90</title>
+<path fill="none" stroke="#ff0055" stroke-dasharray="5,2" d="M1221.38,-720C1134.16,-714.47 1115.2,-693.51 1028.86,-680"/>
+<path fill="none" stroke="#ff0055" stroke-dasharray="5,2" d="M1026.86,-680C982.41,-673.05 932.82,-662.15 895.1,-653.2"/>
+<polygon fill="#ff0055" stroke="#ff0055" points="896.31,-649.89 885.77,-650.97 894.68,-656.7 896.31,-649.89"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge76" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M1420.4,-518C1304.4,-505.82 1169.11,-528.53 1091.77,-545.03"/>
+<polygon fill="#ff00bf" stroke="#ff00bf" points="1091.29,-541.56 1082.27,-547.1 1092.78,-548.4 1091.29,-541.56"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_diag_derived.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge84" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_diag_derived.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1581.69,-532.54C1549.71,-549.9 1491.77,-581.35 1455.28,-601.15"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1454.05,-597.84 1446.93,-605.69 1457.39,-603.99 1454.05,-597.84"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge87" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90</title>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M1420.4,-518C1373.8,-513.11 1321.89,-502.35 1283.06,-493.22"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="1283.97,-489.84 1273.43,-490.92 1282.35,-496.65 1283.97,-489.84"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_ic_inject.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge89" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_ic_inject.f90</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M1420.4,-720C1384.32,-738.01 1340.67,-747.92 1303.64,-753.36"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="1303.3,-749.87 1293.87,-754.7 1304.26,-756.81 1303.3,-749.87"/>
+</g>
+<!-- sourcefile~rdb_ocean_ke_probe.f90&#45;&gt;sourcefile~rdb_ocean_console_stats.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge10" class="edge">
+<title>sourcefile~rdb_ocean_ke_probe.f90&#45;&gt;sourcefile~rdb_ocean_console_stats.f90</title>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M577.82,-216.6C558.61,-220.56 537.2,-224.98 517.28,-229.08"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="516.64,-225.64 507.56,-231.09 518.06,-232.5 516.64,-225.64"/>
+</g>
+<!-- sourcefile~rdb_ocean_redi.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge23" class="edge">
+<title>sourcefile~rdb_ocean_redi.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M616.45,-465.59C569.43,-491.71 463.56,-549.41 444.93,-550"/>
+</g>
+<!-- sourcefile~rdb_ocean_reinit.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge24" class="edge">
+<title>sourcefile~rdb_ocean_reinit.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M832.34,-800C748.89,-783.51 719.25,-833.23 640.95,-800"/>
+</g>
+<!-- sourcefile~rdb_ocean_reinit.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge32" class="edge">
+<title>sourcefile~rdb_ocean_reinit.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1221.38,-800C1141.37,-768.45 918.51,-817.68 834.34,-800"/>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M832.34,-800C796.59,-792.94 782.98,-801.09 752.58,-781 703.22,-748.38 667.74,-686.12 651.27,-652.64"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="654.53,-651.36 647.07,-643.84 648.22,-654.37 654.53,-651.36"/>
+</g>
+<!-- sourcefile~rdb_ocean_reinit.f90&#45;&gt;sourcefile~rdb_ocean_balance.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge42" class="edge">
+<title>sourcefile~rdb_ocean_reinit.f90&#45;&gt;sourcefile~rdb_ocean_balance.f90</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M1359.68,-840C1341.81,-840 1321.98,-840 1303.1,-840"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="1303.32,-836.5 1293.32,-840 1303.32,-843.5 1303.32,-836.5"/>
+</g>
+<!-- sourcefile~rdb_ocean_reinit.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge78" class="edge">
+<title>sourcefile~rdb_ocean_reinit.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M1359.75,-828.79C1306.66,-818.8 1236.06,-805 1223.38,-800"/>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M1221.38,-800C1187.48,-786.63 1166.9,-807.25 1141.62,-781 1084.72,-721.93 1154.82,-665.62 1105.62,-600 1098.58,-590.62 1088.7,-583.24 1078.36,-577.51"/>
+<polygon fill="#ff00bf" stroke="#ff00bf" points="1080.25,-574.54 1069.74,-573.19 1077.12,-580.8 1080.25,-574.54"/>
+</g>
+<!-- sourcefile~rdb_ocean_reinit.f90&#45;&gt;sourcefile~rdb_ocean_ic_inject.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge90" class="edge">
+<title>sourcefile~rdb_ocean_reinit.f90&#45;&gt;sourcefile~rdb_ocean_ic_inject.f90</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M1371.57,-827.45C1360.6,-823.79 1349.23,-819.32 1339.14,-814 1321.21,-804.54 1321.04,-795.51 1303.14,-786 1296.4,-782.42 1289.07,-779.22 1281.69,-776.39"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="1282.9,-773.1 1272.31,-773.02 1280.54,-779.69 1282.9,-773.1"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge25" class="edge">
+<title>sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_halo.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1026.86,-363C1005.03,-364.32 854.74,-396.13 834.34,-404"/>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M832.34,-404C752.98,-434.62 720.16,-373.01 640.95,-404"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge33" class="edge">
+<title>sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M832.34,-404C780.91,-423.85 782.84,-452.92 752.58,-499 732.94,-528.91 739.24,-543.32 716.58,-571 703.77,-586.65 686.1,-600.72 671.06,-611.2"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="669.23,-608.21 662.89,-616.7 673.14,-614.02 669.23,-608.21"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge51" class="edge">
+<title>sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90</title>
+<path fill="none" stroke="#00a9ff" stroke-dasharray="5,2" d="M1159.77,-359.56C1121.96,-359.64 1072.57,-360.36 1028.86,-363"/>
+<path fill="none" stroke="#00a9ff" stroke-dasharray="5,2" d="M1026.86,-363C985.59,-365.49 939.25,-365.57 902.38,-364.99"/>
+<polygon fill="#00a9ff" stroke="#00a9ff" points="902.83,-361.5 892.77,-364.82 902.71,-368.5 902.83,-361.5"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge79" class="edge">
+<title>sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M1209.45,-372.39C1192.8,-390.1 1162.32,-424.18 1141.62,-457 1121.46,-488.95 1133.77,-508.81 1105.62,-534 1102.08,-537.17 1098.14,-539.95 1093.97,-542.4"/>
+<polygon fill="#ff00bf" stroke="#ff00bf" points="1092.57,-539.18 1085.23,-546.83 1095.74,-545.43 1092.57,-539.18"/>
+</g>
+<!-- sourcefile~rdb_ocean_sss_restore.f90&#45;&gt;sourcefile~rdb_ocean_console_stats.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge11" class="edge">
+<title>sourcefile~rdb_ocean_sss_restore.f90&#45;&gt;sourcefile~rdb_ocean_console_stats.f90</title>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M577.82,-271.4C558.61,-267.44 537.2,-263.02 517.28,-258.92"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="518.06,-255.5 507.56,-256.91 516.64,-262.36 518.06,-255.5"/>
+</g>
+<!-- sourcefile~rdb_ocean_sw_chl.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge34" class="edge">
+<title>sourcefile~rdb_ocean_sw_chl.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M768.08,-635.31C754.71,-634.76 740.42,-634.16 726.43,-633.57"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="726.94,-630.09 716.8,-633.17 726.65,-637.09 726.94,-630.09"/>
+</g>
+<!-- sourcefile~rdb_handle.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge54" class="edge">
+<title>sourcefile~rdb_handle.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90</title>
+<path fill="none" stroke="#0054ff" stroke-dasharray="5,2" d="M1707.79,-520C1700.02,-520 1691.78,-520 1683.49,-520"/>
+<polygon fill="#0054ff" stroke="#0054ff" points="1683.7,-516.5 1673.7,-520 1683.7,-523.5 1683.7,-516.5"/>
+</g>
+<!-- sourcefile~rdb_handle.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge72" class="edge">
+<title>sourcefile~rdb_handle.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M1749.94,-507.39C1728.21,-441.7 1618.21,-141.94 1422.4,-152"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup_bc.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_node25" class="node">
+<title>sourcefile~rdb_ocean_setup_bc.f90</title>
+<g id="a_sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_node25"><a xlink:href="../sourcefile/rdb_ocean_setup_bc.f90.html" xlink:title="rdb_ocean_setup_bc.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1492.79,-414.13 1350.02,-414.13 1350.02,-389.87 1492.79,-389.87 1492.79,-414.13"/>
+<text xml:space="preserve" text-anchor="middle" x="1421.4" y="-398.4" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_bc.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_setup_bc.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge61" class="edge">
+<title>sourcefile~rdb_ocean_setup_bc.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90</title>
+<path fill="none" stroke="#ff00ff" stroke-dasharray="5,2" d="M1361.29,-389.4C1339.96,-384.85 1315.67,-379.67 1293.49,-374.95"/>
+<polygon fill="#ff00ff" stroke="#ff00ff" points="1294.44,-371.57 1283.93,-372.91 1292.98,-378.42 1294.44,-371.57"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup_bt.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_node26" class="node">
+<title>sourcefile~rdb_ocean_setup_bt.f90</title>
+<g id="a_sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_node26"><a xlink:href="../sourcefile/rdb_ocean_setup_bt.f90.html" xlink:title="rdb_ocean_setup_bt.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1491.66,-372.13 1351.14,-372.13 1351.14,-347.87 1491.66,-347.87 1491.66,-372.13"/>
+<text xml:space="preserve" text-anchor="middle" x="1421.4" y="-356.4" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_bt.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_setup_bt.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge62" class="edge">
+<title>sourcefile~rdb_ocean_setup_bt.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90</title>
+<path fill="none" stroke="#ff00ff" stroke-dasharray="5,2" d="M1350.66,-360C1333.14,-360 1314.28,-360 1296.59,-360"/>
+<polygon fill="#ff00ff" stroke="#ff00ff" points="1296.67,-356.5 1286.67,-360 1296.67,-363.5 1296.67,-356.5"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup_cavity.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_node27" class="node">
+<title>sourcefile~rdb_ocean_setup_cavity.f90</title>
+<g id="a_sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_node27"><a xlink:href="../sourcefile/rdb_ocean_setup_cavity.f90.html" xlink:title="rdb_ocean_setup_cavity.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1501.41,-330.13 1341.39,-330.13 1341.39,-305.87 1501.41,-305.87 1501.41,-330.13"/>
+<text xml:space="preserve" text-anchor="middle" x="1421.4" y="-314.4" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_cavity.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_setup_cavity.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge63" class="edge">
+<title>sourcefile~rdb_ocean_setup_cavity.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90</title>
+<path fill="none" stroke="#ff00ff" stroke-dasharray="5,2" d="M1361.29,-330.6C1339.96,-335.15 1315.67,-340.33 1293.49,-345.05"/>
+<polygon fill="#ff00ff" stroke="#ff00ff" points="1292.98,-341.58 1283.93,-347.09 1294.44,-348.43 1292.98,-341.58"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup_grid.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_node28" class="node">
+<title>sourcefile~rdb_ocean_setup_grid.f90</title>
+<g id="a_sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_node28"><a xlink:href="../sourcefile/rdb_ocean_setup_grid.f90.html" xlink:title="rdb_ocean_setup_grid.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1496.91,-288.13 1345.89,-288.13 1345.89,-263.87 1496.91,-263.87 1496.91,-288.13"/>
+<text xml:space="preserve" text-anchor="middle" x="1421.4" y="-272.4" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_grid.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_setup_grid.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge64" class="edge">
+<title>sourcefile~rdb_ocean_setup_grid.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90</title>
+<path fill="none" stroke="#ff00ff" stroke-dasharray="5,2" d="M1364.31,-288.56C1355.76,-291.03 1347.14,-293.85 1339.14,-297 1308.31,-309.16 1275.32,-327.72 1252.47,-341.55"/>
+<polygon fill="#ff00ff" stroke="#ff00ff" points="1250.72,-338.53 1244.03,-346.74 1254.38,-344.49 1250.72,-338.53"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup_lateral.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_node29" class="node">
+<title>sourcefile~rdb_ocean_setup_lateral.f90</title>
+<g id="a_sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_node29"><a xlink:href="../sourcefile/rdb_ocean_setup_lateral.f90.html" xlink:title="rdb_ocean_setup_lateral.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1503.66,-246.13 1339.14,-246.13 1339.14,-221.87 1503.66,-221.87 1503.66,-246.13"/>
+<text xml:space="preserve" text-anchor="middle" x="1421.4" y="-230.4" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_lateral.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_setup_lateral.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge65" class="edge">
+<title>sourcefile~rdb_ocean_setup_lateral.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90</title>
+<path fill="none" stroke="#ff00ff" stroke-dasharray="5,2" d="M1358.4,-246.63C1351.72,-248.98 1345.17,-251.75 1339.14,-255 1299.09,-276.61 1261.82,-314.98 1240.89,-338.87"/>
+<polygon fill="#ff00ff" stroke="#ff00ff" points="1238.29,-336.53 1234.43,-346.39 1243.6,-341.08 1238.29,-336.53"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup_vmix.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_node30" class="node">
+<title>sourcefile~rdb_ocean_setup_vmix.f90</title>
+<g id="a_sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_node30"><a xlink:href="../sourcefile/rdb_ocean_setup_vmix.f90.html" xlink:title="rdb_ocean_setup_vmix.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1499.16,-204.13 1343.64,-204.13 1343.64,-179.87 1499.16,-179.87 1499.16,-204.13"/>
+<text xml:space="preserve" text-anchor="middle" x="1421.4" y="-188.4" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_vmix.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_setup_vmix.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge66" class="edge">
+<title>sourcefile~rdb_ocean_setup_vmix.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90</title>
+<path fill="none" stroke="#ff00ff" stroke-dasharray="5,2" d="M1355.73,-204.48C1349.9,-206.84 1344.26,-209.65 1339.14,-213 1290.02,-245.07 1252.6,-305.04 1234.81,-337.59"/>
+<polygon fill="#ff00ff" stroke="#ff00ff" points="1231.86,-335.69 1230.25,-346.17 1238.04,-338.98 1231.86,-335.69"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_continuity.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge37" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_continuity.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M966.56,-558.44C895.63,-556.6 778.34,-553.56 705.58,-551.67"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="705.9,-548.18 695.81,-551.42 705.72,-555.18 705.9,-548.18"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_bulk_forcing.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge45" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_bulk_forcing.f90</title>
+<path fill="none" stroke="#00ffa9" stroke-dasharray="5,2" d="M966.74,-547.51C947.56,-543.52 926.14,-539.07 906.21,-534.93"/>
+<polygon fill="#00ffa9" stroke="#00ffa9" points="906.98,-531.52 896.48,-532.91 905.56,-538.37 906.98,-531.52"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_data_forcing.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge47" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_data_forcing.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M993.76,-572.47C979.21,-579.09 962.62,-588.3 950.1,-600 927.66,-620.98 938.74,-640.65 914.1,-659 912.56,-660.15 910.96,-661.23 909.32,-662.26"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="907.98,-659.01 900.79,-666.79 911.26,-665.19 907.98,-659.01"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge52" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90</title>
+<path fill="none" stroke="#00a9ff" stroke-dasharray="5,2" d="M968.52,-547.42C961.64,-543.97 955.25,-539.59 950.1,-534 905.39,-485.49 958.81,-438.51 914.1,-390 910.39,-385.98 906.07,-382.56 901.38,-379.64"/>
+<polygon fill="#00a9ff" stroke="#00a9ff" points="903.16,-376.62 892.68,-375.06 899.9,-382.82 903.16,-376.62"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_redi.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge58" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_redi.f90</title>
+<path fill="none" stroke="#5400ff" stroke-dasharray="5,2" d="M979.1,-547.5C969.14,-543.9 958.98,-539.43 950.1,-534 931.06,-522.36 934,-509.09 914.1,-499 849.66,-466.34 766.78,-456.17 709.29,-453.34"/>
+<polygon fill="#5400ff" stroke="#5400ff" points="709.8,-449.86 699.66,-452.93 709.5,-456.85 709.8,-449.86"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_sw_chl.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge69" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_sw_chl.f90</title>
+<path fill="none" stroke="#ff0055" stroke-dasharray="5,2" d="M995.93,-572.53C963.47,-585.68 912.24,-606.44 876.18,-621.05"/>
+<polygon fill="#ff0055" stroke="#ff0055" points="874.87,-617.8 866.92,-624.8 877.5,-624.29 874.87,-617.8"/>
+</g>
+<!-- sourcefile~rdb_ocean_diag_derived.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge74" class="edge">
+<title>sourcefile~rdb_ocean_diag_derived.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M1398.38,-631.46C1348.86,-657.66 1226.38,-712.19 1141.62,-663 1113.73,-646.81 1128.86,-622.36 1105.62,-600 1096.15,-590.89 1084.21,-583.34 1072.57,-577.35"/>
+<polygon fill="#ff00bf" stroke="#ff00bf" points="1074.39,-574.34 1063.86,-573.14 1071.34,-580.64 1074.39,-574.34"/>
+</g>
+<!-- sourcefile~rdb_ocean_diag_derived.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge86" class="edge">
+<title>sourcefile~rdb_ocean_diag_derived.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90</title>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M1402.92,-606.49C1368.38,-581.77 1291.2,-526.53 1250.19,-497.18"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="1252.22,-494.34 1242.06,-491.37 1248.15,-500.03 1252.22,-494.34"/>
+</g>
+<!-- sourcefile~rdb_ocean_diag_fills.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge75" class="edge">
+<title>sourcefile~rdb_ocean_diag_fills.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M1172.9,-490.54C1162.27,-494.18 1151.31,-498.65 1141.62,-504 1123.39,-514.08 1123.79,-523.82 1105.62,-534 1099.42,-537.47 1092.67,-540.59 1085.84,-543.35"/>
+<polygon fill="#ff00bf" stroke="#ff00bf" points="1084.64,-540.07 1076.52,-546.87 1087.11,-546.62 1084.64,-540.07"/>
+</g>
+<!-- sourcefile~rdb_ocean_ic_inject.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge77" class="edge">
+<title>sourcefile~rdb_ocean_ic_inject.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M1160.48,-747.45C1153.46,-744 1146.93,-739.6 1141.62,-734 1099.18,-689.26 1144.22,-648.09 1105.62,-600 1098.13,-590.68 1087.89,-583.28 1077.32,-577.52"/>
+<polygon fill="#ff00bf" stroke="#ff00bf" points="1079.03,-574.47 1068.52,-573.16 1075.92,-580.74 1079.03,-574.47"/>
+</g>
+<!-- sourcefile~rdb_ocean_state_restart.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_node35" class="node">
+<title>sourcefile~rdb_ocean_state_restart.f90</title>
+<g id="a_sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_node35"><a xlink:href="../sourcefile/rdb_ocean_state_restart.f90.html" xlink:title="rdb_ocean_state_restart.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1303.14,-612.13 1141.62,-612.13 1141.62,-587.87 1303.14,-587.87 1303.14,-612.13"/>
+<text xml:space="preserve" text-anchor="middle" x="1222.38" y="-596.4" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_state_restart.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_state_restart.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge80" class="edge">
+<title>sourcefile~rdb_ocean_state_restart.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M1160.73,-587.4C1141.57,-583.42 1120.22,-578.98 1100.37,-574.86"/>
+<polygon fill="#ff00bf" stroke="#ff00bf" points="1101.19,-571.45 1090.69,-572.85 1099.77,-578.31 1101.19,-571.45"/>
+</g>
+<!-- sourcefile~rdb_ocean_state_seed.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_node36" class="node">
+<title>sourcefile~rdb_ocean_state_seed.f90</title>
+<g id="a_sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_node36"><a xlink:href="../sourcefile/rdb_ocean_state_seed.f90.html" xlink:title="rdb_ocean_state_seed.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1298.64,-570.13 1146.12,-570.13 1146.12,-545.87 1298.64,-545.87 1298.64,-570.13"/>
+<text xml:space="preserve" text-anchor="middle" x="1222.38" y="-554.4" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_state_seed.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_state_seed.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge81" class="edge">
+<title>sourcefile~rdb_ocean_state_seed.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M1145.84,-558.78C1130.82,-558.94 1115.08,-559.1 1100.2,-559.26"/>
+<polygon fill="#ff00bf" stroke="#ff00bf" points="1100.49,-555.76 1090.53,-559.36 1100.57,-562.76 1100.49,-555.76"/>
+</g>
+<!-- sourcefile~rdb_ocean_state_topo.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_node37" class="node">
+<title>sourcefile~rdb_ocean_state_topo.f90</title>
+<g id="a_sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_node37"><a xlink:href="../sourcefile/rdb_ocean_state_topo.f90.html" xlink:title="rdb_ocean_state_topo.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1297.52,-654.13 1147.25,-654.13 1147.25,-629.87 1297.52,-629.87 1297.52,-654.13"/>
+<text xml:space="preserve" text-anchor="middle" x="1222.38" y="-638.4" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_state_topo.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_state_topo.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_ocean_halo_counters.f90~~AfferentGraph_edge82" class="edge">
+<title>sourcefile~rdb_ocean_state_topo.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M1165.82,-629.45C1157.58,-626.99 1149.29,-624.18 1141.62,-621 1124.51,-613.91 1121.84,-608.95 1105.62,-600 1092.02,-592.5 1076.89,-584.53 1063.68,-577.7"/>
+<polygon fill="#ff00bf" stroke="#ff00bf" points="1065.4,-574.65 1054.91,-573.19 1062.2,-580.87 1065.4,-574.65"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var pansourcefilerdb_ocean_halo_countersf90AfferentGraph = svgPanZoom('#sourcefilerdb_ocean_halo_countersf90AfferentGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#AfferentGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="AfferentGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="200pt" height="32pt"
+ viewBox="0.00 0.00 200.00 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 195.52,-28.27 195.52,4 -4,4"/>
+<!-- Source File -->
+<g id="node1" class="node">
+<title>Source File</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Source File</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node2" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="191.52,-24.27 87.75,-24.27 87.75,0 191.52,0 191.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="139.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a file to a file which it depends on. A file
+is dependent upon another if the latter must be compiled before the former
+can be.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+          </div>
+        </div>
+<br>
+      <section>
+        <h2><span class="anchor" id="src"></span>Source Code</h2>
+        <div class="hl codehilite"><pre><span></span><a id="ln-1" name="ln-1" href="#ln-1"></a><span class="c">!! Ocean halo-exchange counters — backend-agnostic bookkeeping module.</span>
+<a id="ln-2" name="ln-2" href="#ln-2"></a><span class="c">!!</span>
+<a id="ln-3" name="ln-3" href="#ln-3"></a><span class="c">!! Provides deterministic per-category exchange counters that are</span>
+<a id="ln-4" name="ln-4" href="#ln-4"></a><span class="c">!! incremented at SEMANTIC call sites (NOT deep inside primitives) to</span>
+<a id="ln-5" name="ln-5" href="#ln-5"></a><span class="c">!! give a load-independent gate for halo-exchange profiling and testing.</span>
+<a id="ln-6" name="ln-6" href="#ln-6"></a><span class="c">!!</span>
+<a id="ln-7" name="ln-7" href="#ln-7"></a><span class="c">!! DOUBLE-COUNT PREVENTION</span>
+<a id="ln-8" name="ln-8" href="#ln-8"></a><span class="c">!! =======================</span>
+<a id="ln-9" name="ln-9" href="#ln-9"></a><span class="c">!! The 3d wrappers (`centre_3d`, `face_x_3d`, `face_y_3d`) now perform</span>
+<a id="ln-10" name="ln-10" href="#ln-10"></a><span class="c">!! batched single-message exchanges (no per-layer 2d loop).  The grouped</span>
+<a id="ln-11" name="ln-11" href="#ln-11"></a><span class="c">!! `bt_group_2d` and `ocean_halo_exchange_ml_state` wrappers call the</span>
+<a id="ln-12" name="ln-12" href="#ln-12"></a><span class="c">!! primitives internally.</span>
+<a id="ln-13" name="ln-13" href="#ln-13"></a><span class="c">!! Suppression is NESTING-SAFE via a depth counter (`oh_suppress_depth`):</span>
+<a id="ln-14" name="ln-14" href="#ln-14"></a><span class="c">!! each call to `oh_count_suppress_on()` increments the depth, and each</span>
+<a id="ln-15" name="ln-15" href="#ln-15"></a><span class="c">!! `oh_count_suppress_off()` decrements it (floored at 0).  Increment</span>
+<a id="ln-16" name="ln-16" href="#ln-16"></a><span class="c">!! routines check `oh_suppress_depth &gt; 0` before bumping their counter.</span>
+<a id="ln-17" name="ln-17" href="#ln-17"></a><span class="c">!! This handles multi-level nesting: ml_state suppress_on → outer depth</span>
+<a id="ln-18" name="ln-18" href="#ln-18"></a><span class="c">!! still positive, so inner 3d counters stay suppressed inside ml_state.</span>
+<a id="ln-19" name="ln-19" href="#ln-19"></a><span class="c">!!</span>
+<a id="ln-20" name="ln-20" href="#ln-20"></a><span class="c">!! CATEGORIES (9 semantic counters, disjoint and additive):</span>
+<a id="ln-21" name="ln-21" href="#ln-21"></a><span class="c">!!   oh_cnt_bt_group    — ocean_halo_bt_group_2d grouped exchange</span>
+<a id="ln-22" name="ln-22" href="#ln-22"></a><span class="c">!!   oh_cnt_bt_u_mid    — mid-substep bt_ubt face_x exchange (BT Pass-2b→2c)</span>
+<a id="ln-23" name="ln-23" href="#ln-23"></a><span class="c">!!   oh_cnt_ml_state    — ocean_halo_exchange_ml_state whole-ML-state exchange</span>
+<a id="ln-24" name="ln-24" href="#ln-24"></a><span class="c">!!   oh_cnt_centre_2d   — standalone centre_2d primitive</span>
+<a id="ln-25" name="ln-25" href="#ln-25"></a><span class="c">!!   oh_cnt_centre_3d   — standalone centre_3d primitive (batched)</span>
+<a id="ln-26" name="ln-26" href="#ln-26"></a><span class="c">!!   oh_cnt_face_x_2d   — standalone face_x_2d primitive</span>
+<a id="ln-27" name="ln-27" href="#ln-27"></a><span class="c">!!   oh_cnt_face_x_3d   — standalone face_x_3d primitive (batched)</span>
+<a id="ln-28" name="ln-28" href="#ln-28"></a><span class="c">!!   oh_cnt_face_y_2d   — standalone face_y_2d primitive</span>
+<a id="ln-29" name="ln-29" href="#ln-29"></a><span class="c">!!   oh_cnt_face_y_3d   — standalone face_y_3d primitive (batched)</span>
+<a id="ln-30" name="ln-30" href="#ln-30"></a><span class="c">!!</span>
+<a id="ln-31" name="ln-31" href="#ln-31"></a><span class="c">!! MESSAGE COUNTER (oh_cnt_msgs):</span>
+<a id="ln-32" name="ln-32" href="#ln-32"></a><span class="c">!!   Total MPI ISENDs posted by the ocean halo MPI backend.  NOT subject</span>
+<a id="ln-33" name="ln-33" href="#ln-33"></a><span class="c">!!   to the suppress depth — messages are physical MPI operations regardless</span>
+<a id="ln-34" name="ln-34" href="#ln-34"></a><span class="c">!!   of semantic grouping, so suppression does not apply.  Incremented in</span>
+<a id="ln-35" name="ln-35" href="#ln-35"></a><span class="c">!!   `rdb_ocean_halo` on the decomposed axes only; an undecomposed axis posts</span>
+<a id="ln-36" name="ln-36" href="#ln-36"></a><span class="c">!!   no messages, so this stays zero in non-MPI builds.</span>
+<a id="ln-37" name="ln-37" href="#ln-37"></a><span class="c">!!</span>
+<a id="ln-38" name="ln-38" href="#ln-38"></a><span class="c">!! All counters are host-side scalars (never inside a do concurrent /</span>
+<a id="ln-39" name="ln-39" href="#ln-39"></a><span class="c">!! OpenACC region); they are pure integer bookkeeping.</span>
+<a id="ln-40" name="ln-40" href="#ln-40"></a><span class="c">!! No MPI dependency — compiled in BOTH MPI and single-process configs.</span>
+<a id="ln-41" name="ln-41" href="#ln-41"></a><span class="k">module </span><span class="n">rdb_ocean_halo_counters</span>
+<a id="ln-42" name="ln-42" href="#ln-42"></a><span class="w">   </span><span class="k">use</span><span class="p">,</span><span class="w"> </span><span class="k">intrinsic</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">iso_fortran_env</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">int64</span>
+<a id="ln-43" name="ln-43" href="#ln-43"></a><span class="w">   </span><span class="k">use </span><span class="n">pic_strings</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">to_string</span>
+<a id="ln-44" name="ln-44" href="#ln-44"></a><span class="w">   </span><span class="k">implicit none</span>
+<a id="ln-45" name="ln-45" href="#ln-45"></a><span class="k">   private</span>
+<a id="ln-46" name="ln-46" href="#ln-46"></a>
+<a id="ln-47" name="ln-47" href="#ln-47"></a><span class="k">   public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">oh_count_bt_group</span>
+<a id="ln-48" name="ln-48" href="#ln-48"></a><span class="w">   </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">oh_count_bt_u_mid</span>
+<a id="ln-49" name="ln-49" href="#ln-49"></a><span class="w">   </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">oh_count_ml_state</span>
+<a id="ln-50" name="ln-50" href="#ln-50"></a><span class="w">   </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">oh_count_centre_2d</span>
+<a id="ln-51" name="ln-51" href="#ln-51"></a><span class="w">   </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">oh_count_centre_3d</span>
+<a id="ln-52" name="ln-52" href="#ln-52"></a><span class="w">   </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">oh_count_face_x_2d</span>
+<a id="ln-53" name="ln-53" href="#ln-53"></a><span class="w">   </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">oh_count_face_x_3d</span>
+<a id="ln-54" name="ln-54" href="#ln-54"></a><span class="w">   </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">oh_count_face_y_2d</span>
+<a id="ln-55" name="ln-55" href="#ln-55"></a><span class="w">   </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">oh_count_face_y_3d</span>
+<a id="ln-56" name="ln-56" href="#ln-56"></a><span class="w">   </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">oh_count_msgs</span>
+<a id="ln-57" name="ln-57" href="#ln-57"></a><span class="w">   </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">oh_count_suppress_on</span>
+<a id="ln-58" name="ln-58" href="#ln-58"></a><span class="w">   </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">oh_count_suppress_off</span>
+<a id="ln-59" name="ln-59" href="#ln-59"></a><span class="w">   </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">oh_count_suppressed</span>
+<a id="ln-60" name="ln-60" href="#ln-60"></a><span class="w">   </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">oh_counters_reset</span>
+<a id="ln-61" name="ln-61" href="#ln-61"></a><span class="w">   </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">oh_counters_get</span>
+<a id="ln-62" name="ln-62" href="#ln-62"></a><span class="w">   </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">oh_counters_msgs</span>
+<a id="ln-63" name="ln-63" href="#ln-63"></a><span class="w">   </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">oh_counters_total</span>
+<a id="ln-64" name="ln-64" href="#ln-64"></a><span class="w">   </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">oh_counters_format</span>
+<a id="ln-65" name="ln-65" href="#ln-65"></a>
+<a id="ln-66" name="ln-66" href="#ln-66"></a><span class="w">   </span><span class="c">! ------------------------------------------------------------------</span>
+<a id="ln-67" name="ln-67" href="#ln-67"></a><span class="w">   </span><span class="c">! Module-level counters (all initialised 0 at program start).</span>
+<a id="ln-68" name="ln-68" href="#ln-68"></a><span class="w">   </span><span class="c">! ------------------------------------------------------------------</span>
+<a id="ln-69" name="ln-69" href="#ln-69"></a><span class="w">   </span><span class="kt">integer</span><span class="p">(</span><span class="n">int64</span><span class="p">),</span><span class="w"> </span><span class="k">save</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">oh_cnt_bt_group</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0_int64</span>
+<a id="ln-70" name="ln-70" href="#ln-70"></a><span class="w">      </span><span class="c">!! ocean_halo_bt_group_2d grouped exchange calls</span>
+<a id="ln-71" name="ln-71" href="#ln-71"></a><span class="w">   </span><span class="kt">integer</span><span class="p">(</span><span class="n">int64</span><span class="p">),</span><span class="w"> </span><span class="k">save</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">oh_cnt_bt_u_mid</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0_int64</span>
+<a id="ln-72" name="ln-72" href="#ln-72"></a><span class="w">      </span><span class="c">!! Mid-substep bt_ubt face_x exchange calls (BT Pass-2b→2c u seam)</span>
+<a id="ln-73" name="ln-73" href="#ln-73"></a><span class="w">   </span><span class="kt">integer</span><span class="p">(</span><span class="n">int64</span><span class="p">),</span><span class="w"> </span><span class="k">save</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">oh_cnt_ml_state</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0_int64</span>
+<a id="ln-74" name="ln-74" href="#ln-74"></a><span class="w">      </span><span class="c">!! ocean_halo_exchange_ml_state whole-ML-state exchange calls</span>
+<a id="ln-75" name="ln-75" href="#ln-75"></a><span class="w">   </span><span class="kt">integer</span><span class="p">(</span><span class="n">int64</span><span class="p">),</span><span class="w"> </span><span class="k">save</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">oh_cnt_centre_2d</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0_int64</span>
+<a id="ln-76" name="ln-76" href="#ln-76"></a><span class="w">      </span><span class="c">!! Standalone centre_2d primitive calls</span>
+<a id="ln-77" name="ln-77" href="#ln-77"></a><span class="w">   </span><span class="kt">integer</span><span class="p">(</span><span class="n">int64</span><span class="p">),</span><span class="w"> </span><span class="k">save</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">oh_cnt_centre_3d</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0_int64</span>
+<a id="ln-78" name="ln-78" href="#ln-78"></a><span class="w">      </span><span class="c">!! Standalone centre_3d primitive calls</span>
+<a id="ln-79" name="ln-79" href="#ln-79"></a><span class="w">   </span><span class="kt">integer</span><span class="p">(</span><span class="n">int64</span><span class="p">),</span><span class="w"> </span><span class="k">save</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">oh_cnt_face_x_2d</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0_int64</span>
+<a id="ln-80" name="ln-80" href="#ln-80"></a><span class="w">      </span><span class="c">!! Standalone face_x_2d primitive calls</span>
+<a id="ln-81" name="ln-81" href="#ln-81"></a><span class="w">   </span><span class="kt">integer</span><span class="p">(</span><span class="n">int64</span><span class="p">),</span><span class="w"> </span><span class="k">save</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">oh_cnt_face_x_3d</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0_int64</span>
+<a id="ln-82" name="ln-82" href="#ln-82"></a><span class="w">      </span><span class="c">!! Standalone face_x_3d primitive calls</span>
+<a id="ln-83" name="ln-83" href="#ln-83"></a><span class="w">   </span><span class="kt">integer</span><span class="p">(</span><span class="n">int64</span><span class="p">),</span><span class="w"> </span><span class="k">save</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">oh_cnt_face_y_2d</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0_int64</span>
+<a id="ln-84" name="ln-84" href="#ln-84"></a><span class="w">      </span><span class="c">!! Standalone face_y_2d primitive calls</span>
+<a id="ln-85" name="ln-85" href="#ln-85"></a><span class="w">   </span><span class="kt">integer</span><span class="p">(</span><span class="n">int64</span><span class="p">),</span><span class="w"> </span><span class="k">save</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">oh_cnt_face_y_3d</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0_int64</span>
+<a id="ln-86" name="ln-86" href="#ln-86"></a><span class="w">      </span><span class="c">!! Standalone face_y_3d primitive calls</span>
+<a id="ln-87" name="ln-87" href="#ln-87"></a><span class="w">   </span><span class="kt">integer</span><span class="p">(</span><span class="n">int64</span><span class="p">),</span><span class="w"> </span><span class="k">save</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">oh_cnt_msgs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0_int64</span>
+<a id="ln-88" name="ln-88" href="#ln-88"></a><span class="w">      </span><span class="c">!! Total MPI ISENDs posted by the ocean halo MPI backend.</span>
+<a id="ln-89" name="ln-89" href="#ln-89"></a><span class="w">      </span><span class="c">!! NOT subject to the suppress depth — messages are physical MPI</span>
+<a id="ln-90" name="ln-90" href="#ln-90"></a><span class="w">      </span><span class="c">!! operations regardless of semantic grouping, so suppression does</span>
+<a id="ln-91" name="ln-91" href="#ln-91"></a><span class="w">      </span><span class="c">!! not apply.  Zero on single-process builds (no messages posted).</span>
+<a id="ln-92" name="ln-92" href="#ln-92"></a>
+<a id="ln-93" name="ln-93" href="#ln-93"></a><span class="w">   </span><span class="c">! ------------------------------------------------------------------</span>
+<a id="ln-94" name="ln-94" href="#ln-94"></a><span class="w">   </span><span class="c">! Suppress depth counter — incremented by oh_count_suppress_on() and</span>
+<a id="ln-95" name="ln-95" href="#ln-95"></a><span class="w">   </span><span class="c">! decremented (floored at 0) by oh_count_suppress_off().  Nesting-safe:</span>
+<a id="ln-96" name="ln-96" href="#ln-96"></a><span class="w">   </span><span class="c">! ml_state wraps 3d wrappers; the outer depth stays positive until the</span>
+<a id="ln-97" name="ln-97" href="#ln-97"></a><span class="w">   </span><span class="c">! outermost suppress_off(), ensuring no inner 3d counter fires while</span>
+<a id="ln-98" name="ln-98" href="#ln-98"></a><span class="w">   </span><span class="c">! inside a grouped wrapper.  oh_cnt_msgs is NOT suppressed.</span>
+<a id="ln-99" name="ln-99" href="#ln-99"></a><span class="w">   </span><span class="c">! ------------------------------------------------------------------</span>
+<a id="ln-100" name="ln-100" href="#ln-100"></a><span class="w">   </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">save</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">oh_suppress_depth</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<a id="ln-101" name="ln-101" href="#ln-101"></a><span class="w">      </span><span class="c">!! When &gt; 0 all oh_count_* increment calls (except oh_count_msgs) are no-ops.</span>
+<a id="ln-102" name="ln-102" href="#ln-102"></a>
+<a id="ln-103" name="ln-103" href="#ln-103"></a><span class="k">contains</span>
+<a id="ln-104" name="ln-104" href="#ln-104"></a>
+<a id="ln-105" name="ln-105" href="#ln-105"></a><span class="w">   </span><span class="c">! ------------------------------------------------------------------</span>
+<a id="ln-106" name="ln-106" href="#ln-106"></a><span class="w">   </span><span class="c">! Suppress control</span>
+<a id="ln-107" name="ln-107" href="#ln-107"></a><span class="w">   </span><span class="c">! ------------------------------------------------------------------</span>
+<a id="ln-108" name="ln-108" href="#ln-108"></a>
+<a id="ln-109" name="ln-109" href="#ln-109"></a><span class="w">   </span><span class="k">subroutine </span><span class="n">oh_count_suppress_on</span><span class="p">()</span>
+<a id="ln-110" name="ln-110" href="#ln-110"></a><span class="w">      </span><span class="c">!! Increment suppress depth so inner primitive increments are no-ops.</span>
+<a id="ln-111" name="ln-111" href="#ln-111"></a><span class="w">      </span><span class="c">!! Nesting-safe: each on/off pair increments/decrements a counter so</span>
+<a id="ln-112" name="ln-112" href="#ln-112"></a><span class="w">      </span><span class="c">!! nested suppress pairs (ml_state wrapping 3d wrappers) work correctly.</span>
+<a id="ln-113" name="ln-113" href="#ln-113"></a><span class="w">      </span><span class="n">oh_suppress_depth</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">oh_suppress_depth</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-114" name="ln-114" href="#ln-114"></a><span class="w">   </span><span class="k">end subroutine </span><span class="n">oh_count_suppress_on</span>
+<a id="ln-115" name="ln-115" href="#ln-115"></a>
+<a id="ln-116" name="ln-116" href="#ln-116"></a><span class="w">   </span><span class="k">subroutine </span><span class="n">oh_count_suppress_off</span><span class="p">()</span>
+<a id="ln-117" name="ln-117" href="#ln-117"></a><span class="w">      </span><span class="c">!! Decrement suppress depth (floored at 0) after a wrapper completes.</span>
+<a id="ln-118" name="ln-118" href="#ln-118"></a><span class="w">      </span><span class="n">oh_suppress_depth</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">max</span><span class="p">(</span><span class="n">oh_suppress_depth</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span>
+<a id="ln-119" name="ln-119" href="#ln-119"></a><span class="w">   </span><span class="k">end subroutine </span><span class="n">oh_count_suppress_off</span>
+<a id="ln-120" name="ln-120" href="#ln-120"></a>
+<a id="ln-121" name="ln-121" href="#ln-121"></a><span class="w">   </span><span class="k">function </span><span class="n">oh_count_suppressed</span><span class="p">()</span><span class="w"> </span><span class="k">result</span><span class="p">(</span><span class="n">flag</span><span class="p">)</span>
+<a id="ln-122" name="ln-122" href="#ln-122"></a><span class="w">      </span><span class="c">!! Return .true. if suppress depth &gt; 0 (any suppress scope is active).</span>
+<a id="ln-123" name="ln-123" href="#ln-123"></a><span class="w">      </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">flag</span>
+<a id="ln-124" name="ln-124" href="#ln-124"></a><span class="w">      </span><span class="n">flag</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">oh_suppress_depth</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span>
+<a id="ln-125" name="ln-125" href="#ln-125"></a><span class="w">   </span><span class="k">end function </span><span class="n">oh_count_suppressed</span>
+<a id="ln-126" name="ln-126" href="#ln-126"></a>
+<a id="ln-127" name="ln-127" href="#ln-127"></a><span class="w">   </span><span class="c">! ------------------------------------------------------------------</span>
+<a id="ln-128" name="ln-128" href="#ln-128"></a><span class="w">   </span><span class="c">! Increment routines (each checks suppress before bumping).</span>
+<a id="ln-129" name="ln-129" href="#ln-129"></a><span class="w">   </span><span class="c">! ------------------------------------------------------------------</span>
+<a id="ln-130" name="ln-130" href="#ln-130"></a>
+<a id="ln-131" name="ln-131" href="#ln-131"></a><span class="w">   </span><span class="k">subroutine </span><span class="n">oh_count_bt_group</span><span class="p">()</span>
+<a id="ln-132" name="ln-132" href="#ln-132"></a><span class="w">      </span><span class="c">!! Increment the bt_group counter.</span>
+<a id="ln-133" name="ln-133" href="#ln-133"></a><span class="w">      </span><span class="c">!! Called once in ocean_halo_bt_group_2d bodies.</span>
+<a id="ln-134" name="ln-134" href="#ln-134"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">oh_suppress_depth</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+<a id="ln-135" name="ln-135" href="#ln-135"></a><span class="k">      </span><span class="n">oh_cnt_bt_group</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">oh_cnt_bt_group</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1_int64</span>
+<a id="ln-136" name="ln-136" href="#ln-136"></a><span class="w">   </span><span class="k">end subroutine </span><span class="n">oh_count_bt_group</span>
+<a id="ln-137" name="ln-137" href="#ln-137"></a>
+<a id="ln-138" name="ln-138" href="#ln-138"></a><span class="w">   </span><span class="k">subroutine </span><span class="n">oh_count_bt_u_mid</span><span class="p">()</span>
+<a id="ln-139" name="ln-139" href="#ln-139"></a><span class="w">      </span><span class="c">!! Increment the bt_u_mid counter.</span>
+<a id="ln-140" name="ln-140" href="#ln-140"></a><span class="w">      </span><span class="c">!! Called at the mid-substep bt_ubt face_x exchange site.</span>
+<a id="ln-141" name="ln-141" href="#ln-141"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">oh_suppress_depth</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+<a id="ln-142" name="ln-142" href="#ln-142"></a><span class="k">      </span><span class="n">oh_cnt_bt_u_mid</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">oh_cnt_bt_u_mid</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1_int64</span>
+<a id="ln-143" name="ln-143" href="#ln-143"></a><span class="w">   </span><span class="k">end subroutine </span><span class="n">oh_count_bt_u_mid</span>
+<a id="ln-144" name="ln-144" href="#ln-144"></a>
+<a id="ln-145" name="ln-145" href="#ln-145"></a><span class="w">   </span><span class="k">subroutine </span><span class="n">oh_count_ml_state</span><span class="p">()</span>
+<a id="ln-146" name="ln-146" href="#ln-146"></a><span class="w">      </span><span class="c">!! Increment the ml_state counter.</span>
+<a id="ln-147" name="ln-147" href="#ln-147"></a><span class="w">      </span><span class="c">!! Called once in ocean_halo_exchange_ml_state.</span>
+<a id="ln-148" name="ln-148" href="#ln-148"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">oh_suppress_depth</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+<a id="ln-149" name="ln-149" href="#ln-149"></a><span class="k">      </span><span class="n">oh_cnt_ml_state</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">oh_cnt_ml_state</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1_int64</span>
+<a id="ln-150" name="ln-150" href="#ln-150"></a><span class="w">   </span><span class="k">end subroutine </span><span class="n">oh_count_ml_state</span>
+<a id="ln-151" name="ln-151" href="#ln-151"></a>
+<a id="ln-152" name="ln-152" href="#ln-152"></a><span class="w">   </span><span class="k">subroutine </span><span class="n">oh_count_centre_2d</span><span class="p">()</span>
+<a id="ln-153" name="ln-153" href="#ln-153"></a><span class="w">      </span><span class="c">!! Increment the centre_2d standalone counter.</span>
+<a id="ln-154" name="ln-154" href="#ln-154"></a><span class="w">      </span><span class="c">!! Called at the top of each ocean_halo_centre_2d body.</span>
+<a id="ln-155" name="ln-155" href="#ln-155"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">oh_suppress_depth</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+<a id="ln-156" name="ln-156" href="#ln-156"></a><span class="k">      </span><span class="n">oh_cnt_centre_2d</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">oh_cnt_centre_2d</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1_int64</span>
+<a id="ln-157" name="ln-157" href="#ln-157"></a><span class="w">   </span><span class="k">end subroutine </span><span class="n">oh_count_centre_2d</span>
+<a id="ln-158" name="ln-158" href="#ln-158"></a>
+<a id="ln-159" name="ln-159" href="#ln-159"></a><span class="w">   </span><span class="k">subroutine </span><span class="n">oh_count_centre_3d</span><span class="p">()</span>
+<a id="ln-160" name="ln-160" href="#ln-160"></a><span class="w">      </span><span class="c">!! Increment the centre_3d standalone counter.</span>
+<a id="ln-161" name="ln-161" href="#ln-161"></a><span class="w">      </span><span class="c">!! Called once in ocean_halo_centre_3d (after suppressing inner 2d bumps).</span>
+<a id="ln-162" name="ln-162" href="#ln-162"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">oh_suppress_depth</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+<a id="ln-163" name="ln-163" href="#ln-163"></a><span class="k">      </span><span class="n">oh_cnt_centre_3d</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">oh_cnt_centre_3d</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1_int64</span>
+<a id="ln-164" name="ln-164" href="#ln-164"></a><span class="w">   </span><span class="k">end subroutine </span><span class="n">oh_count_centre_3d</span>
+<a id="ln-165" name="ln-165" href="#ln-165"></a>
+<a id="ln-166" name="ln-166" href="#ln-166"></a><span class="w">   </span><span class="k">subroutine </span><span class="n">oh_count_face_x_2d</span><span class="p">()</span>
+<a id="ln-167" name="ln-167" href="#ln-167"></a><span class="w">      </span><span class="c">!! Increment the face_x_2d standalone counter.</span>
+<a id="ln-168" name="ln-168" href="#ln-168"></a><span class="w">      </span><span class="c">!! Called at the top of each ocean_halo_face_x_2d body.</span>
+<a id="ln-169" name="ln-169" href="#ln-169"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">oh_suppress_depth</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+<a id="ln-170" name="ln-170" href="#ln-170"></a><span class="k">      </span><span class="n">oh_cnt_face_x_2d</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">oh_cnt_face_x_2d</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1_int64</span>
+<a id="ln-171" name="ln-171" href="#ln-171"></a><span class="w">   </span><span class="k">end subroutine </span><span class="n">oh_count_face_x_2d</span>
+<a id="ln-172" name="ln-172" href="#ln-172"></a>
+<a id="ln-173" name="ln-173" href="#ln-173"></a><span class="w">   </span><span class="k">subroutine </span><span class="n">oh_count_face_x_3d</span><span class="p">()</span>
+<a id="ln-174" name="ln-174" href="#ln-174"></a><span class="w">      </span><span class="c">!! Increment the face_x_3d standalone counter.</span>
+<a id="ln-175" name="ln-175" href="#ln-175"></a><span class="w">      </span><span class="c">!! Called once in ocean_halo_face_x_3d (after suppressing inner 2d bumps).</span>
+<a id="ln-176" name="ln-176" href="#ln-176"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">oh_suppress_depth</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+<a id="ln-177" name="ln-177" href="#ln-177"></a><span class="k">      </span><span class="n">oh_cnt_face_x_3d</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">oh_cnt_face_x_3d</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1_int64</span>
+<a id="ln-178" name="ln-178" href="#ln-178"></a><span class="w">   </span><span class="k">end subroutine </span><span class="n">oh_count_face_x_3d</span>
+<a id="ln-179" name="ln-179" href="#ln-179"></a>
+<a id="ln-180" name="ln-180" href="#ln-180"></a><span class="w">   </span><span class="k">subroutine </span><span class="n">oh_count_face_y_2d</span><span class="p">()</span>
+<a id="ln-181" name="ln-181" href="#ln-181"></a><span class="w">      </span><span class="c">!! Increment the face_y_2d standalone counter.</span>
+<a id="ln-182" name="ln-182" href="#ln-182"></a><span class="w">      </span><span class="c">!! Called at the top of each ocean_halo_face_y_2d body.</span>
+<a id="ln-183" name="ln-183" href="#ln-183"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">oh_suppress_depth</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+<a id="ln-184" name="ln-184" href="#ln-184"></a><span class="k">      </span><span class="n">oh_cnt_face_y_2d</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">oh_cnt_face_y_2d</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1_int64</span>
+<a id="ln-185" name="ln-185" href="#ln-185"></a><span class="w">   </span><span class="k">end subroutine </span><span class="n">oh_count_face_y_2d</span>
+<a id="ln-186" name="ln-186" href="#ln-186"></a>
+<a id="ln-187" name="ln-187" href="#ln-187"></a><span class="w">   </span><span class="k">subroutine </span><span class="n">oh_count_face_y_3d</span><span class="p">()</span>
+<a id="ln-188" name="ln-188" href="#ln-188"></a><span class="w">      </span><span class="c">!! Increment the face_y_3d standalone counter.</span>
+<a id="ln-189" name="ln-189" href="#ln-189"></a><span class="w">      </span><span class="c">!! Called once in ocean_halo_face_y_3d (batched, no per-layer 2d loop).</span>
+<a id="ln-190" name="ln-190" href="#ln-190"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">oh_suppress_depth</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+<a id="ln-191" name="ln-191" href="#ln-191"></a><span class="k">      </span><span class="n">oh_cnt_face_y_3d</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">oh_cnt_face_y_3d</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1_int64</span>
+<a id="ln-192" name="ln-192" href="#ln-192"></a><span class="w">   </span><span class="k">end subroutine </span><span class="n">oh_count_face_y_3d</span>
+<a id="ln-193" name="ln-193" href="#ln-193"></a>
+<a id="ln-194" name="ln-194" href="#ln-194"></a><span class="w">   </span><span class="k">subroutine </span><span class="n">oh_count_msgs</span><span class="p">(</span><span class="n">n</span><span class="p">)</span>
+<a id="ln-195" name="ln-195" href="#ln-195"></a><span class="w">      </span><span class="c">!! Increment the MPI isend post counter by n.</span>
+<a id="ln-196" name="ln-196" href="#ln-196"></a><span class="w">      </span><span class="c">!! NOT subject to the suppress depth: messages are physical MPI</span>
+<a id="ln-197" name="ln-197" href="#ln-197"></a><span class="w">      </span><span class="c">!! operations regardless of semantic grouping.  Called in the MPI</span>
+<a id="ln-198" name="ln-198" href="#ln-198"></a><span class="w">      </span><span class="c">!! `rdb_ocean_halo` once per exchange after each set of</span>
+<a id="ln-199" name="ln-199" href="#ln-199"></a><span class="w">      </span><span class="c">!! HALO_ISEND_N calls; n is the number of ISENDs just posted.</span>
+<a id="ln-200" name="ln-200" href="#ln-200"></a><span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">n</span>
+<a id="ln-201" name="ln-201" href="#ln-201"></a><span class="w">      </span><span class="n">oh_cnt_msgs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">oh_cnt_msgs</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nb">int</span><span class="p">(</span><span class="n">n</span><span class="p">,</span><span class="w"> </span><span class="n">int64</span><span class="p">)</span>
+<a id="ln-202" name="ln-202" href="#ln-202"></a><span class="w">   </span><span class="k">end subroutine </span><span class="n">oh_count_msgs</span>
+<a id="ln-203" name="ln-203" href="#ln-203"></a>
+<a id="ln-204" name="ln-204" href="#ln-204"></a><span class="w">   </span><span class="c">! ------------------------------------------------------------------</span>
+<a id="ln-205" name="ln-205" href="#ln-205"></a><span class="w">   </span><span class="c">! Reset</span>
+<a id="ln-206" name="ln-206" href="#ln-206"></a><span class="w">   </span><span class="c">! ------------------------------------------------------------------</span>
+<a id="ln-207" name="ln-207" href="#ln-207"></a>
+<a id="ln-208" name="ln-208" href="#ln-208"></a><span class="w">   </span><span class="k">subroutine </span><span class="n">oh_counters_reset</span><span class="p">()</span>
+<a id="ln-209" name="ln-209" href="#ln-209"></a><span class="w">      </span><span class="c">!! Reset all 9 semantic counters and the message counter to zero.</span>
+<a id="ln-210" name="ln-210" href="#ln-210"></a><span class="w">      </span><span class="c">!! Does NOT reset the suppress flag.</span>
+<a id="ln-211" name="ln-211" href="#ln-211"></a><span class="w">      </span><span class="n">oh_cnt_bt_group</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0_int64</span>
+<a id="ln-212" name="ln-212" href="#ln-212"></a><span class="w">      </span><span class="n">oh_cnt_bt_u_mid</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0_int64</span>
+<a id="ln-213" name="ln-213" href="#ln-213"></a><span class="w">      </span><span class="n">oh_cnt_ml_state</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0_int64</span>
+<a id="ln-214" name="ln-214" href="#ln-214"></a><span class="w">      </span><span class="n">oh_cnt_centre_2d</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0_int64</span>
+<a id="ln-215" name="ln-215" href="#ln-215"></a><span class="w">      </span><span class="n">oh_cnt_centre_3d</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0_int64</span>
+<a id="ln-216" name="ln-216" href="#ln-216"></a><span class="w">      </span><span class="n">oh_cnt_face_x_2d</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0_int64</span>
+<a id="ln-217" name="ln-217" href="#ln-217"></a><span class="w">      </span><span class="n">oh_cnt_face_x_3d</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0_int64</span>
+<a id="ln-218" name="ln-218" href="#ln-218"></a><span class="w">      </span><span class="n">oh_cnt_face_y_2d</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0_int64</span>
+<a id="ln-219" name="ln-219" href="#ln-219"></a><span class="w">      </span><span class="n">oh_cnt_face_y_3d</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0_int64</span>
+<a id="ln-220" name="ln-220" href="#ln-220"></a><span class="w">      </span><span class="n">oh_cnt_msgs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0_int64</span>
+<a id="ln-221" name="ln-221" href="#ln-221"></a><span class="w">   </span><span class="k">end subroutine </span><span class="n">oh_counters_reset</span>
+<a id="ln-222" name="ln-222" href="#ln-222"></a>
+<a id="ln-223" name="ln-223" href="#ln-223"></a><span class="w">   </span><span class="c">! ------------------------------------------------------------------</span>
+<a id="ln-224" name="ln-224" href="#ln-224"></a><span class="w">   </span><span class="c">! Getter</span>
+<a id="ln-225" name="ln-225" href="#ln-225"></a><span class="w">   </span><span class="c">! ------------------------------------------------------------------</span>
+<a id="ln-226" name="ln-226" href="#ln-226"></a>
+<a id="ln-227" name="ln-227" href="#ln-227"></a><span class="w">   </span><span class="k">subroutine </span><span class="n">oh_counters_get</span><span class="p">(</span><span class="n">bt_group</span><span class="p">,</span><span class="w"> </span><span class="n">bt_u_mid</span><span class="p">,</span><span class="w"> </span><span class="n">ml_state</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-228" name="ln-228" href="#ln-228"></a><span class="w">                              </span><span class="n">centre_2d</span><span class="p">,</span><span class="w"> </span><span class="n">centre_3d</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-229" name="ln-229" href="#ln-229"></a><span class="w">                              </span><span class="n">face_x_2d</span><span class="p">,</span><span class="w"> </span><span class="n">face_x_3d</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-230" name="ln-230" href="#ln-230"></a><span class="w">                              </span><span class="n">face_y_2d</span><span class="p">,</span><span class="w"> </span><span class="n">face_y_3d</span><span class="p">)</span>
+<a id="ln-231" name="ln-231" href="#ln-231"></a><span class="w">      </span><span class="c">!! Return all 9 semantic counters in one call.</span>
+<a id="ln-232" name="ln-232" href="#ln-232"></a><span class="w">      </span><span class="kt">integer</span><span class="p">(</span><span class="n">int64</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">bt_group</span>
+<a id="ln-233" name="ln-233" href="#ln-233"></a><span class="w">         </span><span class="c">!! bt_group_2d call count</span>
+<a id="ln-234" name="ln-234" href="#ln-234"></a><span class="w">      </span><span class="kt">integer</span><span class="p">(</span><span class="n">int64</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">bt_u_mid</span>
+<a id="ln-235" name="ln-235" href="#ln-235"></a><span class="w">         </span><span class="c">!! mid-substep bt_ubt face_x call count</span>
+<a id="ln-236" name="ln-236" href="#ln-236"></a><span class="w">      </span><span class="kt">integer</span><span class="p">(</span><span class="n">int64</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ml_state</span>
+<a id="ln-237" name="ln-237" href="#ln-237"></a><span class="w">         </span><span class="c">!! ml_state exchange call count</span>
+<a id="ln-238" name="ln-238" href="#ln-238"></a><span class="w">      </span><span class="kt">integer</span><span class="p">(</span><span class="n">int64</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">centre_2d</span>
+<a id="ln-239" name="ln-239" href="#ln-239"></a><span class="w">         </span><span class="c">!! standalone centre_2d call count</span>
+<a id="ln-240" name="ln-240" href="#ln-240"></a><span class="w">      </span><span class="kt">integer</span><span class="p">(</span><span class="n">int64</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">centre_3d</span>
+<a id="ln-241" name="ln-241" href="#ln-241"></a><span class="w">         </span><span class="c">!! standalone centre_3d call count</span>
+<a id="ln-242" name="ln-242" href="#ln-242"></a><span class="w">      </span><span class="kt">integer</span><span class="p">(</span><span class="n">int64</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">face_x_2d</span>
+<a id="ln-243" name="ln-243" href="#ln-243"></a><span class="w">         </span><span class="c">!! standalone face_x_2d call count</span>
+<a id="ln-244" name="ln-244" href="#ln-244"></a><span class="w">      </span><span class="kt">integer</span><span class="p">(</span><span class="n">int64</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">face_x_3d</span>
+<a id="ln-245" name="ln-245" href="#ln-245"></a><span class="w">         </span><span class="c">!! standalone face_x_3d call count</span>
+<a id="ln-246" name="ln-246" href="#ln-246"></a><span class="w">      </span><span class="kt">integer</span><span class="p">(</span><span class="n">int64</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">face_y_2d</span>
+<a id="ln-247" name="ln-247" href="#ln-247"></a><span class="w">         </span><span class="c">!! standalone face_y_2d call count</span>
+<a id="ln-248" name="ln-248" href="#ln-248"></a><span class="w">      </span><span class="kt">integer</span><span class="p">(</span><span class="n">int64</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">face_y_3d</span>
+<a id="ln-249" name="ln-249" href="#ln-249"></a><span class="w">         </span><span class="c">!! standalone face_y_3d call count</span>
+<a id="ln-250" name="ln-250" href="#ln-250"></a>
+<a id="ln-251" name="ln-251" href="#ln-251"></a><span class="w">      </span><span class="n">bt_group</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">oh_cnt_bt_group</span>
+<a id="ln-252" name="ln-252" href="#ln-252"></a><span class="w">      </span><span class="n">bt_u_mid</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">oh_cnt_bt_u_mid</span>
+<a id="ln-253" name="ln-253" href="#ln-253"></a><span class="w">      </span><span class="n">ml_state</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">oh_cnt_ml_state</span>
+<a id="ln-254" name="ln-254" href="#ln-254"></a><span class="w">      </span><span class="n">centre_2d</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">oh_cnt_centre_2d</span>
+<a id="ln-255" name="ln-255" href="#ln-255"></a><span class="w">      </span><span class="n">centre_3d</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">oh_cnt_centre_3d</span>
+<a id="ln-256" name="ln-256" href="#ln-256"></a><span class="w">      </span><span class="n">face_x_2d</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">oh_cnt_face_x_2d</span>
+<a id="ln-257" name="ln-257" href="#ln-257"></a><span class="w">      </span><span class="n">face_x_3d</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">oh_cnt_face_x_3d</span>
+<a id="ln-258" name="ln-258" href="#ln-258"></a><span class="w">      </span><span class="n">face_y_2d</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">oh_cnt_face_y_2d</span>
+<a id="ln-259" name="ln-259" href="#ln-259"></a><span class="w">      </span><span class="n">face_y_3d</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">oh_cnt_face_y_3d</span>
+<a id="ln-260" name="ln-260" href="#ln-260"></a><span class="w">   </span><span class="k">end subroutine </span><span class="n">oh_counters_get</span>
+<a id="ln-261" name="ln-261" href="#ln-261"></a>
+<a id="ln-262" name="ln-262" href="#ln-262"></a><span class="w">   </span><span class="c">! ------------------------------------------------------------------</span>
+<a id="ln-263" name="ln-263" href="#ln-263"></a><span class="w">   </span><span class="c">! Message counter getter</span>
+<a id="ln-264" name="ln-264" href="#ln-264"></a><span class="w">   </span><span class="c">! ------------------------------------------------------------------</span>
+<a id="ln-265" name="ln-265" href="#ln-265"></a>
+<a id="ln-266" name="ln-266" href="#ln-266"></a><span class="w">   </span><span class="k">function </span><span class="n">oh_counters_msgs</span><span class="p">()</span><span class="w"> </span><span class="k">result</span><span class="p">(</span><span class="n">n</span><span class="p">)</span>
+<a id="ln-267" name="ln-267" href="#ln-267"></a><span class="w">      </span><span class="c">!! Return the total MPI ISEND post count.</span>
+<a id="ln-268" name="ln-268" href="#ln-268"></a><span class="w">      </span><span class="c">!! NOT included in oh_counters_total (separate physical counter).</span>
+<a id="ln-269" name="ln-269" href="#ln-269"></a><span class="w">      </span><span class="kt">integer</span><span class="p">(</span><span class="n">int64</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">n</span>
+<a id="ln-270" name="ln-270" href="#ln-270"></a><span class="w">      </span><span class="n">n</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">oh_cnt_msgs</span>
+<a id="ln-271" name="ln-271" href="#ln-271"></a><span class="w">   </span><span class="k">end function </span><span class="n">oh_counters_msgs</span>
+<a id="ln-272" name="ln-272" href="#ln-272"></a>
+<a id="ln-273" name="ln-273" href="#ln-273"></a><span class="w">   </span><span class="c">! ------------------------------------------------------------------</span>
+<a id="ln-274" name="ln-274" href="#ln-274"></a><span class="w">   </span><span class="c">! Total</span>
+<a id="ln-275" name="ln-275" href="#ln-275"></a><span class="w">   </span><span class="c">! ------------------------------------------------------------------</span>
+<a id="ln-276" name="ln-276" href="#ln-276"></a>
+<a id="ln-277" name="ln-277" href="#ln-277"></a><span class="w">   </span><span class="k">function </span><span class="n">oh_counters_total</span><span class="p">()</span><span class="w"> </span><span class="k">result</span><span class="p">(</span><span class="n">total</span><span class="p">)</span>
+<a id="ln-278" name="ln-278" href="#ln-278"></a><span class="w">      </span><span class="c">!! Return the sum of all 9 semantic counters.</span>
+<a id="ln-279" name="ln-279" href="#ln-279"></a><span class="w">      </span><span class="kt">integer</span><span class="p">(</span><span class="n">int64</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">total</span>
+<a id="ln-280" name="ln-280" href="#ln-280"></a><span class="w">      </span><span class="n">total</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">oh_cnt_bt_group</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">oh_cnt_bt_u_mid</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">oh_cnt_ml_state</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-281" name="ln-281" href="#ln-281"></a><span class="w">              </span><span class="n">oh_cnt_centre_2d</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">oh_cnt_centre_3d</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-282" name="ln-282" href="#ln-282"></a><span class="w">              </span><span class="n">oh_cnt_face_x_2d</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">oh_cnt_face_x_3d</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-283" name="ln-283" href="#ln-283"></a><span class="w">              </span><span class="n">oh_cnt_face_y_2d</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">oh_cnt_face_y_3d</span>
+<a id="ln-284" name="ln-284" href="#ln-284"></a><span class="w">   </span><span class="k">end function </span><span class="n">oh_counters_total</span>
+<a id="ln-285" name="ln-285" href="#ln-285"></a>
+<a id="ln-286" name="ln-286" href="#ln-286"></a><span class="w">   </span><span class="c">! ------------------------------------------------------------------</span>
+<a id="ln-287" name="ln-287" href="#ln-287"></a><span class="w">   </span><span class="c">! Format</span>
+<a id="ln-288" name="ln-288" href="#ln-288"></a><span class="w">   </span><span class="c">! ------------------------------------------------------------------</span>
+<a id="ln-289" name="ln-289" href="#ln-289"></a>
+<a id="ln-290" name="ln-290" href="#ln-290"></a><span class="w">   </span><span class="k">function </span><span class="n">oh_counters_format</span><span class="p">()</span><span class="w"> </span><span class="k">result</span><span class="p">(</span><span class="n">str</span><span class="p">)</span>
+<a id="ln-291" name="ln-291" href="#ln-291"></a><span class="w">      </span><span class="c">!! Return a one-line counter summary string.</span>
+<a id="ln-292" name="ln-292" href="#ln-292"></a><span class="w">      </span><span class="c">!!</span>
+<a id="ln-293" name="ln-293" href="#ln-293"></a><span class="w">      </span><span class="c">!! Output format (single line, &lt;= 240 chars):</span>
+<a id="ln-294" name="ln-294" href="#ln-294"></a><span class="w">      </span><span class="c">!!   "halo exch: total=NNN bt_group=NN bt_u=NN ml=NN c2d=NN c3d=NN fx2=NN fx3=NN fy2=NN fy3=NN msgs=NN"</span>
+<a id="ln-295" name="ln-295" href="#ln-295"></a><span class="w">      </span><span class="c">!! msgs is the physical MPI ISEND count (not in total).</span>
+<a id="ln-296" name="ln-296" href="#ln-296"></a><span class="w">      </span><span class="kt">character</span><span class="p">(</span><span class="nb">len</span><span class="o">=</span><span class="mi">256</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">str</span>
+<a id="ln-297" name="ln-297" href="#ln-297"></a><span class="w">         </span><span class="c">!! One-line summary (at most 240 chars; remainder is blank-padded).</span>
+<a id="ln-298" name="ln-298" href="#ln-298"></a>
+<a id="ln-299" name="ln-299" href="#ln-299"></a><span class="w">      </span><span class="n">str</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"halo exch: total="</span><span class="o">//</span><span class="n">to_string</span><span class="p">(</span><span class="n">oh_counters_total</span><span class="p">())</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-300" name="ln-300" href="#ln-300"></a><span class="w">            </span><span class="s2">" bt_group="</span><span class="o">//</span><span class="n">to_string</span><span class="p">(</span><span class="n">oh_cnt_bt_group</span><span class="p">)</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-301" name="ln-301" href="#ln-301"></a><span class="w">            </span><span class="s2">" bt_u="</span><span class="o">//</span><span class="n">to_string</span><span class="p">(</span><span class="n">oh_cnt_bt_u_mid</span><span class="p">)</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-302" name="ln-302" href="#ln-302"></a><span class="w">            </span><span class="s2">" ml="</span><span class="o">//</span><span class="n">to_string</span><span class="p">(</span><span class="n">oh_cnt_ml_state</span><span class="p">)</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-303" name="ln-303" href="#ln-303"></a><span class="w">            </span><span class="s2">" c2d="</span><span class="o">//</span><span class="n">to_string</span><span class="p">(</span><span class="n">oh_cnt_centre_2d</span><span class="p">)</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-304" name="ln-304" href="#ln-304"></a><span class="w">            </span><span class="s2">" c3d="</span><span class="o">//</span><span class="n">to_string</span><span class="p">(</span><span class="n">oh_cnt_centre_3d</span><span class="p">)</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-305" name="ln-305" href="#ln-305"></a><span class="w">            </span><span class="s2">" fx2="</span><span class="o">//</span><span class="n">to_string</span><span class="p">(</span><span class="n">oh_cnt_face_x_2d</span><span class="p">)</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-306" name="ln-306" href="#ln-306"></a><span class="w">            </span><span class="s2">" fx3="</span><span class="o">//</span><span class="n">to_string</span><span class="p">(</span><span class="n">oh_cnt_face_x_3d</span><span class="p">)</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-307" name="ln-307" href="#ln-307"></a><span class="w">            </span><span class="s2">" fy2="</span><span class="o">//</span><span class="n">to_string</span><span class="p">(</span><span class="n">oh_cnt_face_y_2d</span><span class="p">)</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-308" name="ln-308" href="#ln-308"></a><span class="w">            </span><span class="s2">" fy3="</span><span class="o">//</span><span class="n">to_string</span><span class="p">(</span><span class="n">oh_cnt_face_y_3d</span><span class="p">)</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-309" name="ln-309" href="#ln-309"></a><span class="w">            </span><span class="s2">" msgs="</span><span class="o">//</span><span class="n">to_string</span><span class="p">(</span><span class="n">oh_cnt_msgs</span><span class="p">)</span>
+<a id="ln-310" name="ln-310" href="#ln-310"></a><span class="w">   </span><span class="k">end function </span><span class="n">oh_counters_format</span>
+<a id="ln-311" name="ln-311" href="#ln-311"></a>
+<a id="ln-312" name="ln-312" href="#ln-312"></a><span class="k">end module </span><span class="n">rdb_ocean_halo_counters</span>
+</pre></div>
+
+      </section>
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-11-13 23:21 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

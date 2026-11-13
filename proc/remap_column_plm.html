@@ -1,0 +1,1504 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>remap_column_plm &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>remap_column_plm
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.1% of total for procedures.">76 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_remap_column.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_remap_column.f90.html'>rdb_remap_column.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_remap_column.html'>rdb_remap_column</a></li>
+            <li class="breadcrumb-item active" aria-current="page">remap_column_plm</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/remap_column_plm.html#variable-dq_l">dq_l</a>
+            <a class="list-group-item" href="../proc/remap_column_plm.html#variable-dq_r">dq_r</a>
+            <a class="list-group-item" href="../proc/remap_column_plm.html#variable-integral~2">integral</a>
+            <a class="list-group-item" href="../proc/remap_column_plm.html#variable-k~89">k</a>
+            <a class="list-group-item" href="../proc/remap_column_plm.html#variable-ko~2">ko</a>
+            <a class="list-group-item" href="../proc/remap_column_plm.html#variable-ko_start~2">ko_start</a>
+            <a class="list-group-item" href="../proc/remap_column_plm.html#variable-nu~2">nu</a>
+            <a class="list-group-item" href="../proc/remap_column_plm.html#variable-overlap~2">overlap</a>
+            <a class="list-group-item" href="../proc/remap_column_plm.html#variable-slope~3">slope</a>
+            <a class="list-group-item" href="../proc/remap_column_plm.html#variable-xi_hi">xi_hi</a>
+            <a class="list-group-item" href="../proc/remap_column_plm.html#variable-xi_lo">xi_lo</a>
+            <a class="list-group-item" href="../proc/remap_column_plm.html#variable-z_hi~2">z_hi</a>
+            <a class="list-group-item" href="../proc/remap_column_plm.html#variable-z_lo~2">z_lo</a>
+            <a class="list-group-item" href="../proc/remap_column_plm.html#variable-z_new~2">z_new</a>
+            <a class="list-group-item" href="../proc/remap_column_plm.html#variable-z_old~2">z_old</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/remap_column_plm.html#src">remap_column_plm</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>public pure subroutine remap_column_plm(nz, dz_old, dz_new, q_old, q_new, bnd_extrap, nonunif)  
+</h2>
+    
+
+    <p>Piecewise-linear (minmod-limited) remap. Monotone (no new extrema).
+Per old layer k: q_hat(xi) = q(k) + slope(k)<em>(2</em>xi - 1), xi in [0,1],
+slope(k) = 0.5*minmod(q(k+1)-q(k), q(k)-q(k-1)).
+<code>bnd_extrap</code> (absent/.false. = default) closes the boundary cells
+with <code>boundary_half_jump</code> instead of the PCM flatten — see
+<code>remap_column</code>.  <code>nonunif</code> (absent/.false. = default) replaces the
+minmod half-difference — which assumes EQUAL source thicknesses —
+with the thickness-weighted CW84 (1.7)/(1.8) slope; see
+<code>plm_slope_nonuniform</code>.</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz~93"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dz_old~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dz_old</strong>(nz)</td>
+            <td>
+                <p>Old layer thicknesses</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dz_new~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dz_new</strong>(nz)</td>
+            <td>
+                <p>New layer thicknesses</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-q_old~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>q_old</strong>(nz)</td>
+            <td>
+                <p>Old cell-average scalar values</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-q_new~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>q_new</strong>(nz)</td>
+            <td>
+                <p>New cell-average scalar values (conservative)</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-bnd_extrap~2"></span>
+              logical,
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>bnd_extrap</strong></td>
+            <td>
+                <p>Linear-exact boundary-cell closure (MOM6 BOUNDARY_EXTRAPOLATION).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nonunif~2"></span>
+              logical,
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nonunif</strong></td>
+            <td>
+                <p>Non-uniform-grid slope weights (CW84 1.7/1.8).</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~remap_column_plm~~CallsGraph Pages: 1 -->
+<svg id="procremap_column_plmCallsGraph" width="294pt" height="74pt"
+ viewBox="0.00 0.00 294.00 74.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~remap_column_plm~~CallsGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 70.27)">
+<title>proc~~remap_column_plm~~CallsGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-70.27 289.54,-70.27 289.54,4 -4,4"/>
+<!-- proc~remap_column_plm -->
+<g id="proc~~remap_column_plm~~CallsGraph_node1" class="node">
+<title>proc~remap_column_plm</title>
+<polygon fill="none" stroke="black" points="116.52,-45.27 0,-45.27 0,-21 116.52,-21 116.52,-45.27"/>
+<text xml:space="preserve" text-anchor="middle" x="58.26" y="-29.53" font-family="Helvetica,sans-Serif" font-size="10.50">remap_column_plm</text>
+</g>
+<!-- proc~boundary_half_jump -->
+<g id="proc~~remap_column_plm~~CallsGraph_node2" class="node">
+<title>proc~boundary_half_jump</title>
+<g id="a_proc~~remap_column_plm~~CallsGraph_node2"><a xlink:href="../proc/boundary_half_jump.html" xlink:title="boundary_half_jump">
+<polygon fill="#d9534f" stroke="#d9534f" points="279.16,-66.27 158.89,-66.27 158.89,-42 279.16,-42 279.16,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="219.03" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">boundary_half_jump</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column_plm&#45;&gt;proc~boundary_half_jump -->
+<g id="proc~~remap_column_plm~~CallsGraph_edge1" class="edge">
+<title>proc~remap_column_plm&#45;&gt;proc~boundary_half_jump</title>
+<path fill="none" stroke="#ff0000" d="M116.58,-40.72C126.63,-42.05 137.18,-43.44 147.54,-44.81"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="146.78,-48.24 157.16,-46.08 147.7,-41.3 146.78,-48.24"/>
+</g>
+<!-- proc~plm_slope_nonuniform -->
+<g id="proc~~remap_column_plm~~CallsGraph_node3" class="node">
+<title>proc~plm_slope_nonuniform</title>
+<g id="a_proc~~remap_column_plm~~CallsGraph_node3"><a xlink:href="../proc/plm_slope_nonuniform.html" xlink:title="plm_slope_nonuniform">
+<polygon fill="#d9534f" stroke="#d9534f" points="285.54,-24.27 152.52,-24.27 152.52,0 285.54,0 285.54,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="219.03" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">plm_slope_nonuniform</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column_plm&#45;&gt;proc~plm_slope_nonuniform -->
+<g id="proc~~remap_column_plm~~CallsGraph_edge2" class="edge">
+<title>proc~remap_column_plm&#45;&gt;proc~plm_slope_nonuniform</title>
+<path fill="none" stroke="#ff0000" d="M116.58,-25.55C124.52,-24.5 132.78,-23.41 141,-22.32"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="141.21,-25.83 150.66,-21.05 140.29,-18.89 141.21,-25.83"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~remap_column_plm~~CalledByGraph Pages: 1 -->
+<svg id="procremap_column_plmCalledByGraph" width="641pt" height="207pt"
+ viewBox="0.00 0.00 641.00 207.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~remap_column_plm~~CalledByGraph" class="graph" transform="scale(0.456907 0.456907) rotate(0) translate(4 448.27)">
+<title>proc~~remap_column_plm~~CalledByGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-448.27 1398.91,-448.27 1398.91,4 -4,4"/>
+<!-- proc~remap_column_plm -->
+<g id="proc~~remap_column_plm~~CalledByGraph_node1" class="node">
+<title>proc~remap_column_plm</title>
+<polygon fill="none" stroke="black" points="1394.91,-274.27 1278.39,-274.27 1278.39,-250 1394.91,-250 1394.91,-274.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1336.65" y="-258.53" font-family="Helvetica,sans-Serif" font-size="10.50">remap_column_plm</text>
+</g>
+<!-- proc~ebt_column -->
+<g id="proc~~remap_column_plm~~CalledByGraph_node2" class="node">
+<title>proc~ebt_column</title>
+<g id="a_proc~~remap_column_plm~~CalledByGraph_node2"><a xlink:href="../proc/ebt_column.html" xlink:title="ebt_column">
+<polygon fill="#d9534f" stroke="#d9534f" points="1219.14,-378.27 1145.37,-378.27 1145.37,-354 1219.14,-354 1219.14,-378.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1182.25" y="-362.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ebt_column</text>
+</a>
+</g>
+</g>
+<!-- proc~ebt_column&#45;&gt;proc~remap_column_plm -->
+<g id="proc~~remap_column_plm~~CalledByGraph_edge1" class="edge">
+<title>proc~ebt_column&#45;&gt;proc~remap_column_plm</title>
+<path fill="none" stroke="#ff0000" d="M1201.64,-353.59C1228.07,-335.55 1277.01,-302.15 1307.87,-281.09"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1309.67,-284.11 1315.95,-275.58 1305.72,-278.32 1309.67,-284.11"/>
+</g>
+<!-- proc~remap_column -->
+<g id="proc~~remap_column_plm~~CalledByGraph_node3" class="node">
+<title>proc~remap_column</title>
+<g id="a_proc~~remap_column_plm~~CalledByGraph_node3"><a xlink:href="../proc/remap_column.html" xlink:title="remap_column">
+<polygon fill="#d9534f" stroke="#d9534f" points="880.35,-213.27 789.33,-213.27 789.33,-189 880.35,-189 880.35,-213.27"/>
+<text xml:space="preserve" text-anchor="middle" x="834.84" y="-197.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_column</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column&#45;&gt;proc~remap_column_plm -->
+<g id="proc~~remap_column_plm~~CalledByGraph_edge2" class="edge">
+<title>proc~remap_column&#45;&gt;proc~remap_column_plm</title>
+<path fill="none" stroke="#ff0000" d="M852.46,-213.61C873.3,-228.43 910.72,-252.37 947.1,-262.13 1055.93,-291.34 1188.16,-282.43 1266.92,-272.72"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1267.17,-276.21 1276.64,-271.47 1266.28,-269.27 1267.17,-276.21"/>
+</g>
+<!-- proc~remap_column_ppm -->
+<g id="proc~~remap_column_plm~~CalledByGraph_node4" class="node">
+<title>proc~remap_column_ppm</title>
+<g id="a_proc~~remap_column_plm~~CalledByGraph_node4"><a xlink:href="../proc/remap_column_ppm.html" xlink:title="remap_column_ppm">
+<polygon fill="#d9534f" stroke="#d9534f" points="1242.39,-213.27 1122.12,-213.27 1122.12,-189 1242.39,-189 1242.39,-213.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1182.25" y="-197.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_column_ppm</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column&#45;&gt;proc~remap_column_ppm -->
+<g id="proc~~remap_column_plm~~CalledByGraph_edge15" class="edge">
+<title>proc~remap_column&#45;&gt;proc~remap_column_ppm</title>
+<path fill="none" stroke="#00ffff" d="M880.64,-201.13C939,-201.13 1041.69,-201.13 1110.59,-201.13"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="1110.26,-204.64 1120.26,-201.14 1110.26,-197.64 1110.26,-204.64"/>
+</g>
+<!-- proc~remap_column_ppm_h4 -->
+<g id="proc~~remap_column_plm~~CalledByGraph_node5" class="node">
+<title>proc~remap_column_ppm_h4</title>
+<g id="a_proc~~remap_column_plm~~CalledByGraph_node5"><a xlink:href="../proc/remap_column_ppm_h4.html" xlink:title="remap_column_ppm_h4">
+<polygon fill="#d9534f" stroke="#d9534f" points="1086.12,-253.27 947.1,-253.27 947.1,-229 1086.12,-229 1086.12,-253.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1016.61" y="-237.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_column_ppm_h4</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column&#45;&gt;proc~remap_column_ppm_h4 -->
+<g id="proc~~remap_column_plm~~CalledByGraph_edge17" class="edge">
+<title>proc~remap_column&#45;&gt;proc~remap_column_ppm_h4</title>
+<path fill="none" stroke="#7f00ff" d="M880.74,-211.13C901.02,-215.64 925.43,-221.07 947.87,-226.06"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="947.04,-229.46 957.56,-228.22 948.56,-222.63 947.04,-229.46"/>
+</g>
+<!-- proc~remap_column_pqm -->
+<g id="proc~~remap_column_plm~~CalledByGraph_node8" class="node">
+<title>proc~remap_column_pqm</title>
+<g id="a_proc~~remap_column_plm~~CalledByGraph_node8"><a xlink:href="../proc/remap_column_pqm.html" xlink:title="remap_column_pqm">
+<polygon fill="#d9534f" stroke="#d9534f" points="1076.74,-173.27 956.47,-173.27 956.47,-149 1076.74,-149 1076.74,-173.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1016.61" y="-157.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_column_pqm</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column&#45;&gt;proc~remap_column_pqm -->
+<g id="proc~~remap_column_plm~~CalledByGraph_edge20" class="edge">
+<title>proc~remap_column&#45;&gt;proc~remap_column_pqm</title>
+<path fill="none" stroke="#e7ff00" d="M880.74,-191.14C901.02,-186.63 925.43,-181.2 947.87,-176.21"/>
+<polygon fill="#e7ff00" stroke="#e7ff00" points="948.56,-179.64 957.56,-174.05 947.04,-172.81 948.56,-179.64"/>
+</g>
+<!-- proc~remap_column_ppm&#45;&gt;proc~remap_column_plm -->
+<g id="proc~~remap_column_plm~~CalledByGraph_edge3" class="edge">
+<title>proc~remap_column_ppm&#45;&gt;proc~remap_column_plm</title>
+<path fill="none" stroke="#ff0000" d="M1214.46,-213.63C1237.29,-222.77 1268.52,-235.27 1293.56,-245.29"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1292.23,-248.53 1302.82,-248.99 1294.83,-242.03 1292.23,-248.53"/>
+</g>
+<!-- proc~remap_column_ppm_h4&#45;&gt;proc~remap_column_plm -->
+<g id="proc~~remap_column_plm~~CalledByGraph_edge4" class="edge">
+<title>proc~remap_column_ppm_h4&#45;&gt;proc~remap_column_plm</title>
+<path fill="none" stroke="#ff0000" d="M1086.62,-245.69C1139.89,-249.21 1213.26,-254.05 1266.56,-257.57"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1266.23,-261.06 1276.44,-258.23 1266.69,-254.07 1266.23,-261.06"/>
+</g>
+<!-- proc~ocean_remap_tracer_column -->
+<g id="proc~~remap_column_plm~~CalledByGraph_node6" class="node">
+<title>proc~ocean_remap_tracer_column</title>
+<g id="a_proc~~remap_column_plm~~CalledByGraph_node6"><a xlink:href="../proc/ocean_remap_tracer_column.html" xlink:title="ocean_remap_tracer_column">
+<polygon fill="#d9534f" stroke="#d9534f" points="722.58,-108.27 555.81,-108.27 555.81,-84 722.58,-84 722.58,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="639.19" y="-92.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_remap_tracer_column</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_remap_tracer_column&#45;&gt;proc~remap_column -->
+<g id="proc~~remap_column_plm~~CalledByGraph_edge6" class="edge">
+<title>proc~ocean_remap_tracer_column&#45;&gt;proc~remap_column</title>
+<path fill="none" stroke="#7fff00" d="M701.02,-108.69C708.44,-111.08 715.8,-113.87 722.58,-117.13 757.13,-133.74 791.51,-161.95 812.71,-181.05"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="810.11,-183.41 819.84,-187.59 814.84,-178.25 810.11,-183.41"/>
+</g>
+<!-- proc~ocean_remap_tracer_field -->
+<g id="proc~~remap_column_plm~~CalledByGraph_node7" class="node">
+<title>proc~ocean_remap_tracer_field</title>
+<g id="a_proc~~remap_column_plm~~CalledByGraph_node7"><a xlink:href="../proc/ocean_remap_tracer_field.html" xlink:title="ocean_remap_tracer_field">
+<polygon fill="#d9534f" stroke="#d9534f" points="714.33,-318.27 564.06,-318.27 564.06,-294 714.33,-294 714.33,-318.27"/>
+<text xml:space="preserve" text-anchor="middle" x="639.19" y="-302.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_remap_tracer_field</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_remap_tracer_field&#45;&gt;proc~remap_column -->
+<g id="proc~~remap_column_plm~~CalledByGraph_edge7" class="edge">
+<title>proc~ocean_remap_tracer_field&#45;&gt;proc~remap_column</title>
+<path fill="none" stroke="#7fff00" d="M701.02,-293.58C708.44,-291.19 715.8,-288.4 722.58,-285.13 757.13,-268.53 791.51,-240.32 812.71,-221.22"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="814.84,-224.02 819.84,-214.68 810.11,-218.86 814.84,-224.02"/>
+</g>
+<!-- proc~remap_column_pqm&#45;&gt;proc~remap_column_ppm -->
+<g id="proc~~remap_column_plm~~CalledByGraph_edge16" class="edge">
+<title>proc~remap_column_pqm&#45;&gt;proc~remap_column_ppm</title>
+<path fill="none" stroke="#00ffff" d="M1068.94,-173.68C1084.7,-177.53 1102.23,-181.82 1118.66,-185.84"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="1117.81,-189.23 1128.36,-188.2 1119.47,-182.43 1117.81,-189.23"/>
+</g>
+<!-- proc~remap_layer_to_density_impl -->
+<g id="proc~~remap_column_plm~~CalledByGraph_node9" class="node">
+<title>proc~remap_layer_to_density_impl</title>
+<g id="a_proc~~remap_column_plm~~CalledByGraph_node9"><a xlink:href="../proc/remap_layer_to_density_impl.html" xlink:title="remap_layer_to_density_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="722.2,-360.27 556.18,-360.27 556.18,-336 722.2,-336 722.2,-360.27"/>
+<text xml:space="preserve" text-anchor="middle" x="639.19" y="-344.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_layer_to_density_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_layer_to_density_impl&#45;&gt;proc~remap_column -->
+<g id="proc~~remap_column_plm~~CalledByGraph_edge8" class="edge">
+<title>proc~remap_layer_to_density_impl&#45;&gt;proc~remap_column</title>
+<path fill="none" stroke="#7fff00" d="M705.14,-335.59C711.24,-333.23 717.16,-330.44 722.58,-327.13 766.05,-300.57 801.97,-251.65 820.42,-223.21"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="823.22,-225.34 825.6,-215.02 817.3,-221.6 823.22,-225.34"/>
+</g>
+<!-- proc~remap_layer_to_vcoord_impl -->
+<g id="proc~~remap_column_plm~~CalledByGraph_node10" class="node">
+<title>proc~remap_layer_to_vcoord_impl</title>
+<g id="a_proc~~remap_column_plm~~CalledByGraph_node10"><a xlink:href="../proc/remap_layer_to_vcoord_impl.html" xlink:title="remap_layer_to_vcoord_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="721.45,-192.27 556.93,-192.27 556.93,-168 721.45,-168 721.45,-192.27"/>
+<text xml:space="preserve" text-anchor="middle" x="639.19" y="-176.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_layer_to_vcoord_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_layer_to_vcoord_impl&#45;&gt;proc~remap_column -->
+<g id="proc~~remap_column_plm~~CalledByGraph_edge9" class="edge">
+<title>proc~remap_layer_to_vcoord_impl&#45;&gt;proc~remap_column</title>
+<path fill="none" stroke="#7fff00" d="M721.76,-188.98C740.66,-191.03 760.37,-193.17 777.89,-195.07"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="777.23,-198.52 787.55,-196.11 777.98,-191.56 777.23,-198.52"/>
+</g>
+<!-- proc~remap_tracer_grounded -->
+<g id="proc~~remap_column_plm~~CalledByGraph_node11" class="node">
+<title>proc~remap_tracer_grounded</title>
+<g id="a_proc~~remap_column_plm~~CalledByGraph_node11"><a xlink:href="../proc/remap_tracer_grounded.html" xlink:title="remap_tracer_grounded">
+<polygon fill="#d9534f" stroke="#d9534f" points="709.08,-150.27 569.31,-150.27 569.31,-126 709.08,-126 709.08,-150.27"/>
+<text xml:space="preserve" text-anchor="middle" x="639.19" y="-134.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_tracer_grounded</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_tracer_grounded&#45;&gt;proc~remap_column -->
+<g id="proc~~remap_column_plm~~CalledByGraph_edge10" class="edge">
+<title>proc~remap_tracer_grounded&#45;&gt;proc~remap_column</title>
+<path fill="none" stroke="#7fff00" d="M693.18,-150.71C703.01,-153.31 713.15,-156.16 722.58,-159.13 746.22,-166.59 772.16,-176.29 793.05,-184.49"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="791.47,-187.63 802.06,-188.06 794.05,-181.12 791.47,-187.63"/>
+</g>
+<!-- proc~remap_x_face_grounded -->
+<g id="proc~~remap_column_plm~~CalledByGraph_node12" class="node">
+<title>proc~remap_x_face_grounded</title>
+<g id="a_proc~~remap_column_plm~~CalledByGraph_node12"><a xlink:href="../proc/remap_x_face_grounded.html" xlink:title="remap_x_face_grounded">
+<polygon fill="#d9534f" stroke="#d9534f" points="710.2,-66.27 568.18,-66.27 568.18,-42 710.2,-42 710.2,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="639.19" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_x_face_grounded</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_x_face_grounded&#45;&gt;proc~remap_column -->
+<g id="proc~~remap_column_plm~~CalledByGraph_edge11" class="edge">
+<title>proc~remap_x_face_grounded&#45;&gt;proc~remap_column</title>
+<path fill="none" stroke="#7fff00" d="M705.14,-66.68C711.24,-69.04 717.16,-71.83 722.58,-75.13 766.05,-101.7 801.97,-150.62 820.42,-179.06"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="817.3,-180.67 825.6,-187.25 823.22,-176.93 817.3,-180.67"/>
+</g>
+<!-- proc~remap_x_face_velocity -->
+<g id="proc~~remap_column_plm~~CalledByGraph_node13" class="node">
+<title>proc~remap_x_face_velocity</title>
+<g id="a_proc~~remap_column_plm~~CalledByGraph_node13"><a xlink:href="../proc/remap_x_face_velocity.html" xlink:title="remap_x_face_velocity">
+<polygon fill="#d9534f" stroke="#d9534f" points="705.33,-276.27 573.06,-276.27 573.06,-252 705.33,-252 705.33,-276.27"/>
+<text xml:space="preserve" text-anchor="middle" x="639.19" y="-260.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_x_face_velocity</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_x_face_velocity&#45;&gt;proc~remap_column -->
+<g id="proc~~remap_column_plm~~CalledByGraph_edge12" class="edge">
+<title>proc~remap_x_face_velocity&#45;&gt;proc~remap_column</title>
+<path fill="none" stroke="#7fff00" d="M693.18,-251.56C703.01,-248.96 713.15,-246.11 722.58,-243.13 746.22,-235.68 772.16,-225.98 793.05,-217.78"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="794.05,-221.15 802.06,-214.21 791.47,-214.64 794.05,-221.15"/>
+</g>
+<!-- proc~remap_y_face_grounded -->
+<g id="proc~~remap_column_plm~~CalledByGraph_node14" class="node">
+<title>proc~remap_y_face_grounded</title>
+<g id="a_proc~~remap_column_plm~~CalledByGraph_node14"><a xlink:href="../proc/remap_y_face_grounded.html" xlink:title="remap_y_face_grounded">
+<polygon fill="#d9534f" stroke="#d9534f" points="710.2,-24.27 568.18,-24.27 568.18,0 710.2,0 710.2,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="639.19" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_y_face_grounded</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_y_face_grounded&#45;&gt;proc~remap_column -->
+<g id="proc~~remap_column_plm~~CalledByGraph_edge13" class="edge">
+<title>proc~remap_y_face_grounded&#45;&gt;proc~remap_column</title>
+<path fill="none" stroke="#7fff00" d="M707.31,-24.63C712.71,-27 717.89,-29.8 722.58,-33.13 775.33,-70.61 809.94,-141.65 825.08,-178.17"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="821.78,-179.35 828.75,-187.33 828.28,-176.74 821.78,-179.35"/>
+</g>
+<!-- proc~remap_y_face_velocity -->
+<g id="proc~~remap_column_plm~~CalledByGraph_node15" class="node">
+<title>proc~remap_y_face_velocity</title>
+<g id="a_proc~~remap_column_plm~~CalledByGraph_node15"><a xlink:href="../proc/remap_y_face_velocity.html" xlink:title="remap_y_face_velocity">
+<polygon fill="#d9534f" stroke="#d9534f" points="705.33,-234.27 573.06,-234.27 573.06,-210 705.33,-210 705.33,-234.27"/>
+<text xml:space="preserve" text-anchor="middle" x="639.19" y="-218.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_y_face_velocity</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_y_face_velocity&#45;&gt;proc~remap_column -->
+<g id="proc~~remap_column_plm~~CalledByGraph_edge14" class="edge">
+<title>proc~remap_y_face_velocity&#45;&gt;proc~remap_column</title>
+<path fill="none" stroke="#7fff00" d="M705.75,-215.03C729.11,-212.49 755.19,-209.66 777.69,-207.22"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="778.03,-210.71 787.59,-206.15 777.27,-203.75 778.03,-210.71"/>
+</g>
+<!-- proc~wavespeed_mode_column -->
+<g id="proc~~remap_column_plm~~CalledByGraph_node16" class="node">
+<title>proc~wavespeed_mode_column</title>
+<g id="a_proc~~remap_column_plm~~CalledByGraph_node16"><a xlink:href="../proc/wavespeed_mode_column.html" xlink:title="wavespeed_mode_column">
+<polygon fill="#d9534f" stroke="#d9534f" points="911.1,-402.27 758.58,-402.27 758.58,-378 911.1,-378 911.1,-402.27"/>
+<text xml:space="preserve" text-anchor="middle" x="834.84" y="-386.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">wavespeed_mode_column</text>
+</a>
+</g>
+</g>
+<!-- proc~wavespeed_mode_column&#45;&gt;proc~ebt_column -->
+<g id="proc~~remap_column_plm~~CalledByGraph_edge5" class="edge">
+<title>proc~wavespeed_mode_column&#45;&gt;proc~ebt_column</title>
+<path fill="none" stroke="#ff0000" d="M911.22,-384.9C979,-380.19 1076.48,-373.41 1133.9,-369.43"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1133.93,-372.93 1143.67,-368.75 1133.45,-365.95 1133.93,-372.93"/>
+</g>
+<!-- proc~ocean_apply_ale_remap_centres -->
+<g id="proc~~remap_column_plm~~CalledByGraph_node17" class="node">
+<title>proc~ocean_apply_ale_remap_centres</title>
+<g id="a_proc~~remap_column_plm~~CalledByGraph_node17"><a xlink:href="../proc/ocean_apply_ale_remap_centres.html" xlink:title="ocean_apply_ale_remap_centres">
+<polygon fill="#d9534f" stroke="#d9534f" points="495.81,-318.27 311.04,-318.27 311.04,-294 495.81,-294 495.81,-318.27"/>
+<text xml:space="preserve" text-anchor="middle" x="403.42" y="-302.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_apply_ale_remap_centres</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_apply_ale_remap_centres&#45;&gt;proc~ocean_remap_tracer_field -->
+<g id="proc~~remap_column_plm~~CalledByGraph_edge18" class="edge">
+<title>proc~ocean_apply_ale_remap_centres&#45;&gt;proc~ocean_remap_tracer_field</title>
+<path fill="none" stroke="#ff8b00" d="M496.15,-306.13C514.6,-306.13 533.92,-306.13 552.17,-306.13"/>
+<polygon fill="#ff8b00" stroke="#ff8b00" points="552.17,-309.64 562.17,-306.14 552.17,-302.64 552.17,-309.64"/>
+</g>
+<!-- proc~ocean_apply_ale_remap_faces -->
+<g id="proc~~remap_column_plm~~CalledByGraph_node18" class="node">
+<title>proc~ocean_apply_ale_remap_faces</title>
+<g id="a_proc~~remap_column_plm~~CalledByGraph_node18"><a xlink:href="../proc/ocean_apply_ale_remap_faces.html" xlink:title="ocean_apply_ale_remap_faces">
+<polygon fill="#d9534f" stroke="#d9534f" points="490.56,-234.27 316.29,-234.27 316.29,-210 490.56,-210 490.56,-234.27"/>
+<text xml:space="preserve" text-anchor="middle" x="403.42" y="-218.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_apply_ale_remap_faces</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_apply_ale_remap_faces&#45;&gt;proc~remap_x_face_velocity -->
+<g id="proc~~remap_column_plm~~CalledByGraph_edge27" class="edge">
+<title>proc~ocean_apply_ale_remap_faces&#45;&gt;proc~remap_x_face_velocity</title>
+<path fill="none" stroke="#002eff" d="M474.56,-234.74C502.11,-239.69 533.8,-245.38 561.91,-250.43"/>
+<polygon fill="#002eff" stroke="#002eff" points="560.95,-253.81 571.41,-252.14 562.19,-246.92 560.95,-253.81"/>
+</g>
+<!-- proc~ocean_apply_ale_remap_faces&#45;&gt;proc~remap_y_face_velocity -->
+<g id="proc~~remap_column_plm~~CalledByGraph_edge30" class="edge">
+<title>proc~ocean_apply_ale_remap_faces&#45;&gt;proc~remap_y_face_velocity</title>
+<path fill="none" stroke="#e700ff" d="M490.81,-222.13C513.95,-222.13 538.81,-222.13 561.4,-222.13"/>
+<polygon fill="#e700ff" stroke="#e700ff" points="561.12,-225.64 571.12,-222.14 561.12,-218.64 561.12,-225.64"/>
+</g>
+<!-- proc~ocean_apply_ale_remap_step -->
+<g id="proc~~remap_column_plm~~CalledByGraph_node19" class="node">
+<title>proc~ocean_apply_ale_remap_step</title>
+<g id="a_proc~~remap_column_plm~~CalledByGraph_node19"><a xlink:href="../proc/ocean_apply_ale_remap_step.html" xlink:title="ocean_apply_ale_remap_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="487.56,-276.27 319.29,-276.27 319.29,-252 487.56,-252 487.56,-276.27"/>
+<text xml:space="preserve" text-anchor="middle" x="403.42" y="-260.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_apply_ale_remap_step</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_apply_ale_remap_step&#45;&gt;proc~ocean_remap_tracer_field -->
+<g id="proc~~remap_column_plm~~CalledByGraph_edge19" class="edge">
+<title>proc~ocean_apply_ale_remap_step&#45;&gt;proc~ocean_remap_tracer_field</title>
+<path fill="none" stroke="#ff8b00" d="M474.56,-276.74C500.45,-281.39 530.01,-286.7 556.81,-291.51"/>
+<polygon fill="#ff8b00" stroke="#ff8b00" points="556.15,-294.95 566.62,-293.27 557.39,-288.06 556.15,-294.95"/>
+</g>
+<!-- proc~ocean_apply_ale_remap_step&#45;&gt;proc~remap_x_face_velocity -->
+<g id="proc~~remap_column_plm~~CalledByGraph_edge28" class="edge">
+<title>proc~ocean_apply_ale_remap_step&#45;&gt;proc~remap_x_face_velocity</title>
+<path fill="none" stroke="#002eff" d="M487.83,-264.13C511.83,-264.13 537.89,-264.13 561.47,-264.13"/>
+<polygon fill="#002eff" stroke="#002eff" points="561.31,-267.64 571.31,-264.14 561.31,-260.64 561.31,-267.64"/>
+</g>
+<!-- proc~ocean_apply_ale_remap_step&#45;&gt;proc~remap_y_face_velocity -->
+<g id="proc~~remap_column_plm~~CalledByGraph_edge31" class="edge">
+<title>proc~ocean_apply_ale_remap_step&#45;&gt;proc~remap_y_face_velocity</title>
+<path fill="none" stroke="#e700ff" d="M474.56,-251.53C502.11,-246.58 533.8,-240.89 561.91,-235.84"/>
+<polygon fill="#e700ff" stroke="#e700ff" points="562.19,-239.35 571.41,-234.13 560.95,-232.46 562.19,-239.35"/>
+</g>
+<!-- proc~ocean_apply_conservative_min_thickness -->
+<g id="proc~~remap_column_plm~~CalledByGraph_node20" class="node">
+<title>proc~ocean_apply_conservative_min_thickness</title>
+<g id="a_proc~~remap_column_plm~~CalledByGraph_node20"><a xlink:href="../proc/ocean_apply_conservative_min_thickness.html" xlink:title="ocean_apply_conservative_min_thickness">
+<polygon fill="#d9534f" stroke="#d9534f" points="519.81,-66.27 287.04,-66.27 287.04,-42 519.81,-42 519.81,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="403.42" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_apply_conservative_min_thickness</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_apply_conservative_min_thickness&#45;&gt;proc~remap_tracer_grounded -->
+<g id="proc~~remap_column_plm~~CalledByGraph_edge25" class="edge">
+<title>proc~ocean_apply_conservative_min_thickness&#45;&gt;proc~remap_tracer_grounded</title>
+<path fill="none" stroke="#00ffb9" d="M501.58,-66.67C507.93,-69.04 514.07,-71.84 519.81,-75.13 541.13,-87.37 534.93,-104.16 555.81,-117.13 557.95,-118.46 560.17,-119.71 562.45,-120.88"/>
+<polygon fill="#00ffb9" stroke="#00ffb9" points="560.84,-123.99 571.39,-124.88 563.7,-117.6 560.84,-123.99"/>
+</g>
+<!-- proc~ocean_apply_conservative_min_thickness&#45;&gt;proc~remap_x_face_grounded -->
+<g id="proc~~remap_column_plm~~CalledByGraph_edge26" class="edge">
+<title>proc~ocean_apply_conservative_min_thickness&#45;&gt;proc~remap_x_face_grounded</title>
+<path fill="none" stroke="#00b9ff" d="M520.28,-54.13C532.64,-54.13 545.01,-54.13 556.84,-54.13"/>
+<polygon fill="#00b9ff" stroke="#00b9ff" points="556.49,-57.64 566.49,-54.14 556.49,-50.64 556.49,-57.64"/>
+</g>
+<!-- proc~ocean_apply_conservative_min_thickness&#45;&gt;proc~remap_y_face_grounded -->
+<g id="proc~~remap_column_plm~~CalledByGraph_edge29" class="edge">
+<title>proc~ocean_apply_conservative_min_thickness&#45;&gt;proc~remap_y_face_grounded</title>
+<path fill="none" stroke="#5c00ff" d="M474.56,-41.53C500.45,-36.88 530.01,-31.57 556.81,-26.76"/>
+<polygon fill="#5c00ff" stroke="#5c00ff" points="557.39,-30.21 566.62,-25 556.15,-23.32 557.39,-30.21"/>
+</g>
+<!-- proc~remap_layer_to_density -->
+<g id="proc~~remap_column_plm~~CalledByGraph_node21" class="node">
+<title>proc~remap_layer_to_density</title>
+<g id="a_proc~~remap_column_plm~~CalledByGraph_node21"><a xlink:href="../proc/remap_layer_to_density.html" xlink:title="remap_layer_to_density">
+<polygon fill="#d9534f" stroke="#d9534f" points="472.18,-360.27 334.66,-360.27 334.66,-336 472.18,-336 472.18,-360.27"/>
+<text xml:space="preserve" text-anchor="middle" x="403.42" y="-344.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_layer_to_density</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_layer_to_density&#45;&gt;proc~remap_layer_to_density_impl -->
+<g id="proc~~remap_column_plm~~CalledByGraph_edge21" class="edge">
+<title>proc~remap_layer_to_density&#45;&gt;proc~remap_layer_to_density_impl</title>
+<path fill="none" stroke="#5cff00" d="M472.67,-348.13C495.12,-348.13 520.49,-348.13 544.5,-348.13"/>
+<polygon fill="#5cff00" stroke="#5cff00" points="544.27,-351.64 554.27,-348.14 544.27,-344.64 544.27,-351.64"/>
+</g>
+<!-- proc~remap_layer_to_sigma -->
+<g id="proc~~remap_column_plm~~CalledByGraph_node22" class="node">
+<title>proc~remap_layer_to_sigma</title>
+<g id="a_proc~~remap_column_plm~~CalledByGraph_node22"><a xlink:href="../proc/remap_layer_to_sigma.html" xlink:title="remap_layer_to_sigma">
+<polygon fill="#d9534f" stroke="#d9534f" points="469.18,-150.27 337.66,-150.27 337.66,-126 469.18,-126 469.18,-150.27"/>
+<text xml:space="preserve" text-anchor="middle" x="403.42" y="-134.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_layer_to_sigma</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_layer_to_sigma&#45;&gt;proc~remap_layer_to_vcoord_impl -->
+<g id="proc~~remap_column_plm~~CalledByGraph_edge22" class="edge">
+<title>proc~remap_layer_to_sigma&#45;&gt;proc~remap_layer_to_vcoord_impl</title>
+<path fill="none" stroke="#00ff2e" d="M469.54,-149.83C496.62,-154.7 528.33,-160.4 556.91,-165.53"/>
+<polygon fill="#00ff2e" stroke="#00ff2e" points="556.16,-168.95 566.62,-167.28 557.4,-162.06 556.16,-168.95"/>
+</g>
+<!-- proc~remap_layer_to_z -->
+<g id="proc~~remap_column_plm~~CalledByGraph_node23" class="node">
+<title>proc~remap_layer_to_z</title>
+<g id="a_proc~~remap_column_plm~~CalledByGraph_node23"><a xlink:href="../proc/remap_layer_to_z.html" xlink:title="remap_layer_to_z">
+<polygon fill="#d9534f" stroke="#d9534f" points="455.68,-108.27 351.16,-108.27 351.16,-84 455.68,-84 455.68,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="403.42" y="-92.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_layer_to_z</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_layer_to_z&#45;&gt;proc~remap_layer_to_vcoord_impl -->
+<g id="proc~~remap_column_plm~~CalledByGraph_edge23" class="edge">
+<title>proc~remap_layer_to_z&#45;&gt;proc~remap_layer_to_vcoord_impl</title>
+<path fill="none" stroke="#00ff2e" d="M456.12,-98.06C477,-100.69 500.65,-106.14 519.81,-117.13 541.13,-129.37 534.93,-146.16 555.81,-159.13 557.95,-160.46 560.17,-161.71 562.45,-162.88"/>
+<polygon fill="#00ff2e" stroke="#00ff2e" points="560.84,-165.99 571.39,-166.88 563.7,-159.6 560.84,-165.99"/>
+</g>
+<!-- proc~remap_layer_to_zstar -->
+<g id="proc~~remap_column_plm~~CalledByGraph_node24" class="node">
+<title>proc~remap_layer_to_zstar</title>
+<g id="a_proc~~remap_column_plm~~CalledByGraph_node24"><a xlink:href="../proc/remap_layer_to_zstar.html" xlink:title="remap_layer_to_zstar">
+<polygon fill="#d9534f" stroke="#d9534f" points="465.81,-192.27 341.04,-192.27 341.04,-168 465.81,-168 465.81,-192.27"/>
+<text xml:space="preserve" text-anchor="middle" x="403.42" y="-176.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_layer_to_zstar</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_layer_to_zstar&#45;&gt;proc~remap_layer_to_vcoord_impl -->
+<g id="proc~~remap_column_plm~~CalledByGraph_edge24" class="edge">
+<title>proc~remap_layer_to_zstar&#45;&gt;proc~remap_layer_to_vcoord_impl</title>
+<path fill="none" stroke="#00ff2e" d="M466.15,-180.13C490.42,-180.13 518.79,-180.13 545.43,-180.13"/>
+<polygon fill="#00ff2e" stroke="#00ff2e" points="545.2,-183.64 555.2,-180.14 545.2,-176.64 545.2,-183.64"/>
+</g>
+<!-- proc~wavespeed_cg1_column -->
+<g id="proc~~remap_column_plm~~CalledByGraph_node25" class="node">
+<title>proc~wavespeed_cg1_column</title>
+<g id="a_proc~~remap_column_plm~~CalledByGraph_node25"><a xlink:href="../proc/wavespeed_cg1_column.html" xlink:title="wavespeed_cg1_column">
+<polygon fill="#d9534f" stroke="#d9534f" points="709.83,-402.27 568.56,-402.27 568.56,-378 709.83,-378 709.83,-402.27"/>
+<text xml:space="preserve" text-anchor="middle" x="639.19" y="-386.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">wavespeed_cg1_column</text>
+</a>
+</g>
+</g>
+<!-- proc~wavespeed_cg1_column&#45;&gt;proc~wavespeed_mode_column -->
+<g id="proc~~remap_column_plm~~CalledByGraph_edge32" class="edge">
+<title>proc~wavespeed_cg1_column&#45;&gt;proc~wavespeed_mode_column</title>
+<path fill="none" stroke="#ff008b" d="M710.11,-390.13C722.05,-390.13 734.59,-390.13 746.91,-390.13"/>
+<polygon fill="#ff008b" stroke="#ff008b" points="746.63,-393.64 756.63,-390.14 746.63,-386.64 746.63,-393.64"/>
+</g>
+<!-- proc~wavespeed_compute_impl -->
+<g id="proc~~remap_column_plm~~CalledByGraph_node26" class="node">
+<title>proc~wavespeed_compute_impl</title>
+<g id="a_proc~~remap_column_plm~~CalledByGraph_node26"><a xlink:href="../proc/wavespeed_compute_impl.html" xlink:title="wavespeed_compute_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="715.45,-444.27 562.93,-444.27 562.93,-420 715.45,-420 715.45,-444.27"/>
+<text xml:space="preserve" text-anchor="middle" x="639.19" y="-428.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">wavespeed_compute_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~wavespeed_compute_impl&#45;&gt;proc~wavespeed_mode_column -->
+<g id="proc~~remap_column_plm~~CalledByGraph_edge33" class="edge">
+<title>proc~wavespeed_compute_impl&#45;&gt;proc~wavespeed_mode_column</title>
+<path fill="none" stroke="#ff008b" d="M698.29,-419.53C719.17,-415.01 742.91,-409.86 764.63,-405.15"/>
+<polygon fill="#ff008b" stroke="#ff008b" points="765.27,-408.59 774.3,-403.05 763.79,-401.75 765.27,-408.59"/>
+</g>
+<!-- proc~ocean_dyn_step_split -->
+<g id="proc~~remap_column_plm~~CalledByGraph_node27" class="node">
+<title>proc~ocean_dyn_step_split</title>
+<g id="a_proc~~remap_column_plm~~CalledByGraph_node27"><a xlink:href="../proc/ocean_dyn_step_split.html" xlink:title="ocean_dyn_step_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="251.04,-349.27 127.02,-349.27 127.02,-325 251.04,-325 251.04,-349.27"/>
+<text xml:space="preserve" text-anchor="middle" x="189.03" y="-333.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step_split</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step_split&#45;&gt;proc~ocean_apply_ale_remap_step -->
+<g id="proc~~remap_column_plm~~CalledByGraph_edge34" class="edge">
+<title>proc~ocean_dyn_step_split&#45;&gt;proc~ocean_apply_ale_remap_step</title>
+<path fill="none" stroke="#cbff00" d="M208.9,-324.71C227.88,-312.79 258.36,-295.15 287.04,-285.13 293.81,-282.77 300.89,-280.66 308.08,-278.78"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="308.7,-282.23 317.58,-276.45 307.03,-275.43 308.7,-282.23"/>
+</g>
+<!-- proc~wavespeed_compute -->
+<g id="proc~~remap_column_plm~~CalledByGraph_node29" class="node">
+<title>proc~wavespeed_compute</title>
+<g id="a_proc~~remap_column_plm~~CalledByGraph_node29"><a xlink:href="../proc/wavespeed_compute.html" xlink:title="wavespeed_compute">
+<polygon fill="#d9534f" stroke="#d9534f" points="465.43,-423.27 341.41,-423.27 341.41,-399 465.43,-399 465.43,-423.27"/>
+<text xml:space="preserve" text-anchor="middle" x="403.42" y="-407.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">wavespeed_compute</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step_split&#45;&gt;proc~wavespeed_compute -->
+<g id="proc~~remap_column_plm~~CalledByGraph_edge39" class="edge">
+<title>proc~ocean_dyn_step_split&#45;&gt;proc~wavespeed_compute</title>
+<path fill="none" stroke="#0000ff" d="M226.06,-349.69C261.68,-362.1 316.38,-381.15 355.4,-394.75"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="354.19,-398.04 364.79,-398.02 356.5,-391.43 354.19,-398.04"/>
+</g>
+<!-- proc~run_continuity_chain -->
+<g id="proc~~remap_column_plm~~CalledByGraph_node28" class="node">
+<title>proc~run_continuity_chain</title>
+<g id="a_proc~~remap_column_plm~~CalledByGraph_node28"><a xlink:href="../proc/run_continuity_chain.html" xlink:title="run_continuity_chain">
+<polygon fill="#d9534f" stroke="#d9534f" points="249.91,-66.27 128.14,-66.27 128.14,-42 249.91,-42 249.91,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="189.03" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_continuity_chain</text>
+</a>
+</g>
+</g>
+<!-- proc~run_continuity_chain&#45;&gt;proc~ocean_apply_conservative_min_thickness -->
+<g id="proc~~remap_column_plm~~CalledByGraph_edge35" class="edge">
+<title>proc~run_continuity_chain&#45;&gt;proc~ocean_apply_conservative_min_thickness</title>
+<path fill="none" stroke="#33ff00" d="M250.33,-54.13C258.34,-54.13 266.79,-54.13 275.43,-54.13"/>
+<polygon fill="#33ff00" stroke="#33ff00" points="275.36,-57.64 285.36,-54.14 275.36,-50.64 275.36,-57.64"/>
+</g>
+<!-- proc~wavespeed_compute&#45;&gt;proc~wavespeed_compute_impl -->
+<g id="proc~~remap_column_plm~~CalledByGraph_edge36" class="edge">
+<title>proc~wavespeed_compute&#45;&gt;proc~wavespeed_compute_impl</title>
+<path fill="none" stroke="#ff0098" d="M465.85,-416.65C492,-419 522.98,-421.78 551.4,-424.34"/>
+<polygon fill="#ff0098" stroke="#ff0098" points="550.79,-427.8 561.07,-425.21 551.42,-420.83 550.79,-427.8"/>
+</g>
+<!-- proc~engine_step -->
+<g id="proc~~remap_column_plm~~CalledByGraph_node30" class="node">
+<title>proc~engine_step</title>
+<g id="a_proc~~remap_column_plm~~CalledByGraph_node30"><a xlink:href="../proc/engine_step.html" xlink:title="engine_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="83.52,-349.27 7.5,-349.27 7.5,-325 83.52,-325 83.52,-349.27"/>
+<text xml:space="preserve" text-anchor="middle" x="45.51" y="-333.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~ocean_dyn_step_split -->
+<g id="proc~~remap_column_plm~~CalledByGraph_edge37" class="edge">
+<title>proc~engine_step&#45;&gt;proc~ocean_dyn_step_split</title>
+<path fill="none" stroke="#ff0000" d="M83.69,-337.13C93.48,-337.13 104.38,-337.13 115.34,-337.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="115.23,-340.64 125.23,-337.14 115.23,-333.64 115.23,-340.64"/>
+</g>
+<!-- proc~run_stage_split -->
+<g id="proc~~remap_column_plm~~CalledByGraph_node31" class="node">
+<title>proc~run_stage_split</title>
+<g id="a_proc~~remap_column_plm~~CalledByGraph_node31"><a xlink:href="../proc/run_stage_split.html" xlink:title="run_stage_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="91.02,-66.27 0,-66.27 0,-42 91.02,-42 91.02,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="45.51" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage_split</text>
+</a>
+</g>
+</g>
+<!-- proc~run_stage_split&#45;&gt;proc~run_continuity_chain -->
+<g id="proc~~remap_column_plm~~CalledByGraph_edge38" class="edge">
+<title>proc~run_stage_split&#45;&gt;proc~run_continuity_chain</title>
+<path fill="none" stroke="#00ff00" d="M91.29,-54.13C99.34,-54.13 107.91,-54.13 116.5,-54.13"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="116.24,-57.64 126.24,-54.14 116.24,-50.64 116.24,-57.64"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocremap_column_plmCalledByGraph = svgPanZoom('#procremap_column_plmCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dq_l"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dq_l</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dq_r"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dq_r</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-integral~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>integral</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-k~89"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>k</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ko~2"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ko</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ko_start~2"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ko_start</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nu~2"></span>
+              logical,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nu</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-overlap~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>overlap</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-slope~3"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>slope</strong>(NZ_STACK_MAX)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-xi_hi"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>xi_hi</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-xi_lo"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>xi_lo</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-z_hi~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>z_hi</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-z_lo~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>z_lo</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-z_new~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>z_new</strong>(0:NZ_STACK_MAX)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-z_old~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>z_old</strong>(0:NZ_STACK_MAX)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">pure subroutine </span><span class="n">remap_column_plm</span><span class="p">(</span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">dz_old</span><span class="p">,</span><span class="w"> </span><span class="n">dz_new</span><span class="p">,</span><span class="w"> </span><span class="n">q_old</span><span class="p">,</span><span class="w"> </span><span class="n">q_new</span><span class="p">,</span><span class="w"> </span><span class="n">bnd_extrap</span><span class="p">,</span><span class="w"> </span><span class="n">nonunif</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!$acc routine seq</span>
+<span class="w">      </span><span class="c">!! Piecewise-linear (minmod-limited) remap. Monotone (no new extrema).</span>
+<span class="w">      </span><span class="c">!! Per old layer k: q_hat(xi) = q(k) + slope(k)*(2*xi - 1), xi in [0,1],</span>
+<span class="w">      </span><span class="c">!! slope(k) = 0.5*minmod(q(k+1)-q(k), q(k)-q(k-1)).</span>
+<span class="w">      </span><span class="c">!! `bnd_extrap` (absent/.false. = default) closes the boundary cells</span>
+<span class="w">      </span><span class="c">!! with `boundary_half_jump` instead of the PCM flatten — see</span>
+<span class="w">      </span><span class="c">!! `remap_column`.  `nonunif` (absent/.false. = default) replaces the</span>
+<span class="w">      </span><span class="c">!! minmod half-difference — which assumes EQUAL source thicknesses —</span>
+<span class="w">      </span><span class="c">!! with the thickness-weighted CW84 (1.7)/(1.8) slope; see</span>
+<span class="w">      </span><span class="c">!! `plm_slope_nonuniform`.</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nz</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dz_old</span><span class="p">(</span><span class="n">nz</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! Old layer thicknesses</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dz_new</span><span class="p">(</span><span class="n">nz</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! New layer thicknesses</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">q_old</span><span class="p">(</span><span class="n">nz</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! Old cell-average scalar values</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">q_new</span><span class="p">(</span><span class="n">nz</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! New cell-average scalar values (conservative)</span>
+<span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">bnd_extrap</span>
+<span class="w">         </span><span class="c">!! Linear-exact boundary-cell closure (MOM6 BOUNDARY_EXTRAPOLATION).</span>
+<span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nonunif</span>
+<span class="w">         </span><span class="c">!! Non-uniform-grid slope weights (CW84 1.7/1.8).</span>
+
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">z_old</span><span class="p">(</span><span class="mi">0</span><span class="p">:</span><span class="n">NZ_STACK_MAX</span><span class="p">),</span><span class="w"> </span><span class="n">z_new</span><span class="p">(</span><span class="mi">0</span><span class="p">:</span><span class="n">NZ_STACK_MAX</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">slope</span><span class="p">(</span><span class="n">NZ_STACK_MAX</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">z_lo</span><span class="p">,</span><span class="w"> </span><span class="n">z_hi</span><span class="p">,</span><span class="w"> </span><span class="n">overlap</span><span class="p">,</span><span class="w"> </span><span class="n">integral</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">xi_lo</span><span class="p">,</span><span class="w"> </span><span class="n">xi_hi</span><span class="p">,</span><span class="w"> </span><span class="n">dq_l</span><span class="p">,</span><span class="w"> </span><span class="n">dq_r</span>
+<span class="w">      </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nu</span>
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">k</span><span class="p">,</span><span class="w"> </span><span class="n">ko</span><span class="p">,</span><span class="w"> </span><span class="n">ko_start</span>
+
+<span class="w">      </span><span class="n">nu</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">false</span><span class="p">.</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">nonunif</span><span class="p">))</span><span class="w"> </span><span class="n">nu</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nonunif</span>
+
+<span class="w">      </span><span class="c">! Single-layer case: identity remap</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">nz</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         </span><span class="n">q_new</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">q_old</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+<span class="w">         </span><span class="k">return</span>
+<span class="k">      end if</span>
+
+<span class="w">      </span><span class="c">! Build interface positions</span>
+<span class="w">      </span><span class="n">z_old</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">      </span><span class="n">z_new</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">      </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span>
+<span class="w">         </span><span class="n">z_old</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">z_old</span><span class="p">(</span><span class="n">k</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">dz_old</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+<span class="w">         </span><span class="n">z_new</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">z_new</span><span class="p">(</span><span class="n">k</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">dz_new</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end do</span>
+
+<span class="w">      </span><span class="c">! Compute minmod-limited slopes</span>
+<span class="w">      </span><span class="c">! slope(k) = half the limited difference across the layer</span>
+<span class="w">      </span><span class="n">slope</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">nu</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">            </span><span class="k">call </span><span class="n">plm_slope_nonuniform</span><span class="p">(</span><span class="n">dz_old</span><span class="p">(</span><span class="n">k</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="n">dz_old</span><span class="p">(</span><span class="n">k</span><span class="p">),</span><span class="w"> </span><span class="n">dz_old</span><span class="p">(</span><span class="n">k</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="n">q_old</span><span class="p">(</span><span class="n">k</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="n">q_old</span><span class="p">(</span><span class="n">k</span><span class="p">),</span><span class="w"> </span><span class="n">q_old</span><span class="p">(</span><span class="n">k</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="n">slope</span><span class="p">(</span><span class="n">k</span><span class="p">))</span>
+<span class="w">         </span><span class="k">end do</span>
+<span class="k">      else</span>
+<span class="k">         do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">            </span><span class="n">dq_l</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">q_old</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">q_old</span><span class="p">(</span><span class="n">k</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">            </span><span class="n">dq_r</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">q_old</span><span class="p">(</span><span class="n">k</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">q_old</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">dq_l</span><span class="o">*</span><span class="n">dq_r</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               </span><span class="n">slope</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="nb">sign</span><span class="p">(</span><span class="nb">min</span><span class="p">(</span><span class="nb">abs</span><span class="p">(</span><span class="n">dq_l</span><span class="p">),</span><span class="w"> </span><span class="nb">abs</span><span class="p">(</span><span class="n">dq_r</span><span class="p">)),</span><span class="w"> </span><span class="n">dq_l</span><span class="p">)</span>
+<span class="w">            </span><span class="k">else</span>
+<span class="k">               </span><span class="n">slope</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">            </span><span class="k">end if</span>
+<span class="k">         end do</span>
+<span class="k">      end if</span>
+<span class="k">      </span><span class="n">slope</span><span class="p">(</span><span class="n">nz</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">      </span><span class="c">! Boundary cells: PCM flatten by default; the linear-exact one-sided</span>
+<span class="w">      </span><span class="c">! half-jump when boundary extrapolation is requested.</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">bnd_extrap</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         if</span><span class="w"> </span><span class="p">(</span><span class="n">bnd_extrap</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            call </span><span class="n">boundary_half_jump</span><span class="p">(</span><span class="n">dz_old</span><span class="p">(</span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="n">dz_old</span><span class="p">(</span><span class="mi">2</span><span class="p">),</span><span class="w"> </span><span class="n">q_old</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">q_old</span><span class="p">(</span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="n">slope</span><span class="p">(</span><span class="mi">1</span><span class="p">))</span>
+<span class="w">            </span><span class="k">call </span><span class="n">boundary_half_jump</span><span class="p">(</span><span class="n">dz_old</span><span class="p">(</span><span class="n">nz</span><span class="p">),</span><span class="w"> </span><span class="n">dz_old</span><span class="p">(</span><span class="n">nz</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                    </span><span class="n">q_old</span><span class="p">(</span><span class="n">nz</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">q_old</span><span class="p">(</span><span class="n">nz</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="n">slope</span><span class="p">(</span><span class="n">nz</span><span class="p">))</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">      end if</span>
+
+<span class="w">      </span><span class="c">! Sweep: for each new layer, integrate PLM from old layers</span>
+<span class="w">      </span><span class="n">ko_start</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">      </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">dz_new</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            </span><span class="n">q_new</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">            </span><span class="k">cycle</span>
+<span class="k">         end if</span>
+
+<span class="k">         </span><span class="n">integral</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">         </span><span class="k">do </span><span class="n">ko</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ko_start</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span>
+<span class="w">            </span><span class="n">z_lo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">max</span><span class="p">(</span><span class="n">z_new</span><span class="p">(</span><span class="n">k</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="n">z_old</span><span class="p">(</span><span class="n">ko</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">))</span>
+<span class="w">            </span><span class="n">z_hi</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">min</span><span class="p">(</span><span class="n">z_new</span><span class="p">(</span><span class="n">k</span><span class="p">),</span><span class="w"> </span><span class="n">z_old</span><span class="p">(</span><span class="n">ko</span><span class="p">))</span>
+<span class="w">            </span><span class="n">overlap</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">z_hi</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">z_lo</span>
+
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">overlap</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               if</span><span class="w"> </span><span class="p">(</span><span class="n">z_old</span><span class="p">(</span><span class="n">ko</span><span class="p">)</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">z_new</span><span class="p">(</span><span class="n">k</span><span class="p">))</span><span class="w"> </span><span class="k">exit</span>
+<span class="k">               cycle</span>
+<span class="k">            end if</span>
+
+<span class="k">            if</span><span class="w"> </span><span class="p">(</span><span class="n">dz_old</span><span class="p">(</span><span class="n">ko</span><span class="p">)</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="w">               </span><span class="c">! Normalised coordinates within old layer ko</span>
+<span class="w">               </span><span class="n">xi_lo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">z_lo</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">z_old</span><span class="p">(</span><span class="n">ko</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">))</span><span class="o">/</span><span class="n">dz_old</span><span class="p">(</span><span class="n">ko</span><span class="p">)</span>
+<span class="w">               </span><span class="n">xi_hi</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">z_hi</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">z_old</span><span class="p">(</span><span class="n">ko</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">))</span><span class="o">/</span><span class="n">dz_old</span><span class="p">(</span><span class="n">ko</span><span class="p">)</span>
+
+<span class="w">               </span><span class="c">! Integral of q_hat(xi) = q + slope*(2*xi - 1) over [xi_lo, xi_hi]</span>
+<span class="w">               </span><span class="c">! = (xi_hi - xi_lo) * (q + slope*(xi_hi + xi_lo - 1))</span>
+<span class="w">               </span><span class="c">! scaled to physical space: * dz_old(ko)</span>
+<span class="w">               </span><span class="n">integral</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">integral</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">overlap</span><span class="o">*</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                          </span><span class="p">(</span><span class="n">q_old</span><span class="p">(</span><span class="n">ko</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">slope</span><span class="p">(</span><span class="n">ko</span><span class="p">)</span><span class="o">*</span><span class="p">(</span><span class="n">xi_lo</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">xi_hi</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mf">1.0_wp</span><span class="p">))</span>
+<span class="w">            </span><span class="k">else</span>
+<span class="k">               </span><span class="n">integral</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">integral</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">q_old</span><span class="p">(</span><span class="n">ko</span><span class="p">)</span><span class="o">*</span><span class="n">overlap</span>
+<span class="w">            </span><span class="k">end if</span>
+
+<span class="k">            if</span><span class="w"> </span><span class="p">(</span><span class="n">z_old</span><span class="p">(</span><span class="n">ko</span><span class="p">)</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="n">z_new</span><span class="p">(</span><span class="n">k</span><span class="p">))</span><span class="w"> </span><span class="n">ko_start</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ko</span>
+<span class="w">         </span><span class="k">end do</span>
+
+<span class="k">         </span><span class="n">q_new</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">integral</span><span class="o">/</span><span class="n">dz_new</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end do</span>
+<span class="k">   end subroutine </span><span class="n">remap_column_plm</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-11-13 23:21 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

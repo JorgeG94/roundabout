@@ -1,0 +1,938 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>efp_regularize &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>efp_regularize
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.0% of total for procedures.">28 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_efp.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_efp.f90.html'>rdb_efp.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_efp.html'>rdb_efp</a></li>
+            <li class="breadcrumb-item active" aria-current="page">efp_regularize</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/efp_regularize.html#variable-n~39">n</a>
+            <a class="list-group-item" href="../proc/efp_regularize.html#variable-positive">positive</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/efp_regularize.html#src">efp_regularize</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>public pure subroutine efp_regularize(e)  
+</h2>
+    
+
+    <p><code>efp_carry</code> plus: force every bin to share the overall sign, so a
+single well-conditioned FP accumulation (<code>efp_to_real</code>) can form
+<code>Sum pr(n)*e(n)</code> without alternating-sign cancellation error.
+Mirrors MOM6 <code>regularize_ints</code>.</p>
+<p>After <code>efp_carry</code>, bins 2..6 satisfy <code>|e(n)| &lt; 2**P</code>.  The overall
+sign is that of the first (most-significant) nonzero bin.  A
+single descending pass then borrows/carries any bin of the
+opposite sign into <code>[0, 2**P)</code> (or <code>(-2**P, 0]</code>) from its
+next-more-significant neighbour &ndash; exact, since
+<code>e(n-1)*2**P + e(n)</code> is invariant under <code>(e(n-1) -+ 1, e(n) +- 2**P)</code>
+&ndash; and cascades: a neighbour driven negative/positive by one
+borrow is itself fixed on the next loop iteration.</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-e~15"></span>
+              integer(kind=int64),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>e</strong>(EFP_DIGITS)</td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~efp_regularize~~CallsGraph Pages: 1 -->
+<svg id="procefp_regularizeCallsGraph" width="193pt" height="32pt"
+ viewBox="0.00 0.00 193.00 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~efp_regularize~~CallsGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 28.27)">
+<title>proc~~efp_regularize~~CallsGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 189.04,-28.27 189.04,4 -4,4"/>
+<!-- proc~efp_regularize -->
+<g id="proc~~efp_regularize~~CallsGraph_node1" class="node">
+<title>proc~efp_regularize</title>
+<polygon fill="none" stroke="black" points="87.27,-24.27 0,-24.27 0,0 87.27,0 87.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="43.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">efp_regularize</text>
+</g>
+<!-- proc~efp_carry -->
+<g id="proc~~efp_regularize~~CallsGraph_node2" class="node">
+<title>proc~efp_carry</title>
+<g id="a_proc~~efp_regularize~~CallsGraph_node2"><a xlink:href="../proc/efp_carry.html" xlink:title="efp_carry">
+<polygon fill="#d9534f" stroke="#d9534f" points="185.04,-24.27 123.27,-24.27 123.27,0 185.04,0 185.04,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="154.15" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">efp_carry</text>
+</a>
+</g>
+</g>
+<!-- proc~efp_regularize&#45;&gt;proc~efp_carry -->
+<g id="proc~~efp_regularize~~CallsGraph_edge1" class="edge">
+<title>proc~efp_regularize&#45;&gt;proc~efp_carry</title>
+<path fill="none" stroke="#ff0000" d="M87.52,-12.13C95.49,-12.13 103.79,-12.13 111.71,-12.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="111.43,-15.64 121.43,-12.14 111.43,-8.64 111.43,-15.64"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~efp_regularize~~CalledByGraph Pages: 1 -->
+<svg id="procefp_regularizeCalledByGraph" width="641pt" height="169pt"
+ viewBox="0.00 0.00 641.00 169.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~efp_regularize~~CalledByGraph" class="graph" transform="scale(0.525449 0.525449) rotate(0) translate(4 317.98)">
+<title>proc~~efp_regularize~~CalledByGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-317.98 1215.91,-317.98 1215.91,4 -4,4"/>
+<!-- proc~efp_regularize -->
+<g id="proc~~efp_regularize~~CalledByGraph_node1" class="node">
+<title>proc~efp_regularize</title>
+<polygon fill="none" stroke="black" points="1211.91,-86.27 1124.64,-86.27 1124.64,-62 1211.91,-62 1211.91,-86.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1168.27" y="-70.53" font-family="Helvetica,sans-Serif" font-size="10.50">efp_regularize</text>
+</g>
+<!-- proc~efp_from_transport -->
+<g id="proc~~efp_regularize~~CalledByGraph_node2" class="node">
+<title>proc~efp_from_transport</title>
+<g id="a_proc~~efp_regularize~~CalledByGraph_node2"><a xlink:href="../proc/efp_from_transport.html" xlink:title="efp_from_transport">
+<polygon fill="#d9534f" stroke="#d9534f" points="1088.64,-146.27 975.87,-146.27 975.87,-122 1088.64,-122 1088.64,-146.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1032.25" y="-130.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">efp_from_transport</text>
+</a>
+</g>
+</g>
+<!-- proc~efp_from_transport&#45;&gt;proc~efp_regularize -->
+<g id="proc~~efp_regularize~~CalledByGraph_edge1" class="edge">
+<title>proc~efp_from_transport&#45;&gt;proc~efp_regularize</title>
+<path fill="none" stroke="#ff0000" d="M1061.35,-121.56C1080.92,-112.8 1107.26,-101 1128.78,-91.37"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1130.14,-94.6 1137.84,-87.31 1127.28,-88.21 1130.14,-94.6"/>
+</g>
+<!-- proc~efp_minus -->
+<g id="proc~~efp_regularize~~CalledByGraph_node3" class="node">
+<title>proc~efp_minus</title>
+<g id="a_proc~~efp_regularize~~CalledByGraph_node3"><a xlink:href="../proc/efp_minus.html" xlink:title="efp_minus">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="1065.39,-24.27 999.12,-24.27 999.12,0 1065.39,0 1065.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1032.25" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">efp_minus</text>
+</a>
+</g>
+</g>
+<!-- proc~efp_minus&#45;&gt;proc~efp_regularize -->
+<g id="proc~~efp_regularize~~CalledByGraph_edge2" class="edge">
+<title>proc~efp_minus&#45;&gt;proc~efp_regularize</title>
+<path fill="none" stroke="#ff0000" d="M1065.73,-23.71C1073.32,-26.62 1081.32,-29.85 1088.64,-33.13 1104.24,-40.13 1121.1,-48.77 1135.2,-56.31"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1133.12,-59.17 1143.58,-60.85 1136.45,-53.01 1133.12,-59.17"/>
+</g>
+<!-- proc~efp_plus -->
+<g id="proc~~efp_regularize~~CalledByGraph_node4" class="node">
+<title>proc~efp_plus</title>
+<g id="a_proc~~efp_regularize~~CalledByGraph_node4"><a xlink:href="../proc/efp_plus.html" xlink:title="efp_plus">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="1060.14,-66.27 1004.37,-66.27 1004.37,-42 1060.14,-42 1060.14,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1032.25" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">efp_plus</text>
+</a>
+</g>
+</g>
+<!-- proc~efp_plus&#45;&gt;proc~efp_regularize -->
+<g id="proc~~efp_regularize~~CalledByGraph_edge3" class="edge">
+<title>proc~efp_plus&#45;&gt;proc~efp_regularize</title>
+<path fill="none" stroke="#ff0000" d="M1060.38,-58.18C1075.51,-60.44 1094.9,-63.33 1113.01,-66.04"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1112.46,-69.49 1122.87,-67.51 1113.49,-62.57 1112.46,-69.49"/>
+</g>
+<!-- proc~efp_to_real -->
+<g id="proc~~efp_regularize~~CalledByGraph_node5" class="node">
+<title>proc~efp_to_real</title>
+<g id="a_proc~~efp_regularize~~CalledByGraph_node5"><a xlink:href="../proc/efp_to_real.html" xlink:title="efp_to_real">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="908.74,-104.27 838.72,-104.27 838.72,-80 908.74,-80 908.74,-104.27"/>
+<text xml:space="preserve" text-anchor="middle" x="873.73" y="-88.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">efp_to_real</text>
+</a>
+</g>
+</g>
+<!-- proc~efp_to_real&#45;&gt;proc~efp_regularize -->
+<g id="proc~~efp_regularize~~CalledByGraph_edge4" class="edge">
+<title>proc~efp_to_real&#45;&gt;proc~efp_regularize</title>
+<path fill="none" stroke="#ff0000" d="M909.15,-90.02C959.42,-86.92 1053.4,-81.14 1113.03,-77.47"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1113.2,-80.97 1122.96,-76.86 1112.77,-73.98 1113.2,-80.97"/>
+</g>
+<!-- proc~efp_real_diff -->
+<g id="proc~~efp_regularize~~CalledByGraph_node6" class="node">
+<title>proc~efp_real_diff</title>
+<g id="a_proc~~efp_regularize~~CalledByGraph_node6"><a xlink:href="../proc/efp_real_diff.html" xlink:title="efp_real_diff">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="738.97,-24.27 662.2,-24.27 662.2,0 738.97,0 738.97,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="700.59" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">efp_real_diff</text>
+</a>
+</g>
+</g>
+<!-- proc~efp_real_diff&#45;&gt;proc~efp_minus -->
+<g id="proc~~efp_regularize~~CalledByGraph_edge6" class="edge">
+<title>proc~efp_real_diff&#45;&gt;proc~efp_minus</title>
+<path fill="none" stroke="#7fff00" d="M739.41,-12.13C800.86,-12.13 922.09,-12.13 987.3,-12.13"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="987.28,-15.64 997.28,-12.14 987.28,-8.64 987.28,-15.64"/>
+</g>
+<!-- proc~efp_real_diff&#45;&gt;proc~efp_to_real -->
+<g id="proc~~efp_regularize~~CalledByGraph_edge7" class="edge">
+<title>proc~efp_real_diff&#45;&gt;proc~efp_to_real</title>
+<path fill="none" stroke="#7f00ff" d="M738.3,-24.71C749.15,-28.71 760.96,-33.34 771.6,-38.13 795.6,-48.94 821.79,-62.99 841.5,-74.05"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="839.71,-77.06 850.14,-78.94 843.16,-70.97 839.71,-77.06"/>
+</g>
+<!-- proc~halo_allreduce_efp_list -->
+<g id="proc~~efp_regularize~~CalledByGraph_node7" class="node">
+<title>proc~halo_allreduce_efp_list</title>
+<g id="a_proc~~efp_regularize~~CalledByGraph_node7"><a xlink:href="../proc/halo_allreduce_efp_list.html" xlink:title="halo_allreduce_efp_list">
+<polygon fill="#d9534f" stroke="#d9534f" points="939.87,-146.27 807.6,-146.27 807.6,-122 939.87,-122 939.87,-146.27"/>
+<text xml:space="preserve" text-anchor="middle" x="873.73" y="-130.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">halo_allreduce_efp_list</text>
+</a>
+</g>
+</g>
+<!-- proc~halo_allreduce_efp_list&#45;&gt;proc~efp_from_transport -->
+<g id="proc~~efp_regularize~~CalledByGraph_edge5" class="edge">
+<title>proc~halo_allreduce_efp_list&#45;&gt;proc~efp_from_transport</title>
+<path fill="none" stroke="#ff0000" d="M940.21,-134.13C948.09,-134.13 956.14,-134.13 964.05,-134.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="963.97,-137.64 973.97,-134.14 963.97,-130.64 963.97,-137.64"/>
+</g>
+<!-- proc~ke_probe_coradv_split -->
+<g id="proc~~efp_regularize~~CalledByGraph_node8" class="node">
+<title>proc~ke_probe_coradv_split</title>
+<g id="a_proc~~efp_regularize~~CalledByGraph_node8"><a xlink:href="../proc/ke_probe_coradv_split.html" xlink:title="ke_probe_coradv_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="765.22,-188.27 635.95,-188.27 635.95,-164 765.22,-164 765.22,-188.27"/>
+<text xml:space="preserve" text-anchor="middle" x="700.59" y="-172.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ke_probe_coradv_split</text>
+</a>
+</g>
+</g>
+<!-- proc~ke_probe_coradv_split&#45;&gt;proc~efp_to_real -->
+<g id="proc~~efp_regularize~~CalledByGraph_edge8" class="edge">
+<title>proc~ke_probe_coradv_split&#45;&gt;proc~efp_to_real</title>
+<path fill="none" stroke="#7f00ff" d="M755.39,-163.5C761.08,-161.15 766.6,-158.39 771.6,-155.13 792.21,-141.73 787.13,-126.75 807.6,-113.13 813.64,-109.12 820.5,-105.82 827.45,-103.13"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="828.58,-106.45 836.9,-99.88 826.31,-99.83 828.58,-106.45"/>
+</g>
+<!-- proc~ke_probe_coradv_split&#45;&gt;proc~halo_allreduce_efp_list -->
+<g id="proc~~efp_regularize~~CalledByGraph_edge13" class="edge">
+<title>proc~ke_probe_coradv_split&#45;&gt;proc~halo_allreduce_efp_list</title>
+<path fill="none" stroke="#ffff00" d="M752.94,-163.53C770.96,-159.11 791.41,-154.09 810.25,-149.47"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="811.07,-152.87 819.95,-147.09 809.41,-146.07 811.07,-152.87"/>
+</g>
+<!-- proc~ke_probe_sample -->
+<g id="proc~~efp_regularize~~CalledByGraph_node9" class="node">
+<title>proc~ke_probe_sample</title>
+<g id="a_proc~~efp_regularize~~CalledByGraph_node9"><a xlink:href="../proc/ke_probe_sample.html" xlink:title="ke_probe_sample">
+<polygon fill="#d9534f" stroke="#d9534f" points="752.85,-146.27 648.33,-146.27 648.33,-122 752.85,-122 752.85,-146.27"/>
+<text xml:space="preserve" text-anchor="middle" x="700.59" y="-130.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ke_probe_sample</text>
+</a>
+</g>
+</g>
+<!-- proc~ke_probe_sample&#45;&gt;proc~efp_to_real -->
+<g id="proc~~efp_regularize~~CalledByGraph_edge9" class="edge">
+<title>proc~ke_probe_sample&#45;&gt;proc~efp_to_real</title>
+<path fill="none" stroke="#7f00ff" d="M752.94,-121.53C776.61,-115.73 804.46,-108.89 827.35,-103.27"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="828.13,-106.68 837.01,-100.9 826.46,-99.89 828.13,-106.68"/>
+</g>
+<!-- proc~ke_probe_sample&#45;&gt;proc~halo_allreduce_efp_list -->
+<g id="proc~~efp_regularize~~CalledByGraph_edge14" class="edge">
+<title>proc~ke_probe_sample&#45;&gt;proc~halo_allreduce_efp_list</title>
+<path fill="none" stroke="#ffff00" d="M752.94,-134.13C766.38,-134.13 781.17,-134.13 795.63,-134.13"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="795.62,-137.64 805.62,-134.14 795.62,-130.64 795.62,-137.64"/>
+</g>
+<!-- proc~ocean_console_stats_report -->
+<g id="proc~~efp_regularize~~CalledByGraph_node10" class="node">
+<title>proc~ocean_console_stats_report</title>
+<g id="a_proc~~efp_regularize~~CalledByGraph_node10"><a xlink:href="../proc/ocean_console_stats_report.html" xlink:title="ocean_console_stats_report">
+<polygon fill="#d9534f" stroke="#d9534f" points="430.56,-64.27 272.04,-64.27 272.04,-40 430.56,-40 430.56,-64.27"/>
+<text xml:space="preserve" text-anchor="middle" x="351.3" y="-48.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_console_stats_report</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_console_stats_report&#45;&gt;proc~efp_to_real -->
+<g id="proc~~efp_regularize~~CalledByGraph_edge10" class="edge">
+<title>proc~ocean_console_stats_report&#45;&gt;proc~efp_to_real</title>
+<path fill="none" stroke="#7f00ff" d="M431.06,-51.97C515.56,-52.66 653.57,-56.3 771.6,-71.13 789.99,-73.45 810.02,-77.31 827.36,-81.11"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="826.33,-84.46 836.85,-83.24 827.86,-77.63 826.33,-84.46"/>
+</g>
+<!-- proc~ocean_console_stats_report&#45;&gt;proc~halo_allreduce_efp_list -->
+<g id="proc~~efp_regularize~~CalledByGraph_edge15" class="edge">
+<title>proc~ocean_console_stats_report&#45;&gt;proc~halo_allreduce_efp_list</title>
+<path fill="none" stroke="#ffff00" d="M368.96,-64.6C410.33,-94.69 522.22,-170.76 629.58,-197.13 690.88,-212.19 710.91,-214.49 771.6,-197.13 801.03,-188.72 830.24,-168.98 849.64,-153.82"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="851.82,-156.56 857.41,-147.55 847.43,-151.11 851.82,-156.56"/>
+</g>
+<!-- proc~console_stats_report -->
+<g id="proc~~efp_regularize~~CalledByGraph_node13" class="node">
+<title>proc~console_stats_report</title>
+<g id="a_proc~~efp_regularize~~CalledByGraph_node13"><a xlink:href="../proc/console_stats_report.html" xlink:title="console_stats_report">
+<polygon fill="#d9534f" stroke="#d9534f" points="590.2,-24.27 469.93,-24.27 469.93,0 590.2,0 590.2,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="530.07" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">console_stats_report</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_console_stats_report&#45;&gt;proc~console_stats_report -->
+<g id="proc~~efp_regularize~~CalledByGraph_edge23" class="edge">
+<title>proc~ocean_console_stats_report&#45;&gt;proc~console_stats_report</title>
+<path fill="none" stroke="#7fff00" d="M407.75,-39.59C425.1,-35.66 444.44,-31.29 462.48,-27.2"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="463.06,-30.66 472.04,-25.04 461.51,-23.83 463.06,-30.66"/>
+</g>
+<!-- proc~ocean_sss_restore_apply -->
+<g id="proc~~efp_regularize~~CalledByGraph_node11" class="node">
+<title>proc~ocean_sss_restore_apply</title>
+<g id="a_proc~~efp_regularize~~CalledByGraph_node11"><a xlink:href="../proc/ocean_sss_restore_apply.html" xlink:title="ocean_sss_restore_apply">
+<polygon fill="#d9534f" stroke="#d9534f" points="771.6,-104.27 629.58,-104.27 629.58,-80 771.6,-80 771.6,-104.27"/>
+<text xml:space="preserve" text-anchor="middle" x="700.59" y="-88.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_sss_restore_apply</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_sss_restore_apply&#45;&gt;proc~efp_to_real -->
+<g id="proc~~efp_regularize~~CalledByGraph_edge11" class="edge">
+<title>proc~ocean_sss_restore_apply&#45;&gt;proc~efp_to_real</title>
+<path fill="none" stroke="#7f00ff" d="M771.7,-92.13C790.45,-92.13 810.22,-92.13 827.26,-92.13"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="827.06,-95.64 837.06,-92.14 827.06,-88.64 827.06,-95.64"/>
+</g>
+<!-- proc~ocean_sss_restore_apply&#45;&gt;proc~halo_allreduce_efp_list -->
+<g id="proc~~efp_regularize~~CalledByGraph_edge16" class="edge">
+<title>proc~ocean_sss_restore_apply&#45;&gt;proc~halo_allreduce_efp_list</title>
+<path fill="none" stroke="#ffff00" d="M752.94,-104.74C770.96,-109.16 791.41,-114.18 810.25,-118.8"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="809.41,-122.2 819.95,-121.18 811.07,-115.4 809.41,-122.2"/>
+</g>
+<!-- proc~apply_sw_and_restore -->
+<g id="proc~~efp_regularize~~CalledByGraph_node12" class="node">
+<title>proc~apply_sw_and_restore</title>
+<g id="a_proc~~efp_regularize~~CalledByGraph_node12"><a xlink:href="../proc/apply_sw_and_restore.html" xlink:title="apply_sw_and_restore">
+<polygon fill="#d9534f" stroke="#d9534f" points="593.58,-268.27 466.56,-268.27 466.56,-244 593.58,-244 593.58,-268.27"/>
+<text xml:space="preserve" text-anchor="middle" x="530.07" y="-252.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">apply_sw_and_restore</text>
+</a>
+</g>
+</g>
+<!-- proc~apply_sw_and_restore&#45;&gt;proc~ocean_sss_restore_apply -->
+<g id="proc~~efp_regularize~~CalledByGraph_edge19" class="edge">
+<title>proc~apply_sw_and_restore&#45;&gt;proc~ocean_sss_restore_apply</title>
+<path fill="none" stroke="#ff00ff" d="M536.15,-243.7C548.13,-215.95 580.84,-148.63 629.58,-113.13 631.13,-112.01 632.74,-110.94 634.4,-109.92"/>
+<polygon fill="#ff00ff" stroke="#ff00ff" points="635.77,-113.16 643.02,-105.42 632.53,-106.95 635.77,-113.16"/>
+</g>
+<!-- proc~console_stats_report&#45;&gt;proc~efp_real_diff -->
+<g id="proc~~efp_regularize~~CalledByGraph_edge12" class="edge">
+<title>proc~console_stats_report&#45;&gt;proc~efp_real_diff</title>
+<path fill="none" stroke="#ff0000" d="M590.48,-12.13C610.1,-12.13 631.69,-12.13 650.46,-12.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="650.22,-15.64 660.22,-12.14 650.22,-8.64 650.22,-15.64"/>
+</g>
+<!-- proc~driver_run_ocean -->
+<g id="proc~~efp_regularize~~CalledByGraph_node14" class="node">
+<title>proc~driver_run_ocean</title>
+<g id="a_proc~~efp_regularize~~CalledByGraph_node14"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<polygon fill="#d9534f" stroke="#d9534f" points="226.29,-64.27 121.77,-64.27 121.77,-40 226.29,-40 226.29,-64.27"/>
+<text xml:space="preserve" text-anchor="middle" x="174.03" y="-48.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~ocean_console_stats_report -->
+<g id="proc~~efp_regularize~~CalledByGraph_edge18" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~ocean_console_stats_report</title>
+<path fill="none" stroke="#0000ff" d="M226.67,-52.13C237.27,-52.13 248.72,-52.13 260.23,-52.13"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="260.22,-55.64 270.22,-52.14 260.22,-48.64 260.22,-55.64"/>
+</g>
+<!-- proc~run_stage_split -->
+<g id="proc~~efp_regularize~~CalledByGraph_node15" class="node">
+<title>proc~run_stage_split</title>
+<g id="a_proc~~efp_regularize~~CalledByGraph_node15"><a xlink:href="../proc/run_stage_split.html" xlink:title="run_stage_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="396.81,-309.27 305.79,-309.27 305.79,-285 396.81,-285 396.81,-309.27"/>
+<text xml:space="preserve" text-anchor="middle" x="351.3" y="-293.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage_split</text>
+</a>
+</g>
+</g>
+<!-- proc~run_stage_split&#45;&gt;proc~ke_probe_sample -->
+<g id="proc~~efp_regularize~~CalledByGraph_edge17" class="edge">
+<title>proc~run_stage_split&#45;&gt;proc~ke_probe_sample</title>
+<path fill="none" stroke="#00ffff" d="M396.93,-307.15C449.95,-316.26 538.17,-322.25 593.58,-277.13 637.42,-241.44 589.69,-195.2 629.58,-155.13 632.1,-152.61 634.9,-150.38 637.9,-148.42"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="639.53,-151.53 646.71,-143.74 636.24,-145.34 639.53,-151.53"/>
+</g>
+<!-- proc~run_stage_split&#45;&gt;proc~apply_sw_and_restore -->
+<g id="proc~~efp_regularize~~CalledByGraph_edge22" class="edge">
+<title>proc~run_stage_split&#45;&gt;proc~apply_sw_and_restore</title>
+<path fill="none" stroke="#ff0000" d="M396.91,-286.79C417.12,-282.1 441.42,-276.47 463.63,-271.31"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="464.26,-274.76 473.21,-269.09 462.68,-267.94 464.26,-274.76"/>
+</g>
+<!-- proc~apply_deferred_thermo -->
+<g id="proc~~efp_regularize~~CalledByGraph_node16" class="node">
+<title>proc~apply_deferred_thermo</title>
+<g id="a_proc~~efp_regularize~~CalledByGraph_node16"><a xlink:href="../proc/apply_deferred_thermo.html" xlink:title="apply_deferred_thermo">
+<polygon fill="#d9534f" stroke="#d9534f" points="419.31,-267.27 283.29,-267.27 283.29,-243 419.31,-243 419.31,-267.27"/>
+<text xml:space="preserve" text-anchor="middle" x="351.3" y="-251.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">apply_deferred_thermo</text>
+</a>
+</g>
+</g>
+<!-- proc~apply_deferred_thermo&#45;&gt;proc~apply_sw_and_restore -->
+<g id="proc~~efp_regularize~~CalledByGraph_edge20" class="edge">
+<title>proc~apply_deferred_thermo&#45;&gt;proc~apply_sw_and_restore</title>
+<path fill="none" stroke="#ff0000" d="M419.63,-255.52C431.24,-255.58 443.36,-255.65 455.14,-255.72"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="454.75,-259.21 464.77,-255.77 454.79,-252.21 454.75,-259.21"/>
+</g>
+<!-- proc~driver_run -->
+<g id="proc~~efp_regularize~~CalledByGraph_node17" class="node">
+<title>proc~driver_run</title>
+<g id="a_proc~~efp_regularize~~CalledByGraph_node17"><a xlink:href="../proc/driver_run.html" xlink:title="driver_run">
+<polygon fill="#d9534f" stroke="#d9534f" points="71.14,-64.27 4.87,-64.27 4.87,-40 71.14,-40 71.14,-64.27"/>
+<text xml:space="preserve" text-anchor="middle" x="38.01" y="-48.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run&#45;&gt;proc~driver_run_ocean -->
+<g id="proc~~efp_regularize~~CalledByGraph_edge24" class="edge">
+<title>proc~driver_run&#45;&gt;proc~driver_run_ocean</title>
+<path fill="none" stroke="#00ffff" d="M71.45,-52.13C83.13,-52.13 96.74,-52.13 110.13,-52.13"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="109.77,-55.64 119.77,-52.14 109.77,-48.64 109.77,-55.64"/>
+</g>
+<!-- proc~ocean_dyn_step_split -->
+<g id="proc~~efp_regularize~~CalledByGraph_node18" class="node">
+<title>proc~ocean_dyn_step_split</title>
+<g id="a_proc~~efp_regularize~~CalledByGraph_node18"><a xlink:href="../proc/ocean_dyn_step_split.html" xlink:title="ocean_dyn_step_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="236.04,-288.27 112.02,-288.27 112.02,-264 236.04,-264 236.04,-288.27"/>
+<text xml:space="preserve" text-anchor="middle" x="174.03" y="-272.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step_split</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step_split&#45;&gt;proc~run_stage_split -->
+<g id="proc~~efp_regularize~~CalledByGraph_edge25" class="edge">
+<title>proc~ocean_dyn_step_split&#45;&gt;proc~run_stage_split</title>
+<path fill="none" stroke="#7f00ff" d="M236.33,-283.48C255.04,-285.72 275.52,-288.18 293.9,-290.38"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="293.48,-293.85 303.82,-291.57 294.31,-286.9 293.48,-293.85"/>
+</g>
+<!-- proc~ocean_dyn_step_split&#45;&gt;proc~apply_deferred_thermo -->
+<g id="proc~~efp_regularize~~CalledByGraph_edge26" class="edge">
+<title>proc~ocean_dyn_step_split&#45;&gt;proc~apply_deferred_thermo</title>
+<path fill="none" stroke="#ff0000" d="M236.33,-268.79C247.78,-267.42 259.88,-265.97 271.76,-264.54"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="272.04,-268.04 281.55,-263.37 271.21,-261.09 272.04,-268.04"/>
+</g>
+<!-- proc~run_stage -->
+<g id="proc~~efp_regularize~~CalledByGraph_node19" class="node">
+<title>proc~run_stage</title>
+<g id="a_proc~~efp_regularize~~CalledByGraph_node19"><a xlink:href="../proc/run_stage.html" xlink:title="run_stage">
+<polygon fill="#d9534f" stroke="#d9534f" points="383.31,-225.27 319.29,-225.27 319.29,-201 383.31,-201 383.31,-225.27"/>
+<text xml:space="preserve" text-anchor="middle" x="351.3" y="-209.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage</text>
+</a>
+</g>
+</g>
+<!-- proc~run_stage&#45;&gt;proc~apply_sw_and_restore -->
+<g id="proc~~efp_regularize~~CalledByGraph_edge21" class="edge">
+<title>proc~run_stage&#45;&gt;proc~apply_sw_and_restore</title>
+<path fill="none" stroke="#ff0000" d="M383.5,-220.72C406.42,-226.3 438.34,-234.07 466.45,-240.9"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="465.4,-244.25 475.94,-243.21 467.06,-237.45 465.4,-244.25"/>
+</g>
+<!-- proc~engine_step -->
+<g id="proc~~efp_regularize~~CalledByGraph_node20" class="node">
+<title>proc~engine_step</title>
+<g id="a_proc~~efp_regularize~~CalledByGraph_node20"><a xlink:href="../proc/engine_step.html" xlink:title="engine_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="76.02,-288.27 0,-288.27 0,-264 76.02,-264 76.02,-288.27"/>
+<text xml:space="preserve" text-anchor="middle" x="38.01" y="-272.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~ocean_dyn_step_split -->
+<g id="proc~~efp_regularize~~CalledByGraph_edge27" class="edge">
+<title>proc~engine_step&#45;&gt;proc~ocean_dyn_step_split</title>
+<path fill="none" stroke="#00ffff" d="M76.34,-276.13C83.9,-276.13 92.1,-276.13 100.41,-276.13"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="100.25,-279.64 110.25,-276.14 100.25,-272.64 100.25,-279.64"/>
+</g>
+<!-- proc~ocean_dyn_step -->
+<g id="proc~~efp_regularize~~CalledByGraph_node21" class="node">
+<title>proc~ocean_dyn_step</title>
+<g id="a_proc~~efp_regularize~~CalledByGraph_node21"><a xlink:href="../proc/ocean_dyn_step.html" xlink:title="ocean_dyn_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="222.54,-225.27 125.52,-225.27 125.52,-201 222.54,-201 222.54,-225.27"/>
+<text xml:space="preserve" text-anchor="middle" x="174.03" y="-209.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step&#45;&gt;proc~run_stage -->
+<g id="proc~~efp_regularize~~CalledByGraph_edge28" class="edge">
+<title>proc~ocean_dyn_step&#45;&gt;proc~run_stage</title>
+<path fill="none" stroke="#7f00ff" d="M222.92,-213.13C249.47,-213.13 282.18,-213.13 307.81,-213.13"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="307.53,-216.64 317.53,-213.14 307.53,-209.64 307.53,-216.64"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocefp_regularizeCalledByGraph = svgPanZoom('#procefp_regularizeCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n~39"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>n</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-positive"></span>
+              logical,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>positive</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">pure subroutine </span><span class="n">efp_regularize</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! `efp_carry` plus: force every bin to share the overall sign, so a</span>
+<span class="w">      </span><span class="c">!! single well-conditioned FP accumulation (`efp_to_real`) can form</span>
+<span class="w">      </span><span class="c">!! `Sum pr(n)*e(n)` without alternating-sign cancellation error.</span>
+<span class="w">      </span><span class="c">!! Mirrors MOM6 `regularize_ints`.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! After `efp_carry`, bins 2..6 satisfy `|e(n)| &lt; 2**P`.  The overall</span>
+<span class="w">      </span><span class="c">!! sign is that of the first (most-significant) nonzero bin.  A</span>
+<span class="w">      </span><span class="c">!! single descending pass then borrows/carries any bin of the</span>
+<span class="w">      </span><span class="c">!! opposite sign into `[0, 2**P)` (or `(-2**P, 0]`) from its</span>
+<span class="w">      </span><span class="c">!! next-more-significant neighbour -- exact, since</span>
+<span class="w">      </span><span class="c">!! `e(n-1)*2**P + e(n)` is invariant under `(e(n-1) -+ 1, e(n) +- 2**P)`</span>
+<span class="w">      </span><span class="c">!! -- and cascades: a neighbour driven negative/positive by one</span>
+<span class="w">      </span><span class="c">!! borrow is itself fixed on the next loop iteration.</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">(</span><span class="n">int64</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">e</span><span class="p">(</span><span class="n">EFP_DIGITS</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">n</span>
+<span class="w">      </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">positive</span>
+
+<span class="w">      </span><span class="k">call </span><span class="n">efp_carry</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
+
+<span class="w">      </span><span class="n">positive</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">true</span><span class="p">.</span>
+<span class="w">      </span><span class="k">do </span><span class="n">n</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">EFP_DIGITS</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">e</span><span class="p">(</span><span class="n">n</span><span class="p">)</span><span class="w"> </span><span class="o">/=</span><span class="w"> </span><span class="mi">0_int64</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            </span><span class="n">positive</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">e</span><span class="p">(</span><span class="n">n</span><span class="p">)</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">0_int64</span>
+<span class="w">            </span><span class="k">exit</span>
+<span class="k">         end if</span>
+<span class="k">      end do</span>
+
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="n">positive</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         do </span><span class="n">n</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">EFP_DIGITS</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="o">-</span><span class="mi">1</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">e</span><span class="p">(</span><span class="n">n</span><span class="p">)</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mi">0_int64</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               </span><span class="n">e</span><span class="p">(</span><span class="n">n</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">e</span><span class="p">(</span><span class="n">n</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">EFP_PREC_I64</span>
+<span class="w">               </span><span class="n">e</span><span class="p">(</span><span class="n">n</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">e</span><span class="p">(</span><span class="n">n</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1_int64</span>
+<span class="w">            </span><span class="k">end if</span>
+<span class="k">         end do</span>
+<span class="k">      else</span>
+<span class="k">         do </span><span class="n">n</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">EFP_DIGITS</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="o">-</span><span class="mi">1</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">e</span><span class="p">(</span><span class="n">n</span><span class="p">)</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">0_int64</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               </span><span class="n">e</span><span class="p">(</span><span class="n">n</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">e</span><span class="p">(</span><span class="n">n</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">EFP_PREC_I64</span>
+<span class="w">               </span><span class="n">e</span><span class="p">(</span><span class="n">n</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">e</span><span class="p">(</span><span class="n">n</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1_int64</span>
+<span class="w">            </span><span class="k">end if</span>
+<span class="k">         end do</span>
+<span class="k">      end if</span>
+<span class="k">   end subroutine </span><span class="n">efp_regularize</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-11-13 23:21 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

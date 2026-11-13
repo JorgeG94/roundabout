@@ -1,0 +1,792 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>cavity_safe_state &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>cavity_safe_state
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.0% of total for procedures.">11 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_cavity_melt.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_cavity_melt.f90.html'>rdb_ocean_cavity_melt.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ocean_cavity_melt.html'>rdb_ocean_cavity_melt</a></li>
+            <li class="breadcrumb-item active" aria-current="page">cavity_safe_state</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/cavity_safe_state.html#src">cavity_safe_state</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>private pure subroutine cavity_safe_state(eos, S_w, p_b, T_b, S_b, m_mass)  
+</h2>
+    
+
+    <p>The documented SAFE STATE returned on every non-OK status: zero
+melt, interface salinity equal to the far field, interface
+temperature on the liquidus there.  <code>m_mass</code> is EXACTLY zero, so
+a failed column contributes nothing to a heat/salt budget rather
+than contributing a plausible wrong number.</p>
+<p><code>T_b</code>/<code>S_b</code> inherit whatever <code>S_w</code>/<code>p_b</code> were: if the caller
+handed in a NaN, a NaN comes back.  That is deliberate — this
+routine must not INVENT a finite interface state out of
+corrupted input.  The melt flux, the one output that would
+silently poison a budget, is the one pinned to zero.</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-eos~19"></span>
+              type(<a href='../type/eos_t.html'>eos_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>eos</strong></td>
+            <td>
+                <p>Shared EOS handle — carries the liquidus coefficient set.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-s_w~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>S_w</strong></td>
+            <td>
+                <p>Far-field salinity (g/kg).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-p_b"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>p_b</strong></td>
+            <td>
+                <p>Interface pressure (Pa).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-t_b~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>T_b</strong></td>
+            <td>
+                <p>Interface temperature (degC) = <code>T_f(S_w, p_b)</code>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-s_b~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>S_b</strong></td>
+            <td>
+                <p>Interface salinity (g/kg) = <code>S_w</code>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-m_mass~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>m_mass</strong></td>
+            <td>
+                <p>Melt mass flux (kg/m^2/s) = exactly 0.</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~cavity_safe_state~~CallsGraph Pages: 1 -->
+<svg id="proccavity_safe_stateCallsGraph" width="390pt" height="32pt"
+ viewBox="0.00 0.00 390.00 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~cavity_safe_state~~CallsGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 28.27)">
+<title>proc~~cavity_safe_state~~CallsGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 385.81,-28.27 385.81,4 -4,4"/>
+<!-- proc~cavity_safe_state -->
+<g id="proc~~cavity_safe_state~~CallsGraph_node1" class="node">
+<title>proc~cavity_safe_state</title>
+<polygon fill="none" stroke="black" points="102.27,-24.27 0,-24.27 0,0 102.27,0 102.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="51.13" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">cavity_safe_state</text>
+</g>
+<!-- proc~eos_freezing_point -->
+<g id="proc~~cavity_safe_state~~CallsGraph_node2" class="node">
+<title>proc~eos_freezing_point</title>
+<g id="a_proc~~cavity_safe_state~~CallsGraph_node2"><a xlink:href="../proc/eos_freezing_point.html" xlink:title="eos_freezing_point">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="248.79,-24.27 138.27,-24.27 138.27,0 248.79,0 248.79,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="193.53" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">eos_freezing_point</text>
+</a>
+</g>
+</g>
+<!-- proc~cavity_safe_state&#45;&gt;proc~eos_freezing_point -->
+<g id="proc~~cavity_safe_state~~CallsGraph_edge1" class="edge">
+<title>proc~cavity_safe_state&#45;&gt;proc~eos_freezing_point</title>
+<path fill="none" stroke="#ff0000" d="M102.42,-12.13C110.23,-12.13 118.4,-12.13 126.49,-12.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="126.32,-15.64 136.32,-12.14 126.32,-8.64 126.32,-15.64"/>
+</g>
+<!-- proc~ct_freezing_poly -->
+<g id="proc~~cavity_safe_state~~CallsGraph_node3" class="node">
+<title>proc~ct_freezing_poly</title>
+<g id="a_proc~~cavity_safe_state~~CallsGraph_node3"><a xlink:href="../proc/ct_freezing_poly.html" xlink:title="ct_freezing_poly">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="381.81,-24.27 284.79,-24.27 284.79,0 381.81,0 381.81,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="333.3" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ct_freezing_poly</text>
+</a>
+</g>
+</g>
+<!-- proc~eos_freezing_point&#45;&gt;proc~ct_freezing_poly -->
+<g id="proc~~cavity_safe_state~~CallsGraph_edge2" class="edge">
+<title>proc~eos_freezing_point&#45;&gt;proc~ct_freezing_poly</title>
+<path fill="none" stroke="#ff0000" d="M248.98,-12.13C256.86,-12.13 265.01,-12.13 272.98,-12.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="272.98,-15.64 282.98,-12.14 272.98,-8.64 272.98,-15.64"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~cavity_safe_state~~CalledByGraph Pages: 1 -->
+<svg id="proccavity_safe_stateCalledByGraph" width="641pt" height="98pt"
+ viewBox="0.00 0.00 641.00 98.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~cavity_safe_state~~CalledByGraph" class="graph" transform="scale(0.504363 0.504363) rotate(0) translate(4 191.27)">
+<title>proc~~cavity_safe_state~~CalledByGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-191.27 1266.91,-191.27 1266.91,4 -4,4"/>
+<!-- proc~cavity_safe_state -->
+<g id="proc~~cavity_safe_state~~CalledByGraph_node1" class="node">
+<title>proc~cavity_safe_state</title>
+<polygon fill="none" stroke="black" points="1262.91,-86.27 1160.64,-86.27 1160.64,-62 1262.91,-62 1262.91,-86.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1211.77" y="-70.53" font-family="Helvetica,sans-Serif" font-size="10.50">cavity_safe_state</text>
+</g>
+<!-- proc~cavity_solve_melt_f -->
+<g id="proc~~cavity_safe_state~~CalledByGraph_node2" class="node">
+<title>proc~cavity_solve_melt_f</title>
+<g id="a_proc~~cavity_safe_state~~CalledByGraph_node2"><a xlink:href="../proc/cavity_solve_melt_f.html" xlink:title="cavity_solve_melt_f">
+<polygon fill="#d9534f" stroke="#d9534f" points="822.6,-124.27 708.33,-124.27 708.33,-100 822.6,-100 822.6,-124.27"/>
+<text xml:space="preserve" text-anchor="middle" x="765.46" y="-108.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cavity_solve_melt_f</text>
+</a>
+</g>
+</g>
+<!-- proc~cavity_solve_melt_f&#45;&gt;proc~cavity_safe_state -->
+<g id="proc~~cavity_safe_state~~CalledByGraph_edge1" class="edge">
+<title>proc~cavity_solve_melt_f&#45;&gt;proc~cavity_safe_state</title>
+<path fill="none" stroke="#ff0000" d="M822.82,-114.5C893.83,-116.41 1019.3,-116.19 1124.64,-97.13 1135.61,-95.15 1147.22,-92.46 1158.24,-89.63"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1158.8,-93.1 1167.57,-87.15 1157,-86.33 1158.8,-93.1"/>
+</g>
+<!-- proc~cavity_state_at_x -->
+<g id="proc~~cavity_safe_state~~CalledByGraph_node3" class="node">
+<title>proc~cavity_state_at_x</title>
+<g id="a_proc~~cavity_safe_state~~CalledByGraph_node3"><a xlink:href="../proc/cavity_state_at_x.html" xlink:title="cavity_state_at_x">
+<polygon fill="#d9534f" stroke="#d9534f" points="960.12,-104.27 858.6,-104.27 858.6,-80 960.12,-80 960.12,-104.27"/>
+<text xml:space="preserve" text-anchor="middle" x="909.36" y="-88.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cavity_state_at_x</text>
+</a>
+</g>
+</g>
+<!-- proc~cavity_solve_melt_f&#45;&gt;proc~cavity_state_at_x -->
+<g id="proc~~cavity_safe_state~~CalledByGraph_edge7" class="edge">
+<title>proc~cavity_solve_melt_f&#45;&gt;proc~cavity_state_at_x</title>
+<path fill="none" stroke="#7fff00" d="M822.95,-104.17C830.94,-103.05 839.18,-101.89 847.24,-100.75"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="847.58,-104.24 856.99,-99.38 846.6,-97.31 847.58,-104.24"/>
+</g>
+<!-- proc~cavity_state_at_x&#45;&gt;proc~cavity_safe_state -->
+<g id="proc~~cavity_safe_state~~CalledByGraph_edge2" class="edge">
+<title>proc~cavity_state_at_x&#45;&gt;proc~cavity_safe_state</title>
+<path fill="none" stroke="#ff0000" d="M960.3,-89.14C1012.13,-86.04 1093.25,-81.18 1149.05,-77.83"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1148.93,-81.35 1158.7,-77.26 1148.51,-74.36 1148.93,-81.35"/>
+</g>
+<!-- proc~cavity_three_equation -->
+<g id="proc~~cavity_safe_state~~CalledByGraph_node4" class="node">
+<title>proc~cavity_three_equation</title>
+<g id="a_proc~~cavity_safe_state~~CalledByGraph_node4"><a xlink:href="../proc/cavity_three_equation.html" xlink:title="cavity_three_equation">
+<polygon fill="#d9534f" stroke="#d9534f" points="1124.64,-66.27 996.12,-66.27 996.12,-42 1124.64,-42 1124.64,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1060.38" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cavity_three_equation</text>
+</a>
+</g>
+</g>
+<!-- proc~cavity_state_at_x&#45;&gt;proc~cavity_three_equation -->
+<g id="proc~~cavity_safe_state~~CalledByGraph_edge8" class="edge">
+<title>proc~cavity_state_at_x&#45;&gt;proc~cavity_three_equation</title>
+<path fill="none" stroke="#00ffff" d="M959.57,-79.59C972.22,-76.36 985.97,-72.85 999.11,-69.5"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="999.68,-72.97 1008.5,-67.11 997.95,-66.19 999.68,-72.97"/>
+</g>
+<!-- proc~cavity_three_equation&#45;&gt;proc~cavity_safe_state -->
+<g id="proc~~cavity_safe_state~~CalledByGraph_edge3" class="edge">
+<title>proc~cavity_three_equation&#45;&gt;proc~cavity_safe_state</title>
+<path fill="none" stroke="#ff0000" d="M1124.74,-62.62C1132.84,-63.7 1141.14,-64.81 1149.21,-65.89"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1148.58,-69.34 1158.95,-67.2 1149.51,-62.4 1148.58,-69.34"/>
+</g>
+<!-- proc~cavity_two_equation -->
+<g id="proc~~cavity_safe_state~~CalledByGraph_node5" class="node">
+<title>proc~cavity_two_equation</title>
+<g id="a_proc~~cavity_safe_state~~CalledByGraph_node5"><a xlink:href="../proc/cavity_two_equation.html" xlink:title="cavity_two_equation">
+<polygon fill="#d9534f" stroke="#d9534f" points="1120.14,-24.27 1000.62,-24.27 1000.62,0 1120.14,0 1120.14,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1060.38" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cavity_two_equation</text>
+</a>
+</g>
+</g>
+<!-- proc~cavity_two_equation&#45;&gt;proc~cavity_safe_state -->
+<g id="proc~~cavity_safe_state~~CalledByGraph_edge4" class="edge">
+<title>proc~cavity_two_equation&#45;&gt;proc~cavity_safe_state</title>
+<path fill="none" stroke="#ff0000" d="M1101.81,-24.73C1109.45,-27.34 1117.34,-30.2 1124.64,-33.13 1141.99,-40.11 1160.8,-48.92 1176.4,-56.57"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1174.76,-59.67 1185.27,-60.98 1177.87,-53.4 1174.76,-59.67"/>
+</g>
+<!-- proc~cavity_melt_point_gamma_f -->
+<g id="proc~~cavity_safe_state~~CalledByGraph_node6" class="node">
+<title>proc~cavity_melt_point_gamma_f</title>
+<g id="a_proc~~cavity_safe_state~~CalledByGraph_node6"><a xlink:href="../proc/cavity_melt_point_gamma_f.html" xlink:title="cavity_melt_point_gamma_f">
+<polygon fill="#d9534f" stroke="#d9534f" points="672.33,-145.27 512.31,-145.27 512.31,-121 672.33,-121 672.33,-145.27"/>
+<text xml:space="preserve" text-anchor="middle" x="592.32" y="-129.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cavity_melt_point_gamma_f</text>
+</a>
+</g>
+</g>
+<!-- proc~cavity_melt_point_gamma_f&#45;&gt;proc~cavity_solve_melt_f -->
+<g id="proc~~cavity_safe_state~~CalledByGraph_edge5" class="edge">
+<title>proc~cavity_melt_point_gamma_f&#45;&gt;proc~cavity_solve_melt_f</title>
+<path fill="none" stroke="#ff0000" d="M672.63,-123.4C680.62,-122.42 688.68,-121.43 696.54,-120.47"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="696.86,-123.96 706.36,-119.26 696.01,-117.01 696.86,-123.96"/>
+</g>
+<!-- proc~cavity_solve_melt -->
+<g id="proc~~cavity_safe_state~~CalledByGraph_node7" class="node">
+<title>proc~cavity_solve_melt</title>
+<g id="a_proc~~cavity_safe_state~~CalledByGraph_node7"><a xlink:href="../proc/cavity_solve_melt.html" xlink:title="cavity_solve_melt">
+<polygon fill="#d9534f" stroke="#d9534f" points="644.95,-103.27 539.68,-103.27 539.68,-79 644.95,-79 644.95,-103.27"/>
+<text xml:space="preserve" text-anchor="middle" x="592.32" y="-87.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cavity_solve_melt</text>
+</a>
+</g>
+</g>
+<!-- proc~cavity_solve_melt&#45;&gt;proc~cavity_solve_melt_f -->
+<g id="proc~~cavity_safe_state~~CalledByGraph_edge6" class="edge">
+<title>proc~cavity_solve_melt&#45;&gt;proc~cavity_solve_melt_f</title>
+<path fill="none" stroke="#ff0000" d="M645.13,-97.49C661.44,-99.49 679.69,-101.73 696.91,-103.85"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="696.2,-107.29 706.55,-105.03 697.06,-100.34 696.2,-107.29"/>
+</g>
+<!-- proc~cavity_melt_columns_2d -->
+<g id="proc~~cavity_safe_state~~CalledByGraph_node8" class="node">
+<title>proc~cavity_melt_columns_2d</title>
+<g id="a_proc~~cavity_safe_state~~CalledByGraph_node8"><a xlink:href="../proc/cavity_melt_columns_2d.html" xlink:title="cavity_melt_columns_2d">
+<polygon fill="#d9534f" stroke="#d9534f" points="471.43,-187.27 330.16,-187.27 330.16,-163 471.43,-163 471.43,-187.27"/>
+<text xml:space="preserve" text-anchor="middle" x="400.8" y="-171.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cavity_melt_columns_2d</text>
+</a>
+</g>
+</g>
+<!-- proc~cavity_melt_columns_2d&#45;&gt;proc~cavity_melt_point_gamma_f -->
+<g id="proc~~cavity_safe_state~~CalledByGraph_edge9" class="edge">
+<title>proc~cavity_melt_columns_2d&#45;&gt;proc~cavity_melt_point_gamma_f</title>
+<path fill="none" stroke="#ff0000" d="M458.66,-162.53C478.99,-158.03 502.11,-152.9 523.29,-148.21"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="524.01,-151.64 533.02,-146.05 522.5,-144.8 524.01,-151.64"/>
+</g>
+<!-- proc~cavity_melt_point -->
+<g id="proc~~cavity_safe_state~~CalledByGraph_node9" class="node">
+<title>proc~cavity_melt_point</title>
+<g id="a_proc~~cavity_safe_state~~CalledByGraph_node9"><a xlink:href="../proc/cavity_melt_point.html" xlink:title="cavity_melt_point">
+<polygon fill="#d9534f" stroke="#d9534f" points="453.06,-103.27 348.54,-103.27 348.54,-79 453.06,-79 453.06,-103.27"/>
+<text xml:space="preserve" text-anchor="middle" x="400.8" y="-87.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cavity_melt_point</text>
+</a>
+</g>
+</g>
+<!-- proc~cavity_melt_point&#45;&gt;proc~cavity_solve_melt -->
+<g id="proc~~cavity_safe_state~~CalledByGraph_edge11" class="edge">
+<title>proc~cavity_melt_point&#45;&gt;proc~cavity_solve_melt</title>
+<path fill="none" stroke="#00ffff" d="M453.09,-91.13C476.18,-91.13 503.67,-91.13 528.03,-91.13"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="527.82,-94.64 537.82,-91.14 527.82,-87.64 527.82,-94.64"/>
+</g>
+<!-- proc~cavity_melt_point_gamma -->
+<g id="proc~~cavity_safe_state~~CalledByGraph_node10" class="node">
+<title>proc~cavity_melt_point_gamma</title>
+<g id="a_proc~~cavity_safe_state~~CalledByGraph_node10"><a xlink:href="../proc/cavity_melt_point_gamma.html" xlink:title="cavity_melt_point_gamma">
+<polygon fill="#d9534f" stroke="#d9534f" points="476.31,-145.27 325.29,-145.27 325.29,-121 476.31,-121 476.31,-145.27"/>
+<text xml:space="preserve" text-anchor="middle" x="400.8" y="-129.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cavity_melt_point_gamma</text>
+</a>
+</g>
+</g>
+<!-- proc~cavity_melt_point_gamma&#45;&gt;proc~cavity_melt_point_gamma_f -->
+<g id="proc~~cavity_safe_state~~CalledByGraph_edge10" class="edge">
+<title>proc~cavity_melt_point_gamma&#45;&gt;proc~cavity_melt_point_gamma_f</title>
+<path fill="none" stroke="#ff0000" d="M476.7,-133.13C484.58,-133.13 492.65,-133.13 500.68,-133.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="500.46,-136.64 510.46,-133.14 500.46,-129.64 500.46,-136.64"/>
+</g>
+<!-- proc~cavity_melt_columns -->
+<g id="proc~~cavity_safe_state~~CalledByGraph_node11" class="node">
+<title>proc~cavity_melt_columns</title>
+<g id="a_proc~~cavity_safe_state~~CalledByGraph_node11"><a xlink:href="../proc/cavity_melt_columns.html" xlink:title="cavity_melt_columns">
+<polygon fill="#d9534f" stroke="#d9534f" points="283.66,-103.27 161.14,-103.27 161.14,-79 283.66,-79 283.66,-103.27"/>
+<text xml:space="preserve" text-anchor="middle" x="222.4" y="-87.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cavity_melt_columns</text>
+</a>
+</g>
+</g>
+<!-- proc~cavity_melt_columns&#45;&gt;proc~cavity_melt_point -->
+<g id="proc~~cavity_safe_state~~CalledByGraph_edge13" class="edge">
+<title>proc~cavity_melt_columns&#45;&gt;proc~cavity_melt_point</title>
+<path fill="none" stroke="#00ff00" d="M284.11,-91.13C301.2,-91.13 319.81,-91.13 337.02,-91.13"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="336.57,-94.64 346.57,-91.14 336.57,-87.64 336.57,-94.64"/>
+</g>
+<!-- proc~ocean_cavity_flux_step -->
+<g id="proc~~cavity_safe_state~~CalledByGraph_node12" class="node">
+<title>proc~ocean_cavity_flux_step</title>
+<g id="a_proc~~cavity_safe_state~~CalledByGraph_node12"><a xlink:href="../proc/ocean_cavity_flux_step.html" xlink:title="ocean_cavity_flux_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="289.29,-187.27 155.52,-187.27 155.52,-163 289.29,-163 289.29,-187.27"/>
+<text xml:space="preserve" text-anchor="middle" x="222.4" y="-171.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_cavity_flux_step</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_cavity_flux_step&#45;&gt;proc~cavity_melt_columns_2d -->
+<g id="proc~~cavity_safe_state~~CalledByGraph_edge12" class="edge">
+<title>proc~ocean_cavity_flux_step&#45;&gt;proc~cavity_melt_columns_2d</title>
+<path fill="none" stroke="#ff0000" d="M289.59,-175.13C299.01,-175.13 308.78,-175.13 318.44,-175.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="318.19,-178.64 328.19,-175.14 318.19,-171.64 318.19,-178.64"/>
+</g>
+<!-- proc~engine_step_finalize -->
+<g id="proc~~cavity_safe_state~~CalledByGraph_node13" class="node">
+<title>proc~engine_step_finalize</title>
+<g id="a_proc~~cavity_safe_state~~CalledByGraph_node13"><a xlink:href="../proc/engine_step_finalize.html" xlink:title="engine_step_finalize">
+<polygon fill="#d9534f" stroke="#d9534f" points="119.52,-187.27 0,-187.27 0,-163 119.52,-163 119.52,-187.27"/>
+<text xml:space="preserve" text-anchor="middle" x="59.76" y="-171.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step_finalize</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_step_finalize&#45;&gt;proc~ocean_cavity_flux_step -->
+<g id="proc~~cavity_safe_state~~CalledByGraph_edge14" class="edge">
+<title>proc~engine_step_finalize&#45;&gt;proc~ocean_cavity_flux_step</title>
+<path fill="none" stroke="#00ffff" d="M119.67,-175.13C127.52,-175.13 135.66,-175.13 143.77,-175.13"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="143.67,-178.64 153.67,-175.14 143.67,-171.64 143.67,-178.64"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panproccavity_safe_stateCalledByGraph = svgPanZoom('#proccavity_safe_stateCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">pure subroutine </span><span class="n">cavity_safe_state</span><span class="p">(</span><span class="n">eos</span><span class="p">,</span><span class="w"> </span><span class="n">S_w</span><span class="p">,</span><span class="w"> </span><span class="n">p_b</span><span class="p">,</span><span class="w"> </span><span class="n">T_b</span><span class="p">,</span><span class="w"> </span><span class="n">S_b</span><span class="p">,</span><span class="w"> </span><span class="n">m_mass</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! The documented SAFE STATE returned on every non-OK status: zero</span>
+<span class="w">      </span><span class="c">!! melt, interface salinity equal to the far field, interface</span>
+<span class="w">      </span><span class="c">!! temperature on the liquidus there.  `m_mass` is EXACTLY zero, so</span>
+<span class="w">      </span><span class="c">!! a failed column contributes nothing to a heat/salt budget rather</span>
+<span class="w">      </span><span class="c">!! than contributing a plausible wrong number.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! `T_b`/`S_b` inherit whatever `S_w`/`p_b` were: if the caller</span>
+<span class="w">      </span><span class="c">!! handed in a NaN, a NaN comes back.  That is deliberate — this</span>
+<span class="w">      </span><span class="c">!! routine must not INVENT a finite interface state out of</span>
+<span class="w">      </span><span class="c">!! corrupted input.  The melt flux, the one output that would</span>
+<span class="w">      </span><span class="c">!! silently poison a budget, is the one pinned to zero.</span>
+<span class="w">      </span><span class="c">!$acc routine seq</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">eos_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">eos</span>
+<span class="w">         </span><span class="c">!! Shared EOS handle — carries the liquidus coefficient set.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">S_w</span>
+<span class="w">         </span><span class="c">!! Far-field salinity (g/kg).</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">p_b</span>
+<span class="w">         </span><span class="c">!! Interface pressure (Pa).</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">T_b</span>
+<span class="w">         </span><span class="c">!! Interface temperature (degC) = `T_f(S_w, p_b)`.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">S_b</span>
+<span class="w">         </span><span class="c">!! Interface salinity (g/kg) = `S_w`.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">m_mass</span>
+<span class="w">         </span><span class="c">!! Melt mass flux (kg/m^2/s) = exactly 0.</span>
+<span class="w">      </span><span class="n">T_b</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">eos_freezing_point</span><span class="p">(</span><span class="n">eos</span><span class="p">,</span><span class="w"> </span><span class="n">S_w</span><span class="p">,</span><span class="w"> </span><span class="n">p_b</span><span class="p">)</span>
+<span class="w">      </span><span class="n">S_b</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">S_w</span>
+<span class="w">      </span><span class="n">m_mass</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">   </span><span class="k">end subroutine </span><span class="n">cavity_safe_state</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-11-13 23:21 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

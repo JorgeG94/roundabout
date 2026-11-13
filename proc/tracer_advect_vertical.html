@@ -1,0 +1,862 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>tracer_advect_vertical &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>tracer_advect_vertical
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.0% of total for procedures.">26 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_vertical_advection.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_vertical_advection.f90.html'>rdb_ocean_vertical_advection.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ocean_vertical_advection.html'>rdb_ocean_vertical_advection</a></li>
+            <li class="breadcrumb-item active" aria-current="page">tracer_advect_vertical</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/tracer_advect_vertical.html#variable-it~33">it</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/tracer_advect_vertical.html#src">tracer_advect_vertical</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>public  subroutine tracer_advect_vertical(grid, this, ms, dt, active)  
+</h2>
+    
+
+    <p>Apply first-order upwind-in-z vertical advection to every
+registered tracer, then update <code>h_layer</code> by the same
+vertical mass-flux divergence.  Updating h is what makes
+the kernel CWC-consistent — a uniform <code>c</code> stays
+uniform regardless of how divergent the w field is.</p>
+<p>One shared <code>h⁻ → h⁺</code> pair: <code>h_layer</code> is snapshotted into
+<code>this%h_pair_prev</code> (<code>h⁻</code>), updated by the vertical mass-flux
+divergence (<code>h⁺</code>), and then every tracer takes the pair.  The tracer
+kernel reads only <code>h⁻</code> (it recomputes <code>h⁺</code> from the same fluxes), so the order is bit-identical
+to the old &ldquo;tracers first, then h&rdquo; one.</p>
+<p>Eulerian-z mode: the h update here exactly cancels the
+horizontal h update produced by
+<code>continuity_tracer_step_split</code> (both consume
+the same <code>flux_h_layer</code> — the total horizontal divergence
+summed over both substeps), so <code>h_layer</code> stays at its
+initial z-coordinate values.</p>
+<p>Per-tracer <code>do_vertical_exchange</code> gate lets diagnostic /
+forced tracers opt out without affecting horizontal
+advection.</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-grid~134"></span>
+              type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>grid</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-this~208"></span>
+              type(<a href='../type/ocean_vertical_advection_t.html'>ocean_vertical_advection_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>this</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ms~70"></span>
+              type(<a href='../type/multilayer_state_t.html'>multilayer_state_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ms</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dt~83"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dt</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-active~6"></span>
+              logical,
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>active</strong></td>
+            <td>
+                <p>Optional gate (thermo cadence).  Absent ⇒ kernel runs;
+present-and-false ⇒ early return.</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~tracer_advect_vertical~~CallsGraph Pages: 1 -->
+<svg id="proctracer_advect_verticalCallsGraph" width="448pt" height="116pt"
+ viewBox="0.00 0.00 448.00 116.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~tracer_advect_vertical~~CallsGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 112.27)">
+<title>proc~~tracer_advect_vertical~~CallsGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-112.27 444.04,-112.27 444.04,4 -4,4"/>
+<!-- proc~tracer_advect_vertical -->
+<g id="proc~~tracer_advect_vertical~~CallsGraph_node1" class="node">
+<title>proc~tracer_advect_vertical</title>
+<polygon fill="none" stroke="black" points="130.02,-66.27 0,-66.27 0,-42 130.02,-42 130.02,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="65.01" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50">tracer_advect_vertical</text>
+</g>
+<!-- proc~apply_w_to_h_layer -->
+<g id="proc~~tracer_advect_vertical~~CallsGraph_node2" class="node">
+<title>proc~apply_w_to_h_layer</title>
+<g id="a_proc~~tracer_advect_vertical~~CallsGraph_node2"><a xlink:href="../proc/apply_w_to_h_layer.html" xlink:title="apply_w_to_h_layer">
+<polygon fill="#d9534f" stroke="#d9534f" points="315.16,-108.27 200.89,-108.27 200.89,-84 315.16,-84 315.16,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="258.03" y="-92.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">apply_w_to_h_layer</text>
+</a>
+</g>
+</g>
+<!-- proc~tracer_advect_vertical&#45;&gt;proc~apply_w_to_h_layer -->
+<g id="proc~~tracer_advect_vertical~~CallsGraph_edge1" class="edge">
+<title>proc~tracer_advect_vertical&#45;&gt;proc~apply_w_to_h_layer</title>
+<path fill="none" stroke="#ff0000" d="M123.32,-66.74C144.1,-71.3 167.76,-76.51 189.34,-81.25"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="188.42,-84.63 198.94,-83.36 189.92,-77.8 188.42,-84.63"/>
+</g>
+<!-- proc~copy_h_before -->
+<g id="proc~~tracer_advect_vertical~~CallsGraph_node3" class="node">
+<title>proc~copy_h_before</title>
+<g id="a_proc~~tracer_advect_vertical~~CallsGraph_node3"><a xlink:href="../proc/copy_h_before.html" xlink:title="copy_h_before">
+<polygon fill="#d9534f" stroke="#d9534f" points="302.41,-66.27 213.64,-66.27 213.64,-42 302.41,-42 302.41,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="258.03" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">copy_h_before</text>
+</a>
+</g>
+</g>
+<!-- proc~tracer_advect_vertical&#45;&gt;proc~copy_h_before -->
+<g id="proc~~tracer_advect_vertical~~CallsGraph_edge2" class="edge">
+<title>proc~tracer_advect_vertical&#45;&gt;proc~copy_h_before</title>
+<path fill="none" stroke="#ff0000" d="M130.41,-54.13C153.66,-54.13 179.66,-54.13 202.02,-54.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="201.84,-57.64 211.84,-54.14 201.84,-50.64 201.84,-57.64"/>
+</g>
+<!-- proc~tracer_advect_vertical_one_impl -->
+<g id="proc~~tracer_advect_vertical~~CallsGraph_node4" class="node">
+<title>proc~tracer_advect_vertical_one_impl</title>
+<g id="a_proc~~tracer_advect_vertical~~CallsGraph_node4"><a xlink:href="../proc/tracer_advect_vertical_one_impl.html" xlink:title="tracer_advect_vertical_one_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="350.04,-24.27 166.02,-24.27 166.02,0 350.04,0 350.04,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="258.03" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">tracer_advect_vertical_one_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~tracer_advect_vertical&#45;&gt;proc~tracer_advect_vertical_one_impl -->
+<g id="proc~~tracer_advect_vertical~~CallsGraph_edge3" class="edge">
+<title>proc~tracer_advect_vertical&#45;&gt;proc~tracer_advect_vertical_one_impl</title>
+<path fill="none" stroke="#ff0000" d="M123.32,-41.53C143.91,-37.01 167.33,-31.86 188.76,-27.15"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="189.26,-30.62 198.28,-25.05 187.76,-23.78 189.26,-30.62"/>
+</g>
+<!-- local -->
+<g id="proc~~tracer_advect_vertical~~CallsGraph_node5" class="node">
+<title>local</title>
+<polygon fill="#777777" stroke="#777777" points="440.04,-24.27 386.04,-24.27 386.04,0 440.04,0 440.04,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="413.04" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">local</text>
+</g>
+<!-- proc~tracer_advect_vertical_one_impl&#45;&gt;local -->
+<g id="proc~~tracer_advect_vertical~~CallsGraph_edge4" class="edge">
+<title>proc~tracer_advect_vertical_one_impl&#45;&gt;local</title>
+<path fill="none" stroke="#0000ff" d="M350.25,-12.13C358.63,-12.13 366.77,-12.13 374.24,-12.13"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="374.22,-15.64 384.22,-12.14 374.22,-8.64 374.22,-15.64"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~tracer_advect_vertical~~CalledByGraph Pages: 1 -->
+<svg id="proctracer_advect_verticalCalledByGraph" width="641pt" height="78pt"
+ viewBox="0.00 0.00 641.00 78.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~tracer_advect_vertical~~CalledByGraph" class="graph" transform="scale(0.683631 0.683631) rotate(0) translate(4 110.27)">
+<title>proc~~tracer_advect_vertical~~CalledByGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-110.27 933.64,-110.27 933.64,4 -4,4"/>
+<!-- proc~tracer_advect_vertical -->
+<g id="proc~~tracer_advect_vertical~~CalledByGraph_node1" class="node">
+<title>proc~tracer_advect_vertical</title>
+<polygon fill="none" stroke="black" points="929.64,-66.27 799.62,-66.27 799.62,-42 929.64,-42 929.64,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="864.63" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50">tracer_advect_vertical</text>
+</g>
+<!-- proc~run_continuity_chain -->
+<g id="proc~~tracer_advect_vertical~~CalledByGraph_node2" class="node">
+<title>proc~run_continuity_chain</title>
+<g id="a_proc~~tracer_advect_vertical~~CalledByGraph_node2"><a xlink:href="../proc/run_continuity_chain.html" xlink:title="run_continuity_chain">
+<polygon fill="#d9534f" stroke="#d9534f" points="763.62,-24.27 641.85,-24.27 641.85,0 763.62,0 763.62,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="702.73" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_continuity_chain</text>
+</a>
+</g>
+</g>
+<!-- proc~run_continuity_chain&#45;&gt;proc~tracer_advect_vertical -->
+<g id="proc~~tracer_advect_vertical~~CalledByGraph_edge1" class="edge">
+<title>proc~run_continuity_chain&#45;&gt;proc~tracer_advect_vertical</title>
+<path fill="none" stroke="#ff0000" d="M751.71,-24.74C768.47,-29.14 787.47,-34.13 805,-38.73"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="803.67,-42 814.23,-41.16 805.44,-35.23 803.67,-42"/>
+</g>
+<!-- proc~run_gm_step -->
+<g id="proc~~tracer_advect_vertical~~CalledByGraph_node3" class="node">
+<title>proc~run_gm_step</title>
+<g id="a_proc~~tracer_advect_vertical~~CalledByGraph_node3"><a xlink:href="../proc/run_gm_step.html" xlink:title="run_gm_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="742.62,-66.27 662.85,-66.27 662.85,-42 742.62,-42 742.62,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="702.73" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_gm_step</text>
+</a>
+</g>
+</g>
+<!-- proc~run_gm_step&#45;&gt;proc~tracer_advect_vertical -->
+<g id="proc~~tracer_advect_vertical~~CalledByGraph_edge2" class="edge">
+<title>proc~run_gm_step&#45;&gt;proc~tracer_advect_vertical</title>
+<path fill="none" stroke="#ff0000" d="M742.85,-54.13C756.54,-54.13 772.41,-54.13 788.06,-54.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="787.87,-57.64 797.87,-54.14 787.87,-50.64 787.87,-57.64"/>
+</g>
+<!-- proc~run_stage -->
+<g id="proc~~tracer_advect_vertical~~CalledByGraph_node4" class="node">
+<title>proc~run_stage</title>
+<g id="a_proc~~tracer_advect_vertical~~CalledByGraph_node4"><a xlink:href="../proc/run_stage.html" xlink:title="run_stage">
+<polygon fill="#d9534f" stroke="#d9534f" points="592.35,-106.27 528.33,-106.27 528.33,-82 592.35,-82 592.35,-106.27"/>
+<text xml:space="preserve" text-anchor="middle" x="560.34" y="-90.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage</text>
+</a>
+</g>
+</g>
+<!-- proc~run_stage&#45;&gt;proc~tracer_advect_vertical -->
+<g id="proc~~tracer_advect_vertical~~CalledByGraph_edge3" class="edge">
+<title>proc~run_stage&#45;&gt;proc~tracer_advect_vertical</title>
+<path fill="none" stroke="#ff0000" d="M592.66,-92.3C632.53,-89.71 703.46,-84.25 763.62,-75.13 774.74,-73.45 786.48,-71.31 797.85,-69.05"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="798.49,-72.49 807.59,-67.06 797.09,-65.64 798.49,-72.49"/>
+</g>
+<!-- proc~ocean_dyn_step -->
+<g id="proc~~tracer_advect_vertical~~CalledByGraph_node5" class="node">
+<title>proc~ocean_dyn_step</title>
+<g id="a_proc~~tracer_advect_vertical~~CalledByGraph_node5"><a xlink:href="../proc/ocean_dyn_step.html" xlink:title="ocean_dyn_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="465.33,-106.27 368.31,-106.27 368.31,-82 465.33,-82 465.33,-106.27"/>
+<text xml:space="preserve" text-anchor="middle" x="416.82" y="-90.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step&#45;&gt;proc~run_stage -->
+<g id="proc~~tracer_advect_vertical~~CalledByGraph_edge6" class="edge">
+<title>proc~ocean_dyn_step&#45;&gt;proc~run_stage</title>
+<path fill="none" stroke="#0000ff" d="M465.73,-94.13C482.25,-94.13 500.63,-94.13 516.7,-94.13"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="516.42,-97.64 526.42,-94.14 516.42,-90.64 516.42,-97.64"/>
+</g>
+<!-- proc~ocean_dyn_step_split -->
+<g id="proc~~tracer_advect_vertical~~CalledByGraph_node6" class="node">
+<title>proc~ocean_dyn_step_split</title>
+<g id="a_proc~~tracer_advect_vertical~~CalledByGraph_node6"><a xlink:href="../proc/ocean_dyn_step_split.html" xlink:title="ocean_dyn_step_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="478.83,-64.27 354.81,-64.27 354.81,-40 478.83,-40 478.83,-64.27"/>
+<text xml:space="preserve" text-anchor="middle" x="416.82" y="-48.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step_split</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step_split&#45;&gt;proc~run_gm_step -->
+<g id="proc~~tracer_advect_vertical~~CalledByGraph_edge5" class="edge">
+<title>proc~ocean_dyn_step_split&#45;&gt;proc~run_gm_step</title>
+<path fill="none" stroke="#00ff00" d="M479.08,-52.57C530.43,-52.93 602.88,-53.44 651.03,-53.78"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="650.88,-57.28 660.9,-53.85 650.93,-50.28 650.88,-57.28"/>
+</g>
+<!-- proc~run_stage_split -->
+<g id="proc~~tracer_advect_vertical~~CalledByGraph_node7" class="node">
+<title>proc~run_stage_split</title>
+<g id="a_proc~~tracer_advect_vertical~~CalledByGraph_node7"><a xlink:href="../proc/run_stage_split.html" xlink:title="run_stage_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="605.85,-25.27 514.83,-25.27 514.83,-1 605.85,-1 605.85,-25.27"/>
+<text xml:space="preserve" text-anchor="middle" x="560.34" y="-9.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage_split</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step_split&#45;&gt;proc~run_stage_split -->
+<g id="proc~~tracer_advect_vertical~~CalledByGraph_edge9" class="edge">
+<title>proc~ocean_dyn_step_split&#45;&gt;proc~run_stage_split</title>
+<path fill="none" stroke="#0000ff" d="M463.38,-39.58C476.13,-36.07 490.14,-32.21 503.41,-28.55"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="504.18,-31.97 512.89,-25.93 502.32,-25.22 504.18,-31.97"/>
+</g>
+<!-- proc~run_stage_split&#45;&gt;proc~run_continuity_chain -->
+<g id="proc~~tracer_advect_vertical~~CalledByGraph_edge4" class="edge">
+<title>proc~run_stage_split&#45;&gt;proc~run_continuity_chain</title>
+<path fill="none" stroke="#ff0000" d="M606.15,-12.82C613.78,-12.76 621.88,-12.7 630.01,-12.65"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="629.98,-16.15 639.96,-12.58 629.93,-9.15 629.98,-16.15"/>
+</g>
+<!-- proc~engine_step -->
+<g id="proc~~tracer_advect_vertical~~CalledByGraph_node8" class="node">
+<title>proc~engine_step</title>
+<g id="a_proc~~tracer_advect_vertical~~CalledByGraph_node8"><a xlink:href="../proc/engine_step.html" xlink:title="engine_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="318.81,-85.27 242.79,-85.27 242.79,-61 318.81,-61 318.81,-85.27"/>
+<text xml:space="preserve" text-anchor="middle" x="280.8" y="-69.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~ocean_dyn_step -->
+<g id="proc~~tracer_advect_vertical~~CalledByGraph_edge7" class="edge">
+<title>proc~engine_step&#45;&gt;proc~ocean_dyn_step</title>
+<path fill="none" stroke="#ff0000" d="M319.13,-78.98C330.87,-80.82 344.14,-82.9 356.99,-84.92"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="356.22,-88.34 366.64,-86.43 357.31,-81.42 356.22,-88.34"/>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~ocean_dyn_step_split -->
+<g id="proc~~tracer_advect_vertical~~CalledByGraph_edge8" class="edge">
+<title>proc~engine_step&#45;&gt;proc~ocean_dyn_step_split</title>
+<path fill="none" stroke="#00ff00" d="M319.13,-67.29C326.69,-66.1 334.89,-64.82 343.2,-63.51"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="343.72,-66.98 353.05,-61.97 342.63,-60.06 343.72,-66.98"/>
+</g>
+<!-- proc~driver_run_ocean -->
+<g id="proc~~tracer_advect_vertical~~CalledByGraph_node9" class="node">
+<title>proc~driver_run_ocean</title>
+<g id="a_proc~~tracer_advect_vertical~~CalledByGraph_node9"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<polygon fill="#d9534f" stroke="#d9534f" points="206.79,-106.27 102.27,-106.27 102.27,-82 206.79,-82 206.79,-106.27"/>
+<text xml:space="preserve" text-anchor="middle" x="154.53" y="-90.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_step -->
+<g id="proc~~tracer_advect_vertical~~CalledByGraph_edge10" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_step</title>
+<path fill="none" stroke="#ff0000" d="M207.15,-85.41C215.13,-84.06 223.34,-82.68 231.25,-81.34"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="231.77,-84.8 241.05,-79.68 230.61,-77.9 231.77,-84.8"/>
+</g>
+<!-- proc~rdb_ocean_step -->
+<g id="proc~~tracer_advect_vertical~~CalledByGraph_node10" class="node">
+<title>proc~rdb_ocean_step</title>
+<g id="a_proc~~tracer_advect_vertical~~CalledByGraph_node10"><a xlink:href="../proc/rdb_ocean_step.html" xlink:title="rdb_ocean_step">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="202.29,-64.27 106.77,-64.27 106.77,-40 202.29,-40 202.29,-64.27"/>
+<text xml:space="preserve" text-anchor="middle" x="154.53" y="-48.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_step</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_step&#45;&gt;proc~engine_step -->
+<g id="proc~~tracer_advect_vertical~~CalledByGraph_edge11" class="edge">
+<title>proc~rdb_ocean_step&#45;&gt;proc~engine_step</title>
+<path fill="none" stroke="#ff0000" d="M202.51,-60.07C211.89,-61.66 221.77,-63.33 231.2,-64.92"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="230.49,-68.35 240.94,-66.57 231.66,-61.45 230.49,-68.35"/>
+</g>
+<!-- proc~driver_run -->
+<g id="proc~~tracer_advect_vertical~~CalledByGraph_node11" class="node">
+<title>proc~driver_run</title>
+<g id="a_proc~~tracer_advect_vertical~~CalledByGraph_node11"><a xlink:href="../proc/driver_run.html" xlink:title="driver_run">
+<polygon fill="#d9534f" stroke="#d9534f" points="66.27,-106.27 0,-106.27 0,-82 66.27,-82 66.27,-106.27"/>
+<text xml:space="preserve" text-anchor="middle" x="33.13" y="-90.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run&#45;&gt;proc~driver_run_ocean -->
+<g id="proc~~tracer_advect_vertical~~CalledByGraph_edge12" class="edge">
+<title>proc~driver_run&#45;&gt;proc~driver_run_ocean</title>
+<path fill="none" stroke="#ff0000" d="M66.76,-94.13C74.26,-94.13 82.48,-94.13 90.79,-94.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="90.58,-97.64 100.58,-94.14 90.58,-90.64 90.58,-97.64"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panproctracer_advect_verticalCalledByGraph = svgPanZoom('#proctracer_advect_verticalCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-it~33"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>it</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">subroutine </span><span class="n">tracer_advect_vertical</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">,</span><span class="w"> </span><span class="n">dt</span><span class="p">,</span><span class="w"> </span><span class="n">active</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! Apply first-order upwind-in-z vertical advection to every</span>
+<span class="w">      </span><span class="c">!! registered tracer, then update `h_layer` by the same</span>
+<span class="w">      </span><span class="c">!! vertical mass-flux divergence.  Updating h is what makes</span>
+<span class="w">      </span><span class="c">!! the kernel CWC-consistent — a uniform `c` stays</span>
+<span class="w">      </span><span class="c">!! uniform regardless of how divergent the w field is.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! One shared `h⁻ → h⁺` pair: `h_layer` is snapshotted into</span>
+<span class="w">      </span><span class="c">!! `this%h_pair_prev` (`h⁻`), updated by the vertical mass-flux</span>
+<span class="w">      </span><span class="c">!! divergence (`h⁺`), and then every tracer takes the pair.  The tracer</span>
+<span class="w">      </span><span class="c">!! kernel reads only `h⁻` (it recomputes `h⁺` from the same fluxes), so the order is bit-identical</span>
+<span class="w">      </span><span class="c">!! to the old "tracers first, then h" one.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! Eulerian-z mode: the h update here exactly cancels the</span>
+<span class="w">      </span><span class="c">!! horizontal h update produced by</span>
+<span class="w">      </span><span class="c">!! `continuity_tracer_step_split` (both consume</span>
+<span class="w">      </span><span class="c">!! the same `flux_h_layer` — the total horizontal divergence</span>
+<span class="w">      </span><span class="c">!! summed over both substeps), so `h_layer` stays at its</span>
+<span class="w">      </span><span class="c">!! initial z-coordinate values.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! Per-tracer `do_vertical_exchange` gate lets diagnostic /</span>
+<span class="w">      </span><span class="c">!! forced tracers opt out without affecting horizontal</span>
+<span class="w">      </span><span class="c">!! advection.</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">hgrid_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">grid</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_vertical_advection_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">this</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">multilayer_state_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ms</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dt</span>
+<span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">active</span>
+<span class="w">         </span><span class="c">!! Optional gate (thermo cadence).  Absent ⇒ kernel runs;</span>
+<span class="w">         </span><span class="c">!! present-and-false ⇒ early return.</span>
+
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">it</span>
+
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">active</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">active</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+<span class="k">      end if</span>
+<span class="k">      call </span><span class="n">copy_h_before</span><span class="p">(</span><span class="n">grid</span><span class="p">%</span><span class="n">nx_total</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">ny_total</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">nz_ml</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">h_pair_prev</span><span class="p">%</span><span class="k">data</span><span class="p">)</span>
+<span class="w">      </span><span class="k">call </span><span class="n">apply_w_to_h_layer</span><span class="p">(</span><span class="n">grid</span><span class="p">%</span><span class="n">nx_total</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">ny_total</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">nz_ml</span><span class="p">,</span><span class="w"> </span><span class="n">dt</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">ms</span><span class="p">%</span><span class="n">w_interface</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">h_layer</span><span class="p">)</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">allocated</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">tracers</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         do </span><span class="n">it</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">size</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">tracers</span><span class="p">)</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">tracers</span><span class="p">(</span><span class="n">it</span><span class="p">)%</span><span class="n">do_vertical_exchange</span><span class="p">)</span><span class="w"> </span><span class="k">cycle</span>
+<span class="k">            select case</span><span class="w"> </span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">tracers</span><span class="p">(</span><span class="n">it</span><span class="p">)%</span><span class="n">budget_id</span><span class="p">)</span>
+<span class="w">            </span><span class="k">case</span><span class="w"> </span><span class="p">(</span><span class="n">TRACER_BUDGET_HEAT</span><span class="p">)</span>
+<span class="w">               </span><span class="k">call </span><span class="n">tracer_advect_vertical_one_impl</span><span class="p">(</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                  </span><span class="n">grid</span><span class="p">%</span><span class="n">nx_total</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">ny_total</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">nz_ml</span><span class="p">,</span><span class="w"> </span><span class="n">dt</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                  </span><span class="n">this</span><span class="p">%</span><span class="n">h_pair_prev</span><span class="p">%</span><span class="k">data</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">w_interface</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">tracers</span><span class="p">(</span><span class="n">it</span><span class="p">)%</span><span class="n">c</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                  </span><span class="n">this</span><span class="p">%</span><span class="n">F_face</span><span class="p">%</span><span class="k">data</span><span class="p">,</span><span class="w"> </span><span class="n">budget</span><span class="o">=</span><span class="n">ms</span><span class="p">%</span><span class="n">heat_budget_vert_adv</span><span class="p">)</span>
+<span class="w">            </span><span class="k">case</span><span class="w"> </span><span class="p">(</span><span class="n">TRACER_BUDGET_SALT</span><span class="p">)</span>
+<span class="w">               </span><span class="k">call </span><span class="n">tracer_advect_vertical_one_impl</span><span class="p">(</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                  </span><span class="n">grid</span><span class="p">%</span><span class="n">nx_total</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">ny_total</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">nz_ml</span><span class="p">,</span><span class="w"> </span><span class="n">dt</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                  </span><span class="n">this</span><span class="p">%</span><span class="n">h_pair_prev</span><span class="p">%</span><span class="k">data</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">w_interface</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">tracers</span><span class="p">(</span><span class="n">it</span><span class="p">)%</span><span class="n">c</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                  </span><span class="n">this</span><span class="p">%</span><span class="n">F_face</span><span class="p">%</span><span class="k">data</span><span class="p">,</span><span class="w"> </span><span class="n">budget</span><span class="o">=</span><span class="n">ms</span><span class="p">%</span><span class="n">salt_budget_vert_adv</span><span class="p">)</span>
+<span class="w">            </span><span class="k">case </span><span class="n">default</span>
+<span class="w">               </span><span class="k">call </span><span class="n">tracer_advect_vertical_one_impl</span><span class="p">(</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                  </span><span class="n">grid</span><span class="p">%</span><span class="n">nx_total</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">ny_total</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">nz_ml</span><span class="p">,</span><span class="w"> </span><span class="n">dt</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                  </span><span class="n">this</span><span class="p">%</span><span class="n">h_pair_prev</span><span class="p">%</span><span class="k">data</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">w_interface</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">tracers</span><span class="p">(</span><span class="n">it</span><span class="p">)%</span><span class="n">c</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                  </span><span class="n">this</span><span class="p">%</span><span class="n">F_face</span><span class="p">%</span><span class="k">data</span><span class="p">)</span>
+<span class="w">            </span><span class="k">end select</span>
+<span class="k">         end do</span>
+<span class="k">      end if</span>
+<span class="k">   end subroutine </span><span class="n">tracer_advect_vertical</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-11-13 23:21 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

@@ -1,0 +1,857 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>grid_allreduce_sum_i8 &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>grid_allreduce_sum_i8
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.0% of total for procedures.">10 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_grid_reduce.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_grid_reduce.f90.html'>rdb_grid_reduce.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_grid_reduce.html'>rdb_grid_reduce</a></li>
+            <li class="breadcrumb-item active" aria-current="page">grid_allreduce_sum_i8</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/grid_allreduce_sum_i8.html#src">grid_allreduce_sum_i8</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>public  subroutine grid_allreduce_sum_i8(grid, local_val, global_val)  
+</h2>
+    
+
+    <p>Exact global integer sum over the tiles of <code>grid</code> (identity on an
+untiled grid).</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-grid~316"></span>
+              type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>grid</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-local_val~3"></span>
+              integer(kind=int64),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>local_val</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-global_val~3"></span>
+              integer(kind=int64),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>global_val</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~grid_allreduce_sum_i8~~CallsGraph Pages: 1 -->
+<svg id="procgrid_allreduce_sum_i8CallsGraph" width="620pt" height="95pt"
+ viewBox="0.00 0.00 620.00 95.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~grid_allreduce_sum_i8~~CallsGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 91.27)">
+<title>proc~~grid_allreduce_sum_i8~~CallsGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-91.27 615.58,-91.27 615.58,4 -4,4"/>
+<!-- proc~grid_allreduce_sum_i8 -->
+<g id="proc~~grid_allreduce_sum_i8~~CallsGraph_node1" class="node">
+<title>proc~grid_allreduce_sum_i8</title>
+<polygon fill="none" stroke="black" points="130.02,-66.27 0,-66.27 0,-42 130.02,-42 130.02,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="65.01" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50">grid_allreduce_sum_i8</text>
+</g>
+<!-- proc~grid_is_tiled -->
+<g id="proc~~grid_allreduce_sum_i8~~CallsGraph_node2" class="node">
+<title>proc~grid_is_tiled</title>
+<g id="a_proc~~grid_allreduce_sum_i8~~CallsGraph_node2"><a xlink:href="../proc/grid_is_tiled.html" xlink:title="grid_is_tiled">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="269.42,-87.27 194.9,-87.27 194.9,-63 269.42,-63 269.42,-87.27"/>
+<text xml:space="preserve" text-anchor="middle" x="232.16" y="-71.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">grid_is_tiled</text>
+</a>
+</g>
+</g>
+<!-- proc~grid_allreduce_sum_i8&#45;&gt;proc~grid_is_tiled -->
+<g id="proc~~grid_allreduce_sum_i8~~CallsGraph_edge1" class="edge">
+<title>proc~grid_allreduce_sum_i8&#45;&gt;proc~grid_is_tiled</title>
+<path fill="none" stroke="#ff0000" d="M130.33,-62.31C147.99,-64.56 166.83,-66.95 183.38,-69.06"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="182.56,-72.48 192.93,-70.27 183.45,-65.54 182.56,-72.48"/>
+</g>
+<!-- proc~halo_allreduce_sum_i8 -->
+<g id="proc~~grid_allreduce_sum_i8~~CallsGraph_node3" class="node">
+<title>proc~halo_allreduce_sum_i8</title>
+<g id="a_proc~~grid_allreduce_sum_i8~~CallsGraph_node3"><a xlink:href="../proc/halo_allreduce_sum_i8.html" xlink:title="halo_allreduce_sum_i8">
+<polygon fill="#d9534f" stroke="#d9534f" points="298.29,-45.27 166.02,-45.27 166.02,-21 298.29,-21 298.29,-45.27"/>
+<text xml:space="preserve" text-anchor="middle" x="232.16" y="-29.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">halo_allreduce_sum_i8</text>
+</a>
+</g>
+</g>
+<!-- proc~grid_allreduce_sum_i8&#45;&gt;proc~halo_allreduce_sum_i8 -->
+<g id="proc~~grid_allreduce_sum_i8~~CallsGraph_edge2" class="edge">
+<title>proc~grid_allreduce_sum_i8&#45;&gt;proc~halo_allreduce_sum_i8</title>
+<path fill="none" stroke="#ff0000" d="M130.33,-45.96C138.21,-44.95 146.32,-43.92 154.36,-42.9"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="154.67,-46.39 164.15,-41.66 153.79,-39.45 154.67,-46.39"/>
+</g>
+<!-- allreduce -->
+<g id="proc~~grid_allreduce_sum_i8~~CallsGraph_node4" class="node">
+<title>allreduce</title>
+<polygon fill="#777777" stroke="#777777" points="445.56,-66.27 384.54,-66.27 384.54,-42 445.56,-42 445.56,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="415.05" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">allreduce</text>
+</g>
+<!-- proc~halo_allreduce_sum_i8&#45;&gt;allreduce -->
+<g id="proc~~grid_allreduce_sum_i8~~CallsGraph_edge3" class="edge">
+<title>proc~halo_allreduce_sum_i8&#45;&gt;allreduce</title>
+<path fill="none" stroke="#00ffff" d="M298.72,-40.75C323.57,-43.63 351.15,-46.83 373.1,-49.38"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="372.5,-52.84 382.84,-50.51 373.31,-45.88 372.5,-52.84"/>
+</g>
+<!-- proc~comm_env_compute_comm -->
+<g id="proc~~grid_allreduce_sum_i8~~CallsGraph_node5" class="node">
+<title>proc~comm_env_compute_comm</title>
+<g id="a_proc~~grid_allreduce_sum_i8~~CallsGraph_node5"><a xlink:href="../proc/comm_env_compute_comm.html" xlink:title="comm_env_compute_comm">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="495.81,-24.27 334.29,-24.27 334.29,0 495.81,0 495.81,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="415.05" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">comm_env_compute_comm</text>
+</a>
+</g>
+</g>
+<!-- proc~halo_allreduce_sum_i8&#45;&gt;proc~comm_env_compute_comm -->
+<g id="proc~~grid_allreduce_sum_i8~~CallsGraph_edge4" class="edge">
+<title>proc~halo_allreduce_sum_i8&#45;&gt;proc~comm_env_compute_comm</title>
+<path fill="none" stroke="#00ffff" d="M298.72,-25.52C306.48,-24.62 314.52,-23.69 322.56,-22.76"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="322.87,-26.24 332.4,-21.61 322.07,-19.29 322.87,-26.24"/>
+</g>
+<!-- comm_world -->
+<g id="proc~~grid_allreduce_sum_i8~~CallsGraph_node6" class="node">
+<title>comm_world</title>
+<polygon fill="#777777" stroke="#777777" points="611.58,-24.27 531.81,-24.27 531.81,0 611.58,0 611.58,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="571.7" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">comm_world</text>
+</g>
+<!-- proc~comm_env_compute_comm&#45;&gt;comm_world -->
+<g id="proc~~grid_allreduce_sum_i8~~CallsGraph_edge5" class="edge">
+<title>proc~comm_env_compute_comm&#45;&gt;comm_world</title>
+<path fill="none" stroke="#00ffff" d="M496.09,-12.13C504.31,-12.13 512.49,-12.13 520.26,-12.13"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="520.17,-15.64 530.17,-12.14 520.17,-8.64 520.17,-15.64"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~grid_allreduce_sum_i8~~CalledByGraph Pages: 1 -->
+<svg id="procgrid_allreduce_sum_i8CalledByGraph" width="641pt" height="69pt"
+ viewBox="0.00 0.00 641.00 69.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~grid_allreduce_sum_i8~~CalledByGraph" class="graph" transform="scale(0.436824 0.436824) rotate(0) translate(4 154.27)">
+<title>proc~~grid_allreduce_sum_i8~~CalledByGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-154.27 1463.41,-154.27 1463.41,4 -4,4"/>
+<!-- proc~grid_allreduce_sum_i8 -->
+<g id="proc~~grid_allreduce_sum_i8~~CalledByGraph_node1" class="node">
+<title>proc~grid_allreduce_sum_i8</title>
+<polygon fill="none" stroke="black" points="1459.41,-87.27 1329.39,-87.27 1329.39,-63 1459.41,-63 1459.41,-87.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1394.4" y="-71.54" font-family="Helvetica,sans-Serif" font-size="10.50">grid_allreduce_sum_i8</text>
+</g>
+<!-- proc~configure_ocean_cavity_melt -->
+<g id="proc~~grid_allreduce_sum_i8~~CalledByGraph_node2" class="node">
+<title>proc~configure_ocean_cavity_melt</title>
+<g id="a_proc~~grid_allreduce_sum_i8~~CalledByGraph_node2"><a xlink:href="../proc/configure_ocean_cavity_melt.html" xlink:title="configure_ocean_cavity_melt">
+<polygon fill="#d9534f" stroke="#d9534f" points="1293.39,-107.27 1127.37,-107.27 1127.37,-83 1293.39,-83 1293.39,-107.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1210.38" y="-91.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">configure_ocean_cavity_melt</text>
+</a>
+</g>
+</g>
+<!-- proc~configure_ocean_cavity_melt&#45;&gt;proc~grid_allreduce_sum_i8 -->
+<g id="proc~~grid_allreduce_sum_i8~~CalledByGraph_edge1" class="edge">
+<title>proc~configure_ocean_cavity_melt&#45;&gt;proc~grid_allreduce_sum_i8</title>
+<path fill="none" stroke="#ff0000" d="M1293.87,-86.07C1301.77,-85.2 1309.75,-84.33 1317.59,-83.47"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1317.86,-86.96 1327.42,-82.38 1317.1,-80 1317.86,-86.96"/>
+</g>
+<!-- proc~configure_ocean_closed_faces -->
+<g id="proc~~grid_allreduce_sum_i8~~CalledByGraph_node3" class="node">
+<title>proc~configure_ocean_closed_faces</title>
+<g id="a_proc~~grid_allreduce_sum_i8~~CalledByGraph_node3"><a xlink:href="../proc/configure_ocean_closed_faces.html" xlink:title="configure_ocean_closed_faces">
+<polygon fill="#d9534f" stroke="#d9534f" points="921.6,-67.27 748.08,-67.27 748.08,-43 921.6,-43 921.6,-67.27"/>
+<text xml:space="preserve" text-anchor="middle" x="834.84" y="-51.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">configure_ocean_closed_faces</text>
+</a>
+</g>
+</g>
+<!-- proc~configure_ocean_closed_faces&#45;&gt;proc~grid_allreduce_sum_i8 -->
+<g id="proc~~grid_allreduce_sum_i8~~CalledByGraph_edge2" class="edge">
+<title>proc~configure_ocean_closed_faces&#45;&gt;proc~grid_allreduce_sum_i8</title>
+<path fill="none" stroke="#ff0000" d="M922.04,-58.23C1030.46,-62.12 1214.89,-68.73 1317.97,-72.43"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1317.58,-75.92 1327.7,-72.78 1317.83,-68.92 1317.58,-75.92"/>
+</g>
+<!-- proc~ocean_cavity_flux_step -->
+<g id="proc~~grid_allreduce_sum_i8~~CalledByGraph_node4" class="node">
+<title>proc~ocean_cavity_flux_step</title>
+<g id="a_proc~~grid_allreduce_sum_i8~~CalledByGraph_node4"><a xlink:href="../proc/ocean_cavity_flux_step.html" xlink:title="ocean_cavity_flux_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="1091.37,-147.27 957.6,-147.27 957.6,-123 1091.37,-123 1091.37,-147.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1024.49" y="-131.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_cavity_flux_step</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_cavity_flux_step&#45;&gt;proc~grid_allreduce_sum_i8 -->
+<g id="proc~~grid_allreduce_sum_i8~~CalledByGraph_edge3" class="edge">
+<title>proc~ocean_cavity_flux_step&#45;&gt;proc~grid_allreduce_sum_i8</title>
+<path fill="none" stroke="#ff0000" d="M1091.87,-136.25C1146.62,-135.78 1225.97,-131.92 1293.39,-116.14 1315.95,-110.85 1340.01,-101.13 1358.87,-92.48"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1360.13,-95.76 1367.69,-88.33 1357.15,-89.42 1360.13,-95.76"/>
+</g>
+<!-- proc~seed_cavity_draft -->
+<g id="proc~~grid_allreduce_sum_i8~~CalledByGraph_node5" class="node">
+<title>proc~seed_cavity_draft</title>
+<g id="a_proc~~grid_allreduce_sum_i8~~CalledByGraph_node5"><a xlink:href="../proc/seed_cavity_draft.html" xlink:title="seed_cavity_draft">
+<polygon fill="#d9534f" stroke="#d9534f" points="1262.64,-27.27 1158.12,-27.27 1158.12,-3 1262.64,-3 1262.64,-27.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1210.38" y="-11.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">seed_cavity_draft</text>
+</a>
+</g>
+</g>
+<!-- proc~seed_cavity_draft&#45;&gt;proc~grid_allreduce_sum_i8 -->
+<g id="proc~~grid_allreduce_sum_i8~~CalledByGraph_edge4" class="edge">
+<title>proc~seed_cavity_draft&#45;&gt;proc~grid_allreduce_sum_i8</title>
+<path fill="none" stroke="#ff0000" d="M1251.48,-27.66C1264.83,-31.89 1279.77,-36.66 1293.39,-41.13 1310.68,-46.82 1329.6,-53.2 1346.28,-58.89"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1344.86,-62.1 1355.45,-62.03 1347.12,-55.48 1344.86,-62.1"/>
+</g>
+<!-- interface~configure_ocean_cavity_melt -->
+<g id="proc~~grid_allreduce_sum_i8~~CalledByGraph_node6" class="node">
+<title>interface~configure_ocean_cavity_melt</title>
+<g id="a_proc~~grid_allreduce_sum_i8~~CalledByGraph_node6"><a xlink:href="../interface/configure_ocean_cavity_melt.html" xlink:title="configure_ocean_cavity_melt">
+<polygon fill="#a7506f" stroke="#a7506f" points="708.33,-108.27 542.31,-108.27 542.31,-84 708.33,-84 708.33,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="625.32" y="-92.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">configure_ocean_cavity_melt</text>
+</a>
+</g>
+</g>
+<!-- interface~configure_ocean_cavity_melt&#45;&gt;proc~configure_ocean_cavity_melt -->
+<g id="proc~~grid_allreduce_sum_i8~~CalledByGraph_edge5" class="edge">
+<title>interface~configure_ocean_cavity_melt&#45;&gt;proc~configure_ocean_cavity_melt</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M708.62,-95.99C815.9,-95.81 1003.08,-95.49 1115.69,-95.3"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1115.52,-98.8 1125.51,-95.28 1115.51,-91.8 1115.52,-98.8"/>
+</g>
+<!-- interface~configure_ocean_closed_faces -->
+<g id="proc~~grid_allreduce_sum_i8~~CalledByGraph_node7" class="node">
+<title>interface~configure_ocean_closed_faces</title>
+<g id="a_proc~~grid_allreduce_sum_i8~~CalledByGraph_node7"><a xlink:href="../interface/configure_ocean_closed_faces.html" xlink:title="configure_ocean_closed_faces">
+<polygon fill="#a7506f" stroke="#a7506f" points="712.08,-66.27 538.56,-66.27 538.56,-42 712.08,-42 712.08,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="625.32" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">configure_ocean_closed_faces</text>
+</a>
+</g>
+</g>
+<!-- interface~configure_ocean_closed_faces&#45;&gt;proc~configure_ocean_closed_faces -->
+<g id="proc~~grid_allreduce_sum_i8~~CalledByGraph_edge6" class="edge">
+<title>interface~configure_ocean_closed_faces&#45;&gt;proc~configure_ocean_closed_faces</title>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M712.52,-54.55C720.47,-54.59 728.56,-54.63 736.6,-54.67"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="736.37,-58.17 746.39,-54.71 736.41,-51.17 736.37,-58.17"/>
+</g>
+<!-- interface~seed_cavity_draft -->
+<g id="proc~~grid_allreduce_sum_i8~~CalledByGraph_node8" class="node">
+<title>interface~seed_cavity_draft</title>
+<g id="a_proc~~grid_allreduce_sum_i8~~CalledByGraph_node8"><a xlink:href="../interface/seed_cavity_draft.html" xlink:title="seed_cavity_draft">
+<polygon fill="#a7506f" stroke="#a7506f" points="1076.75,-26.27 972.23,-26.27 972.23,-2 1076.75,-2 1076.75,-26.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1024.49" y="-10.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">seed_cavity_draft</text>
+</a>
+</g>
+</g>
+<!-- interface~seed_cavity_draft&#45;&gt;proc~seed_cavity_draft -->
+<g id="proc~~grid_allreduce_sum_i8~~CalledByGraph_edge8" class="edge">
+<title>interface~seed_cavity_draft&#45;&gt;proc~seed_cavity_draft</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1077.2,-14.42C1098.64,-14.53 1123.72,-14.67 1146.23,-14.79"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="1146.2,-18.29 1156.22,-14.85 1146.24,-11.29 1146.2,-18.29"/>
+</g>
+<!-- proc~engine_step_finalize -->
+<g id="proc~~grid_allreduce_sum_i8~~CalledByGraph_node9" class="node">
+<title>proc~engine_step_finalize</title>
+<g id="a_proc~~grid_allreduce_sum_i8~~CalledByGraph_node9"><a xlink:href="../proc/engine_step_finalize.html" xlink:title="engine_step_finalize">
+<polygon fill="#d9534f" stroke="#d9534f" points="502.56,-148.27 383.04,-148.27 383.04,-124 502.56,-124 502.56,-148.27"/>
+<text xml:space="preserve" text-anchor="middle" x="442.8" y="-132.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step_finalize</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_step_finalize&#45;&gt;proc~ocean_cavity_flux_step -->
+<g id="proc~~grid_allreduce_sum_i8~~CalledByGraph_edge7" class="edge">
+<title>proc~engine_step_finalize&#45;&gt;proc~ocean_cavity_flux_step</title>
+<path fill="none" stroke="#00ffff" d="M502.84,-136.03C608.27,-135.85 828.83,-135.47 946.18,-135.27"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="946.04,-138.77 956.04,-135.25 946.03,-131.77 946.04,-138.77"/>
+</g>
+<!-- proc~driver_run_ocean -->
+<g id="proc~~grid_allreduce_sum_i8~~CalledByGraph_node10" class="node">
+<title>proc~driver_run_ocean</title>
+<g id="a_proc~~grid_allreduce_sum_i8~~CalledByGraph_node10"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<polygon fill="#d9534f" stroke="#d9534f" points="329.79,-108.27 225.27,-108.27 225.27,-84 329.79,-84 329.79,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="277.53" y="-92.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_step_finalize -->
+<g id="proc~~grid_allreduce_sum_i8~~CalledByGraph_edge12" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_step_finalize</title>
+<path fill="none" stroke="#7f00ff" d="M329.74,-108.68C345.47,-112.53 362.96,-116.82 379.35,-120.84"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="378.47,-124.22 389.02,-123.2 380.14,-117.43 378.47,-124.22"/>
+</g>
+<!-- proc~engine_setup -->
+<g id="proc~~grid_allreduce_sum_i8~~CalledByGraph_node11" class="node">
+<title>proc~engine_setup</title>
+<g id="a_proc~~grid_allreduce_sum_i8~~CalledByGraph_node11"><a xlink:href="../proc/engine_setup.html" xlink:title="engine_setup">
+<polygon fill="#d9534f" stroke="#d9534f" points="484.19,-66.27 401.42,-66.27 401.42,-42 484.19,-42 484.19,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="442.8" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_setup</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_setup -->
+<g id="proc~~grid_allreduce_sum_i8~~CalledByGraph_edge16" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#7fff00" d="M327.52,-83.53C347.24,-78.46 370,-72.6 390,-67.46"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="390.82,-70.86 399.63,-64.98 389.07,-64.08 390.82,-70.86"/>
+</g>
+<!-- proc~engine_setup&#45;&gt;interface~configure_ocean_cavity_melt -->
+<g id="proc~~grid_allreduce_sum_i8~~CalledByGraph_edge9" class="edge">
+<title>proc~engine_setup&#45;&gt;interface~configure_ocean_cavity_melt</title>
+<path fill="none" stroke="#ff0000" d="M484.31,-63.56C506.41,-68.7 534.29,-75.19 559.34,-81.02"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="558.24,-84.35 568.77,-83.21 559.83,-77.54 558.24,-84.35"/>
+</g>
+<!-- proc~engine_setup&#45;&gt;interface~configure_ocean_closed_faces -->
+<g id="proc~~grid_allreduce_sum_i8~~CalledByGraph_edge10" class="edge">
+<title>proc~engine_setup&#45;&gt;interface~configure_ocean_closed_faces</title>
+<path fill="none" stroke="#7fff00" d="M484.31,-54.13C497.07,-54.13 511.75,-54.13 526.71,-54.13"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="526.66,-57.64 536.66,-54.14 526.66,-50.64 526.66,-57.64"/>
+</g>
+<!-- interface~ocean_state_seed_from_cfg -->
+<g id="proc~~grid_allreduce_sum_i8~~CalledByGraph_node14" class="node">
+<title>interface~ocean_state_seed_from_cfg</title>
+<g id="a_proc~~grid_allreduce_sum_i8~~CalledByGraph_node14"><a xlink:href="../interface/ocean_state_seed_from_cfg.html" xlink:title="ocean_state_seed_from_cfg">
+<polygon fill="#a7506f" stroke="#a7506f" points="704.58,-24.27 546.06,-24.27 546.06,0 704.58,0 704.58,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="625.32" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_state_seed_from_cfg</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_setup&#45;&gt;interface~ocean_state_seed_from_cfg -->
+<g id="proc~~grid_allreduce_sum_i8~~CalledByGraph_edge19" class="edge">
+<title>proc~engine_setup&#45;&gt;interface~ocean_state_seed_from_cfg</title>
+<path fill="none" stroke="#ff0000" d="M484.31,-44.71C506.41,-39.57 534.29,-33.08 559.34,-27.25"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="559.83,-30.73 568.77,-25.06 558.24,-23.92 559.83,-30.73"/>
+</g>
+<!-- proc~ocean_state_seed_from_cfg -->
+<g id="proc~~grid_allreduce_sum_i8~~CalledByGraph_node12" class="node">
+<title>proc~ocean_state_seed_from_cfg</title>
+<g id="a_proc~~grid_allreduce_sum_i8~~CalledByGraph_node12"><a xlink:href="../proc/ocean_state_seed_from_cfg.html" xlink:title="ocean_state_seed_from_cfg">
+<polygon fill="#d9534f" stroke="#d9534f" points="914.1,-25.27 755.58,-25.27 755.58,-1 914.1,-1 914.1,-25.27"/>
+<text xml:space="preserve" text-anchor="middle" x="834.84" y="-9.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_state_seed_from_cfg</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_state_seed_from_cfg&#45;&gt;interface~seed_cavity_draft -->
+<g id="proc~~grid_allreduce_sum_i8~~CalledByGraph_edge11" class="edge">
+<title>proc~ocean_state_seed_from_cfg&#45;&gt;interface~seed_cavity_draft</title>
+<path fill="none" stroke="#00ffff" d="M914.33,-13.55C929.78,-13.64 945.79,-13.72 960.64,-13.8"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="960.21,-17.3 970.23,-13.85 960.25,-10.3 960.21,-17.3"/>
+</g>
+<!-- proc~rdb_ocean_step -->
+<g id="proc~~grid_allreduce_sum_i8~~CalledByGraph_node13" class="node">
+<title>proc~rdb_ocean_step</title>
+<g id="a_proc~~grid_allreduce_sum_i8~~CalledByGraph_node13"><a xlink:href="../proc/rdb_ocean_step.html" xlink:title="rdb_ocean_step">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="325.29,-150.27 229.77,-150.27 229.77,-126 325.29,-126 325.29,-150.27"/>
+<text xml:space="preserve" text-anchor="middle" x="277.53" y="-134.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_step</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_step&#45;&gt;proc~engine_step_finalize -->
+<g id="proc~~grid_allreduce_sum_i8~~CalledByGraph_edge13" class="edge">
+<title>proc~rdb_ocean_step&#45;&gt;proc~engine_step_finalize</title>
+<path fill="none" stroke="#7f00ff" d="M325.75,-137.56C340.08,-137.38 356.13,-137.18 371.62,-136.99"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="371.3,-140.5 381.26,-136.88 371.22,-133.5 371.3,-140.5"/>
+</g>
+<!-- interface~ocean_state_seed_from_cfg&#45;&gt;proc~ocean_state_seed_from_cfg -->
+<g id="proc~~grid_allreduce_sum_i8~~CalledByGraph_edge18" class="edge">
+<title>interface~ocean_state_seed_from_cfg&#45;&gt;proc~ocean_state_seed_from_cfg</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M705.07,-12.51C717.75,-12.58 730.96,-12.64 743.88,-12.7"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="743.61,-16.2 753.63,-12.75 743.65,-9.2 743.61,-16.2"/>
+</g>
+<!-- proc~complete_ocean_create -->
+<g id="proc~~grid_allreduce_sum_i8~~CalledByGraph_node15" class="node">
+<title>proc~complete_ocean_create</title>
+<g id="a_proc~~grid_allreduce_sum_i8~~CalledByGraph_node15"><a xlink:href="../proc/complete_ocean_create.html" xlink:title="complete_ocean_create">
+<polygon fill="#d9534f" stroke="#d9534f" points="347.04,-66.27 208.02,-66.27 208.02,-42 347.04,-42 347.04,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="277.53" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">complete_ocean_create</text>
+</a>
+</g>
+</g>
+<!-- proc~complete_ocean_create&#45;&gt;proc~engine_setup -->
+<g id="proc~~grid_allreduce_sum_i8~~CalledByGraph_edge15" class="edge">
+<title>proc~complete_ocean_create&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#7fff00" d="M347.3,-54.13C361.45,-54.13 376.14,-54.13 389.59,-54.13"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="389.54,-57.64 399.54,-54.14 389.54,-50.64 389.54,-57.64"/>
+</g>
+<!-- proc~driver_run -->
+<g id="proc~~grid_allreduce_sum_i8~~CalledByGraph_node16" class="node">
+<title>proc~driver_run</title>
+<g id="a_proc~~grid_allreduce_sum_i8~~CalledByGraph_node16"><a xlink:href="../proc/driver_run.html" xlink:title="driver_run">
+<polygon fill="#d9534f" stroke="#d9534f" points="119.14,-108.27 52.87,-108.27 52.87,-84 119.14,-84 119.14,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="86.01" y="-92.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run&#45;&gt;proc~driver_run_ocean -->
+<g id="proc~~grid_allreduce_sum_i8~~CalledByGraph_edge14" class="edge">
+<title>proc~driver_run&#45;&gt;proc~driver_run_ocean</title>
+<path fill="none" stroke="#ff0000" d="M119.59,-96.14C145.42,-96.14 182.28,-96.14 213.78,-96.14"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="213.61,-99.64 223.61,-96.14 213.61,-92.64 213.61,-99.64"/>
+</g>
+<!-- proc~driver_validate -->
+<g id="proc~~grid_allreduce_sum_i8~~CalledByGraph_node17" class="node">
+<title>proc~driver_validate</title>
+<g id="a_proc~~grid_allreduce_sum_i8~~CalledByGraph_node17"><a xlink:href="../proc/driver_validate.html" xlink:title="driver_validate">
+<polygon fill="#d9534f" stroke="#d9534f" points="323.04,-24.27 232.02,-24.27 232.02,0 323.04,0 323.04,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="277.53" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_validate</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_validate&#45;&gt;proc~engine_setup -->
+<g id="proc~~grid_allreduce_sum_i8~~CalledByGraph_edge17" class="edge">
+<title>proc~driver_validate&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#7fff00" d="M323.14,-23.61C343.89,-28.95 368.68,-35.32 390.22,-40.87"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="389.13,-44.2 399.69,-43.3 390.87,-37.42 389.13,-44.2"/>
+</g>
+<!-- proc~rdb_ocean_create_finalize -->
+<g id="proc~~grid_allreduce_sum_i8~~CalledByGraph_node18" class="node">
+<title>proc~rdb_ocean_create_finalize</title>
+<g id="a_proc~~grid_allreduce_sum_i8~~CalledByGraph_node18"><a xlink:href="../proc/rdb_ocean_create_finalize.html" xlink:title="rdb_ocean_create_finalize">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="161.14,-66.27 10.87,-66.27 10.87,-42 161.14,-42 161.14,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="86.01" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_create_finalize</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_create_finalize&#45;&gt;proc~complete_ocean_create -->
+<g id="proc~~grid_allreduce_sum_i8~~CalledByGraph_edge20" class="edge">
+<title>proc~rdb_ocean_create_finalize&#45;&gt;proc~complete_ocean_create</title>
+<path fill="none" stroke="#7fff00" d="M161.64,-54.13C172.98,-54.13 184.73,-54.13 196.19,-54.13"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="196.01,-57.64 206.01,-54.14 196.01,-50.64 196.01,-57.64"/>
+</g>
+<!-- proc~rdb_ocean_create_from_string -->
+<g id="proc~~grid_allreduce_sum_i8~~CalledByGraph_node19" class="node">
+<title>proc~rdb_ocean_create_from_string</title>
+<g id="a_proc~~grid_allreduce_sum_i8~~CalledByGraph_node19"><a xlink:href="../proc/rdb_ocean_create_from_string.html" xlink:title="rdb_ocean_create_from_string">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="172.02,-24.27 0,-24.27 0,0 172.02,0 172.02,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="86.01" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_create_from_string</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_create_from_string&#45;&gt;proc~complete_ocean_create -->
+<g id="proc~~grid_allreduce_sum_i8~~CalledByGraph_edge21" class="edge">
+<title>proc~rdb_ocean_create_from_string&#45;&gt;proc~complete_ocean_create</title>
+<path fill="none" stroke="#7fff00" d="M143.87,-24.74C164.2,-29.24 187.32,-34.37 208.5,-39.06"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="207.71,-42.47 218.23,-41.22 209.22,-35.63 207.71,-42.47"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocgrid_allreduce_sum_i8CalledByGraph = svgPanZoom('#procgrid_allreduce_sum_i8CalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">subroutine </span><span class="n">grid_allreduce_sum_i8</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">local_val</span><span class="p">,</span><span class="w"> </span><span class="n">global_val</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! Exact global integer sum over the tiles of `grid` (identity on an</span>
+<span class="w">      </span><span class="c">!! untiled grid).</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">hgrid_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">grid</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">(</span><span class="n">int64</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">local_val</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">(</span><span class="n">int64</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">global_val</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">grid_is_tiled</span><span class="p">(</span><span class="n">grid</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">halo_allreduce_sum_i8</span><span class="p">(</span><span class="n">local_val</span><span class="p">,</span><span class="w"> </span><span class="n">global_val</span><span class="p">)</span>
+<span class="w">      </span><span class="k">else</span>
+<span class="k">         </span><span class="n">global_val</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">local_val</span>
+<span class="w">      </span><span class="k">end if</span>
+<span class="k">   end subroutine </span><span class="n">grid_allreduce_sum_i8</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-11-13 23:21 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

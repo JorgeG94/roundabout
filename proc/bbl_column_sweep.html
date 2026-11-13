@@ -1,0 +1,988 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>bbl_column_sweep &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>bbl_column_sweep
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.0% of total for procedures.">46 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_bbl_mixing.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_bbl_mixing.f90.html'>rdb_ocean_bbl_mixing.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ocean_bbl_mixing.html'>rdb_ocean_bbl_mixing</a></li>
+            <li class="breadcrumb-item active" aria-current="page">bbl_column_sweep</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/bbl_column_sweep.html#variable-den~2">den</a>
+            <a class="list-group-item" href="../proc/bbl_column_sweep.html#variable-dtot">dtot</a>
+            <a class="list-group-item" href="../proc/bbl_column_sweep.html#variable-dzk">dzk</a>
+            <a class="list-group-item" href="../proc/bbl_column_sweep.html#variable-k~401">k</a>
+            <a class="list-group-item" href="../proc/bbl_column_sweep.html#variable-kw">kw</a>
+            <a class="list-group-item" href="../proc/bbl_column_sweep.html#variable-lam_inv">lam_inv</a>
+            <a class="list-group-item" href="../proc/bbl_column_sweep.html#variable-n2_min">n2_min</a>
+            <a class="list-group-item" href="../proc/bbl_column_sweep.html#variable-n2e~2">n2e</a>
+            <a class="list-group-item" href="../proc/bbl_column_sweep.html#variable-need">need</a>
+            <a class="list-group-item" href="../proc/bbl_column_sweep.html#variable-rem~6">rem</a>
+            <a class="list-group-item" href="../proc/bbl_column_sweep.html#variable-used">used</a>
+            <a class="list-group-item" href="../proc/bbl_column_sweep.html#variable-z~4">z</a>
+            <a class="list-group-item" href="../proc/bbl_column_sweep.html#variable-zt~4">zt</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/bbl_column_sweep.html#src">bbl_column_sweep</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>public pure subroutine bbl_column_sweep(nz, kbed, h, n2, ustar, f_abs, tke_col, max_decay, use_omega, omega2, von_karman, kd_max, kd)  
+</h2>
+    
+
+    <p>One column&rsquo;s law-of-the-wall BBL diffusivity with the decaying
+energy ledger (see the module header).  Bottom-up: <code>h(k)</code> the
+layer thicknesses, <code>n2(k)</code> the stratification at the TOP
+interface of layer <code>k</code> (interface <code>k+1</code>), <code>kd(K)</code> the output at
+interface <code>K</code> (zero at <code>K &lt;= kbed</code> and <code>K = nz+1</code>).
+<code>tke_col</code> is the power offered at the bed (m^3/s^3).  <code>D - z</code> is
+evaluated as the live column depth minus the height of the
+interface above the bed (equal to the distance down from the
+surface up to round-off).  <code>kd_max</code> enters only the unstratified
+branch; the stratified branch is the wall law scaled by
+<code>used/need</code>.</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz~443"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-kbed~2"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>kbed</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h~97"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h</strong>(nz)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n2~36"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>n2</strong>(nz)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ustar~15"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ustar</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-f_abs~5"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>f_abs</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-tke_col"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>tke_col</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-max_decay~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>max_decay</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-use_omega~3"></span>
+              logical,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>use_omega</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-omega2~6"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>omega2</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-von_karman~5"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>von_karman</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-kd_max~11"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>kd_max</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-kd"></span>
+              real(kind=wp),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>kd</strong>(nz+1)</td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~bbl_column_sweep~~CalledByGraph Pages: 1 -->
+<svg id="procbbl_column_sweepCalledByGraph" width="641pt" height="77pt"
+ viewBox="0.00 0.00 641.00 77.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~bbl_column_sweep~~CalledByGraph" class="graph" transform="scale(0.662621 0.662621) rotate(0) translate(4 112.27)">
+<title>proc~~bbl_column_sweep~~CalledByGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-112.27 963.37,-112.27 963.37,4 -4,4"/>
+<!-- proc~bbl_column_sweep -->
+<g id="proc~~bbl_column_sweep~~CalledByGraph_node1" class="node">
+<title>proc~bbl_column_sweep</title>
+<polygon fill="none" stroke="black" points="959.37,-87.27 847.35,-87.27 847.35,-63 959.37,-63 959.37,-87.27"/>
+<text xml:space="preserve" text-anchor="middle" x="903.36" y="-71.54" font-family="Helvetica,sans-Serif" font-size="10.50">bbl_column_sweep</text>
+</g>
+<!-- proc~bbl_mixing_compute_impl -->
+<g id="proc~~bbl_column_sweep~~CalledByGraph_node2" class="node">
+<title>proc~bbl_mixing_compute_impl</title>
+<g id="a_proc~~bbl_column_sweep~~CalledByGraph_node2"><a xlink:href="../proc/bbl_mixing_compute_impl.html" xlink:title="bbl_mixing_compute_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="811.35,-87.27 661.08,-87.27 661.08,-63 811.35,-63 811.35,-87.27"/>
+<text xml:space="preserve" text-anchor="middle" x="736.21" y="-71.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">bbl_mixing_compute_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~bbl_mixing_compute_impl&#45;&gt;proc~bbl_column_sweep -->
+<g id="proc~~bbl_column_sweep~~CalledByGraph_edge1" class="edge">
+<title>proc~bbl_mixing_compute_impl&#45;&gt;proc~bbl_column_sweep</title>
+<path fill="none" stroke="#ff0000" d="M811.57,-75.14C819.63,-75.14 827.79,-75.14 835.74,-75.14"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="835.69,-78.64 845.69,-75.14 835.69,-71.64 835.69,-78.64"/>
+</g>
+<!-- proc~bbl_mixing_compute -->
+<g id="proc~~bbl_column_sweep~~CalledByGraph_node3" class="node">
+<title>proc~bbl_mixing_compute</title>
+<g id="a_proc~~bbl_column_sweep~~CalledByGraph_node3"><a xlink:href="../proc/bbl_mixing_compute.html" xlink:title="bbl_mixing_compute">
+<polygon fill="#d9534f" stroke="#d9534f" points="625.08,-87.27 503.31,-87.27 503.31,-63 625.08,-63 625.08,-87.27"/>
+<text xml:space="preserve" text-anchor="middle" x="564.19" y="-71.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">bbl_mixing_compute</text>
+</a>
+</g>
+</g>
+<!-- proc~bbl_mixing_compute&#45;&gt;proc~bbl_mixing_compute_impl -->
+<g id="proc~~bbl_column_sweep~~CalledByGraph_edge2" class="edge">
+<title>proc~bbl_mixing_compute&#45;&gt;proc~bbl_mixing_compute_impl</title>
+<path fill="none" stroke="#ff0000" d="M625.14,-75.14C632.94,-75.14 641.04,-75.14 649.16,-75.14"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="649.11,-78.64 659.11,-75.14 649.1,-71.64 649.11,-78.64"/>
+</g>
+<!-- proc~vmix_build_coefficients -->
+<g id="proc~~bbl_column_sweep~~CalledByGraph_node4" class="node">
+<title>proc~vmix_build_coefficients</title>
+<g id="a_proc~~bbl_column_sweep~~CalledByGraph_node4"><a xlink:href="../proc/vmix_build_coefficients.html" xlink:title="vmix_build_coefficients">
+<polygon fill="#d9534f" stroke="#d9534f" points="467.31,-87.27 332.04,-87.27 332.04,-63 467.31,-63 467.31,-87.27"/>
+<text xml:space="preserve" text-anchor="middle" x="399.67" y="-71.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vmix_build_coefficients</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_build_coefficients&#45;&gt;proc~bbl_mixing_compute -->
+<g id="proc~~bbl_column_sweep~~CalledByGraph_edge3" class="edge">
+<title>proc~vmix_build_coefficients&#45;&gt;proc~bbl_mixing_compute</title>
+<path fill="none" stroke="#ff0000" d="M467.72,-75.14C475.53,-75.14 483.52,-75.14 491.4,-75.14"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="491.3,-78.64 501.3,-75.14 491.3,-71.64 491.3,-78.64"/>
+</g>
+<!-- proc~apply_deferred_thermo -->
+<g id="proc~~bbl_column_sweep~~CalledByGraph_node5" class="node">
+<title>proc~apply_deferred_thermo</title>
+<g id="a_proc~~bbl_column_sweep~~CalledByGraph_node5"><a xlink:href="../proc/apply_deferred_thermo.html" xlink:title="apply_deferred_thermo">
+<polygon fill="#d9534f" stroke="#d9534f" points="296.04,-108.27 160.02,-108.27 160.02,-84 296.04,-84 296.04,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="228.03" y="-92.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">apply_deferred_thermo</text>
+</a>
+</g>
+</g>
+<!-- proc~apply_deferred_thermo&#45;&gt;proc~vmix_build_coefficients -->
+<g id="proc~~bbl_column_sweep~~CalledByGraph_edge4" class="edge">
+<title>proc~apply_deferred_thermo&#45;&gt;proc~vmix_build_coefficients</title>
+<path fill="none" stroke="#ff0000" d="M296.08,-87.84C304.01,-86.85 312.16,-85.84 320.23,-84.85"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="320.56,-88.33 330.06,-83.63 319.7,-81.38 320.56,-88.33"/>
+</g>
+<!-- proc~vmix_apply_in_stage -->
+<g id="proc~~bbl_column_sweep~~CalledByGraph_node6" class="node">
+<title>proc~vmix_apply_in_stage</title>
+<g id="a_proc~~bbl_column_sweep~~CalledByGraph_node6"><a xlink:href="../proc/vmix_apply_in_stage.html" xlink:title="vmix_apply_in_stage">
+<polygon fill="#d9534f" stroke="#d9534f" points="288.54,-66.27 167.52,-66.27 167.52,-42 288.54,-42 288.54,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="228.03" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vmix_apply_in_stage</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_apply_in_stage&#45;&gt;proc~vmix_build_coefficients -->
+<g id="proc~~bbl_column_sweep~~CalledByGraph_edge5" class="edge">
+<title>proc~vmix_apply_in_stage&#45;&gt;proc~vmix_build_coefficients</title>
+<path fill="none" stroke="#ff0000" d="M288.84,-61.54C299,-62.8 309.68,-64.12 320.23,-65.42"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="319.74,-68.89 330.1,-66.65 320.6,-61.94 319.74,-68.89"/>
+</g>
+<!-- proc~ocean_dyn_step_split -->
+<g id="proc~~bbl_column_sweep~~CalledByGraph_node7" class="node">
+<title>proc~ocean_dyn_step_split</title>
+<g id="a_proc~~bbl_column_sweep~~CalledByGraph_node7"><a xlink:href="../proc/ocean_dyn_step_split.html" xlink:title="ocean_dyn_step_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="124.02,-108.27 0,-108.27 0,-84 124.02,-84 124.02,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="62.01" y="-92.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step_split</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step_split&#45;&gt;proc~apply_deferred_thermo -->
+<g id="proc~~bbl_column_sweep~~CalledByGraph_edge6" class="edge">
+<title>proc~ocean_dyn_step_split&#45;&gt;proc~apply_deferred_thermo</title>
+<path fill="none" stroke="#ff0000" d="M124.08,-96.14C131.95,-96.14 140.08,-96.14 148.18,-96.14"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="148.05,-99.64 158.05,-96.14 148.05,-92.64 148.05,-99.64"/>
+</g>
+<!-- proc~run_stage -->
+<g id="proc~~bbl_column_sweep~~CalledByGraph_node8" class="node">
+<title>proc~run_stage</title>
+<g id="a_proc~~bbl_column_sweep~~CalledByGraph_node8"><a xlink:href="../proc/run_stage.html" xlink:title="run_stage">
+<polygon fill="#d9534f" stroke="#d9534f" points="94.02,-66.27 30,-66.27 30,-42 94.02,-42 94.02,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="62.01" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage</text>
+</a>
+</g>
+</g>
+<!-- proc~run_stage&#45;&gt;proc~vmix_apply_in_stage -->
+<g id="proc~~bbl_column_sweep~~CalledByGraph_edge7" class="edge">
+<title>proc~run_stage&#45;&gt;proc~vmix_apply_in_stage</title>
+<path fill="none" stroke="#00ffff" d="M94.25,-54.13C111.74,-54.13 134.31,-54.13 155.86,-54.13"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="155.84,-57.64 165.84,-54.14 155.84,-50.64 155.84,-57.64"/>
+</g>
+<!-- proc~run_stage_split -->
+<g id="proc~~bbl_column_sweep~~CalledByGraph_node9" class="node">
+<title>proc~run_stage_split</title>
+<g id="a_proc~~bbl_column_sweep~~CalledByGraph_node9"><a xlink:href="../proc/run_stage_split.html" xlink:title="run_stage_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="107.52,-24.27 16.5,-24.27 16.5,0 107.52,0 107.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="62.01" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage_split</text>
+</a>
+</g>
+</g>
+<!-- proc~run_stage_split&#45;&gt;proc~vmix_apply_in_stage -->
+<g id="proc~~bbl_column_sweep~~CalledByGraph_edge8" class="edge">
+<title>proc~run_stage_split&#45;&gt;proc~vmix_apply_in_stage</title>
+<path fill="none" stroke="#00ffff" d="M107.83,-23.61C126.07,-28.28 147.43,-33.75 166.99,-38.76"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="165.92,-42.1 176.48,-41.19 167.66,-35.32 165.92,-42.1"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocbbl_column_sweepCalledByGraph = svgPanZoom('#procbbl_column_sweepCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-den~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>den</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dtot"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dtot</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dzk"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dzk</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-k~401"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>k</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-kw"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>kw</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-lam_inv"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>lam_inv</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n2_min"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>n2_min</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n2e~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>n2e</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-need"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>need</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-rem~6"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>rem</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-used"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>used</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-z~4"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>z</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-zt~4"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>zt</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">pure subroutine </span><span class="n">bbl_column_sweep</span><span class="p">(</span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">kbed</span><span class="p">,</span><span class="w"> </span><span class="n">h</span><span class="p">,</span><span class="w"> </span><span class="n">n2</span><span class="p">,</span><span class="w"> </span><span class="n">ustar</span><span class="p">,</span><span class="w"> </span><span class="n">f_abs</span><span class="p">,</span><span class="w"> </span><span class="n">tke_col</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                    </span><span class="n">max_decay</span><span class="p">,</span><span class="w"> </span><span class="n">use_omega</span><span class="p">,</span><span class="w"> </span><span class="n">omega2</span><span class="p">,</span><span class="w"> </span><span class="n">von_karman</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                    </span><span class="n">kd_max</span><span class="p">,</span><span class="w"> </span><span class="n">kd</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! One column's law-of-the-wall BBL diffusivity with the decaying</span>
+<span class="w">      </span><span class="c">!! energy ledger (see the module header).  Bottom-up: `h(k)` the</span>
+<span class="w">      </span><span class="c">!! layer thicknesses, `n2(k)` the stratification at the TOP</span>
+<span class="w">      </span><span class="c">!! interface of layer `k` (interface `k+1`), `kd(K)` the output at</span>
+<span class="w">      </span><span class="c">!! interface `K` (zero at `K &lt;= kbed` and `K = nz+1`).</span>
+<span class="w">      </span><span class="c">!! `tke_col` is the power offered at the bed (m^3/s^3).  `D - z` is</span>
+<span class="w">      </span><span class="c">!! evaluated as the live column depth minus the height of the</span>
+<span class="w">      </span><span class="c">!! interface above the bed (equal to the distance down from the</span>
+<span class="w">      </span><span class="c">!! surface up to round-off).  `kd_max` enters only the unstratified</span>
+<span class="w">      </span><span class="c">!! branch; the stratified branch is the wall law scaled by</span>
+<span class="w">      </span><span class="c">!! `used/need`.</span>
+<span class="w">      </span><span class="c">!$acc routine seq</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">kbed</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">h</span><span class="p">(</span><span class="n">nz</span><span class="p">),</span><span class="w"> </span><span class="n">n2</span><span class="p">(</span><span class="n">nz</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ustar</span><span class="p">,</span><span class="w"> </span><span class="n">f_abs</span><span class="p">,</span><span class="w"> </span><span class="n">tke_col</span><span class="p">,</span><span class="w"> </span><span class="n">max_decay</span><span class="p">,</span><span class="w"> </span><span class="n">omega2</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">von_karman</span><span class="p">,</span><span class="w"> </span><span class="n">kd_max</span>
+<span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">use_omega</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">kd</span><span class="p">(</span><span class="n">nz</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">k</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dtot</span><span class="p">,</span><span class="w"> </span><span class="n">lam_inv</span><span class="p">,</span><span class="w"> </span><span class="n">n2_min</span><span class="p">,</span><span class="w"> </span><span class="n">rem</span><span class="p">,</span><span class="w"> </span><span class="n">z</span><span class="p">,</span><span class="w"> </span><span class="n">zt</span><span class="p">,</span><span class="w"> </span><span class="n">den</span><span class="p">,</span><span class="w"> </span><span class="n">kw</span><span class="p">,</span><span class="w"> </span><span class="n">dzk</span><span class="p">,</span><span class="w"> </span><span class="n">need</span><span class="p">,</span><span class="w"> </span><span class="n">used</span><span class="p">,</span><span class="w"> </span><span class="n">n2e</span>
+
+<span class="w">      </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">         </span><span class="n">kd</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">      </span><span class="k">end do</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="p">(</span><span class="n">ustar</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="p">.</span><span class="nb">or</span><span class="p">.</span><span class="w"> </span><span class="n">kbed</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="p">.</span><span class="nb">or</span><span class="p">.</span><span class="w"> </span><span class="n">kbed</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+
+<span class="k">      </span><span class="n">dtot</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">H_DIV_EPS</span>
+<span class="w">      </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">kbed</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span>
+<span class="w">         </span><span class="n">dtot</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dtot</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">h</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end do</span>
+<span class="k">      </span><span class="n">lam_inv</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">max</span><span class="p">(</span><span class="mf">1.0_wp</span><span class="o">/</span><span class="n">max_decay</span><span class="p">,</span><span class="w"> </span><span class="n">f_abs</span><span class="o">/</span><span class="n">ustar</span><span class="p">)</span>
+<span class="w">      </span><span class="n">n2_min</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">use_omega</span><span class="p">)</span><span class="w"> </span><span class="n">n2_min</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">omega2</span>
+<span class="w">      </span><span class="n">rem</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">max</span><span class="p">(</span><span class="n">tke_col</span><span class="p">,</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span>
+<span class="w">      </span><span class="n">z</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">      </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">kbed</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">         </span><span class="c">! Joule loss across layer k, then serve its top interface K = k+1.</span>
+<span class="w">         </span><span class="n">z</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">z</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">h</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+<span class="w">         </span><span class="n">rem</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">rem</span><span class="o">*</span><span class="nb">exp</span><span class="p">(</span><span class="o">-</span><span class="n">h</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="o">*</span><span class="n">lam_inv</span><span class="p">)</span>
+<span class="w">         </span><span class="n">zt</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dtot</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">z</span>
+<span class="w">         </span><span class="n">den</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ustar</span><span class="o">*</span><span class="n">dtot</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">f_abs</span><span class="o">*</span><span class="n">z</span><span class="o">*</span><span class="n">zt</span>
+<span class="w">         </span><span class="n">kw</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">den</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="n">kw</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">von_karman</span><span class="o">*</span><span class="n">ustar</span><span class="o">*</span><span class="n">ustar</span><span class="o">*</span><span class="n">z</span><span class="o">*</span><span class="n">zt</span><span class="o">/</span><span class="n">den</span>
+<span class="w">         </span><span class="n">dzk</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="p">(</span><span class="n">h</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">h</span><span class="p">(</span><span class="n">k</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">))</span>
+<span class="w">         </span><span class="n">n2e</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">max</span><span class="p">(</span><span class="n">n2</span><span class="p">(</span><span class="n">k</span><span class="p">),</span><span class="w"> </span><span class="n">n2_min</span><span class="p">)</span>
+<span class="w">         </span><span class="n">need</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">kw</span><span class="o">*</span><span class="n">dzk</span><span class="o">*</span><span class="n">n2e</span>
+<span class="w">         </span><span class="n">used</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">need</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            </span><span class="n">used</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">min</span><span class="p">(</span><span class="n">need</span><span class="p">,</span><span class="w"> </span><span class="n">rem</span><span class="p">)</span>
+<span class="w">            </span><span class="n">kw</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">kw</span><span class="o">*</span><span class="n">used</span><span class="o">/</span><span class="n">need</span>
+<span class="w">         </span><span class="k">else if</span><span class="w"> </span><span class="p">(</span><span class="n">n2e</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="w">            </span><span class="c">! Nothing to pay for: fill to the cap while power remains.</span>
+<span class="w">            </span><span class="n">kw</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">rem</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="n">kw</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">kd_max</span>
+<span class="w">         </span><span class="k">else</span>
+<span class="k">            </span><span class="n">kw</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">         </span><span class="n">rem</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">max</span><span class="p">(</span><span class="n">rem</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">used</span><span class="p">,</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span>
+<span class="w">         </span><span class="n">kd</span><span class="p">(</span><span class="n">k</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">kw</span>
+<span class="w">      </span><span class="k">end do</span>
+<span class="k">   end subroutine </span><span class="n">bbl_column_sweep</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-11-13 23:21 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

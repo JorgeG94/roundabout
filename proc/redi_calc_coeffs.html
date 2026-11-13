@@ -1,0 +1,1065 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>redi_calc_coeffs &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>redi_calc_coeffs
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.0% of total for procedures.">22 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_redi.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_redi.f90.html'>rdb_ocean_redi.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ocean_redi.html'>rdb_ocean_redi</a></li>
+            <li class="breadcrumb-item active" aria-current="page">redi_calc_coeffs</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/redi_calc_coeffs.html#variable-nx~54">nx</a>
+            <a class="list-group-item" href="../proc/redi_calc_coeffs.html#variable-ny~54">ny</a>
+            <a class="list-group-item" href="../proc/redi_calc_coeffs.html#variable-nz~42">nz</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/redi_calc_coeffs.html#src">redi_calc_coeffs</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>public  subroutine redi_calc_coeffs(grid, metrics, eos, this, ms)  
+</h2>
+    
+
+    <p>Public entry: fill the Phase-A coefficient arrays.  No-op if
+absent / uninitialised / disabled.  Run once per outer step at
+THERMO cadence (a slow, tracer-independent geometry).  Outer-shim:
+dereference the tracer-registry c arrays on the host, pass the
+flat top-level allocatables to the flat-impl kernels.</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-grid~54"></span>
+              type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>grid</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-metrics~6"></span>
+              type(<a href='../type/ocean_metrics_t.html'>ocean_metrics_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>metrics</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-eos~8"></span>
+              type(<a href='../type/eos_t.html'>eos_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>eos</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-this~61"></span>
+              type(<a href='../type/ocean_redi_t.html'>ocean_redi_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>this</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ms~22"></span>
+              type(<a href='../type/multilayer_state_t.html'>multilayer_state_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ms</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~redi_calc_coeffs~~CallsGraph Pages: 1 -->
+<svg id="procredi_calc_coeffsCallsGraph" width="641pt" height="188pt"
+ viewBox="0.00 0.00 641.00 188.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~redi_calc_coeffs~~CallsGraph" class="graph" transform="scale(0.661595 0.661595) rotate(0) translate(4 280.27)">
+<title>proc~~redi_calc_coeffs~~CallsGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-280.27 964.87,-280.27 964.87,4 -4,4"/>
+<!-- proc~redi_calc_coeffs -->
+<g id="proc~~redi_calc_coeffs~~CallsGraph_node1" class="node">
+<title>proc~redi_calc_coeffs</title>
+<polygon fill="none" stroke="black" points="96.27,-87.27 0,-87.27 0,-63 96.27,-63 96.27,-87.27"/>
+<text xml:space="preserve" text-anchor="middle" x="48.13" y="-71.54" font-family="Helvetica,sans-Serif" font-size="10.50">redi_calc_coeffs</text>
+</g>
+<!-- proc~redi_calc_coeffs_x -->
+<g id="proc~~redi_calc_coeffs~~CallsGraph_node2" class="node">
+<title>proc~redi_calc_coeffs_x</title>
+<g id="a_proc~~redi_calc_coeffs~~CallsGraph_node2"><a xlink:href="../proc/redi_calc_coeffs_x.html" xlink:title="redi_calc_coeffs_x">
+<polygon fill="#d9534f" stroke="#d9534f" points="248.79,-150.27 141.27,-150.27 141.27,-126 248.79,-126 248.79,-150.27"/>
+<text xml:space="preserve" text-anchor="middle" x="195.03" y="-134.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">redi_calc_coeffs_x</text>
+</a>
+</g>
+</g>
+<!-- proc~redi_calc_coeffs&#45;&gt;proc~redi_calc_coeffs_x -->
+<g id="proc~~redi_calc_coeffs~~CallsGraph_edge1" class="edge">
+<title>proc~redi_calc_coeffs&#45;&gt;proc~redi_calc_coeffs_x</title>
+<path fill="none" stroke="#ff0000" d="M71.67,-87.6C88.16,-96.46 111.25,-108.3 132.27,-117.14 135.88,-118.65 139.64,-120.14 143.44,-121.58"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="142.17,-124.84 152.76,-124.98 144.57,-118.27 142.17,-124.84"/>
+</g>
+<!-- proc~redi_calc_coeffs_y -->
+<g id="proc~~redi_calc_coeffs~~CallsGraph_node3" class="node">
+<title>proc~redi_calc_coeffs_y</title>
+<g id="a_proc~~redi_calc_coeffs~~CallsGraph_node3"><a xlink:href="../proc/redi_calc_coeffs_y.html" xlink:title="redi_calc_coeffs_y">
+<polygon fill="#d9534f" stroke="#d9534f" points="248.79,-108.27 141.27,-108.27 141.27,-84 248.79,-84 248.79,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="195.03" y="-92.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">redi_calc_coeffs_y</text>
+</a>
+</g>
+</g>
+<!-- proc~redi_calc_coeffs&#45;&gt;proc~redi_calc_coeffs_y -->
+<g id="proc~~redi_calc_coeffs~~CallsGraph_edge2" class="edge">
+<title>proc~redi_calc_coeffs&#45;&gt;proc~redi_calc_coeffs_y</title>
+<path fill="none" stroke="#ff0000" d="M96.58,-82.01C107.23,-83.55 118.69,-85.22 129.89,-86.84"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="129.07,-90.26 139.47,-88.23 130.07,-83.33 129.07,-90.26"/>
+</g>
+<!-- proc~redi_open_windows_x -->
+<g id="proc~~redi_calc_coeffs~~CallsGraph_node4" class="node">
+<title>proc~redi_open_windows_x</title>
+<g id="a_proc~~redi_calc_coeffs~~CallsGraph_node4"><a xlink:href="../proc/redi_open_windows_x.html" xlink:title="redi_open_windows_x">
+<polygon fill="#d9534f" stroke="#d9534f" points="257.79,-66.27 132.27,-66.27 132.27,-42 257.79,-42 257.79,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="195.03" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">redi_open_windows_x</text>
+</a>
+</g>
+</g>
+<!-- proc~redi_calc_coeffs&#45;&gt;proc~redi_open_windows_x -->
+<g id="proc~~redi_calc_coeffs~~CallsGraph_edge3" class="edge">
+<title>proc~redi_calc_coeffs&#45;&gt;proc~redi_open_windows_x</title>
+<path fill="none" stroke="#ff0000" d="M96.58,-68.26C104.35,-67.13 112.56,-65.94 120.79,-64.75"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="121.08,-68.24 130.48,-63.35 120.08,-61.32 121.08,-68.24"/>
+</g>
+<!-- proc~redi_open_windows_y -->
+<g id="proc~~redi_calc_coeffs~~CallsGraph_node5" class="node">
+<title>proc~redi_open_windows_y</title>
+<g id="a_proc~~redi_calc_coeffs~~CallsGraph_node5"><a xlink:href="../proc/redi_open_windows_y.html" xlink:title="redi_open_windows_y">
+<polygon fill="#d9534f" stroke="#d9534f" points="257.79,-24.27 132.27,-24.27 132.27,0 257.79,0 257.79,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="195.03" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">redi_open_windows_y</text>
+</a>
+</g>
+</g>
+<!-- proc~redi_calc_coeffs&#45;&gt;proc~redi_open_windows_y -->
+<g id="proc~~redi_calc_coeffs~~CallsGraph_edge4" class="edge">
+<title>proc~redi_calc_coeffs&#45;&gt;proc~redi_open_windows_y</title>
+<path fill="none" stroke="#ff0000" d="M71.67,-62.67C88.16,-53.81 111.25,-41.97 132.27,-33.13 135.88,-31.62 139.64,-30.13 143.44,-28.69"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="144.57,-32 152.76,-25.29 142.17,-25.43 144.57,-32"/>
+</g>
+<!-- local -->
+<g id="proc~~redi_calc_coeffs~~CallsGraph_node6" class="node">
+<title>local</title>
+<polygon fill="#777777" stroke="#777777" points="375.3,-108.27 321.3,-108.27 321.3,-84 375.3,-84 375.3,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="348.3" y="-92.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">local</text>
+</g>
+<!-- proc~redi_calc_coeffs_x&#45;&gt;local -->
+<g id="proc~~redi_calc_coeffs~~CallsGraph_edge5" class="edge">
+<title>proc~redi_calc_coeffs_x&#45;&gt;local</title>
+<path fill="none" stroke="#ff0000" d="M241.42,-125.53C263.3,-119.46 289.22,-112.26 309.94,-106.51"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="310.7,-109.93 319.4,-103.88 308.83,-103.18 310.7,-109.93"/>
+</g>
+<!-- proc~redi_face_coeffs -->
+<g id="proc~~redi_calc_coeffs~~CallsGraph_node7" class="node">
+<title>proc~redi_face_coeffs</title>
+<g id="a_proc~~redi_calc_coeffs~~CallsGraph_node7"><a xlink:href="../proc/redi_face_coeffs.html" xlink:title="redi_face_coeffs">
+<polygon fill="#d9534f" stroke="#d9534f" points="397.18,-150.27 299.41,-150.27 299.41,-126 397.18,-126 397.18,-150.27"/>
+<text xml:space="preserve" text-anchor="middle" x="348.3" y="-134.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">redi_face_coeffs</text>
+</a>
+</g>
+</g>
+<!-- proc~redi_calc_coeffs_x&#45;&gt;proc~redi_face_coeffs -->
+<g id="proc~~redi_calc_coeffs~~CallsGraph_edge6" class="edge">
+<title>proc~redi_calc_coeffs_x&#45;&gt;proc~redi_face_coeffs</title>
+<path fill="none" stroke="#ff0000" d="M248.94,-138.13C261.4,-138.13 274.76,-138.13 287.5,-138.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="287.47,-141.64 297.47,-138.14 287.47,-134.64 287.47,-141.64"/>
+</g>
+<!-- proc~redi_calc_coeffs_y&#45;&gt;local -->
+<g id="proc~~redi_calc_coeffs~~CallsGraph_edge7" class="edge">
+<title>proc~redi_calc_coeffs_y&#45;&gt;local</title>
+<path fill="none" stroke="#7fff00" d="M248.94,-96.14C268.93,-96.14 291.25,-96.14 309.57,-96.14"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="309.45,-99.64 319.45,-96.14 309.45,-92.64 309.45,-99.64"/>
+</g>
+<!-- proc~redi_calc_coeffs_y&#45;&gt;proc~redi_face_coeffs -->
+<g id="proc~~redi_calc_coeffs~~CallsGraph_edge8" class="edge">
+<title>proc~redi_calc_coeffs_y&#45;&gt;proc~redi_face_coeffs</title>
+<path fill="none" stroke="#7fff00" d="M241.42,-108.74C256.97,-113.06 274.57,-117.94 290.89,-122.47"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="289.92,-125.83 300.49,-125.14 291.79,-119.09 289.92,-125.83"/>
+</g>
+<!-- proc~redi_open_windows_x&#45;&gt;local -->
+<g id="proc~~redi_calc_coeffs~~CallsGraph_edge9" class="edge">
+<title>proc~redi_open_windows_x&#45;&gt;local</title>
+<path fill="none" stroke="#00ffff" d="M241.42,-66.74C263.3,-72.81 289.22,-80.01 309.94,-85.76"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="308.83,-89.09 319.4,-88.39 310.7,-82.34 308.83,-89.09"/>
+</g>
+<!-- proc~redi_open_window -->
+<g id="proc~~redi_calc_coeffs~~CallsGraph_node8" class="node">
+<title>proc~redi_open_window</title>
+<g id="a_proc~~redi_calc_coeffs~~CallsGraph_node8"><a xlink:href="../proc/redi_open_window.html" xlink:title="redi_open_window">
+<polygon fill="#d9534f" stroke="#d9534f" points="402.81,-66.27 293.79,-66.27 293.79,-42 402.81,-42 402.81,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="348.3" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">redi_open_window</text>
+</a>
+</g>
+</g>
+<!-- proc~redi_open_windows_x&#45;&gt;proc~redi_open_window -->
+<g id="proc~~redi_calc_coeffs~~CallsGraph_edge10" class="edge">
+<title>proc~redi_open_windows_x&#45;&gt;proc~redi_open_window</title>
+<path fill="none" stroke="#00ffff" d="M257.99,-54.13C265.89,-54.13 273.99,-54.13 281.93,-54.13"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="281.91,-57.64 291.91,-54.14 281.91,-50.64 281.91,-57.64"/>
+</g>
+<!-- rdb_vl_is_live -->
+<g id="proc~~redi_calc_coeffs~~CallsGraph_node9" class="node">
+<title>rdb_vl_is_live</title>
+<polygon fill="#777777" stroke="#777777" points="388.93,-24.27 307.66,-24.27 307.66,0 388.93,0 388.93,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="348.3" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_vl_is_live</text>
+</g>
+<!-- proc~redi_open_windows_x&#45;&gt;rdb_vl_is_live -->
+<g id="proc~~redi_calc_coeffs~~CallsGraph_edge11" class="edge">
+<title>proc~redi_open_windows_x&#45;&gt;rdb_vl_is_live</title>
+<path fill="none" stroke="#00ffff" d="M241.42,-41.53C258.7,-36.73 278.51,-31.23 296.29,-26.3"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="297.18,-29.68 305.88,-23.64 295.31,-22.94 297.18,-29.68"/>
+</g>
+<!-- proc~redi_open_windows_y&#45;&gt;local -->
+<g id="proc~~redi_calc_coeffs~~CallsGraph_edge12" class="edge">
+<title>proc~redi_open_windows_y&#45;&gt;local</title>
+<path fill="none" stroke="#7f00ff" d="M242.21,-24.74C247.68,-27.12 253.01,-29.9 257.79,-33.13 278.15,-46.91 273.75,-60.89 293.79,-75.14 298.87,-78.75 304.66,-81.85 310.51,-84.47"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="308.98,-87.63 319.56,-88.12 311.6,-81.14 308.98,-87.63"/>
+</g>
+<!-- proc~redi_open_windows_y&#45;&gt;proc~redi_open_window -->
+<g id="proc~~redi_calc_coeffs~~CallsGraph_edge13" class="edge">
+<title>proc~redi_open_windows_y&#45;&gt;proc~redi_open_window</title>
+<path fill="none" stroke="#7f00ff" d="M241.42,-24.74C256.97,-29.06 274.57,-33.94 290.89,-38.47"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="289.92,-41.83 300.49,-41.14 291.79,-35.09 289.92,-41.83"/>
+</g>
+<!-- proc~redi_open_windows_y&#45;&gt;rdb_vl_is_live -->
+<g id="proc~~redi_calc_coeffs~~CallsGraph_edge14" class="edge">
+<title>proc~redi_open_windows_y&#45;&gt;rdb_vl_is_live</title>
+<path fill="none" stroke="#7f00ff" d="M257.99,-12.13C270.61,-12.13 283.75,-12.13 295.94,-12.13"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="295.79,-15.64 305.79,-12.14 295.79,-8.64 295.79,-15.64"/>
+</g>
+<!-- proc~redi_build_column -->
+<g id="proc~~redi_calc_coeffs~~CallsGraph_node10" class="node">
+<title>proc~redi_build_column</title>
+<g id="a_proc~~redi_calc_coeffs~~CallsGraph_node10"><a xlink:href="../proc/redi_build_column.html" xlink:title="redi_build_column">
+<polygon fill="#d9534f" stroke="#d9534f" points="588.7,-171.27 480.43,-171.27 480.43,-147 588.7,-147 588.7,-171.27"/>
+<text xml:space="preserve" text-anchor="middle" x="534.57" y="-155.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">redi_build_column</text>
+</a>
+</g>
+</g>
+<!-- proc~redi_face_coeffs&#45;&gt;proc~redi_build_column -->
+<g id="proc~~redi_calc_coeffs~~CallsGraph_edge15" class="edge">
+<title>proc~redi_face_coeffs&#45;&gt;proc~redi_build_column</title>
+<path fill="none" stroke="#7fff00" d="M397.23,-143.6C419.04,-146.08 445.19,-149.06 468.72,-151.74"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="468.19,-155.21 478.53,-152.86 468.99,-148.25 468.19,-155.21"/>
+</g>
+<!-- proc~redi_neutral_positions_continuous -->
+<g id="proc~~redi_calc_coeffs~~CallsGraph_node11" class="node">
+<title>proc~redi_neutral_positions_continuous</title>
+<g id="a_proc~~redi_calc_coeffs~~CallsGraph_node11"><a xlink:href="../proc/redi_neutral_positions_continuous.html" xlink:title="redi_neutral_positions_continuous">
+<polygon fill="#d9534f" stroke="#d9534f" points="630.33,-108.27 438.81,-108.27 438.81,-84 630.33,-84 630.33,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="534.57" y="-92.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">redi_neutral_positions_continuous</text>
+</a>
+</g>
+</g>
+<!-- proc~redi_face_coeffs&#45;&gt;proc~redi_neutral_positions_continuous -->
+<g id="proc~~redi_calc_coeffs~~CallsGraph_edge16" class="edge">
+<title>proc~redi_face_coeffs&#45;&gt;proc~redi_neutral_positions_continuous</title>
+<path fill="none" stroke="#7fff00" d="M397.23,-127.21C418.59,-122.34 444.09,-116.53 467.23,-111.26"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="467.93,-114.69 476.9,-109.05 466.37,-107.86 467.93,-114.69"/>
+</g>
+<!-- proc~eos_density_specvol_derivs -->
+<g id="proc~~redi_calc_coeffs~~CallsGraph_node12" class="node">
+<title>proc~eos_density_specvol_derivs</title>
+<g id="a_proc~~redi_calc_coeffs~~CallsGraph_node12"><a xlink:href="../proc/eos_density_specvol_derivs.html" xlink:title="eos_density_specvol_derivs">
+<polygon fill="#d9534f" stroke="#d9534f" points="823.35,-234.27 666.33,-234.27 666.33,-210 823.35,-210 823.35,-234.27"/>
+<text xml:space="preserve" text-anchor="middle" x="744.84" y="-218.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">eos_density_specvol_derivs</text>
+</a>
+</g>
+</g>
+<!-- proc~redi_build_column&#45;&gt;proc~eos_density_specvol_derivs -->
+<g id="proc~~redi_calc_coeffs~~CallsGraph_edge17" class="edge">
+<title>proc~redi_build_column&#45;&gt;proc~eos_density_specvol_derivs</title>
+<path fill="none" stroke="#ff0000" d="M573.19,-171.73C599.25,-180.32 634.78,-191.8 666.33,-201.13 672.5,-202.96 678.96,-204.81 685.41,-206.61"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="684.16,-209.9 694.73,-209.19 686.03,-203.15 684.16,-209.9"/>
+</g>
+<!-- proc~redi_interface_scalar -->
+<g id="proc~~redi_calc_coeffs~~CallsGraph_node14" class="node">
+<title>proc~redi_interface_scalar</title>
+<g id="a_proc~~redi_calc_coeffs~~CallsGraph_node14"><a xlink:href="../proc/redi_interface_scalar.html" xlink:title="redi_interface_scalar">
+<polygon fill="#d9534f" stroke="#d9534f" points="806.1,-192.27 683.58,-192.27 683.58,-168 806.1,-168 806.1,-192.27"/>
+<text xml:space="preserve" text-anchor="middle" x="744.84" y="-176.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">redi_interface_scalar</text>
+</a>
+</g>
+</g>
+<!-- proc~redi_build_column&#45;&gt;proc~redi_interface_scalar -->
+<g id="proc~~redi_calc_coeffs~~CallsGraph_edge18" class="edge">
+<title>proc~redi_build_column&#45;&gt;proc~redi_interface_scalar</title>
+<path fill="none" stroke="#ff0000" d="M589.2,-164.54C614.41,-167.08 644.82,-170.15 671.98,-172.89"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="671.59,-176.37 681.89,-173.89 672.3,-169.4 671.59,-176.37"/>
+</g>
+<!-- rdb_vl_column_conc -->
+<g id="proc~~redi_calc_coeffs~~CallsGraph_node16" class="node">
+<title>rdb_vl_column_conc</title>
+<polygon fill="#777777" stroke="#777777" points="804.6,-150.27 685.08,-150.27 685.08,-126 804.6,-126 804.6,-150.27"/>
+<text xml:space="preserve" text-anchor="middle" x="744.84" y="-134.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_vl_column_conc</text>
+</g>
+<!-- proc~redi_build_column&#45;&gt;rdb_vl_column_conc -->
+<g id="proc~~redi_calc_coeffs~~CallsGraph_edge19" class="edge">
+<title>proc~redi_build_column&#45;&gt;rdb_vl_column_conc</title>
+<path fill="none" stroke="#ff0000" d="M589.2,-153.73C614.95,-151.13 646.12,-147.99 673.71,-145.21"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="673.79,-148.72 683.39,-144.23 673.08,-141.75 673.79,-148.72"/>
+</g>
+<!-- proc~redi_absolute_position -->
+<g id="proc~~redi_calc_coeffs~~CallsGraph_node13" class="node">
+<title>proc~redi_absolute_position</title>
+<g id="a_proc~~redi_calc_coeffs~~CallsGraph_node13"><a xlink:href="../proc/redi_absolute_position.html" xlink:title="redi_absolute_position">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="809.85,-66.27 679.83,-66.27 679.83,-42 809.85,-42 809.85,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="744.84" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">redi_absolute_position</text>
+</a>
+</g>
+</g>
+<!-- proc~redi_neutral_positions_continuous&#45;&gt;proc~redi_absolute_position -->
+<g id="proc~~redi_calc_coeffs~~CallsGraph_edge20" class="edge">
+<title>proc~redi_neutral_positions_continuous&#45;&gt;proc~redi_absolute_position</title>
+<path fill="none" stroke="#00ffff" d="M598.06,-83.53C620.81,-78.94 646.75,-73.71 670.37,-68.95"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="670.8,-72.43 679.91,-67.03 669.42,-65.57 670.8,-72.43"/>
+</g>
+<!-- proc~redi_interpolate_position -->
+<g id="proc~~redi_calc_coeffs~~CallsGraph_node15" class="node">
+<title>proc~redi_interpolate_position</title>
+<g id="a_proc~~redi_calc_coeffs~~CallsGraph_node15"><a xlink:href="../proc/redi_interpolate_position.html" xlink:title="redi_interpolate_position">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="816.22,-108.27 673.45,-108.27 673.45,-84 816.22,-84 816.22,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="744.84" y="-92.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">redi_interpolate_position</text>
+</a>
+</g>
+</g>
+<!-- proc~redi_neutral_positions_continuous&#45;&gt;proc~redi_interpolate_position -->
+<g id="proc~~redi_calc_coeffs~~CallsGraph_edge21" class="edge">
+<title>proc~redi_neutral_positions_continuous&#45;&gt;proc~redi_interpolate_position</title>
+<path fill="none" stroke="#00ffff" d="M630.56,-96.14C640.93,-96.14 651.42,-96.14 661.61,-96.14"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="661.46,-99.64 671.46,-96.14 661.46,-92.64 661.46,-99.64"/>
+</g>
+<!-- proc~roquet_rho_point -->
+<g id="proc~~redi_calc_coeffs~~CallsGraph_node19" class="node">
+<title>proc~roquet_rho_point</title>
+<g id="a_proc~~redi_calc_coeffs~~CallsGraph_node19"><a xlink:href="../proc/roquet_rho_point.html" xlink:title="roquet_rho_point">
+<polygon fill="#d9534f" stroke="#d9534f" points="960.87,-276.27 859.35,-276.27 859.35,-252 960.87,-252 960.87,-276.27"/>
+<text xml:space="preserve" text-anchor="middle" x="910.11" y="-260.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">roquet_rho_point</text>
+</a>
+</g>
+</g>
+<!-- proc~eos_density_specvol_derivs&#45;&gt;proc~roquet_rho_point -->
+<g id="proc~~redi_calc_coeffs~~CallsGraph_edge22" class="edge">
+<title>proc~eos_density_specvol_derivs&#45;&gt;proc~roquet_rho_point</title>
+<path fill="none" stroke="#ff0000" d="M794.83,-234.74C811.94,-239.14 831.34,-244.13 849.24,-248.73"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="848.14,-252.06 858.69,-251.17 849.88,-245.28 848.14,-252.06"/>
+</g>
+<!-- proc~roquet_spv_point -->
+<g id="proc~~redi_calc_coeffs~~CallsGraph_node20" class="node">
+<title>proc~roquet_spv_point</title>
+<g id="a_proc~~redi_calc_coeffs~~CallsGraph_node20"><a xlink:href="../proc/roquet_spv_point.html" xlink:title="roquet_spv_point">
+<polygon fill="#d9534f" stroke="#d9534f" points="960.87,-234.27 859.35,-234.27 859.35,-210 960.87,-210 960.87,-234.27"/>
+<text xml:space="preserve" text-anchor="middle" x="910.11" y="-218.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">roquet_spv_point</text>
+</a>
+</g>
+</g>
+<!-- proc~eos_density_specvol_derivs&#45;&gt;proc~roquet_spv_point -->
+<g id="proc~~redi_calc_coeffs~~CallsGraph_edge23" class="edge">
+<title>proc~eos_density_specvol_derivs&#45;&gt;proc~roquet_spv_point</title>
+<path fill="none" stroke="#ff0000" d="M823.65,-222.13C831.71,-222.13 839.81,-222.13 847.65,-222.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="847.4,-225.64 857.4,-222.14 847.4,-218.64 847.4,-225.64"/>
+</g>
+<!-- proc~redi_plm_diff -->
+<g id="proc~~redi_calc_coeffs~~CallsGraph_node17" class="node">
+<title>proc~redi_plm_diff</title>
+<g id="a_proc~~redi_calc_coeffs~~CallsGraph_node17"><a xlink:href="../proc/redi_plm_diff.html" xlink:title="redi_plm_diff">
+<polygon fill="#d9534f" stroke="#d9534f" points="950,-192.27 870.23,-192.27 870.23,-168 950,-168 950,-192.27"/>
+<text xml:space="preserve" text-anchor="middle" x="910.11" y="-176.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">redi_plm_diff</text>
+</a>
+</g>
+</g>
+<!-- proc~redi_interface_scalar&#45;&gt;proc~redi_plm_diff -->
+<g id="proc~~redi_calc_coeffs~~CallsGraph_edge24" class="edge">
+<title>proc~redi_interface_scalar&#45;&gt;proc~redi_plm_diff</title>
+<path fill="none" stroke="#00ff66" d="M806.17,-180.13C823.44,-180.13 842.08,-180.13 858.69,-180.13"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="858.31,-183.64 868.31,-180.14 858.31,-176.64 858.31,-183.64"/>
+</g>
+<!-- proc~redi_ppm_edge -->
+<g id="proc~~redi_calc_coeffs~~CallsGraph_node18" class="node">
+<title>proc~redi_ppm_edge</title>
+<g id="a_proc~~redi_calc_coeffs~~CallsGraph_node18"><a xlink:href="../proc/redi_ppm_edge.html" xlink:title="redi_ppm_edge">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="956.75,-150.27 863.48,-150.27 863.48,-126 956.75,-126 956.75,-150.27"/>
+<text xml:space="preserve" text-anchor="middle" x="910.11" y="-134.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">redi_ppm_edge</text>
+</a>
+</g>
+</g>
+<!-- proc~redi_interface_scalar&#45;&gt;proc~redi_ppm_edge -->
+<g id="proc~~redi_calc_coeffs~~CallsGraph_edge25" class="edge">
+<title>proc~redi_interface_scalar&#45;&gt;proc~redi_ppm_edge</title>
+<path fill="none" stroke="#00ff66" d="M794.83,-167.53C812.88,-162.89 833.48,-157.59 852.18,-152.78"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="852.95,-156.2 861.77,-150.31 851.21,-149.42 852.95,-156.2"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocredi_calc_coeffsCallsGraph = svgPanZoom('#procredi_calc_coeffsCallsGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~redi_calc_coeffs~~CalledByGraph Pages: 1 -->
+<svg id="procredi_calc_coeffsCalledByGraph" width="641pt" height="59pt"
+ viewBox="0.00 0.00 641.00 59.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~redi_calc_coeffs~~CalledByGraph" class="graph" transform="scale(0.789292 0.789292) rotate(0) translate(4 70.27)">
+<title>proc~~redi_calc_coeffs~~CalledByGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-70.27 808.12,-70.27 808.12,4 -4,4"/>
+<!-- proc~redi_calc_coeffs -->
+<g id="proc~~redi_calc_coeffs~~CalledByGraph_node1" class="node">
+<title>proc~redi_calc_coeffs</title>
+<polygon fill="none" stroke="black" points="804.12,-45.27 707.85,-45.27 707.85,-21 804.12,-21 804.12,-45.27"/>
+<text xml:space="preserve" text-anchor="middle" x="755.98" y="-29.53" font-family="Helvetica,sans-Serif" font-size="10.50">redi_calc_coeffs</text>
+</g>
+<!-- proc~apply_deferred_tracer_step -->
+<g id="proc~~redi_calc_coeffs~~CalledByGraph_node2" class="node">
+<title>proc~apply_deferred_tracer_step</title>
+<g id="a_proc~~redi_calc_coeffs~~CalledByGraph_node2"><a xlink:href="../proc/apply_deferred_tracer_step.html" xlink:title="apply_deferred_tracer_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="671.85,-25.27 514.83,-25.27 514.83,-1 671.85,-1 671.85,-25.27"/>
+<text xml:space="preserve" text-anchor="middle" x="593.34" y="-9.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">apply_deferred_tracer_step</text>
+</a>
+</g>
+</g>
+<!-- proc~apply_deferred_tracer_step&#45;&gt;proc~redi_calc_coeffs -->
+<g id="proc~~redi_calc_coeffs~~CalledByGraph_edge1" class="edge">
+<title>proc~apply_deferred_tracer_step&#45;&gt;proc~redi_calc_coeffs</title>
+<path fill="none" stroke="#ff0000" d="M672.31,-22.84C680.37,-23.85 688.45,-24.85 696.25,-25.82"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="695.57,-29.26 705.92,-27.03 696.43,-22.32 695.57,-29.26"/>
+</g>
+<!-- proc~ocean_dyn_step_split -->
+<g id="proc~~redi_calc_coeffs~~CalledByGraph_node3" class="node">
+<title>proc~ocean_dyn_step_split</title>
+<g id="a_proc~~redi_calc_coeffs~~CalledByGraph_node3"><a xlink:href="../proc/ocean_dyn_step_split.html" xlink:title="ocean_dyn_step_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="478.83,-45.27 354.81,-45.27 354.81,-21 478.83,-21 478.83,-45.27"/>
+<text xml:space="preserve" text-anchor="middle" x="416.82" y="-29.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step_split</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step_split&#45;&gt;proc~redi_calc_coeffs -->
+<g id="proc~~redi_calc_coeffs~~CalledByGraph_edge2" class="edge">
+<title>proc~ocean_dyn_step_split&#45;&gt;proc~redi_calc_coeffs</title>
+<path fill="none" stroke="#ff0000" d="M479.14,-33.86C490.98,-33.98 503.29,-34.08 514.83,-34.13 584.62,-34.49 602.06,-34.55 671.85,-34.13 679.7,-34.09 687.96,-34.02 696.11,-33.93"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="696.03,-37.43 705.99,-33.82 695.95,-30.43 696.03,-37.43"/>
+</g>
+<!-- proc~ocean_dyn_step_split&#45;&gt;proc~apply_deferred_tracer_step -->
+<g id="proc~~redi_calc_coeffs~~CalledByGraph_edge3" class="edge">
+<title>proc~ocean_dyn_step_split&#45;&gt;proc~apply_deferred_tracer_step</title>
+<path fill="none" stroke="#ff0000" d="M478.86,-26.14C486.77,-25.23 494.99,-24.29 503.23,-23.35"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="503.42,-26.85 512.96,-22.23 502.63,-19.89 503.42,-26.85"/>
+</g>
+<!-- proc~engine_step -->
+<g id="proc~~redi_calc_coeffs~~CalledByGraph_node4" class="node">
+<title>proc~engine_step</title>
+<g id="a_proc~~redi_calc_coeffs~~CalledByGraph_node4"><a xlink:href="../proc/engine_step.html" xlink:title="engine_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="318.81,-45.27 242.79,-45.27 242.79,-21 318.81,-21 318.81,-45.27"/>
+<text xml:space="preserve" text-anchor="middle" x="280.8" y="-29.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~ocean_dyn_step_split -->
+<g id="proc~~redi_calc_coeffs~~CalledByGraph_edge4" class="edge">
+<title>proc~engine_step&#45;&gt;proc~ocean_dyn_step_split</title>
+<path fill="none" stroke="#00ffff" d="M319.13,-33.13C326.69,-33.13 334.89,-33.13 343.2,-33.13"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="343.04,-36.64 353.04,-33.14 343.04,-29.64 343.04,-36.64"/>
+</g>
+<!-- proc~driver_run_ocean -->
+<g id="proc~~redi_calc_coeffs~~CalledByGraph_node5" class="node">
+<title>proc~driver_run_ocean</title>
+<g id="a_proc~~redi_calc_coeffs~~CalledByGraph_node5"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<polygon fill="#d9534f" stroke="#d9534f" points="206.79,-66.27 102.27,-66.27 102.27,-42 206.79,-42 206.79,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="154.53" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_step -->
+<g id="proc~~redi_calc_coeffs~~CalledByGraph_edge5" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_step</title>
+<path fill="none" stroke="#ff0000" d="M207.15,-45.41C215.13,-44.06 223.34,-42.68 231.25,-41.34"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="231.77,-44.8 241.05,-39.68 230.61,-37.9 231.77,-44.8"/>
+</g>
+<!-- proc~rdb_ocean_step -->
+<g id="proc~~redi_calc_coeffs~~CalledByGraph_node6" class="node">
+<title>proc~rdb_ocean_step</title>
+<g id="a_proc~~redi_calc_coeffs~~CalledByGraph_node6"><a xlink:href="../proc/rdb_ocean_step.html" xlink:title="rdb_ocean_step">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="202.29,-24.27 106.77,-24.27 106.77,0 202.29,0 202.29,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="154.53" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_step</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_step&#45;&gt;proc~engine_step -->
+<g id="proc~~redi_calc_coeffs~~CalledByGraph_edge6" class="edge">
+<title>proc~rdb_ocean_step&#45;&gt;proc~engine_step</title>
+<path fill="none" stroke="#ff0000" d="M202.51,-20.07C211.89,-21.66 221.77,-23.33 231.2,-24.92"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="230.49,-28.35 240.94,-26.57 231.66,-21.45 230.49,-28.35"/>
+</g>
+<!-- proc~driver_run -->
+<g id="proc~~redi_calc_coeffs~~CalledByGraph_node7" class="node">
+<title>proc~driver_run</title>
+<g id="a_proc~~redi_calc_coeffs~~CalledByGraph_node7"><a xlink:href="../proc/driver_run.html" xlink:title="driver_run">
+<polygon fill="#d9534f" stroke="#d9534f" points="66.27,-66.27 0,-66.27 0,-42 66.27,-42 66.27,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="33.13" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run&#45;&gt;proc~driver_run_ocean -->
+<g id="proc~~redi_calc_coeffs~~CalledByGraph_edge7" class="edge">
+<title>proc~driver_run&#45;&gt;proc~driver_run_ocean</title>
+<path fill="none" stroke="#ff0000" d="M66.76,-54.13C74.26,-54.13 82.48,-54.13 90.79,-54.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="90.58,-57.64 100.58,-54.14 90.58,-50.64 90.58,-57.64"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocredi_calc_coeffsCalledByGraph = svgPanZoom('#procredi_calc_coeffsCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx~54"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny~54"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz~42"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">subroutine </span><span class="n">redi_calc_coeffs</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">,</span><span class="w"> </span><span class="n">eos</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! Public entry: fill the Phase-A coefficient arrays.  No-op if</span>
+<span class="w">      </span><span class="c">!! absent / uninitialised / disabled.  Run once per outer step at</span>
+<span class="w">      </span><span class="c">!! THERMO cadence (a slow, tracer-independent geometry).  Outer-shim:</span>
+<span class="w">      </span><span class="c">!! dereference the tracer-registry c arrays on the host, pass the</span>
+<span class="w">      </span><span class="c">!! flat top-level allocatables to the flat-impl kernels.</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">hgrid_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">grid</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_metrics_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">metrics</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">eos_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">eos</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_redi_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">this</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">multilayer_state_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ms</span>
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span>
+
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">is_init</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">enable</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">idx_temperature</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="p">.</span><span class="nb">or</span><span class="p">.</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">idx_salinity</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="nb">allocated</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">h_layer</span><span class="p">))</span><span class="w"> </span><span class="k">return</span>
+
+<span class="k">      </span><span class="n">nx</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">nx_total</span>
+<span class="w">      </span><span class="n">ny</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">ny_total</span>
+<span class="w">      </span><span class="n">nz</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">nz_ml</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">this</span><span class="p">%</span><span class="n">nz_ml</span><span class="w"> </span><span class="o">/=</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+
+<span class="w">      </span><span class="c">! z-level closed faces: refresh every face's open window first.  A</span>
+<span class="w">      </span><span class="c">! SEPARATE, host-gated pass, so the coefficient kernels below never</span>
+<span class="w">      </span><span class="c">! name `open_u`/`open_v` — with the knob off those are the `(1,1,1)`</span>
+<span class="w">      </span><span class="c">! placeholders, and NVHPC present-checks an array a kernel indexes</span>
+<span class="w">      </span><span class="c">! over the kernel's LOOP range whether or not the branch is taken</span>
+<span class="w">      </span><span class="c">! ("partially present" under `mem:separate`).  Knob off ⇒ not called,</span>
+<span class="w">      </span><span class="c">! the windows keep their `1..nz` init value.  (`redi_calc_coeffs`</span>
+<span class="w">      </span><span class="c">! itself launches no `do concurrent`, so the escaping-array cost of a</span>
+<span class="w">      </span><span class="c">! gated call — CLAUDE.md — has nothing here to pessimise.)</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">metrics</span><span class="p">%</span><span class="n">use_closed_faces</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">redi_open_windows_x</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">%</span><span class="n">open_u</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                  </span><span class="n">this</span><span class="p">%</span><span class="n">uKb</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">uKt</span><span class="p">)</span>
+<span class="w">         </span><span class="k">call </span><span class="n">redi_open_windows_y</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">%</span><span class="n">open_v</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                  </span><span class="n">this</span><span class="p">%</span><span class="n">vKb</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">vKt</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end if</span>
+<span class="k">      call </span><span class="n">redi_calc_coeffs_x</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">nsurf</span><span class="p">,</span><span class="w"> </span><span class="n">eos</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">ms</span><span class="p">%</span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">ms</span><span class="p">%</span><span class="n">tracers</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">idx_temperature</span><span class="p">)%</span><span class="n">c</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">ms</span><span class="p">%</span><span class="n">tracers</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">idx_salinity</span><span class="p">)%</span><span class="n">c</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">metrics</span><span class="p">%</span><span class="n">wet_u</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">uKb</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">uKt</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">this</span><span class="p">%</span><span class="n">uPoL</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">uPoR</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">uKoL</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">uKoR</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">uhEff</span><span class="p">)</span>
+<span class="w">      </span><span class="k">call </span><span class="n">redi_calc_coeffs_y</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">nsurf</span><span class="p">,</span><span class="w"> </span><span class="n">eos</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">ms</span><span class="p">%</span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">ms</span><span class="p">%</span><span class="n">tracers</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">idx_temperature</span><span class="p">)%</span><span class="n">c</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">ms</span><span class="p">%</span><span class="n">tracers</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">idx_salinity</span><span class="p">)%</span><span class="n">c</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">metrics</span><span class="p">%</span><span class="n">wet_v</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">vKb</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">vKt</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                              </span><span class="n">this</span><span class="p">%</span><span class="n">vPoL</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">vPoR</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">vKoL</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">vKoR</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">vhEff</span><span class="p">)</span>
+<span class="w">   </span><span class="k">end subroutine </span><span class="n">redi_calc_coeffs</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-11-13 23:21 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

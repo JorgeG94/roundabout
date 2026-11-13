@@ -1,0 +1,1246 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>apply_diag_selection &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>apply_diag_selection
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.0% of total for procedures.">31 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_diag_derived.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_diag_derived.f90.html'>rdb_ocean_diag_derived.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ocean_diag_derived.html'>rdb_ocean_diag_derived</a></li>
+            <li class="breadcrumb-item active" aria-current="page">apply_diag_selection</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/apply_diag_selection.html#variable-coord~6">coord</a>
+            <a class="list-group-item" href="../proc/apply_diag_selection.html#variable-dcoord~2">dcoord</a>
+            <a class="list-group-item" href="../proc/apply_diag_selection.html#variable-dto~2">dto</a>
+            <a class="list-group-item" href="../proc/apply_diag_selection.html#variable-dtout~3">dtout</a>
+            <a class="list-group-item" href="../proc/apply_diag_selection.html#variable-i~595">i</a>
+            <a class="list-group-item" href="../proc/apply_diag_selection.html#variable-op~2">op</a>
+            <a class="list-group-item" href="../proc/apply_diag_selection.html#variable-specs~6">specs</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/apply_diag_selection.html#src">apply_diag_selection</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>public  subroutine apply_diag_selection(state, spec, dt_out, default_coord)  
+</h2>
+    
+
+    <p>Configure the ocean diagnostic set from the unified
+<code>&amp;ocean_diag_nml diags</code> selection string.  Single production entry
+point: parses <code>spec</code> once, registers the canonical defaults
+(consulting the spec for per-diagnostic <code>:off</code> skips and
+<code>:cadence</code> / <code>:op</code> / <code>:coord</code> overrides), then registers any spec
+entries that name a derived-catalog diagnostic (with their overrides).</p>
+<p><code>default_coord</code> (a <code>DIAG_VGRID_*</code>, default LAYER) is the global
+output vgrid (<code>&amp;ocean_diag_nml vgrid</code>) applied to layered diagnostics
+that don&rsquo;t carry a per-diag <code>:coord</code>.</p>
+<p>An empty / blank <code>spec</code> + LAYER default reproduces the canonical set
+exactly (bit-identical).  A spec name that is neither canonical nor
+in the derived catalog fails loud via <code>register_derived</code>.  A <code>:off</code>
+on a non-canonical name that is not registered is a harmless no-op.</p>
+<p>Must be called AFTER the output-level setters (<code>set_output_z_levels</code>
+/ <code>set_output_sigma_levels</code> / <code>set_output_zstar_levels</code> /
+<code>set_output_density_levels</code>) so non-layer diagnostics size their
+remap targets correctly.</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-state~44"></span>
+              type(<a href='../type/ocean_state_t.html'>ocean_state_t</a>),
+            </td>
+<td>intent(inout),</td>
+              <td></td>            <td>
+              target
+            </td>
+            <td>::</td>
+            <td><strong>state</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-spec~2"></span>
+              character(len=*),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>spec</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dt_out~8"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dt_out</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-default_coord~3"></span>
+              integer,
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>default_coord</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~apply_diag_selection~~CallsGraph Pages: 1 -->
+<svg id="procapply_diag_selectionCallsGraph" width="641pt" height="279pt"
+ viewBox="0.00 0.00 641.00 279.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~apply_diag_selection~~CallsGraph" class="graph" transform="scale(0.588278 0.588278) rotate(0) translate(4 470.27)">
+<title>proc~~apply_diag_selection~~CallsGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-470.27 1085.62,-470.27 1085.62,4 -4,4"/>
+<!-- proc~apply_diag_selection -->
+<g id="proc~~apply_diag_selection~~CallsGraph_node1" class="node">
+<title>proc~apply_diag_selection</title>
+<polygon fill="none" stroke="black" points="122.52,-288.27 0,-288.27 0,-264 122.52,-264 122.52,-288.27"/>
+<text xml:space="preserve" text-anchor="middle" x="61.26" y="-272.53" font-family="Helvetica,sans-Serif" font-size="10.50">apply_diag_selection</text>
+</g>
+<!-- proc~gate_clause -->
+<g id="proc~~apply_diag_selection~~CallsGraph_node2" class="node">
+<title>proc~gate_clause</title>
+<g id="a_proc~~apply_diag_selection~~CallsGraph_node2"><a xlink:href="../proc/gate_clause.html" xlink:title="gate_clause">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="308.79,-440.27 233.52,-440.27 233.52,-416 308.79,-416 308.79,-440.27"/>
+<text xml:space="preserve" text-anchor="middle" x="271.15" y="-424.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">gate_clause</text>
+</a>
+</g>
+</g>
+<!-- proc~apply_diag_selection&#45;&gt;proc~gate_clause -->
+<g id="proc~~apply_diag_selection~~CallsGraph_edge1" class="edge">
+<title>proc~apply_diag_selection&#45;&gt;proc~gate_clause</title>
+<path fill="none" stroke="#ff0000" d="M70.98,-288.76C86.41,-310.28 120.51,-354.36 158.52,-381.13 177.83,-394.74 201.68,-405.45 222.38,-413.19"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="221.17,-416.47 231.76,-416.56 223.53,-409.89 221.17,-416.47"/>
+</g>
+<!-- proc~is_canonical_diag_name -->
+<g id="proc~~apply_diag_selection~~CallsGraph_node3" class="node">
+<title>proc~is_canonical_diag_name</title>
+<g id="a_proc~~apply_diag_selection~~CallsGraph_node3"><a xlink:href="../proc/is_canonical_diag_name.html" xlink:title="is_canonical_diag_name">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="341.79,-372.27 200.52,-372.27 200.52,-348 341.79,-348 341.79,-372.27"/>
+<text xml:space="preserve" text-anchor="middle" x="271.15" y="-356.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">is_canonical_diag_name</text>
+</a>
+</g>
+</g>
+<!-- proc~apply_diag_selection&#45;&gt;proc~is_canonical_diag_name -->
+<g id="proc~~apply_diag_selection~~CallsGraph_edge2" class="edge">
+<title>proc~apply_diag_selection&#45;&gt;proc~is_canonical_diag_name</title>
+<path fill="none" stroke="#ff0000" d="M77.21,-288.65C95.29,-303.11 127.21,-326.53 158.52,-339.13 168.23,-343.04 178.71,-346.23 189.22,-348.84"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="188.16,-352.18 198.69,-351 189.72,-345.36 188.16,-352.18"/>
+</g>
+<!-- proc~ocean_diag_is_registered -->
+<g id="proc~~apply_diag_selection~~CallsGraph_node4" class="node">
+<title>proc~ocean_diag_is_registered</title>
+<g id="a_proc~~apply_diag_selection~~CallsGraph_node4"><a xlink:href="../proc/ocean_diag_is_registered.html" xlink:title="ocean_diag_t%ocean_diag_is_registered">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="383.79,-330.27 158.52,-330.27 158.52,-306 383.79,-306 383.79,-330.27"/>
+<text xml:space="preserve" text-anchor="middle" x="271.15" y="-314.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_diag_t%ocean_diag_is_registered</text>
+</a>
+</g>
+</g>
+<!-- proc~apply_diag_selection&#45;&gt;proc~ocean_diag_is_registered -->
+<g id="proc~~apply_diag_selection~~CallsGraph_edge3" class="edge">
+<title>proc~apply_diag_selection&#45;&gt;proc~ocean_diag_is_registered</title>
+<path fill="none" stroke="#ff0000" d="M118.7,-288.73C131.76,-291.57 145.61,-294.51 158.52,-297.13 168.78,-299.22 179.58,-301.34 190.26,-303.39"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="189.35,-306.78 199.83,-305.22 190.66,-299.91 189.35,-306.78"/>
+</g>
+<!-- proc~parse_diag_spec -->
+<g id="proc~~apply_diag_selection~~CallsGraph_node5" class="node">
+<title>proc~parse_diag_spec</title>
+<g id="a_proc~~apply_diag_selection~~CallsGraph_node5"><a xlink:href="../proc/parse_diag_spec.html" xlink:title="parse_diag_spec">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="321.16,-288.27 221.14,-288.27 221.14,-264 321.16,-264 321.16,-288.27"/>
+<text xml:space="preserve" text-anchor="middle" x="271.15" y="-272.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">parse_diag_spec</text>
+</a>
+</g>
+</g>
+<!-- proc~apply_diag_selection&#45;&gt;proc~parse_diag_spec -->
+<g id="proc~~apply_diag_selection~~CallsGraph_edge4" class="edge">
+<title>proc~apply_diag_selection&#45;&gt;proc~parse_diag_spec</title>
+<path fill="none" stroke="#ff0000" d="M122.95,-276.13C150.22,-276.13 182.32,-276.13 209.57,-276.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="209.41,-279.64 219.41,-276.14 209.41,-272.64 209.41,-279.64"/>
+</g>
+<!-- proc~register_default_diags -->
+<g id="proc~~apply_diag_selection~~CallsGraph_node6" class="node">
+<title>proc~register_default_diags</title>
+<g id="a_proc~~apply_diag_selection~~CallsGraph_node6"><a xlink:href="../proc/register_default_diags.html" xlink:title="register_default_diags">
+<polygon fill="#d9534f" stroke="#d9534f" points="335.41,-145.27 206.89,-145.27 206.89,-121 335.41,-121 335.41,-145.27"/>
+<text xml:space="preserve" text-anchor="middle" x="271.15" y="-129.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">register_default_diags</text>
+</a>
+</g>
+</g>
+<!-- proc~apply_diag_selection&#45;&gt;proc~register_default_diags -->
+<g id="proc~~apply_diag_selection~~CallsGraph_edge5" class="edge">
+<title>proc~apply_diag_selection&#45;&gt;proc~register_default_diags</title>
+<path fill="none" stroke="#ff0000" d="M80.35,-263.69C116.82,-238.6 199.4,-181.8 242.62,-152.07"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="244.46,-155.06 250.72,-146.51 240.49,-149.29 244.46,-155.06"/>
+</g>
+<!-- proc~register_derived -->
+<g id="proc~~apply_diag_selection~~CallsGraph_node7" class="node">
+<title>proc~register_derived</title>
+<g id="a_proc~~apply_diag_selection~~CallsGraph_node7"><a xlink:href="../proc/register_derived.html" xlink:title="register_derived">
+<polygon fill="#d9534f" stroke="#d9534f" points="320.04,-246.27 222.27,-246.27 222.27,-222 320.04,-222 320.04,-246.27"/>
+<text xml:space="preserve" text-anchor="middle" x="271.15" y="-230.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">register_derived</text>
+</a>
+</g>
+</g>
+<!-- proc~apply_diag_selection&#45;&gt;proc~register_derived -->
+<g id="proc~~apply_diag_selection~~CallsGraph_edge6" class="edge">
+<title>proc~apply_diag_selection&#45;&gt;proc~register_derived</title>
+<path fill="none" stroke="#ff0000" d="M118.7,-263.54C131.76,-260.7 145.61,-257.76 158.52,-255.13 175.56,-251.67 194.11,-248.11 211.1,-244.91"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="211.34,-248.43 220.53,-243.15 210.06,-241.55 211.34,-248.43"/>
+</g>
+<!-- warning -->
+<g id="proc~~apply_diag_selection~~CallsGraph_node8" class="node">
+<title>warning</title>
+<polygon fill="#777777" stroke="#777777" points="298.29,-103.27 244.02,-103.27 244.02,-79 298.29,-79 298.29,-103.27"/>
+<text xml:space="preserve" text-anchor="middle" x="271.15" y="-87.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">warning</text>
+</g>
+<!-- proc~apply_diag_selection&#45;&gt;warning -->
+<g id="proc~~apply_diag_selection~~CallsGraph_edge7" class="edge">
+<title>proc~apply_diag_selection&#45;&gt;warning</title>
+<path fill="none" stroke="#ff0000" d="M65.61,-263.84C74.74,-232.81 103.16,-151.07 158.52,-112.14 179.95,-97.06 209.2,-91.98 232.38,-90.57"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="232.51,-94.07 242.37,-90.2 232.24,-87.08 232.51,-94.07"/>
+</g>
+<!-- proc~canonical_diag_gate_hint -->
+<g id="proc~~apply_diag_selection~~CallsGraph_node10" class="node">
+<title>proc~canonical_diag_gate_hint</title>
+<g id="a_proc~~apply_diag_selection~~CallsGraph_node10"><a xlink:href="../proc/canonical_diag_gate_hint.html" xlink:title="canonical_diag_gate_hint">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="570.06,-466.27 423.54,-466.27 423.54,-442 570.06,-442 570.06,-466.27"/>
+<text xml:space="preserve" text-anchor="middle" x="496.8" y="-450.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">canonical_diag_gate_hint</text>
+</a>
+</g>
+</g>
+<!-- proc~gate_clause&#45;&gt;proc~canonical_diag_gate_hint -->
+<g id="proc~~apply_diag_selection~~CallsGraph_edge8" class="edge">
+<title>proc~gate_clause&#45;&gt;proc~canonical_diag_gate_hint</title>
+<path fill="none" stroke="#ff0000" d="M309.09,-432.43C336.96,-435.67 376.33,-440.25 411.73,-444.36"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="411.23,-447.83 421.56,-445.5 412.04,-440.87 411.23,-447.83"/>
+</g>
+<!-- proc~parse_one_spec_token -->
+<g id="proc~~apply_diag_selection~~CallsGraph_node18" class="node">
+<title>proc~parse_one_spec_token</title>
+<g id="a_proc~~apply_diag_selection~~CallsGraph_node18"><a xlink:href="../proc/parse_one_spec_token.html" xlink:title="parse_one_spec_token">
+<polygon fill="#d9534f" stroke="#d9534f" points="562.93,-424.27 430.66,-424.27 430.66,-400 562.93,-400 562.93,-424.27"/>
+<text xml:space="preserve" text-anchor="middle" x="496.8" y="-408.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">parse_one_spec_token</text>
+</a>
+</g>
+</g>
+<!-- proc~parse_diag_spec&#45;&gt;proc~parse_one_spec_token -->
+<g id="proc~~apply_diag_selection~~CallsGraph_edge9" class="edge">
+<title>proc~parse_diag_spec&#45;&gt;proc~parse_one_spec_token</title>
+<path fill="none" stroke="#00ff91" d="M321.6,-275.26C342.78,-277.27 366.55,-283.02 383.79,-297.13 416.8,-324.17 388.8,-356.8 419.79,-386.13 423,-389.18 426.59,-391.86 430.4,-394.24"/>
+<polygon fill="#00ff91" stroke="#00ff91" points="428.47,-397.17 438.93,-398.8 431.77,-391 428.47,-397.17"/>
+</g>
+<!-- proc~register_one_canonical -->
+<g id="proc~~apply_diag_selection~~CallsGraph_node19" class="node">
+<title>proc~register_one_canonical</title>
+<g id="a_proc~~apply_diag_selection~~CallsGraph_node19"><a xlink:href="../proc/register_one_canonical.html" xlink:title="register_one_canonical">
+<polygon fill="#d9534f" stroke="#d9534f" points="564.06,-66.27 429.54,-66.27 429.54,-42 564.06,-42 564.06,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="496.8" y="-50.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">register_one_canonical</text>
+</a>
+</g>
+</g>
+<!-- proc~register_default_diags&#45;&gt;proc~register_one_canonical -->
+<g id="proc~~apply_diag_selection~~CallsGraph_edge10" class="edge">
+<title>proc~register_default_diags&#45;&gt;proc~register_one_canonical</title>
+<path fill="none" stroke="#0091ff" d="M335.77,-127.26C351.99,-124.15 369.01,-119.39 383.79,-112.14 403.01,-102.7 401.3,-90.92 419.79,-80.14 425.8,-76.63 432.35,-73.5 439.01,-70.74"/>
+<polygon fill="#0091ff" stroke="#0091ff" points="440.01,-74.11 448.08,-67.24 437.49,-67.58 440.01,-74.11"/>
+</g>
+<!-- proc~spec_requested -->
+<g id="proc~~apply_diag_selection~~CallsGraph_node20" class="node">
+<title>proc~spec_requested</title>
+<g id="a_proc~~apply_diag_selection~~CallsGraph_node20"><a xlink:href="../proc/spec_requested.html" xlink:title="spec_requested">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="544.18,-24.27 449.41,-24.27 449.41,0 544.18,0 544.18,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="496.8" y="-8.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">spec_requested</text>
+</a>
+</g>
+</g>
+<!-- proc~register_default_diags&#45;&gt;proc~spec_requested -->
+<g id="proc~~apply_diag_selection~~CallsGraph_edge11" class="edge">
+<title>proc~register_default_diags&#45;&gt;proc~spec_requested</title>
+<path fill="none" stroke="#0091ff" d="M335.64,-131.7C352.67,-128.66 370.13,-122.84 383.79,-112.14 414.16,-88.34 390.44,-58.18 419.79,-33.14 425.26,-28.47 431.68,-24.83 438.43,-22"/>
+<polygon fill="#0091ff" stroke="#0091ff" points="439.55,-25.32 447.81,-18.69 437.21,-18.72 439.55,-25.32"/>
+</g>
+<!-- error -->
+<g id="proc~~apply_diag_selection~~CallsGraph_node9" class="node">
+<title>error</title>
+<polygon fill="#777777" stroke="#777777" points="736.32,-382.27 682.32,-382.27 682.32,-358 736.32,-358 736.32,-382.27"/>
+<text xml:space="preserve" text-anchor="middle" x="709.32" y="-366.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">error</text>
+</g>
+<!-- proc~register_derived&#45;&gt;error -->
+<g id="proc~~apply_diag_selection~~CallsGraph_edge12" class="edge">
+<title>proc~register_derived&#45;&gt;error</title>
+<path fill="none" stroke="#4800ff" d="M320.41,-232.87C341.98,-234.71 366.4,-240.42 383.79,-255.13 419.21,-285.11 382.54,-325.47 419.79,-353.13 458.54,-381.91 601.98,-377.04 670.89,-372.84"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="670.8,-376.35 680.55,-372.22 670.35,-369.37 670.8,-376.35"/>
+</g>
+<!-- proc~catalog_name_list -->
+<g id="proc~~apply_diag_selection~~CallsGraph_node11" class="node">
+<title>proc~catalog_name_list</title>
+<g id="a_proc~~apply_diag_selection~~CallsGraph_node11"><a xlink:href="../proc/catalog_name_list.html" xlink:title="catalog_name_list">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="550.56,-226.27 443.04,-226.27 443.04,-202 550.56,-202 550.56,-226.27"/>
+<text xml:space="preserve" text-anchor="middle" x="496.8" y="-210.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">catalog_name_list</text>
+</a>
+</g>
+</g>
+<!-- proc~register_derived&#45;&gt;proc~catalog_name_list -->
+<g id="proc~~apply_diag_selection~~CallsGraph_edge13" class="edge">
+<title>proc~register_derived&#45;&gt;proc~catalog_name_list</title>
+<path fill="none" stroke="#4800ff" d="M320.41,-229.82C352.85,-226.92 395.98,-223.06 431.36,-219.9"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="431.39,-223.41 441.04,-219.03 430.77,-216.44 431.39,-223.41"/>
+</g>
+<!-- proc~coord_remap_proc -->
+<g id="proc~~apply_diag_selection~~CallsGraph_node12" class="node">
+<title>proc~coord_remap_proc</title>
+<g id="a_proc~~apply_diag_selection~~CallsGraph_node12"><a xlink:href="../proc/coord_remap_proc.html" xlink:title="coord_remap_proc">
+<polygon fill="#d9534f" stroke="#d9534f" points="764.58,-102.27 654.06,-102.27 654.06,-78 764.58,-78 764.58,-102.27"/>
+<text xml:space="preserve" text-anchor="middle" x="709.32" y="-86.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">coord_remap_proc</text>
+</a>
+</g>
+</g>
+<!-- proc~register_derived&#45;&gt;proc~coord_remap_proc -->
+<g id="proc~~apply_diag_selection~~CallsGraph_edge14" class="edge">
+<title>proc~register_derived&#45;&gt;proc~coord_remap_proc</title>
+<path fill="none" stroke="#4800ff" d="M290.17,-221.69C312.43,-206.21 351.33,-178.81 383.79,-154.13 400.15,-141.7 400.86,-133.12 419.79,-125.14 491.74,-94.76 582.16,-88.32 642.41,-87.98"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="642.15,-91.48 652.16,-87.98 642.16,-84.48 642.15,-91.48"/>
+</g>
+<!-- proc~derived_requires_fail -->
+<g id="proc~~apply_diag_selection~~CallsGraph_node13" class="node">
+<title>proc~derived_requires_fail</title>
+<g id="a_proc~~apply_diag_selection~~CallsGraph_node13"><a xlink:href="../proc/derived_requires_fail.html" xlink:title="derived_requires_fail">
+<polygon fill="#d9534f" stroke="#d9534f" points="557.68,-344.27 435.91,-344.27 435.91,-320 557.68,-320 557.68,-344.27"/>
+<text xml:space="preserve" text-anchor="middle" x="496.8" y="-328.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">derived_requires_fail</text>
+</a>
+</g>
+</g>
+<!-- proc~register_derived&#45;&gt;proc~derived_requires_fail -->
+<g id="proc~~apply_diag_selection~~CallsGraph_edge15" class="edge">
+<title>proc~register_derived&#45;&gt;proc~derived_requires_fail</title>
+<path fill="none" stroke="#4800ff" d="M320.47,-235.23C341.3,-237.64 365.12,-243.14 383.79,-255.13 407.13,-270.13 397.58,-289.5 419.79,-306.13 424.28,-309.5 429.23,-312.45 434.4,-315.03"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="432.58,-318.05 443.13,-318.93 435.43,-311.65 432.58,-318.05"/>
+</g>
+<!-- proc~diag_mask_vanished_is_on -->
+<g id="proc~~apply_diag_selection~~CallsGraph_node14" class="node">
+<title>proc~diag_mask_vanished_is_on</title>
+<g id="a_proc~~apply_diag_selection~~CallsGraph_node14"><a xlink:href="../proc/diag_mask_vanished_is_on.html" xlink:title="diag_mask_vanished_is_on">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="573.81,-184.27 419.79,-184.27 419.79,-160 573.81,-160 573.81,-184.27"/>
+<text xml:space="preserve" text-anchor="middle" x="496.8" y="-168.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">diag_mask_vanished_is_on</text>
+</a>
+</g>
+</g>
+<!-- proc~register_derived&#45;&gt;proc~diag_mask_vanished_is_on -->
+<g id="proc~~apply_diag_selection~~CallsGraph_edge16" class="edge">
+<title>proc~register_derived&#45;&gt;proc~diag_mask_vanished_is_on</title>
+<path fill="none" stroke="#4800ff" d="M317.38,-221.56C346.6,-213.44 385.44,-202.65 419.79,-193.13 426.13,-191.38 432.77,-189.54 439.37,-187.72"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="440.21,-191.11 448.92,-185.08 438.35,-184.37 440.21,-191.11"/>
+</g>
+<!-- proc~ensure_catalog_initialised -->
+<g id="proc~~apply_diag_selection~~CallsGraph_node15" class="node">
+<title>proc~ensure_catalog_initialised</title>
+<g id="a_proc~~apply_diag_selection~~CallsGraph_node15"><a xlink:href="../proc/ensure_catalog_initialised.html" xlink:title="ensure_catalog_initialised">
+<polygon fill="#d9534f" stroke="#d9534f" points="783.7,-246.27 634.93,-246.27 634.93,-222 783.7,-222 783.7,-246.27"/>
+<text xml:space="preserve" text-anchor="middle" x="709.32" y="-230.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ensure_catalog_initialised</text>
+</a>
+</g>
+</g>
+<!-- proc~register_derived&#45;&gt;proc~ensure_catalog_initialised -->
+<g id="proc~~apply_diag_selection~~CallsGraph_edge17" class="edge">
+<title>proc~register_derived&#45;&gt;proc~ensure_catalog_initialised</title>
+<path fill="none" stroke="#4800ff" d="M320.36,-234.54C349.21,-234.77 386.6,-235.02 419.79,-235.13 488.24,-235.37 505.36,-235.39 573.81,-235.13 589.84,-235.08 606.95,-234.98 623.4,-234.86"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="623.18,-238.36 633.16,-234.79 623.13,-231.36 623.18,-238.36"/>
+</g>
+<!-- proc~error_ring_push -->
+<g id="proc~~apply_diag_selection~~CallsGraph_node16" class="node">
+<title>proc~error_ring_push</title>
+<g id="a_proc~~apply_diag_selection~~CallsGraph_node16"><a xlink:href="../proc/error_ring_push.html" xlink:title="error_ring_push">
+<polygon fill="#d9534f" stroke="#d9534f" points="756.7,-322.27 661.93,-322.27 661.93,-298 756.7,-298 756.7,-322.27"/>
+<text xml:space="preserve" text-anchor="middle" x="709.32" y="-306.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">error_ring_push</text>
+</a>
+</g>
+</g>
+<!-- proc~register_derived&#45;&gt;proc~error_ring_push -->
+<g id="proc~~apply_diag_selection~~CallsGraph_edge18" class="edge">
+<title>proc~register_derived&#45;&gt;proc~error_ring_push</title>
+<path fill="none" stroke="#4800ff" d="M320.5,-242.56C401.37,-256.65 563.75,-284.94 650.53,-300.06"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="649.8,-303.49 660.25,-301.76 651,-296.59 649.8,-303.49"/>
+</g>
+<!-- proc~ocean_diag_register -->
+<g id="proc~~apply_diag_selection~~CallsGraph_node17" class="node">
+<title>proc~ocean_diag_register</title>
+<g id="a_proc~~apply_diag_selection~~CallsGraph_node17"><a xlink:href="../proc/ocean_diag_register.html" xlink:title="ocean_diag_t%ocean_diag_register">
+<polygon fill="#d9534f" stroke="#d9534f" points="808.83,-144.27 609.81,-144.27 609.81,-120 808.83,-120 808.83,-144.27"/>
+<text xml:space="preserve" text-anchor="middle" x="709.32" y="-128.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_diag_t%ocean_diag_register</text>
+</a>
+</g>
+</g>
+<!-- proc~register_derived&#45;&gt;proc~ocean_diag_register -->
+<g id="proc~~apply_diag_selection~~CallsGraph_edge19" class="edge">
+<title>proc~register_derived&#45;&gt;proc~ocean_diag_register</title>
+<path fill="none" stroke="#4800ff" d="M288.31,-221.79C314.35,-202.68 367.93,-166.55 419.79,-151.13 477.07,-134.11 543.46,-128.81 598.11,-128.01"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="598.1,-131.51 608.07,-127.92 598.04,-124.51 598.1,-131.51"/>
+</g>
+<!-- proc~catalog_name_list&#45;&gt;proc~ensure_catalog_initialised -->
+<g id="proc~~apply_diag_selection~~CallsGraph_edge20" class="edge">
+<title>proc~catalog_name_list&#45;&gt;proc~ensure_catalog_initialised</title>
+<path fill="none" stroke="#ffff00" d="M550.92,-219.18C572.79,-221.26 598.68,-223.72 623.08,-226.04"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="622.75,-229.52 633.04,-226.98 623.41,-222.55 622.75,-229.52"/>
+</g>
+<!-- proc~derived_requires_fail&#45;&gt;error -->
+<g id="proc~~apply_diag_selection~~CallsGraph_edge21" class="edge">
+<title>proc~derived_requires_fail&#45;&gt;error</title>
+<path fill="none" stroke="#00ff00" d="M558.13,-343.02C594.43,-349.58 639.52,-357.72 670.77,-363.36"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="670.07,-366.79 680.54,-365.12 671.32,-359.9 670.07,-366.79"/>
+</g>
+<!-- proc~derived_requires_fail&#45;&gt;proc~error_ring_push -->
+<g id="proc~~apply_diag_selection~~CallsGraph_edge22" class="edge">
+<title>proc~derived_requires_fail&#45;&gt;proc~error_ring_push</title>
+<path fill="none" stroke="#00ff00" d="M558.13,-325.83C587.19,-322.79 621.89,-319.17 650.61,-316.17"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="650.61,-319.68 660.2,-315.16 649.89,-312.72 650.61,-319.68"/>
+</g>
+<!-- proc~reset_accumulator -->
+<g id="proc~~apply_diag_selection~~CallsGraph_node23" class="node">
+<title>proc~reset_accumulator</title>
+<g id="a_proc~~apply_diag_selection~~CallsGraph_node23"><a xlink:href="../proc/reset_accumulator.html" xlink:title="reset_accumulator">
+<polygon fill="#d9534f" stroke="#d9534f" points="955.35,-144.27 844.83,-144.27 844.83,-120 955.35,-120 955.35,-144.27"/>
+<text xml:space="preserve" text-anchor="middle" x="900.09" y="-128.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">reset_accumulator</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_diag_register&#45;&gt;proc~reset_accumulator -->
+<g id="proc~~apply_diag_selection~~CallsGraph_edge23" class="edge">
+<title>proc~ocean_diag_register&#45;&gt;proc~reset_accumulator</title>
+<path fill="none" stroke="#0000ff" d="M809.13,-132.13C817.18,-132.13 825.2,-132.13 832.93,-132.13"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="832.91,-135.64 842.91,-132.14 832.91,-128.64 832.91,-135.64"/>
+</g>
+<!-- proc~parse_one_spec_token&#45;&gt;error -->
+<g id="proc~~apply_diag_selection~~CallsGraph_edge24" class="edge">
+<title>proc~parse_one_spec_token&#45;&gt;error</title>
+<path fill="none" stroke="#7f00ff" d="M560.96,-399.53C596.83,-392.38 640.51,-383.66 670.96,-377.59"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="671.33,-381.08 680.46,-375.69 669.96,-374.22 671.33,-381.08"/>
+</g>
+<!-- proc~lower_ascii -->
+<g id="proc~~apply_diag_selection~~CallsGraph_node21" class="node">
+<title>proc~lower_ascii</title>
+<g id="a_proc~~apply_diag_selection~~CallsGraph_node21"><a xlink:href="../proc/lower_ascii.html" xlink:title="lower_ascii">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="744.33,-466.27 674.31,-466.27 674.31,-442 744.33,-442 744.33,-466.27"/>
+<text xml:space="preserve" text-anchor="middle" x="709.32" y="-450.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">lower_ascii</text>
+</a>
+</g>
+</g>
+<!-- proc~parse_one_spec_token&#45;&gt;proc~lower_ascii -->
+<g id="proc~~apply_diag_selection~~CallsGraph_edge25" class="edge">
+<title>proc~parse_one_spec_token&#45;&gt;proc~lower_ascii</title>
+<path fill="none" stroke="#7f00ff" d="M560.96,-424.74C593.83,-431.29 633.24,-439.16 663.04,-445.1"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="661.97,-448.46 672.47,-446.98 663.34,-441.59 661.97,-448.46"/>
+</g>
+<!-- proc~parse_cadence_attr -->
+<g id="proc~~apply_diag_selection~~CallsGraph_node22" class="node">
+<title>proc~parse_cadence_attr</title>
+<g id="a_proc~~apply_diag_selection~~CallsGraph_node22"><a xlink:href="../proc/parse_cadence_attr.html" xlink:title="parse_cadence_attr">
+<polygon fill="#d9534f" stroke="#d9534f" points="767.58,-424.27 651.06,-424.27 651.06,-400 767.58,-400 767.58,-424.27"/>
+<text xml:space="preserve" text-anchor="middle" x="709.32" y="-408.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">parse_cadence_attr</text>
+</a>
+</g>
+</g>
+<!-- proc~parse_one_spec_token&#45;&gt;proc~parse_cadence_attr -->
+<g id="proc~~apply_diag_selection~~CallsGraph_edge26" class="edge">
+<title>proc~parse_one_spec_token&#45;&gt;proc~parse_cadence_attr</title>
+<path fill="none" stroke="#7f00ff" d="M563.26,-412.13C587.43,-412.13 614.89,-412.13 639.36,-412.13"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="639.23,-415.64 649.23,-412.14 639.23,-408.64 639.23,-415.64"/>
+</g>
+<!-- proc~register_one_canonical&#45;&gt;proc~coord_remap_proc -->
+<g id="proc~~apply_diag_selection~~CallsGraph_edge27" class="edge">
+<title>proc~register_one_canonical&#45;&gt;proc~coord_remap_proc</title>
+<path fill="none" stroke="#ff00ff" d="M564.41,-65.53C589.38,-69.8 617.71,-74.64 642.6,-78.9"/>
+<polygon fill="#ff00ff" stroke="#ff00ff" points="641.82,-82.31 652.27,-80.55 643,-75.41 641.82,-82.31"/>
+</g>
+<!-- proc~register_one_canonical&#45;&gt;proc~ocean_diag_register -->
+<g id="proc~~apply_diag_selection~~CallsGraph_edge28" class="edge">
+<title>proc~register_one_canonical&#45;&gt;proc~ocean_diag_register</title>
+<path fill="none" stroke="#ff00ff" d="M518.13,-66.54C540.04,-79.4 576.29,-99.26 609.81,-111.14 615.48,-113.14 621.4,-114.99 627.4,-116.68"/>
+<polygon fill="#ff00ff" stroke="#ff00ff" points="626.24,-119.99 636.8,-119.18 628.03,-113.23 626.24,-119.99"/>
+</g>
+<!-- proc~resolve_canonical_spec -->
+<g id="proc~~apply_diag_selection~~CallsGraph_node24" class="node">
+<title>proc~resolve_canonical_spec</title>
+<g id="a_proc~~apply_diag_selection~~CallsGraph_node24"><a xlink:href="../proc/resolve_canonical_spec.html" xlink:title="resolve_canonical_spec">
+<polygon fill="#d9534f" stroke="#d9534f" points="777.7,-60.27 640.93,-60.27 640.93,-36 777.7,-36 777.7,-60.27"/>
+<text xml:space="preserve" text-anchor="middle" x="709.32" y="-44.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">resolve_canonical_spec</text>
+</a>
+</g>
+</g>
+<!-- proc~register_one_canonical&#45;&gt;proc~resolve_canonical_spec -->
+<g id="proc~~apply_diag_selection~~CallsGraph_edge29" class="edge">
+<title>proc~register_one_canonical&#45;&gt;proc~resolve_canonical_spec</title>
+<path fill="none" stroke="#ff00ff" d="M564.41,-52.24C585.04,-51.65 607.96,-51 629.34,-50.39"/>
+<polygon fill="#ff00ff" stroke="#ff00ff" points="629.29,-53.89 639.18,-50.11 629.09,-46.89 629.29,-53.89"/>
+</g>
+<!-- proc~fill_buffer_impl -->
+<g id="proc~~apply_diag_selection~~CallsGraph_node25" class="node">
+<title>proc~fill_buffer_impl</title>
+<g id="a_proc~~apply_diag_selection~~CallsGraph_node25"><a xlink:href="../proc/fill_buffer_impl.html" xlink:title="fill_buffer_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="1081.62,-144.27 991.35,-144.27 991.35,-120 1081.62,-120 1081.62,-144.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1036.48" y="-128.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">fill_buffer_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~reset_accumulator&#45;&gt;proc~fill_buffer_impl -->
+<g id="proc~~apply_diag_selection~~CallsGraph_edge30" class="edge">
+<title>proc~reset_accumulator&#45;&gt;proc~fill_buffer_impl</title>
+<path fill="none" stroke="#00ffff" d="M955.75,-132.13C963.66,-132.13 971.81,-132.13 979.74,-132.13"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="979.64,-135.64 989.64,-132.14 979.64,-128.64 979.64,-135.64"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocapply_diag_selectionCallsGraph = svgPanZoom('#procapply_diag_selectionCallsGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~apply_diag_selection~~CalledByGraph Pages: 1 -->
+<svg id="procapply_diag_selectionCalledByGraph" width="641pt" height="127pt"
+ viewBox="0.00 0.00 641.00 127.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~apply_diag_selection~~CalledByGraph" class="graph" transform="scale(0.80065 0.80065) rotate(0) translate(4 154.27)">
+<title>proc~~apply_diag_selection~~CalledByGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-154.27 796.6,-154.27 796.6,4 -4,4"/>
+<!-- proc~apply_diag_selection -->
+<g id="proc~~apply_diag_selection~~CalledByGraph_node1" class="node">
+<title>proc~apply_diag_selection</title>
+<polygon fill="none" stroke="black" points="792.6,-66.27 670.08,-66.27 670.08,-42 792.6,-42 792.6,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="731.34" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50">apply_diag_selection</text>
+</g>
+<!-- proc~engine_configure_diag -->
+<g id="proc~~apply_diag_selection~~CalledByGraph_node2" class="node">
+<title>proc~engine_configure_diag</title>
+<g id="a_proc~~apply_diag_selection~~CalledByGraph_node2"><a xlink:href="../proc/engine_configure_diag.html" xlink:title="engine_configure_diag">
+<polygon fill="#d9534f" stroke="#d9534f" points="634.08,-66.27 501.81,-66.27 501.81,-42 634.08,-42 634.08,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="567.94" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_configure_diag</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_configure_diag&#45;&gt;proc~apply_diag_selection -->
+<g id="proc~~apply_diag_selection~~CalledByGraph_edge1" class="edge">
+<title>proc~engine_configure_diag&#45;&gt;proc~apply_diag_selection</title>
+<path fill="none" stroke="#ff0000" d="M634.13,-54.13C642.09,-54.13 650.27,-54.13 658.33,-54.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="658.1,-57.64 668.1,-54.14 658.1,-50.64 658.1,-57.64"/>
+</g>
+<!-- proc~engine_setup -->
+<g id="proc~~apply_diag_selection~~CalledByGraph_node3" class="node">
+<title>proc~engine_setup</title>
+<g id="a_proc~~apply_diag_selection~~CalledByGraph_node3"><a xlink:href="../proc/engine_setup.html" xlink:title="engine_setup">
+<polygon fill="#d9534f" stroke="#d9534f" points="465.81,-66.27 383.04,-66.27 383.04,-42 465.81,-42 465.81,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="424.42" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_setup</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_setup&#45;&gt;proc~engine_configure_diag -->
+<g id="proc~~apply_diag_selection~~CalledByGraph_edge2" class="edge">
+<title>proc~engine_setup&#45;&gt;proc~engine_configure_diag</title>
+<path fill="none" stroke="#ff0000" d="M465.98,-54.13C473.62,-54.13 481.83,-54.13 490.16,-54.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="490.02,-57.64 500.02,-54.14 490.02,-50.64 490.02,-57.64"/>
+</g>
+<!-- proc~complete_ocean_create -->
+<g id="proc~~apply_diag_selection~~CalledByGraph_node4" class="node">
+<title>proc~complete_ocean_create</title>
+<g id="a_proc~~apply_diag_selection~~CalledByGraph_node4"><a xlink:href="../proc/complete_ocean_create.html" xlink:title="complete_ocean_create">
+<polygon fill="#d9534f" stroke="#d9534f" points="347.04,-108.27 208.02,-108.27 208.02,-84 347.04,-84 347.04,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="277.53" y="-92.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">complete_ocean_create</text>
+</a>
+</g>
+</g>
+<!-- proc~complete_ocean_create&#45;&gt;proc~engine_setup -->
+<g id="proc~~apply_diag_selection~~CalledByGraph_edge3" class="edge">
+<title>proc~complete_ocean_create&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#ff0000" d="M322,-83.53C337.72,-78.98 355.61,-73.79 371.94,-69.06"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="372.87,-72.43 381.5,-66.29 370.92,-65.71 372.87,-72.43"/>
+</g>
+<!-- proc~driver_run_ocean -->
+<g id="proc~~apply_diag_selection~~CalledByGraph_node5" class="node">
+<title>proc~driver_run_ocean</title>
+<g id="a_proc~~apply_diag_selection~~CalledByGraph_node5"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<polygon fill="#d9534f" stroke="#d9534f" points="329.79,-66.27 225.27,-66.27 225.27,-42 329.79,-42 329.79,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="277.53" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_setup -->
+<g id="proc~~apply_diag_selection~~CalledByGraph_edge4" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#ff0000" d="M330.02,-54.13C343.36,-54.13 357.73,-54.13 371.11,-54.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="371.05,-57.64 381.05,-54.14 371.05,-50.64 371.05,-57.64"/>
+</g>
+<!-- proc~driver_validate -->
+<g id="proc~~apply_diag_selection~~CalledByGraph_node6" class="node">
+<title>proc~driver_validate</title>
+<g id="a_proc~~apply_diag_selection~~CalledByGraph_node6"><a xlink:href="../proc/driver_validate.html" xlink:title="driver_validate">
+<polygon fill="#d9534f" stroke="#d9534f" points="323.04,-24.27 232.02,-24.27 232.02,0 323.04,0 323.04,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="277.53" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_validate</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_validate&#45;&gt;proc~engine_setup -->
+<g id="proc~~apply_diag_selection~~CalledByGraph_edge5" class="edge">
+<title>proc~driver_validate&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#ff0000" d="M322,-24.74C337.72,-29.29 355.61,-34.48 371.94,-39.21"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="370.92,-42.56 381.5,-41.98 372.87,-35.84 370.92,-42.56"/>
+</g>
+<!-- proc~driver_run -->
+<g id="proc~~apply_diag_selection~~CalledByGraph_node7" class="node">
+<title>proc~driver_run</title>
+<g id="a_proc~~apply_diag_selection~~CalledByGraph_node7"><a xlink:href="../proc/driver_run.html" xlink:title="driver_run">
+<polygon fill="#d9534f" stroke="#d9534f" points="119.14,-66.27 52.87,-66.27 52.87,-42 119.14,-42 119.14,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="86.01" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run&#45;&gt;proc~driver_run_ocean -->
+<g id="proc~~apply_diag_selection~~CalledByGraph_edge8" class="edge">
+<title>proc~driver_run&#45;&gt;proc~driver_run_ocean</title>
+<path fill="none" stroke="#00ff00" d="M119.59,-54.13C145.42,-54.13 182.28,-54.13 213.78,-54.13"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="213.61,-57.64 223.61,-54.14 213.61,-50.64 213.61,-57.64"/>
+</g>
+<!-- proc~rdb_ocean_create_finalize -->
+<g id="proc~~apply_diag_selection~~CalledByGraph_node8" class="node">
+<title>proc~rdb_ocean_create_finalize</title>
+<g id="a_proc~~apply_diag_selection~~CalledByGraph_node8"><a xlink:href="../proc/rdb_ocean_create_finalize.html" xlink:title="rdb_ocean_create_finalize">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="161.14,-150.27 10.87,-150.27 10.87,-126 161.14,-126 161.14,-150.27"/>
+<text xml:space="preserve" text-anchor="middle" x="86.01" y="-134.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_create_finalize</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_create_finalize&#45;&gt;proc~complete_ocean_create -->
+<g id="proc~~apply_diag_selection~~CalledByGraph_edge6" class="edge">
+<title>proc~rdb_ocean_create_finalize&#45;&gt;proc~complete_ocean_create</title>
+<path fill="none" stroke="#ff0000" d="M143.87,-125.53C164.2,-121.03 187.32,-115.9 208.5,-111.21"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="209.22,-114.64 218.23,-109.05 207.71,-107.8 209.22,-114.64"/>
+</g>
+<!-- proc~rdb_ocean_create_from_string -->
+<g id="proc~~apply_diag_selection~~CalledByGraph_node9" class="node">
+<title>proc~rdb_ocean_create_from_string</title>
+<g id="a_proc~~apply_diag_selection~~CalledByGraph_node9"><a xlink:href="../proc/rdb_ocean_create_from_string.html" xlink:title="rdb_ocean_create_from_string">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="172.02,-108.27 0,-108.27 0,-84 172.02,-84 172.02,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="86.01" y="-92.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_create_from_string</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_create_from_string&#45;&gt;proc~complete_ocean_create -->
+<g id="proc~~apply_diag_selection~~CalledByGraph_edge7" class="edge">
+<title>proc~rdb_ocean_create_from_string&#45;&gt;proc~complete_ocean_create</title>
+<path fill="none" stroke="#ff0000" d="M172.34,-96.14C180.27,-96.14 188.28,-96.14 196.15,-96.14"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="196.05,-99.64 206.05,-96.14 196.05,-92.64 196.05,-99.64"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocapply_diag_selectionCalledByGraph = svgPanZoom('#procapply_diag_selectionCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-coord~6"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>coord</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dcoord~2"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dcoord</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dto~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dto</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dtout~3"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dtout</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-i~595"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>i</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-op~2"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>op</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-specs~6"></span>
+              type(<a href='../type/diag_spec_t.html'>diag_spec_t</a>),
+            </td>
+              <td>private,</td>
+            <td>
+              allocatable
+            </td>
+            <td>::</td>
+            <td><strong>specs</strong>(:)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">subroutine </span><span class="n">apply_diag_selection</span><span class="p">(</span><span class="n">state</span><span class="p">,</span><span class="w"> </span><span class="n">spec</span><span class="p">,</span><span class="w"> </span><span class="n">dt_out</span><span class="p">,</span><span class="w"> </span><span class="n">default_coord</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! Configure the ocean diagnostic set from the unified</span>
+<span class="w">      </span><span class="c">!! `&amp;ocean_diag_nml diags` selection string.  Single production entry</span>
+<span class="w">      </span><span class="c">!! point: parses `spec` once, registers the canonical defaults</span>
+<span class="w">      </span><span class="c">!! (consulting the spec for per-diagnostic `:off` skips and</span>
+<span class="w">      </span><span class="c">!! `:cadence` / `:op` / `:coord` overrides), then registers any spec</span>
+<span class="w">      </span><span class="c">!! entries that name a derived-catalog diagnostic (with their overrides).</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! `default_coord` (a `DIAG_VGRID_*`, default LAYER) is the global</span>
+<span class="w">      </span><span class="c">!! output vgrid (`&amp;ocean_diag_nml vgrid`) applied to layered diagnostics</span>
+<span class="w">      </span><span class="c">!! that don't carry a per-diag `:coord`.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! An empty / blank `spec` + LAYER default reproduces the canonical set</span>
+<span class="w">      </span><span class="c">!! exactly (bit-identical).  A spec name that is neither canonical nor</span>
+<span class="w">      </span><span class="c">!! in the derived catalog fails loud via `register_derived`.  A `:off`</span>
+<span class="w">      </span><span class="c">!! on a non-canonical name that is not registered is a harmless no-op.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! Must be called AFTER the output-level setters (`set_output_z_levels`</span>
+<span class="w">      </span><span class="c">!! / `set_output_sigma_levels` / `set_output_zstar_levels` /</span>
+<span class="w">      </span><span class="c">!! `set_output_density_levels`) so non-layer diagnostics size their</span>
+<span class="w">      </span><span class="c">!! remap targets correctly.</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_state_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">),</span><span class="w"> </span><span class="k">target</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">state</span>
+<span class="w">      </span><span class="kt">character</span><span class="p">(</span><span class="nb">len</span><span class="o">=*</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">spec</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dt_out</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">default_coord</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">diag_spec_t</span><span class="p">),</span><span class="w"> </span><span class="k">allocatable</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">specs</span><span class="p">(:)</span>
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">op</span><span class="p">,</span><span class="w"> </span><span class="n">dcoord</span><span class="p">,</span><span class="w"> </span><span class="n">coord</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dtout</span><span class="p">,</span><span class="w"> </span><span class="n">dto</span>
+
+<span class="w">      </span><span class="n">dtout</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">360</span><span class="mf">0.0_wp</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">dt_out</span><span class="p">))</span><span class="w"> </span><span class="n">dtout</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dt_out</span>
+<span class="w">      </span><span class="n">dcoord</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">DIAG_VGRID_LAYER</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">default_coord</span><span class="p">))</span><span class="w"> </span><span class="n">dcoord</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">default_coord</span>
+
+<span class="w">      </span><span class="n">specs</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">parse_diag_spec</span><span class="p">(</span><span class="n">spec</span><span class="p">)</span>
+
+<span class="w">      </span><span class="c">! Canonical set, with the spec's per-diagnostic skips / overrides.</span>
+<span class="w">      </span><span class="k">call </span><span class="n">register_default_diags</span><span class="p">(</span><span class="n">state</span><span class="p">,</span><span class="w"> </span><span class="n">dt_out</span><span class="o">=</span><span class="n">dtout</span><span class="p">,</span><span class="w"> </span><span class="n">specs</span><span class="o">=</span><span class="n">specs</span><span class="p">,</span><span class="w"> </span><span class="n">default_coord</span><span class="o">=</span><span class="n">dcoord</span><span class="p">)</span>
+
+<span class="w">      </span><span class="c">! Derived-catalog additions: any spec entry that is not a canonical</span>
+<span class="w">      </span><span class="c">! diagnostic and is not turned off.</span>
+<span class="w">      </span><span class="k">do </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">size</span><span class="p">(</span><span class="n">specs</span><span class="p">)</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">specs</span><span class="p">(</span><span class="n">i</span><span class="p">)%</span><span class="n">off</span><span class="p">)</span><span class="w"> </span><span class="k">cycle</span>
+<span class="k">         if</span><span class="w"> </span><span class="p">(</span><span class="n">is_canonical_diag_name</span><span class="p">(</span><span class="nb">trim</span><span class="p">(</span><span class="n">specs</span><span class="p">(</span><span class="n">i</span><span class="p">)%</span><span class="n">name</span><span class="p">)))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">diag</span><span class="p">%</span><span class="n">is_registered</span><span class="p">(</span><span class="nb">trim</span><span class="p">(</span><span class="n">specs</span><span class="p">(</span><span class="n">i</span><span class="p">)%</span><span class="n">name</span><span class="p">)))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               call </span><span class="n">global_logger</span><span class="p">%</span><span class="n">warning</span><span class="p">(</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                  </span><span class="s2">"&amp;ocean_diag_nml diags requested '"</span><span class="o">//</span><span class="nb">trim</span><span class="p">(</span><span class="n">specs</span><span class="p">(</span><span class="n">i</span><span class="p">)%</span><span class="n">name</span><span class="p">)</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                  </span><span class="s2">"', which is a canonical diagnostic but is NOT registered — it will "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                  </span><span class="s2">"be absent from the output. "</span><span class="o">//</span><span class="n">gate_clause</span><span class="p">(</span><span class="nb">trim</span><span class="p">(</span><span class="n">specs</span><span class="p">(</span><span class="n">i</span><span class="p">)%</span><span class="n">name</span><span class="p">)))</span>
+<span class="w">            </span><span class="k">end if</span>
+<span class="k">            cycle</span>
+<span class="k">         end if</span>
+<span class="k">         </span><span class="n">op</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">DIAG_OP_INSTANT</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">specs</span><span class="p">(</span><span class="n">i</span><span class="p">)%</span><span class="n">time_op</span><span class="w"> </span><span class="o">/=</span><span class="w"> </span><span class="n">DIAG_OP_UNSET</span><span class="p">)</span><span class="w"> </span><span class="n">op</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">specs</span><span class="p">(</span><span class="n">i</span><span class="p">)%</span><span class="n">time_op</span>
+<span class="w">         </span><span class="n">dto</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dtout</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">specs</span><span class="p">(</span><span class="n">i</span><span class="p">)%</span><span class="n">dt_out</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="n">dto</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">specs</span><span class="p">(</span><span class="n">i</span><span class="p">)%</span><span class="n">dt_out</span>
+<span class="w">         </span><span class="n">coord</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dcoord</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">specs</span><span class="p">(</span><span class="n">i</span><span class="p">)%</span><span class="n">coord</span><span class="w"> </span><span class="o">/=</span><span class="w"> </span><span class="n">DIAG_COORD_UNSET</span><span class="p">)</span><span class="w"> </span><span class="n">coord</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">specs</span><span class="p">(</span><span class="n">i</span><span class="p">)%</span><span class="n">coord</span>
+<span class="w">         </span><span class="k">call </span><span class="n">register_derived</span><span class="p">(</span><span class="n">state</span><span class="p">,</span><span class="w"> </span><span class="nb">trim</span><span class="p">(</span><span class="n">specs</span><span class="p">(</span><span class="n">i</span><span class="p">)%</span><span class="n">name</span><span class="p">),</span><span class="w"> </span><span class="n">time_op</span><span class="o">=</span><span class="n">op</span><span class="p">,</span><span class="w"> </span><span class="n">dt_out</span><span class="o">=</span><span class="n">dto</span><span class="p">,</span><span class="w"> </span><span class="n">coord</span><span class="o">=</span><span class="n">coord</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end do</span>
+<span class="k">   end subroutine </span><span class="n">apply_diag_selection</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-11-13 23:21 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

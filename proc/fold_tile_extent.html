@@ -1,0 +1,662 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>fold_tile_extent &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>fold_tile_extent
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.0% of total for procedures.">17 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_fold_plan.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_fold_plan.f90.html'>rdb_ocean_fold_plan.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ocean_fold_plan.html'>rdb_ocean_fold_plan</a></li>
+            <li class="breadcrumb-item active" aria-current="page">fold_tile_extent</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/fold_tile_extent.html#variable-base~6">base</a>
+            <a class="list-group-item" href="../proc/fold_tile_extent.html#variable-rem~7">rem</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/fold_tile_extent.html#src">fold_tile_extent</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>public pure subroutine fold_tile_extent(ni, px, rx, a, w)  
+</h2>
+    
+
+    <p>First global cell <code>a</code> and width <code>w</code> of tile <code>rx</code> — the
+<code>decomp_init</code> split (remainder to the WEST tiles), restated here so
+the plan stays pure and dependency-free (cross-checked against
+<code>decomp_init</code> by the unit test).</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ni~16"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ni</strong></td>
+            <td>
+                <p>Global physical width of the fold row (cells).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-px~12"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>px</strong></td>
+            <td>
+                <p>Tiles along the fold row.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-rx~8"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>rx</strong></td>
+            <td>
+                <p>Tile x-coordinate (0-based, <code>0..px-1</code>).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-a~40"></span>
+              integer,
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>a</strong></td>
+            <td>
+                <p>First global cell of the tile (1-based).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-w~33"></span>
+              integer,
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>w</strong></td>
+            <td>
+                <p>Tile width (cells).</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~fold_tile_extent~~CalledByGraph Pages: 1 -->
+<svg id="procfold_tile_extentCalledByGraph" width="641pt" height="95pt"
+ viewBox="0.00 0.00 641.00 95.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~fold_tile_extent~~CalledByGraph" class="graph" transform="scale(0.597591 0.597591) rotate(0) translate(4 154.27)">
+<title>proc~~fold_tile_extent~~CalledByGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-154.27 1068.64,-154.27 1068.64,4 -4,4"/>
+<!-- proc~fold_tile_extent -->
+<g id="proc~~fold_tile_extent~~CalledByGraph_node1" class="node">
+<title>proc~fold_tile_extent</title>
+<polygon fill="none" stroke="black" points="1064.64,-66.27 972.87,-66.27 972.87,-42 1064.64,-42 1064.64,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1018.75" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50">fold_tile_extent</text>
+</g>
+<!-- proc~fold_plan_build -->
+<g id="proc~~fold_tile_extent~~CalledByGraph_node2" class="node">
+<title>proc~fold_plan_build</title>
+<g id="a_proc~~fold_tile_extent~~CalledByGraph_node2"><a xlink:href="../proc/fold_plan_build.html" xlink:title="fold_plan_build">
+<polygon fill="#d9534f" stroke="#d9534f" points="778.35,-66.27 686.58,-66.27 686.58,-42 778.35,-42 778.35,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="732.46" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">fold_plan_build</text>
+</a>
+</g>
+</g>
+<!-- proc~fold_plan_build&#45;&gt;proc~fold_tile_extent -->
+<g id="proc~~fold_tile_extent~~CalledByGraph_edge1" class="edge">
+<title>proc~fold_plan_build&#45;&gt;proc~fold_tile_extent</title>
+<path fill="none" stroke="#ff0000" d="M778.81,-54.79C790.4,-54.94 802.83,-55.06 814.35,-55.13 868.8,-55.47 882.42,-55.47 936.87,-55.13 944.7,-55.09 952.95,-55.01 961.07,-54.92"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="960.94,-58.43 970.9,-54.81 960.86,-51.43 960.94,-58.43"/>
+</g>
+<!-- proc~fold_receiver_entries -->
+<g id="proc~~fold_tile_extent~~CalledByGraph_node3" class="node">
+<title>proc~fold_receiver_entries</title>
+<g id="a_proc~~fold_tile_extent~~CalledByGraph_node3"><a xlink:href="../proc/fold_receiver_entries.html" xlink:title="fold_receiver_entries">
+<polygon fill="#d9534f" stroke="#d9534f" points="936.87,-46.27 814.35,-46.27 814.35,-22 936.87,-22 936.87,-46.27"/>
+<text xml:space="preserve" text-anchor="middle" x="875.61" y="-30.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">fold_receiver_entries</text>
+</a>
+</g>
+</g>
+<!-- proc~fold_plan_build&#45;&gt;proc~fold_receiver_entries -->
+<g id="proc~~fold_tile_extent~~CalledByGraph_edge4" class="edge">
+<title>proc~fold_plan_build&#45;&gt;proc~fold_receiver_entries</title>
+<path fill="none" stroke="#00ffff" d="M778.51,-47.75C786.28,-46.65 794.52,-45.48 802.78,-44.31"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="803.12,-47.8 812.53,-42.93 802.13,-40.87 803.12,-47.8"/>
+</g>
+<!-- proc~fold_receiver_entries&#45;&gt;proc~fold_tile_extent -->
+<g id="proc~~fold_tile_extent~~CalledByGraph_edge2" class="edge">
+<title>proc~fold_receiver_entries&#45;&gt;proc~fold_tile_extent</title>
+<path fill="none" stroke="#ff0000" d="M937.29,-42.73C945.22,-43.86 953.32,-45 961.18,-46.12"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="960.59,-49.57 970.98,-47.51 961.57,-42.64 960.59,-49.57"/>
+</g>
+<!-- proc~ocean_fold_exchange_init -->
+<g id="proc~~fold_tile_extent~~CalledByGraph_node4" class="node">
+<title>proc~ocean_fold_exchange_init</title>
+<g id="a_proc~~fold_tile_extent~~CalledByGraph_node4"><a xlink:href="../proc/ocean_fold_exchange_init.html" xlink:title="ocean_fold_exchange_init">
+<polygon fill="#d9534f" stroke="#d9534f" points="650.58,-66.27 501.81,-66.27 501.81,-42 650.58,-42 650.58,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="576.19" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_fold_exchange_init</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_fold_exchange_init&#45;&gt;proc~fold_plan_build -->
+<g id="proc~~fold_tile_extent~~CalledByGraph_edge3" class="edge">
+<title>proc~ocean_fold_exchange_init&#45;&gt;proc~fold_plan_build</title>
+<path fill="none" stroke="#ff0000" d="M650.72,-54.13C658.85,-54.13 667.04,-54.13 674.92,-54.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="674.68,-57.64 684.68,-54.14 674.68,-50.64 674.68,-57.64"/>
+</g>
+<!-- proc~engine_setup -->
+<g id="proc~~fold_tile_extent~~CalledByGraph_node5" class="node">
+<title>proc~engine_setup</title>
+<g id="a_proc~~fold_tile_extent~~CalledByGraph_node5"><a xlink:href="../proc/engine_setup.html" xlink:title="engine_setup">
+<polygon fill="#d9534f" stroke="#d9534f" points="465.81,-66.27 383.04,-66.27 383.04,-42 465.81,-42 465.81,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="424.42" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_setup</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_setup&#45;&gt;proc~ocean_fold_exchange_init -->
+<g id="proc~~fold_tile_extent~~CalledByGraph_edge5" class="edge">
+<title>proc~engine_setup&#45;&gt;proc~ocean_fold_exchange_init</title>
+<path fill="none" stroke="#ff0000" d="M465.95,-54.13C473.52,-54.13 481.68,-54.13 490.01,-54.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="489.93,-57.64 499.93,-54.14 489.93,-50.64 489.93,-57.64"/>
+</g>
+<!-- proc~complete_ocean_create -->
+<g id="proc~~fold_tile_extent~~CalledByGraph_node6" class="node">
+<title>proc~complete_ocean_create</title>
+<g id="a_proc~~fold_tile_extent~~CalledByGraph_node6"><a xlink:href="../proc/complete_ocean_create.html" xlink:title="complete_ocean_create">
+<polygon fill="#d9534f" stroke="#d9534f" points="347.04,-108.27 208.02,-108.27 208.02,-84 347.04,-84 347.04,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="277.53" y="-92.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">complete_ocean_create</text>
+</a>
+</g>
+</g>
+<!-- proc~complete_ocean_create&#45;&gt;proc~engine_setup -->
+<g id="proc~~fold_tile_extent~~CalledByGraph_edge6" class="edge">
+<title>proc~complete_ocean_create&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#ff0000" d="M322,-83.53C337.72,-78.98 355.61,-73.79 371.94,-69.06"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="372.87,-72.43 381.5,-66.29 370.92,-65.71 372.87,-72.43"/>
+</g>
+<!-- proc~driver_run_ocean -->
+<g id="proc~~fold_tile_extent~~CalledByGraph_node7" class="node">
+<title>proc~driver_run_ocean</title>
+<g id="a_proc~~fold_tile_extent~~CalledByGraph_node7"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<polygon fill="#d9534f" stroke="#d9534f" points="329.79,-66.27 225.27,-66.27 225.27,-42 329.79,-42 329.79,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="277.53" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_setup -->
+<g id="proc~~fold_tile_extent~~CalledByGraph_edge7" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#ff0000" d="M330.02,-54.13C343.36,-54.13 357.73,-54.13 371.11,-54.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="371.05,-57.64 381.05,-54.14 371.05,-50.64 371.05,-57.64"/>
+</g>
+<!-- proc~driver_validate -->
+<g id="proc~~fold_tile_extent~~CalledByGraph_node8" class="node">
+<title>proc~driver_validate</title>
+<g id="a_proc~~fold_tile_extent~~CalledByGraph_node8"><a xlink:href="../proc/driver_validate.html" xlink:title="driver_validate">
+<polygon fill="#d9534f" stroke="#d9534f" points="323.04,-24.27 232.02,-24.27 232.02,0 323.04,0 323.04,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="277.53" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_validate</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_validate&#45;&gt;proc~engine_setup -->
+<g id="proc~~fold_tile_extent~~CalledByGraph_edge8" class="edge">
+<title>proc~driver_validate&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#ff0000" d="M322,-24.74C337.72,-29.29 355.61,-34.48 371.94,-39.21"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="370.92,-42.56 381.5,-41.98 372.87,-35.84 370.92,-42.56"/>
+</g>
+<!-- proc~driver_run -->
+<g id="proc~~fold_tile_extent~~CalledByGraph_node9" class="node">
+<title>proc~driver_run</title>
+<g id="a_proc~~fold_tile_extent~~CalledByGraph_node9"><a xlink:href="../proc/driver_run.html" xlink:title="driver_run">
+<polygon fill="#d9534f" stroke="#d9534f" points="119.14,-66.27 52.87,-66.27 52.87,-42 119.14,-42 119.14,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="86.01" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run&#45;&gt;proc~driver_run_ocean -->
+<g id="proc~~fold_tile_extent~~CalledByGraph_edge11" class="edge">
+<title>proc~driver_run&#45;&gt;proc~driver_run_ocean</title>
+<path fill="none" stroke="#00ff00" d="M119.59,-54.13C145.42,-54.13 182.28,-54.13 213.78,-54.13"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="213.61,-57.64 223.61,-54.14 213.61,-50.64 213.61,-57.64"/>
+</g>
+<!-- proc~rdb_ocean_create_finalize -->
+<g id="proc~~fold_tile_extent~~CalledByGraph_node10" class="node">
+<title>proc~rdb_ocean_create_finalize</title>
+<g id="a_proc~~fold_tile_extent~~CalledByGraph_node10"><a xlink:href="../proc/rdb_ocean_create_finalize.html" xlink:title="rdb_ocean_create_finalize">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="161.14,-150.27 10.87,-150.27 10.87,-126 161.14,-126 161.14,-150.27"/>
+<text xml:space="preserve" text-anchor="middle" x="86.01" y="-134.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_create_finalize</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_create_finalize&#45;&gt;proc~complete_ocean_create -->
+<g id="proc~~fold_tile_extent~~CalledByGraph_edge9" class="edge">
+<title>proc~rdb_ocean_create_finalize&#45;&gt;proc~complete_ocean_create</title>
+<path fill="none" stroke="#ff0000" d="M143.87,-125.53C164.2,-121.03 187.32,-115.9 208.5,-111.21"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="209.22,-114.64 218.23,-109.05 207.71,-107.8 209.22,-114.64"/>
+</g>
+<!-- proc~rdb_ocean_create_from_string -->
+<g id="proc~~fold_tile_extent~~CalledByGraph_node11" class="node">
+<title>proc~rdb_ocean_create_from_string</title>
+<g id="a_proc~~fold_tile_extent~~CalledByGraph_node11"><a xlink:href="../proc/rdb_ocean_create_from_string.html" xlink:title="rdb_ocean_create_from_string">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="172.02,-108.27 0,-108.27 0,-84 172.02,-84 172.02,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="86.01" y="-92.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_create_from_string</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_create_from_string&#45;&gt;proc~complete_ocean_create -->
+<g id="proc~~fold_tile_extent~~CalledByGraph_edge10" class="edge">
+<title>proc~rdb_ocean_create_from_string&#45;&gt;proc~complete_ocean_create</title>
+<path fill="none" stroke="#ff0000" d="M172.34,-96.14C180.27,-96.14 188.28,-96.14 196.15,-96.14"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="196.05,-99.64 206.05,-96.14 196.05,-92.64 196.05,-99.64"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocfold_tile_extentCalledByGraph = svgPanZoom('#procfold_tile_extentCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-base~6"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>base</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-rem~7"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>rem</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">pure subroutine </span><span class="n">fold_tile_extent</span><span class="p">(</span><span class="n">ni</span><span class="p">,</span><span class="w"> </span><span class="n">px</span><span class="p">,</span><span class="w"> </span><span class="n">rx</span><span class="p">,</span><span class="w"> </span><span class="n">a</span><span class="p">,</span><span class="w"> </span><span class="n">w</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! First global cell `a` and width `w` of tile `rx` — the</span>
+<span class="w">      </span><span class="c">!! `decomp_init` split (remainder to the WEST tiles), restated here so</span>
+<span class="w">      </span><span class="c">!! the plan stays pure and dependency-free (cross-checked against</span>
+<span class="w">      </span><span class="c">!! `decomp_init` by the unit test).</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ni</span>
+<span class="w">         </span><span class="c">!! Global physical width of the fold row (cells).</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">px</span>
+<span class="w">         </span><span class="c">!! Tiles along the fold row.</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">rx</span>
+<span class="w">         </span><span class="c">!! Tile x-coordinate (0-based, `0..px-1`).</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">a</span>
+<span class="w">         </span><span class="c">!! First global cell of the tile (1-based).</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">w</span>
+<span class="w">         </span><span class="c">!! Tile width (cells).</span>
+
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">base</span><span class="p">,</span><span class="w"> </span><span class="n">rem</span>
+
+<span class="w">      </span><span class="n">base</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ni</span><span class="o">/</span><span class="n">px</span>
+<span class="w">      </span><span class="n">rem</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">mod</span><span class="p">(</span><span class="n">ni</span><span class="p">,</span><span class="w"> </span><span class="n">px</span><span class="p">)</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">rx</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">rem</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         </span><span class="n">w</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">base</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">         </span><span class="n">a</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">rx</span><span class="o">*</span><span class="p">(</span><span class="n">base</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">      </span><span class="k">else</span>
+<span class="k">         </span><span class="n">w</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">base</span>
+<span class="w">         </span><span class="n">a</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">rem</span><span class="o">*</span><span class="p">(</span><span class="n">base</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="p">(</span><span class="n">rx</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">rem</span><span class="p">)</span><span class="o">*</span><span class="n">base</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">      </span><span class="k">end if</span>
+<span class="k">   end subroutine </span><span class="n">fold_tile_extent</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-11-13 23:21 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

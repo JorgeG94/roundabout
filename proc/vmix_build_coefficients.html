@@ -1,0 +1,2488 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>vmix_build_coefficients &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>vmix_build_coefficients
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.1% of total for procedures.">100 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_dyn.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_dyn.f90.html'>rdb_ocean_dyn.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ocean_dyn.html'>rdb_ocean_dyn</a></li>
+            <li class="breadcrumb-item active" aria-current="page">vmix_build_coefficients</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/vmix_build_coefficients.html#variable-epbl_active">epbl_active</a>
+            <a class="list-group-item" href="../proc/vmix_build_coefficients.html#variable-kshear_active">kshear_active</a>
+            <a class="list-group-item" href="../proc/vmix_build_coefficients.html#variable-shear_first">shear_first</a>
+            <a class="list-group-item" href="../proc/vmix_build_coefficients.html#variable-tidal_active">tidal_active</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/vmix_build_coefficients.html#src">vmix_build_coefficients</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>private  subroutine vmix_build_coefficients(grid, dyn, vmix, vd, ss, ms, dt, refresh_slow, sf, epbl, kshear, vmix_tidal, metrics)  
+</h2>
+    
+
+    <p>Assemble the vertical-mixing coefficients <code>vmix%kv/kt/ks</code>: interior
+seed (PP81 / none) -&gt; KPP overlay or EPBL merge -&gt; kappa-shear
+merge -&gt; tidal merge -&gt; law-of-the-wall BBL merge -&gt; KV_ML_INVZ2
+-&gt; convective adjustment -&gt; heat/salt split -&gt; <code>vmix_assemble</code>
+(see <code>vmix_apply_in_stage</code> for the contributor rules).  Extracted
+verbatim from the stage chain so the SAME code runs in-stage
+(<code>diabatic_first = .true.</code> / ratio 1) and at the interval end
+(<code>diabatic_first = .false.</code>, from <code>apply_deferred_thermo</code>).</p>
+<p><code>refresh_slow</code> fires the slow column solves (<code>epbl_compute</code>,
+<code>kappa_shear_compute</code>, <code>tidal_mixing_compute</code>, <code>bbl_mixing_compute</code>)
+that refresh their persistent <code>kd_int</code> before the merges; the merges
+themselves run on every call.  Requires <code>vmix%use_closure</code>.</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-grid~332"></span>
+              type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>grid</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dyn~8"></span>
+              type(<a href='../type/ocean_dyn_t.html'>ocean_dyn_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dyn</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-vmix~5"></span>
+              type(<a href='../type/ocean_vmix_t.html'>ocean_vmix_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>vmix</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-vd~3"></span>
+              type(<a href='../type/ocean_vdiff_t.html'>ocean_vdiff_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>vd</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ss~20"></span>
+              type(<a href='../type/ocean_surface_stress_t.html'>ocean_surface_stress_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ss</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ms~132"></span>
+              type(<a href='../type/multilayer_state_t.html'>multilayer_state_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ms</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dt~133"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dt</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-refresh_slow"></span>
+              logical,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>refresh_slow</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sf~22"></span>
+              type(<a href='../type/ocean_surface_flux_t.html'>ocean_surface_flux_t</a>),
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>sf</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-epbl~6"></span>
+              type(<a href='../type/ocean_epbl_t.html'>ocean_epbl_t</a>),
+            </td>
+<td>intent(inout),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>epbl</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-kshear~5"></span>
+              type(<a href='../type/ocean_kappa_shear_t.html'>ocean_kappa_shear_t</a>),
+            </td>
+<td>intent(inout),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>kshear</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-vmix_tidal~4"></span>
+              type(<a href='../type/ocean_tidal_mixing_t.html'>ocean_tidal_mixing_t</a>),
+            </td>
+<td>intent(inout),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>vmix_tidal</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-metrics~87"></span>
+              type(<a href='../type/ocean_metrics_t.html'>ocean_metrics_t</a>),
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>metrics</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~vmix_build_coefficients~~CallsGraph Pages: 1 -->
+<svg id="procvmix_build_coefficientsCallsGraph" width="641pt" height="636pt"
+ viewBox="0.00 0.00 641.00 636.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~vmix_build_coefficients~~CallsGraph" class="graph" transform="scale(0.430878 0.430878) rotate(0) translate(4 1472.27)">
+<title>proc~~vmix_build_coefficients~~CallsGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-1472.27 1483.66,-1472.27 1483.66,4 -4,4"/>
+<!-- proc~vmix_build_coefficients -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node1" class="node">
+<title>proc~vmix_build_coefficients</title>
+<polygon fill="none" stroke="black" points="135.27,-932.27 0,-932.27 0,-908 135.27,-908 135.27,-932.27"/>
+<text xml:space="preserve" text-anchor="middle" x="67.63" y="-916.53" font-family="Helvetica,sans-Serif" font-size="10.50">vmix_build_coefficients</text>
+</g>
+<!-- error -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node2" class="node">
+<title>error</title>
+<polygon fill="#777777" stroke="#777777" points="490.8,-1177.27 436.8,-1177.27 436.8,-1153 490.8,-1153 490.8,-1177.27"/>
+<text xml:space="preserve" text-anchor="middle" x="463.8" y="-1161.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">error</text>
+</g>
+<!-- proc~vmix_build_coefficients&#45;&gt;error -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge1" class="edge">
+<title>proc~vmix_build_coefficients&#45;&gt;error</title>
+<path fill="none" stroke="#ff0000" d="M68.99,-932.62C70.98,-976.15 84.15,-1121.78 171.27,-1181.13 248.8,-1233.96 366.6,-1202.04 425.92,-1180.3"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="427.1,-1183.6 435.22,-1176.79 424.63,-1177.05 427.1,-1183.6"/>
+</g>
+<!-- proc~bbl_mixing_compute -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node3" class="node">
+<title>proc~bbl_mixing_compute</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node3"><a xlink:href="../proc/bbl_mixing_compute.html" xlink:title="bbl_mixing_compute">
+<polygon fill="#d9534f" stroke="#d9534f" points="310.66,-1294.27 188.89,-1294.27 188.89,-1270 310.66,-1270 310.66,-1294.27"/>
+<text xml:space="preserve" text-anchor="middle" x="249.78" y="-1278.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">bbl_mixing_compute</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_build_coefficients&#45;&gt;proc~bbl_mixing_compute -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge2" class="edge">
+<title>proc~vmix_build_coefficients&#45;&gt;proc~bbl_mixing_compute</title>
+<path fill="none" stroke="#ff0000" d="M68.37,-932.51C68.02,-981.79 73.55,-1166.09 171.27,-1261.13 173.53,-1263.34 176,-1265.31 178.63,-1267.09"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="176.93,-1270.15 187.37,-1271.93 180.32,-1264.02 176.93,-1270.15"/>
+</g>
+<!-- proc~bbl_mixing_merge_into_kt -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node4" class="node">
+<title>proc~bbl_mixing_merge_into_kt</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node4"><a xlink:href="../proc/bbl_mixing_merge_into_kt.html" xlink:title="bbl_mixing_merge_into_kt">
+<polygon fill="#d9534f" stroke="#d9534f" points="324.91,-1252.27 174.64,-1252.27 174.64,-1228 324.91,-1228 324.91,-1252.27"/>
+<text xml:space="preserve" text-anchor="middle" x="249.78" y="-1236.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">bbl_mixing_merge_into_kt</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_build_coefficients&#45;&gt;proc~bbl_mixing_merge_into_kt -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge3" class="edge">
+<title>proc~vmix_build_coefficients&#45;&gt;proc~bbl_mixing_merge_into_kt</title>
+<path fill="none" stroke="#ff0000" d="M69.22,-932.48C72.02,-977.06 87.62,-1131.5 171.27,-1214.13 174.27,-1217.1 177.63,-1219.73 181.21,-1222.06"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="179.36,-1225.04 189.8,-1226.82 182.75,-1218.91 179.36,-1225.04"/>
+</g>
+<!-- proc~epbl_compute -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node5" class="node">
+<title>proc~epbl_compute</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node5"><a xlink:href="../proc/epbl_compute.html" xlink:title="epbl_compute">
+<polygon fill="#d9534f" stroke="#d9534f" points="293.41,-1336.27 206.14,-1336.27 206.14,-1312 293.41,-1312 293.41,-1336.27"/>
+<text xml:space="preserve" text-anchor="middle" x="249.78" y="-1320.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">epbl_compute</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_build_coefficients&#45;&gt;proc~epbl_compute -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge4" class="edge">
+<title>proc~vmix_build_coefficients&#45;&gt;proc~epbl_compute</title>
+<path fill="none" stroke="#ff0000" d="M70.27,-932.41C78.41,-991.73 116.34,-1248.05 171.27,-1303.13 177.78,-1309.66 186.1,-1314.22 194.85,-1317.39"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="193.63,-1320.67 204.21,-1320.17 195.62,-1313.96 193.63,-1320.67"/>
+</g>
+<!-- proc~epbl_merge_into_kv_kt -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node6" class="node">
+<title>proc~epbl_merge_into_kv_kt</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node6"><a xlink:href="../proc/epbl_merge_into_kv_kt.html" xlink:title="epbl_merge_into_kv_kt">
+<polygon fill="#d9534f" stroke="#d9534f" points="316.29,-1172.27 183.27,-1172.27 183.27,-1148 316.29,-1148 316.29,-1172.27"/>
+<text xml:space="preserve" text-anchor="middle" x="249.78" y="-1156.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">epbl_merge_into_kv_kt</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_build_coefficients&#45;&gt;proc~epbl_merge_into_kv_kt -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge5" class="edge">
+<title>proc~vmix_build_coefficients&#45;&gt;proc~epbl_merge_into_kv_kt</title>
+<path fill="none" stroke="#ff0000" d="M70.7,-932.51C77.57,-969.8 103.26,-1082.02 171.27,-1139.13 172.38,-1140.07 173.53,-1140.96 174.71,-1141.81"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="172.66,-1144.66 183.04,-1146.83 176.28,-1138.67 172.66,-1144.66"/>
+</g>
+<!-- proc~epbl_merge_max_shear -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node7" class="node">
+<title>proc~epbl_merge_max_shear</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node7"><a xlink:href="../proc/epbl_merge_max_shear.html" xlink:title="epbl_merge_max_shear">
+<polygon fill="#d9534f" stroke="#d9534f" points="319.29,-1130.27 180.27,-1130.27 180.27,-1106 319.29,-1106 319.29,-1130.27"/>
+<text xml:space="preserve" text-anchor="middle" x="249.78" y="-1114.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">epbl_merge_max_shear</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_build_coefficients&#45;&gt;proc~epbl_merge_max_shear -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge6" class="edge">
+<title>proc~vmix_build_coefficients&#45;&gt;proc~epbl_merge_max_shear</title>
+<path fill="none" stroke="#ff0000" d="M72.62,-932.57C83.34,-964.02 115.76,-1047.41 171.27,-1092.13 175.4,-1095.47 179.99,-1098.38 184.79,-1100.92"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="183,-1103.95 193.54,-1105.01 185.96,-1097.61 183,-1103.95"/>
+</g>
+<!-- proc~kappa_shear_compute -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node8" class="node">
+<title>proc~kappa_shear_compute</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node8"><a xlink:href="../proc/kappa_shear_compute.html" xlink:title="kappa_shear_compute">
+<polygon fill="#d9534f" stroke="#d9534f" points="529.93,-1100.27 397.66,-1100.27 397.66,-1076 529.93,-1076 529.93,-1100.27"/>
+<text xml:space="preserve" text-anchor="middle" x="463.8" y="-1084.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">kappa_shear_compute</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_build_coefficients&#45;&gt;proc~kappa_shear_compute -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge7" class="edge">
+<title>proc~vmix_build_coefficients&#45;&gt;proc~kappa_shear_compute</title>
+<path fill="none" stroke="#ff0000" d="M73.55,-932.5C85.48,-960.64 118.85,-1029.33 171.27,-1059.13 206.76,-1079.31 312.35,-1085.59 386.19,-1087.46"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="385.7,-1090.95 395.78,-1087.68 385.86,-1083.95 385.7,-1090.95"/>
+</g>
+<!-- proc~kappa_shear_merge_into_kv_kt -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node9" class="node">
+<title>proc~kappa_shear_merge_into_kv_kt</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node9"><a xlink:href="../proc/kappa_shear_merge_into_kv_kt.html" xlink:title="kappa_shear_merge_into_kv_kt">
+<polygon fill="#d9534f" stroke="#d9534f" points="552.81,-1058.27 374.79,-1058.27 374.79,-1034 552.81,-1034 552.81,-1058.27"/>
+<text xml:space="preserve" text-anchor="middle" x="463.8" y="-1042.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">kappa_shear_merge_into_kv_kt</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_build_coefficients&#45;&gt;proc~kappa_shear_merge_into_kv_kt -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge8" class="edge">
+<title>proc~vmix_build_coefficients&#45;&gt;proc~kappa_shear_merge_into_kv_kt</title>
+<path fill="none" stroke="#ff0000" d="M90.08,-932.6C110.45,-944.06 142.2,-960.91 171.27,-972.13 254.26,-1004.18 277.86,-1004.07 364.29,-1025.13 372.5,-1027.14 381.12,-1029.13 389.7,-1031.05"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="388.93,-1034.46 399.45,-1033.19 390.44,-1027.62 388.93,-1034.46"/>
+</g>
+<!-- proc~kshear_stage_merge -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node10" class="node">
+<title>proc~kshear_stage_merge</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node10"><a xlink:href="../proc/kshear_stage_merge.html" xlink:title="kshear_stage_merge">
+<polygon fill="#d9534f" stroke="#d9534f" points="311.04,-1050.27 188.52,-1050.27 188.52,-1026 311.04,-1026 311.04,-1050.27"/>
+<text xml:space="preserve" text-anchor="middle" x="249.78" y="-1034.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">kshear_stage_merge</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_build_coefficients&#45;&gt;proc~kshear_stage_merge -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge9" class="edge">
+<title>proc~vmix_build_coefficients&#45;&gt;proc~kshear_stage_merge</title>
+<path fill="none" stroke="#ff0000" d="M79.39,-932.62C96.84,-952.15 133.22,-989.98 171.27,-1012.13 177.31,-1015.65 183.89,-1018.77 190.58,-1021.53"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="189.12,-1024.72 199.71,-1025.01 191.62,-1018.18 189.12,-1024.72"/>
+</g>
+<!-- proc~ocean_dyn_therm_dt -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node11" class="node">
+<title>proc~ocean_dyn_therm_dt</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node11"><a xlink:href="../proc/ocean_dyn_therm_dt.html" xlink:title="ocean_dyn_t%ocean_dyn_therm_dt">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="563.31,-1016.27 364.29,-1016.27 364.29,-992 563.31,-992 563.31,-1016.27"/>
+<text xml:space="preserve" text-anchor="middle" x="463.8" y="-1000.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_t%ocean_dyn_therm_dt</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_build_coefficients&#45;&gt;proc~ocean_dyn_therm_dt -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge10" class="edge">
+<title>proc~vmix_build_coefficients&#45;&gt;proc~ocean_dyn_therm_dt</title>
+<path fill="none" stroke="#ff0000" d="M127.65,-932.71C198.57,-947.83 317.45,-973.16 392.9,-989.24"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="391.72,-992.57 402.23,-991.23 393.18,-985.72 391.72,-992.57"/>
+</g>
+<!-- proc~profiler_start -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node12" class="node">
+<title>proc~profiler_start</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node12"><a xlink:href="../proc/profiler_start.html" xlink:title="profiler_start">
+<polygon fill="#d9534f" stroke="#d9534f" points="289.29,-932.27 210.27,-932.27 210.27,-908 289.29,-908 289.29,-932.27"/>
+<text xml:space="preserve" text-anchor="middle" x="249.78" y="-916.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">profiler_start</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_build_coefficients&#45;&gt;proc~profiler_start -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge11" class="edge">
+<title>proc~vmix_build_coefficients&#45;&gt;proc~profiler_start</title>
+<path fill="none" stroke="#ff0000" d="M135.71,-920.13C156.52,-920.13 179.08,-920.13 198.54,-920.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="198.39,-923.64 208.39,-920.14 198.39,-916.64 198.39,-923.64"/>
+</g>
+<!-- proc~profiler_stop -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node13" class="node">
+<title>proc~profiler_stop</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node13"><a xlink:href="../proc/profiler_stop.html" xlink:title="profiler_stop">
+<polygon fill="#d9534f" stroke="#d9534f" points="288.54,-890.27 211.02,-890.27 211.02,-866 288.54,-866 288.54,-890.27"/>
+<text xml:space="preserve" text-anchor="middle" x="249.78" y="-874.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">profiler_stop</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_build_coefficients&#45;&gt;proc~profiler_stop -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge12" class="edge">
+<title>proc~vmix_build_coefficients&#45;&gt;proc~profiler_stop</title>
+<path fill="none" stroke="#ff0000" d="M122.68,-907.53C147.2,-901.82 175.98,-895.11 199.84,-889.54"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="200.36,-893.02 209.3,-887.34 198.77,-886.2 200.36,-893.02"/>
+</g>
+<!-- proc~tidal_mixing_compute -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node14" class="node">
+<title>proc~tidal_mixing_compute</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node14"><a xlink:href="../proc/tidal_mixing_compute.html" xlink:title="tidal_mixing_compute">
+<polygon fill="#d9534f" stroke="#d9534f" points="314.04,-764.27 185.52,-764.27 185.52,-740 314.04,-740 314.04,-764.27"/>
+<text xml:space="preserve" text-anchor="middle" x="249.78" y="-748.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">tidal_mixing_compute</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_build_coefficients&#45;&gt;proc~tidal_mixing_compute -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge13" class="edge">
+<title>proc~vmix_build_coefficients&#45;&gt;proc~tidal_mixing_compute</title>
+<path fill="none" stroke="#ff0000" d="M73.73,-907.68C86.01,-879.22 120.1,-809.13 171.27,-773.13 172.88,-772 174.54,-770.94 176.25,-769.92"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="177.8,-773.06 185.14,-765.42 174.64,-766.82 177.8,-773.06"/>
+</g>
+<!-- proc~tidal_mixing_merge_into_kt -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node15" class="node">
+<title>proc~tidal_mixing_merge_into_kt</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node15"><a xlink:href="../proc/tidal_mixing_merge_into_kt.html" xlink:title="tidal_mixing_merge_into_kt">
+<polygon fill="#d9534f" stroke="#d9534f" points="328.29,-806.27 171.27,-806.27 171.27,-782 328.29,-782 328.29,-806.27"/>
+<text xml:space="preserve" text-anchor="middle" x="249.78" y="-790.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">tidal_mixing_merge_into_kt</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_build_coefficients&#45;&gt;proc~tidal_mixing_merge_into_kt -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge14" class="edge">
+<title>proc~vmix_build_coefficients&#45;&gt;proc~tidal_mixing_merge_into_kt</title>
+<path fill="none" stroke="#ff0000" d="M77.25,-907.68C93.2,-885.61 129.5,-839.65 171.27,-815.13 173.74,-813.68 176.32,-812.33 178.96,-811.07"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="180.2,-814.34 188.05,-807.23 177.48,-807.9 180.2,-814.34"/>
+</g>
+<!-- proc~vmix_add_kv_ml_invz2 -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node16" class="node">
+<title>proc~vmix_add_kv_ml_invz2</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node16"><a xlink:href="../proc/vmix_add_kv_ml_invz2.html" xlink:title="vmix_add_kv_ml_invz2">
+<polygon fill="#d9534f" stroke="#d9534f" points="315.54,-848.27 184.02,-848.27 184.02,-824 315.54,-824 315.54,-848.27"/>
+<text xml:space="preserve" text-anchor="middle" x="249.78" y="-832.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vmix_add_kv_ml_invz2</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_build_coefficients&#45;&gt;proc~vmix_add_kv_ml_invz2 -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge15" class="edge">
+<title>proc~vmix_build_coefficients&#45;&gt;proc~vmix_add_kv_ml_invz2</title>
+<path fill="none" stroke="#ff0000" d="M85.6,-907.6C105.3,-893.57 139.21,-870.97 171.27,-857.13 175.26,-855.41 179.43,-853.8 183.67,-852.29"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="184.48,-855.71 192.88,-849.24 182.28,-849.06 184.48,-855.71"/>
+</g>
+<!-- proc~vmix_apply_convection -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node17" class="node">
+<title>proc~vmix_apply_convection</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node17"><a xlink:href="../proc/vmix_apply_convection.html" xlink:title="vmix_apply_convection">
+<polygon fill="#d9534f" stroke="#d9534f" points="317.41,-722.27 182.14,-722.27 182.14,-698 317.41,-698 317.41,-722.27"/>
+<text xml:space="preserve" text-anchor="middle" x="249.78" y="-706.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vmix_apply_convection</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_build_coefficients&#45;&gt;proc~vmix_apply_convection -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge16" class="edge">
+<title>proc~vmix_build_coefficients&#45;&gt;proc~vmix_apply_convection</title>
+<path fill="none" stroke="#ff0000" d="M71.75,-907.53C80.81,-873.51 110.49,-779.18 171.27,-731.13 172.57,-730.11 173.91,-729.13 175.3,-728.2"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="176.64,-731.46 183.61,-723.48 173.19,-725.38 176.64,-731.46"/>
+</g>
+<!-- proc~vmix_apply_kpp_overlay -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node18" class="node">
+<title>proc~vmix_apply_kpp_overlay</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node18"><a xlink:href="../proc/vmix_apply_kpp_overlay.html" xlink:title="vmix_apply_kpp_overlay">
+<polygon fill="#d9534f" stroke="#d9534f" points="320.41,-173.27 179.14,-173.27 179.14,-149 320.41,-149 320.41,-173.27"/>
+<text xml:space="preserve" text-anchor="middle" x="249.78" y="-157.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vmix_apply_kpp_overlay</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_build_coefficients&#45;&gt;proc~vmix_apply_kpp_overlay -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge17" class="edge">
+<title>proc~vmix_build_coefficients&#45;&gt;proc~vmix_apply_kpp_overlay</title>
+<path fill="none" stroke="#ff0000" d="M70.36,-907.52C78.62,-848.05 116.08,-590.05 171.27,-384.13 191.26,-309.55 223.81,-223.96 239.6,-183.97"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="242.76,-185.5 243.2,-174.92 236.25,-182.91 242.76,-185.5"/>
+</g>
+<!-- proc~vmix_assemble -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node19" class="node">
+<title>proc~vmix_assemble</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node19"><a xlink:href="../proc/vmix_assemble.html" xlink:title="vmix_assemble">
+<polygon fill="#d9534f" stroke="#d9534f" points="510.43,-402.27 417.16,-402.27 417.16,-378 510.43,-378 510.43,-402.27"/>
+<text xml:space="preserve" text-anchor="middle" x="463.8" y="-386.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vmix_assemble</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_build_coefficients&#45;&gt;proc~vmix_assemble -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge18" class="edge">
+<title>proc~vmix_build_coefficients&#45;&gt;proc~vmix_assemble</title>
+<path fill="none" stroke="#ff0000" d="M69.67,-907.57C74.05,-861.3 94.5,-697.69 171.27,-593.13 238.55,-501.5 360.1,-436.58 422.87,-407.41"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="424.14,-410.68 431.78,-403.34 421.23,-404.31 424.14,-410.68"/>
+</g>
+<!-- proc~vmix_compute_pp81 -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node20" class="node">
+<title>proc~vmix_compute_pp81</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node20"><a xlink:href="../proc/vmix_compute_pp81.html" xlink:title="vmix_compute_pp81">
+<polygon fill="#d9534f" stroke="#d9534f" points="310.66,-680.27 188.89,-680.27 188.89,-656 310.66,-656 310.66,-680.27"/>
+<text xml:space="preserve" text-anchor="middle" x="249.78" y="-664.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vmix_compute_pp81</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_build_coefficients&#45;&gt;proc~vmix_compute_pp81 -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge19" class="edge">
+<title>proc~vmix_build_coefficients&#45;&gt;proc~vmix_compute_pp81</title>
+<path fill="none" stroke="#ff0000" d="M70.39,-907.65C76.49,-868.93 100.47,-749.82 171.27,-689.13 173.49,-687.23 175.87,-685.5 178.37,-683.92"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="179.94,-687.05 187.15,-679.28 176.67,-680.86 179.94,-687.05"/>
+</g>
+<!-- proc~vmix_seed_interior_none -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node21" class="node">
+<title>proc~vmix_seed_interior_none</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node21"><a xlink:href="../proc/vmix_seed_interior_none.html" xlink:title="vmix_seed_interior_none">
+<polygon fill="#d9534f" stroke="#d9534f" points="535.93,-255.27 391.66,-255.27 391.66,-231 535.93,-231 535.93,-255.27"/>
+<text xml:space="preserve" text-anchor="middle" x="463.8" y="-239.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vmix_seed_interior_none</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_build_coefficients&#45;&gt;proc~vmix_seed_interior_none -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge20" class="edge">
+<title>proc~vmix_build_coefficients&#45;&gt;proc~vmix_seed_interior_none</title>
+<path fill="none" stroke="#ff0000" d="M68.34,-907.51C67.59,-850.42 70.87,-612.39 171.27,-458.13 235.16,-359.98 360.37,-290.86 423.87,-260.47"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="425.32,-263.65 432.88,-256.23 422.34,-257.32 425.32,-263.65"/>
+</g>
+<!-- proc~vmix_split_kd_heat_salt -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node22" class="node">
+<title>proc~vmix_split_kd_heat_salt</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node22"><a xlink:href="../proc/vmix_split_kd_heat_salt.html" xlink:title="vmix_split_kd_heat_salt">
+<polygon fill="#d9534f" stroke="#d9534f" points="531.43,-619.27 396.16,-619.27 396.16,-595 531.43,-595 531.43,-619.27"/>
+<text xml:space="preserve" text-anchor="middle" x="463.8" y="-603.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vmix_split_kd_heat_salt</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_build_coefficients&#45;&gt;proc~vmix_split_kd_heat_salt -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge21" class="edge">
+<title>proc~vmix_build_coefficients&#45;&gt;proc~vmix_split_kd_heat_salt</title>
+<path fill="none" stroke="#ff0000" d="M69.09,-907.53C71.43,-863.5 85.6,-715.53 171.27,-647.13 230.96,-599.47 320.38,-593.84 384.43,-597.4"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="383.97,-600.88 394.17,-598.04 384.42,-593.89 383.97,-600.88"/>
+</g>
+<!-- proc~bbl_mixing_compute_impl -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node24" class="node">
+<title>proc~bbl_mixing_compute_impl</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node24"><a xlink:href="../proc/bbl_mixing_compute_impl.html" xlink:title="bbl_mixing_compute_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="777.7,-894.27 627.43,-894.27 627.43,-870 777.7,-870 777.7,-894.27"/>
+<text xml:space="preserve" text-anchor="middle" x="702.57" y="-878.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">bbl_mixing_compute_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~bbl_mixing_compute&#45;&gt;proc~bbl_mixing_compute_impl -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge22" class="edge">
+<title>proc~bbl_mixing_compute&#45;&gt;proc~bbl_mixing_compute_impl</title>
+<path fill="none" stroke="#ff4800" d="M310.94,-1281.1C381.91,-1276.47 498.45,-1257.58 563.31,-1186.13 614.34,-1129.92 567.88,-1088.25 599.31,-1019.13 620.19,-973.22 658.42,-927.88 681.76,-902.6"/>
+<polygon fill="#ff4800" stroke="#ff4800" points="684.01,-905.31 688.3,-895.63 678.91,-900.52 684.01,-905.31"/>
+</g>
+<!-- proc~epbl_column_kernel -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node25" class="node">
+<title>proc~epbl_column_kernel</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node25"><a xlink:href="../proc/epbl_column_kernel.html" xlink:title="epbl_column_kernel">
+<polygon fill="#d9534f" stroke="#d9534f" points="761.95,-1336.27 643.18,-1336.27 643.18,-1312 761.95,-1312 761.95,-1336.27"/>
+<text xml:space="preserve" text-anchor="middle" x="702.57" y="-1320.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">epbl_column_kernel</text>
+</a>
+</g>
+</g>
+<!-- proc~epbl_compute&#45;&gt;proc~epbl_column_kernel -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge23" class="edge">
+<title>proc~epbl_compute&#45;&gt;proc~epbl_column_kernel</title>
+<path fill="none" stroke="#ffda00" d="M293.6,-1324.13C371.45,-1324.13 536.85,-1324.13 631.4,-1324.13"/>
+<polygon fill="#ffda00" stroke="#ffda00" points="631.34,-1327.64 641.34,-1324.14 631.34,-1320.64 631.34,-1327.64"/>
+</g>
+<!-- proc~kappa_shear_column_kernel -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node28" class="node">
+<title>proc~kappa_shear_column_kernel</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node28"><a xlink:href="../proc/kappa_shear_column_kernel.html" xlink:title="kappa_shear_column_kernel">
+<polygon fill="#d9534f" stroke="#d9534f" points="784.45,-1094.27 620.68,-1094.27 620.68,-1070 784.45,-1070 784.45,-1094.27"/>
+<text xml:space="preserve" text-anchor="middle" x="702.57" y="-1078.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">kappa_shear_column_kernel</text>
+</a>
+</g>
+</g>
+<!-- proc~kappa_shear_compute&#45;&gt;proc~kappa_shear_column_kernel -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge24" class="edge">
+<title>proc~kappa_shear_compute&#45;&gt;proc~kappa_shear_column_kernel</title>
+<path fill="none" stroke="#48ff00" d="M530.13,-1086.48C554.56,-1085.86 582.79,-1085.14 609.21,-1084.48"/>
+<polygon fill="#48ff00" stroke="#48ff00" points="608.98,-1087.98 618.89,-1084.23 608.8,-1080.98 608.98,-1087.98"/>
+</g>
+<!-- proc~kappa_shear_vertex_kernel -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node29" class="node">
+<title>proc~kappa_shear_vertex_kernel</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node29"><a xlink:href="../proc/kappa_shear_vertex_kernel.html" xlink:title="kappa_shear_vertex_kernel">
+<polygon fill="#d9534f" stroke="#d9534f" points="781.08,-1052.27 624.06,-1052.27 624.06,-1028 781.08,-1028 781.08,-1052.27"/>
+<text xml:space="preserve" text-anchor="middle" x="702.57" y="-1036.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">kappa_shear_vertex_kernel</text>
+</a>
+</g>
+</g>
+<!-- proc~kappa_shear_compute&#45;&gt;proc~kappa_shear_vertex_kernel -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge25" class="edge">
+<title>proc~kappa_shear_compute&#45;&gt;proc~kappa_shear_vertex_kernel</title>
+<path fill="none" stroke="#48ff00" d="M527.01,-1075.52C558.02,-1069.24 595.72,-1061.59 628.14,-1055.02"/>
+<polygon fill="#48ff00" stroke="#48ff00" points="628.78,-1058.46 637.88,-1053.05 627.39,-1051.6 628.78,-1058.46"/>
+</g>
+<!-- proc~kappa_shear_vertex_scatter -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node30" class="node">
+<title>proc~kappa_shear_vertex_scatter</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node30"><a xlink:href="../proc/kappa_shear_vertex_scatter.html" xlink:title="kappa_shear_vertex_scatter">
+<polygon fill="#d9534f" stroke="#d9534f" points="782.58,-810.27 622.56,-810.27 622.56,-786 782.58,-786 782.58,-810.27"/>
+<text xml:space="preserve" text-anchor="middle" x="702.57" y="-794.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">kappa_shear_vertex_scatter</text>
+</a>
+</g>
+</g>
+<!-- proc~kappa_shear_compute&#45;&gt;proc~kappa_shear_vertex_scatter -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge26" class="edge">
+<title>proc~kappa_shear_compute&#45;&gt;proc~kappa_shear_vertex_scatter</title>
+<path fill="none" stroke="#48ff00" d="M530.22,-1085.64C542.67,-1082.24 554.53,-1076.52 563.31,-1067.13 639.43,-985.83 522.89,-900.16 599.31,-819.13 603.08,-815.14 607.38,-811.8 612.05,-809.01"/>
+<polygon fill="#48ff00" stroke="#48ff00" points="613.32,-812.29 620.71,-804.71 610.2,-806.02 613.32,-812.29"/>
+</g>
+<!-- proc~kshear_stage_merge&#45;&gt;error -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge27" class="edge">
+<title>proc~kshear_stage_merge&#45;&gt;error</title>
+<path fill="none" stroke="#00ff48" d="M270.31,-1050.7C292.81,-1065.09 330.95,-1089.25 364.29,-1109.13 386.06,-1122.12 410.87,-1136.22 430.14,-1147.02"/>
+<polygon fill="#00ff48" stroke="#00ff48" points="428.19,-1149.94 438.63,-1151.77 431.61,-1143.83 428.19,-1149.94"/>
+</g>
+<!-- proc~kshear_stage_merge&#45;&gt;proc~kappa_shear_compute -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge28" class="edge">
+<title>proc~kshear_stage_merge&#45;&gt;proc~kappa_shear_compute</title>
+<path fill="none" stroke="#00ff48" d="M298.45,-1050.77C318.7,-1056.02 342.61,-1062.06 364.29,-1067.13 372.79,-1069.13 381.72,-1071.14 390.59,-1073.09"/>
+<polygon fill="#00ff48" stroke="#00ff48" points="389.76,-1076.49 400.28,-1075.2 391.25,-1069.65 389.76,-1076.49"/>
+</g>
+<!-- proc~kshear_stage_merge&#45;&gt;proc~kappa_shear_merge_into_kv_kt -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge29" class="edge">
+<title>proc~kshear_stage_merge&#45;&gt;proc~kappa_shear_merge_into_kv_kt</title>
+<path fill="none" stroke="#00ff48" d="M311.54,-1040.43C327.6,-1041.03 345.36,-1041.7 362.91,-1042.37"/>
+<polygon fill="#00ff48" stroke="#00ff48" points="362.74,-1045.86 372.87,-1042.74 363.01,-1038.87 362.74,-1045.86"/>
+</g>
+<!-- proc~kshear_stage_merge&#45;&gt;proc~ocean_dyn_therm_dt -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge30" class="edge">
+<title>proc~kshear_stage_merge&#45;&gt;proc~ocean_dyn_therm_dt</title>
+<path fill="none" stroke="#00ff48" d="M311.54,-1028.39C330.73,-1025.31 352.35,-1021.85 373.12,-1018.52"/>
+<polygon fill="#00ff48" stroke="#00ff48" points="373.4,-1022.02 382.72,-1016.98 372.29,-1015.1 373.4,-1022.02"/>
+</g>
+<!-- proc~find_or_create_region -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node26" class="node">
+<title>proc~find_or_create_region</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node26"><a xlink:href="../proc/find_or_create_region.html" xlink:title="find_or_create_region">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="526.93,-974.27 400.66,-974.27 400.66,-950 526.93,-950 526.93,-974.27"/>
+<text xml:space="preserve" text-anchor="middle" x="463.8" y="-958.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">find_or_create_region</text>
+</a>
+</g>
+</g>
+<!-- proc~profiler_start&#45;&gt;proc~find_or_create_region -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge31" class="edge">
+<title>proc~profiler_start&#45;&gt;proc~find_or_create_region</title>
+<path fill="none" stroke="#00ffda" d="M289.67,-927.84C317.49,-933.35 355.78,-940.93 389.28,-947.57"/>
+<polygon fill="#00ffda" stroke="#00ffda" points="388.46,-950.98 398.95,-949.49 389.82,-944.11 388.46,-950.98"/>
+</g>
+<!-- proc~get_wall_time -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node27" class="node">
+<title>proc~get_wall_time</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node27"><a xlink:href="../proc/get_wall_time.html" xlink:title="get_wall_time">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="505.93,-890.27 421.66,-890.27 421.66,-866 505.93,-866 505.93,-890.27"/>
+<text xml:space="preserve" text-anchor="middle" x="463.8" y="-874.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">get_wall_time</text>
+</a>
+</g>
+</g>
+<!-- proc~profiler_start&#45;&gt;proc~get_wall_time -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge32" class="edge">
+<title>proc~profiler_start&#45;&gt;proc~get_wall_time</title>
+<path fill="none" stroke="#00ffda" d="M289.67,-912.43C323.47,-905.74 372.74,-895.98 410.08,-888.58"/>
+<polygon fill="#00ffda" stroke="#00ffda" points="410.65,-892.03 419.77,-886.66 409.29,-885.17 410.65,-892.03"/>
+</g>
+<!-- proc~nvtx_range_push -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node32" class="node">
+<title>proc~nvtx_range_push</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node32"><a xlink:href="../proc/nvtx_range_push.html" xlink:title="nvtx_range_push">
+<polygon fill="#d9534f" stroke="#d9534f" points="514.56,-932.27 413.04,-932.27 413.04,-908 514.56,-908 514.56,-932.27"/>
+<text xml:space="preserve" text-anchor="middle" x="463.8" y="-916.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">nvtx_range_push</text>
+</a>
+</g>
+</g>
+<!-- proc~profiler_start&#45;&gt;proc~nvtx_range_push -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge33" class="edge">
+<title>proc~profiler_start&#45;&gt;proc~nvtx_range_push</title>
+<path fill="none" stroke="#00ffda" d="M289.67,-920.13C320.84,-920.13 365.17,-920.13 401.17,-920.13"/>
+<polygon fill="#00ffda" stroke="#00ffda" points="401.03,-923.64 411.03,-920.14 401.03,-916.64 401.03,-923.64"/>
+</g>
+<!-- proc~profiler_stop&#45;&gt;proc~get_wall_time -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge34" class="edge">
+<title>proc~profiler_stop&#45;&gt;proc~get_wall_time</title>
+<path fill="none" stroke="#00daff" d="M288.68,-878.13C322.47,-878.13 372.26,-878.13 409.96,-878.13"/>
+<polygon fill="#00daff" stroke="#00daff" points="409.72,-881.64 419.72,-878.14 409.72,-874.64 409.72,-881.64"/>
+</g>
+<!-- proc~nvtx_range_pop -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node31" class="node">
+<title>proc~nvtx_range_pop</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node31"><a xlink:href="../proc/nvtx_range_pop.html" xlink:title="nvtx_range_pop">
+<polygon fill="#d9534f" stroke="#d9534f" points="511.93,-848.27 415.66,-848.27 415.66,-824 511.93,-824 511.93,-848.27"/>
+<text xml:space="preserve" text-anchor="middle" x="463.8" y="-832.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">nvtx_range_pop</text>
+</a>
+</g>
+</g>
+<!-- proc~profiler_stop&#45;&gt;proc~nvtx_range_pop -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge35" class="edge">
+<title>proc~profiler_stop&#45;&gt;proc~nvtx_range_pop</title>
+<path fill="none" stroke="#00daff" d="M288.68,-870.63C320.74,-864.28 367.21,-855.07 404.08,-847.77"/>
+<polygon fill="#00daff" stroke="#00daff" points="404.58,-851.24 413.71,-845.86 403.22,-844.37 404.58,-851.24"/>
+</g>
+<!-- proc~tidal_mixing_column_kernel -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node33" class="node">
+<title>proc~tidal_mixing_column_kernel</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node33"><a xlink:href="../proc/tidal_mixing_column_kernel.html" xlink:title="tidal_mixing_column_kernel">
+<polygon fill="#d9534f" stroke="#d9534f" points="782.58,-852.27 622.56,-852.27 622.56,-828 782.58,-828 782.58,-852.27"/>
+<text xml:space="preserve" text-anchor="middle" x="702.57" y="-836.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">tidal_mixing_column_kernel</text>
+</a>
+</g>
+</g>
+<!-- proc~tidal_mixing_compute&#45;&gt;proc~tidal_mixing_column_kernel -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge36" class="edge">
+<title>proc~tidal_mixing_compute&#45;&gt;proc~tidal_mixing_column_kernel</title>
+<path fill="none" stroke="#0091ff" d="M314.41,-764.56C396.37,-780.56 538.64,-808.33 626.01,-825.38"/>
+<polygon fill="#0091ff" stroke="#0091ff" points="625.2,-828.79 635.68,-827.27 626.54,-821.92 625.2,-828.79"/>
+</g>
+<!-- local -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node23" class="node">
+<title>local</title>
+<polygon fill="#777777" stroke="#777777" points="947.71,-694.27 893.71,-694.27 893.71,-670 947.71,-670 947.71,-694.27"/>
+<text xml:space="preserve" text-anchor="middle" x="920.71" y="-678.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">local</text>
+</g>
+<!-- proc~vmix_add_kv_ml_invz2&#45;&gt;local -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge37" class="edge">
+<title>proc~vmix_add_kv_ml_invz2&#45;&gt;local</title>
+<path fill="none" stroke="#0000ff" d="M315.73,-824.11C419.81,-804.42 630.1,-762.88 805.83,-717.13 831.74,-710.39 860.56,-701.52 882.73,-694.39"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="883.79,-697.73 892.22,-691.32 881.63,-691.07 883.79,-697.73"/>
+</g>
+<!-- proc~vmix_convection_impl -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node39" class="node">
+<title>proc~vmix_convection_impl</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node39"><a xlink:href="../proc/vmix_convection_impl.html" xlink:title="vmix_convection_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="528.43,-730.27 399.16,-730.27 399.16,-706 528.43,-706 528.43,-730.27"/>
+<text xml:space="preserve" text-anchor="middle" x="463.8" y="-714.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vmix_convection_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_apply_convection&#45;&gt;proc~vmix_convection_impl -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge38" class="edge">
+<title>proc~vmix_apply_convection&#45;&gt;proc~vmix_convection_impl</title>
+<path fill="none" stroke="#4800ff" d="M317.86,-712.67C339.97,-713.5 364.7,-714.43 387.38,-715.29"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="387.05,-718.78 397.17,-715.66 387.31,-711.78 387.05,-718.78"/>
+</g>
+<!-- proc~vmix_kpp_overlay_impl -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node41" class="node">
+<title>proc~vmix_kpp_overlay_impl</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node41"><a xlink:href="../proc/vmix_kpp_overlay_impl.html" xlink:title="vmix_kpp_overlay_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="770.2,-66.27 634.93,-66.27 634.93,-42 770.2,-42 770.2,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="702.57" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vmix_kpp_overlay_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_apply_kpp_overlay&#45;&gt;proc~vmix_kpp_overlay_impl -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge39" class="edge">
+<title>proc~vmix_apply_kpp_overlay&#45;&gt;proc~vmix_kpp_overlay_impl</title>
+<path fill="none" stroke="#9100ff" d="M299.13,-148.57C366.29,-131.25 491.71,-99.45 599.31,-75.13 608.33,-73.1 617.82,-71.04 627.23,-69.04"/>
+<polygon fill="#9100ff" stroke="#9100ff" points="627.66,-72.53 636.73,-67.05 626.22,-65.68 627.66,-72.53"/>
+</g>
+<!-- proc~vmix_assemble_clip_henyey_impl -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node34" class="node">
+<title>proc~vmix_assemble_clip_henyey_impl</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node34"><a xlink:href="../proc/vmix_assemble_clip_henyey_impl.html" xlink:title="vmix_assemble_clip_henyey_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="797.58,-402.27 607.56,-402.27 607.56,-378 797.58,-378 797.58,-402.27"/>
+<text xml:space="preserve" text-anchor="middle" x="702.57" y="-386.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vmix_assemble_clip_henyey_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_assemble&#45;&gt;proc~vmix_assemble_clip_henyey_impl -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge40" class="edge">
+<title>proc~vmix_assemble&#45;&gt;proc~vmix_assemble_clip_henyey_impl</title>
+<path fill="none" stroke="#da00ff" d="M510.73,-390.13C535.06,-390.13 566.02,-390.13 595.88,-390.13"/>
+<polygon fill="#da00ff" stroke="#da00ff" points="595.75,-393.64 605.75,-390.14 595.75,-386.64 595.75,-393.64"/>
+</g>
+<!-- proc~vmix_assemble_clip_henyey_pr_impl -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node35" class="node">
+<title>proc~vmix_assemble_clip_henyey_pr_impl</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node35"><a xlink:href="../proc/vmix_assemble_clip_henyey_pr_impl.html" xlink:title="vmix_assemble_clip_henyey_pr_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="805.83,-360.27 599.31,-360.27 599.31,-336 805.83,-336 805.83,-360.27"/>
+<text xml:space="preserve" text-anchor="middle" x="702.57" y="-344.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vmix_assemble_clip_henyey_pr_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_assemble&#45;&gt;proc~vmix_assemble_clip_henyey_pr_impl -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge41" class="edge">
+<title>proc~vmix_assemble&#45;&gt;proc~vmix_assemble_clip_henyey_pr_impl</title>
+<path fill="none" stroke="#da00ff" d="M510.73,-381.99C541.57,-376.52 583.05,-369.16 619.47,-362.7"/>
+<polygon fill="#da00ff" stroke="#da00ff" points="619.87,-366.18 629.1,-360.99 618.65,-359.29 619.87,-366.18"/>
+</g>
+<!-- proc~vmix_assemble_clip_impl -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node36" class="node">
+<title>proc~vmix_assemble_clip_impl</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node36"><a xlink:href="../proc/vmix_assemble_clip_impl.html" xlink:title="vmix_assemble_clip_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="775.45,-486.27 629.68,-486.27 629.68,-462 775.45,-462 775.45,-486.27"/>
+<text xml:space="preserve" text-anchor="middle" x="702.57" y="-470.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vmix_assemble_clip_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_assemble&#45;&gt;proc~vmix_assemble_clip_impl -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge42" class="edge">
+<title>proc~vmix_assemble&#45;&gt;proc~vmix_assemble_clip_impl</title>
+<path fill="none" stroke="#da00ff" d="M487.45,-402.77C513.65,-416.9 558.44,-439.58 599.31,-453.13 605.48,-455.18 611.93,-457.07 618.46,-458.8"/>
+<polygon fill="#da00ff" stroke="#da00ff" points="617.47,-462.16 628.02,-461.19 619.17,-455.37 617.47,-462.16"/>
+</g>
+<!-- proc~vmix_assemble_clip_profile_impl -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node37" class="node">
+<title>proc~vmix_assemble_clip_profile_impl</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node37"><a xlink:href="../proc/vmix_assemble_clip_profile_impl.html" xlink:title="vmix_assemble_clip_profile_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="794.95,-444.27 610.18,-444.27 610.18,-420 794.95,-420 794.95,-444.27"/>
+<text xml:space="preserve" text-anchor="middle" x="702.57" y="-428.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vmix_assemble_clip_profile_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_assemble&#45;&gt;proc~vmix_assemble_clip_profile_impl -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge43" class="edge">
+<title>proc~vmix_assemble&#45;&gt;proc~vmix_assemble_clip_profile_impl</title>
+<path fill="none" stroke="#da00ff" d="M510.73,-398.28C541.57,-403.75 583.05,-411.11 619.47,-417.57"/>
+<polygon fill="#da00ff" stroke="#da00ff" points="618.65,-420.98 629.1,-419.28 619.87,-414.09 618.65,-420.98"/>
+</g>
+<!-- proc~vmix_bkgnd_fill_impl -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node38" class="node">
+<title>proc~vmix_bkgnd_fill_impl</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node38"><a xlink:href="../proc/vmix_bkgnd_fill_impl.html" xlink:title="vmix_bkgnd_fill_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="763.45,-318.27 641.68,-318.27 641.68,-294 763.45,-294 763.45,-318.27"/>
+<text xml:space="preserve" text-anchor="middle" x="702.57" y="-302.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vmix_bkgnd_fill_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_assemble&#45;&gt;proc~vmix_bkgnd_fill_impl -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge44" class="edge">
+<title>proc~vmix_assemble&#45;&gt;proc~vmix_bkgnd_fill_impl</title>
+<path fill="none" stroke="#da00ff" d="M487.45,-377.5C513.65,-363.37 558.44,-340.69 599.31,-327.13 609.1,-323.89 619.59,-321.05 629.99,-318.59"/>
+<polygon fill="#da00ff" stroke="#da00ff" points="630.73,-322.01 639.72,-316.41 629.2,-315.18 630.73,-322.01"/>
+</g>
+<!-- proc~vmix_guard_impl -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node40" class="node">
+<title>proc~vmix_guard_impl</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node40"><a xlink:href="../proc/vmix_guard_impl.html" xlink:title="vmix_guard_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="753.7,-192.27 651.43,-192.27 651.43,-168 753.7,-168 753.7,-192.27"/>
+<text xml:space="preserve" text-anchor="middle" x="702.57" y="-176.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vmix_guard_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_assemble&#45;&gt;proc~vmix_guard_impl -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge45" class="edge">
+<title>proc~vmix_assemble&#45;&gt;proc~vmix_guard_impl</title>
+<path fill="none" stroke="#da00ff" d="M475.5,-377.71C494.3,-355.62 534.05,-307.7 563.31,-264.13 581.29,-237.36 573.2,-220.06 599.31,-201.13 611.18,-192.53 625.76,-187.27 640.15,-184.1"/>
+<polygon fill="#da00ff" stroke="#da00ff" points="640.39,-187.61 649.58,-182.33 639.1,-180.73 640.39,-187.61"/>
+</g>
+<!-- proc~vmix_resolve_kd_min -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node42" class="node">
+<title>proc~vmix_resolve_kd_min</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node42"><a xlink:href="../proc/vmix_resolve_kd_min.html" xlink:title="vmix_resolve_kd_min">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="764.58,-276.27 640.56,-276.27 640.56,-252 764.58,-252 764.58,-276.27"/>
+<text xml:space="preserve" text-anchor="middle" x="702.57" y="-260.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vmix_resolve_kd_min</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_assemble&#45;&gt;proc~vmix_resolve_kd_min -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge46" class="edge">
+<title>proc~vmix_assemble&#45;&gt;proc~vmix_resolve_kd_min</title>
+<path fill="none" stroke="#da00ff" d="M476.82,-377.5C498.87,-355.14 548.21,-308.74 599.31,-285.13 608.61,-280.84 618.8,-277.41 629.02,-274.69"/>
+<polygon fill="#da00ff" stroke="#da00ff" points="629.72,-278.12 638.61,-272.35 628.07,-271.32 629.72,-278.12"/>
+</g>
+<!-- proc~vmix_smooth_121_impl -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node46" class="node">
+<title>proc~vmix_smooth_121_impl</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node46"><a xlink:href="../proc/vmix_smooth_121_impl.html" xlink:title="vmix_smooth_121_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="770.58,-528.27 634.56,-528.27 634.56,-504 770.58,-504 770.58,-528.27"/>
+<text xml:space="preserve" text-anchor="middle" x="702.57" y="-512.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vmix_smooth_121_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_assemble&#45;&gt;proc~vmix_smooth_121_impl -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge47" class="edge">
+<title>proc~vmix_assemble&#45;&gt;proc~vmix_smooth_121_impl</title>
+<path fill="none" stroke="#da00ff" d="M476.82,-402.77C498.87,-425.13 548.21,-471.53 599.31,-495.13 606.86,-498.62 614.99,-501.53 623.25,-503.97"/>
+<polygon fill="#da00ff" stroke="#da00ff" points="622.11,-507.28 632.68,-506.5 623.93,-500.52 622.11,-507.28"/>
+</g>
+<!-- proc~vmix_compute_pp81&#45;&gt;local -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge48" class="edge">
+<title>proc~vmix_compute_pp81&#45;&gt;local</title>
+<path fill="none" stroke="#ff00da" d="M311.03,-669.4C446.44,-672.23 771.62,-679.04 882.18,-681.35"/>
+<polygon fill="#ff00da" stroke="#ff00da" points="881.81,-684.84 891.88,-681.55 881.95,-677.84 881.81,-684.84"/>
+</g>
+<!-- proc~vmix_seed_interior_none&#45;&gt;proc~vmix_bkgnd_fill_impl -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge49" class="edge">
+<title>proc~vmix_seed_interior_none&#45;&gt;proc~vmix_bkgnd_fill_impl</title>
+<path fill="none" stroke="#ff0091" d="M501.62,-255.73C528.5,-264.65 565.91,-276.51 599.31,-285.13 609.23,-287.7 619.76,-290.15 630.14,-292.42"/>
+<polygon fill="#ff0091" stroke="#ff0091" points="629.33,-295.82 639.84,-294.49 630.79,-288.98 629.33,-295.82"/>
+</g>
+<!-- proc~vmix_seed_interior_none&#45;&gt;proc~vmix_resolve_kd_min -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge50" class="edge">
+<title>proc~vmix_seed_interior_none&#45;&gt;proc~vmix_resolve_kd_min</title>
+<path fill="none" stroke="#ff0091" d="M536.16,-249.46C565.62,-252.08 599.72,-255.1 629.28,-257.72"/>
+<polygon fill="#ff0091" stroke="#ff0091" points="628.58,-261.18 638.85,-258.57 629.2,-254.2 628.58,-261.18"/>
+</g>
+<!-- proc~vmix_seed_none_henyey_impl -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node43" class="node">
+<title>proc~vmix_seed_none_henyey_impl</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node43"><a xlink:href="../proc/vmix_seed_none_henyey_impl.html" xlink:title="vmix_seed_none_henyey_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="788.95,-234.27 616.18,-234.27 616.18,-210 788.95,-210 788.95,-234.27"/>
+<text xml:space="preserve" text-anchor="middle" x="702.57" y="-218.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vmix_seed_none_henyey_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_seed_interior_none&#45;&gt;proc~vmix_seed_none_henyey_impl -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge51" class="edge">
+<title>proc~vmix_seed_interior_none&#45;&gt;proc~vmix_seed_none_henyey_impl</title>
+<path fill="none" stroke="#ff0091" d="M536.16,-236.81C557.59,-234.9 581.48,-232.79 604.29,-230.76"/>
+<polygon fill="#ff0091" stroke="#ff0091" points="604.58,-234.25 614.23,-229.88 603.96,-227.28 604.58,-234.25"/>
+</g>
+<!-- proc~vmix_seed_none_profile_impl -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node44" class="node">
+<title>proc~vmix_seed_none_profile_impl</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node44"><a xlink:href="../proc/vmix_seed_none_profile_impl.html" xlink:title="vmix_seed_none_profile_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="786.33,-150.27 618.81,-150.27 618.81,-126 786.33,-126 786.33,-150.27"/>
+<text xml:space="preserve" text-anchor="middle" x="702.57" y="-134.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vmix_seed_none_profile_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_seed_interior_none&#45;&gt;proc~vmix_seed_none_profile_impl -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge52" class="edge">
+<title>proc~vmix_seed_interior_none&#45;&gt;proc~vmix_seed_none_profile_impl</title>
+<path fill="none" stroke="#ff0091" d="M480.36,-230.8C504.43,-212.35 552.78,-177.74 599.31,-159.13 604.16,-157.2 609.21,-155.43 614.35,-153.82"/>
+<polygon fill="#ff0091" stroke="#ff0091" points="614.93,-157.29 623.56,-151.15 612.98,-150.57 614.93,-157.29"/>
+</g>
+<!-- proc~vmix_seed_none_scalar_impl -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node45" class="node">
+<title>proc~vmix_seed_none_scalar_impl</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node45"><a xlink:href="../proc/vmix_seed_none_scalar_impl.html" xlink:title="vmix_seed_none_scalar_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="785.58,-108.27 619.56,-108.27 619.56,-84 785.58,-84 785.58,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="702.57" y="-92.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vmix_seed_none_scalar_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_seed_interior_none&#45;&gt;proc~vmix_seed_none_scalar_impl -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge53" class="edge">
+<title>proc~vmix_seed_interior_none&#45;&gt;proc~vmix_seed_none_scalar_impl</title>
+<path fill="none" stroke="#ff0091" d="M479.01,-230.51C498.33,-213.28 533.84,-181.31 563.31,-153.13 579.67,-137.5 579.39,-127.86 599.31,-117.13 602.32,-115.51 605.45,-114.01 608.66,-112.63"/>
+<polygon fill="#ff0091" stroke="#ff0091" points="609.64,-116 617.71,-109.14 607.12,-109.47 609.64,-116"/>
+</g>
+<!-- proc~vmix_split_ddiff_eos_impl -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node47" class="node">
+<title>proc~vmix_split_ddiff_eos_impl</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node47"><a xlink:href="../proc/vmix_split_ddiff_eos_impl.html" xlink:title="vmix_split_ddiff_eos_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="775.45,-570.27 629.68,-570.27 629.68,-546 775.45,-546 775.45,-570.27"/>
+<text xml:space="preserve" text-anchor="middle" x="702.57" y="-554.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vmix_split_ddiff_eos_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_split_kd_heat_salt&#45;&gt;proc~vmix_split_ddiff_eos_impl -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge54" class="edge">
+<title>proc~vmix_split_kd_heat_salt&#45;&gt;proc~vmix_split_ddiff_eos_impl</title>
+<path fill="none" stroke="#ff0048" d="M525.06,-594.56C548.26,-589.72 575.02,-584.16 599.31,-579.13 608.85,-577.16 618.9,-575.09 628.81,-573.05"/>
+<polygon fill="#ff0048" stroke="#ff0048" points="629.35,-576.51 638.44,-571.07 627.94,-569.66 629.35,-576.51"/>
+</g>
+<!-- proc~vmix_split_ddiff_impl -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node48" class="node">
+<title>proc~vmix_split_ddiff_impl</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node48"><a xlink:href="../proc/vmix_split_ddiff_impl.html" xlink:title="vmix_split_ddiff_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="763.45,-654.27 641.68,-654.27 641.68,-630 763.45,-630 763.45,-654.27"/>
+<text xml:space="preserve" text-anchor="middle" x="702.57" y="-638.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vmix_split_ddiff_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_split_kd_heat_salt&#45;&gt;proc~vmix_split_ddiff_impl -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge55" class="edge">
+<title>proc~vmix_split_kd_heat_salt&#45;&gt;proc~vmix_split_ddiff_impl</title>
+<path fill="none" stroke="#ff0048" d="M531.7,-617.02C562.39,-621.56 598.82,-626.95 630.05,-631.56"/>
+<polygon fill="#ff0048" stroke="#ff0048" points="629.4,-635 639.81,-633 630.43,-628.08 629.4,-635"/>
+</g>
+<!-- proc~vmix_split_kd_heat_salt_impl -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node49" class="node">
+<title>proc~vmix_split_kd_heat_salt_impl</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node49"><a xlink:href="../proc/vmix_split_kd_heat_salt_impl.html" xlink:title="vmix_split_kd_heat_salt_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="784.45,-612.27 620.68,-612.27 620.68,-588 784.45,-588 784.45,-612.27"/>
+<text xml:space="preserve" text-anchor="middle" x="702.57" y="-596.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vmix_split_kd_heat_salt_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_split_kd_heat_salt&#45;&gt;proc~vmix_split_kd_heat_salt_impl -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge56" class="edge">
+<title>proc~vmix_split_kd_heat_salt&#45;&gt;proc~vmix_split_kd_heat_salt_impl</title>
+<path fill="none" stroke="#ff0048" d="M531.7,-605.16C555.76,-604.45 583.35,-603.63 609.2,-602.87"/>
+<polygon fill="#ff0048" stroke="#ff0048" points="609.13,-606.37 619.03,-602.58 608.93,-599.37 609.13,-606.37"/>
+</g>
+<!-- proc~bbl_mixing_compute_impl&#45;&gt;local -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge57" class="edge">
+<title>proc~bbl_mixing_compute_impl&#45;&gt;local</title>
+<path fill="none" stroke="#ff3800" d="M778.08,-876.09C788.18,-872.74 797.82,-867.94 805.83,-861.13 839.94,-832.19 818.3,-805.19 841.83,-767.13 857.07,-742.49 879.98,-718.54 897.01,-702.37"/>
+<polygon fill="#ff3800" stroke="#ff3800" points="899.25,-705.07 904.2,-695.7 894.49,-699.94 899.25,-705.07"/>
+</g>
+<!-- proc~bbl_column_sweep -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node50" class="node">
+<title>proc~bbl_column_sweep</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node50"><a xlink:href="../proc/bbl_column_sweep.html" xlink:title="bbl_column_sweep">
+<polygon fill="#d9534f" stroke="#d9534f" points="976.72,-884.27 864.7,-884.27 864.7,-860 976.72,-860 976.72,-884.27"/>
+<text xml:space="preserve" text-anchor="middle" x="920.71" y="-868.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">bbl_column_sweep</text>
+</a>
+</g>
+</g>
+<!-- proc~bbl_mixing_compute_impl&#45;&gt;proc~bbl_column_sweep -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge58" class="edge">
+<title>proc~bbl_mixing_compute_impl&#45;&gt;proc~bbl_column_sweep</title>
+<path fill="none" stroke="#ff3800" d="M777.95,-878.69C802.3,-877.57 829.18,-876.32 852.93,-875.22"/>
+<polygon fill="#ff3800" stroke="#ff3800" points="852.98,-878.73 862.8,-874.77 852.65,-871.73 852.98,-878.73"/>
+</g>
+<!-- proc~column_layer_n2 -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node51" class="node">
+<title>proc~column_layer_n2</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node51"><a xlink:href="../proc/column_layer_n2.html" xlink:title="column_layer_n2">
+<polygon fill="#d9534f" stroke="#d9534f" points="971.85,-842.27 869.58,-842.27 869.58,-818 971.85,-818 971.85,-842.27"/>
+<text xml:space="preserve" text-anchor="middle" x="920.71" y="-826.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">column_layer_n2</text>
+</a>
+</g>
+</g>
+<!-- proc~bbl_mixing_compute_impl&#45;&gt;proc~column_layer_n2 -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge59" class="edge">
+<title>proc~bbl_mixing_compute_impl&#45;&gt;proc~column_layer_n2</title>
+<path fill="none" stroke="#ff3800" d="M768.36,-869.53C780.83,-866.9 793.76,-864.05 805.83,-861.13 821.97,-857.24 825.81,-855.52 841.83,-851.13 848.39,-849.34 855.26,-847.47 862.1,-845.62"/>
+<polygon fill="#ff3800" stroke="#ff3800" points="862.55,-849.12 871.29,-843.13 860.72,-842.36 862.55,-849.12"/>
+</g>
+<!-- rdb_vl_column_conc -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node71" class="node">
+<title>rdb_vl_column_conc</title>
+<polygon fill="#777777" stroke="#777777" points="980.47,-926.27 860.95,-926.27 860.95,-902 980.47,-902 980.47,-926.27"/>
+<text xml:space="preserve" text-anchor="middle" x="920.71" y="-910.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_vl_column_conc</text>
+</g>
+<!-- proc~bbl_mixing_compute_impl&#45;&gt;rdb_vl_column_conc -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge60" class="edge">
+<title>proc~bbl_mixing_compute_impl&#45;&gt;rdb_vl_column_conc</title>
+<path fill="none" stroke="#ff3800" d="M777.95,-893.15C801.04,-896.57 826.41,-900.32 849.22,-903.7"/>
+<polygon fill="#ff3800" stroke="#ff3800" points="848.64,-907.15 859.05,-905.15 849.67,-900.23 848.64,-907.15"/>
+</g>
+<!-- proc~epbl_column_kernel&#45;&gt;local -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge61" class="edge">
+<title>proc~epbl_column_kernel&#45;&gt;local</title>
+<path fill="none" stroke="#ff7100" d="M711.09,-1311.74C730.54,-1279.02 782.6,-1187.07 805.83,-1103.13 845.9,-958.39 780.01,-904.01 841.83,-767.13 853.65,-740.96 876.7,-717.42 894.67,-701.78"/>
+<polygon fill="#ff7100" stroke="#ff7100" points="896.45,-704.86 901.85,-695.74 891.94,-699.5 896.45,-704.86"/>
+</g>
+<!-- proc~eos_specvol_derivs -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node53" class="node">
+<title>proc~eos_specvol_derivs</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node53"><a xlink:href="../proc/eos_specvol_derivs.html" xlink:title="eos_specvol_derivs">
+<polygon fill="#d9534f" stroke="#d9534f" points="1154.74,-842.27 1041.22,-842.27 1041.22,-818 1154.74,-818 1154.74,-842.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1097.98" y="-826.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">eos_specvol_derivs</text>
+</a>
+</g>
+</g>
+<!-- proc~epbl_column_kernel&#45;&gt;proc~eos_specvol_derivs -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge62" class="edge">
+<title>proc~epbl_column_kernel&#45;&gt;proc~eos_specvol_derivs</title>
+<path fill="none" stroke="#ff7100" d="M711.96,-1311.7C731.35,-1283.99 782.18,-1216.95 841.83,-1183.13 904.57,-1147.56 947.01,-1194.49 999.6,-1145.13 1084.76,-1065.22 1096.04,-912.6 1097.1,-853.93"/>
+<polygon fill="#ff7100" stroke="#ff7100" points="1100.6,-854.14 1097.19,-844.11 1093.6,-854.08 1100.6,-854.14"/>
+</g>
+<!-- proc~epbl_find_mstar -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node54" class="node">
+<title>proc~epbl_find_mstar</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node54"><a xlink:href="../proc/epbl_find_mstar.html" xlink:title="epbl_find_mstar">
+<polygon fill="#d9534f" stroke="#d9534f" points="968.85,-1258.27 872.58,-1258.27 872.58,-1234 968.85,-1234 968.85,-1258.27"/>
+<text xml:space="preserve" text-anchor="middle" x="920.71" y="-1242.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">epbl_find_mstar</text>
+</a>
+</g>
+</g>
+<!-- proc~epbl_column_kernel&#45;&gt;proc~epbl_find_mstar -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge63" class="edge">
+<title>proc~epbl_column_kernel&#45;&gt;proc~epbl_find_mstar</title>
+<path fill="none" stroke="#ff7100" d="M731.24,-1311.5C758.87,-1299.18 802.74,-1280.4 841.83,-1267.13 848.27,-1264.95 855.07,-1262.84 861.86,-1260.85"/>
+<polygon fill="#ff7100" stroke="#ff7100" points="862.35,-1264.35 871.02,-1258.25 860.44,-1257.61 862.35,-1264.35"/>
+</g>
+<!-- proc~epbl_lf17_la -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node55" class="node">
+<title>proc~epbl_lf17_la</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node55"><a xlink:href="../proc/epbl_lf17_la.html" xlink:title="epbl_lf17_la">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="958.35,-1300.27 883.08,-1300.27 883.08,-1276 958.35,-1276 958.35,-1300.27"/>
+<text xml:space="preserve" text-anchor="middle" x="920.71" y="-1284.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">epbl_lf17_la</text>
+</a>
+</g>
+</g>
+<!-- proc~epbl_column_kernel&#45;&gt;proc~epbl_lf17_la -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge64" class="edge">
+<title>proc~epbl_column_kernel&#45;&gt;proc~epbl_lf17_la</title>
+<path fill="none" stroke="#ff7100" d="M762.35,-1314.35C796.68,-1308.63 839.45,-1301.5 871.74,-1296.13"/>
+<polygon fill="#ff7100" stroke="#ff7100" points="871.91,-1299.65 881.2,-1294.55 870.76,-1292.74 871.91,-1299.65"/>
+</g>
+<!-- proc~epbl_lf17_wave_state -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node56" class="node">
+<title>proc~epbl_lf17_wave_state</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node56"><a xlink:href="../proc/epbl_lf17_wave_state.html" xlink:title="epbl_lf17_wave_state">
+<polygon fill="#d9534f" stroke="#d9534f" points="983.1,-1468.27 858.33,-1468.27 858.33,-1444 983.1,-1444 983.1,-1468.27"/>
+<text xml:space="preserve" text-anchor="middle" x="920.71" y="-1452.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">epbl_lf17_wave_state</text>
+</a>
+</g>
+</g>
+<!-- proc~epbl_column_kernel&#45;&gt;proc~epbl_lf17_wave_state -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge65" class="edge">
+<title>proc~epbl_column_kernel&#45;&gt;proc~epbl_lf17_wave_state</title>
+<path fill="none" stroke="#ff7100" d="M715.29,-1336.46C737.71,-1359.32 789.13,-1408.37 841.83,-1435.13 844.91,-1436.7 848.13,-1438.16 851.42,-1439.52"/>
+<polygon fill="#ff7100" stroke="#ff7100" points="850.11,-1442.77 860.7,-1442.99 852.57,-1436.21 850.11,-1442.77"/>
+</g>
+<!-- proc~epbl_lt_enhance -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node57" class="node">
+<title>proc~epbl_lt_enhance</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node57"><a xlink:href="../proc/epbl_lt_enhance.html" xlink:title="epbl_lt_enhance">
+<polygon fill="#d9534f" stroke="#d9534f" points="969.97,-1426.27 871.45,-1426.27 871.45,-1402 969.97,-1402 969.97,-1426.27"/>
+<text xml:space="preserve" text-anchor="middle" x="920.71" y="-1410.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">epbl_lt_enhance</text>
+</a>
+</g>
+</g>
+<!-- proc~epbl_column_kernel&#45;&gt;proc~epbl_lt_enhance -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge66" class="edge">
+<title>proc~epbl_column_kernel&#45;&gt;proc~epbl_lt_enhance</title>
+<path fill="none" stroke="#ff7100" d="M724.99,-1336.52C751.66,-1351.53 798.95,-1376.84 841.83,-1393.13 847.78,-1395.4 854.08,-1397.52 860.41,-1399.48"/>
+<polygon fill="#ff7100" stroke="#ff7100" points="859.01,-1402.71 869.59,-1402.19 860.99,-1396 859.01,-1402.71"/>
+</g>
+<!-- proc~epbl_mixlen_shape -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node58" class="node">
+<title>proc~epbl_mixlen_shape</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node58"><a xlink:href="../proc/epbl_mixlen_shape.html" xlink:title="epbl_mixlen_shape">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="977.47,-1384.27 863.95,-1384.27 863.95,-1360 977.47,-1360 977.47,-1384.27"/>
+<text xml:space="preserve" text-anchor="middle" x="920.71" y="-1368.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">epbl_mixlen_shape</text>
+</a>
+</g>
+</g>
+<!-- proc~epbl_column_kernel&#45;&gt;proc~epbl_mixlen_shape -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge67" class="edge">
+<title>proc~epbl_column_kernel&#45;&gt;proc~epbl_mixlen_shape</title>
+<path fill="none" stroke="#ff7100" d="M760.36,-1336.75C788.64,-1343.03 823.02,-1350.66 852.6,-1357.23"/>
+<polygon fill="#ff7100" stroke="#ff7100" points="851.68,-1360.61 862.2,-1359.36 853.2,-1353.78 851.68,-1360.61"/>
+</g>
+<!-- proc~sw_pe_cost_shape -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node68" class="node">
+<title>proc~sw_pe_cost_shape</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node68"><a xlink:href="../proc/sw_pe_cost_shape.html" xlink:title="sw_pe_cost_shape">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="974.85,-1342.27 866.58,-1342.27 866.58,-1318 974.85,-1318 974.85,-1342.27"/>
+<text xml:space="preserve" text-anchor="middle" x="920.71" y="-1326.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">sw_pe_cost_shape</text>
+</a>
+</g>
+</g>
+<!-- proc~epbl_column_kernel&#45;&gt;proc~sw_pe_cost_shape -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge68" class="edge">
+<title>proc~epbl_column_kernel&#45;&gt;proc~sw_pe_cost_shape</title>
+<path fill="none" stroke="#ff7100" d="M762.35,-1325.77C790.93,-1326.56 825.37,-1327.52 854.73,-1328.33"/>
+<polygon fill="#ff7100" stroke="#ff7100" points="854.53,-1331.83 864.62,-1328.61 854.72,-1324.83 854.53,-1331.83"/>
+</g>
+<!-- proc~kappa_shear_column_kernel&#45;&gt;local -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge69" class="edge">
+<title>proc~kappa_shear_column_kernel&#45;&gt;local</title>
+<path fill="none" stroke="#e2ff00" d="M784.71,-1075.74C792.65,-1072.26 799.93,-1067.53 805.83,-1061.13 850.46,-1012.75 814.28,-826.92 841.83,-767.13 853.92,-740.89 877.15,-717.21 895.1,-701.55"/>
+<polygon fill="#e2ff00" stroke="#e2ff00" points="896.88,-704.64 902.26,-695.51 892.36,-699.29 896.88,-704.64"/>
+</g>
+<!-- proc~ks_precompute -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node62" class="node">
+<title>proc~ks_precompute</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node62"><a xlink:href="../proc/ks_precompute.html" xlink:title="ks_precompute">
+<polygon fill="#d9534f" stroke="#d9534f" points="966.97,-1010.27 874.45,-1010.27 874.45,-986 966.97,-986 966.97,-1010.27"/>
+<text xml:space="preserve" text-anchor="middle" x="920.71" y="-994.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ks_precompute</text>
+</a>
+</g>
+</g>
+<!-- proc~kappa_shear_column_kernel&#45;&gt;proc~ks_precompute -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge70" class="edge">
+<title>proc~kappa_shear_column_kernel&#45;&gt;proc~ks_precompute</title>
+<path fill="none" stroke="#e2ff00" d="M784.73,-1070.74C792.11,-1068.16 799.27,-1065 805.83,-1061.13 827.01,-1048.66 821.04,-1032.25 841.83,-1019.13 848.43,-1014.97 855.85,-1011.62 863.42,-1008.94"/>
+<polygon fill="#e2ff00" stroke="#e2ff00" points="864.21,-1012.36 872.7,-1006.01 862.11,-1005.68 864.21,-1012.36"/>
+</g>
+<!-- proc~ks_solve_column -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node63" class="node">
+<title>proc~ks_solve_column</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node63"><a xlink:href="../proc/ks_solve_column.html" xlink:title="ks_solve_column">
+<polygon fill="#d9534f" stroke="#d9534f" points="971.1,-1216.27 870.33,-1216.27 870.33,-1192 971.1,-1192 971.1,-1216.27"/>
+<text xml:space="preserve" text-anchor="middle" x="920.71" y="-1200.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ks_solve_column</text>
+</a>
+</g>
+</g>
+<!-- proc~kappa_shear_column_kernel&#45;&gt;proc~ks_solve_column -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge71" class="edge">
+<title>proc~kappa_shear_column_kernel&#45;&gt;proc~ks_solve_column</title>
+<path fill="none" stroke="#e2ff00" d="M725.89,-1094.73C764.33,-1116.43 843.18,-1160.94 887.55,-1185.98"/>
+<polygon fill="#e2ff00" stroke="#e2ff00" points="885.77,-1189 896.2,-1190.86 889.21,-1182.9 885.77,-1189"/>
+</g>
+<!-- proc~massless_build_maps -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node64" class="node">
+<title>proc~massless_build_maps</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node64"><a xlink:href="../proc/massless_build_maps.html" xlink:title="massless_build_maps">
+<polygon fill="#d9534f" stroke="#d9534f" points="983.47,-1136.27 857.95,-1136.27 857.95,-1112 983.47,-1112 983.47,-1136.27"/>
+<text xml:space="preserve" text-anchor="middle" x="920.71" y="-1120.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">massless_build_maps</text>
+</a>
+</g>
+</g>
+<!-- proc~kappa_shear_column_kernel&#45;&gt;proc~massless_build_maps -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge72" class="edge">
+<title>proc~kappa_shear_column_kernel&#45;&gt;proc~massless_build_maps</title>
+<path fill="none" stroke="#e2ff00" d="M768.42,-1094.74C793.01,-1099.51 821.17,-1104.99 846.48,-1109.9"/>
+<polygon fill="#e2ff00" stroke="#e2ff00" points="845.54,-1113.29 856.02,-1111.76 846.87,-1106.42 845.54,-1113.29"/>
+</g>
+<!-- proc~massless_interp_back -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node65" class="node">
+<title>proc~massless_interp_back</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node65"><a xlink:href="../proc/massless_interp_back.html" xlink:title="massless_interp_back">
+<polygon fill="#d9534f" stroke="#d9534f" points="984.22,-1094.27 857.2,-1094.27 857.2,-1070 984.22,-1070 984.22,-1094.27"/>
+<text xml:space="preserve" text-anchor="middle" x="920.71" y="-1078.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">massless_interp_back</text>
+</a>
+</g>
+</g>
+<!-- proc~kappa_shear_column_kernel&#45;&gt;proc~massless_interp_back -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge73" class="edge">
+<title>proc~kappa_shear_column_kernel&#45;&gt;proc~massless_interp_back</title>
+<path fill="none" stroke="#e2ff00" d="M784.67,-1082.13C804.6,-1082.13 825.83,-1082.13 845.42,-1082.13"/>
+<polygon fill="#e2ff00" stroke="#e2ff00" points="845.23,-1085.64 855.23,-1082.14 845.23,-1078.64 845.23,-1085.64"/>
+</g>
+<!-- proc~massless_merge_fields -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node66" class="node">
+<title>proc~massless_merge_fields</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node66"><a xlink:href="../proc/massless_merge_fields.html" xlink:title="massless_merge_fields">
+<polygon fill="#d9534f" stroke="#d9534f" points="987.6,-1052.27 853.83,-1052.27 853.83,-1028 987.6,-1028 987.6,-1052.27"/>
+<text xml:space="preserve" text-anchor="middle" x="920.71" y="-1036.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">massless_merge_fields</text>
+</a>
+</g>
+</g>
+<!-- proc~kappa_shear_column_kernel&#45;&gt;proc~massless_merge_fields -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge74" class="edge">
+<title>proc~kappa_shear_column_kernel&#45;&gt;proc~massless_merge_fields</title>
+<path fill="none" stroke="#e2ff00" d="M768.42,-1069.53C792.14,-1064.92 819.19,-1059.67 843.8,-1054.89"/>
+<polygon fill="#e2ff00" stroke="#e2ff00" points="844.28,-1058.36 853.42,-1053.02 842.94,-1051.49 844.28,-1058.36"/>
+</g>
+<!-- proc~kappa_shear_vertex_kernel&#45;&gt;local -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge75" class="edge">
+<title>proc~kappa_shear_vertex_kernel&#45;&gt;local</title>
+<path fill="none" stroke="#aaff00" d="M715.57,-1027.64C736.85,-1004.78 781.3,-953.91 805.83,-903.13 833.03,-846.83 811.84,-822 841.83,-767.13 855.65,-741.86 878.54,-718.14 895.94,-702.21"/>
+<polygon fill="#aaff00" stroke="#aaff00" points="898.19,-704.9 903.33,-695.64 893.54,-699.67 898.19,-704.9"/>
+</g>
+<!-- proc~ks_gather_corner -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node61" class="node">
+<title>proc~ks_gather_corner</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node61"><a xlink:href="../proc/ks_gather_corner.html" xlink:title="ks_gather_corner">
+<polygon fill="#d9534f" stroke="#d9534f" points="972.6,-968.27 868.83,-968.27 868.83,-944 972.6,-944 972.6,-968.27"/>
+<text xml:space="preserve" text-anchor="middle" x="920.71" y="-952.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ks_gather_corner</text>
+</a>
+</g>
+</g>
+<!-- proc~kappa_shear_vertex_kernel&#45;&gt;proc~ks_gather_corner -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge76" class="edge">
+<title>proc~kappa_shear_vertex_kernel&#45;&gt;proc~ks_gather_corner</title>
+<path fill="none" stroke="#aaff00" d="M727.54,-1027.75C754.73,-1014.05 800.63,-991.96 841.83,-977.13 846.92,-975.3 852.24,-973.55 857.61,-971.89"/>
+<polygon fill="#aaff00" stroke="#aaff00" points="858.6,-975.24 867.2,-969.04 856.61,-968.53 858.6,-975.24"/>
+</g>
+<!-- proc~kappa_shear_vertex_kernel&#45;&gt;proc~ks_precompute -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge77" class="edge">
+<title>proc~kappa_shear_vertex_kernel&#45;&gt;proc~ks_precompute</title>
+<path fill="none" stroke="#aaff00" d="M768.42,-1027.53C798.5,-1021.69 833.93,-1014.8 862.93,-1009.17"/>
+<polygon fill="#aaff00" stroke="#aaff00" points="863.49,-1012.63 872.63,-1007.28 862.15,-1005.76 863.49,-1012.63"/>
+</g>
+<!-- proc~kappa_shear_vertex_kernel&#45;&gt;proc~ks_solve_column -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge78" class="edge">
+<title>proc~kappa_shear_vertex_kernel&#45;&gt;proc~ks_solve_column</title>
+<path fill="none" stroke="#aaff00" d="M781.49,-1047.73C790.3,-1050.94 798.67,-1055.29 805.83,-1061.13 837.3,-1086.81 816.81,-1113.14 841.83,-1145.13 854.46,-1161.29 872.54,-1175.35 888.09,-1185.68"/>
+<polygon fill="#aaff00" stroke="#aaff00" points="885.8,-1188.37 896.11,-1190.81 889.57,-1182.47 885.8,-1188.37"/>
+</g>
+<!-- proc~kappa_shear_vertex_kernel&#45;&gt;proc~massless_build_maps -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge79" class="edge">
+<title>proc~kappa_shear_vertex_kernel&#45;&gt;proc~massless_build_maps</title>
+<path fill="none" stroke="#aaff00" d="M781.55,-1050.45C790.05,-1053.22 798.33,-1056.72 805.83,-1061.13 827.01,-1073.61 821.04,-1090.02 841.83,-1103.13 843.95,-1104.47 846.15,-1105.72 848.41,-1106.89"/>
+<polygon fill="#aaff00" stroke="#aaff00" points="846.73,-1109.98 857.29,-1110.92 849.63,-1103.6 846.73,-1109.98"/>
+</g>
+<!-- proc~kappa_shear_vertex_kernel&#45;&gt;proc~massless_interp_back -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge80" class="edge">
+<title>proc~kappa_shear_vertex_kernel&#45;&gt;proc~massless_interp_back</title>
+<path fill="none" stroke="#aaff00" d="M768.42,-1052.74C792.68,-1057.45 820.43,-1062.84 845.47,-1067.71"/>
+<polygon fill="#aaff00" stroke="#aaff00" points="844.8,-1071.14 855.28,-1069.61 846.13,-1064.27 844.8,-1071.14"/>
+</g>
+<!-- proc~kappa_shear_vertex_kernel&#45;&gt;proc~massless_merge_fields -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge81" class="edge">
+<title>proc~kappa_shear_vertex_kernel&#45;&gt;proc~massless_merge_fields</title>
+<path fill="none" stroke="#aaff00" d="M781.3,-1040.13C801.03,-1040.13 822.22,-1040.13 841.95,-1040.13"/>
+<polygon fill="#aaff00" stroke="#aaff00" points="841.87,-1043.64 851.87,-1040.14 841.87,-1036.64 841.87,-1043.64"/>
+</g>
+<!-- proc~kappa_shear_vertex_scatter&#45;&gt;local -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge82" class="edge">
+<title>proc~kappa_shear_vertex_scatter&#45;&gt;local</title>
+<path fill="none" stroke="#71ff00" d="M770.22,-785.51C782.4,-782.01 794.74,-777.61 805.83,-772.13 842.37,-754.08 878.19,-722.92 899.62,-702.42"/>
+<polygon fill="#71ff00" stroke="#71ff00" points="901.82,-705.16 906.54,-695.67 896.94,-700.15 901.82,-705.16"/>
+</g>
+<!-- proc~tidal_mixing_column_kernel&#45;&gt;local -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge83" class="edge">
+<title>proc~tidal_mixing_column_kernel&#45;&gt;local</title>
+<path fill="none" stroke="#00ff38" d="M783.07,-830.2C791.12,-827.35 798.87,-823.73 805.83,-819.13 829.28,-803.64 824.29,-789.1 841.83,-767.13 860.22,-744.09 883.24,-719.42 899.47,-702.63"/>
+<polygon fill="#00ff38" stroke="#00ff38" points="901.75,-705.3 906.22,-695.7 896.73,-700.42 901.75,-705.3"/>
+</g>
+<!-- proc~tidal_mixing_column_kernel&#45;&gt;proc~column_layer_n2 -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge84" class="edge">
+<title>proc~tidal_mixing_column_kernel&#45;&gt;proc~column_layer_n2</title>
+<path fill="none" stroke="#00ff38" d="M782.83,-836.47C807.68,-835.32 834.72,-834.07 858.16,-832.98"/>
+<polygon fill="#00ff38" stroke="#00ff38" points="858.01,-836.49 867.83,-832.54 857.68,-829.5 858.01,-836.49"/>
+</g>
+<!-- proc~polzin_stretched_scale -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node67" class="node">
+<title>proc~polzin_stretched_scale</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node67"><a xlink:href="../proc/polzin_stretched_scale.html" xlink:title="polzin_stretched_scale">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="986.1,-800.27 855.33,-800.27 855.33,-776 986.1,-776 986.1,-800.27"/>
+<text xml:space="preserve" text-anchor="middle" x="920.71" y="-784.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">polzin_stretched_scale</text>
+</a>
+</g>
+</g>
+<!-- proc~tidal_mixing_column_kernel&#45;&gt;proc~polzin_stretched_scale -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge85" class="edge">
+<title>proc~tidal_mixing_column_kernel&#45;&gt;proc~polzin_stretched_scale</title>
+<path fill="none" stroke="#00ff38" d="M768.36,-827.53C780.83,-824.9 793.76,-822.05 805.83,-819.13 821.97,-815.24 825.81,-813.52 841.83,-809.13 848.39,-807.34 855.26,-805.47 862.1,-803.62"/>
+<polygon fill="#00ff38" stroke="#00ff38" points="862.55,-807.12 871.29,-801.13 860.72,-800.36 862.55,-807.12"/>
+</g>
+<!-- proc~vmix_assemble_clip_henyey_impl&#45;&gt;local -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge86" class="edge">
+<title>proc~vmix_assemble_clip_henyey_impl&#45;&gt;local</title>
+<path fill="none" stroke="#00ff71" d="M792.61,-402.52C797.32,-404.95 801.77,-407.8 805.83,-411.13 884.87,-476.07 909.95,-605.44 917.12,-658.55"/>
+<polygon fill="#00ff71" stroke="#00ff71" points="913.62,-658.79 918.33,-668.28 920.57,-657.92 913.62,-658.79"/>
+</g>
+<!-- proc~henyey_lat_factor_impl -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node59" class="node">
+<title>proc~henyey_lat_factor_impl</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node59"><a xlink:href="../proc/henyey_lat_factor_impl.html" xlink:title="henyey_lat_factor_impl">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="987.97,-360.27 853.45,-360.27 853.45,-336 987.97,-336 987.97,-360.27"/>
+<text xml:space="preserve" text-anchor="middle" x="920.71" y="-344.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">henyey_lat_factor_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_assemble_clip_henyey_impl&#45;&gt;proc~henyey_lat_factor_impl -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge87" class="edge">
+<title>proc~vmix_assemble_clip_henyey_impl&#45;&gt;proc~henyey_lat_factor_impl</title>
+<path fill="none" stroke="#00ff71" d="M768.42,-377.53C792.14,-372.92 819.19,-367.67 843.8,-362.89"/>
+<polygon fill="#00ff71" stroke="#00ff71" points="844.28,-366.36 853.42,-361.02 842.94,-359.49 844.28,-366.36"/>
+</g>
+<!-- proc~vmix_assemble_clip_henyey_pr_impl&#45;&gt;local -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge88" class="edge">
+<title>proc~vmix_assemble_clip_henyey_pr_impl&#45;&gt;local</title>
+<path fill="none" stroke="#00ffa9" d="M793.29,-360.54C797.76,-362.98 801.99,-365.82 805.83,-369.13 895.13,-446.23 914.43,-599.25 918.58,-658.21"/>
+<polygon fill="#00ffa9" stroke="#00ffa9" points="915.08,-658.32 919.18,-668.09 922.07,-657.89 915.08,-658.32"/>
+</g>
+<!-- proc~vmix_assemble_clip_henyey_pr_impl&#45;&gt;proc~henyey_lat_factor_impl -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge89" class="edge">
+<title>proc~vmix_assemble_clip_henyey_pr_impl&#45;&gt;proc~henyey_lat_factor_impl</title>
+<path fill="none" stroke="#00ffa9" d="M806.26,-348.13C818.19,-348.13 830.2,-348.13 841.72,-348.13"/>
+<polygon fill="#00ffa9" stroke="#00ffa9" points="841.54,-351.64 851.54,-348.14 841.54,-344.64 841.54,-351.64"/>
+</g>
+<!-- proc~vmix_bkgnd_fill_impl&#45;&gt;local -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge90" class="edge">
+<title>proc~vmix_bkgnd_fill_impl&#45;&gt;local</title>
+<path fill="none" stroke="#00a9ff" d="M763.88,-307.9C779.06,-311.01 794.3,-316.78 805.83,-327.13 856.94,-373.01 901.58,-586.79 915.35,-658.57"/>
+<polygon fill="#00a9ff" stroke="#00a9ff" points="911.84,-658.88 917.14,-668.05 918.72,-657.57 911.84,-658.88"/>
+</g>
+<!-- proc~vmix_convection_impl&#45;&gt;local -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge91" class="edge">
+<title>proc~vmix_convection_impl&#45;&gt;local</title>
+<path fill="none" stroke="#0071ff" d="M528.68,-715.12C597.27,-711.62 709.4,-705.17 805.83,-696.13 831.38,-693.74 860.06,-690.21 882.25,-687.29"/>
+<polygon fill="#0071ff" stroke="#0071ff" points="882.58,-690.78 892.03,-685.99 881.65,-683.84 882.58,-690.78"/>
+</g>
+<!-- reduce -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node72" class="node">
+<title>reduce</title>
+<polygon fill="#777777" stroke="#777777" points="947.71,-192.27 893.71,-192.27 893.71,-168 947.71,-168 947.71,-192.27"/>
+<text xml:space="preserve" text-anchor="middle" x="920.71" y="-176.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">reduce</text>
+</g>
+<!-- proc~vmix_guard_impl&#45;&gt;reduce -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge92" class="edge">
+<title>proc~vmix_guard_impl&#45;&gt;reduce</title>
+<path fill="none" stroke="#0038ff" d="M753.97,-180.13C793.09,-180.13 846.45,-180.13 881.95,-180.13"/>
+<polygon fill="#0038ff" stroke="#0038ff" points="881.74,-183.64 891.74,-180.14 881.74,-176.64 881.74,-183.64"/>
+</g>
+<!-- proc~vmix_kpp_overlay_impl&#45;&gt;local -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge93" class="edge">
+<title>proc~vmix_kpp_overlay_impl&#45;&gt;local</title>
+<path fill="none" stroke="#0000ff" d="M770.56,-55.73C783.85,-59.12 796.55,-65.08 805.83,-75.13 850.46,-123.52 829.86,-304.41 841.83,-369.13 862.1,-478.74 897.93,-607.12 912.87,-658.82"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="909.47,-659.65 915.62,-668.28 916.19,-657.7 909.47,-659.65"/>
+</g>
+<!-- proc~eos_buoyancy_coeffs -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node52" class="node">
+<title>proc~eos_buoyancy_coeffs</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node52"><a xlink:href="../proc/eos_buoyancy_coeffs.html" xlink:title="eos_buoyancy_coeffs">
+<polygon fill="#d9534f" stroke="#d9534f" points="1160.37,-706.27 1035.6,-706.27 1035.6,-682 1160.37,-682 1160.37,-706.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1097.98" y="-690.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">eos_buoyancy_coeffs</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_kpp_overlay_impl&#45;&gt;proc~eos_buoyancy_coeffs -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge94" class="edge">
+<title>proc~vmix_kpp_overlay_impl&#45;&gt;proc~eos_buoyancy_coeffs</title>
+<path fill="none" stroke="#0000ff" d="M770.57,-61.29C782.84,-64.4 795.13,-68.83 805.83,-75.13 827.01,-87.61 821.02,-104.05 841.83,-117.13 903.26,-155.75 950.39,-105.81 999.6,-159.13 1070.15,-235.58 1091.4,-576.86 1095.95,-670.37"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="1092.44,-670.31 1096.4,-680.14 1099.44,-669.98 1092.44,-670.31"/>
+</g>
+<!-- proc~kpp_surface_buoyancy_flux -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node60" class="node">
+<title>proc~kpp_surface_buoyancy_flux</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node60"><a xlink:href="../proc/kpp_surface_buoyancy_flux.html" xlink:title="kpp_surface_buoyancy_flux">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="999.6,-108.27 841.83,-108.27 841.83,-84 999.6,-84 999.6,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="920.71" y="-92.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">kpp_surface_buoyancy_flux</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_kpp_overlay_impl&#45;&gt;proc~kpp_surface_buoyancy_flux -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge95" class="edge">
+<title>proc~vmix_kpp_overlay_impl&#45;&gt;proc~kpp_surface_buoyancy_flux</title>
+<path fill="none" stroke="#0000ff" d="M768.42,-66.74C792.14,-71.35 819.19,-76.6 843.8,-81.38"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="842.94,-84.78 853.42,-83.25 844.28,-77.91 842.94,-84.78"/>
+</g>
+<!-- proc~sw_transmission -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node69" class="node">
+<title>proc~sw_transmission</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node69"><a xlink:href="../proc/sw_transmission.html" xlink:title="sw_transmission">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="969.6,-66.27 871.83,-66.27 871.83,-42 969.6,-42 969.6,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="920.71" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">sw_transmission</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_kpp_overlay_impl&#45;&gt;proc~sw_transmission -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge96" class="edge">
+<title>proc~vmix_kpp_overlay_impl&#45;&gt;proc~sw_transmission</title>
+<path fill="none" stroke="#0000ff" d="M770.48,-54.13C799.25,-54.13 832.59,-54.13 860.45,-54.13"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="860.12,-57.64 870.12,-54.14 860.12,-50.64 860.12,-57.64"/>
+</g>
+<!-- proc~sw_transmission_nb -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node70" class="node">
+<title>proc~sw_transmission_nb</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node70"><a xlink:href="../proc/sw_transmission_nb.html" xlink:title="sw_transmission_nb">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="978.97,-24.27 862.45,-24.27 862.45,0 978.97,0 978.97,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="920.71" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">sw_transmission_nb</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_kpp_overlay_impl&#45;&gt;proc~sw_transmission_nb -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge97" class="edge">
+<title>proc~vmix_kpp_overlay_impl&#45;&gt;proc~sw_transmission_nb</title>
+<path fill="none" stroke="#0000ff" d="M768.42,-41.53C794.53,-36.46 824.68,-30.6 851.15,-25.46"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="851.62,-28.93 860.77,-23.59 850.28,-22.06 851.62,-28.93"/>
+</g>
+<!-- proc~vmix_seed_none_henyey_impl&#45;&gt;local -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge98" class="edge">
+<title>proc~vmix_seed_none_henyey_impl&#45;&gt;local</title>
+<path fill="none" stroke="#7100ff" d="M789.37,-231.81C795.38,-234.79 800.97,-238.52 805.83,-243.13 813.67,-250.58 891.91,-568.48 913.96,-658.57"/>
+<polygon fill="#7100ff" stroke="#7100ff" points="910.55,-659.36 916.32,-668.24 917.35,-657.7 910.55,-659.36"/>
+</g>
+<!-- proc~vmix_seed_none_henyey_impl&#45;&gt;proc~henyey_lat_factor_impl -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge99" class="edge">
+<title>proc~vmix_seed_none_henyey_impl&#45;&gt;proc~henyey_lat_factor_impl</title>
+<path fill="none" stroke="#7100ff" d="M785.34,-234.69C792.45,-237.04 799.38,-239.83 805.83,-243.13 846.18,-263.82 882.79,-302.81 903.07,-327.02"/>
+<polygon fill="#7100ff" stroke="#7100ff" points="900.26,-329.1 909.3,-334.63 905.67,-324.67 900.26,-329.1"/>
+</g>
+<!-- proc~vmix_smooth_121_impl&#45;&gt;local -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge100" class="edge">
+<title>proc~vmix_smooth_121_impl&#45;&gt;local</title>
+<path fill="none" stroke="#ff00e2" d="M771.06,-522.99C783.22,-526.13 795.35,-530.65 805.83,-537.13 855,-567.54 891.47,-627.2 908.69,-659.71"/>
+<polygon fill="#ff00e2" stroke="#ff00e2" points="905.4,-660.98 913.09,-668.27 911.63,-657.78 905.4,-660.98"/>
+</g>
+<!-- proc~vmix_split_ddiff_eos_impl&#45;&gt;local -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge101" class="edge">
+<title>proc~vmix_split_ddiff_eos_impl&#45;&gt;local</title>
+<path fill="none" stroke="#ff00aa" d="M775.79,-567.56C786.21,-570.45 796.54,-574.22 805.83,-579.13 825.55,-589.58 825.42,-599.01 841.83,-614.13 859.82,-630.71 880.72,-648.9 896.34,-662.3"/>
+<polygon fill="#ff00aa" stroke="#ff00aa" points="893.84,-664.76 903.72,-668.6 898.39,-659.44 893.84,-664.76"/>
+</g>
+<!-- proc~vmix_split_ddiff_eos_impl&#45;&gt;proc~eos_buoyancy_coeffs -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge102" class="edge">
+<title>proc~vmix_split_ddiff_eos_impl&#45;&gt;proc~eos_buoyancy_coeffs</title>
+<path fill="none" stroke="#ff00aa" d="M773.28,-570.76C784.25,-573.23 795.41,-576.03 805.83,-579.13 899.35,-606.98 1004.89,-652.33 1059.6,-676.93"/>
+<polygon fill="#ff00aa" stroke="#ff00aa" points="1057.91,-680.01 1068.47,-680.94 1060.8,-673.63 1057.91,-680.01"/>
+</g>
+<!-- proc~vmix_split_ddiff_impl&#45;&gt;local -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge103" class="edge">
+<title>proc~vmix_split_ddiff_impl&#45;&gt;local</title>
+<path fill="none" stroke="#ff0071" d="M763.78,-653.28C801.71,-660.3 849.51,-669.14 882.12,-675.18"/>
+<polygon fill="#ff0071" stroke="#ff0071" points="881.45,-678.61 891.92,-676.99 882.72,-671.73 881.45,-678.61"/>
+</g>
+<!-- proc~column_layer_n2&#45;&gt;proc~eos_specvol_derivs -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge104" class="edge">
+<title>proc~column_layer_n2&#45;&gt;proc~eos_specvol_derivs</title>
+<path fill="none" stroke="#ff4200" d="M971.94,-830.13C989.87,-830.13 1010.37,-830.13 1029.51,-830.13"/>
+<polygon fill="#ff4200" stroke="#ff4200" points="1029.39,-833.64 1039.39,-830.14 1029.39,-826.64 1029.39,-833.64"/>
+</g>
+<!-- proc~roquet_rho_point -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node78" class="node">
+<title>proc~roquet_rho_point</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node78"><a xlink:href="../proc/roquet_rho_point.html" xlink:title="roquet_rho_point">
+<polygon fill="#d9534f" stroke="#d9534f" points="1302.01,-795.27 1200.49,-795.27 1200.49,-771 1302.01,-771 1302.01,-795.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1251.25" y="-779.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">roquet_rho_point</text>
+</a>
+</g>
+</g>
+<!-- proc~eos_buoyancy_coeffs&#45;&gt;proc~roquet_rho_point -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge105" class="edge">
+<title>proc~eos_buoyancy_coeffs&#45;&gt;proc~roquet_rho_point</title>
+<path fill="none" stroke="#ff8500" d="M1114.43,-706.67C1133.04,-721.34 1165.63,-745.72 1196.37,-762.13 1198.85,-763.46 1201.43,-764.75 1204.06,-765.99"/>
+<polygon fill="#ff8500" stroke="#ff8500" points="1202.41,-769.08 1212.97,-769.91 1205.23,-762.68 1202.41,-769.08"/>
+</g>
+<!-- proc~roquet_spv_point -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node79" class="node">
+<title>proc~roquet_spv_point</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node79"><a xlink:href="../proc/roquet_spv_point.html" xlink:title="roquet_spv_point">
+<polygon fill="#d9534f" stroke="#d9534f" points="1302.01,-753.27 1200.49,-753.27 1200.49,-729 1302.01,-729 1302.01,-753.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1251.25" y="-737.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">roquet_spv_point</text>
+</a>
+</g>
+</g>
+<!-- proc~eos_buoyancy_coeffs&#45;&gt;proc~roquet_spv_point -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge106" class="edge">
+<title>proc~eos_buoyancy_coeffs&#45;&gt;proc~roquet_spv_point</title>
+<path fill="none" stroke="#ff8500" d="M1139.52,-706.73C1157.75,-712.39 1179.47,-719.14 1198.83,-725.16"/>
+<polygon fill="#ff8500" stroke="#ff8500" points="1197.57,-728.43 1208.16,-728.06 1199.65,-721.75 1197.57,-728.43"/>
+</g>
+<!-- proc~eos_specvol_derivs&#45;&gt;proc~roquet_rho_point -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge107" class="edge">
+<title>proc~eos_specvol_derivs&#45;&gt;proc~roquet_rho_point</title>
+<path fill="none" stroke="#ffc700" d="M1139.52,-817.54C1157.75,-811.88 1179.47,-805.13 1198.83,-799.11"/>
+<polygon fill="#ffc700" stroke="#ffc700" points="1199.65,-802.52 1208.16,-796.21 1197.57,-795.84 1199.65,-802.52"/>
+</g>
+<!-- proc~eos_specvol_derivs&#45;&gt;proc~roquet_spv_point -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge108" class="edge">
+<title>proc~eos_specvol_derivs&#45;&gt;proc~roquet_spv_point</title>
+<path fill="none" stroke="#ffc700" d="M1114.43,-817.6C1133.04,-802.93 1165.63,-778.55 1196.37,-762.13 1198.85,-760.81 1201.43,-759.52 1204.06,-758.28"/>
+<polygon fill="#ffc700" stroke="#ffc700" points="1205.23,-761.59 1212.97,-754.36 1202.41,-755.19 1205.23,-761.59"/>
+</g>
+<!-- proc~one_m_exp_x -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node77" class="node">
+<title>proc~one_m_exp_x</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node77"><a xlink:href="../proc/one_m_exp_x.html" xlink:title="one_m_exp_x">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="1139.37,-1300.27 1056.6,-1300.27 1056.6,-1276 1139.37,-1276 1139.37,-1300.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1097.98" y="-1284.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">one_m_exp_x</text>
+</a>
+</g>
+</g>
+<!-- proc~epbl_lf17_la&#45;&gt;proc~one_m_exp_x -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge109" class="edge">
+<title>proc~epbl_lf17_la&#45;&gt;proc~one_m_exp_x</title>
+<path fill="none" stroke="#b1ff00" d="M958.46,-1288.13C983.6,-1288.13 1017.3,-1288.13 1045.16,-1288.13"/>
+<polygon fill="#b1ff00" stroke="#b1ff00" points="1044.8,-1291.64 1054.8,-1288.14 1044.8,-1284.64 1044.8,-1291.64"/>
+</g>
+<!-- proc~ks_solve_column&#45;&gt;proc~eos_specvol_derivs -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge110" class="edge">
+<title>proc~ks_solve_column&#45;&gt;proc~eos_specvol_derivs</title>
+<path fill="none" stroke="#009bff" d="M971.2,-1195.59C981.71,-1191.75 991.93,-1186.19 999.6,-1178.13 1045.3,-1130.12 1081.91,-924.26 1093.3,-853.86"/>
+<polygon fill="#009bff" stroke="#009bff" points="1096.72,-854.62 1094.83,-844.2 1089.81,-853.52 1096.72,-854.62"/>
+</g>
+<!-- proc~ks_adaptive_dt -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node73" class="node">
+<title>proc~ks_adaptive_dt</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node73"><a xlink:href="../proc/ks_adaptive_dt.html" xlink:title="ks_adaptive_dt">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="1143.12,-1176.27 1052.85,-1176.27 1052.85,-1152 1143.12,-1152 1143.12,-1176.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1097.98" y="-1160.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ks_adaptive_dt</text>
+</a>
+</g>
+</g>
+<!-- proc~ks_solve_column&#45;&gt;proc~ks_adaptive_dt -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge111" class="edge">
+<title>proc~ks_solve_column&#45;&gt;proc~ks_adaptive_dt</title>
+<path fill="none" stroke="#009bff" d="M971.47,-1192.78C993.29,-1187.8 1018.99,-1181.94 1041.43,-1176.81"/>
+<polygon fill="#009bff" stroke="#009bff" points="1042.04,-1180.26 1051.01,-1174.63 1040.48,-1173.44 1042.04,-1180.26"/>
+</g>
+<!-- proc~ks_find_kappa_tke -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node74" class="node">
+<title>proc~ks_find_kappa_tke</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node74"><a xlink:href="../proc/ks_find_kappa_tke.html" xlink:title="ks_find_kappa_tke">
+<polygon fill="#d9534f" stroke="#d9534f" points="1152.12,-1218.27 1043.85,-1218.27 1043.85,-1194 1152.12,-1194 1152.12,-1218.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1097.98" y="-1202.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ks_find_kappa_tke</text>
+</a>
+</g>
+</g>
+<!-- proc~ks_solve_column&#45;&gt;proc~ks_find_kappa_tke -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge112" class="edge">
+<title>proc~ks_solve_column&#45;&gt;proc~ks_find_kappa_tke</title>
+<path fill="none" stroke="#009bff" d="M971.47,-1204.7C990.34,-1204.92 1012.11,-1205.17 1032.17,-1205.4"/>
+<polygon fill="#009bff" stroke="#009bff" points="1031.87,-1208.89 1041.91,-1205.51 1031.95,-1201.89 1031.87,-1208.89"/>
+</g>
+<!-- proc~ks_projected_state -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node75" class="node">
+<title>proc~ks_projected_state</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node75"><a xlink:href="../proc/ks_projected_state.html" xlink:title="ks_projected_state">
+<polygon fill="#d9534f" stroke="#d9534f" points="1306.14,-1156.27 1196.37,-1156.27 1196.37,-1132 1306.14,-1132 1306.14,-1156.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1251.25" y="-1140.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ks_projected_state</text>
+</a>
+</g>
+</g>
+<!-- proc~ks_solve_column&#45;&gt;proc~ks_projected_state -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge113" class="edge">
+<title>proc~ks_solve_column&#45;&gt;proc~ks_projected_state</title>
+<path fill="none" stroke="#009bff" d="M970.59,-1191.57C980.56,-1187.98 990.71,-1183.55 999.6,-1178.13 1018.66,-1166.53 1014.92,-1151.53 1035.6,-1143.13 1082.83,-1123.96 1140.87,-1125.56 1184.68,-1131.21"/>
+<polygon fill="#009bff" stroke="#009bff" points="1184.18,-1134.67 1194.57,-1132.6 1185.15,-1127.74 1184.18,-1134.67"/>
+</g>
+<!-- proc~ks_src_func -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node76" class="node">
+<title>proc~ks_src_func</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node76"><a xlink:href="../proc/ks_src_func.html" xlink:title="ks_src_func">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="1287.01,-1218.27 1215.49,-1218.27 1215.49,-1194 1287.01,-1194 1287.01,-1218.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1251.25" y="-1202.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ks_src_func</text>
+</a>
+</g>
+</g>
+<!-- proc~ks_solve_column&#45;&gt;proc~ks_src_func -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge114" class="edge">
+<title>proc~ks_solve_column&#45;&gt;proc~ks_src_func</title>
+<path fill="none" stroke="#009bff" d="M971.56,-1216.44C991.36,-1220.74 1014.43,-1225.02 1035.6,-1227.13 1090.78,-1232.65 1105.28,-1233.48 1160.37,-1227.13 1174.82,-1225.47 1190.31,-1222.35 1204.3,-1219.01"/>
+<polygon fill="#009bff" stroke="#009bff" points="1204.82,-1222.49 1213.68,-1216.67 1203.13,-1215.69 1204.82,-1222.49"/>
+</g>
+<!-- proc~ks_adaptive_dt&#45;&gt;proc~ks_projected_state -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge115" class="edge">
+<title>proc~ks_adaptive_dt&#45;&gt;proc~ks_projected_state</title>
+<path fill="none" stroke="#ff0000" d="M1143.55,-1158.24C1156.55,-1156.52 1171.03,-1154.61 1185.02,-1152.76"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1185.15,-1156.27 1194.6,-1151.49 1184.23,-1149.33 1185.15,-1156.27"/>
+</g>
+<!-- proc~ks_adaptive_dt&#45;&gt;proc~ks_src_func -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge116" class="edge">
+<title>proc~ks_adaptive_dt&#45;&gt;proc~ks_src_func</title>
+<path fill="none" stroke="#ff0000" d="M1143.55,-1176.51C1162.64,-1181.81 1184.92,-1188 1204.17,-1193.34"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1203.08,-1196.67 1213.65,-1195.97 1204.95,-1189.92 1203.08,-1196.67"/>
+</g>
+<!-- proc~ks_find_kappa_tke&#45;&gt;proc~ks_src_func -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge117" class="edge">
+<title>proc~ks_find_kappa_tke&#45;&gt;proc~ks_src_func</title>
+<path fill="none" stroke="#ffda00" d="M1152.32,-1206.13C1169.16,-1206.13 1187.61,-1206.13 1203.92,-1206.13"/>
+<polygon fill="#ffda00" stroke="#ffda00" points="1203.85,-1209.64 1213.85,-1206.14 1203.85,-1202.64 1203.85,-1209.64"/>
+</g>
+<!-- proc~roquet_model_ct_derivs -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_node80" class="node">
+<title>proc~roquet_model_ct_derivs</title>
+<g id="a_proc~~vmix_build_coefficients~~CallsGraph_node80"><a xlink:href="../proc/roquet_model_ct_derivs.html" xlink:title="roquet_model_ct_derivs">
+<polygon fill="#d9534f" stroke="#d9534f" points="1479.66,-774.27 1342.14,-774.27 1342.14,-750 1479.66,-750 1479.66,-774.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1410.9" y="-758.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">roquet_model_ct_derivs</text>
+</a>
+</g>
+</g>
+<!-- proc~roquet_rho_point&#45;&gt;proc~roquet_model_ct_derivs -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge118" class="edge">
+<title>proc~roquet_rho_point&#45;&gt;proc~roquet_model_ct_derivs</title>
+<path fill="none" stroke="#4800ff" d="M1302.13,-776.49C1311.21,-775.28 1320.88,-773.99 1330.57,-772.7"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="1330.95,-776.18 1340.4,-771.39 1330.03,-769.24 1330.95,-776.18"/>
+</g>
+<!-- proc~roquet_spv_point&#45;&gt;proc~roquet_model_ct_derivs -->
+<g id="proc~~vmix_build_coefficients~~CallsGraph_edge119" class="edge">
+<title>proc~roquet_spv_point&#45;&gt;proc~roquet_model_ct_derivs</title>
+<path fill="none" stroke="#ff00da" d="M1302.13,-747.78C1311.21,-748.99 1320.88,-750.28 1330.57,-751.57"/>
+<polygon fill="#ff00da" stroke="#ff00da" points="1330.03,-755.03 1340.4,-752.88 1330.95,-748.09 1330.03,-755.03"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocvmix_build_coefficientsCallsGraph = svgPanZoom('#procvmix_build_coefficientsCallsGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~vmix_build_coefficients~~CalledByGraph Pages: 1 -->
+<svg id="procvmix_build_coefficientsCalledByGraph" width="641pt" height="77pt"
+ viewBox="0.00 0.00 641.00 77.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~vmix_build_coefficients~~CalledByGraph" class="graph" transform="scale(0.669703 0.669703) rotate(0) translate(4 110.27)">
+<title>proc~~vmix_build_coefficients~~CalledByGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-110.27 953.14,-110.27 953.14,4 -4,4"/>
+<!-- proc~vmix_build_coefficients -->
+<g id="proc~~vmix_build_coefficients~~CalledByGraph_node1" class="node">
+<title>proc~vmix_build_coefficients</title>
+<polygon fill="none" stroke="black" points="949.14,-85.27 813.87,-85.27 813.87,-61 949.14,-61 949.14,-85.27"/>
+<text xml:space="preserve" text-anchor="middle" x="881.5" y="-69.54" font-family="Helvetica,sans-Serif" font-size="10.50">vmix_build_coefficients</text>
+</g>
+<!-- proc~apply_deferred_thermo -->
+<g id="proc~~vmix_build_coefficients~~CalledByGraph_node2" class="node">
+<title>proc~apply_deferred_thermo</title>
+<g id="a_proc~~vmix_build_coefficients~~CalledByGraph_node2"><a xlink:href="../proc/apply_deferred_thermo.html" xlink:title="apply_deferred_thermo">
+<polygon fill="#d9534f" stroke="#d9534f" points="777.87,-106.27 641.85,-106.27 641.85,-82 777.87,-82 777.87,-106.27"/>
+<text xml:space="preserve" text-anchor="middle" x="709.86" y="-90.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">apply_deferred_thermo</text>
+</a>
+</g>
+</g>
+<!-- proc~apply_deferred_thermo&#45;&gt;proc~vmix_build_coefficients -->
+<g id="proc~~vmix_build_coefficients~~CalledByGraph_edge1" class="edge">
+<title>proc~apply_deferred_thermo&#45;&gt;proc~vmix_build_coefficients</title>
+<path fill="none" stroke="#ff0000" d="M777.91,-85.84C785.84,-84.85 793.99,-83.84 802.06,-82.85"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="802.39,-86.33 811.89,-81.63 801.53,-79.38 802.39,-86.33"/>
+</g>
+<!-- proc~vmix_apply_in_stage -->
+<g id="proc~~vmix_build_coefficients~~CalledByGraph_node3" class="node">
+<title>proc~vmix_apply_in_stage</title>
+<g id="a_proc~~vmix_build_coefficients~~CalledByGraph_node3"><a xlink:href="../proc/vmix_apply_in_stage.html" xlink:title="vmix_apply_in_stage">
+<polygon fill="#d9534f" stroke="#d9534f" points="770.37,-64.27 649.35,-64.27 649.35,-40 770.37,-40 770.37,-64.27"/>
+<text xml:space="preserve" text-anchor="middle" x="709.86" y="-48.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vmix_apply_in_stage</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_apply_in_stage&#45;&gt;proc~vmix_build_coefficients -->
+<g id="proc~~vmix_build_coefficients~~CalledByGraph_edge2" class="edge">
+<title>proc~vmix_apply_in_stage&#45;&gt;proc~vmix_build_coefficients</title>
+<path fill="none" stroke="#ff0000" d="M770.67,-59.54C780.83,-60.8 791.51,-62.12 802.06,-63.42"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="801.57,-66.89 811.93,-64.65 802.43,-59.94 801.57,-66.89"/>
+</g>
+<!-- proc~ocean_dyn_step_split -->
+<g id="proc~~vmix_build_coefficients~~CalledByGraph_node4" class="node">
+<title>proc~ocean_dyn_step_split</title>
+<g id="a_proc~~vmix_build_coefficients~~CalledByGraph_node4"><a xlink:href="../proc/ocean_dyn_step_split.html" xlink:title="ocean_dyn_step_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="478.83,-66.27 354.81,-66.27 354.81,-42 478.83,-42 478.83,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="416.82" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step_split</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step_split&#45;&gt;proc~apply_deferred_thermo -->
+<g id="proc~~vmix_build_coefficients~~CalledByGraph_edge3" class="edge">
+<title>proc~ocean_dyn_step_split&#45;&gt;proc~apply_deferred_thermo</title>
+<path fill="none" stroke="#ff0000" d="M470.73,-66.75C484.99,-69.83 500.44,-72.88 514.83,-75.14 552.7,-81.07 595.03,-85.47 630.47,-88.53"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="629.95,-92 640.21,-89.35 630.54,-85.03 629.95,-92"/>
+</g>
+<!-- proc~run_stage_split -->
+<g id="proc~~vmix_build_coefficients~~CalledByGraph_node6" class="node">
+<title>proc~run_stage_split</title>
+<g id="a_proc~~vmix_build_coefficients~~CalledByGraph_node6"><a xlink:href="../proc/run_stage_split.html" xlink:title="run_stage_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="605.85,-66.27 514.83,-66.27 514.83,-42 605.85,-42 605.85,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="560.34" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage_split</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step_split&#45;&gt;proc~run_stage_split -->
+<g id="proc~~vmix_build_coefficients~~CalledByGraph_edge8" class="edge">
+<title>proc~ocean_dyn_step_split&#45;&gt;proc~run_stage_split</title>
+<path fill="none" stroke="#0000ff" d="M479.07,-54.13C487.1,-54.13 495.3,-54.13 503.24,-54.13"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="503.12,-57.64 513.12,-54.14 503.12,-50.64 503.12,-57.64"/>
+</g>
+<!-- proc~run_stage -->
+<g id="proc~~vmix_build_coefficients~~CalledByGraph_node5" class="node">
+<title>proc~run_stage</title>
+<g id="a_proc~~vmix_build_coefficients~~CalledByGraph_node5"><a xlink:href="../proc/run_stage.html" xlink:title="run_stage">
+<polygon fill="#d9534f" stroke="#d9534f" points="592.35,-24.27 528.33,-24.27 528.33,0 592.35,0 592.35,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="560.34" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage</text>
+</a>
+</g>
+</g>
+<!-- proc~run_stage&#45;&gt;proc~vmix_apply_in_stage -->
+<g id="proc~~vmix_build_coefficients~~CalledByGraph_edge4" class="edge">
+<title>proc~run_stage&#45;&gt;proc~vmix_apply_in_stage</title>
+<path fill="none" stroke="#00ffff" d="M592.63,-20.62C609.75,-25.26 631.51,-31.16 651.56,-36.6"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="650.46,-39.93 661.03,-39.16 652.29,-33.17 650.46,-39.93"/>
+</g>
+<!-- proc~run_stage_split&#45;&gt;proc~vmix_apply_in_stage -->
+<g id="proc~~vmix_build_coefficients~~CalledByGraph_edge5" class="edge">
+<title>proc~run_stage_split&#45;&gt;proc~vmix_apply_in_stage</title>
+<path fill="none" stroke="#00ffff" d="M606,-53.53C616.07,-53.39 627,-53.24 637.86,-53.1"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="637.63,-56.6 647.58,-52.97 637.54,-49.6 637.63,-56.6"/>
+</g>
+<!-- proc~engine_step -->
+<g id="proc~~vmix_build_coefficients~~CalledByGraph_node7" class="node">
+<title>proc~engine_step</title>
+<g id="a_proc~~vmix_build_coefficients~~CalledByGraph_node7"><a xlink:href="../proc/engine_step.html" xlink:title="engine_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="318.81,-45.27 242.79,-45.27 242.79,-21 318.81,-21 318.81,-45.27"/>
+<text xml:space="preserve" text-anchor="middle" x="280.8" y="-29.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~ocean_dyn_step_split -->
+<g id="proc~~vmix_build_coefficients~~CalledByGraph_edge6" class="edge">
+<title>proc~engine_step&#45;&gt;proc~ocean_dyn_step_split</title>
+<path fill="none" stroke="#ff0000" d="M319.13,-38.98C326.69,-40.17 334.89,-41.45 343.2,-42.76"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="342.63,-46.21 353.05,-44.3 343.72,-39.29 342.63,-46.21"/>
+</g>
+<!-- proc~ocean_dyn_step -->
+<g id="proc~~vmix_build_coefficients~~CalledByGraph_node8" class="node">
+<title>proc~ocean_dyn_step</title>
+<g id="a_proc~~vmix_build_coefficients~~CalledByGraph_node8"><a xlink:href="../proc/ocean_dyn_step.html" xlink:title="ocean_dyn_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="465.33,-24.27 368.31,-24.27 368.31,0 465.33,0 465.33,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="416.82" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~ocean_dyn_step -->
+<g id="proc~~vmix_build_coefficients~~CalledByGraph_edge11" class="edge">
+<title>proc~engine_step&#45;&gt;proc~ocean_dyn_step</title>
+<path fill="none" stroke="#00ffff" d="M319.13,-27.29C330.87,-25.45 344.14,-23.37 356.99,-21.35"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="357.31,-24.85 366.64,-19.84 356.22,-17.93 357.31,-24.85"/>
+</g>
+<!-- proc~ocean_dyn_step&#45;&gt;proc~run_stage -->
+<g id="proc~~vmix_build_coefficients~~CalledByGraph_edge7" class="edge">
+<title>proc~ocean_dyn_step&#45;&gt;proc~run_stage</title>
+<path fill="none" stroke="#00ff00" d="M465.73,-12.13C482.25,-12.13 500.63,-12.13 516.7,-12.13"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="516.42,-15.64 526.42,-12.14 516.42,-8.64 516.42,-15.64"/>
+</g>
+<!-- proc~driver_run_ocean -->
+<g id="proc~~vmix_build_coefficients~~CalledByGraph_node9" class="node">
+<title>proc~driver_run_ocean</title>
+<g id="a_proc~~vmix_build_coefficients~~CalledByGraph_node9"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<polygon fill="#d9534f" stroke="#d9534f" points="206.79,-66.27 102.27,-66.27 102.27,-42 206.79,-42 206.79,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="154.53" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_step -->
+<g id="proc~~vmix_build_coefficients~~CalledByGraph_edge9" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_step</title>
+<path fill="none" stroke="#ff0000" d="M207.15,-45.41C215.13,-44.06 223.34,-42.68 231.25,-41.34"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="231.77,-44.8 241.05,-39.68 230.61,-37.9 231.77,-44.8"/>
+</g>
+<!-- proc~rdb_ocean_step -->
+<g id="proc~~vmix_build_coefficients~~CalledByGraph_node10" class="node">
+<title>proc~rdb_ocean_step</title>
+<g id="a_proc~~vmix_build_coefficients~~CalledByGraph_node10"><a xlink:href="../proc/rdb_ocean_step.html" xlink:title="rdb_ocean_step">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="202.29,-24.27 106.77,-24.27 106.77,0 202.29,0 202.29,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="154.53" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_step</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_step&#45;&gt;proc~engine_step -->
+<g id="proc~~vmix_build_coefficients~~CalledByGraph_edge10" class="edge">
+<title>proc~rdb_ocean_step&#45;&gt;proc~engine_step</title>
+<path fill="none" stroke="#ff0000" d="M202.51,-20.07C211.89,-21.66 221.77,-23.33 231.2,-24.92"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="230.49,-28.35 240.94,-26.57 231.66,-21.45 230.49,-28.35"/>
+</g>
+<!-- proc~driver_run -->
+<g id="proc~~vmix_build_coefficients~~CalledByGraph_node11" class="node">
+<title>proc~driver_run</title>
+<g id="a_proc~~vmix_build_coefficients~~CalledByGraph_node11"><a xlink:href="../proc/driver_run.html" xlink:title="driver_run">
+<polygon fill="#d9534f" stroke="#d9534f" points="66.27,-66.27 0,-66.27 0,-42 66.27,-42 66.27,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="33.13" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run&#45;&gt;proc~driver_run_ocean -->
+<g id="proc~~vmix_build_coefficients~~CalledByGraph_edge12" class="edge">
+<title>proc~driver_run&#45;&gt;proc~driver_run_ocean</title>
+<path fill="none" stroke="#ff0000" d="M66.76,-54.13C74.26,-54.13 82.48,-54.13 90.79,-54.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="90.58,-57.64 100.58,-54.14 90.58,-50.64 90.58,-57.64"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocvmix_build_coefficientsCalledByGraph = svgPanZoom('#procvmix_build_coefficientsCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-epbl_active"></span>
+              logical,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>epbl_active</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-kshear_active"></span>
+              logical,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>kshear_active</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-shear_first"></span>
+              logical,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>shear_first</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-tidal_active"></span>
+              logical,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>tidal_active</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">subroutine </span><span class="n">vmix_build_coefficients</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">dyn</span><span class="p">,</span><span class="w"> </span><span class="n">vmix</span><span class="p">,</span><span class="w"> </span><span class="n">vd</span><span class="p">,</span><span class="w"> </span><span class="n">ss</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">,</span><span class="w"> </span><span class="n">dt</span><span class="p">,</span><span class="w"> </span><span class="n">refresh_slow</span><span class="p">,</span><span class="w"> </span><span class="n">sf</span><span class="p">,</span><span class="w"> </span><span class="n">epbl</span><span class="p">,</span><span class="w"> </span><span class="n">kshear</span><span class="p">,</span><span class="w"> </span><span class="n">vmix_tidal</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! Assemble the vertical-mixing coefficients `vmix%kv/kt/ks`: interior</span>
+<span class="w">      </span><span class="c">!! seed (PP81 / none) -&gt; KPP overlay or EPBL merge -&gt; kappa-shear</span>
+<span class="w">      </span><span class="c">!! merge -&gt; tidal merge -&gt; law-of-the-wall BBL merge -&gt; KV_ML_INVZ2</span>
+<span class="w">      </span><span class="c">!! -&gt; convective adjustment -&gt; heat/salt split -&gt; `vmix_assemble`</span>
+<span class="w">      </span><span class="c">!! (see `vmix_apply_in_stage` for the contributor rules).  Extracted</span>
+<span class="w">      </span><span class="c">!! verbatim from the stage chain so the SAME code runs in-stage</span>
+<span class="w">      </span><span class="c">!! (`diabatic_first = .true.` / ratio 1) and at the interval end</span>
+<span class="w">      </span><span class="c">!! (`diabatic_first = .false.`, from `apply_deferred_thermo`).</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! `refresh_slow` fires the slow column solves (`epbl_compute`,</span>
+<span class="w">      </span><span class="c">!! `kappa_shear_compute`, `tidal_mixing_compute`, `bbl_mixing_compute`)</span>
+<span class="w">      </span><span class="c">!! that refresh their persistent `kd_int` before the merges; the merges</span>
+<span class="w">      </span><span class="c">!! themselves run on every call.  Requires `vmix%use_closure`.</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">hgrid_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">grid</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_dyn_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dyn</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_vmix_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">vmix</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_vdiff_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">vd</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_surface_stress_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ss</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">multilayer_state_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ms</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dt</span>
+<span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">refresh_slow</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_surface_flux_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">sf</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_epbl_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">epbl</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_kappa_shear_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">kshear</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_tidal_mixing_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">vmix_tidal</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_metrics_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">metrics</span>
+
+<span class="w">      </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">epbl_active</span><span class="p">,</span><span class="w"> </span><span class="n">kshear_active</span><span class="p">,</span><span class="w"> </span><span class="n">tidal_active</span><span class="p">,</span><span class="w"> </span><span class="n">shear_first</span>
+
+<span class="w">      </span><span class="n">epbl_active</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">false</span><span class="p">.</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">epbl</span><span class="p">))</span><span class="w"> </span><span class="n">epbl_active</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">epbl</span><span class="p">%</span><span class="n">enable</span>
+<span class="w">      </span><span class="n">kshear_active</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">false</span><span class="p">.</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">kshear</span><span class="p">))</span><span class="w"> </span><span class="n">kshear_active</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">kshear</span><span class="p">%</span><span class="n">enable</span>
+<span class="w">      </span><span class="n">tidal_active</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">false</span><span class="p">.</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">vmix_tidal</span><span class="p">))</span><span class="w"> </span><span class="n">tidal_active</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">vmix_tidal</span><span class="p">%</span><span class="n">enable</span>
+<span class="w">      </span><span class="c">! combine="max_shear": kappa-shear must be merged BEFORE the ePBL</span>
+<span class="w">      </span><span class="c">! merge so the ePBL step can subtract it (the "add"/"max" order is</span>
+<span class="w">      </span><span class="c">! unchanged).  Without kappa-shear the mode is plain "add".</span>
+<span class="w">      </span><span class="n">shear_first</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">false</span><span class="p">.</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">epbl_active</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">kshear_active</span><span class="p">)</span><span class="w"> </span><span class="n">shear_first</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="n">epbl</span><span class="p">%</span><span class="n">combine_mode</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">EPBL_COMBINE_MAX_SHEAR</span><span class="p">)</span>
+
+<span class="w">      </span><span class="k">call </span><span class="n">profiler_start</span><span class="p">(</span><span class="s2">"ocean_vmix_compute"</span><span class="p">)</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">vmix</span><span class="p">%</span><span class="n">interior_closure</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">VMIX_INTERIOR_PP81</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">vmix_compute_pp81</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">vmix</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">)</span>
+<span class="w">      </span><span class="k">else if</span><span class="w"> </span><span class="p">(</span><span class="n">vmix</span><span class="p">%</span><span class="n">interior_closure</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">VMIX_INTERIOR_NONE</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="w">         </span><span class="c">! No shear-driven interior closure (OM3: no PP81): seed the</span>
+<span class="w">         </span><span class="c">! interior kv/kt with the background; the other contributors</span>
+<span class="w">         </span><span class="c">! add on top, vmix_assemble keeps floors and ceilings.</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">metrics</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            call </span><span class="n">vmix_seed_interior_none</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">vmix</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">,</span><span class="w"> </span><span class="n">geolat</span><span class="o">=</span><span class="n">metrics</span><span class="p">%</span><span class="n">geolatT</span><span class="p">)</span>
+<span class="w">         </span><span class="k">else</span>
+<span class="k">            call </span><span class="n">vmix_seed_interior_none</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">vmix</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">)</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">      else</span>
+<span class="w">         </span><span class="c">! PR-6 fail-loud: VMIX_INTERIOR_LARGE94 / VMIX_INTERIOR_CVMIX are</span>
+<span class="w">         </span><span class="c">! reserved-but-unwired (no kernel).  Selecting one would leave</span>
+<span class="w">         </span><span class="c">! kv/kt with NO interior mixing.  The `interior_closure`</span>
+<span class="w">         </span><span class="c">! namelist parser never returns them, so this</span>
+<span class="w">         </span><span class="c">! is defence-in-depth for the next code/config consumer.</span>
+<span class="w">         </span><span class="k">call </span><span class="n">logger</span><span class="p">%</span><span class="n">error</span><span class="p">(</span><span class="s2">"vmix_apply_in_stage: the selected interior closure "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                           </span><span class="s2">"has no kernel (only VMIX_INTERIOR_PP81/NONE are implemented; "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                           </span><span class="s2">"VMIX_INTERIOR_LARGE94/CVMIX are reserved-but-unwired) — "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                           </span><span class="s2">"running it would leave kv/kt with no interior mixing"</span><span class="p">)</span>
+<span class="w">         </span><span class="k">error stop</span><span class="w"> </span><span class="s2">"vmix_apply_in_stage: unimplemented vmix interior closure"</span>
+<span class="w">      </span><span class="k">end if</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="n">vmix</span><span class="p">%</span><span class="n">use_kpp</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="p">.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">epbl_active</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="nb">present</span><span class="p">(</span><span class="n">sf</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            call </span><span class="n">logger</span><span class="p">%</span><span class="n">error</span><span class="p">(</span><span class="s2">"vmix_apply_in_stage: KPP requires the surface-flux slot (sf)"</span><span class="p">)</span>
+<span class="w">            </span><span class="k">error stop</span><span class="w"> </span><span class="s2">"vmix_apply_in_stage: use_kpp requires the surface-flux slot (sf)"</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">         call </span><span class="n">vmix_apply_kpp_overlay</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">vmix</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">,</span><span class="w"> </span><span class="n">ss</span><span class="p">,</span><span class="w"> </span><span class="n">sf</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end if</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="n">epbl_active</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="nb">present</span><span class="p">(</span><span class="n">sf</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            call </span><span class="n">logger</span><span class="p">%</span><span class="n">error</span><span class="p">(</span><span class="s2">"vmix_apply_in_stage: EPBL requires the surface-flux slot (sf)"</span><span class="p">)</span>
+<span class="w">            </span><span class="k">error stop</span><span class="w"> </span><span class="s2">"vmix_apply_in_stage: EPBL requires the surface-flux slot (sf)"</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">         if</span><span class="w"> </span><span class="p">(</span><span class="n">refresh_slow</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            call </span><span class="n">epbl_compute</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">epbl</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">,</span><span class="w"> </span><span class="n">ss</span><span class="p">,</span><span class="w"> </span><span class="n">dyn</span><span class="p">%</span><span class="n">therm_dt</span><span class="p">(</span><span class="n">dt</span><span class="p">),</span><span class="w"> </span><span class="n">sf</span><span class="p">)</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">         if</span><span class="w"> </span><span class="p">(</span><span class="n">shear_first</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            call </span><span class="n">kshear_stage_merge</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">dyn</span><span class="p">,</span><span class="w"> </span><span class="n">vmix</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">,</span><span class="w"> </span><span class="n">kshear</span><span class="p">,</span><span class="w"> </span><span class="n">dt</span><span class="p">,</span><span class="w"> </span><span class="n">refresh_slow</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">)</span>
+<span class="w">            </span><span class="k">call </span><span class="n">epbl_merge_max_shear</span><span class="p">(</span><span class="n">epbl</span><span class="p">,</span><span class="w"> </span><span class="n">size</span><span class="p">(</span><span class="n">vmix</span><span class="p">%</span><span class="n">kt</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="n">size</span><span class="p">(</span><span class="n">vmix</span><span class="p">%</span><span class="n">kt</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="n">size</span><span class="p">(</span><span class="n">vmix</span><span class="p">%</span><span class="n">kt</span><span class="p">,</span><span class="w"> </span><span class="mi">3</span><span class="p">),</span><span class="w"> </span><span class="n">vmix</span><span class="p">%</span><span class="n">kv</span><span class="p">,</span><span class="w"> </span><span class="n">vmix</span><span class="p">%</span><span class="n">kt</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="n">kshear</span><span class="p">%</span><span class="n">kd_int</span><span class="p">,</span><span class="w"> </span><span class="nb">merge</span><span class="p">(</span><span class="mf">0.0_wp</span><span class="p">,</span><span class="w"> </span><span class="n">kshear</span><span class="p">%</span><span class="n">prandtl_turb</span><span class="p">,</span><span class="w"> </span><span class="n">kshear</span><span class="p">%</span><span class="n">at_vertex</span><span class="p">))</span>
+<span class="w">         </span><span class="k">else</span>
+<span class="k">            call </span><span class="n">epbl_merge_into_kv_kt</span><span class="p">(</span><span class="n">epbl</span><span class="p">,</span><span class="w"> </span><span class="n">size</span><span class="p">(</span><span class="n">vmix</span><span class="p">%</span><span class="n">kt</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="n">size</span><span class="p">(</span><span class="n">vmix</span><span class="p">%</span><span class="n">kt</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                       </span><span class="n">size</span><span class="p">(</span><span class="n">vmix</span><span class="p">%</span><span class="n">kt</span><span class="p">,</span><span class="w"> </span><span class="mi">3</span><span class="p">),</span><span class="w"> </span><span class="n">vmix</span><span class="p">%</span><span class="n">kv</span><span class="p">,</span><span class="w"> </span><span class="n">vmix</span><span class="p">%</span><span class="n">kt</span><span class="p">)</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">      end if</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="n">kshear_active</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="p">.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">shear_first</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         if</span><span class="w"> </span><span class="p">(</span><span class="n">refresh_slow</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            if</span><span class="w"> </span><span class="p">(</span><span class="n">kshear</span><span class="p">%</span><span class="n">at_vertex</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="w">               </span><span class="c">! Vertex form needs the halo-valid wet masks for the</span>
+<span class="w">               </span><span class="c">! corner gather; fail-loud inside if metrics is absent.</span>
+<span class="w">               </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="nb">present</span><span class="p">(</span><span class="n">metrics</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                  call </span><span class="n">logger</span><span class="p">%</span><span class="n">error</span><span class="p">(</span><span class="s2">"vmix_apply_in_stage: kappa-shear at_vertex "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                    </span><span class="s2">"requires the metrics slot (wet masks)"</span><span class="p">)</span>
+<span class="w">                  </span><span class="k">error stop</span><span class="w"> </span><span class="s2">"vmix_apply_in_stage: at_vertex needs metrics"</span>
+<span class="w">               </span><span class="k">end if</span>
+<span class="k">               call </span><span class="n">kappa_shear_compute</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">kshear</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">,</span><span class="w"> </span><span class="n">dyn</span><span class="p">%</span><span class="n">therm_dt</span><span class="p">(</span><span class="n">dt</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                        </span><span class="n">wet_t</span><span class="o">=</span><span class="n">metrics</span><span class="p">%</span><span class="n">wet_T</span><span class="p">,</span><span class="w"> </span><span class="n">wet_u</span><span class="o">=</span><span class="n">metrics</span><span class="p">%</span><span class="n">wet_u</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                        </span><span class="n">wet_v</span><span class="o">=</span><span class="n">metrics</span><span class="p">%</span><span class="n">wet_v</span><span class="p">)</span>
+<span class="w">            </span><span class="k">else</span>
+<span class="k">               call </span><span class="n">kappa_shear_compute</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">kshear</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">,</span><span class="w"> </span><span class="n">dyn</span><span class="p">%</span><span class="n">therm_dt</span><span class="p">(</span><span class="n">dt</span><span class="p">))</span>
+<span class="w">            </span><span class="k">end if</span>
+<span class="k">         end if</span>
+<span class="k">         call </span><span class="n">kappa_shear_merge_into_kv_kt</span><span class="p">(</span><span class="n">kshear</span><span class="p">,</span><span class="w"> </span><span class="n">size</span><span class="p">(</span><span class="n">vmix</span><span class="p">%</span><span class="n">kt</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="n">size</span><span class="p">(</span><span class="n">vmix</span><span class="p">%</span><span class="n">kt</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                           </span><span class="n">size</span><span class="p">(</span><span class="n">vmix</span><span class="p">%</span><span class="n">kt</span><span class="p">,</span><span class="w"> </span><span class="mi">3</span><span class="p">),</span><span class="w"> </span><span class="n">vmix</span><span class="p">%</span><span class="n">kv</span><span class="p">,</span><span class="w"> </span><span class="n">vmix</span><span class="p">%</span><span class="n">kt</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end if</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="n">tidal_active</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         if</span><span class="w"> </span><span class="p">(</span><span class="n">refresh_slow</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            call </span><span class="n">tidal_mixing_compute</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">vmix_tidal</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">,</span><span class="w"> </span><span class="n">dyn</span><span class="p">%</span><span class="n">therm_dt</span><span class="p">(</span><span class="n">dt</span><span class="p">))</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">         call </span><span class="n">tidal_mixing_merge_into_kt</span><span class="p">(</span><span class="n">vmix_tidal</span><span class="p">,</span><span class="w"> </span><span class="n">size</span><span class="p">(</span><span class="n">vmix</span><span class="p">%</span><span class="n">kt</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="n">size</span><span class="p">(</span><span class="n">vmix</span><span class="p">%</span><span class="n">kt</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                         </span><span class="n">size</span><span class="p">(</span><span class="n">vmix</span><span class="p">%</span><span class="n">kt</span><span class="p">,</span><span class="w"> </span><span class="mi">3</span><span class="p">),</span><span class="w"> </span><span class="n">vmix</span><span class="p">%</span><span class="n">kv</span><span class="p">,</span><span class="w"> </span><span class="n">vmix</span><span class="p">%</span><span class="n">kt</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end if</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="n">vd</span><span class="p">%</span><span class="n">bbl_mix</span><span class="p">%</span><span class="n">enable</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="w">         </span><span class="c">! Law-of-the-wall BBL diffusivity: tracer kt only, additive.</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">refresh_slow</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            call </span><span class="n">bbl_mixing_compute</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">vd</span><span class="p">%</span><span class="n">bbl_mix</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">)</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">         call </span><span class="n">bbl_mixing_merge_into_kt</span><span class="p">(</span><span class="n">vd</span><span class="p">%</span><span class="n">bbl_mix</span><span class="p">,</span><span class="w"> </span><span class="n">size</span><span class="p">(</span><span class="n">vmix</span><span class="p">%</span><span class="n">kt</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="n">size</span><span class="p">(</span><span class="n">vmix</span><span class="p">%</span><span class="n">kt</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                       </span><span class="n">size</span><span class="p">(</span><span class="n">vmix</span><span class="p">%</span><span class="n">kt</span><span class="p">,</span><span class="w"> </span><span class="mi">3</span><span class="p">),</span><span class="w"> </span><span class="n">vmix</span><span class="p">%</span><span class="n">kt</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end if</span>
+<span class="k">      call </span><span class="n">vmix_add_kv_ml_invz2</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">vmix</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">)</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">vmix</span><span class="p">%</span><span class="n">conv_enable</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="w">         </span><span class="c">! Brunt-Vaisala-triggered convective adjustment.  A CONTRIBUTOR</span>
+<span class="w">         </span><span class="c">! (max() floor), so it must run BEFORE vmix_assemble -- see the</span>
+<span class="w">         </span><span class="c">! rdb_ocean_vmix module docstring for the D1-D4 divergences from</span>
+<span class="w">         </span><span class="c">! MOM6's MOM_CVMix_conv.  Masks against the live BL depth of</span>
+<span class="w">         </span><span class="c">! whichever surface scheme is active this stage.</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">epbl_active</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            call </span><span class="n">vmix_apply_convection</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">vmix</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">,</span><span class="w"> </span><span class="n">epbl</span><span class="p">%</span><span class="n">mld</span><span class="p">)</span>
+<span class="w">         </span><span class="k">else</span>
+<span class="k">            call </span><span class="n">vmix_apply_convection</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">vmix</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">,</span><span class="w"> </span><span class="n">vmix</span><span class="p">%</span><span class="n">bl_depth</span><span class="p">)</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">      end if</span>
+<span class="w">      </span><span class="c">! `vmix_split_kd_heat_salt` is NOT a contributor -- it must be</span>
+<span class="w">      </span><span class="c">! the LAST statement before `vmix_assemble`, always.  Any future</span>
+<span class="w">      </span><span class="c">! PR adding a kv/kt contributor (e.g. convective adjustment)</span>
+<span class="w">      </span><span class="c">! inserts ABOVE this line, never below it -- ks is derived from</span>
+<span class="w">      </span><span class="c">! whatever kt holds at this point, so a contributor placed after</span>
+<span class="w">      </span><span class="c">! the split silently never reaches ks.</span>
+<span class="w">      </span><span class="k">call </span><span class="n">vmix_split_kd_heat_salt</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">vmix</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">)</span>
+<span class="w">      </span><span class="c">! Single downstream assembly gate: background floors, kv_max/kd_max</span>
+<span class="w">      </span><span class="c">! ceilings, optional 1-2-1 smoothing, optional negative/NaN guard.</span>
+<span class="w">      </span><span class="c">! Defaults reproduce the pre-assembly chain bit-for-bit.  Gates kv,</span>
+<span class="w">      </span><span class="c">! kt, AND ks.  `geolat` rides on the optional metrics slot (the C7</span>
+<span class="w">      </span><span class="c">! Henyey latitude factor's only spatial input) — forwarded when the</span>
+<span class="w">      </span><span class="c">! caller threaded metrics through, omitted otherwise.  Omitting it</span>
+<span class="w">      </span><span class="c">! is safe: vmix_assemble fails loud if `bkgnd_henyey` is on and</span>
+<span class="w">      </span><span class="c">! geolat is absent, so a caller that forgot cannot silently lose</span>
+<span class="w">      </span><span class="c">! the latitude factor.</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">metrics</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">vmix_assemble</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">vmix</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">,</span><span class="w"> </span><span class="n">geolat</span><span class="o">=</span><span class="n">metrics</span><span class="p">%</span><span class="n">geolatT</span><span class="p">)</span>
+<span class="w">      </span><span class="k">else</span>
+<span class="k">         call </span><span class="n">vmix_assemble</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">vmix</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end if</span>
+<span class="k">      call </span><span class="n">profiler_stop</span><span class="p">(</span><span class="s2">"ocean_vmix_compute"</span><span class="p">)</span>
+<span class="w">   </span><span class="k">end subroutine </span><span class="n">vmix_build_coefficients</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-11-13 23:21 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

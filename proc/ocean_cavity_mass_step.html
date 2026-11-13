@@ -1,0 +1,2069 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>ocean_cavity_mass_step &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>ocean_cavity_mass_step
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.0% of total for procedures.">62 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_cavity_flux.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_cavity_flux.f90.html'>rdb_ocean_cavity_flux.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ocean_cavity_flux.html'>rdb_ocean_cavity_flux</a></li>
+            <li class="breadcrumb-item active" aria-current="page">ocean_cavity_mass_step</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/ocean_cavity_mass_step.html#variable-area_open~3">area_open</a>
+            <a class="list-group-item" href="../proc/ocean_cavity_mass_step.html#variable-dt_over_rho0~5">dt_over_rho0</a>
+            <a class="list-group-item" href="../proc/ocean_cavity_mass_step.html#variable-dw~5">dw</a>
+            <a class="list-group-item" href="../proc/ocean_cavity_mass_step.html#variable-idx_ps">idx_ps</a>
+            <a class="list-group-item" href="../proc/ocean_cavity_mass_step.html#variable-idx_s~2">idx_s</a>
+            <a class="list-group-item" href="../proc/ocean_cavity_mass_step.html#variable-idx_t~2">idx_t</a>
+            <a class="list-group-item" href="../proc/ocean_cavity_mass_step.html#variable-it~42">it</a>
+            <a class="list-group-item" href="../proc/ocean_cavity_mass_step.html#variable-n_thin_comp">n_thin_comp</a>
+            <a class="list-group-item" href="../proc/ocean_cavity_mass_step.html#variable-n_thin_src">n_thin_src</a>
+            <a class="list-group-item" href="../proc/ocean_cavity_mass_step.html#variable-nx~338">nx</a>
+            <a class="list-group-item" href="../proc/ocean_cavity_mass_step.html#variable-ny~338">ny</a>
+            <a class="list-group-item" href="../proc/ocean_cavity_mass_step.html#variable-nz~274">nz</a>
+            <a class="list-group-item" href="../proc/ocean_cavity_mass_step.html#variable-tmp~3">tmp</a>
+            <a class="list-group-item" href="../proc/ocean_cavity_mass_step.html#variable-vol_melt~3">vol_melt</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/ocean_cavity_mass_step.html#src">ocean_cavity_mass_step</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>public  subroutine ocean_cavity_mass_step(grid, metrics, cav, ms, dt, weight, active)  
+</h2>
+        <div class="card mb-4">
+      <h3 class="card-header card-title bg-light">Uses</h3>
+      <div class="card-body">
+        <ul class="list-group list-group-flush">
+            <li class="list-group-item">
+              <ul class="list-inline">
+                  <li class="list-inline-item">pic_logger</li>
+                  <li class="list-inline-item"><a href='../module/rdb_halo.html'>rdb_halo</a></li>
+                  <li class="list-inline-item"><a href='../module/rdb_ocean_status.html'>rdb_ocean_status</a></li>
+                  <li class="list-inline-item"><a href='../module/rdb_error_ring.html'>rdb_error_ring</a></li>
+                  <li class="list-inline-item">pic_strings</li>
+              </ul>
+            </li>
+            <li class="list-group-item">
+              <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~ocean_cavity_mass_step~~UsesGraph Pages: 1 -->
+<svg id="prococean_cavity_mass_stepUsesGraph" width="641pt" height="342pt"
+ viewBox="0.00 0.00 641.00 342.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~ocean_cavity_mass_step~~UsesGraph" class="graph" transform="scale(0.619078 0.619078) rotate(0) translate(4 547.68)">
+<title>proc~~ocean_cavity_mass_step~~UsesGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-547.68 1031.41,-547.68 1031.41,4 -4,4"/>
+<!-- proc~ocean_cavity_mass_step -->
+<g id="proc~~ocean_cavity_mass_step~~UsesGraph_node1" class="node">
+<title>proc~ocean_cavity_mass_step</title>
+<polygon fill="none" stroke="black" points="1027.41,-258.31 885.39,-258.31 885.39,-234.04 1027.41,-234.04 1027.41,-258.31"/>
+<text xml:space="preserve" text-anchor="middle" x="956.4" y="-242.57" font-family="Helvetica,sans-Serif" font-size="10.50">ocean_cavity_mass_step</text>
+</g>
+<!-- module~rdb_error_ring -->
+<g id="proc~~ocean_cavity_mass_step~~UsesGraph_node2" class="node">
+<title>module~rdb_error_ring</title>
+<g id="a_proc~~ocean_cavity_mass_step~~UsesGraph_node2"><a xlink:href="../module/rdb_error_ring.html" xlink:title="rdb_error_ring">
+<polygon fill="#337ab7" stroke="#337ab7" points="322.56,-166.31 235.29,-166.31 235.29,-142.04 322.56,-142.04 322.56,-166.31"/>
+<text xml:space="preserve" text-anchor="middle" x="278.92" y="-150.57" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_error_ring</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_cavity_mass_step&#45;&gt;module~rdb_error_ring -->
+<g id="proc~~ocean_cavity_mass_step~~UsesGraph_edge1" class="edge">
+<title>proc~ocean_cavity_mass_step&#45;&gt;module~rdb_error_ring</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M707.73,-154.17C589.04,-132.34 556.59,-162.52 436.19,-154.17"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M434.19,-154.17C401.04,-152.14 363.79,-152.08 334.21,-152.55"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="334.31,-149.05 324.37,-152.74 334.44,-156.05 334.31,-149.05"/>
+</g>
+<!-- module~rdb_halo -->
+<g id="proc~~ocean_cavity_mass_step~~UsesGraph_node3" class="node">
+<title>module~rdb_halo</title>
+<g id="a_proc~~ocean_cavity_mass_step~~UsesGraph_node3"><a xlink:href="../module/rdb_halo.html" xlink:title="rdb_halo">
+<polygon fill="#337ab7" stroke="#337ab7" points="849.39,-351.31 791.37,-351.31 791.37,-327.04 849.39,-327.04 849.39,-351.31"/>
+<text xml:space="preserve" text-anchor="middle" x="820.38" y="-335.57" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_halo</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_cavity_mass_step&#45;&gt;module~rdb_halo -->
+<g id="proc~~ocean_cavity_mass_step~~UsesGraph_edge2" class="edge">
+<title>proc~ocean_cavity_mass_step&#45;&gt;module~rdb_halo</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M937.33,-258.71C914.52,-274.54 875.08,-301.91 848.61,-320.27"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="846.63,-317.39 840.41,-325.97 850.62,-323.14 846.63,-317.39"/>
+</g>
+<!-- module~rdb_ocean_status -->
+<g id="proc~~ocean_cavity_mass_step~~UsesGraph_node4" class="node">
+<title>module~rdb_ocean_status</title>
+<g id="a_proc~~ocean_cavity_mass_step~~UsesGraph_node4"><a xlink:href="../module/rdb_ocean_status.html" xlink:title="rdb_ocean_status">
+<polygon fill="#337ab7" stroke="#337ab7" points="487.45,-88.31 382.93,-88.31 382.93,-64.04 487.45,-64.04 487.45,-88.31"/>
+<text xml:space="preserve" text-anchor="middle" x="435.19" y="-72.57" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_status</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_cavity_mass_step&#45;&gt;module~rdb_ocean_status -->
+<g id="proc~~ocean_cavity_mass_step~~UsesGraph_edge3" class="edge">
+<title>proc~ocean_cavity_mass_step&#45;&gt;module~rdb_ocean_status</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M577.71,-55.17C563.01,-49.03 527.47,-54.32 495.68,-61.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="495.12,-57.67 486.12,-63.26 496.64,-64.51 495.12,-57.67"/>
+</g>
+<!-- pic_logger -->
+<g id="proc~~ocean_cavity_mass_step~~UsesGraph_node5" class="node">
+<title>pic_logger</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="173.41,-166.31 106.4,-166.31 106.4,-142.04 173.41,-142.04 173.41,-166.31"/>
+<text xml:space="preserve" text-anchor="middle" x="139.91" y="-150.57" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">pic_logger</text>
+</g>
+<!-- proc~ocean_cavity_mass_step&#45;&gt;pic_logger -->
+<g id="proc~~ocean_cavity_mass_step~~UsesGraph_edge4" class="edge">
+<title>proc~ocean_cavity_mass_step&#45;&gt;pic_logger</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M930.41,-233.57C886.89,-212.37 793.82,-170.32 709.73,-154.17"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M707.73,-154.17C639.69,-130.86 646.08,-82.9 579.71,-55.17"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M577.71,-55.17C539.79,-39.33 535.29,-22.77 495.33,-13.17 443.35,-0.69 424.13,8.02 375.06,-13.17 318.45,-37.62 338.45,-94.74 279.92,-114.17"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M277.92,-114.17C246.88,-123.87 211.65,-134.14 184.69,-141.84"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="183.79,-138.46 175.13,-144.56 185.71,-145.19 183.79,-138.46"/>
+</g>
+<!-- pic_strings -->
+<g id="proc~~ocean_cavity_mass_step~~UsesGraph_node6" class="node">
+<title>pic_strings</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="469.08,-46.31 401.31,-46.31 401.31,-22.04 469.08,-22.04 469.08,-46.31"/>
+<text xml:space="preserve" text-anchor="middle" x="435.19" y="-30.57" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">pic_strings</text>
+</g>
+<!-- proc~ocean_cavity_mass_step&#45;&gt;pic_strings -->
+<g id="proc~~ocean_cavity_mass_step~~UsesGraph_edge5" class="edge">
+<title>proc~ocean_cavity_mass_step&#45;&gt;pic_strings</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M577.71,-55.17C546.9,-42.3 509.41,-37.15 480.76,-35.17"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="481.15,-31.69 470.97,-34.61 480.75,-38.68 481.15,-31.69"/>
+</g>
+<!-- module~rdb_error_ring&#45;&gt;pic_logger -->
+<g id="proc~~ocean_cavity_mass_step~~UsesGraph_edge6" class="edge">
+<title>module~rdb_error_ring&#45;&gt;pic_logger</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M234.95,-154.17C219.03,-154.17 200.97,-154.17 184.96,-154.17"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="185.24,-150.67 175.24,-154.17 185.24,-157.67 185.24,-150.67"/>
+</g>
+<!-- module~rdb_halo&#45;&gt;pic_logger -->
+<g id="proc~~ocean_cavity_mass_step~~UsesGraph_edge12" class="edge">
+<title>module~rdb_halo&#45;&gt;pic_logger</title>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M814.74,-326.77C806.09,-305.15 785.62,-260.3 755.37,-233.17 699.13,-182.74 511.01,-126.64 436.19,-116.17"/>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M434.19,-116.17C366.94,-102.81 345,-92.56 279.92,-114.17"/>
+</g>
+<!-- iso_fortran_env -->
+<g id="proc~~ocean_cavity_mass_step~~UsesGraph_node7" class="node">
+<title>iso_fortran_env</title>
+<g id="a_proc~~ocean_cavity_mass_step~~UsesGraph_node7"><a xlink:href="http://fortranwiki.org/fortran/show/iso_fortran_env" xlink:title="iso_fortran_env">
+<polygon fill="#337ab7" stroke="#337ab7" points="625.35,-392.31 532.08,-392.31 532.08,-368.04 625.35,-368.04 625.35,-392.31"/>
+<text xml:space="preserve" text-anchor="middle" x="578.71" y="-376.57" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">iso_fortran_env</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_halo&#45;&gt;iso_fortran_env -->
+<g id="proc~~ocean_cavity_mass_step~~UsesGraph_edge7" class="edge">
+<title>module~rdb_halo&#45;&gt;iso_fortran_env</title>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M791.05,-349.84C780.05,-353.62 767.25,-357.58 755.37,-360.17 716.31,-368.71 671.51,-373.74 636.94,-376.62"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="636.83,-373.11 627.14,-377.39 637.38,-380.09 636.83,-373.11"/>
+</g>
+<!-- module~rdb_comm_env -->
+<g id="proc~~ocean_cavity_mass_step~~UsesGraph_node8" class="node">
+<title>module~rdb_comm_env</title>
+<g id="a_proc~~ocean_cavity_mass_step~~UsesGraph_node8"><a xlink:href="../module/rdb_comm_env.html" xlink:title="rdb_comm_env">
+<polygon fill="#337ab7" stroke="#337ab7" points="755.37,-443.31 662.1,-443.31 662.1,-419.04 755.37,-419.04 755.37,-443.31"/>
+<text xml:space="preserve" text-anchor="middle" x="708.73" y="-427.57" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_comm_env</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_halo&#45;&gt;module~rdb_comm_env -->
+<g id="proc~~ocean_cavity_mass_step~~UsesGraph_edge8" class="edge">
+<title>module~rdb_halo&#45;&gt;module~rdb_comm_env</title>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M804.66,-351.64C791.7,-362.6 772.31,-378.98 755.37,-393.17 748.15,-399.23 740.26,-405.8 733.11,-411.75"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="731.17,-408.82 725.72,-417.91 735.64,-414.2 731.17,-408.82"/>
+</g>
+<!-- module~rdb_constants -->
+<g id="proc~~ocean_cavity_mass_step~~UsesGraph_node9" class="node">
+<title>module~rdb_constants</title>
+<g id="a_proc~~ocean_cavity_mass_step~~UsesGraph_node9"><a xlink:href="../module/rdb_constants.html" xlink:title="rdb_constants">
+<polygon fill="#337ab7" stroke="#337ab7" points="182.79,-246.31 97.02,-246.31 97.02,-222.04 182.79,-222.04 182.79,-246.31"/>
+<text xml:space="preserve" text-anchor="middle" x="139.91" y="-230.57" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_constants</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_halo&#45;&gt;module~rdb_constants -->
+<g id="proc~~ocean_cavity_mass_step~~UsesGraph_edge9" class="edge">
+<title>module~rdb_halo&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M707.73,-511.17C597.6,-560.52 547.12,-463.62 436.19,-511.17"/>
+</g>
+<!-- module~rdb_decomp -->
+<g id="proc~~ocean_cavity_mass_step~~UsesGraph_node10" class="node">
+<title>module~rdb_decomp</title>
+<g id="a_proc~~ocean_cavity_mass_step~~UsesGraph_node10"><a xlink:href="../module/rdb_decomp.html" xlink:title="rdb_decomp">
+<polygon fill="#337ab7" stroke="#337ab7" points="747.87,-266.31 669.6,-266.31 669.6,-242.04 747.87,-242.04 747.87,-266.31"/>
+<text xml:space="preserve" text-anchor="middle" x="708.73" y="-250.57" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_decomp</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_halo&#45;&gt;module~rdb_decomp -->
+<g id="proc~~ocean_cavity_mass_step~~UsesGraph_edge10" class="edge">
+<title>module~rdb_halo&#45;&gt;module~rdb_decomp</title>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M803.2,-326.63C785.22,-312.69 755.97,-290.01 734.97,-273.74"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="737.22,-271.05 727.18,-267.69 732.93,-276.59 737.22,-271.05"/>
+</g>
+<!-- module~rdb_efp -->
+<g id="proc~~ocean_cavity_mass_step~~UsesGraph_node11" class="node">
+<title>module~rdb_efp</title>
+<g id="a_proc~~ocean_cavity_mass_step~~UsesGraph_node11"><a xlink:href="../module/rdb_efp.html" xlink:title="rdb_efp">
+<polygon fill="#337ab7" stroke="#337ab7" points="735.73,-351.31 681.73,-351.31 681.73,-327.04 735.73,-327.04 735.73,-351.31"/>
+<text xml:space="preserve" text-anchor="middle" x="708.73" y="-335.57" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_efp</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_halo&#45;&gt;module~rdb_efp -->
+<g id="proc~~ocean_cavity_mass_step~~UsesGraph_edge11" class="edge">
+<title>module~rdb_halo&#45;&gt;module~rdb_efp</title>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M791.14,-339.17C777.73,-339.17 761.5,-339.17 747.08,-339.17"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="747.51,-335.67 737.51,-339.17 747.51,-342.67 747.51,-335.67"/>
+</g>
+<!-- pic_mpi_lib -->
+<g id="proc~~ocean_cavity_mass_step~~UsesGraph_node12" class="node">
+<title>pic_mpi_lib</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="614.1,-483.31 543.33,-483.31 543.33,-459.04 614.1,-459.04 614.1,-483.31"/>
+<text xml:space="preserve" text-anchor="middle" x="578.71" y="-467.57" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">pic_mpi_lib</text>
+</g>
+<!-- module~rdb_halo&#45;&gt;pic_mpi_lib -->
+<g id="proc~~ocean_cavity_mass_step~~UsesGraph_edge13" class="edge">
+<title>module~rdb_halo&#45;&gt;pic_mpi_lib</title>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M816.48,-351.38C807.62,-385.42 777.28,-480.91 709.73,-511.17"/>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M707.73,-511.17C691.27,-518.55 647.82,-502.34 616.09,-488.39"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="617.78,-485.31 607.22,-484.4 614.91,-491.69 617.78,-485.31"/>
+</g>
+<!-- module~rdb_comm_env&#45;&gt;iso_fortran_env -->
+<g id="proc~~ocean_cavity_mass_step~~UsesGraph_edge14" class="edge">
+<title>module~rdb_comm_env&#45;&gt;iso_fortran_env</title>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M676.09,-418.57C659.66,-412.02 639.36,-403.93 621.64,-396.87"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="622.99,-393.64 612.4,-393.19 620.4,-400.15 622.99,-393.64"/>
+</g>
+<!-- module~rdb_comm_env&#45;&gt;module~rdb_constants -->
+<g id="proc~~ocean_cavity_mass_step~~UsesGraph_edge15" class="edge">
+<title>module~rdb_comm_env&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M661.88,-430.4C625.51,-431.12 573.89,-435.18 531.33,-450.17 483.96,-466.86 482.23,-491.09 436.19,-511.17"/>
+</g>
+<!-- module~rdb_comm_env&#45;&gt;pic_mpi_lib -->
+<g id="proc~~ocean_cavity_mass_step~~UsesGraph_edge16" class="edge">
+<title>module~rdb_comm_env&#45;&gt;pic_mpi_lib</title>
+<path fill="none" stroke="#ffff00" stroke-dasharray="5,2" d="M667.58,-443.72C654.16,-447.91 639.1,-452.62 625.29,-456.93"/>
+<polygon fill="#ffff00" stroke="#ffff00" points="624.49,-453.52 615.99,-459.84 626.58,-460.2 624.49,-453.52"/>
+</g>
+<!-- pic_types -->
+<g id="proc~~ocean_cavity_mass_step~~UsesGraph_node15" class="node">
+<title>pic_types</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="61.02,-246.31 0,-246.31 0,-222.04 61.02,-222.04 61.02,-246.31"/>
+<text xml:space="preserve" text-anchor="middle" x="30.51" y="-230.57" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">pic_types</text>
+</g>
+<!-- module~rdb_constants&#45;&gt;pic_types -->
+<g id="proc~~ocean_cavity_mass_step~~UsesGraph_edge17" class="edge">
+<title>module~rdb_constants&#45;&gt;pic_types</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M96.77,-234.17C88.79,-234.17 80.46,-234.17 72.52,-234.17"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="72.77,-230.67 62.77,-234.17 72.77,-237.67 72.77,-230.67"/>
+</g>
+<!-- module~rdb_config -->
+<g id="proc~~ocean_cavity_mass_step~~UsesGraph_node14" class="node">
+<title>module~rdb_config</title>
+<g id="a_proc~~ocean_cavity_mass_step~~UsesGraph_node14"><a xlink:href="../module/rdb_config.html" xlink:title="rdb_config">
+<polygon fill="#337ab7" stroke="#337ab7" points="612.6,-206.31 544.83,-206.31 544.83,-182.04 612.6,-182.04 612.6,-206.31"/>
+<text xml:space="preserve" text-anchor="middle" x="578.71" y="-190.57" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_config</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_decomp&#45;&gt;module~rdb_config -->
+<g id="proc~~ocean_cavity_mass_step~~UsesGraph_edge18" class="edge">
+<title>module~rdb_decomp&#45;&gt;module~rdb_config</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M680.9,-241.59C662.29,-232.87 637.27,-221.15 616.77,-211.54"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="618.43,-208.45 607.89,-207.38 615.46,-214.79 618.43,-208.45"/>
+</g>
+<!-- module~rdb_efp&#45;&gt;iso_fortran_env -->
+<g id="proc~~ocean_cavity_mass_step~~UsesGraph_edge20" class="edge">
+<title>module~rdb_efp&#45;&gt;iso_fortran_env</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M681.52,-347.57C666.62,-352.34 647.46,-358.48 629.79,-364.14"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="628.92,-360.74 620.47,-367.12 631.06,-367.4 628.92,-360.74"/>
+</g>
+<!-- ieee_arithmetic -->
+<g id="proc~~ocean_cavity_mass_step~~UsesGraph_node13" class="node">
+<title>ieee_arithmetic</title>
+<g id="a_proc~~ocean_cavity_mass_step~~UsesGraph_node13"><a xlink:href="http://fortranwiki.org/fortran/show/ieee_arithmetic" xlink:title="ieee_arithmetic">
+<polygon fill="#337ab7" stroke="#337ab7" points="626.1,-350.31 531.33,-350.31 531.33,-326.04 626.1,-326.04 626.1,-350.31"/>
+<text xml:space="preserve" text-anchor="middle" x="578.71" y="-334.57" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ieee_arithmetic</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_efp&#45;&gt;ieee_arithmetic -->
+<g id="proc~~ocean_cavity_mass_step~~UsesGraph_edge19" class="edge">
+<title>module~rdb_efp&#45;&gt;ieee_arithmetic</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M681.52,-338.97C668.75,-338.87 652.84,-338.74 637.43,-338.62"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="637.89,-335.13 627.86,-338.55 637.84,-342.13 637.89,-335.13"/>
+</g>
+<!-- module~rdb_config&#45;&gt;module~rdb_error_ring -->
+<g id="proc~~ocean_cavity_mass_step~~UsesGraph_edge22" class="edge">
+<title>module~rdb_config&#45;&gt;module~rdb_error_ring</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M547.17,-181.58C518.95,-170.91 475.55,-156.9 436.19,-154.17"/>
+</g>
+<!-- module~rdb_config&#45;&gt;module~rdb_ocean_status -->
+<g id="proc~~ocean_cavity_mass_step~~UsesGraph_edge27" class="edge">
+<title>module~rdb_config&#45;&gt;module~rdb_ocean_status</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M569.19,-181.61C555.54,-162.32 527.09,-125.2 495.33,-102.17 491.02,-99.05 486.27,-96.18 481.4,-93.6"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="483.2,-90.58 472.68,-89.34 480.13,-96.87 483.2,-90.58"/>
+</g>
+<!-- module~rdb_config&#45;&gt;pic_logger -->
+<g id="proc~~ocean_cavity_mass_step~~UsesGraph_edge29" class="edge">
+<title>module~rdb_config&#45;&gt;pic_logger</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M563.74,-181.81C539.71,-161.71 488.15,-123.44 436.19,-116.17"/>
+</g>
+<!-- module~rdb_config&#45;&gt;pic_strings -->
+<g id="proc~~ocean_cavity_mass_step~~UsesGraph_edge30" class="edge">
+<title>module~rdb_config&#45;&gt;pic_strings</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M573.69,-181.84C564.31,-154.96 538.44,-90.64 495.33,-55.17 490.65,-51.32 485.21,-48.15 479.57,-45.55"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="481.29,-42.47 470.7,-42.02 478.7,-48.97 481.29,-42.47"/>
+</g>
+<!-- module~rdb_config&#45;&gt;module~rdb_constants -->
+<g id="proc~~ocean_cavity_mass_step~~UsesGraph_edge21" class="edge">
+<title>module~rdb_config&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M572.68,-206.7C549.28,-264.67 451.76,-504.45 436.19,-511.17"/>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M434.19,-511.17C346.24,-549.15 294.29,-562.14 218.79,-503.17 179.44,-472.44 153.1,-317.87 144.22,-257.95"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="147.7,-257.58 142.81,-248.18 140.77,-258.58 147.7,-257.58"/>
+</g>
+<!-- module~rdb_ice_enthalpy -->
+<g id="proc~~ocean_cavity_mass_step~~UsesGraph_node16" class="node">
+<title>module~rdb_ice_enthalpy</title>
+<g id="a_proc~~ocean_cavity_mass_step~~UsesGraph_node16"><a xlink:href="../module/rdb_ice_enthalpy.html" xlink:title="rdb_ice_enthalpy">
+<polygon fill="#337ab7" stroke="#337ab7" points="330.06,-246.31 227.79,-246.31 227.79,-222.04 330.06,-222.04 330.06,-246.31"/>
+<text xml:space="preserve" text-anchor="middle" x="278.92" y="-230.57" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_enthalpy</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_config&#45;&gt;module~rdb_ice_enthalpy -->
+<g id="proc~~ocean_cavity_mass_step~~UsesGraph_edge23" class="edge">
+<title>module~rdb_config&#45;&gt;module~rdb_ice_enthalpy</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M544.71,-203.89C529.75,-207.95 511.77,-212.37 495.33,-215.17 443.97,-223.92 384.99,-228.77 341.75,-231.37"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="341.57,-227.88 331.78,-231.95 341.97,-234.87 341.57,-227.88"/>
+</g>
+<!-- module~rdb_ice_init -->
+<g id="proc~~ocean_cavity_mass_step~~UsesGraph_node17" class="node">
+<title>module~rdb_ice_init</title>
+<g id="a_proc~~ocean_cavity_mass_step~~UsesGraph_node17"><a xlink:href="../module/rdb_ice_init.html" xlink:title="rdb_ice_init">
+<polygon fill="#337ab7" stroke="#337ab7" points="471.33,-370.31 399.06,-370.31 399.06,-346.04 471.33,-346.04 471.33,-370.31"/>
+<text xml:space="preserve" text-anchor="middle" x="435.19" y="-354.57" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_init</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_config&#45;&gt;module~rdb_ice_init -->
+<g id="proc~~ocean_cavity_mass_step~~UsesGraph_edge24" class="edge">
+<title>module~rdb_config&#45;&gt;module~rdb_ice_init</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M573.93,-206.44C564.87,-233.84 539.35,-300.49 495.33,-337.17 491.41,-340.44 486.95,-343.21 482.27,-345.56"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="481,-342.3 473.2,-349.47 483.77,-348.73 481,-342.3"/>
+</g>
+<!-- module~rdb_nml_schema -->
+<g id="proc~~ocean_cavity_mass_step~~UsesGraph_node18" class="node">
+<title>module~rdb_nml_schema</title>
+<g id="a_proc~~ocean_cavity_mass_step~~UsesGraph_node18"><a xlink:href="../module/rdb_nml_schema.html" xlink:title="rdb_nml_schema">
+<polygon fill="#337ab7" stroke="#337ab7" points="486.33,-206.31 384.06,-206.31 384.06,-182.04 486.33,-182.04 486.33,-206.31"/>
+<text xml:space="preserve" text-anchor="middle" x="435.19" y="-190.57" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_nml_schema</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_config&#45;&gt;module~rdb_nml_schema -->
+<g id="proc~~ocean_cavity_mass_step~~UsesGraph_edge25" class="edge">
+<title>module~rdb_config&#45;&gt;module~rdb_nml_schema</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M544.53,-194.17C530.66,-194.17 514.08,-194.17 498.1,-194.17"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="498.14,-190.67 488.14,-194.17 498.14,-197.67 498.14,-190.67"/>
+</g>
+<!-- module~rdb_ocean_bulk_flux -->
+<g id="proc~~ocean_cavity_mass_step~~UsesGraph_node19" class="node">
+<title>module~rdb_ocean_bulk_flux</title>
+<g id="a_proc~~ocean_cavity_mass_step~~UsesGraph_node19"><a xlink:href="../module/rdb_ocean_bulk_flux.html" xlink:title="rdb_ocean_bulk_flux">
+<polygon fill="#337ab7" stroke="#337ab7" points="495.33,-328.31 375.06,-328.31 375.06,-304.04 495.33,-304.04 495.33,-328.31"/>
+<text xml:space="preserve" text-anchor="middle" x="435.19" y="-312.57" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_bulk_flux</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_config&#45;&gt;module~rdb_ocean_bulk_flux -->
+<g id="proc~~ocean_cavity_mass_step~~UsesGraph_edge26" class="edge">
+<title>module~rdb_config&#45;&gt;module~rdb_ocean_bulk_flux</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M570.73,-206.58C558.23,-227.68 530.1,-270.67 495.33,-295.17 493.74,-296.29 492.08,-297.36 490.37,-298.38"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="488.81,-295.25 481.52,-302.94 492.02,-301.47 488.81,-295.25"/>
+</g>
+<!-- pic_ascii -->
+<g id="proc~~ocean_cavity_mass_step~~UsesGraph_node20" class="node">
+<title>pic_ascii</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="463.45,-286.31 406.93,-286.31 406.93,-262.04 463.45,-262.04 463.45,-286.31"/>
+<text xml:space="preserve" text-anchor="middle" x="435.19" y="-270.57" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">pic_ascii</text>
+</g>
+<!-- module~rdb_config&#45;&gt;pic_ascii -->
+<g id="proc~~ocean_cavity_mass_step~~UsesGraph_edge28" class="edge">
+<title>module~rdb_config&#45;&gt;pic_ascii</title>
+<path fill="none" stroke="#00ff00" stroke-dasharray="5,2" d="M560.56,-206.63C544.24,-218.18 518.78,-235.45 495.33,-248.17 488.65,-251.8 481.37,-255.32 474.27,-258.55"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="472.86,-255.35 465.12,-262.58 475.68,-261.75 472.86,-255.35"/>
+</g>
+<!-- module~rdb_ice_enthalpy&#45;&gt;module~rdb_constants -->
+<g id="proc~~ocean_cavity_mass_step~~UsesGraph_edge31" class="edge">
+<title>module~rdb_ice_enthalpy&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M227.29,-234.17C216.66,-234.17 205.4,-234.17 194.65,-234.17"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="194.76,-230.67 184.76,-234.17 194.76,-237.67 194.76,-230.67"/>
+</g>
+<!-- module~rdb_ice_init&#45;&gt;module~rdb_constants -->
+<g id="proc~~ocean_cavity_mass_step~~UsesGraph_edge32" class="edge">
+<title>module~rdb_ice_init&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M398.57,-349.04C390.42,-346.02 382.1,-342.13 375.06,-337.17 354.4,-322.63 359.94,-307.4 339.06,-293.17 316.24,-277.63 306.03,-283.16 279.92,-274.17"/>
+</g>
+<!-- module~rdb_ice_init&#45;&gt;module~rdb_ice_enthalpy -->
+<g id="proc~~ocean_cavity_mass_step~~UsesGraph_edge35" class="edge">
+<title>module~rdb_ice_init&#45;&gt;module~rdb_ice_enthalpy</title>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M398.85,-350.69C390.32,-347.6 381.75,-343.25 375.06,-337.17 347.09,-311.77 366.08,-286.58 339.06,-260.17 336.08,-257.26 332.71,-254.64 329.14,-252.3"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="331.06,-249.36 320.64,-247.46 327.6,-255.45 331.06,-249.36"/>
+</g>
+<!-- module~rdb_grid -->
+<g id="proc~~ocean_cavity_mass_step~~UsesGraph_node21" class="node">
+<title>module~rdb_grid</title>
+<g id="a_proc~~ocean_cavity_mass_step~~UsesGraph_node21"><a xlink:href="../module/rdb_grid.html" xlink:title="rdb_grid">
+<polygon fill="#337ab7" stroke="#337ab7" points="306.81,-494.31 251.04,-494.31 251.04,-470.04 306.81,-470.04 306.81,-494.31"/>
+<text xml:space="preserve" text-anchor="middle" x="278.92" y="-478.57" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_grid</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ice_init&#45;&gt;module~rdb_grid -->
+<g id="proc~~ocean_cavity_mass_step~~UsesGraph_edge33" class="edge">
+<title>module~rdb_ice_init&#45;&gt;module~rdb_grid</title>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M425.71,-370.78C410.66,-392.24 377.26,-435.97 339.06,-461.17 332.58,-465.45 325.13,-468.97 317.75,-471.82"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="316.83,-468.44 308.54,-475.04 319.14,-475.05 316.83,-468.44"/>
+</g>
+<!-- module~rdb_ice_column -->
+<g id="proc~~ocean_cavity_mass_step~~UsesGraph_node22" class="node">
+<title>module~rdb_ice_column</title>
+<g id="a_proc~~ocean_cavity_mass_step~~UsesGraph_node22"><a xlink:href="../module/rdb_ice_column.html" xlink:title="rdb_ice_column">
+<polygon fill="#337ab7" stroke="#337ab7" points="326.68,-452.31 231.16,-452.31 231.16,-428.04 326.68,-428.04 326.68,-452.31"/>
+<text xml:space="preserve" text-anchor="middle" x="278.92" y="-436.57" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_column</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ice_init&#45;&gt;module~rdb_ice_column -->
+<g id="proc~~ocean_cavity_mass_step~~UsesGraph_edge34" class="edge">
+<title>module~rdb_ice_init&#45;&gt;module~rdb_ice_column</title>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M417.36,-370.66C398.87,-383.96 367.95,-405.01 339.06,-419.17 336.03,-420.66 332.86,-422.09 329.64,-423.47"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="328.64,-420.1 320.66,-427.07 331.24,-426.59 328.64,-420.1"/>
+</g>
+<!-- module~rdb_ice_state -->
+<g id="proc~~ocean_cavity_mass_step~~UsesGraph_node23" class="node">
+<title>module~rdb_ice_state</title>
+<g id="a_proc~~ocean_cavity_mass_step~~UsesGraph_node23"><a xlink:href="../module/rdb_ice_state.html" xlink:title="rdb_ice_state">
+<polygon fill="#337ab7" stroke="#337ab7" points="319.93,-410.31 237.91,-410.31 237.91,-386.04 319.93,-386.04 319.93,-410.31"/>
+<text xml:space="preserve" text-anchor="middle" x="278.92" y="-394.57" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_state</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ice_init&#45;&gt;module~rdb_ice_state -->
+<g id="proc~~ocean_cavity_mass_step~~UsesGraph_edge36" class="edge">
+<title>module~rdb_ice_init&#45;&gt;module~rdb_ice_state</title>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M398.8,-367.35C378.79,-372.54 353.41,-379.12 331.24,-384.87"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="330.59,-381.42 321.79,-387.32 332.35,-388.2 330.59,-381.42"/>
+</g>
+<!-- module~rdb_multilayer_state -->
+<g id="proc~~ocean_cavity_mass_step~~UsesGraph_node24" class="node">
+<title>module~rdb_multilayer_state</title>
+<g id="a_proc~~ocean_cavity_mass_step~~UsesGraph_node24"><a xlink:href="../module/rdb_multilayer_state.html" xlink:title="rdb_multilayer_state">
+<polygon fill="#337ab7" stroke="#337ab7" points="339.06,-368.31 218.79,-368.31 218.79,-344.04 339.06,-344.04 339.06,-368.31"/>
+<text xml:space="preserve" text-anchor="middle" x="278.92" y="-352.57" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_multilayer_state</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ice_init&#45;&gt;module~rdb_multilayer_state -->
+<g id="proc~~ocean_cavity_mass_step~~UsesGraph_edge37" class="edge">
+<title>module~rdb_ice_init&#45;&gt;module~rdb_multilayer_state</title>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M398.8,-357.71C384.49,-357.53 367.44,-357.31 350.78,-357.09"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="350.9,-353.59 340.86,-356.96 350.81,-360.59 350.9,-353.59"/>
+</g>
+<!-- module~rdb_ocean_metrics -->
+<g id="proc~~ocean_cavity_mass_step~~UsesGraph_node25" class="node">
+<title>module~rdb_ocean_metrics</title>
+<g id="a_proc~~ocean_cavity_mass_step~~UsesGraph_node25"><a xlink:href="../module/rdb_ocean_metrics.html" xlink:title="rdb_ocean_metrics">
+<polygon fill="#337ab7" stroke="#337ab7" points="335.31,-326.31 222.54,-326.31 222.54,-302.04 335.31,-302.04 335.31,-326.31"/>
+<text xml:space="preserve" text-anchor="middle" x="278.92" y="-310.57" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_metrics</text>
+</a>
+</g>
+</g>
+<!-- module~rdb_ice_init&#45;&gt;module~rdb_ocean_metrics -->
+<g id="proc~~ocean_cavity_mass_step~~UsesGraph_edge38" class="edge">
+<title>module~rdb_ice_init&#45;&gt;module~rdb_ocean_metrics</title>
+<path fill="none" stroke="#cbff00" stroke-dasharray="5,2" d="M398.8,-348.08C379.86,-342.68 356.12,-335.91 334.85,-329.84"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="336.01,-326.53 325.44,-327.15 334.09,-333.26 336.01,-326.53"/>
+</g>
+<!-- module~rdb_nml_schema&#45;&gt;module~rdb_error_ring -->
+<g id="proc~~ocean_cavity_mass_step~~UsesGraph_edge40" class="edge">
+<title>module~rdb_nml_schema&#45;&gt;module~rdb_error_ring</title>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M385.81,-181.63C369.28,-177.34 350.7,-172.52 333.77,-168.13"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="334.94,-164.82 324.39,-165.7 333.19,-171.6 334.94,-164.82"/>
+</g>
+<!-- module~rdb_nml_schema&#45;&gt;pic_logger -->
+<g id="proc~~ocean_cavity_mass_step~~UsesGraph_edge41" class="edge">
+<title>module~rdb_nml_schema&#45;&gt;pic_logger</title>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M383.82,-194.17C353.68,-194.17 314.61,-194.17 279.92,-194.17"/>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M277.92,-194.17C242.97,-194.17 204.93,-182.03 177.82,-171.12"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="179.25,-167.92 168.67,-167.3 176.55,-174.38 179.25,-167.92"/>
+</g>
+<!-- module~rdb_nml_schema&#45;&gt;module~rdb_constants -->
+<g id="proc~~ocean_cavity_mass_step~~UsesGraph_edge39" class="edge">
+<title>module~rdb_nml_schema&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#00ff66" stroke-dasharray="5,2" d="M277.92,-194.17C242.97,-194.17 204.93,-206.32 177.82,-217.22"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="176.55,-213.96 168.67,-221.04 179.25,-220.42 176.55,-213.96"/>
+</g>
+<!-- module~rdb_ocean_bulk_flux&#45;&gt;module~rdb_constants -->
+<g id="proc~~ocean_cavity_mass_step~~UsesGraph_edge42" class="edge">
+<title>module~rdb_ocean_bulk_flux&#45;&gt;module~rdb_constants</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M381.19,-303.58C351.18,-296 313.12,-285.61 279.92,-274.17"/>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M277.92,-274.17C250.58,-264.75 219.68,-255.61 194.16,-248.44"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="195.24,-245.11 184.67,-245.81 193.36,-251.86 195.24,-245.11"/>
+</g>
+<!-- module~rdb_ocean_bulk_flux&#45;&gt;module~rdb_ice_enthalpy -->
+<g id="proc~~ocean_cavity_mass_step~~UsesGraph_edge43" class="edge">
+<title>module~rdb_ocean_bulk_flux&#45;&gt;module~rdb_ice_enthalpy</title>
+<path fill="none" stroke="#0066ff" stroke-dasharray="5,2" d="M391.8,-303.65C385.99,-301.21 380.24,-298.39 375.06,-295.17 356.11,-283.39 357.57,-272.64 339.06,-260.17 334.53,-257.12 329.59,-254.29 324.55,-251.71"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="326.07,-248.56 315.54,-247.41 323.06,-254.88 326.07,-248.56"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprococean_cavity_mass_stepUsesGraph = svgPanZoom('#prococean_cavity_mass_stepUsesGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#UsesGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="UsesGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="511pt" height="32pt"
+ viewBox="0.00 0.00 511.00 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 506.88,-28.27 506.88,4 -4,4"/>
+<!-- Module -->
+<g id="node1" class="node">
+<title>Module</title>
+<polygon fill="#337ab7" stroke="#337ab7" points="54,-24.27 0,-24.27 0,0 54,0 54,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="27" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Module</text>
+</g>
+<!-- Submodule -->
+<g id="node2" class="node">
+<title>Submodule</title>
+<polygon fill="#5bc0de" stroke="#5bc0de" points="144.13,-24.27 71.87,-24.27 71.87,0 144.13,0 144.13,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="108" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Submodule</text>
+</g>
+<!-- Subroutine -->
+<g id="node3" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="231.63,-24.27 162.37,-24.27 162.37,0 231.63,0 231.63,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="197" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node4" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="306.26,-24.27 249.74,-24.27 249.74,0 306.26,0 306.26,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="278" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Program -->
+<g id="node5" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="381.26,-24.27 324.74,-24.27 324.74,0 381.26,0 381.26,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="353" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node6" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="502.88,-24.27 399.12,-24.27 399.12,0 502.88,0 502.88,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="451" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a submodule to the (sub)module which it is
+descended from. Dashed arrows point from a module or program unit to 
+modules which it uses.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+            </li>
+        </ul>
+      </div>
+    </div>
+
+
+    <p>The real-freshwater MASS update — one call, at the THERMO
+cadence, from inside the RK2 stage immediately after
+<code>ocean_surface_flux_apply_tracers</code>.</p>
+<p>WHY THERE, and not in <code>engine_step_finalize</code> next to the melt
+solve.  Three things have to line up:</p>
+<ol>
+<li><strong>The same melt value.</strong>  The salt and heat halves of the
+     melt ride <code>Q_salt</code>/<code>Q_heat</code>, which the stage&rsquo;s surface-flux
+     apply spends.  Putting the volume anywhere else would spend
+     <code>melt(n)</code> for mass and <code>melt(n-1)</code> for salt.</li>
+<li><strong>The same stage weight, by construction.</strong>  Under
+     <code>ssp_rk2</code> both stages apply and <code>rk2_average</code> halves the
+     pair; under <code>pred_corr</code> <code>therm_active</code> is false in the
+     predictor and the corrector&rsquo;s single application IS the
+     step.  The caller passes the matching <code>weight</code> for the
+     budget accumulator, the same one <code>ocean_accumulate_mass_out</code>
+     takes.</li>
+<li><strong>The barotropic mode sees it.</strong>  <code>derive_bt_from_layers</code>
+     rebuilds <code>bt_eta = sum_k h - bt_H_ref</code> at the TOP of every
+     stage, so a thickness source applied here is in <code>bt_eta</code>
+     one stage later with no separate barotropic forcing term —
+     the free surface under the cavity datum simply rises.  The
+     BT substep&rsquo;s transport renormalisation (<code>bt_uhbt</code>) is a
+     constraint on the layer TRANSPORTS within a stage and never
+     reads a thickness source, so it is undisturbed.  This is
+     the documented <code>F_slow</code>-style operator split, and it is what
+     MOM6 does with its own surface mass fluxes.</li>
+</ol>
+<p>It runs BEFORE the vertical-mixing block in the same stage, so
+the implicit vdiff/drag solves see the thickened top layer —
+which is the right order: the added volume is part of the column
+before the column is mixed.  The ALE remap then redistributes it
+to the coordinate&rsquo;s target after <code>rk2_average</code>.</p>
+<p>NON-<code>pure</code>: it logs, it fails loud, it mutates <code>ms%mass_src</code>,
+and (with compensation on) it issues one collective.  Its six
+kernels are all <code>pure</code>.</p>
+<p><code>mem:separate</code>: every array is mapped by its owning slot&rsquo;s
+<code>enter_data</code>; the tracer-registry derefs happen on the HOST
+before each kernel (the outer-shim rule).</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-grid~200"></span>
+              type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>grid</strong></td>
+            <td>
+                <p>Horizontal grid (<code>nx_total</code>/<code>ny_total</code>/<code>nghost</code>).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-metrics~50"></span>
+              type(<a href='../type/ocean_metrics_t.html'>ocean_metrics_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>metrics</strong></td>
+            <td>
+                <p>Reads <code>cover_frac</code> and <code>areaT</code>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-cav"></span>
+              type(<a href='../type/ocean_cavity_flux_t.html'>ocean_cavity_flux_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>cav</strong></td>
+            <td>
+                <p>The cavity-melt slot; reads <code>melt</code>/<code>active</code>/<code>t_b</code>, writes
+<code>comp_scale</code> and the thin counters.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ms~84"></span>
+              type(<a href='../type/multilayer_state_t.html'>multilayer_state_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ms</strong></td>
+            <td>
+                <p>Writes <code>h_layer(:,:,nz)</code>, the S/T/passive tracer loads, the
+two surface budget contributors and <code>mass_src</code>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dt~97"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dt</strong></td>
+            <td>
+                <p>Thermo timestep (s) — the same <code>therm_dt</code> the surface-flux
+apply was given.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-weight~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>weight</strong></td>
+            <td>
+                <p>Per-stage weight for the <code>mass_src</code> accumulator (0.5 per
+SSP-RK2 stage; 0 / 1 for the pred_corr predictor /
+corrector), matching <code>ocean_accumulate_mass_out</code>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-active~19"></span>
+              logical,
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>active</strong></td>
+            <td>
+                <p>Thermo-cadence gate.  Present-and-false ⇒ early return;
+absent ⇒ run.</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~ocean_cavity_mass_step~~CallsGraph Pages: 1 -->
+<svg id="prococean_cavity_mass_stepCallsGraph" width="641pt" height="439pt"
+ viewBox="0.00 0.00 641.00 439.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~ocean_cavity_mass_step~~CallsGraph" class="graph" transform="scale(0.962347 0.962347) rotate(0) translate(4 452.37)">
+<title>proc~~ocean_cavity_mass_step~~CallsGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-452.37 662.08,-452.37 662.08,4 -4,4"/>
+<!-- proc~ocean_cavity_mass_step -->
+<g id="proc~~ocean_cavity_mass_step~~CallsGraph_node1" class="node">
+<title>proc~ocean_cavity_mass_step</title>
+<polygon fill="none" stroke="black" points="142.02,-234.27 0,-234.27 0,-210 142.02,-210 142.02,-234.27"/>
+<text xml:space="preserve" text-anchor="middle" x="71.01" y="-218.53" font-family="Helvetica,sans-Serif" font-size="10.50">ocean_cavity_mass_step</text>
+</g>
+<!-- error -->
+<g id="proc~~ocean_cavity_mass_step~~CallsGraph_node2" class="node">
+<title>error</title>
+<polygon fill="#777777" stroke="#777777" points="488.55,-444.27 434.55,-444.27 434.55,-420 488.55,-420 488.55,-444.27"/>
+<text xml:space="preserve" text-anchor="middle" x="461.55" y="-428.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">error</text>
+</g>
+<!-- proc~ocean_cavity_mass_step&#45;&gt;error -->
+<g id="proc~~ocean_cavity_mass_step~~CallsGraph_edge1" class="edge">
+<title>proc~ocean_cavity_mass_step&#45;&gt;error</title>
+<path fill="none" stroke="#ff0000" d="M74.71,-234.64C83.01,-269.66 111.69,-368.91 178.02,-411.13 253.91,-459.45 365.57,-449.44 423.16,-439.79"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="423.54,-443.28 432.77,-438.09 422.31,-436.39 423.54,-443.28"/>
+</g>
+<!-- proc~cavity_comp_apply_impl -->
+<g id="proc~~ocean_cavity_mass_step~~CallsGraph_node3" class="node">
+<title>proc~cavity_comp_apply_impl</title>
+<g id="a_proc~~ocean_cavity_mass_step~~CallsGraph_node3"><a xlink:href="../proc/cavity_comp_apply_impl.html" xlink:title="cavity_comp_apply_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="332.04,-234.27 190.77,-234.27 190.77,-210 332.04,-210 332.04,-234.27"/>
+<text xml:space="preserve" text-anchor="middle" x="261.41" y="-218.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cavity_comp_apply_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_cavity_mass_step&#45;&gt;proc~cavity_comp_apply_impl -->
+<g id="proc~~ocean_cavity_mass_step~~CallsGraph_edge2" class="edge">
+<title>proc~ocean_cavity_mass_step&#45;&gt;proc~cavity_comp_apply_impl</title>
+<path fill="none" stroke="#ff0000" d="M142.43,-222.13C154.43,-222.13 166.99,-222.13 179.24,-222.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="178.87,-225.64 188.87,-222.14 178.87,-218.64 178.87,-225.64"/>
+</g>
+<!-- proc~cavity_comp_withdrawal -->
+<g id="proc~~ocean_cavity_mass_step~~CallsGraph_node4" class="node">
+<title>proc~cavity_comp_withdrawal</title>
+<g id="a_proc~~ocean_cavity_mass_step~~CallsGraph_node4"><a xlink:href="../proc/cavity_comp_withdrawal.html" xlink:title="cavity_comp_withdrawal">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="332.04,-150.27 190.77,-150.27 190.77,-126 332.04,-126 332.04,-150.27"/>
+<text xml:space="preserve" text-anchor="middle" x="261.41" y="-134.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cavity_comp_withdrawal</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_cavity_mass_step&#45;&gt;proc~cavity_comp_withdrawal -->
+<g id="proc~~ocean_cavity_mass_step~~CallsGraph_edge3" class="edge">
+<title>proc~ocean_cavity_mass_step&#45;&gt;proc~cavity_comp_withdrawal</title>
+<path fill="none" stroke="#ff0000" d="M89.56,-209.55C109.94,-195.46 144.99,-172.82 178.02,-159.13 182.32,-157.35 186.8,-155.69 191.36,-154.15"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="192.18,-157.57 200.66,-151.22 190.07,-150.89 192.18,-157.57"/>
+</g>
+<!-- proc~cavity_mass_apply_impl -->
+<g id="proc~~ocean_cavity_mass_step~~CallsGraph_node5" class="node">
+<title>proc~cavity_mass_apply_impl</title>
+<g id="a_proc~~ocean_cavity_mass_step~~CallsGraph_node5"><a xlink:href="../proc/cavity_mass_apply_impl.html" xlink:title="cavity_mass_apply_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="330.92,-276.27 191.9,-276.27 191.9,-252 330.92,-252 330.92,-276.27"/>
+<text xml:space="preserve" text-anchor="middle" x="261.41" y="-260.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cavity_mass_apply_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_cavity_mass_step&#45;&gt;proc~cavity_mass_apply_impl -->
+<g id="proc~~ocean_cavity_mass_step~~CallsGraph_edge4" class="edge">
+<title>proc~ocean_cavity_mass_step&#45;&gt;proc~cavity_mass_apply_impl</title>
+<path fill="none" stroke="#ff0000" d="M128.53,-234.74C148.75,-239.24 171.73,-244.37 192.78,-249.06"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="191.92,-252.45 202.44,-251.21 193.44,-245.62 191.92,-252.45"/>
+</g>
+<!-- proc~cavity_mass_dilute_impl -->
+<g id="proc~~ocean_cavity_mass_step~~CallsGraph_node6" class="node">
+<title>proc~cavity_mass_dilute_impl</title>
+<g id="a_proc~~ocean_cavity_mass_step~~CallsGraph_node6"><a xlink:href="../proc/cavity_mass_dilute_impl.html" xlink:title="cavity_mass_dilute_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="331.29,-318.27 191.52,-318.27 191.52,-294 331.29,-294 331.29,-318.27"/>
+<text xml:space="preserve" text-anchor="middle" x="261.41" y="-302.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cavity_mass_dilute_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_cavity_mass_step&#45;&gt;proc~cavity_mass_dilute_impl -->
+<g id="proc~~ocean_cavity_mass_step~~CallsGraph_edge5" class="edge">
+<title>proc~ocean_cavity_mass_step&#45;&gt;proc~cavity_mass_dilute_impl</title>
+<path fill="none" stroke="#ff0000" d="M89.56,-234.72C109.94,-248.81 144.99,-271.45 178.02,-285.13 182.32,-286.92 186.8,-288.58 191.36,-290.12"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="190.07,-293.38 200.66,-293.05 192.18,-286.7 190.07,-293.38"/>
+</g>
+<!-- proc~cavity_mass_salt_mirror_impl -->
+<g id="proc~~ocean_cavity_mass_step~~CallsGraph_node7" class="node">
+<title>proc~cavity_mass_salt_mirror_impl</title>
+<g id="a_proc~~ocean_cavity_mass_step~~CallsGraph_node7"><a xlink:href="../proc/cavity_mass_salt_mirror_impl.html" xlink:title="cavity_mass_salt_mirror_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="344.79,-360.27 178.02,-360.27 178.02,-336 344.79,-336 344.79,-360.27"/>
+<text xml:space="preserve" text-anchor="middle" x="261.41" y="-344.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cavity_mass_salt_mirror_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_cavity_mass_step&#45;&gt;proc~cavity_mass_salt_mirror_impl -->
+<g id="proc~~ocean_cavity_mass_step~~CallsGraph_edge6" class="edge">
+<title>proc~ocean_cavity_mass_step&#45;&gt;proc~cavity_mass_salt_mirror_impl</title>
+<path fill="none" stroke="#ff0000" d="M80.97,-234.64C97.54,-256.79 135.19,-302.89 178.02,-327.13 180.64,-328.62 183.36,-330 186.16,-331.28"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="184.56,-334.41 195.14,-334.95 187.21,-327.93 184.56,-334.41"/>
+</g>
+<!-- proc~cavity_mass_thin_is_fatal -->
+<g id="proc~~ocean_cavity_mass_step~~CallsGraph_node8" class="node">
+<title>proc~cavity_mass_thin_is_fatal</title>
+<g id="a_proc~~ocean_cavity_mass_step~~CallsGraph_node8"><a xlink:href="../proc/cavity_mass_thin_is_fatal.html" xlink:title="cavity_mass_thin_is_fatal">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="333.54,-108.27 189.27,-108.27 189.27,-84 333.54,-84 333.54,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="261.41" y="-92.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cavity_mass_thin_is_fatal</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_cavity_mass_step&#45;&gt;proc~cavity_mass_thin_is_fatal -->
+<g id="proc~~ocean_cavity_mass_step~~CallsGraph_edge7" class="edge">
+<title>proc~ocean_cavity_mass_step&#45;&gt;proc~cavity_mass_thin_is_fatal</title>
+<path fill="none" stroke="#ff0000" d="M80.97,-209.63C97.54,-187.48 135.19,-141.38 178.02,-117.13 180.64,-115.65 183.36,-114.27 186.16,-112.99"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="187.21,-116.34 195.14,-109.32 184.56,-109.86 187.21,-116.34"/>
+</g>
+<!-- proc~cavity_mass_totals_impl -->
+<g id="proc~~ocean_cavity_mass_step~~CallsGraph_node9" class="node">
+<title>proc~cavity_mass_totals_impl</title>
+<g id="a_proc~~ocean_cavity_mass_step~~CallsGraph_node9"><a xlink:href="../proc/cavity_mass_totals_impl.html" xlink:title="cavity_mass_totals_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="330.92,-192.27 191.9,-192.27 191.9,-168 330.92,-168 330.92,-192.27"/>
+<text xml:space="preserve" text-anchor="middle" x="261.41" y="-176.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cavity_mass_totals_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_cavity_mass_step&#45;&gt;proc~cavity_mass_totals_impl -->
+<g id="proc~~ocean_cavity_mass_step~~CallsGraph_edge8" class="edge">
+<title>proc~ocean_cavity_mass_step&#45;&gt;proc~cavity_mass_totals_impl</title>
+<path fill="none" stroke="#ff0000" d="M128.53,-209.53C148.75,-205.03 171.73,-199.9 192.78,-195.21"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="193.44,-198.65 202.44,-193.06 191.92,-191.82 193.44,-198.65"/>
+</g>
+<!-- proc~fail -->
+<g id="proc~~ocean_cavity_mass_step~~CallsGraph_node10" class="node">
+<title>proc~fail</title>
+<g id="a_proc~~ocean_cavity_mass_step~~CallsGraph_node10"><a xlink:href="../proc/fail.html" xlink:title="fail">
+<polygon fill="#d9534f" stroke="#d9534f" points="288.41,-402.27 234.41,-402.27 234.41,-378 288.41,-378 288.41,-402.27"/>
+<text xml:space="preserve" text-anchor="middle" x="261.41" y="-386.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">fail</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_cavity_mass_step&#45;&gt;proc~fail -->
+<g id="proc~~ocean_cavity_mass_step~~CallsGraph_edge9" class="edge">
+<title>proc~ocean_cavity_mass_step&#45;&gt;proc~fail</title>
+<path fill="none" stroke="#ff0000" d="M77.35,-234.65C90.21,-263.22 125.74,-333.54 178.02,-369.13 191.24,-378.14 208.03,-383.28 223,-386.22"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="222.07,-389.61 232.51,-387.82 223.23,-382.71 222.07,-389.61"/>
+</g>
+<!-- proc~halo_allreduce_sum -->
+<g id="proc~~ocean_cavity_mass_step~~CallsGraph_node11" class="node">
+<title>proc~halo_allreduce_sum</title>
+<g id="a_proc~~ocean_cavity_mass_step~~CallsGraph_node11"><a xlink:href="../proc/halo_allreduce_sum.html" xlink:title="halo_allreduce_sum">
+<polygon fill="#d9534f" stroke="#d9534f" points="320.04,-66.27 202.77,-66.27 202.77,-42 320.04,-42 320.04,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="261.41" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">halo_allreduce_sum</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_cavity_mass_step&#45;&gt;proc~halo_allreduce_sum -->
+<g id="proc~~ocean_cavity_mass_step~~CallsGraph_edge10" class="edge">
+<title>proc~ocean_cavity_mass_step&#45;&gt;proc~halo_allreduce_sum</title>
+<path fill="none" stroke="#ff0000" d="M77.35,-209.62C90.21,-181.05 125.74,-110.73 178.02,-75.13 182.25,-72.25 186.85,-69.77 191.64,-67.62"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="192.89,-70.89 200.94,-64 190.35,-64.37 192.89,-70.89"/>
+</g>
+<!-- to_string -->
+<g id="proc~~ocean_cavity_mass_step~~CallsGraph_node12" class="node">
+<title>to_string</title>
+<polygon fill="#777777" stroke="#777777" points="290.04,-24.27 232.77,-24.27 232.77,0 290.04,0 290.04,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="261.41" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">to_string</text>
+</g>
+<!-- proc~ocean_cavity_mass_step&#45;&gt;to_string -->
+<g id="proc~~ocean_cavity_mass_step~~CallsGraph_edge11" class="edge">
+<title>proc~ocean_cavity_mass_step&#45;&gt;to_string</title>
+<path fill="none" stroke="#ff0000" d="M75.25,-209.72C84.76,-175.77 115.94,-80.78 178.02,-33.13 190.43,-23.61 206.68,-18.37 221.47,-15.51"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="221.6,-19.03 230.92,-13.98 220.49,-12.12 221.6,-19.03"/>
+</g>
+<!-- local -->
+<g id="proc~~ocean_cavity_mass_step~~CallsGraph_node14" class="node">
+<title>local</title>
+<polygon fill="#777777" stroke="#777777" points="488.55,-276.27 434.55,-276.27 434.55,-252 488.55,-252 488.55,-276.27"/>
+<text xml:space="preserve" text-anchor="middle" x="461.55" y="-260.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">local</text>
+</g>
+<!-- proc~cavity_comp_apply_impl&#45;&gt;local -->
+<g id="proc~~ocean_cavity_mass_step~~CallsGraph_edge12" class="edge">
+<title>proc~cavity_comp_apply_impl&#45;&gt;local</title>
+<path fill="none" stroke="#ff8b00" d="M321.86,-234.74C354.72,-241.7 394.54,-250.14 423.07,-256.19"/>
+<polygon fill="#ff8b00" stroke="#ff8b00" points="422.18,-259.58 432.69,-258.23 423.64,-252.73 422.18,-259.58"/>
+</g>
+<!-- reduce -->
+<g id="proc~~ocean_cavity_mass_step~~CallsGraph_node19" class="node">
+<title>reduce</title>
+<polygon fill="#777777" stroke="#777777" points="488.55,-234.27 434.55,-234.27 434.55,-210 488.55,-210 488.55,-234.27"/>
+<text xml:space="preserve" text-anchor="middle" x="461.55" y="-218.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">reduce</text>
+</g>
+<!-- proc~cavity_comp_apply_impl&#45;&gt;reduce -->
+<g id="proc~~ocean_cavity_mass_step~~CallsGraph_edge13" class="edge">
+<title>proc~cavity_comp_apply_impl&#45;&gt;reduce</title>
+<path fill="none" stroke="#ff8b00" d="M332.26,-222.13C362.85,-222.13 397.52,-222.13 423.1,-222.13"/>
+<polygon fill="#ff8b00" stroke="#ff8b00" points="423,-225.64 433,-222.14 423,-218.64 423,-225.64"/>
+</g>
+<!-- proc~cavity_mass_apply_impl&#45;&gt;local -->
+<g id="proc~~ocean_cavity_mass_step~~CallsGraph_edge14" class="edge">
+<title>proc~cavity_mass_apply_impl&#45;&gt;local</title>
+<path fill="none" stroke="#5cff00" d="M331.15,-264.13C361.97,-264.13 397.13,-264.13 423.01,-264.13"/>
+<polygon fill="#5cff00" stroke="#5cff00" points="422.69,-267.64 432.69,-264.14 422.69,-260.64 422.69,-267.64"/>
+</g>
+<!-- proc~cavity_melt_thickness_pair -->
+<g id="proc~~ocean_cavity_mass_step~~CallsGraph_node15" class="node">
+<title>proc~cavity_melt_thickness_pair</title>
+<g id="a_proc~~ocean_cavity_mass_step~~CallsGraph_node15"><a xlink:href="../proc/cavity_melt_thickness_pair.html" xlink:title="cavity_melt_thickness_pair">
+<polygon fill="#d9534f" stroke="#d9534f" points="538.19,-360.27 384.92,-360.27 384.92,-336 538.19,-336 538.19,-360.27"/>
+<text xml:space="preserve" text-anchor="middle" x="461.55" y="-344.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cavity_melt_thickness_pair</text>
+</a>
+</g>
+</g>
+<!-- proc~cavity_mass_apply_impl&#45;&gt;proc~cavity_melt_thickness_pair -->
+<g id="proc~~ocean_cavity_mass_step~~CallsGraph_edge15" class="edge">
+<title>proc~cavity_mass_apply_impl&#45;&gt;proc~cavity_melt_thickness_pair</title>
+<path fill="none" stroke="#5cff00" d="M327.83,-276.77C333.77,-279.1 339.52,-281.86 344.79,-285.13 365.67,-298.11 359.96,-314.08 380.79,-327.13 382.91,-328.46 385.11,-329.71 387.37,-330.87"/>
+<polygon fill="#5cff00" stroke="#5cff00" points="385.69,-333.95 396.24,-334.88 388.57,-327.57 385.69,-333.95"/>
+</g>
+<!-- rdb_conc_add_source_mass -->
+<g id="proc~~ocean_cavity_mass_step~~CallsGraph_node18" class="node">
+<title>rdb_conc_add_source_mass</title>
+<polygon fill="#777777" stroke="#777777" points="541.19,-318.27 381.92,-318.27 381.92,-294 541.19,-294 541.19,-318.27"/>
+<text xml:space="preserve" text-anchor="middle" x="461.55" y="-302.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_conc_add_source_mass</text>
+</g>
+<!-- proc~cavity_mass_apply_impl&#45;&gt;rdb_conc_add_source_mass -->
+<g id="proc~~ocean_cavity_mass_step~~CallsGraph_edge16" class="edge">
+<title>proc~cavity_mass_apply_impl&#45;&gt;rdb_conc_add_source_mass</title>
+<path fill="none" stroke="#5cff00" d="M321.86,-276.74C343.31,-281.28 367.73,-286.46 390.04,-291.19"/>
+<polygon fill="#5cff00" stroke="#5cff00" points="389.15,-294.58 399.66,-293.23 390.6,-287.73 389.15,-294.58"/>
+</g>
+<!-- proc~cavity_mass_apply_impl&#45;&gt;reduce -->
+<g id="proc~~ocean_cavity_mass_step~~CallsGraph_edge17" class="edge">
+<title>proc~cavity_mass_apply_impl&#45;&gt;reduce</title>
+<path fill="none" stroke="#5cff00" d="M321.86,-251.53C354.72,-244.57 394.54,-236.13 423.07,-230.08"/>
+<polygon fill="#5cff00" stroke="#5cff00" points="423.64,-233.54 432.69,-228.04 422.18,-226.69 423.64,-233.54"/>
+</g>
+<!-- proc~cavity_mass_dilute_impl&#45;&gt;local -->
+<g id="proc~~ocean_cavity_mass_step~~CallsGraph_edge18" class="edge">
+<title>proc~cavity_mass_dilute_impl&#45;&gt;local</title>
+<path fill="none" stroke="#00ff2e" d="M321.86,-293.53C354.72,-286.57 394.54,-278.13 423.07,-272.08"/>
+<polygon fill="#00ff2e" stroke="#00ff2e" points="423.64,-275.54 432.69,-270.04 422.18,-268.69 423.64,-275.54"/>
+</g>
+<!-- proc~cavity_mass_dilute_impl&#45;&gt;proc~cavity_melt_thickness_pair -->
+<g id="proc~~ocean_cavity_mass_step~~CallsGraph_edge19" class="edge">
+<title>proc~cavity_mass_dilute_impl&#45;&gt;proc~cavity_melt_thickness_pair</title>
+<path fill="none" stroke="#00ff2e" d="M321.86,-318.74C343.31,-323.28 367.73,-328.46 390.04,-333.19"/>
+<polygon fill="#00ff2e" stroke="#00ff2e" points="389.15,-336.58 399.66,-335.23 390.6,-329.73 389.15,-336.58"/>
+</g>
+<!-- proc~cavity_mass_dilute_impl&#45;&gt;rdb_conc_add_source_mass -->
+<g id="proc~~ocean_cavity_mass_step~~CallsGraph_edge20" class="edge">
+<title>proc~cavity_mass_dilute_impl&#45;&gt;rdb_conc_add_source_mass</title>
+<path fill="none" stroke="#00ff2e" d="M331.71,-306.13C344.14,-306.13 357.25,-306.13 370.17,-306.13"/>
+<polygon fill="#00ff2e" stroke="#00ff2e" points="369.94,-309.64 379.94,-306.14 369.94,-302.64 369.94,-309.64"/>
+</g>
+<!-- proc~cavity_mass_salt_mirror_impl&#45;&gt;local -->
+<g id="proc~~ocean_cavity_mass_step~~CallsGraph_edge21" class="edge">
+<title>proc~cavity_mass_salt_mirror_impl&#45;&gt;local</title>
+<path fill="none" stroke="#00ffb9" d="M327.83,-335.5C333.77,-333.17 339.52,-330.41 344.79,-327.13 365.67,-314.16 359.96,-298.19 380.79,-285.13 393.4,-277.23 408.91,-272.29 422.89,-269.2"/>
+<polygon fill="#00ffb9" stroke="#00ffb9" points="423.54,-272.64 432.7,-267.3 422.21,-265.77 423.54,-272.64"/>
+</g>
+<!-- proc~cavity_mass_salt_mirror_impl&#45;&gt;proc~cavity_melt_thickness_pair -->
+<g id="proc~~ocean_cavity_mass_step~~CallsGraph_edge22" class="edge">
+<title>proc~cavity_mass_salt_mirror_impl&#45;&gt;proc~cavity_melt_thickness_pair</title>
+<path fill="none" stroke="#00ffb9" d="M345.29,-348.13C354.56,-348.13 364.03,-348.13 373.36,-348.13"/>
+<polygon fill="#00ffb9" stroke="#00ffb9" points="373.12,-351.64 383.12,-348.14 373.12,-344.64 373.12,-351.64"/>
+</g>
+<!-- proc~cavity_mass_salt_mirror_impl&#45;&gt;rdb_conc_add_source_mass -->
+<g id="proc~~ocean_cavity_mass_step~~CallsGraph_edge23" class="edge">
+<title>proc~cavity_mass_salt_mirror_impl&#45;&gt;rdb_conc_add_source_mass</title>
+<path fill="none" stroke="#00ffb9" d="M321.86,-335.53C343.31,-330.99 367.73,-325.81 390.04,-321.08"/>
+<polygon fill="#00ffb9" stroke="#00ffb9" points="390.6,-324.54 399.66,-319.04 389.15,-317.69 390.6,-324.54"/>
+</g>
+<!-- proc~cavity_mass_totals_impl&#45;&gt;reduce -->
+<g id="proc~~ocean_cavity_mass_step~~CallsGraph_edge24" class="edge">
+<title>proc~cavity_mass_totals_impl&#45;&gt;reduce</title>
+<path fill="none" stroke="#002eff" d="M321.86,-192.74C354.72,-199.7 394.54,-208.14 423.07,-214.19"/>
+<polygon fill="#002eff" stroke="#002eff" points="422.18,-217.58 432.69,-216.23 423.64,-210.73 422.18,-217.58"/>
+</g>
+<!-- proc~fail&#45;&gt;error -->
+<g id="proc~~ocean_cavity_mass_step~~CallsGraph_edge25" class="edge">
+<title>proc~fail&#45;&gt;error</title>
+<path fill="none" stroke="#5c00ff" d="M288.72,-395.71C323.14,-403.01 383.67,-415.84 422.93,-424.16"/>
+<polygon fill="#5c00ff" stroke="#5c00ff" points="422.14,-427.57 432.65,-426.22 423.59,-420.72 422.14,-427.57"/>
+</g>
+<!-- proc~error_ring_push -->
+<g id="proc~~ocean_cavity_mass_step~~CallsGraph_node17" class="node">
+<title>proc~error_ring_push</title>
+<g id="a_proc~~ocean_cavity_mass_step~~CallsGraph_node17"><a xlink:href="../proc/error_ring_push.html" xlink:title="error_ring_push">
+<polygon fill="#d9534f" stroke="#d9534f" points="508.94,-402.27 414.17,-402.27 414.17,-378 508.94,-378 508.94,-402.27"/>
+<text xml:space="preserve" text-anchor="middle" x="461.55" y="-386.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">error_ring_push</text>
+</a>
+</g>
+</g>
+<!-- proc~fail&#45;&gt;proc~error_ring_push -->
+<g id="proc~~ocean_cavity_mass_step~~CallsGraph_edge26" class="edge">
+<title>proc~fail&#45;&gt;proc~error_ring_push</title>
+<path fill="none" stroke="#5c00ff" d="M288.72,-390.13C317.62,-390.13 364.95,-390.13 402.62,-390.13"/>
+<polygon fill="#5c00ff" stroke="#5c00ff" points="402.46,-393.64 412.46,-390.14 402.46,-386.64 402.46,-393.64"/>
+</g>
+<!-- allreduce -->
+<g id="proc~~ocean_cavity_mass_step~~CallsGraph_node13" class="node">
+<title>allreduce</title>
+<polygon fill="#777777" stroke="#777777" points="492.06,-87.27 431.04,-87.27 431.04,-63 492.06,-63 492.06,-87.27"/>
+<text xml:space="preserve" text-anchor="middle" x="461.55" y="-71.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">allreduce</text>
+</g>
+<!-- proc~halo_allreduce_sum&#45;&gt;allreduce -->
+<g id="proc~~ocean_cavity_mass_step~~CallsGraph_edge27" class="edge">
+<title>proc~halo_allreduce_sum&#45;&gt;allreduce</title>
+<path fill="none" stroke="#e700ff" d="M320.52,-60.29C352.23,-63.66 390.74,-67.74 419.35,-70.77"/>
+<polygon fill="#e700ff" stroke="#e700ff" points="418.74,-74.22 429.06,-71.8 419.48,-67.26 418.74,-74.22"/>
+</g>
+<!-- proc~comm_env_compute_comm -->
+<g id="proc~~ocean_cavity_mass_step~~CallsGraph_node16" class="node">
+<title>proc~comm_env_compute_comm</title>
+<g id="a_proc~~ocean_cavity_mass_step~~CallsGraph_node16"><a xlink:href="../proc/comm_env_compute_comm.html" xlink:title="comm_env_compute_comm">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="542.31,-45.27 380.79,-45.27 380.79,-21 542.31,-21 542.31,-45.27"/>
+<text xml:space="preserve" text-anchor="middle" x="461.55" y="-29.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">comm_env_compute_comm</text>
+</a>
+</g>
+</g>
+<!-- proc~halo_allreduce_sum&#45;&gt;proc~comm_env_compute_comm -->
+<g id="proc~~ocean_cavity_mass_step~~CallsGraph_edge28" class="edge">
+<title>proc~halo_allreduce_sum&#45;&gt;proc~comm_env_compute_comm</title>
+<path fill="none" stroke="#e700ff" d="M320.52,-47.98C335.73,-46.36 352.51,-44.59 369.01,-42.84"/>
+<polygon fill="#e700ff" stroke="#e700ff" points="369.29,-46.33 378.86,-41.79 368.55,-39.37 369.29,-46.33"/>
+</g>
+<!-- comm_world -->
+<g id="proc~~ocean_cavity_mass_step~~CallsGraph_node20" class="node">
+<title>comm_world</title>
+<polygon fill="#777777" stroke="#777777" points="658.08,-45.27 578.31,-45.27 578.31,-21 658.08,-21 658.08,-45.27"/>
+<text xml:space="preserve" text-anchor="middle" x="618.2" y="-29.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">comm_world</text>
+</g>
+<!-- proc~comm_env_compute_comm&#45;&gt;comm_world -->
+<g id="proc~~ocean_cavity_mass_step~~CallsGraph_edge29" class="edge">
+<title>proc~comm_env_compute_comm&#45;&gt;comm_world</title>
+<path fill="none" stroke="#00ff91" d="M542.59,-33.13C550.81,-33.13 558.99,-33.13 566.76,-33.13"/>
+<polygon fill="#00ff91" stroke="#00ff91" points="566.67,-36.64 576.67,-33.14 566.67,-29.64 566.67,-36.64"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprococean_cavity_mass_stepCallsGraph = svgPanZoom('#prococean_cavity_mass_stepCallsGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~ocean_cavity_mass_step~~CalledByGraph Pages: 1 -->
+<svg id="prococean_cavity_mass_stepCalledByGraph" width="641pt" height="60pt"
+ viewBox="0.00 0.00 641.00 60.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~ocean_cavity_mass_step~~CalledByGraph" class="graph" transform="scale(0.809476 0.809476) rotate(0) translate(4 70.27)">
+<title>proc~~ocean_cavity_mass_step~~CalledByGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-70.27 787.87,-70.27 787.87,4 -4,4"/>
+<!-- proc~ocean_cavity_mass_step -->
+<g id="proc~~ocean_cavity_mass_step~~CalledByGraph_node1" class="node">
+<title>proc~ocean_cavity_mass_step</title>
+<polygon fill="none" stroke="black" points="783.87,-45.27 641.85,-45.27 641.85,-21 783.87,-21 783.87,-45.27"/>
+<text xml:space="preserve" text-anchor="middle" x="712.86" y="-29.53" font-family="Helvetica,sans-Serif" font-size="10.50">ocean_cavity_mass_step</text>
+</g>
+<!-- proc~run_stage -->
+<g id="proc~~ocean_cavity_mass_step~~CalledByGraph_node2" class="node">
+<title>proc~run_stage</title>
+<g id="a_proc~~ocean_cavity_mass_step~~CalledByGraph_node2"><a xlink:href="../proc/run_stage.html" xlink:title="run_stage">
+<polygon fill="#d9534f" stroke="#d9534f" points="592.35,-66.27 528.33,-66.27 528.33,-42 592.35,-42 592.35,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="560.34" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage</text>
+</a>
+</g>
+</g>
+<!-- proc~run_stage&#45;&gt;proc~ocean_cavity_mass_step -->
+<g id="proc~~ocean_cavity_mass_step~~CalledByGraph_edge1" class="edge">
+<title>proc~run_stage&#45;&gt;proc~ocean_cavity_mass_step</title>
+<path fill="none" stroke="#ff0000" d="M592.53,-49.78C603.7,-48.23 616.86,-46.39 630.3,-44.51"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="630.69,-47.99 640.11,-43.15 629.72,-41.06 630.69,-47.99"/>
+</g>
+<!-- proc~run_stage_split -->
+<g id="proc~~ocean_cavity_mass_step~~CalledByGraph_node3" class="node">
+<title>proc~run_stage_split</title>
+<g id="a_proc~~ocean_cavity_mass_step~~CalledByGraph_node3"><a xlink:href="../proc/run_stage_split.html" xlink:title="run_stage_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="605.85,-24.27 514.83,-24.27 514.83,0 605.85,0 605.85,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="560.34" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage_split</text>
+</a>
+</g>
+</g>
+<!-- proc~run_stage_split&#45;&gt;proc~ocean_cavity_mass_step -->
+<g id="proc~~ocean_cavity_mass_step~~CalledByGraph_edge2" class="edge">
+<title>proc~run_stage_split&#45;&gt;proc~ocean_cavity_mass_step</title>
+<path fill="none" stroke="#ff0000" d="M606.09,-18.38C613.78,-19.45 621.98,-20.59 630.28,-21.75"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="629.73,-25.21 640.12,-23.13 630.7,-18.28 629.73,-25.21"/>
+</g>
+<!-- proc~ocean_dyn_step -->
+<g id="proc~~ocean_cavity_mass_step~~CalledByGraph_node4" class="node">
+<title>proc~ocean_dyn_step</title>
+<g id="a_proc~~ocean_cavity_mass_step~~CalledByGraph_node4"><a xlink:href="../proc/ocean_dyn_step.html" xlink:title="ocean_dyn_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="465.33,-66.27 368.31,-66.27 368.31,-42 465.33,-42 465.33,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="416.82" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step&#45;&gt;proc~run_stage -->
+<g id="proc~~ocean_cavity_mass_step~~CalledByGraph_edge3" class="edge">
+<title>proc~ocean_dyn_step&#45;&gt;proc~run_stage</title>
+<path fill="none" stroke="#ff0000" d="M465.73,-54.13C482.25,-54.13 500.63,-54.13 516.7,-54.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="516.42,-57.64 526.42,-54.14 516.42,-50.64 516.42,-57.64"/>
+</g>
+<!-- proc~ocean_dyn_step_split -->
+<g id="proc~~ocean_cavity_mass_step~~CalledByGraph_node5" class="node">
+<title>proc~ocean_dyn_step_split</title>
+<g id="a_proc~~ocean_cavity_mass_step~~CalledByGraph_node5"><a xlink:href="../proc/ocean_dyn_step_split.html" xlink:title="ocean_dyn_step_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="478.83,-24.27 354.81,-24.27 354.81,0 478.83,0 478.83,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="416.82" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step_split</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step_split&#45;&gt;proc~run_stage_split -->
+<g id="proc~~ocean_cavity_mass_step~~CalledByGraph_edge4" class="edge">
+<title>proc~ocean_dyn_step_split&#45;&gt;proc~run_stage_split</title>
+<path fill="none" stroke="#00ffff" d="M479.07,-12.13C487.1,-12.13 495.3,-12.13 503.24,-12.13"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="503.12,-15.64 513.12,-12.14 503.12,-8.64 503.12,-15.64"/>
+</g>
+<!-- proc~engine_step -->
+<g id="proc~~ocean_cavity_mass_step~~CalledByGraph_node6" class="node">
+<title>proc~engine_step</title>
+<g id="a_proc~~ocean_cavity_mass_step~~CalledByGraph_node6"><a xlink:href="../proc/engine_step.html" xlink:title="engine_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="318.81,-45.27 242.79,-45.27 242.79,-21 318.81,-21 318.81,-45.27"/>
+<text xml:space="preserve" text-anchor="middle" x="280.8" y="-29.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~ocean_dyn_step -->
+<g id="proc~~ocean_cavity_mass_step~~CalledByGraph_edge5" class="edge">
+<title>proc~engine_step&#45;&gt;proc~ocean_dyn_step</title>
+<path fill="none" stroke="#ff0000" d="M319.13,-38.98C330.87,-40.82 344.14,-42.9 356.99,-44.92"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="356.22,-48.34 366.64,-46.43 357.31,-41.42 356.22,-48.34"/>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~ocean_dyn_step_split -->
+<g id="proc~~ocean_cavity_mass_step~~CalledByGraph_edge6" class="edge">
+<title>proc~engine_step&#45;&gt;proc~ocean_dyn_step_split</title>
+<path fill="none" stroke="#00ffff" d="M319.13,-27.29C326.69,-26.1 334.89,-24.82 343.2,-23.51"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="343.72,-26.98 353.05,-21.97 342.63,-20.06 343.72,-26.98"/>
+</g>
+<!-- proc~driver_run_ocean -->
+<g id="proc~~ocean_cavity_mass_step~~CalledByGraph_node7" class="node">
+<title>proc~driver_run_ocean</title>
+<g id="a_proc~~ocean_cavity_mass_step~~CalledByGraph_node7"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<polygon fill="#d9534f" stroke="#d9534f" points="206.79,-66.27 102.27,-66.27 102.27,-42 206.79,-42 206.79,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="154.53" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_step -->
+<g id="proc~~ocean_cavity_mass_step~~CalledByGraph_edge7" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_step</title>
+<path fill="none" stroke="#ff0000" d="M207.15,-45.41C215.13,-44.06 223.34,-42.68 231.25,-41.34"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="231.77,-44.8 241.05,-39.68 230.61,-37.9 231.77,-44.8"/>
+</g>
+<!-- proc~rdb_ocean_step -->
+<g id="proc~~ocean_cavity_mass_step~~CalledByGraph_node8" class="node">
+<title>proc~rdb_ocean_step</title>
+<g id="a_proc~~ocean_cavity_mass_step~~CalledByGraph_node8"><a xlink:href="../proc/rdb_ocean_step.html" xlink:title="rdb_ocean_step">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="202.29,-24.27 106.77,-24.27 106.77,0 202.29,0 202.29,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="154.53" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_step</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_step&#45;&gt;proc~engine_step -->
+<g id="proc~~ocean_cavity_mass_step~~CalledByGraph_edge8" class="edge">
+<title>proc~rdb_ocean_step&#45;&gt;proc~engine_step</title>
+<path fill="none" stroke="#ff0000" d="M202.51,-20.07C211.89,-21.66 221.77,-23.33 231.2,-24.92"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="230.49,-28.35 240.94,-26.57 231.66,-21.45 230.49,-28.35"/>
+</g>
+<!-- proc~driver_run -->
+<g id="proc~~ocean_cavity_mass_step~~CalledByGraph_node9" class="node">
+<title>proc~driver_run</title>
+<g id="a_proc~~ocean_cavity_mass_step~~CalledByGraph_node9"><a xlink:href="../proc/driver_run.html" xlink:title="driver_run">
+<polygon fill="#d9534f" stroke="#d9534f" points="66.27,-66.27 0,-66.27 0,-42 66.27,-42 66.27,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="33.13" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run&#45;&gt;proc~driver_run_ocean -->
+<g id="proc~~ocean_cavity_mass_step~~CalledByGraph_edge9" class="edge">
+<title>proc~driver_run&#45;&gt;proc~driver_run_ocean</title>
+<path fill="none" stroke="#ff0000" d="M66.76,-54.13C74.26,-54.13 82.48,-54.13 90.79,-54.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="90.58,-57.64 100.58,-54.14 90.58,-50.64 90.58,-57.64"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprococean_cavity_mass_stepCalledByGraph = svgPanZoom('#prococean_cavity_mass_stepCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-area_open~3"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>area_open</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dt_over_rho0~5"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dt_over_rho0</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dw~5"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dw</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-idx_ps"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>idx_ps</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-idx_s~2"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>idx_s</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-idx_t~2"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>idx_t</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-it~42"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>it</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n_thin_comp"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>n_thin_comp</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n_thin_src"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>n_thin_src</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx~338"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny~338"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz~274"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-tmp~3"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>tmp</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-vol_melt~3"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>vol_melt</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">subroutine </span><span class="n">ocean_cavity_mass_step</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">,</span><span class="w"> </span><span class="n">cav</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">,</span><span class="w"> </span><span class="n">dt</span><span class="p">,</span><span class="w"> </span><span class="n">weight</span><span class="p">,</span><span class="w"> </span><span class="n">active</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! The real-freshwater MASS update — one call, at the THERMO</span>
+<span class="w">      </span><span class="c">!! cadence, from inside the RK2 stage immediately after</span>
+<span class="w">      </span><span class="c">!! `ocean_surface_flux_apply_tracers`.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! WHY THERE, and not in `engine_step_finalize` next to the melt</span>
+<span class="w">      </span><span class="c">!! solve.  Three things have to line up:</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!!   1. **The same melt value.**  The salt and heat halves of the</span>
+<span class="w">      </span><span class="c">!!      melt ride `Q_salt`/`Q_heat`, which the stage's surface-flux</span>
+<span class="w">      </span><span class="c">!!      apply spends.  Putting the volume anywhere else would spend</span>
+<span class="w">      </span><span class="c">!!      `melt(n)` for mass and `melt(n-1)` for salt.</span>
+<span class="w">      </span><span class="c">!!   2. **The same stage weight, by construction.**  Under</span>
+<span class="w">      </span><span class="c">!!      `ssp_rk2` both stages apply and `rk2_average` halves the</span>
+<span class="w">      </span><span class="c">!!      pair; under `pred_corr` `therm_active` is false in the</span>
+<span class="w">      </span><span class="c">!!      predictor and the corrector's single application IS the</span>
+<span class="w">      </span><span class="c">!!      step.  The caller passes the matching `weight` for the</span>
+<span class="w">      </span><span class="c">!!      budget accumulator, the same one `ocean_accumulate_mass_out`</span>
+<span class="w">      </span><span class="c">!!      takes.</span>
+<span class="w">      </span><span class="c">!!   3. **The barotropic mode sees it.**  `derive_bt_from_layers`</span>
+<span class="w">      </span><span class="c">!!      rebuilds `bt_eta = sum_k h - bt_H_ref` at the TOP of every</span>
+<span class="w">      </span><span class="c">!!      stage, so a thickness source applied here is in `bt_eta`</span>
+<span class="w">      </span><span class="c">!!      one stage later with no separate barotropic forcing term —</span>
+<span class="w">      </span><span class="c">!!      the free surface under the cavity datum simply rises.  The</span>
+<span class="w">      </span><span class="c">!!      BT substep's transport renormalisation (`bt_uhbt`) is a</span>
+<span class="w">      </span><span class="c">!!      constraint on the layer TRANSPORTS within a stage and never</span>
+<span class="w">      </span><span class="c">!!      reads a thickness source, so it is undisturbed.  This is</span>
+<span class="w">      </span><span class="c">!!      the documented `F_slow`-style operator split, and it is what</span>
+<span class="w">      </span><span class="c">!!      MOM6 does with its own surface mass fluxes.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! It runs BEFORE the vertical-mixing block in the same stage, so</span>
+<span class="w">      </span><span class="c">!! the implicit vdiff/drag solves see the thickened top layer —</span>
+<span class="w">      </span><span class="c">!! which is the right order: the added volume is part of the column</span>
+<span class="w">      </span><span class="c">!! before the column is mixed.  The ALE remap then redistributes it</span>
+<span class="w">      </span><span class="c">!! to the coordinate's target after `rk2_average`.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! NON-`pure`: it logs, it fails loud, it mutates `ms%mass_src`,</span>
+<span class="w">      </span><span class="c">!! and (with compensation on) it issues one collective.  Its six</span>
+<span class="w">      </span><span class="c">!! kernels are all `pure`.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! `mem:separate`: every array is mapped by its owning slot's</span>
+<span class="w">      </span><span class="c">!! `enter_data`; the tracer-registry derefs happen on the HOST</span>
+<span class="w">      </span><span class="c">!! before each kernel (the outer-shim rule).</span>
+<span class="w">      </span><span class="k">use </span><span class="n">pic_logger</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">global_logger</span>
+<span class="w">      </span><span class="k">use </span><span class="n">pic_strings</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">to_string</span>
+<span class="w">      </span><span class="k">use </span><span class="n">rdb_error_ring</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">fail</span>
+<span class="w">      </span><span class="k">use </span><span class="n">rdb_ocean_status</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">OCEAN_STATUS_ERR_SETUP</span>
+<span class="w">      </span><span class="k">use </span><span class="n">rdb_halo</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">halo_allreduce_sum</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">hgrid_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">grid</span>
+<span class="w">         </span><span class="c">!! Horizontal grid (`nx_total`/`ny_total`/`nghost`).</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_metrics_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">metrics</span>
+<span class="w">         </span><span class="c">!! Reads `cover_frac` and `areaT`.</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_cavity_flux_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">cav</span>
+<span class="w">         </span><span class="c">!! The cavity-melt slot; reads `melt`/`active`/`t_b`, writes</span>
+<span class="w">         </span><span class="c">!! `comp_scale` and the thin counters.</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">multilayer_state_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ms</span>
+<span class="w">         </span><span class="c">!! Writes `h_layer(:,:,nz)`, the S/T/passive tracer loads, the</span>
+<span class="w">         </span><span class="c">!! two surface budget contributors and `mass_src`.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dt</span>
+<span class="w">         </span><span class="c">!! Thermo timestep (s) — the same `therm_dt` the surface-flux</span>
+<span class="w">         </span><span class="c">!! apply was given.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">weight</span>
+<span class="w">         </span><span class="c">!! Per-stage weight for the `mass_src` accumulator (0.5 per</span>
+<span class="w">         </span><span class="c">!! SSP-RK2 stage; 0 / 1 for the pred_corr predictor /</span>
+<span class="w">         </span><span class="c">!! corrector), matching `ocean_accumulate_mass_out`.</span>
+<span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">active</span>
+<span class="w">         </span><span class="c">!! Thermo-cadence gate.  Present-and-false ⇒ early return;</span>
+<span class="w">         </span><span class="c">!! absent ⇒ run.</span>
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">idx_t</span><span class="p">,</span><span class="w"> </span><span class="n">idx_s</span><span class="p">,</span><span class="w"> </span><span class="n">idx_ps</span><span class="p">,</span><span class="w"> </span><span class="n">it</span><span class="p">,</span><span class="w"> </span><span class="n">n_thin_src</span><span class="p">,</span><span class="w"> </span><span class="n">n_thin_comp</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dt_over_rho0</span><span class="p">,</span><span class="w"> </span><span class="n">vol_melt</span><span class="p">,</span><span class="w"> </span><span class="n">area_open</span><span class="p">,</span><span class="w"> </span><span class="n">dw</span><span class="p">,</span><span class="w"> </span><span class="n">tmp</span>
+
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">cav</span><span class="p">%</span><span class="n">is_init</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">cav</span><span class="p">%</span><span class="n">enable</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="n">cav</span><span class="p">%</span><span class="n">freshwater</span><span class="w"> </span><span class="o">/=</span><span class="w"> </span><span class="n">CAVITY_FW_MASS</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">active</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">active</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+<span class="k">      end if</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="nb">allocated</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">tracers</span><span class="p">))</span><span class="w"> </span><span class="k">return</span>
+<span class="k">      </span><span class="n">idx_t</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">idx_temperature</span>
+<span class="w">      </span><span class="n">idx_s</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">idx_salinity</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">idx_t</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="p">.</span><span class="nb">or</span><span class="p">.</span><span class="w"> </span><span class="n">idx_s</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+
+<span class="k">      </span><span class="n">nx</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">nx_total</span>
+<span class="w">      </span><span class="n">ny</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">ny_total</span>
+<span class="w">      </span><span class="n">nz</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">nz_ml</span>
+<span class="w">      </span><span class="n">idx_ps</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">idx_pseudo_salt</span>
+<span class="w">      </span><span class="n">dt_over_rho0</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dt</span><span class="o">/</span><span class="n">cav</span><span class="p">%</span><span class="n">rho0</span>
+
+<span class="w">      </span><span class="c">! (1) Interior integrals FIRST: the melt volume the budget tracks</span>
+<span class="w">      </span><span class="c">! and the open-ocean area the sink would spend it over.  Combined</span>
+<span class="w">      </span><span class="c">! across ranks so a decomposed domain removes the same total the</span>
+<span class="w">      </span><span class="c">! whole domain gained.</span>
+<span class="w">      </span><span class="k">call </span><span class="n">cavity_mass_totals_impl</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="n">dt_over_rho0</span><span class="p">,</span><span class="w"> </span><span class="n">cav</span><span class="p">%</span><span class="n">active</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                   </span><span class="n">ms</span><span class="p">%</span><span class="n">wet_mask</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">%</span><span class="n">cover_frac</span><span class="p">,</span><span class="w"> </span><span class="n">cav</span><span class="p">%</span><span class="n">melt</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                   </span><span class="n">metrics</span><span class="p">%</span><span class="n">areaT</span><span class="p">,</span><span class="w"> </span><span class="n">vol_melt</span><span class="p">,</span><span class="w"> </span><span class="n">area_open</span><span class="p">)</span>
+<span class="w">      </span><span class="n">tmp</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">vol_melt</span>
+<span class="w">      </span><span class="k">call </span><span class="n">halo_allreduce_sum</span><span class="p">(</span><span class="n">tmp</span><span class="p">,</span><span class="w"> </span><span class="n">vol_melt</span><span class="p">)</span>
+<span class="w">      </span><span class="n">tmp</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">area_open</span>
+<span class="w">      </span><span class="k">call </span><span class="n">halo_allreduce_sum</span><span class="p">(</span><span class="n">tmp</span><span class="p">,</span><span class="w"> </span><span class="n">area_open</span><span class="p">)</span>
+<span class="w">      </span><span class="n">cav</span><span class="p">%</span><span class="n">melt_volume_step</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">vol_melt</span>
+<span class="w">      </span><span class="n">cav</span><span class="p">%</span><span class="n">open_area</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">area_open</span>
+
+<span class="w">      </span><span class="c">! (2) The source.</span>
+<span class="w">      </span><span class="c">! The pseudo-salt mirror goes FIRST: it needs the pre-source thickness</span>
+<span class="w">      </span><span class="c">! to form its own `h_before -&gt; h_after` pair (the apply overwrites it).</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">idx_ps</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">cavity_mass_salt_mirror_impl</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">dt_over_rho0</span><span class="p">,</span><span class="w"> </span><span class="n">dt_over_rho0</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                           </span><span class="n">cav</span><span class="p">%</span><span class="n">s_ice</span><span class="p">,</span><span class="w"> </span><span class="n">cav</span><span class="p">%</span><span class="n">active</span><span class="p">,</span><span class="w"> </span><span class="n">cav</span><span class="p">%</span><span class="n">melt</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                           </span><span class="n">cav</span><span class="p">%</span><span class="n">s_far</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">tracers</span><span class="p">(</span><span class="n">idx_ps</span><span class="p">)%</span><span class="n">c</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">k_top</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end if</span>
+<span class="k">      do </span><span class="n">it</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">size</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">tracers</span><span class="p">)</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">it</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">idx_t</span><span class="w"> </span><span class="p">.</span><span class="nb">or</span><span class="p">.</span><span class="w"> </span><span class="n">it</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">idx_s</span><span class="w"> </span><span class="p">.</span><span class="nb">or</span><span class="p">.</span><span class="w"> </span><span class="n">it</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">idx_ps</span><span class="p">)</span><span class="w"> </span><span class="k">cycle</span>
+<span class="k">         if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="nb">allocated</span><span class="p">(</span><span class="n">ms</span><span class="p">%</span><span class="n">tracers</span><span class="p">(</span><span class="n">it</span><span class="p">)%</span><span class="n">c</span><span class="p">))</span><span class="w"> </span><span class="k">cycle</span>
+<span class="k">         call </span><span class="n">cavity_mass_dilute_impl</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">dt_over_rho0</span><span class="p">,</span><span class="w"> </span><span class="n">cav</span><span class="p">%</span><span class="n">active</span><span class="p">,</span><span class="w"> </span><span class="n">cav</span><span class="p">%</span><span class="n">melt</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="n">ms</span><span class="p">%</span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">tracers</span><span class="p">(</span><span class="n">it</span><span class="p">)%</span><span class="n">c</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">k_top</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end do</span>
+<span class="k">      call </span><span class="n">cavity_mass_apply_impl</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">dt_over_rho0</span><span class="p">,</span><span class="w"> </span><span class="n">dt_over_rho0</span><span class="p">,</span><span class="w"> </span><span class="n">cav</span><span class="p">%</span><span class="n">s_ice</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                  </span><span class="n">cav</span><span class="p">%</span><span class="n">active</span><span class="p">,</span><span class="w"> </span><span class="n">cav</span><span class="p">%</span><span class="n">melt</span><span class="p">,</span><span class="w"> </span><span class="n">cav</span><span class="p">%</span><span class="n">s_far</span><span class="p">,</span><span class="w"> </span><span class="n">cav</span><span class="p">%</span><span class="n">t_b</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                  </span><span class="n">ms</span><span class="p">%</span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">tracers</span><span class="p">(</span><span class="n">idx_s</span><span class="p">)%</span><span class="n">c</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">tracers</span><span class="p">(</span><span class="n">idx_t</span><span class="p">)%</span><span class="n">c</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                  </span><span class="n">ms</span><span class="p">%</span><span class="n">salt_budget_surface</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">heat_budget_surface</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                  </span><span class="n">ms</span><span class="p">%</span><span class="n">k_top</span><span class="p">,</span><span class="w"> </span><span class="n">n_thin_src</span><span class="p">)</span>
+<span class="w">      </span><span class="n">ms</span><span class="p">%</span><span class="n">mass_src</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">mass_src</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">weight</span><span class="o">*</span><span class="n">RHO_WATER</span><span class="o">*</span><span class="n">vol_melt</span>
+
+<span class="w">      </span><span class="c">! (3) The sink, when the knob asks for it.</span>
+<span class="w">      </span><span class="n">n_thin_comp</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<span class="w">      </span><span class="n">cav</span><span class="p">%</span><span class="n">comp_withdrawal_step</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">cav</span><span class="p">%</span><span class="n">volume_comp</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">CAVITY_VC_UNIFORM_OPEN</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         </span><span class="n">dw</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cavity_comp_withdrawal</span><span class="p">(</span><span class="n">vol_melt</span><span class="p">,</span><span class="w"> </span><span class="n">area_open</span><span class="p">)</span>
+<span class="w">         </span><span class="n">cav</span><span class="p">%</span><span class="n">comp_withdrawal_step</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dw</span>
+<span class="w">         </span><span class="k">call </span><span class="n">cavity_comp_apply_impl</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">dw</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">wet_mask</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">%</span><span class="n">cover_frac</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                     </span><span class="n">ms</span><span class="p">%</span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">tracers</span><span class="p">(</span><span class="n">idx_s</span><span class="p">)%</span><span class="n">c</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                     </span><span class="n">ms</span><span class="p">%</span><span class="n">tracers</span><span class="p">(</span><span class="n">idx_t</span><span class="p">)%</span><span class="n">c</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">salt_budget_surface</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                     </span><span class="n">ms</span><span class="p">%</span><span class="n">heat_budget_surface</span><span class="p">,</span><span class="w"> </span><span class="n">cav</span><span class="p">%</span><span class="n">comp_scale</span><span class="p">,</span><span class="w"> </span><span class="n">n_thin_comp</span><span class="p">)</span>
+<span class="w">         </span><span class="c">! NOTE the sink stays on `k = nz` and is NOT routed through</span>
+<span class="w">         </span><span class="c">! `k_top`, deliberately: its own gate is `cover_frac &lt; 0.5`, so</span>
+<span class="w">         </span><span class="c">! it only ever acts on OPEN-OCEAN columns, and an open-ocean</span>
+<span class="w">         </span><span class="c">! column has `z_top = 0` ⇒ no top-side filler ⇒ `k_top ≡ nz`.</span>
+<span class="w">         </span><span class="c">! Routing it would be a provable no-op; leaving it spells out</span>
+<span class="w">         </span><span class="c">! that "the top layer" and "the first live layer" are the same</span>
+<span class="w">         </span><span class="c">! row wherever this kernel runs.  Passive tracers need no rescale: the</span>
+<span class="w">         </span><span class="c">! sink removes water at its own concentration, which they store.</span>
+<span class="w">         </span><span class="c">! The removed interior volume is exactly `dw*area_open` — the</span>
+<span class="w">         </span><span class="c">! same product the withdrawal was derived from — so with no</span>
+<span class="w">         </span><span class="c">! clamping this cancels the source term to the last bit and the</span>
+<span class="w">         </span><span class="c">! domain mass is constant.</span>
+<span class="w">         </span><span class="n">ms</span><span class="p">%</span><span class="n">mass_src</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ms</span><span class="p">%</span><span class="n">mass_src</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">weight</span><span class="o">*</span><span class="n">RHO_WATER</span><span class="o">*</span><span class="n">dw</span><span class="o">*</span><span class="n">area_open</span>
+<span class="w">      </span><span class="k">end if</span>
+
+<span class="w">      </span><span class="c">! (4) Accounting, then fail loud.</span>
+<span class="w">      </span><span class="n">cav</span><span class="p">%</span><span class="n">n_thin_step</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">n_thin_src</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">n_thin_comp</span>
+<span class="w">      </span><span class="n">cav</span><span class="p">%</span><span class="n">n_thin_total</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cav</span><span class="p">%</span><span class="n">n_thin_total</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nb">int</span><span class="p">(</span><span class="n">cav</span><span class="p">%</span><span class="n">n_thin_step</span><span class="p">,</span><span class="w"> </span><span class="n">int64</span><span class="p">)</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">cavity_mass_thin_is_fatal</span><span class="p">(</span><span class="n">cav</span><span class="p">%</span><span class="n">n_thin_step</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">global_logger</span><span class="p">%</span><span class="n">error</span><span class="p">(</span><span class="s2">"cavity real freshwater: "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                  </span><span class="n">to_string</span><span class="p">(</span><span class="n">n_thin_src</span><span class="p">)</span><span class="o">//</span><span class="s2">" melt column(s) and "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                  </span><span class="n">to_string</span><span class="p">(</span><span class="n">n_thin_comp</span><span class="p">)</span><span class="o">//</span><span class="s2">" compensation column(s) "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                  </span><span class="s2">"could not give up the requested thickness"</span><span class="p">)</span>
+<span class="w">         </span><span class="k">call </span><span class="n">fail</span><span class="p">(</span><span class="s2">"&amp;ocean_cavity_melt_nml freshwater='mass': "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="n">to_string</span><span class="p">(</span><span class="n">cav</span><span class="p">%</span><span class="n">n_thin_step</span><span class="p">)</span><span class="o">//</span><span class="s2">" column(s) would have been driven "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="s2">"below H_CAVITY_FLOOR (2*H_VANISHED) by the top-layer "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="s2">"withdrawal (a freezing "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="s2">"column thinner than |m|*dt/rho_0, or a compensation sink "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="s2">"deeper than the open-ocean top layer).  The withdrawal was "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="s2">"clamped so the state stays finite, but a clamped withdrawal "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="s2">"no longer matches the tracked mass source, so the console's "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="s2">"Mass Error would stop being a leak measurement while still "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="s2">"being printed as one.  Use a thicker top layer (a coordinate "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="s2">"with a larger surface target), a shorter dt, or "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                   </span><span class="s2">"volume_compensation='none'."</span><span class="p">,</span><span class="w"> </span><span class="n">code</span><span class="o">=</span><span class="n">OCEAN_STATUS_ERR_SETUP</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end if</span>
+<span class="k">   end subroutine </span><span class="n">ocean_cavity_mass_step</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-11-13 23:21 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

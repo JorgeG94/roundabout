@@ -1,0 +1,1027 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>ocean_apply_ale_remap_faces &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>ocean_apply_ale_remap_faces
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.0% of total for procedures.">29 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_remap.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_remap.f90.html'>rdb_ocean_remap.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ocean_remap.html'>rdb_ocean_remap</a></li>
+            <li class="breadcrumb-item active" aria-current="page">ocean_apply_ale_remap_faces</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/ocean_apply_ale_remap_faces.html#variable-be~5">be</a>
+            <a class="list-group-item" href="../proc/ocean_apply_ale_remap_faces.html#variable-ke~4">ke</a>
+            <a class="list-group-item" href="../proc/ocean_apply_ale_remap_faces.html#variable-m~44">m</a>
+            <a class="list-group-item" href="../proc/ocean_apply_ale_remap_faces.html#variable-nu~19">nu</a>
+            <a class="list-group-item" href="../proc/ocean_apply_ale_remap_faces.html#variable-nx~589">nx</a>
+            <a class="list-group-item" href="../proc/ocean_apply_ale_remap_faces.html#variable-ny~589">ny</a>
+            <a class="list-group-item" href="../proc/ocean_apply_ale_remap_faces.html#variable-nz~485">nz</a>
+            <a class="list-group-item" href="../proc/ocean_apply_ale_remap_faces.html#variable-zf~2">zf</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/ocean_apply_ale_remap_faces.html#src">ocean_apply_ale_remap_faces</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>public  subroutine ocean_apply_ale_remap_faces(grid, h_old, h_new, u_face_x, v_face_y, method, conserve_ke, zlevel_faces, bnd_extrap, nonunif)  
+</h2>
+    
+
+    <p>Face-velocity pass of the ALE remap. Remaps u_face_x_layer and
+v_face_y_layer h_old→h_new using arithmetic-mean face thicknesses and
+the per-column kernel. Public only for the unit-test suite.
+Velocity treated as the face &ldquo;concentration&rdquo; (analogous to the tracer c at
+centres); per-face conservation sum_k(h_face·u_face) preserved
+(momentum-conserving). Outer-wall faces take the adjacent cell&rsquo;s
+thickness verbatim (no across-cell to average).</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-grid~372"></span>
+              type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>grid</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_old~11"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_old</strong>(:,:,:)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_new~20"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_new</strong>(:,:,:)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-u_face_x~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>u_face_x</strong>(:,:,:)</td>
+            <td>
+                <p>Eastward face velocity, shape <code>(nx+1, ny, nz)</code>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-v_face_y~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>v_face_y</strong>(:,:,:)</td>
+            <td>
+                <p>Northward face velocity, shape <code>(nx, ny+1, nz)</code>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-method~10"></span>
+              integer,
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>method</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-conserve_ke"></span>
+              logical,
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>conserve_ke</strong></td>
+            <td>
+                <p>Enable the KE-conserving baroclinic-anomaly rescale (default
+<code>.false.</code> ⇒ momentum-only remap, bit-identical).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-zlevel_faces~8"></span>
+              logical,
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>zlevel_faces</strong></td>
+            <td>
+                <p><code>&amp;vcoord_nml zfixed_closed_faces</code> — build the face columns as
+<code>min(h_L, h_R)</code> and drop the closed layers, so the remap
+neither fills nor drains an inert filler.  Default <code>.false.</code>
+⇒ bit-identical.  See <code>remap_x_face_velocity</code>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-bnd_extrap~9"></span>
+              logical,
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>bnd_extrap</strong></td>
+            <td>
+                <p>Linear-exact boundary-cell reconstruction (default <code>.false.</code>
+⇒ the PCM flatten, bit-identical).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nonunif~8"></span>
+              logical,
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nonunif</strong></td>
+            <td>
+                <p>Non-uniform-grid PLM/PPM weights (default <code>.false.</code> ⇒ the
+equal-thickness specialisations, bit-identical).</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~ocean_apply_ale_remap_faces~~CallsGraph Pages: 1 -->
+<svg id="prococean_apply_ale_remap_facesCallsGraph" width="641pt" height="213pt"
+ viewBox="0.00 0.00 641.00 213.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~ocean_apply_ale_remap_faces~~CallsGraph" class="graph" transform="scale(0.537801 0.537801) rotate(0) translate(4 392.27)">
+<title>proc~~ocean_apply_ale_remap_faces~~CallsGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-392.27 1187.89,-392.27 1187.89,4 -4,4"/>
+<!-- proc~ocean_apply_ale_remap_faces -->
+<g id="proc~~ocean_apply_ale_remap_faces~~CallsGraph_node1" class="node">
+<title>proc~ocean_apply_ale_remap_faces</title>
+<polygon fill="none" stroke="black" points="174.27,-308.27 0,-308.27 0,-284 174.27,-284 174.27,-308.27"/>
+<text xml:space="preserve" text-anchor="middle" x="87.13" y="-292.53" font-family="Helvetica,sans-Serif" font-size="10.50">ocean_apply_ale_remap_faces</text>
+</g>
+<!-- proc~remap_x_face_velocity -->
+<g id="proc~~ocean_apply_ale_remap_faces~~CallsGraph_node2" class="node">
+<title>proc~remap_x_face_velocity</title>
+<g id="a_proc~~ocean_apply_ale_remap_faces~~CallsGraph_node2"><a xlink:href="../proc/remap_x_face_velocity.html" xlink:title="remap_x_face_velocity">
+<polygon fill="#d9534f" stroke="#d9534f" points="342.54,-329.27 210.27,-329.27 210.27,-305 342.54,-305 342.54,-329.27"/>
+<text xml:space="preserve" text-anchor="middle" x="276.41" y="-313.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_x_face_velocity</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_apply_ale_remap_faces&#45;&gt;proc~remap_x_face_velocity -->
+<g id="proc~~ocean_apply_ale_remap_faces~~CallsGraph_edge1" class="edge">
+<title>proc~ocean_apply_ale_remap_faces&#45;&gt;proc~remap_x_face_velocity</title>
+<path fill="none" stroke="#ff0000" d="M174.64,-305.84C182.63,-306.73 190.68,-307.63 198.57,-308.52"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="198.15,-311.99 208.48,-309.63 198.93,-305.04 198.15,-311.99"/>
+</g>
+<!-- proc~remap_y_face_velocity -->
+<g id="proc~~ocean_apply_ale_remap_faces~~CallsGraph_node3" class="node">
+<title>proc~remap_y_face_velocity</title>
+<g id="a_proc~~ocean_apply_ale_remap_faces~~CallsGraph_node3"><a xlink:href="../proc/remap_y_face_velocity.html" xlink:title="remap_y_face_velocity">
+<polygon fill="#d9534f" stroke="#d9534f" points="342.54,-287.27 210.27,-287.27 210.27,-263 342.54,-263 342.54,-287.27"/>
+<text xml:space="preserve" text-anchor="middle" x="276.41" y="-271.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_y_face_velocity</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_apply_ale_remap_faces&#45;&gt;proc~remap_y_face_velocity -->
+<g id="proc~~ocean_apply_ale_remap_faces~~CallsGraph_edge2" class="edge">
+<title>proc~ocean_apply_ale_remap_faces&#45;&gt;proc~remap_y_face_velocity</title>
+<path fill="none" stroke="#ff0000" d="M174.64,-286.43C182.63,-285.54 190.68,-284.64 198.57,-283.75"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="198.93,-287.23 208.48,-282.64 198.15,-280.28 198.93,-287.23"/>
+</g>
+<!-- local -->
+<g id="proc~~ocean_apply_ale_remap_faces~~CallsGraph_node4" class="node">
+<title>local</title>
+<polygon fill="#777777" stroke="#777777" points="465.3,-350.27 411.3,-350.27 411.3,-326 465.3,-326 465.3,-350.27"/>
+<text xml:space="preserve" text-anchor="middle" x="438.3" y="-334.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">local</text>
+</g>
+<!-- proc~remap_x_face_velocity&#45;&gt;local -->
+<g id="proc~~ocean_apply_ale_remap_faces~~CallsGraph_edge3" class="edge">
+<title>proc~remap_x_face_velocity&#45;&gt;local</title>
+<path fill="none" stroke="#ff0000" d="M342.9,-325.74C362.38,-328.3 383.05,-331.01 400.06,-333.24"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="399.32,-336.68 409.69,-334.51 400.23,-329.74 399.32,-336.68"/>
+</g>
+<!-- proc~remap_column -->
+<g id="proc~~ocean_apply_ale_remap_faces~~CallsGraph_node5" class="node">
+<title>proc~remap_column</title>
+<g id="a_proc~~ocean_apply_ale_remap_faces~~CallsGraph_node5"><a xlink:href="../proc/remap_column.html" xlink:title="remap_column">
+<polygon fill="#d9534f" stroke="#d9534f" points="483.81,-308.27 392.79,-308.27 392.79,-284 483.81,-284 483.81,-308.27"/>
+<text xml:space="preserve" text-anchor="middle" x="438.3" y="-292.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_column</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_x_face_velocity&#45;&gt;proc~remap_column -->
+<g id="proc~~ocean_apply_ale_remap_faces~~CallsGraph_edge4" class="edge">
+<title>proc~remap_x_face_velocity&#45;&gt;proc~remap_column</title>
+<path fill="none" stroke="#ff0000" d="M342.9,-308.53C355.71,-306.85 369.03,-305.1 381.49,-303.46"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="381.69,-306.97 391.15,-302.2 380.78,-300.03 381.69,-306.97"/>
+</g>
+<!-- proc~rescale_anomaly_ke -->
+<g id="proc~~ocean_apply_ale_remap_faces~~CallsGraph_node6" class="node">
+<title>proc~rescale_anomaly_ke</title>
+<g id="a_proc~~ocean_apply_ale_remap_faces~~CallsGraph_node6"><a xlink:href="../proc/rescale_anomaly_ke.html" xlink:title="rescale_anomaly_ke">
+<polygon fill="#d9534f" stroke="#d9534f" points="498.06,-266.27 378.54,-266.27 378.54,-242 498.06,-242 498.06,-266.27"/>
+<text xml:space="preserve" text-anchor="middle" x="438.3" y="-250.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rescale_anomaly_ke</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_x_face_velocity&#45;&gt;proc~rescale_anomaly_ke -->
+<g id="proc~~ocean_apply_ale_remap_faces~~CallsGraph_edge5" class="edge">
+<title>proc~remap_x_face_velocity&#45;&gt;proc~rescale_anomaly_ke</title>
+<path fill="none" stroke="#ff0000" d="M320.99,-304.53C328.29,-302.01 335.71,-299.19 342.54,-296.13 359.45,-288.58 361.75,-282.95 378.54,-275.13 381.68,-273.67 384.95,-272.25 388.27,-270.88"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="389.52,-274.15 397.55,-267.23 386.96,-267.63 389.52,-274.15"/>
+</g>
+<!-- proc~remap_y_face_velocity&#45;&gt;local -->
+<g id="proc~~ocean_apply_ale_remap_faces~~CallsGraph_edge6" class="edge">
+<title>proc~remap_y_face_velocity&#45;&gt;local</title>
+<path fill="none" stroke="#00ffff" d="M320.99,-287.74C328.29,-290.26 335.71,-293.08 342.54,-296.13 359.45,-303.69 361.75,-309.32 378.54,-317.13 385.39,-320.32 392.86,-323.33 400.12,-326.02"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="398.83,-329.28 409.42,-329.34 401.18,-322.68 398.83,-329.28"/>
+</g>
+<!-- proc~remap_y_face_velocity&#45;&gt;proc~remap_column -->
+<g id="proc~~ocean_apply_ale_remap_faces~~CallsGraph_edge7" class="edge">
+<title>proc~remap_y_face_velocity&#45;&gt;proc~remap_column</title>
+<path fill="none" stroke="#00ffff" d="M342.9,-283.74C355.71,-285.42 369.03,-287.17 381.49,-288.81"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="380.78,-292.24 391.15,-290.07 381.69,-285.3 380.78,-292.24"/>
+</g>
+<!-- proc~remap_y_face_velocity&#45;&gt;proc~rescale_anomaly_ke -->
+<g id="proc~~ocean_apply_ale_remap_faces~~CallsGraph_edge8" class="edge">
+<title>proc~remap_y_face_velocity&#45;&gt;proc~rescale_anomaly_ke</title>
+<path fill="none" stroke="#00ffff" d="M342.9,-266.53C350.82,-265.49 358.92,-264.43 366.9,-263.38"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="367.11,-266.88 376.57,-262.11 366.2,-259.94 367.11,-266.88"/>
+</g>
+<!-- proc~remap_column_pcm -->
+<g id="proc~~ocean_apply_ale_remap_faces~~CallsGraph_node7" class="node">
+<title>proc~remap_column_pcm</title>
+<g id="a_proc~~ocean_apply_ale_remap_faces~~CallsGraph_node7"><a xlink:href="../proc/remap_column_pcm.html" xlink:title="remap_column_pcm">
+<polygon fill="#d9534f" stroke="#d9534f" points="653.96,-388.27 534.44,-388.27 534.44,-364 653.96,-364 653.96,-388.27"/>
+<text xml:space="preserve" text-anchor="middle" x="594.2" y="-372.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_column_pcm</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column&#45;&gt;proc~remap_column_pcm -->
+<g id="proc~~ocean_apply_ale_remap_faces~~CallsGraph_edge9" class="edge">
+<title>proc~remap_column&#45;&gt;proc~remap_column_pcm</title>
+<path fill="none" stroke="#00ff00" d="M481.03,-308.7C486.93,-311.14 492.77,-313.95 498.06,-317.13 516.65,-328.34 515.88,-338.27 534.06,-350.13 538.81,-353.23 543.99,-356.12 549.25,-358.77"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="547.45,-361.79 557.99,-362.89 550.44,-355.46 547.45,-361.79"/>
+</g>
+<!-- proc~remap_column_plm -->
+<g id="proc~~ocean_apply_ale_remap_faces~~CallsGraph_node8" class="node">
+<title>proc~remap_column_plm</title>
+<g id="a_proc~~ocean_apply_ale_remap_faces~~CallsGraph_node8"><a xlink:href="../proc/remap_column_plm.html" xlink:title="remap_column_plm">
+<polygon fill="#d9534f" stroke="#d9534f" points="1005.5,-348.27 888.98,-348.27 888.98,-324 1005.5,-324 1005.5,-348.27"/>
+<text xml:space="preserve" text-anchor="middle" x="947.24" y="-332.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_column_plm</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column&#45;&gt;proc~remap_column_plm -->
+<g id="proc~~ocean_apply_ale_remap_faces~~CallsGraph_edge10" class="edge">
+<title>proc~remap_column&#45;&gt;proc~remap_column_plm</title>
+<path fill="none" stroke="#00ff00" d="M484.03,-303.53C499.81,-305.93 517.69,-308.41 534.06,-310.13 654.48,-322.81 795.39,-330.07 877.35,-333.55"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="877.11,-337.05 887.25,-333.97 877.41,-330.05 877.11,-337.05"/>
+</g>
+<!-- proc~remap_column_ppm -->
+<g id="proc~~ocean_apply_ale_remap_faces~~CallsGraph_node9" class="node">
+<title>proc~remap_column_ppm</title>
+<g id="a_proc~~ocean_apply_ale_remap_faces~~CallsGraph_node9"><a xlink:href="../proc/remap_column_ppm.html" xlink:title="remap_column_ppm">
+<polygon fill="#d9534f" stroke="#d9534f" points="827.1,-226.27 706.83,-226.27 706.83,-202 827.1,-202 827.1,-226.27"/>
+<text xml:space="preserve" text-anchor="middle" x="766.97" y="-210.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_column_ppm</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column&#45;&gt;proc~remap_column_ppm -->
+<g id="proc~~ocean_apply_ale_remap_faces~~CallsGraph_edge11" class="edge">
+<title>proc~remap_column&#45;&gt;proc~remap_column_ppm</title>
+<path fill="none" stroke="#00ff00" d="M484.04,-284.91C541.24,-270.55 640.54,-245.62 704.72,-229.51"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="705.57,-232.9 714.42,-227.07 703.87,-226.11 705.57,-232.9"/>
+</g>
+<!-- proc~remap_column_ppm_h4 -->
+<g id="proc~~ocean_apply_ale_remap_faces~~CallsGraph_node10" class="node">
+<title>proc~remap_column_ppm_h4</title>
+<g id="a_proc~~ocean_apply_ale_remap_faces~~CallsGraph_node10"><a xlink:href="../proc/remap_column_ppm_h4.html" xlink:title="remap_column_ppm_h4">
+<polygon fill="#d9534f" stroke="#d9534f" points="836.48,-308.27 697.46,-308.27 697.46,-284 836.48,-284 836.48,-308.27"/>
+<text xml:space="preserve" text-anchor="middle" x="766.97" y="-292.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_column_ppm_h4</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column&#45;&gt;proc~remap_column_ppm_h4 -->
+<g id="proc~~ocean_apply_ale_remap_faces~~CallsGraph_edge12" class="edge">
+<title>proc~remap_column&#45;&gt;proc~remap_column_ppm_h4</title>
+<path fill="none" stroke="#00ff00" d="M484.04,-296.13C535.88,-296.13 622.31,-296.13 685.83,-296.13"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="685.5,-299.64 695.5,-296.14 685.5,-292.64 685.5,-299.64"/>
+</g>
+<!-- proc~remap_column_pqm -->
+<g id="proc~~ocean_apply_ale_remap_faces~~CallsGraph_node11" class="node">
+<title>proc~remap_column_pqm</title>
+<g id="a_proc~~ocean_apply_ale_remap_faces~~CallsGraph_node11"><a xlink:href="../proc/remap_column_pqm.html" xlink:title="remap_column_pqm">
+<polygon fill="#d9534f" stroke="#d9534f" points="654.33,-106.27 534.06,-106.27 534.06,-82 654.33,-82 654.33,-106.27"/>
+<text xml:space="preserve" text-anchor="middle" x="594.2" y="-90.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">remap_column_pqm</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column&#45;&gt;proc~remap_column_pqm -->
+<g id="proc~~ocean_apply_ale_remap_faces~~CallsGraph_edge13" class="edge">
+<title>proc~remap_column&#45;&gt;proc~remap_column_pqm</title>
+<path fill="none" stroke="#00ff00" d="M484.27,-284.12C489.24,-281.65 493.97,-278.69 498.06,-275.13 511.25,-263.68 560.37,-162.9 582.39,-116.88"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="585.45,-118.59 586.6,-108.06 579.14,-115.57 585.45,-118.59"/>
+</g>
+<!-- proc~boundary_half_jump -->
+<g id="proc~~ocean_apply_ale_remap_faces~~CallsGraph_node12" class="node">
+<title>proc~boundary_half_jump</title>
+<g id="a_proc~~ocean_apply_ale_remap_faces~~CallsGraph_node12"><a xlink:href="../proc/boundary_half_jump.html" xlink:title="boundary_half_jump">
+<polygon fill="#d9534f" stroke="#d9534f" points="1177.52,-225.27 1057.25,-225.27 1057.25,-201 1177.52,-201 1177.52,-225.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1117.38" y="-209.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">boundary_half_jump</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column_plm&#45;&gt;proc~boundary_half_jump -->
+<g id="proc~~ocean_apply_ale_remap_faces~~CallsGraph_edge14" class="edge">
+<title>proc~remap_column_plm&#45;&gt;proc~boundary_half_jump</title>
+<path fill="none" stroke="#cbff00" d="M987.88,-323.6C997.08,-319.9 1006.6,-315.41 1014.87,-310.13 1048.18,-288.91 1079.99,-255.7 1098.85,-234.17"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="1101.49,-236.47 1105.35,-226.61 1096.18,-231.91 1101.49,-236.47"/>
+</g>
+<!-- proc~plm_slope_nonuniform -->
+<g id="proc~~ocean_apply_ale_remap_faces~~CallsGraph_node13" class="node">
+<title>proc~plm_slope_nonuniform</title>
+<g id="a_proc~~ocean_apply_ale_remap_faces~~CallsGraph_node13"><a xlink:href="../proc/plm_slope_nonuniform.html" xlink:title="plm_slope_nonuniform">
+<polygon fill="#d9534f" stroke="#d9534f" points="1183.89,-348.27 1050.87,-348.27 1050.87,-324 1183.89,-324 1183.89,-348.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1117.38" y="-332.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">plm_slope_nonuniform</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column_plm&#45;&gt;proc~plm_slope_nonuniform -->
+<g id="proc~~ocean_apply_ale_remap_faces~~CallsGraph_edge15" class="edge">
+<title>proc~remap_column_plm&#45;&gt;proc~plm_slope_nonuniform</title>
+<path fill="none" stroke="#cbff00" d="M1005.63,-336.13C1016.48,-336.13 1027.98,-336.13 1039.32,-336.13"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="1039.05,-339.64 1049.05,-336.14 1039.05,-332.64 1039.05,-339.64"/>
+</g>
+<!-- proc~remap_column_ppm&#45;&gt;proc~remap_column_plm -->
+<g id="proc~~ocean_apply_ale_remap_faces~~CallsGraph_edge20" class="edge">
+<title>proc~remap_column_ppm&#45;&gt;proc~remap_column_plm</title>
+<path fill="none" stroke="#00ff66" d="M786.37,-226.73C817.81,-248.25 882.02,-292.19 918.78,-317.34"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="916.45,-319.99 926.68,-322.75 920.4,-314.22 916.45,-319.99"/>
+</g>
+<!-- proc~remap_column_ppm&#45;&gt;proc~boundary_half_jump -->
+<g id="proc~~ocean_apply_ale_remap_faces~~CallsGraph_edge16" class="edge">
+<title>proc~remap_column_ppm&#45;&gt;proc~boundary_half_jump</title>
+<path fill="none" stroke="#00ff66" d="M783.82,-201.65C804.47,-186.25 842.36,-160.92 879.6,-151.13 937.75,-135.86 957,-134.86 1014.87,-151.13 1044.12,-159.36 1073.28,-178.61 1092.79,-193.5"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="1090.6,-196.23 1100.62,-199.66 1094.93,-190.72 1090.6,-196.23"/>
+</g>
+<!-- proc~ppm_edge_nonuniform -->
+<g id="proc~~ocean_apply_ale_remap_faces~~CallsGraph_node14" class="node">
+<title>proc~ppm_edge_nonuniform</title>
+<g id="a_proc~~ocean_apply_ale_remap_faces~~CallsGraph_node14"><a xlink:href="../proc/ppm_edge_nonuniform.html" xlink:title="ppm_edge_nonuniform">
+<polygon fill="#d9534f" stroke="#d9534f" points="1014.87,-226.27 879.6,-226.27 879.6,-202 1014.87,-202 1014.87,-226.27"/>
+<text xml:space="preserve" text-anchor="middle" x="947.24" y="-210.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ppm_edge_nonuniform</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column_ppm&#45;&gt;proc~ppm_edge_nonuniform -->
+<g id="proc~~ocean_apply_ale_remap_faces~~CallsGraph_edge17" class="edge">
+<title>proc~remap_column_ppm&#45;&gt;proc~ppm_edge_nonuniform</title>
+<path fill="none" stroke="#00ff66" d="M827.33,-214.13C840.3,-214.13 854.23,-214.13 867.82,-214.13"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="867.62,-217.64 877.62,-214.14 867.62,-210.64 867.62,-217.64"/>
+</g>
+<!-- proc~ppm_edge_two_cell -->
+<g id="proc~~ocean_apply_ale_remap_faces~~CallsGraph_node15" class="node">
+<title>proc~ppm_edge_two_cell</title>
+<g id="a_proc~~ocean_apply_ale_remap_faces~~CallsGraph_node15"><a xlink:href="../proc/ppm_edge_two_cell.html" xlink:title="ppm_edge_two_cell">
+<polygon fill="#d9534f" stroke="#d9534f" points="1005.12,-184.27 889.35,-184.27 889.35,-160 1005.12,-160 1005.12,-184.27"/>
+<text xml:space="preserve" text-anchor="middle" x="947.24" y="-168.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ppm_edge_two_cell</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column_ppm&#45;&gt;proc~ppm_edge_two_cell -->
+<g id="proc~~ocean_apply_ale_remap_faces~~CallsGraph_edge18" class="edge">
+<title>proc~remap_column_ppm&#45;&gt;proc~ppm_edge_two_cell</title>
+<path fill="none" stroke="#00ff66" d="M821.45,-201.53C840.4,-197.07 861.92,-192 881.7,-187.34"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="882.38,-190.77 891.31,-185.07 880.78,-183.96 882.38,-190.77"/>
+</g>
+<!-- proc~ppm_jump_nonuniform -->
+<g id="proc~~ocean_apply_ale_remap_faces~~CallsGraph_node16" class="node">
+<title>proc~ppm_jump_nonuniform</title>
+<g id="a_proc~~ocean_apply_ale_remap_faces~~CallsGraph_node16"><a xlink:href="../proc/ppm_jump_nonuniform.html" xlink:title="ppm_jump_nonuniform">
+<polygon fill="#d9534f" stroke="#d9534f" points="1014.87,-268.27 879.6,-268.27 879.6,-244 1014.87,-244 1014.87,-268.27"/>
+<text xml:space="preserve" text-anchor="middle" x="947.24" y="-252.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ppm_jump_nonuniform</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column_ppm&#45;&gt;proc~ppm_jump_nonuniform -->
+<g id="proc~~ocean_apply_ale_remap_faces~~CallsGraph_edge19" class="edge">
+<title>proc~remap_column_ppm&#45;&gt;proc~ppm_jump_nonuniform</title>
+<path fill="none" stroke="#00ff66" d="M821.45,-226.74C840.4,-231.2 861.92,-236.27 881.7,-240.93"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="880.78,-244.31 891.31,-243.2 882.38,-237.5 880.78,-244.31"/>
+</g>
+<!-- proc~remap_column_ppm_h4&#45;&gt;proc~remap_column_plm -->
+<g id="proc~~ocean_apply_ale_remap_faces~~CallsGraph_edge22" class="edge">
+<title>proc~remap_column_ppm_h4&#45;&gt;proc~remap_column_plm</title>
+<path fill="none" stroke="#0066ff" d="M823.88,-308.68C841.39,-312.61 860.88,-316.98 879.08,-321.07"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="878.21,-324.46 888.73,-323.23 879.74,-317.63 878.21,-324.46"/>
+</g>
+<!-- proc~remap_column_ppm_h4&#45;&gt;proc~boundary_half_jump -->
+<g id="proc~~ocean_apply_ale_remap_faces~~CallsGraph_edge21" class="edge">
+<title>proc~remap_column_ppm_h4&#45;&gt;proc~boundary_half_jump</title>
+<path fill="none" stroke="#0066ff" d="M836.77,-299.6C887.29,-300.07 956.91,-296.32 1014.87,-277.13 1044.1,-267.46 1073.42,-247.62 1092.98,-232.58"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="1094.89,-235.53 1100.56,-226.59 1090.55,-230.04 1094.89,-235.53"/>
+</g>
+<!-- proc~remap_column_pqm&#45;&gt;proc~remap_column_ppm -->
+<g id="proc~~ocean_apply_ale_remap_faces~~CallsGraph_edge26" class="edge">
+<title>proc~remap_column_pqm&#45;&gt;proc~remap_column_ppm</title>
+<path fill="none" stroke="#cc00ff" d="M613.15,-106.75C643.13,-127.82 703.56,-170.28 738.78,-195.03"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="736.56,-197.75 746.76,-200.64 740.59,-192.03 736.56,-197.75"/>
+</g>
+<!-- proc~remap_column_pqm&#45;&gt;proc~boundary_half_jump -->
+<g id="proc~~ocean_apply_ale_remap_faces~~CallsGraph_edge23" class="edge">
+<title>proc~remap_column_pqm&#45;&gt;proc~boundary_half_jump</title>
+<path fill="none" stroke="#cc00ff" d="M654.58,-89.9C738.12,-86.13 893.68,-87.25 1014.87,-135.13 1047.17,-147.9 1077.86,-174.14 1096.87,-192.65"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="1094.37,-195.1 1103.91,-199.71 1099.32,-190.16 1094.37,-195.1"/>
+</g>
+<!-- proc~pqm_end_value_h4 -->
+<g id="proc~~ocean_apply_ale_remap_faces~~CallsGraph_node17" class="node">
+<title>proc~pqm_end_value_h4</title>
+<g id="a_proc~~ocean_apply_ale_remap_faces~~CallsGraph_node17"><a xlink:href="../proc/pqm_end_value_h4.html" xlink:title="pqm_end_value_h4">
+<polygon fill="#d9534f" stroke="#d9534f" points="824.1,-66.27 709.83,-66.27 709.83,-42 824.1,-42 824.1,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="766.97" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">pqm_end_value_h4</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column_pqm&#45;&gt;proc~pqm_end_value_h4 -->
+<g id="proc~~ocean_apply_ale_remap_faces~~CallsGraph_edge24" class="edge">
+<title>proc~remap_column_pqm&#45;&gt;proc~pqm_end_value_h4</title>
+<path fill="none" stroke="#cc00ff" d="M648.76,-81.59C665.37,-77.7 683.85,-73.37 701.14,-69.32"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="701.89,-72.74 710.82,-67.05 700.29,-65.92 701.89,-72.74"/>
+</g>
+<!-- proc~pqm_solve_diag_dominant -->
+<g id="proc~~ocean_apply_ale_remap_faces~~CallsGraph_node18" class="node">
+<title>proc~pqm_solve_diag_dominant</title>
+<g id="a_proc~~ocean_apply_ale_remap_faces~~CallsGraph_node18"><a xlink:href="../proc/pqm_solve_diag_dominant.html" xlink:title="pqm_solve_diag_dominant">
+<polygon fill="#d9534f" stroke="#d9534f" points="843.6,-24.27 690.33,-24.27 690.33,0 843.6,0 843.6,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="766.97" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">pqm_solve_diag_dominant</text>
+</a>
+</g>
+</g>
+<!-- proc~remap_column_pqm&#45;&gt;proc~pqm_solve_diag_dominant -->
+<g id="proc~~ocean_apply_ale_remap_faces~~CallsGraph_edge25" class="edge">
+<title>proc~remap_column_pqm&#45;&gt;proc~pqm_solve_diag_dominant</title>
+<path fill="none" stroke="#cc00ff" d="M611.51,-81.5C629.8,-67.87 660.78,-46.35 690.33,-33.13 694.1,-31.45 698.03,-29.87 702.04,-28.39"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="703,-31.76 711.33,-25.22 700.74,-25.14 703,-31.76"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprococean_apply_ale_remap_facesCallsGraph = svgPanZoom('#prococean_apply_ale_remap_facesCallsGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-be~5"></span>
+              logical,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>be</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ke~4"></span>
+              logical,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ke</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-m~44"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>m</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nu~19"></span>
+              logical,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nu</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx~589"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny~589"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz~485"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-zf~2"></span>
+              logical,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>zf</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">subroutine </span><span class="n">ocean_apply_ale_remap_faces</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">h_old</span><span class="p">,</span><span class="w"> </span><span class="n">h_new</span><span class="p">,</span><span class="w"> </span><span class="n">u_face_x</span><span class="p">,</span><span class="w"> </span><span class="n">v_face_y</span><span class="p">,</span><span class="w"> </span><span class="n">method</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                          </span><span class="n">conserve_ke</span><span class="p">,</span><span class="w"> </span><span class="n">zlevel_faces</span><span class="p">,</span><span class="w"> </span><span class="n">bnd_extrap</span><span class="p">,</span><span class="w"> </span><span class="n">nonunif</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! Face-velocity pass of the ALE remap. Remaps u_face_x_layer and</span>
+<span class="w">      </span><span class="c">!! v_face_y_layer h_old→h_new using arithmetic-mean face thicknesses and</span>
+<span class="w">      </span><span class="c">!! the per-column kernel. Public only for the unit-test suite.</span>
+<span class="w">      </span><span class="c">!! Velocity treated as the face "concentration" (analogous to the tracer c at</span>
+<span class="w">      </span><span class="c">!! centres); per-face conservation sum_k(h_face·u_face) preserved</span>
+<span class="w">      </span><span class="c">!! (momentum-conserving). Outer-wall faces take the adjacent cell's</span>
+<span class="w">      </span><span class="c">!! thickness verbatim (no across-cell to average).</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">hgrid_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">grid</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">h_old</span><span class="p">(:,</span><span class="w"> </span><span class="p">:,</span><span class="w"> </span><span class="p">:)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">h_new</span><span class="p">(:,</span><span class="w"> </span><span class="p">:,</span><span class="w"> </span><span class="p">:)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">u_face_x</span><span class="p">(:,</span><span class="w"> </span><span class="p">:,</span><span class="w"> </span><span class="p">:)</span>
+<span class="w">         </span><span class="c">!! Eastward face velocity, shape `(nx+1, ny, nz)`.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">v_face_y</span><span class="p">(:,</span><span class="w"> </span><span class="p">:,</span><span class="w"> </span><span class="p">:)</span>
+<span class="w">         </span><span class="c">!! Northward face velocity, shape `(nx, ny+1, nz)`.</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">method</span>
+<span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">conserve_ke</span>
+<span class="w">         </span><span class="c">!! Enable the KE-conserving baroclinic-anomaly rescale (default</span>
+<span class="w">         </span><span class="c">!! `.false.` ⇒ momentum-only remap, bit-identical).</span>
+<span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">zlevel_faces</span>
+<span class="w">         </span><span class="c">!! `&amp;vcoord_nml zfixed_closed_faces` — build the face columns as</span>
+<span class="w">         </span><span class="c">!! `min(h_L, h_R)` and drop the closed layers, so the remap</span>
+<span class="w">         </span><span class="c">!! neither fills nor drains an inert filler.  Default `.false.`</span>
+<span class="w">         </span><span class="c">!! ⇒ bit-identical.  See `remap_x_face_velocity`.</span>
+<span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">bnd_extrap</span>
+<span class="w">         </span><span class="c">!! Linear-exact boundary-cell reconstruction (default `.false.`</span>
+<span class="w">         </span><span class="c">!! ⇒ the PCM flatten, bit-identical).</span>
+<span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nonunif</span>
+<span class="w">         </span><span class="c">!! Non-uniform-grid PLM/PPM weights (default `.false.` ⇒ the</span>
+<span class="w">         </span><span class="c">!! equal-thickness specialisations, bit-identical).</span>
+
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">m</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span>
+<span class="w">      </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ke</span><span class="p">,</span><span class="w"> </span><span class="n">zf</span><span class="p">,</span><span class="w"> </span><span class="n">be</span><span class="p">,</span><span class="w"> </span><span class="n">nu</span>
+<span class="w">      </span><span class="n">m</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">REMAP_PPM</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">method</span><span class="p">))</span><span class="w"> </span><span class="n">m</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">method</span>
+<span class="w">      </span><span class="n">ke</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">false</span><span class="p">.</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">conserve_ke</span><span class="p">))</span><span class="w"> </span><span class="n">ke</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">conserve_ke</span>
+<span class="w">      </span><span class="n">zf</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">false</span><span class="p">.</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">zlevel_faces</span><span class="p">))</span><span class="w"> </span><span class="n">zf</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">zlevel_faces</span>
+<span class="w">      </span><span class="n">be</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">false</span><span class="p">.</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">bnd_extrap</span><span class="p">))</span><span class="w"> </span><span class="n">be</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">bnd_extrap</span>
+<span class="w">      </span><span class="n">nu</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">false</span><span class="p">.</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">nonunif</span><span class="p">))</span><span class="w"> </span><span class="n">nu</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nonunif</span>
+<span class="w">      </span><span class="n">nx</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">nx_total</span>
+<span class="w">      </span><span class="n">ny</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">ny_total</span>
+<span class="w">      </span><span class="n">nz</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">size</span><span class="p">(</span><span class="n">u_face_x</span><span class="p">,</span><span class="w"> </span><span class="mi">3</span><span class="p">)</span>
+
+<span class="w">      </span><span class="k">call </span><span class="n">remap_x_face_velocity</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">h_old</span><span class="p">,</span><span class="w"> </span><span class="n">h_new</span><span class="p">,</span><span class="w"> </span><span class="n">u_face_x</span><span class="p">,</span><span class="w"> </span><span class="n">m</span><span class="p">,</span><span class="w"> </span><span class="n">ke</span><span class="p">,</span><span class="w"> </span><span class="n">zf</span><span class="p">,</span><span class="w"> </span><span class="n">be</span><span class="p">,</span><span class="w"> </span><span class="n">nu</span><span class="p">)</span>
+<span class="w">      </span><span class="k">call </span><span class="n">remap_y_face_velocity</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">h_old</span><span class="p">,</span><span class="w"> </span><span class="n">h_new</span><span class="p">,</span><span class="w"> </span><span class="n">v_face_y</span><span class="p">,</span><span class="w"> </span><span class="n">m</span><span class="p">,</span><span class="w"> </span><span class="n">ke</span><span class="p">,</span><span class="w"> </span><span class="n">zf</span><span class="p">,</span><span class="w"> </span><span class="n">be</span><span class="p">,</span><span class="w"> </span><span class="n">nu</span><span class="p">)</span>
+<span class="w">   </span><span class="k">end subroutine </span><span class="n">ocean_apply_ale_remap_faces</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-11-13 23:21 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

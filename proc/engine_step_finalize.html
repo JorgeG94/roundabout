@@ -1,0 +1,1416 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>engine_step_finalize &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>engine_step_finalize
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.0% of total for procedures.">22 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_engine.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_engine.f90.html'>rdb_ocean_engine.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ocean_engine.html'>rdb_ocean_engine</a></li>
+            <li class="breadcrumb-item active" aria-current="page">engine_step_finalize</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/engine_step_finalize.html#src">engine_step_finalize</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>public  subroutine engine_step_finalize(engine, dt, t, ierr)  
+</h2>
+    
+
+    <p>Second half of one outer step: derive <code>Q_heat</code>/<code>Q_salt</code> from
+the surface-flux component set (no-op unless
+<code>&amp;ocean_forcing_nml enable_components</code>) and, when diagnostics
+are configured, run one <code>ocean_diag_t%step</code>. Call immediately
+after <code>engine_step</code> and, when sea ice is enabled,
+<code>engine_step_ice</code> too — see <code>engine_step</code>&rsquo;s docstring for why
+this is a separate call.</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-engine~8"></span>
+              type(<a href='../type/ocean_engine_t.html'>ocean_engine_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>engine</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dt~36"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dt</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-t~21"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>t</strong></td>
+            <td>
+                <p>Simulation time at the START of the step this finalizes
+(the same <code>t</code> passed to the matching <code>engine_step</code> call) —
+<code>t + dt</code> is what reaches the diag manager, matching
+<code>driver_run_ocean</code>&rsquo;s post-advance <code>t_current</code>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ierr~33"></span>
+              integer,
+            </td>
+<td>intent(out),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ierr</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~engine_step_finalize~~CallsGraph Pages: 1 -->
+<svg id="procengine_step_finalizeCallsGraph" width="641pt" height="319pt"
+ viewBox="0.00 0.00 641.00 319.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~engine_step_finalize~~CallsGraph" class="graph" transform="scale(0.452399 0.452399) rotate(0) translate(4 700.27)">
+<title>proc~~engine_step_finalize~~CallsGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-700.27 1412.89,-700.27 1412.89,4 -4,4"/>
+<!-- proc~engine_step_finalize -->
+<g id="proc~~engine_step_finalize~~CallsGraph_node1" class="node">
+<title>proc~engine_step_finalize</title>
+<polygon fill="none" stroke="black" points="119.52,-213.27 0,-213.27 0,-189 119.52,-189 119.52,-213.27"/>
+<text xml:space="preserve" text-anchor="middle" x="59.76" y="-197.53" font-family="Helvetica,sans-Serif" font-size="10.50">engine_step_finalize</text>
+</g>
+<!-- proc~ocean_cavity_flux_step -->
+<g id="proc~~engine_step_finalize~~CallsGraph_node2" class="node">
+<title>proc~ocean_cavity_flux_step</title>
+<g id="a_proc~~engine_step_finalize~~CallsGraph_node2"><a xlink:href="../proc/ocean_cavity_flux_step.html" xlink:title="ocean_cavity_flux_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="582.44,-507.27 448.67,-507.27 448.67,-483 582.44,-483 582.44,-507.27"/>
+<text xml:space="preserve" text-anchor="middle" x="515.55" y="-491.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_cavity_flux_step</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_step_finalize&#45;&gt;proc~ocean_cavity_flux_step -->
+<g id="proc~~engine_step_finalize~~CallsGraph_edge1" class="edge">
+<title>proc~engine_step_finalize&#45;&gt;proc~ocean_cavity_flux_step</title>
+<path fill="none" stroke="#ff0000" d="M79.58,-213.77C98.66,-226.55 129.07,-246.83 155.52,-264.13 277.74,-344.07 424.5,-437.8 485.63,-476.74"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="483.43,-479.49 493.75,-481.9 487.19,-473.58 483.43,-479.49"/>
+</g>
+<!-- proc~ocean_diag_step -->
+<g id="proc~~engine_step_finalize~~CallsGraph_node3" class="node">
+<title>proc~ocean_diag_step</title>
+<g id="a_proc~~engine_step_finalize~~CallsGraph_node3"><a xlink:href="../proc/ocean_diag_step.html" xlink:title="ocean_diag_t%ocean_diag_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="365.41,-255.27 184.39,-255.27 184.39,-231 365.41,-231 365.41,-255.27"/>
+<text xml:space="preserve" text-anchor="middle" x="274.9" y="-239.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_diag_t%ocean_diag_step</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_step_finalize&#45;&gt;proc~ocean_diag_step -->
+<g id="proc~~engine_step_finalize~~CallsGraph_edge2" class="edge">
+<title>proc~engine_step_finalize&#45;&gt;proc~ocean_diag_step</title>
+<path fill="none" stroke="#ff0000" d="M115.79,-213.75C128.8,-216.61 142.63,-219.56 155.52,-222.13 166.27,-224.28 177.59,-226.43 188.79,-228.48"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="187.97,-231.89 198.44,-230.24 189.23,-225.01 187.97,-231.89"/>
+</g>
+<!-- proc~ocean_dyn_is_thermo_step -->
+<g id="proc~~engine_step_finalize~~CallsGraph_node4" class="node">
+<title>proc~ocean_dyn_is_thermo_step</title>
+<g id="a_proc~~engine_step_finalize~~CallsGraph_node4"><a xlink:href="../proc/ocean_dyn_is_thermo_step.html" xlink:title="ocean_dyn_t%ocean_dyn_is_thermo_step">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="390.54,-213.27 159.27,-213.27 159.27,-189 390.54,-189 390.54,-213.27"/>
+<text xml:space="preserve" text-anchor="middle" x="274.9" y="-197.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_t%ocean_dyn_is_thermo_step</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_step_finalize&#45;&gt;proc~ocean_dyn_is_thermo_step -->
+<g id="proc~~engine_step_finalize~~CallsGraph_edge3" class="edge">
+<title>proc~engine_step_finalize&#45;&gt;proc~ocean_dyn_is_thermo_step</title>
+<path fill="none" stroke="#ff0000" d="M119.85,-201.13C128.7,-201.13 138.11,-201.13 147.74,-201.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="147.6,-204.64 157.6,-201.14 147.6,-197.64 147.6,-204.64"/>
+</g>
+<!-- proc~ocean_surface_flux_assemble -->
+<g id="proc~~engine_step_finalize~~CallsGraph_node5" class="node">
+<title>proc~ocean_surface_flux_assemble</title>
+<g id="a_proc~~engine_step_finalize~~CallsGraph_node5"><a xlink:href="../proc/ocean_surface_flux_assemble.html" xlink:title="ocean_surface_flux_assemble">
+<polygon fill="#d9534f" stroke="#d9534f" points="600.81,-66.27 430.29,-66.27 430.29,-42 600.81,-42 600.81,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="515.55" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_surface_flux_assemble</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_step_finalize&#45;&gt;proc~ocean_surface_flux_assemble -->
+<g id="proc~~engine_step_finalize~~CallsGraph_edge4" class="edge">
+<title>proc~engine_step_finalize&#45;&gt;proc~ocean_surface_flux_assemble</title>
+<path fill="none" stroke="#ff0000" d="M114.76,-188.58C128.06,-185.65 142.28,-182.65 155.52,-180.13 261.08,-160.06 295.1,-183.46 394.29,-142.13 399.58,-139.93 455.25,-98.56 488.96,-73.33"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="490.71,-76.4 496.61,-67.6 486.51,-70.79 490.71,-76.4"/>
+</g>
+<!-- proc~ocean_surface_stress_set_shelf_from_ustar -->
+<g id="proc~~engine_step_finalize~~CallsGraph_node6" class="node">
+<title>proc~ocean_surface_stress_set_shelf_from_ustar</title>
+<g id="a_proc~~engine_step_finalize~~CallsGraph_node6"><a xlink:href="../proc/ocean_surface_stress_set_shelf_from_ustar.html" xlink:title="ocean_surface_stress_set_shelf_from_ustar">
+<polygon fill="#d9534f" stroke="#d9534f" points="394.29,-133.27 155.52,-133.27 155.52,-109 394.29,-109 394.29,-133.27"/>
+<text xml:space="preserve" text-anchor="middle" x="274.9" y="-117.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_surface_stress_set_shelf_from_ustar</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_step_finalize&#45;&gt;proc~ocean_surface_stress_set_shelf_from_ustar -->
+<g id="proc~~engine_step_finalize~~CallsGraph_edge5" class="edge">
+<title>proc~engine_step_finalize&#45;&gt;proc~ocean_surface_stress_set_shelf_from_ustar</title>
+<path fill="none" stroke="#ff0000" d="M78.81,-188.64C97.3,-176.38 127.24,-158.01 155.52,-147.13 166.16,-143.04 177.6,-139.52 189.03,-136.5"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="189.63,-139.96 198.48,-134.14 187.93,-133.17 189.63,-139.96"/>
+</g>
+<!-- proc~cavity_far_field_impl -->
+<g id="proc~~engine_step_finalize~~CallsGraph_node8" class="node">
+<title>proc~cavity_far_field_impl</title>
+<g id="a_proc~~engine_step_finalize~~CallsGraph_node8"><a xlink:href="../proc/cavity_far_field_impl.html" xlink:title="cavity_far_field_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="801.71,-318.27 681.44,-318.27 681.44,-294 801.71,-294 801.71,-318.27"/>
+<text xml:space="preserve" text-anchor="middle" x="741.57" y="-302.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cavity_far_field_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_cavity_flux_step&#45;&gt;proc~cavity_far_field_impl -->
+<g id="proc~~engine_step_finalize~~CallsGraph_edge6" class="edge">
+<title>proc~ocean_cavity_flux_step&#45;&gt;proc~cavity_far_field_impl</title>
+<path fill="none" stroke="#ff0000" d="M524.74,-482.61C549.19,-445.39 620.89,-337.44 636.81,-327.13 646.75,-320.7 658.25,-316.17 669.91,-313"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="670.68,-316.42 679.61,-310.71 669.07,-309.61 670.68,-316.42"/>
+</g>
+<!-- proc~cavity_flux_fill_impl -->
+<g id="proc~~engine_step_finalize~~CallsGraph_node9" class="node">
+<title>proc~cavity_flux_fill_impl</title>
+<g id="a_proc~~engine_step_finalize~~CallsGraph_node9"><a xlink:href="../proc/cavity_flux_fill_impl.html" xlink:title="cavity_flux_fill_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="798.71,-486.27 684.44,-486.27 684.44,-462 798.71,-462 798.71,-486.27"/>
+<text xml:space="preserve" text-anchor="middle" x="741.57" y="-470.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cavity_flux_fill_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_cavity_flux_step&#45;&gt;proc~cavity_flux_fill_impl -->
+<g id="proc~~engine_step_finalize~~CallsGraph_edge7" class="edge">
+<title>proc~ocean_cavity_flux_step&#45;&gt;proc~cavity_flux_fill_impl</title>
+<path fill="none" stroke="#ff0000" d="M582.85,-488.92C611.33,-486.25 644.56,-483.14 673.16,-480.45"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="673.14,-483.97 682.77,-479.55 672.49,-477 673.14,-483.97"/>
+</g>
+<!-- proc~cavity_melt_columns_2d -->
+<g id="proc~~engine_step_finalize~~CallsGraph_node10" class="node">
+<title>proc~cavity_melt_columns_2d</title>
+<g id="a_proc~~engine_step_finalize~~CallsGraph_node10"><a xlink:href="../proc/cavity_melt_columns_2d.html" xlink:title="cavity_melt_columns_2d">
+<polygon fill="#d9534f" stroke="#d9534f" points="812.21,-360.27 670.94,-360.27 670.94,-336 812.21,-336 812.21,-360.27"/>
+<text xml:space="preserve" text-anchor="middle" x="741.57" y="-344.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cavity_melt_columns_2d</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_cavity_flux_step&#45;&gt;proc~cavity_melt_columns_2d -->
+<g id="proc~~engine_step_finalize~~CallsGraph_edge8" class="edge">
+<title>proc~ocean_cavity_flux_step&#45;&gt;proc~cavity_melt_columns_2d</title>
+<path fill="none" stroke="#ff0000" d="M524.46,-482.73C541.55,-457.01 584.65,-397.91 636.81,-369.13 643.95,-365.2 651.72,-361.99 659.7,-359.39"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="660.6,-362.77 669.22,-356.62 658.64,-356.05 660.6,-362.77"/>
+</g>
+<!-- proc~cavity_melt_status_is_fatal -->
+<g id="proc~~engine_step_finalize~~CallsGraph_node11" class="node">
+<title>proc~cavity_melt_status_is_fatal</title>
+<g id="a_proc~~engine_step_finalize~~CallsGraph_node11"><a xlink:href="../proc/cavity_melt_status_is_fatal.html" xlink:title="cavity_melt_status_is_fatal">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="817.46,-696.27 665.69,-696.27 665.69,-672 817.46,-672 817.46,-696.27"/>
+<text xml:space="preserve" text-anchor="middle" x="741.57" y="-680.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cavity_melt_status_is_fatal</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_cavity_flux_step&#45;&gt;proc~cavity_melt_status_is_fatal -->
+<g id="proc~~engine_step_finalize~~CallsGraph_edge9" class="edge">
+<title>proc~ocean_cavity_flux_step&#45;&gt;proc~cavity_melt_status_is_fatal</title>
+<path fill="none" stroke="#ff0000" d="M521.62,-507.72C535.1,-539.48 575.09,-623.17 636.81,-663.13 642.34,-666.72 648.37,-669.71 654.63,-672.21"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="653.33,-675.46 663.92,-675.45 655.64,-668.85 653.33,-675.46"/>
+</g>
+<!-- proc~cavity_status_counts_impl -->
+<g id="proc~~engine_step_finalize~~CallsGraph_node12" class="node">
+<title>proc~cavity_status_counts_impl</title>
+<g id="a_proc~~engine_step_finalize~~CallsGraph_node12"><a xlink:href="../proc/cavity_status_counts_impl.html" xlink:title="cavity_status_counts_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="815.96,-444.27 667.19,-444.27 667.19,-420 815.96,-420 815.96,-444.27"/>
+<text xml:space="preserve" text-anchor="middle" x="741.57" y="-428.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cavity_status_counts_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_cavity_flux_step&#45;&gt;proc~cavity_status_counts_impl -->
+<g id="proc~~engine_step_finalize~~CallsGraph_edge10" class="edge">
+<title>proc~ocean_cavity_flux_step&#45;&gt;proc~cavity_status_counts_impl</title>
+<path fill="none" stroke="#ff0000" d="M548.84,-482.51C572.84,-473.46 606.53,-461.45 636.81,-453.13 644.49,-451.03 652.54,-449.03 660.61,-447.17"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="661.13,-450.64 670.13,-445.05 659.61,-443.81 661.13,-450.64"/>
+</g>
+<!-- proc~fail -->
+<g id="proc~~engine_step_finalize~~CallsGraph_node14" class="node">
+<title>proc~fail</title>
+<g id="a_proc~~engine_step_finalize~~CallsGraph_node14"><a xlink:href="../proc/fail.html" xlink:title="fail">
+<polygon fill="#d9534f" stroke="#d9534f" points="768.57,-654.27 714.57,-654.27 714.57,-630 768.57,-630 768.57,-654.27"/>
+<text xml:space="preserve" text-anchor="middle" x="741.57" y="-638.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">fail</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_cavity_flux_step&#45;&gt;proc~fail -->
+<g id="proc~~engine_step_finalize~~CallsGraph_edge11" class="edge">
+<title>proc~ocean_cavity_flux_step&#45;&gt;proc~fail</title>
+<path fill="none" stroke="#ff0000" d="M524.46,-507.54C541.55,-533.26 584.65,-592.36 636.81,-621.13 657.08,-632.32 682.53,-637.58 703.15,-640.04"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="702.54,-643.5 712.84,-641.01 703.24,-636.53 702.54,-643.5"/>
+</g>
+<!-- proc~grid_allreduce_sum_i8 -->
+<g id="proc~~engine_step_finalize~~CallsGraph_node18" class="node">
+<title>proc~grid_allreduce_sum_i8</title>
+<g id="a_proc~~engine_step_finalize~~CallsGraph_node18"><a xlink:href="../proc/grid_allreduce_sum_i8.html" xlink:title="grid_allreduce_sum_i8">
+<polygon fill="#d9534f" stroke="#d9534f" points="806.58,-612.27 676.56,-612.27 676.56,-588 806.58,-588 806.58,-612.27"/>
+<text xml:space="preserve" text-anchor="middle" x="741.57" y="-596.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">grid_allreduce_sum_i8</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_cavity_flux_step&#45;&gt;proc~grid_allreduce_sum_i8 -->
+<g id="proc~~engine_step_finalize~~CallsGraph_edge12" class="edge">
+<title>proc~ocean_cavity_flux_step&#45;&gt;proc~grid_allreduce_sum_i8</title>
+<path fill="none" stroke="#ff0000" d="M530.21,-507.56C551.39,-526.13 594.2,-560.88 636.81,-579.13 645.77,-582.97 655.47,-586.12 665.22,-588.7"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="664.2,-592.06 674.75,-591.02 665.86,-585.26 664.2,-592.06"/>
+</g>
+<!-- to_string -->
+<g id="proc~~engine_step_finalize~~CallsGraph_node22" class="node">
+<title>to_string</title>
+<polygon fill="#777777" stroke="#777777" points="770.21,-570.27 712.94,-570.27 712.94,-546 770.21,-546 770.21,-570.27"/>
+<text xml:space="preserve" text-anchor="middle" x="741.57" y="-554.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">to_string</text>
+</g>
+<!-- proc~ocean_cavity_flux_step&#45;&gt;to_string -->
+<g id="proc~~engine_step_finalize~~CallsGraph_edge13" class="edge">
+<title>proc~ocean_cavity_flux_step&#45;&gt;to_string</title>
+<path fill="none" stroke="#ff0000" d="M548.84,-507.76C572.84,-516.81 606.53,-528.82 636.81,-537.13 657.9,-542.92 681.8,-547.87 701.34,-551.5"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="700.63,-554.93 711.09,-553.27 701.88,-548.04 700.63,-554.93"/>
+</g>
+<!-- warning -->
+<g id="proc~~engine_step_finalize~~CallsGraph_node23" class="node">
+<title>warning</title>
+<polygon fill="#777777" stroke="#777777" points="768.71,-528.27 714.44,-528.27 714.44,-504 768.71,-504 768.71,-528.27"/>
+<text xml:space="preserve" text-anchor="middle" x="741.57" y="-512.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">warning</text>
+</g>
+<!-- proc~ocean_cavity_flux_step&#45;&gt;warning -->
+<g id="proc~~engine_step_finalize~~CallsGraph_edge14" class="edge">
+<title>proc~ocean_cavity_flux_step&#45;&gt;warning</title>
+<path fill="none" stroke="#ff0000" d="M582.85,-501.35C621.92,-505.01 669.95,-509.51 702.67,-512.58"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="702.19,-516.05 712.48,-513.5 702.85,-509.08 702.19,-516.05"/>
+</g>
+<!-- info -->
+<g id="proc~~engine_step_finalize~~CallsGraph_node7" class="node">
+<title>info</title>
+<polygon fill="#777777" stroke="#777777" points="542.55,-360.27 488.55,-360.27 488.55,-336 542.55,-336 542.55,-360.27"/>
+<text xml:space="preserve" text-anchor="middle" x="515.55" y="-344.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">info</text>
+</g>
+<!-- proc~ocean_diag_step&#45;&gt;info -->
+<g id="proc~~engine_step_finalize~~CallsGraph_edge15" class="edge">
+<title>proc~ocean_diag_step&#45;&gt;info</title>
+<path fill="none" stroke="#cbff00" d="M295.11,-255.68C323.58,-273.78 379.11,-307.21 430.29,-327.13 445.29,-332.98 462.44,-337.6 477.33,-341"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="476.21,-344.34 486.73,-343.04 477.7,-337.5 476.21,-344.34"/>
+</g>
+<!-- proc~diag_field_stats -->
+<g id="proc~~engine_step_finalize~~CallsGraph_node13" class="node">
+<title>proc~diag_field_stats</title>
+<g id="a_proc~~engine_step_finalize~~CallsGraph_node13"><a xlink:href="../proc/diag_field_stats.html" xlink:title="diag_field_stats">
+<polygon fill="#d9534f" stroke="#d9534f" points="562.19,-318.27 468.92,-318.27 468.92,-294 562.19,-294 562.19,-318.27"/>
+<text xml:space="preserve" text-anchor="middle" x="515.55" y="-302.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">diag_field_stats</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_diag_step&#45;&gt;proc~diag_field_stats -->
+<g id="proc~~engine_step_finalize~~CallsGraph_edge16" class="edge">
+<title>proc~ocean_diag_step&#45;&gt;proc~diag_field_stats</title>
+<path fill="none" stroke="#cbff00" d="M321.1,-255.7C351.84,-264.18 393.47,-275.54 430.29,-285.13 439.11,-287.43 448.45,-289.82 457.59,-292.12"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="456.57,-295.47 467.12,-294.5 458.27,-288.68 456.57,-295.47"/>
+</g>
+<!-- proc~fill_and_remap -->
+<g id="proc~~engine_step_finalize~~CallsGraph_node15" class="node">
+<title>proc~fill_and_remap</title>
+<g id="a_proc~~engine_step_finalize~~CallsGraph_node15"><a xlink:href="../proc/fill_and_remap.html" xlink:title="fill_and_remap">
+<polygon fill="#d9534f" stroke="#d9534f" points="560.31,-234.27 470.79,-234.27 470.79,-210 560.31,-210 560.31,-234.27"/>
+<text xml:space="preserve" text-anchor="middle" x="515.55" y="-218.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">fill_and_remap</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_diag_step&#45;&gt;proc~fill_and_remap -->
+<g id="proc~~engine_step_finalize~~CallsGraph_edge17" class="edge">
+<title>proc~ocean_diag_step&#45;&gt;proc~fill_and_remap</title>
+<path fill="none" stroke="#cbff00" d="M365.79,-235.23C397.12,-232.47 431.34,-229.46 459.05,-227.02"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="459.34,-230.51 468.99,-226.14 458.72,-223.53 459.34,-230.51"/>
+</g>
+<!-- proc~finalise_accumulator -->
+<g id="proc~~engine_step_finalize~~CallsGraph_node16" class="node">
+<title>proc~finalise_accumulator</title>
+<g id="a_proc~~engine_step_finalize~~CallsGraph_node16"><a xlink:href="../proc/finalise_accumulator.html" xlink:title="finalise_accumulator">
+<polygon fill="#d9534f" stroke="#d9534f" points="576.81,-192.27 454.29,-192.27 454.29,-168 576.81,-168 576.81,-192.27"/>
+<text xml:space="preserve" text-anchor="middle" x="515.55" y="-176.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">finalise_accumulator</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_diag_step&#45;&gt;proc~finalise_accumulator -->
+<g id="proc~~engine_step_finalize~~CallsGraph_edge18" class="edge">
+<title>proc~ocean_diag_step&#45;&gt;proc~finalise_accumulator</title>
+<path fill="none" stroke="#cbff00" d="M365.68,-230.68C375.47,-228.3 385.18,-225.48 394.29,-222.13 411.68,-215.75 413.13,-208.11 430.29,-201.13 434.69,-199.35 439.28,-197.68 443.95,-196.13"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="444.97,-199.48 453.5,-193.18 442.91,-192.79 444.97,-199.48"/>
+</g>
+<!-- proc~fold_sample -->
+<g id="proc~~engine_step_finalize~~CallsGraph_node17" class="node">
+<title>proc~fold_sample</title>
+<g id="a_proc~~engine_step_finalize~~CallsGraph_node17"><a xlink:href="../proc/fold_sample.html" xlink:title="fold_sample">
+<polygon fill="#d9534f" stroke="#d9534f" points="553.56,-150.27 477.54,-150.27 477.54,-126 553.56,-126 553.56,-150.27"/>
+<text xml:space="preserve" text-anchor="middle" x="515.55" y="-134.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">fold_sample</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_diag_step&#45;&gt;proc~fold_sample -->
+<g id="proc~~engine_step_finalize~~CallsGraph_edge19" class="edge">
+<title>proc~ocean_diag_step&#45;&gt;proc~fold_sample</title>
+<path fill="none" stroke="#cbff00" d="M365.63,-236C375.85,-232.7 385.67,-228.2 394.29,-222.13 420.66,-203.57 404.58,-178.6 430.29,-159.13 440.7,-151.25 453.72,-146.3 466.38,-143.2"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="466.78,-146.69 475.86,-141.23 465.36,-139.84 466.78,-146.69"/>
+</g>
+<!-- proc~reset_accumulator -->
+<g id="proc~~engine_step_finalize~~CallsGraph_node21" class="node">
+<title>proc~reset_accumulator</title>
+<g id="a_proc~~engine_step_finalize~~CallsGraph_node21"><a xlink:href="../proc/reset_accumulator.html" xlink:title="reset_accumulator">
+<polygon fill="#d9534f" stroke="#d9534f" points="570.81,-276.27 460.29,-276.27 460.29,-252 570.81,-252 570.81,-276.27"/>
+<text xml:space="preserve" text-anchor="middle" x="515.55" y="-260.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">reset_accumulator</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_diag_step&#45;&gt;proc~reset_accumulator -->
+<g id="proc~~engine_step_finalize~~CallsGraph_edge20" class="edge">
+<title>proc~ocean_diag_step&#45;&gt;proc~reset_accumulator</title>
+<path fill="none" stroke="#cbff00" d="M365.79,-251.04C393.29,-253.46 423.01,-256.08 448.61,-258.33"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="448.28,-261.82 458.54,-259.21 448.89,-254.84 448.28,-261.82"/>
+</g>
+<!-- proc~ocean_surfflux_assemble_cover_impl -->
+<g id="proc~~engine_step_finalize~~CallsGraph_node19" class="node">
+<title>proc~ocean_surfflux_assemble_cover_impl</title>
+<g id="a_proc~~engine_step_finalize~~CallsGraph_node19"><a xlink:href="../proc/ocean_surfflux_assemble_cover_impl.html" xlink:title="ocean_surfflux_assemble_cover_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="846.33,-66.27 636.81,-66.27 636.81,-42 846.33,-42 846.33,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="741.57" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_surfflux_assemble_cover_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_surface_flux_assemble&#45;&gt;proc~ocean_surfflux_assemble_cover_impl -->
+<g id="proc~~engine_step_finalize~~CallsGraph_edge21" class="edge">
+<title>proc~ocean_surface_flux_assemble&#45;&gt;proc~ocean_surfflux_assemble_cover_impl</title>
+<path fill="none" stroke="#0066ff" d="M601.24,-54.13C609.07,-54.13 617.1,-54.13 625.14,-54.13"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="625,-57.64 635,-54.14 625,-50.64 625,-57.64"/>
+</g>
+<!-- proc~ocean_surfflux_assemble_impl -->
+<g id="proc~~engine_step_finalize~~CallsGraph_node20" class="node">
+<title>proc~ocean_surfflux_assemble_impl</title>
+<g id="a_proc~~engine_step_finalize~~CallsGraph_node20"><a xlink:href="../proc/ocean_surfflux_assemble_impl.html" xlink:title="ocean_surfflux_assemble_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="828.71,-24.27 654.44,-24.27 654.44,0 828.71,0 828.71,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="741.57" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_surfflux_assemble_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_surface_flux_assemble&#45;&gt;proc~ocean_surfflux_assemble_impl -->
+<g id="proc~~engine_step_finalize~~CallsGraph_edge22" class="edge">
+<title>proc~ocean_surface_flux_assemble&#45;&gt;proc~ocean_surfflux_assemble_impl</title>
+<path fill="none" stroke="#0066ff" d="M583.76,-41.53C608.46,-36.9 636.64,-31.62 662.23,-26.82"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="662.73,-30.29 671.92,-25.01 661.44,-23.41 662.73,-30.29"/>
+</g>
+<!-- local -->
+<g id="proc~~engine_step_finalize~~CallsGraph_node25" class="node">
+<title>local</title>
+<polygon fill="#777777" stroke="#777777" points="989.34,-150.27 935.34,-150.27 935.34,-126 989.34,-126 989.34,-150.27"/>
+<text xml:space="preserve" text-anchor="middle" x="962.34" y="-134.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">local</text>
+</g>
+<!-- proc~cavity_far_field_impl&#45;&gt;local -->
+<g id="proc~~engine_step_finalize~~CallsGraph_edge23" class="edge">
+<title>proc~cavity_far_field_impl&#45;&gt;local</title>
+<path fill="none" stroke="#ff5900" d="M802.09,-301.48C817.32,-298.36 833.12,-293.3 846.33,-285.13 896.36,-254.23 933.26,-193.27 950.5,-160.39"/>
+<polygon fill="#ff5900" stroke="#ff5900" points="953.48,-162.25 954.89,-151.76 947.24,-159.08 953.48,-162.25"/>
+</g>
+<!-- proc~cavity_melt_columns_2d&#45;&gt;local -->
+<g id="proc~~engine_step_finalize~~CallsGraph_edge24" class="edge">
+<title>proc~cavity_melt_columns_2d&#45;&gt;local</title>
+<path fill="none" stroke="#f0ff00" d="M812.52,-342.19C824.52,-338.95 836.33,-334.16 846.33,-327.13 905.85,-285.36 940.23,-202.02 954.11,-161.43"/>
+<polygon fill="#f0ff00" stroke="#f0ff00" points="957.35,-162.77 957.15,-152.17 950.7,-160.58 957.35,-162.77"/>
+</g>
+<!-- proc~cavity_melt_point_gamma_f -->
+<g id="proc~~engine_step_finalize~~CallsGraph_node26" class="node">
+<title>proc~cavity_melt_point_gamma_f</title>
+<g id="a_proc~~engine_step_finalize~~CallsGraph_node26"><a xlink:href="../proc/cavity_melt_point_gamma_f.html" xlink:title="cavity_melt_point_gamma_f">
+<polygon fill="#d9534f" stroke="#d9534f" points="1042.35,-394.27 882.33,-394.27 882.33,-370 1042.35,-370 1042.35,-394.27"/>
+<text xml:space="preserve" text-anchor="middle" x="962.34" y="-378.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cavity_melt_point_gamma_f</text>
+</a>
+</g>
+</g>
+<!-- proc~cavity_melt_columns_2d&#45;&gt;proc~cavity_melt_point_gamma_f -->
+<g id="proc~~engine_step_finalize~~CallsGraph_edge25" class="edge">
+<title>proc~cavity_melt_columns_2d&#45;&gt;proc~cavity_melt_point_gamma_f</title>
+<path fill="none" stroke="#f0ff00" d="M812.69,-359.03C831.18,-361.91 851.4,-365.05 870.81,-368.06"/>
+<polygon fill="#f0ff00" stroke="#f0ff00" points="870.2,-371.51 880.62,-369.59 871.28,-364.6 870.2,-371.51"/>
+</g>
+<!-- proc~cavity_ustar -->
+<g id="proc~~engine_step_finalize~~CallsGraph_node27" class="node">
+<title>proc~cavity_ustar</title>
+<g id="a_proc~~engine_step_finalize~~CallsGraph_node27"><a xlink:href="../proc/cavity_ustar.html" xlink:title="cavity_ustar">
+<polygon fill="#d9534f" stroke="#d9534f" points="999.98,-352.27 924.71,-352.27 924.71,-328 999.98,-328 999.98,-352.27"/>
+<text xml:space="preserve" text-anchor="middle" x="962.34" y="-336.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cavity_ustar</text>
+</a>
+</g>
+</g>
+<!-- proc~cavity_melt_columns_2d&#45;&gt;proc~cavity_ustar -->
+<g id="proc~~engine_step_finalize~~CallsGraph_edge26" class="edge">
+<title>proc~cavity_melt_columns_2d&#45;&gt;proc~cavity_ustar</title>
+<path fill="none" stroke="#f0ff00" d="M812.69,-345.57C845.46,-344.37 883.65,-342.98 913.12,-341.9"/>
+<polygon fill="#f0ff00" stroke="#f0ff00" points="912.98,-345.41 922.84,-341.54 912.72,-338.41 912.98,-345.41"/>
+</g>
+<!-- reduce -->
+<g id="proc~~engine_step_finalize~~CallsGraph_node38" class="node">
+<title>reduce</title>
+<polygon fill="#777777" stroke="#777777" points="989.34,-441.27 935.34,-441.27 935.34,-417 989.34,-417 989.34,-441.27"/>
+<text xml:space="preserve" text-anchor="middle" x="962.34" y="-425.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">reduce</text>
+</g>
+<!-- proc~cavity_status_counts_impl&#45;&gt;reduce -->
+<g id="proc~~engine_step_finalize~~CallsGraph_edge27" class="edge">
+<title>proc~cavity_status_counts_impl&#45;&gt;reduce</title>
+<path fill="none" stroke="#3cff00" d="M816.33,-431.12C852.31,-430.63 894.06,-430.06 923.5,-429.65"/>
+<polygon fill="#3cff00" stroke="#3cff00" points="923.45,-433.16 933.4,-429.52 923.35,-426.16 923.45,-433.16"/>
+</g>
+<!-- proc~diag_reduce_stats -->
+<g id="proc~~engine_step_finalize~~CallsGraph_node28" class="node">
+<title>proc~diag_reduce_stats</title>
+<g id="a_proc~~engine_step_finalize~~CallsGraph_node28"><a xlink:href="../proc/diag_reduce_stats.html" xlink:title="diag_reduce_stats">
+<polygon fill="#d9534f" stroke="#d9534f" points="794.96,-402.27 688.19,-402.27 688.19,-378 794.96,-378 794.96,-402.27"/>
+<text xml:space="preserve" text-anchor="middle" x="741.57" y="-386.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">diag_reduce_stats</text>
+</a>
+</g>
+</g>
+<!-- proc~diag_field_stats&#45;&gt;proc~diag_reduce_stats -->
+<g id="proc~~engine_step_finalize~~CallsGraph_edge28" class="edge">
+<title>proc~diag_field_stats&#45;&gt;proc~diag_reduce_stats</title>
+<path fill="none" stroke="#00ff1e" d="M562.33,-312.18C575.42,-315.29 589.27,-320.01 600.81,-327.13 621.73,-340.05 615.61,-356.69 636.81,-369.13 648.88,-376.22 662.95,-380.95 676.76,-384.1"/>
+<polygon fill="#00ff1e" stroke="#00ff1e" points="675.76,-387.47 686.25,-386 677.13,-380.6 675.76,-387.47"/>
+</g>
+<!-- error -->
+<g id="proc~~engine_step_finalize~~CallsGraph_node24" class="node">
+<title>error</title>
+<polygon fill="#777777" stroke="#777777" points="989.34,-654.27 935.34,-654.27 935.34,-630 989.34,-630 989.34,-654.27"/>
+<text xml:space="preserve" text-anchor="middle" x="962.34" y="-638.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">error</text>
+</g>
+<!-- proc~fail&#45;&gt;error -->
+<g id="proc~~engine_step_finalize~~CallsGraph_edge29" class="edge">
+<title>proc~fail&#45;&gt;error</title>
+<path fill="none" stroke="#00ff78" d="M768.96,-642.13C807.48,-642.13 879.3,-642.13 923.46,-642.13"/>
+<polygon fill="#00ff78" stroke="#00ff78" points="923.34,-645.64 933.34,-642.14 923.34,-638.64 923.34,-645.64"/>
+</g>
+<!-- proc~error_ring_push -->
+<g id="proc~~engine_step_finalize~~CallsGraph_node29" class="node">
+<title>proc~error_ring_push</title>
+<g id="a_proc~~engine_step_finalize~~CallsGraph_node29"><a xlink:href="../proc/error_ring_push.html" xlink:title="error_ring_push">
+<polygon fill="#d9534f" stroke="#d9534f" points="1009.73,-696.27 914.96,-696.27 914.96,-672 1009.73,-672 1009.73,-696.27"/>
+<text xml:space="preserve" text-anchor="middle" x="962.34" y="-680.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">error_ring_push</text>
+</a>
+</g>
+</g>
+<!-- proc~fail&#45;&gt;proc~error_ring_push -->
+<g id="proc~~engine_step_finalize~~CallsGraph_edge30" class="edge">
+<title>proc~fail&#45;&gt;proc~error_ring_push</title>
+<path fill="none" stroke="#00ff78" d="M768.96,-647.2C802.1,-653.56 859.9,-664.66 903.51,-673.03"/>
+<polygon fill="#00ff78" stroke="#00ff78" points="902.59,-676.42 913.07,-674.87 903.91,-669.55 902.59,-676.42"/>
+</g>
+<!-- proc~finalise_copy_impl -->
+<g id="proc~~engine_step_finalize~~CallsGraph_node31" class="node">
+<title>proc~finalise_copy_impl</title>
+<g id="a_proc~~engine_step_finalize~~CallsGraph_node31"><a xlink:href="../proc/finalise_copy_impl.html" xlink:title="finalise_copy_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="796.08,-234.27 687.06,-234.27 687.06,-210 796.08,-210 796.08,-234.27"/>
+<text xml:space="preserve" text-anchor="middle" x="741.57" y="-218.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">finalise_copy_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~fill_and_remap&#45;&gt;proc~finalise_copy_impl -->
+<g id="proc~~engine_step_finalize~~CallsGraph_edge31" class="edge">
+<title>proc~fill_and_remap&#45;&gt;proc~finalise_copy_impl</title>
+<path fill="none" stroke="#00ffd1" d="M560.81,-222.13C593.63,-222.13 638.88,-222.13 675.76,-222.13"/>
+<polygon fill="#00ffd1" stroke="#00ffd1" points="675.41,-225.64 685.41,-222.14 675.41,-218.64 675.41,-225.64"/>
+</g>
+<!-- proc~finalise_accumulator&#45;&gt;proc~finalise_copy_impl -->
+<g id="proc~~engine_step_finalize~~CallsGraph_edge32" class="edge">
+<title>proc~finalise_accumulator&#45;&gt;proc~finalise_copy_impl</title>
+<path fill="none" stroke="#00d1ff" d="M577.17,-191.5C607.64,-197.21 644.58,-204.14 675.63,-209.96"/>
+<polygon fill="#00d1ff" stroke="#00d1ff" points="674.82,-213.37 685.29,-211.77 676.11,-206.49 674.82,-213.37"/>
+</g>
+<!-- proc~finalise_scale_impl -->
+<g id="proc~~engine_step_finalize~~CallsGraph_node32" class="node">
+<title>proc~finalise_scale_impl</title>
+<g id="a_proc~~engine_step_finalize~~CallsGraph_node32"><a xlink:href="../proc/finalise_scale_impl.html" xlink:title="finalise_scale_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="797.21,-192.27 685.94,-192.27 685.94,-168 797.21,-168 797.21,-192.27"/>
+<text xml:space="preserve" text-anchor="middle" x="741.57" y="-176.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">finalise_scale_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~finalise_accumulator&#45;&gt;proc~finalise_scale_impl -->
+<g id="proc~~engine_step_finalize~~CallsGraph_edge33" class="edge">
+<title>proc~finalise_accumulator&#45;&gt;proc~finalise_scale_impl</title>
+<path fill="none" stroke="#00d1ff" d="M577.17,-180.13C607.16,-180.13 643.43,-180.13 674.16,-180.13"/>
+<polygon fill="#00d1ff" stroke="#00d1ff" points="674.14,-183.64 684.14,-180.14 674.14,-176.64 674.14,-183.64"/>
+</g>
+<!-- proc~fold_sample_masked_impl -->
+<g id="proc~~engine_step_finalize~~CallsGraph_node33" class="node">
+<title>proc~fold_sample_masked_impl</title>
+<g id="a_proc~~engine_step_finalize~~CallsGraph_node33"><a xlink:href="../proc/fold_sample_masked_impl.html" xlink:title="fold_sample_masked_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="817.46,-150.27 665.69,-150.27 665.69,-126 817.46,-126 817.46,-150.27"/>
+<text xml:space="preserve" text-anchor="middle" x="741.57" y="-134.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">fold_sample_masked_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~fold_sample&#45;&gt;proc~fold_sample_masked_impl -->
+<g id="proc~~engine_step_finalize~~CallsGraph_edge34" class="edge">
+<title>proc~fold_sample&#45;&gt;proc~fold_sample_masked_impl</title>
+<path fill="none" stroke="#0078ff" d="M554.05,-138.13C581.36,-138.13 619.49,-138.13 654.16,-138.13"/>
+<polygon fill="#0078ff" stroke="#0078ff" points="653.76,-141.64 663.76,-138.14 653.76,-134.64 653.76,-141.64"/>
+</g>
+<!-- proc~fold_sample_unmasked_impl -->
+<g id="proc~~engine_step_finalize~~CallsGraph_node34" class="node">
+<title>proc~fold_sample_unmasked_impl</title>
+<g id="a_proc~~engine_step_finalize~~CallsGraph_node34"><a xlink:href="../proc/fold_sample_unmasked_impl.html" xlink:title="fold_sample_unmasked_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="824.21,-108.27 658.94,-108.27 658.94,-84 824.21,-84 824.21,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="741.57" y="-92.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">fold_sample_unmasked_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~fold_sample&#45;&gt;proc~fold_sample_unmasked_impl -->
+<g id="proc~~engine_step_finalize~~CallsGraph_edge35" class="edge">
+<title>proc~fold_sample&#45;&gt;proc~fold_sample_unmasked_impl</title>
+<path fill="none" stroke="#0078ff" d="M554.05,-131.11C583.51,-125.58 625.56,-117.7 662.27,-110.81"/>
+<polygon fill="#0078ff" stroke="#0078ff" points="662.81,-114.28 671.99,-108.99 661.52,-107.4 662.81,-114.28"/>
+</g>
+<!-- proc~grid_is_tiled -->
+<g id="proc~~engine_step_finalize~~CallsGraph_node35" class="node">
+<title>proc~grid_is_tiled</title>
+<g id="a_proc~~engine_step_finalize~~CallsGraph_node35"><a xlink:href="../proc/grid_is_tiled.html" xlink:title="grid_is_tiled">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="999.6,-570.27 925.08,-570.27 925.08,-546 999.6,-546 999.6,-570.27"/>
+<text xml:space="preserve" text-anchor="middle" x="962.34" y="-554.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">grid_is_tiled</text>
+</a>
+</g>
+</g>
+<!-- proc~grid_allreduce_sum_i8&#45;&gt;proc~grid_is_tiled -->
+<g id="proc~~engine_step_finalize~~CallsGraph_edge36" class="edge">
+<title>proc~grid_allreduce_sum_i8&#45;&gt;proc~grid_is_tiled</title>
+<path fill="none" stroke="#001dff" d="M807.02,-587.76C841.15,-581.21 882.34,-573.3 913.57,-567.31"/>
+<polygon fill="#001dff" stroke="#001dff" points="913.95,-570.8 923.11,-565.47 912.63,-563.92 913.95,-570.8"/>
+</g>
+<!-- proc~halo_allreduce_sum_i8 -->
+<g id="proc~~engine_step_finalize~~CallsGraph_node36" class="node">
+<title>proc~halo_allreduce_sum_i8</title>
+<g id="a_proc~~engine_step_finalize~~CallsGraph_node36"><a xlink:href="../proc/halo_allreduce_sum_i8.html" xlink:title="halo_allreduce_sum_i8">
+<polygon fill="#d9534f" stroke="#d9534f" points="1028.48,-612.27 896.21,-612.27 896.21,-588 1028.48,-588 1028.48,-612.27"/>
+<text xml:space="preserve" text-anchor="middle" x="962.34" y="-596.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">halo_allreduce_sum_i8</text>
+</a>
+</g>
+</g>
+<!-- proc~grid_allreduce_sum_i8&#45;&gt;proc~halo_allreduce_sum_i8 -->
+<g id="proc~~engine_step_finalize~~CallsGraph_edge37" class="edge">
+<title>proc~grid_allreduce_sum_i8&#45;&gt;proc~halo_allreduce_sum_i8</title>
+<path fill="none" stroke="#001dff" d="M807.02,-600.13C831.29,-600.13 859.12,-600.13 884.41,-600.13"/>
+<polygon fill="#001dff" stroke="#001dff" points="884.32,-603.64 894.32,-600.14 884.32,-596.64 884.32,-603.64"/>
+</g>
+<!-- proc~ocean_surfflux_assemble_cover_impl&#45;&gt;local -->
+<g id="proc~~engine_step_finalize~~CallsGraph_edge38" class="edge">
+<title>proc~ocean_surfflux_assemble_cover_impl&#45;&gt;local</title>
+<path fill="none" stroke="#3c00ff" d="M818.4,-66.71C827.93,-69.09 837.44,-71.89 846.33,-75.13 877.48,-86.52 910.43,-105.35 933.03,-119.47"/>
+<polygon fill="#3c00ff" stroke="#3c00ff" points="931.05,-122.35 941.37,-124.76 934.81,-116.45 931.05,-122.35"/>
+</g>
+<!-- rdb_vl_first_live -->
+<g id="proc~~engine_step_finalize~~CallsGraph_node37" class="node">
+<title>rdb_vl_first_live</title>
+<polygon fill="#777777" stroke="#777777" points="1008.98,-45.27 915.71,-45.27 915.71,-21 1008.98,-21 1008.98,-45.27"/>
+<text xml:space="preserve" text-anchor="middle" x="962.34" y="-29.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_vl_first_live</text>
+</g>
+<!-- proc~ocean_surfflux_assemble_cover_impl&#45;&gt;rdb_vl_first_live -->
+<g id="proc~~engine_step_finalize~~CallsGraph_edge39" class="edge">
+<title>proc~ocean_surfflux_assemble_cover_impl&#45;&gt;rdb_vl_first_live</title>
+<path fill="none" stroke="#3c00ff" d="M846.83,-44.13C866.6,-42.23 886.59,-40.31 904.22,-38.62"/>
+<polygon fill="#3c00ff" stroke="#3c00ff" points="904.31,-42.13 913.93,-37.69 903.64,-35.16 904.31,-42.13"/>
+</g>
+<!-- proc~ocean_surfflux_assemble_impl&#45;&gt;local -->
+<g id="proc~~engine_step_finalize~~CallsGraph_edge40" class="edge">
+<title>proc~ocean_surfflux_assemble_impl&#45;&gt;local</title>
+<path fill="none" stroke="#9500ff" d="M825.79,-24.74C832.91,-27.08 839.86,-29.85 846.33,-33.13 886.98,-53.77 923.98,-92.78 944.5,-117"/>
+<polygon fill="#9500ff" stroke="#9500ff" points="941.73,-119.15 950.8,-124.62 947.12,-114.68 941.73,-119.15"/>
+</g>
+<!-- proc~ocean_surfflux_assemble_impl&#45;&gt;rdb_vl_first_live -->
+<g id="proc~~engine_step_finalize~~CallsGraph_edge41" class="edge">
+<title>proc~ocean_surfflux_assemble_impl&#45;&gt;rdb_vl_first_live</title>
+<path fill="none" stroke="#9500ff" d="M829.03,-20.43C854.27,-22.86 881.21,-25.44 904.15,-27.65"/>
+<polygon fill="#9500ff" stroke="#9500ff" points="903.61,-31.11 913.9,-28.58 904.28,-24.14 903.61,-31.11"/>
+</g>
+<!-- proc~fill_buffer_impl -->
+<g id="proc~~engine_step_finalize~~CallsGraph_node30" class="node">
+<title>proc~fill_buffer_impl</title>
+<g id="a_proc~~engine_step_finalize~~CallsGraph_node30"><a xlink:href="../proc/fill_buffer_impl.html" xlink:title="fill_buffer_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="786.71,-276.27 696.44,-276.27 696.44,-252 786.71,-252 786.71,-276.27"/>
+<text xml:space="preserve" text-anchor="middle" x="741.57" y="-260.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">fill_buffer_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~reset_accumulator&#45;&gt;proc~fill_buffer_impl -->
+<g id="proc~~engine_step_finalize~~CallsGraph_edge42" class="edge">
+<title>proc~reset_accumulator&#45;&gt;proc~fill_buffer_impl</title>
+<path fill="none" stroke="#f000ff" d="M571.06,-264.13C605.51,-264.13 649.9,-264.13 684.62,-264.13"/>
+<polygon fill="#f000ff" stroke="#f000ff" points="684.48,-267.64 694.47,-264.14 684.47,-260.64 684.48,-267.64"/>
+</g>
+<!-- proc~cavity_solve_melt_f -->
+<g id="proc~~engine_step_finalize~~CallsGraph_node40" class="node">
+<title>proc~cavity_solve_melt_f</title>
+<g id="a_proc~~engine_step_finalize~~CallsGraph_node40"><a xlink:href="../proc/cavity_solve_melt_f.html" xlink:title="cavity_solve_melt_f">
+<polygon fill="#d9534f" stroke="#d9534f" points="1216.25,-394.27 1101.98,-394.27 1101.98,-370 1216.25,-370 1216.25,-394.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1159.11" y="-378.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cavity_solve_melt_f</text>
+</a>
+</g>
+</g>
+<!-- proc~cavity_melt_point_gamma_f&#45;&gt;proc~cavity_solve_melt_f -->
+<g id="proc~~engine_step_finalize~~CallsGraph_edge43" class="edge">
+<title>proc~cavity_melt_point_gamma_f&#45;&gt;proc~cavity_solve_melt_f</title>
+<path fill="none" stroke="#ffcc00" d="M1042.84,-382.13C1058.52,-382.13 1074.83,-382.13 1090.09,-382.13"/>
+<polygon fill="#ffcc00" stroke="#ffcc00" points="1090,-385.64 1100,-382.14 1090,-378.64 1090,-385.64"/>
+</g>
+<!-- proc~diag_reduce_stats&#45;&gt;reduce -->
+<g id="proc~~engine_step_finalize~~CallsGraph_edge44" class="edge">
+<title>proc~diag_reduce_stats&#45;&gt;reduce</title>
+<path fill="none" stroke="#65ff00" d="M795.25,-399.53C834.89,-406.59 888.27,-416.11 923.69,-422.42"/>
+<polygon fill="#65ff00" stroke="#65ff00" points="923.02,-425.86 933.48,-424.17 924.25,-418.97 923.02,-425.86"/>
+</g>
+<!-- proc~fold_sample_masked_impl&#45;&gt;local -->
+<g id="proc~~engine_step_finalize~~CallsGraph_edge45" class="edge">
+<title>proc~fold_sample_masked_impl&#45;&gt;local</title>
+<path fill="none" stroke="#0066ff" d="M817.86,-138.13C853.6,-138.13 894.73,-138.13 923.77,-138.13"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="923.52,-141.64 933.52,-138.14 923.52,-134.64 923.52,-141.64"/>
+</g>
+<!-- allreduce -->
+<g id="proc~~engine_step_finalize~~CallsGraph_node39" class="node">
+<title>allreduce</title>
+<polygon fill="#777777" stroke="#777777" points="1189.62,-580.27 1128.6,-580.27 1128.6,-556 1189.62,-556 1189.62,-580.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1159.11" y="-564.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">allreduce</text>
+</g>
+<!-- proc~halo_allreduce_sum_i8&#45;&gt;allreduce -->
+<g id="proc~~engine_step_finalize~~CallsGraph_edge46" class="edge">
+<title>proc~halo_allreduce_sum_i8&#45;&gt;allreduce</title>
+<path fill="none" stroke="#cc00ff" d="M1028.74,-589.39C1057.97,-584.59 1091.52,-579.08 1117.13,-574.87"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="1117.5,-578.35 1126.8,-573.28 1116.37,-571.45 1117.5,-578.35"/>
+</g>
+<!-- proc~comm_env_compute_comm -->
+<g id="proc~~engine_step_finalize~~CallsGraph_node41" class="node">
+<title>proc~comm_env_compute_comm</title>
+<g id="a_proc~~engine_step_finalize~~CallsGraph_node41"><a xlink:href="../proc/comm_env_compute_comm.html" xlink:title="comm_env_compute_comm">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="1239.87,-622.27 1078.35,-622.27 1078.35,-598 1239.87,-598 1239.87,-622.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1159.11" y="-606.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">comm_env_compute_comm</text>
+</a>
+</g>
+</g>
+<!-- proc~halo_allreduce_sum_i8&#45;&gt;proc~comm_env_compute_comm -->
+<g id="proc~~engine_step_finalize~~CallsGraph_edge47" class="edge">
+<title>proc~halo_allreduce_sum_i8&#45;&gt;proc~comm_env_compute_comm</title>
+<path fill="none" stroke="#cc00ff" d="M1028.74,-603.49C1040.96,-604.12 1053.94,-604.79 1066.78,-605.45"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="1066.32,-608.93 1076.49,-605.94 1066.68,-601.94 1066.32,-608.93"/>
+</g>
+<!-- proc~cavity_heat_fluxes -->
+<g id="proc~~engine_step_finalize~~CallsGraph_node43" class="node">
+<title>proc~cavity_heat_fluxes</title>
+<g id="a_proc~~engine_step_finalize~~CallsGraph_node43"><a xlink:href="../proc/cavity_heat_fluxes.html" xlink:title="cavity_heat_fluxes">
+<polygon fill="#d9534f" stroke="#d9534f" points="1396.89,-475.27 1287.87,-475.27 1287.87,-451 1396.89,-451 1396.89,-475.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1342.38" y="-459.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cavity_heat_fluxes</text>
+</a>
+</g>
+</g>
+<!-- proc~cavity_solve_melt_f&#45;&gt;proc~cavity_heat_fluxes -->
+<g id="proc~~engine_step_finalize~~CallsGraph_edge48" class="edge">
+<title>proc~cavity_solve_melt_f&#45;&gt;proc~cavity_heat_fluxes</title>
+<path fill="none" stroke="#00ff00" d="M1181.78,-394.77C1204.65,-407.76 1242.01,-428.05 1275.87,-442.13 1279.74,-443.74 1283.77,-445.31 1287.86,-446.8"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="1286.69,-450.1 1297.29,-450.11 1289.01,-443.5 1286.69,-450.1"/>
+</g>
+<!-- proc~cavity_law_is_implicit -->
+<g id="proc~~engine_step_finalize~~CallsGraph_node44" class="node">
+<title>proc~cavity_law_is_implicit</title>
+<g id="a_proc~~engine_step_finalize~~CallsGraph_node44"><a xlink:href="../proc/cavity_law_is_implicit.html" xlink:title="cavity_law_is_implicit">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="1404.39,-433.27 1280.37,-433.27 1280.37,-409 1404.39,-409 1404.39,-433.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1342.38" y="-417.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cavity_law_is_implicit</text>
+</a>
+</g>
+</g>
+<!-- proc~cavity_solve_melt_f&#45;&gt;proc~cavity_law_is_implicit -->
+<g id="proc~~engine_step_finalize~~CallsGraph_edge49" class="edge">
+<title>proc~cavity_solve_melt_f&#45;&gt;proc~cavity_law_is_implicit</title>
+<path fill="none" stroke="#00ff00" d="M1216.47,-394.26C1233.94,-398.02 1253.41,-402.21 1271.67,-406.14"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="1270.87,-409.54 1281.38,-408.23 1272.34,-402.7 1270.87,-409.54"/>
+</g>
+<!-- proc~cavity_obukhov_length -->
+<g id="proc~~engine_step_finalize~~CallsGraph_node45" class="node">
+<title>proc~cavity_obukhov_length</title>
+<g id="a_proc~~engine_step_finalize~~CallsGraph_node45"><a xlink:href="../proc/cavity_obukhov_length.html" xlink:title="cavity_obukhov_length">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="1408.89,-391.27 1275.87,-391.27 1275.87,-367 1408.89,-367 1408.89,-391.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1342.38" y="-375.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cavity_obukhov_length</text>
+</a>
+</g>
+</g>
+<!-- proc~cavity_solve_melt_f&#45;&gt;proc~cavity_obukhov_length -->
+<g id="proc~~engine_step_finalize~~CallsGraph_edge50" class="edge">
+<title>proc~cavity_solve_melt_f&#45;&gt;proc~cavity_obukhov_length</title>
+<path fill="none" stroke="#00ff00" d="M1216.47,-381.2C1231.52,-380.95 1248.06,-380.68 1264.03,-380.42"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="1264.07,-383.91 1274.02,-380.25 1263.96,-376.92 1264.07,-383.91"/>
+</g>
+<!-- proc~cavity_outer_residual -->
+<g id="proc~~engine_step_finalize~~CallsGraph_node46" class="node">
+<title>proc~cavity_outer_residual</title>
+<g id="a_proc~~engine_step_finalize~~CallsGraph_node46"><a xlink:href="../proc/cavity_outer_residual.html" xlink:title="cavity_outer_residual">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="1404.39,-349.27 1280.37,-349.27 1280.37,-325 1404.39,-325 1404.39,-349.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1342.38" y="-333.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cavity_outer_residual</text>
+</a>
+</g>
+</g>
+<!-- proc~cavity_solve_melt_f&#45;&gt;proc~cavity_outer_residual -->
+<g id="proc~~engine_step_finalize~~CallsGraph_edge51" class="edge">
+<title>proc~cavity_solve_melt_f&#45;&gt;proc~cavity_outer_residual</title>
+<path fill="none" stroke="#00ff00" d="M1210.6,-369.6C1231.93,-364.31 1256.98,-358.09 1279.41,-352.52"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="1280.2,-355.93 1289.06,-350.12 1278.51,-349.14 1280.2,-355.93"/>
+</g>
+<!-- proc~cavity_safe_state -->
+<g id="proc~~engine_step_finalize~~CallsGraph_node47" class="node">
+<title>proc~cavity_safe_state</title>
+<g id="a_proc~~engine_step_finalize~~CallsGraph_node47"><a xlink:href="../proc/cavity_safe_state.html" xlink:title="cavity_safe_state">
+<polygon fill="#d9534f" stroke="#d9534f" points="1393.52,-307.27 1291.25,-307.27 1291.25,-283 1393.52,-283 1393.52,-307.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1342.38" y="-291.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cavity_safe_state</text>
+</a>
+</g>
+</g>
+<!-- proc~cavity_solve_melt_f&#45;&gt;proc~cavity_safe_state -->
+<g id="proc~~engine_step_finalize~~CallsGraph_edge52" class="edge">
+<title>proc~cavity_solve_melt_f&#45;&gt;proc~cavity_safe_state</title>
+<path fill="none" stroke="#00ff00" d="M1179.13,-369.65C1201.56,-355.31 1240.29,-331.78 1275.87,-316.13 1279.59,-314.5 1283.47,-312.93 1287.42,-311.44"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="1288.26,-314.85 1296.49,-308.17 1285.9,-308.26 1288.26,-314.85"/>
+</g>
+<!-- proc~cavity_solution_reset -->
+<g id="proc~~engine_step_finalize~~CallsGraph_node48" class="node">
+<title>proc~cavity_solution_reset</title>
+<g id="a_proc~~engine_step_finalize~~CallsGraph_node48"><a xlink:href="../proc/cavity_solution_reset.html" xlink:title="cavity_solution_reset">
+<polygon fill="#d9534f" stroke="#d9534f" points="1403.27,-265.27 1281.5,-265.27 1281.5,-241 1403.27,-241 1403.27,-265.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1342.38" y="-249.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cavity_solution_reset</text>
+</a>
+</g>
+</g>
+<!-- proc~cavity_solve_melt_f&#45;&gt;proc~cavity_solution_reset -->
+<g id="proc~~engine_step_finalize~~CallsGraph_edge53" class="edge">
+<title>proc~cavity_solve_melt_f&#45;&gt;proc~cavity_solution_reset</title>
+<path fill="none" stroke="#00ff00" d="M1170.24,-369.57C1188.88,-347.25 1230.82,-300.56 1275.87,-274.13 1278.17,-272.78 1280.57,-271.51 1283.04,-270.31"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="1284.28,-273.58 1292.04,-266.37 1281.48,-267.17 1284.28,-273.58"/>
+</g>
+<!-- proc~cavity_state_at_x -->
+<g id="proc~~engine_step_finalize~~CallsGraph_node49" class="node">
+<title>proc~cavity_state_at_x</title>
+<g id="a_proc~~engine_step_finalize~~CallsGraph_node49"><a xlink:href="../proc/cavity_state_at_x.html" xlink:title="cavity_state_at_x">
+<polygon fill="#d9534f" stroke="#d9534f" points="1393.14,-559.27 1291.62,-559.27 1291.62,-535 1393.14,-535 1393.14,-559.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1342.38" y="-543.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cavity_state_at_x</text>
+</a>
+</g>
+</g>
+<!-- proc~cavity_solve_melt_f&#45;&gt;proc~cavity_state_at_x -->
+<g id="proc~~engine_step_finalize~~CallsGraph_edge54" class="edge">
+<title>proc~cavity_solve_melt_f&#45;&gt;proc~cavity_state_at_x</title>
+<path fill="none" stroke="#00ff00" d="M1166.71,-394.58C1182.08,-422.35 1222.99,-489.81 1275.87,-526.13 1277.64,-527.35 1279.49,-528.5 1281.39,-529.59"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="1279.41,-532.51 1289.92,-533.83 1282.52,-526.24 1279.41,-532.51"/>
+</g>
+<!-- proc~eos_freezing_point -->
+<g id="proc~~engine_step_finalize~~CallsGraph_node50" class="node">
+<title>proc~eos_freezing_point</title>
+<g id="a_proc~~engine_step_finalize~~CallsGraph_node50"><a xlink:href="../proc/eos_freezing_point.html" xlink:title="eos_freezing_point">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="1397.64,-517.27 1287.12,-517.27 1287.12,-493 1397.64,-493 1397.64,-517.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1342.38" y="-501.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">eos_freezing_point</text>
+</a>
+</g>
+</g>
+<!-- proc~cavity_solve_melt_f&#45;&gt;proc~eos_freezing_point -->
+<g id="proc~~engine_step_finalize~~CallsGraph_edge55" class="edge">
+<title>proc~cavity_solve_melt_f&#45;&gt;proc~eos_freezing_point</title>
+<path fill="none" stroke="#00ff00" d="M1171,-394.64C1190.17,-415.92 1232.08,-459.28 1275.87,-484.13 1278.37,-485.55 1280.98,-486.89 1283.65,-488.15"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="1282.24,-491.35 1292.81,-492.03 1284.97,-484.91 1282.24,-491.35"/>
+</g>
+<!-- comm_world -->
+<g id="proc~~engine_step_finalize~~CallsGraph_node42" class="node">
+<title>comm_world</title>
+<polygon fill="#777777" stroke="#777777" points="1382.27,-622.27 1302.5,-622.27 1302.5,-598 1382.27,-598 1382.27,-622.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1342.38" y="-606.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">comm_world</text>
+</g>
+<!-- proc~comm_env_compute_comm&#45;&gt;comm_world -->
+<g id="proc~~engine_step_finalize~~CallsGraph_edge56" class="edge">
+<title>proc~comm_env_compute_comm&#45;&gt;comm_world</title>
+<path fill="none" stroke="#0000ff" d="M1240.15,-610.13C1257.55,-610.13 1275.48,-610.13 1291.32,-610.13"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="1290.94,-613.64 1300.94,-610.14 1290.94,-606.64 1290.94,-613.64"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocengine_step_finalizeCallsGraph = svgPanZoom('#procengine_step_finalizeCallsGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~engine_step_finalize~~CalledByGraph Pages: 1 -->
+<svg id="procengine_step_finalizeCalledByGraph" width="370pt" height="74pt"
+ viewBox="0.00 0.00 370.00 74.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~engine_step_finalize~~CalledByGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 70.27)">
+<title>proc~~engine_step_finalize~~CalledByGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-70.27 366.31,-70.27 366.31,4 -4,4"/>
+<!-- proc~engine_step_finalize -->
+<g id="proc~~engine_step_finalize~~CalledByGraph_node1" class="node">
+<title>proc~engine_step_finalize</title>
+<polygon fill="none" stroke="black" points="362.31,-45.27 242.79,-45.27 242.79,-21 362.31,-21 362.31,-45.27"/>
+<text xml:space="preserve" text-anchor="middle" x="302.55" y="-29.53" font-family="Helvetica,sans-Serif" font-size="10.50">engine_step_finalize</text>
+</g>
+<!-- proc~driver_run_ocean -->
+<g id="proc~~engine_step_finalize~~CalledByGraph_node2" class="node">
+<title>proc~driver_run_ocean</title>
+<g id="a_proc~~engine_step_finalize~~CalledByGraph_node2"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<polygon fill="#d9534f" stroke="#d9534f" points="206.79,-66.27 102.27,-66.27 102.27,-42 206.79,-42 206.79,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="154.53" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_step_finalize -->
+<g id="proc~~engine_step_finalize~~CalledByGraph_edge1" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_step_finalize</title>
+<path fill="none" stroke="#ff0000" d="M207.01,-46.73C214.77,-45.62 222.88,-44.45 230.96,-43.29"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="231.41,-46.76 240.81,-41.87 230.41,-39.83 231.41,-46.76"/>
+</g>
+<!-- proc~rdb_ocean_step -->
+<g id="proc~~engine_step_finalize~~CalledByGraph_node3" class="node">
+<title>proc~rdb_ocean_step</title>
+<g id="a_proc~~engine_step_finalize~~CalledByGraph_node3"><a xlink:href="../proc/rdb_ocean_step.html" xlink:title="rdb_ocean_step">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="202.29,-24.27 106.77,-24.27 106.77,0 202.29,0 202.29,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="154.53" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_step</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_step&#45;&gt;proc~engine_step_finalize -->
+<g id="proc~~engine_step_finalize~~CalledByGraph_edge2" class="edge">
+<title>proc~rdb_ocean_step&#45;&gt;proc~engine_step_finalize</title>
+<path fill="none" stroke="#ff0000" d="M202.54,-18.9C211.64,-20.21 221.37,-21.6 231.04,-23"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="230.43,-26.44 240.83,-24.4 231.43,-19.51 230.43,-26.44"/>
+</g>
+<!-- proc~driver_run -->
+<g id="proc~~engine_step_finalize~~CalledByGraph_node4" class="node">
+<title>proc~driver_run</title>
+<g id="a_proc~~engine_step_finalize~~CalledByGraph_node4"><a xlink:href="../proc/driver_run.html" xlink:title="driver_run">
+<polygon fill="#d9534f" stroke="#d9534f" points="66.27,-66.27 0,-66.27 0,-42 66.27,-42 66.27,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="33.13" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run&#45;&gt;proc~driver_run_ocean -->
+<g id="proc~~engine_step_finalize~~CalledByGraph_edge3" class="edge">
+<title>proc~driver_run&#45;&gt;proc~driver_run_ocean</title>
+<path fill="none" stroke="#ff0000" d="M66.76,-54.13C74.26,-54.13 82.48,-54.13 90.79,-54.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="90.58,-57.64 100.58,-54.14 90.58,-50.64 90.58,-57.64"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">subroutine </span><span class="n">engine_step_finalize</span><span class="p">(</span><span class="n">engine</span><span class="p">,</span><span class="w"> </span><span class="n">dt</span><span class="p">,</span><span class="w"> </span><span class="n">t</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! Second half of one outer step: derive `Q_heat`/`Q_salt` from</span>
+<span class="w">      </span><span class="c">!! the surface-flux component set (no-op unless</span>
+<span class="w">      </span><span class="c">!! `&amp;ocean_forcing_nml enable_components`) and, when diagnostics</span>
+<span class="w">      </span><span class="c">!! are configured, run one `ocean_diag_t%step`. Call immediately</span>
+<span class="w">      </span><span class="c">!! after `engine_step` and, when sea ice is enabled,</span>
+<span class="w">      </span><span class="c">!! `engine_step_ice` too — see `engine_step`'s docstring for why</span>
+<span class="w">      </span><span class="c">!! this is a separate call.</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_engine_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">engine</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dt</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">t</span>
+<span class="w">         </span><span class="c">!! Simulation time at the START of the step this finalizes</span>
+<span class="w">         </span><span class="c">!! (the same `t` passed to the matching `engine_step` call) —</span>
+<span class="w">         </span><span class="c">!! `t + dt` is what reaches the diag manager, matching</span>
+<span class="w">         </span><span class="c">!! `driver_run_ocean`'s post-advance `t_current`.</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ierr</span>
+
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">ierr</span><span class="p">))</span><span class="w"> </span><span class="n">ierr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">OCEAN_STATUS_OK</span>
+
+<span class="w">      </span><span class="c">! Ice-shelf basal melt (P2b): solve the three-equation interface on</span>
+<span class="w">      </span><span class="c">! every covered column and fill the OWNED heat_cavity/salt_cavity</span>
+<span class="w">      </span><span class="c">! components.  MUST precede the assembler, which folds them into</span>
+<span class="w">      </span><span class="c">! Q_heat/Q_salt.  Same thermo cadence, and a no-op (immediate</span>
+<span class="w">      </span><span class="c">! return) when &amp;ocean_cavity_melt_nml enable=.false.  Cavity x sea</span>
+<span class="w">      </span><span class="c">! ice is refused at configure, so the ordering against</span>
+<span class="w">      </span><span class="c">! engine_step_ice's fillers is not a live question.</span>
+<span class="w">      </span><span class="k">call </span><span class="n">ocean_cavity_flux_step</span><span class="p">(</span><span class="n">engine</span><span class="p">%</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">engine</span><span class="p">%</span><span class="n">state</span><span class="p">%</span><span class="n">cavity_flux</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                  </span><span class="n">engine</span><span class="p">%</span><span class="n">state</span><span class="p">%</span><span class="n">metrics</span><span class="p">,</span><span class="w"> </span><span class="n">engine</span><span class="p">%</span><span class="n">state</span><span class="p">%</span><span class="n">multilayer</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                  </span><span class="n">engine</span><span class="p">%</span><span class="n">state</span><span class="p">%</span><span class="n">eos</span><span class="p">,</span><span class="w"> </span><span class="n">engine</span><span class="p">%</span><span class="n">state</span><span class="p">%</span><span class="n">surface_flux</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                  </span><span class="n">active</span><span class="o">=</span><span class="n">engine</span><span class="p">%</span><span class="n">state</span><span class="p">%</span><span class="n">dyn</span><span class="p">%</span><span class="n">enable_thermodynamics</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                  </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">engine</span><span class="p">%</span><span class="n">state</span><span class="p">%</span><span class="n">dyn</span><span class="p">%</span><span class="n">is_thermo_step</span><span class="p">(),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                  </span><span class="n">ierr</span><span class="o">=</span><span class="n">ierr</span><span class="p">)</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">ierr</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         if</span><span class="w"> </span><span class="p">(</span><span class="n">ierr</span><span class="w"> </span><span class="o">/=</span><span class="w"> </span><span class="n">OCEAN_STATUS_OK</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+<span class="k">      end if</span>
+
+<span class="w">      </span><span class="c">! Phase 4b — the MELT-ONLY fallback for the boundary-layer `u_*`.</span>
+<span class="w">      </span><span class="c">!</span>
+<span class="w">      </span><span class="c">! When `&amp;ocean_tdrag_nml` is on, the RK2 stage drivers publish</span>
+<span class="w">      </span><span class="c">! `ss%stress_shelf` from the top drag's own `stress_top`, in-stage</span>
+<span class="w">      </span><span class="c">! and unlagged, and this branch stays out of the way.  When it is</span>
+<span class="w">      </span><span class="c">! OFF but basal melt is on, nothing else would give KPP/EPBL an</span>
+<span class="w">      </span><span class="c">! under-ice `u_*` at all — they would mix a covered column on the</span>
+<span class="w">      </span><span class="c">! masked (exactly zero) wind stress.  The melt slot already solved</span>
+<span class="w">      </span><span class="c">! for a friction velocity with the SAME `C_d` (the one-drag-</span>
+<span class="w">      </span><span class="c">! coefficient rule: `&amp;ocean_cavity_melt_nml cdrag_top` must equal</span>
+<span class="w">      </span><span class="c">! `&amp;ocean_tdrag_nml cd`), so re-deriving `|tau_top| = rho_0*u_*^2`</span>
+<span class="w">      </span><span class="c">! from it is the consistent answer, not a second drag law.</span>
+<span class="w">      </span><span class="c">!</span>
+<span class="w">      </span><span class="c">! HONEST LIMIT: `cav%ustar` is refreshed at the THERMO cadence, at</span>
+<span class="w">      </span><span class="c">! the END of the outer step, so this path reaches the boundary-layer</span>
+<span class="w">      </span><span class="c">! schemes ONE OUTER STEP LATE.  The top-drag path has no such lag.</span>
+<span class="w">      </span><span class="c">! `cav%ustar` is exactly 0 on every uncovered column, so the</span>
+<span class="w">      </span><span class="c">! published field keeps `stress_shelf`'s "zero off the cover"</span>
+<span class="w">      </span><span class="c">! invariant.</span>
+<span class="w">      </span><span class="c">!</span>
+<span class="w">      </span><span class="c">! A CALL, not an inline `do concurrent`, and the reason is a GPU</span>
+<span class="w">      </span><span class="c">! rule rather than a style preference.  A `do concurrent` written</span>
+<span class="w">      </span><span class="c">! here would reference `engine%state%surface_stress%stress_shelf`,</span>
+<span class="w">      </span><span class="c">! i.e. it would walk the ENGINE, and `ocean_engine_t` is not a</span>
+<span class="w">      </span><span class="c">! mapped object -- only `engine%state` is.  nvfortran then emits a</span>
+<span class="w">      </span><span class="c">! data clause for the whole `engine` and aborts at run time with</span>
+<span class="w">      </span><span class="c">! "variable in data clause is partially present on the device:</span>
+<span class="w">      </span><span class="c">! name=engine".  Measured, cc70, 2026-09-20: it did exactly that.</span>
+<span class="w">      </span><span class="c">! Host-dereferencing the two component arrays AT the call site and</span>
+<span class="w">      </span><span class="c">! handing them to a flat explicit-shape kernel is the fix -- the</span>
+<span class="w">      </span><span class="c">! outer-shim + flat-impl pattern.</span>
+<span class="w">      </span><span class="c">!</span>
+<span class="w">      </span><span class="c">! CLAUDE.md's "write a host-gated pass INLINE" rule does not apply:</span>
+<span class="w">      </span><span class="c">! that rule exists because an escaping state array pessimises the</span>
+<span class="w">      </span><span class="c">! OTHER `do concurrent` loops in the calling routine, and</span>
+<span class="w">      </span><span class="c">! `engine_step_finalize` has none -- it is a four-call orchestrator.</span>
+<span class="w">      </span><span class="c">!</span>
+<span class="w">      </span><span class="c">! Placeholder safety is STRUCTURAL, not a runtime branch: the gate</span>
+<span class="w">      </span><span class="c">! is `cavity_flux%enable`, and the melt slot allocates `ustar` at</span>
+<span class="w">      </span><span class="c">! `(nx, ny)` exactly when that is set (`(1,1)` otherwise), while</span>
+<span class="w">      </span><span class="c">! `stress_shelf` is always full size.  So the explicit-shape dummies</span>
+<span class="w">      </span><span class="c">! below can only ever be reached with matching, full-size actuals.</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">engine</span><span class="p">%</span><span class="n">state</span><span class="p">%</span><span class="n">cavity_flux</span><span class="p">%</span><span class="n">enable</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="p">.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">engine</span><span class="p">%</span><span class="n">state</span><span class="p">%</span><span class="n">tdrag</span><span class="p">%</span><span class="n">enable</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">ocean_surface_stress_set_shelf_from_ustar</span><span class="p">(</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">            </span><span class="n">engine</span><span class="p">%</span><span class="n">state</span><span class="p">%</span><span class="n">surface_stress</span><span class="p">%</span><span class="n">stress_shelf</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">            </span><span class="n">engine</span><span class="p">%</span><span class="n">state</span><span class="p">%</span><span class="n">cavity_flux</span><span class="p">%</span><span class="n">ustar</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">            </span><span class="n">engine</span><span class="p">%</span><span class="n">state</span><span class="p">%</span><span class="n">surface_stress</span><span class="p">%</span><span class="n">rho0</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">            </span><span class="n">size</span><span class="p">(</span><span class="n">engine</span><span class="p">%</span><span class="n">state</span><span class="p">%</span><span class="n">surface_stress</span><span class="p">%</span><span class="n">stress_shelf</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">            </span><span class="n">size</span><span class="p">(</span><span class="n">engine</span><span class="p">%</span><span class="n">state</span><span class="p">%</span><span class="n">surface_stress</span><span class="p">%</span><span class="n">stress_shelf</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">))</span>
+<span class="w">      </span><span class="k">end if</span>
+
+<span class="w">      </span><span class="c">! Ice-shelf cover: the assembler is where the atmospheric bands and</span>
+<span class="w">      </span><span class="c">! the cavity's own heat_cavity/salt_cavity are still separable, so</span>
+<span class="w">      </span><span class="c">! it is where `1 - cover_frac` is applied — and applying it there</span>
+<span class="w">      </span><span class="c">! (rather than at apply time) is also what makes the `Q_heat` /</span>
+<span class="w">      </span><span class="c">! `Q_salt` that KPP and EPBL read for `B_0` the MASKED values.</span>
+<span class="w">      </span><span class="c">! Cavity off ⇒ the original call, byte-identical.</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">engine</span><span class="p">%</span><span class="n">state</span><span class="p">%</span><span class="n">metrics</span><span class="p">%</span><span class="n">use_cavity</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">ocean_surface_flux_assemble</span><span class="p">(</span><span class="n">engine</span><span class="p">%</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">engine</span><span class="p">%</span><span class="n">state</span><span class="p">%</span><span class="n">surface_flux</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                          </span><span class="n">engine</span><span class="p">%</span><span class="n">state</span><span class="p">%</span><span class="n">multilayer</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                          </span><span class="n">active</span><span class="o">=</span><span class="n">engine</span><span class="p">%</span><span class="n">state</span><span class="p">%</span><span class="n">dyn</span><span class="p">%</span><span class="n">enable_thermodynamics</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                          </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">engine</span><span class="p">%</span><span class="n">state</span><span class="p">%</span><span class="n">dyn</span><span class="p">%</span><span class="n">is_thermo_step</span><span class="p">(),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                          </span><span class="n">cover_frac</span><span class="o">=</span><span class="n">engine</span><span class="p">%</span><span class="n">state</span><span class="p">%</span><span class="n">metrics</span><span class="p">%</span><span class="n">cover_frac</span><span class="p">)</span>
+<span class="w">      </span><span class="k">else</span>
+<span class="k">         call </span><span class="n">ocean_surface_flux_assemble</span><span class="p">(</span><span class="n">engine</span><span class="p">%</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">engine</span><span class="p">%</span><span class="n">state</span><span class="p">%</span><span class="n">surface_flux</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                          </span><span class="n">engine</span><span class="p">%</span><span class="n">state</span><span class="p">%</span><span class="n">multilayer</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                          </span><span class="n">active</span><span class="o">=</span><span class="n">engine</span><span class="p">%</span><span class="n">state</span><span class="p">%</span><span class="n">dyn</span><span class="p">%</span><span class="n">enable_thermodynamics</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                          </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">engine</span><span class="p">%</span><span class="n">state</span><span class="p">%</span><span class="n">dyn</span><span class="p">%</span><span class="n">is_thermo_step</span><span class="p">())</span>
+<span class="w">      </span><span class="k">end if</span>
+
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="n">engine</span><span class="p">%</span><span class="n">diag_enabled</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         call </span><span class="n">engine</span><span class="p">%</span><span class="n">state</span><span class="p">%</span><span class="n">diag</span><span class="p">%</span><span class="n">step</span><span class="p">(</span><span class="n">engine</span><span class="p">%</span><span class="n">state</span><span class="p">,</span><span class="w"> </span><span class="n">dt</span><span class="p">,</span><span class="w"> </span><span class="n">t</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">dt</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end if</span>
+<span class="k">   end subroutine </span><span class="n">engine_step_finalize</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-11-13 23:21 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

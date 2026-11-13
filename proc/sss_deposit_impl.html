@@ -1,0 +1,1148 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>sss_deposit_impl &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>sss_deposit_impl
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.0% of total for procedures.">37 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_sss_restore.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_sss_restore.f90.html'>rdb_ocean_sss_restore.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ocean_sss_restore.html'>rdb_ocean_sss_restore</a></li>
+            <li class="breadcrumb-item active" aria-current="page">sss_deposit_impl</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/sss_deposit_impl.html#variable-f~7">f</a>
+            <a class="list-group-item" href="../proc/sss_deposit_impl.html#variable-i~334">i</a>
+            <a class="list-group-item" href="../proc/sss_deposit_impl.html#variable-inc">inc</a>
+            <a class="list-group-item" href="../proc/sss_deposit_impl.html#variable-j~322">j</a>
+            <a class="list-group-item" href="../proc/sss_deposit_impl.html#variable-kt~32">kt</a>
+            <a class="list-group-item" href="../proc/sss_deposit_impl.html#variable-ow~4">ow</a>
+            <a class="list-group-item" href="../proc/sss_deposit_impl.html#variable-pw~10">pw</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/sss_deposit_impl.html#src">sss_deposit_impl</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>public pure subroutine sss_deposit_impl(nx, ny, nz, c, budget, h_layer, tgt, wet, cover, use_cover, k_top, coef, max_delta, h_min, convert_sp, net_mode, fpos, fneg, shift, inv_scale)  
+</h2>
+    
+
+    <p>Recompute <code>F</code>, apply the net adjustment, and deposit
+<code>inv_scale * F</code> (<code>inv_scale = dt/rho0</code>) into the first live layer
+and the salt budget contributor.  Over the full array (ghosts
+included - the target&rsquo;s ghosts were exchanged).</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx~350"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny~350"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz~283"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-c~49"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>c</strong>(nx,ny,nz)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-budget~9"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>budget</strong>(nx,ny,nz)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_layer~79"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_layer</strong>(nx,ny,nz)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-tgt~9"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>tgt</strong>(nx,ny)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-wet~9"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>wet</strong>(nx,ny)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-cover~6"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>cover</strong>(nx,ny)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-use_cover~3"></span>
+              logical,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>use_cover</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-k_top~8"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>k_top</strong>(nx,ny)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-coef~6"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>coef</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-max_delta~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>max_delta</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_min~22"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_min</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-convert_sp~4"></span>
+              logical,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>convert_sp</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-net_mode"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>net_mode</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-fpos~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>fpos</strong></td>
+            <td>
+                <p>Scaling factors (<code>SSS_NET_SCALE</code>).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-fneg~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>fneg</strong></td>
+            <td>
+                <p>Scaling factors (<code>SSS_NET_SCALE</code>).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-shift"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>shift</strong></td>
+            <td>
+                <p>Area-mean flux to subtract (<code>SSS_NET_MEAN</code>).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-inv_scale"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>inv_scale</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~sss_deposit_impl~~CallsGraph Pages: 1 -->
+<svg id="procsss_deposit_implCallsGraph" width="404pt" height="200pt"
+ viewBox="0.00 0.00 404.00 200.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~sss_deposit_impl~~CallsGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 196.27)">
+<title>proc~~sss_deposit_impl~~CallsGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-196.27 400.06,-196.27 400.06,4 -4,4"/>
+<!-- proc~sss_deposit_impl -->
+<g id="proc~~sss_deposit_impl~~CallsGraph_node1" class="node">
+<title>proc~sss_deposit_impl</title>
+<polygon fill="none" stroke="black" points="100.02,-108.27 0,-108.27 0,-84 100.02,-84 100.02,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="50.01" y="-92.54" font-family="Helvetica,sans-Serif" font-size="10.50">sss_deposit_impl</text>
+</g>
+<!-- local -->
+<g id="proc~~sss_deposit_impl~~CallsGraph_node2" class="node">
+<title>local</title>
+<polygon fill="#777777" stroke="#777777" points="240.78,-192.27 186.78,-192.27 186.78,-168 240.78,-168 240.78,-192.27"/>
+<text xml:space="preserve" text-anchor="middle" x="213.78" y="-176.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">local</text>
+</g>
+<!-- proc~sss_deposit_impl&#45;&gt;local -->
+<g id="proc~~sss_deposit_impl~~CallsGraph_edge1" class="edge">
+<title>proc~sss_deposit_impl&#45;&gt;local</title>
+<path fill="none" stroke="#ff0000" d="M64.4,-108.57C80.33,-122.73 108.26,-145.64 136.02,-159.13 148.32,-165.11 162.59,-169.61 175.46,-172.87"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="174.32,-176.2 184.86,-175.09 175.92,-169.39 174.32,-176.2"/>
+</g>
+<!-- proc~sss_cell_flux -->
+<g id="proc~~sss_deposit_impl~~CallsGraph_node3" class="node">
+<title>proc~sss_cell_flux</title>
+<g id="a_proc~~sss_deposit_impl~~CallsGraph_node3"><a xlink:href="../proc/sss_cell_flux.html" xlink:title="sss_cell_flux">
+<polygon fill="#d9534f" stroke="#d9534f" points="251.79,-150.27 175.77,-150.27 175.77,-126 251.79,-126 251.79,-150.27"/>
+<text xml:space="preserve" text-anchor="middle" x="213.78" y="-134.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">sss_cell_flux</text>
+</a>
+</g>
+</g>
+<!-- proc~sss_deposit_impl&#45;&gt;proc~sss_cell_flux -->
+<g id="proc~~sss_deposit_impl~~CallsGraph_edge2" class="edge">
+<title>proc~sss_deposit_impl&#45;&gt;proc~sss_cell_flux</title>
+<path fill="none" stroke="#ff0000" d="M99.55,-108.74C120.04,-114.06 143.85,-120.24 164.34,-125.56"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="163.31,-128.91 173.87,-128.03 165.07,-122.13 163.31,-128.91"/>
+</g>
+<!-- rdb_conc_accepted_source -->
+<g id="proc~~sss_deposit_impl~~CallsGraph_node4" class="node">
+<title>rdb_conc_accepted_source</title>
+<polygon fill="#777777" stroke="#777777" points="291.54,-108.27 136.02,-108.27 136.02,-84 291.54,-84 291.54,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="213.78" y="-92.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_conc_accepted_source</text>
+</g>
+<!-- proc~sss_deposit_impl&#45;&gt;rdb_conc_accepted_source -->
+<g id="proc~~sss_deposit_impl~~CallsGraph_edge3" class="edge">
+<title>proc~sss_deposit_impl&#45;&gt;rdb_conc_accepted_source</title>
+<path fill="none" stroke="#ff0000" d="M100.43,-96.14C108.09,-96.14 116.2,-96.14 124.42,-96.14"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="124.14,-99.64 134.14,-96.14 124.14,-92.64 124.14,-99.64"/>
+</g>
+<!-- rdb_conc_add_source -->
+<g id="proc~~sss_deposit_impl~~CallsGraph_node5" class="node">
+<title>rdb_conc_add_source</title>
+<polygon fill="#777777" stroke="#777777" points="276.92,-66.27 150.65,-66.27 150.65,-42 276.92,-42 276.92,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="213.78" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_conc_add_source</text>
+</g>
+<!-- proc~sss_deposit_impl&#45;&gt;rdb_conc_add_source -->
+<g id="proc~~sss_deposit_impl~~CallsGraph_edge4" class="edge">
+<title>proc~sss_deposit_impl&#45;&gt;rdb_conc_add_source</title>
+<path fill="none" stroke="#ff0000" d="M99.55,-83.53C116.42,-79.15 135.55,-74.19 153.21,-69.6"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="154.01,-73.01 162.81,-67.11 152.25,-66.23 154.01,-73.01"/>
+</g>
+<!-- rdb_vl_first_live -->
+<g id="proc~~sss_deposit_impl~~CallsGraph_node6" class="node">
+<title>rdb_vl_first_live</title>
+<polygon fill="#777777" stroke="#777777" points="260.42,-24.27 167.15,-24.27 167.15,0 260.42,0 260.42,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="213.78" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_vl_first_live</text>
+</g>
+<!-- proc~sss_deposit_impl&#45;&gt;rdb_vl_first_live -->
+<g id="proc~~sss_deposit_impl~~CallsGraph_edge5" class="edge">
+<title>proc~sss_deposit_impl&#45;&gt;rdb_vl_first_live</title>
+<path fill="none" stroke="#ff0000" d="M64.4,-83.7C80.33,-69.54 108.26,-46.63 136.02,-33.13 142.3,-30.08 149.09,-27.42 155.95,-25.11"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="156.76,-28.52 165.26,-22.21 154.68,-21.84 156.76,-28.52"/>
+</g>
+<!-- proc~sr_from_sp -->
+<g id="proc~~sss_deposit_impl~~CallsGraph_node7" class="node">
+<title>proc~sr_from_sp</title>
+<g id="a_proc~~sss_deposit_impl~~CallsGraph_node7"><a xlink:href="../proc/sr_from_sp.html" xlink:title="sr_from_sp">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="396.06,-150.27 327.54,-150.27 327.54,-126 396.06,-126 396.06,-150.27"/>
+<text xml:space="preserve" text-anchor="middle" x="361.8" y="-134.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">sr_from_sp</text>
+</a>
+</g>
+</g>
+<!-- proc~sss_cell_flux&#45;&gt;proc~sr_from_sp -->
+<g id="proc~~sss_deposit_impl~~CallsGraph_edge6" class="edge">
+<title>proc~sss_cell_flux&#45;&gt;proc~sr_from_sp</title>
+<path fill="none" stroke="#cbff00" d="M252,-138.13C271.45,-138.13 295.39,-138.13 315.86,-138.13"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="315.62,-141.64 325.62,-138.14 315.62,-134.64 315.62,-141.64"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~sss_deposit_impl~~CalledByGraph Pages: 1 -->
+<svg id="procsss_deposit_implCalledByGraph" width="641pt" height="81pt"
+ viewBox="0.00 0.00 641.00 81.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~sss_deposit_impl~~CalledByGraph" class="graph" transform="scale(0.698356 0.698356) rotate(0) translate(4 112.27)">
+<title>proc~~sss_deposit_impl~~CalledByGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-112.27 913.87,-112.27 913.87,4 -4,4"/>
+<!-- proc~sss_deposit_impl -->
+<g id="proc~~sss_deposit_impl~~CalledByGraph_node1" class="node">
+<title>proc~sss_deposit_impl</title>
+<polygon fill="none" stroke="black" points="909.87,-66.27 809.85,-66.27 809.85,-42 909.87,-42 909.87,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="859.86" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50">sss_deposit_impl</text>
+</g>
+<!-- proc~deposit_dispatch -->
+<g id="proc~~sss_deposit_impl~~CalledByGraph_node2" class="node">
+<title>proc~deposit_dispatch</title>
+<g id="a_proc~~sss_deposit_impl~~CalledByGraph_node2"><a xlink:href="../proc/deposit_dispatch.html" xlink:title="deposit_dispatch">
+<polygon fill="#d9534f" stroke="#d9534f" points="773.85,-66.27 673.08,-66.27 673.08,-42 773.85,-42 773.85,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="723.46" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">deposit_dispatch</text>
+</a>
+</g>
+</g>
+<!-- proc~deposit_dispatch&#45;&gt;proc~sss_deposit_impl -->
+<g id="proc~~sss_deposit_impl~~CalledByGraph_edge1" class="edge">
+<title>proc~deposit_dispatch&#45;&gt;proc~sss_deposit_impl</title>
+<path fill="none" stroke="#ff0000" d="M774.13,-54.13C781.95,-54.13 790.12,-54.13 798.16,-54.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="797.89,-57.64 807.89,-54.14 797.89,-50.64 797.89,-57.64"/>
+</g>
+<!-- proc~ocean_sss_restore_apply -->
+<g id="proc~~sss_deposit_impl~~CalledByGraph_node3" class="node">
+<title>proc~ocean_sss_restore_apply</title>
+<g id="a_proc~~sss_deposit_impl~~CalledByGraph_node3"><a xlink:href="../proc/ocean_sss_restore_apply.html" xlink:title="ocean_sss_restore_apply">
+<polygon fill="#d9534f" stroke="#d9534f" points="637.08,-66.27 495.06,-66.27 495.06,-42 637.08,-42 637.08,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="566.07" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_sss_restore_apply</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_sss_restore_apply&#45;&gt;proc~deposit_dispatch -->
+<g id="proc~~sss_deposit_impl~~CalledByGraph_edge2" class="edge">
+<title>proc~ocean_sss_restore_apply&#45;&gt;proc~deposit_dispatch</title>
+<path fill="none" stroke="#ff0000" d="M637.49,-54.13C645.48,-54.13 653.57,-54.13 661.42,-54.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="661.2,-57.64 671.2,-54.14 661.2,-50.64 661.2,-57.64"/>
+</g>
+<!-- proc~apply_sw_and_restore -->
+<g id="proc~~sss_deposit_impl~~CalledByGraph_node4" class="node">
+<title>proc~apply_sw_and_restore</title>
+<g id="a_proc~~sss_deposit_impl~~CalledByGraph_node4"><a xlink:href="../proc/apply_sw_and_restore.html" xlink:title="apply_sw_and_restore">
+<polygon fill="#d9534f" stroke="#d9534f" points="459.06,-66.27 332.04,-66.27 332.04,-42 459.06,-42 459.06,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="395.55" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">apply_sw_and_restore</text>
+</a>
+</g>
+</g>
+<!-- proc~apply_sw_and_restore&#45;&gt;proc~ocean_sss_restore_apply -->
+<g id="proc~~sss_deposit_impl~~CalledByGraph_edge3" class="edge">
+<title>proc~apply_sw_and_restore&#45;&gt;proc~ocean_sss_restore_apply</title>
+<path fill="none" stroke="#ff0000" d="M459.3,-54.13C467.12,-54.13 475.21,-54.13 483.27,-54.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="483.1,-57.64 493.1,-54.14 483.1,-50.64 483.1,-57.64"/>
+</g>
+<!-- proc~apply_deferred_thermo -->
+<g id="proc~~sss_deposit_impl~~CalledByGraph_node5" class="node">
+<title>proc~apply_deferred_thermo</title>
+<g id="a_proc~~sss_deposit_impl~~CalledByGraph_node5"><a xlink:href="../proc/apply_deferred_thermo.html" xlink:title="apply_deferred_thermo">
+<polygon fill="#d9534f" stroke="#d9534f" points="296.04,-108.27 160.02,-108.27 160.02,-84 296.04,-84 296.04,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="228.03" y="-92.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">apply_deferred_thermo</text>
+</a>
+</g>
+</g>
+<!-- proc~apply_deferred_thermo&#45;&gt;proc~apply_sw_and_restore -->
+<g id="proc~~sss_deposit_impl~~CalledByGraph_edge4" class="edge">
+<title>proc~apply_deferred_thermo&#45;&gt;proc~apply_sw_and_restore</title>
+<path fill="none" stroke="#ff0000" d="M278.69,-83.53C296.04,-79.13 315.71,-74.14 333.86,-69.54"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="334.62,-72.95 343.46,-67.1 332.9,-66.17 334.62,-72.95"/>
+</g>
+<!-- proc~run_stage -->
+<g id="proc~~sss_deposit_impl~~CalledByGraph_node6" class="node">
+<title>proc~run_stage</title>
+<g id="a_proc~~sss_deposit_impl~~CalledByGraph_node6"><a xlink:href="../proc/run_stage.html" xlink:title="run_stage">
+<polygon fill="#d9534f" stroke="#d9534f" points="260.04,-24.27 196.02,-24.27 196.02,0 260.04,0 260.04,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="228.03" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage</text>
+</a>
+</g>
+</g>
+<!-- proc~run_stage&#45;&gt;proc~apply_sw_and_restore -->
+<g id="proc~~sss_deposit_impl~~CalledByGraph_edge5" class="edge">
+<title>proc~run_stage&#45;&gt;proc~apply_sw_and_restore</title>
+<path fill="none" stroke="#ff0000" d="M260.16,-20.03C280.96,-25.31 309.01,-32.43 334.1,-38.8"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="332.99,-42.13 343.55,-41.19 334.71,-35.34 332.99,-42.13"/>
+</g>
+<!-- proc~run_stage_split -->
+<g id="proc~~sss_deposit_impl~~CalledByGraph_node7" class="node">
+<title>proc~run_stage_split</title>
+<g id="a_proc~~sss_deposit_impl~~CalledByGraph_node7"><a xlink:href="../proc/run_stage_split.html" xlink:title="run_stage_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="273.54,-66.27 182.52,-66.27 182.52,-42 273.54,-42 273.54,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="228.03" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage_split</text>
+</a>
+</g>
+</g>
+<!-- proc~run_stage_split&#45;&gt;proc~apply_sw_and_restore -->
+<g id="proc~~sss_deposit_impl~~CalledByGraph_edge6" class="edge">
+<title>proc~run_stage_split&#45;&gt;proc~apply_sw_and_restore</title>
+<path fill="none" stroke="#ff0000" d="M273.82,-54.13C288.15,-54.13 304.42,-54.13 320.27,-54.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="320.19,-57.64 330.19,-54.14 320.19,-50.64 320.19,-57.64"/>
+</g>
+<!-- proc~ocean_dyn_step -->
+<g id="proc~~sss_deposit_impl~~CalledByGraph_node8" class="node">
+<title>proc~ocean_dyn_step</title>
+<g id="a_proc~~sss_deposit_impl~~CalledByGraph_node8"><a xlink:href="../proc/ocean_dyn_step.html" xlink:title="ocean_dyn_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="110.52,-24.27 13.5,-24.27 13.5,0 110.52,0 110.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="62.01" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step&#45;&gt;proc~run_stage -->
+<g id="proc~~sss_deposit_impl~~CalledByGraph_edge8" class="edge">
+<title>proc~ocean_dyn_step&#45;&gt;proc~run_stage</title>
+<path fill="none" stroke="#00ff00" d="M110.89,-12.13C134.24,-12.13 162.09,-12.13 184.66,-12.13"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="184.41,-15.64 194.41,-12.14 184.41,-8.64 184.41,-15.64"/>
+</g>
+<!-- proc~ocean_dyn_step_split -->
+<g id="proc~~sss_deposit_impl~~CalledByGraph_node9" class="node">
+<title>proc~ocean_dyn_step_split</title>
+<g id="a_proc~~sss_deposit_impl~~CalledByGraph_node9"><a xlink:href="../proc/ocean_dyn_step_split.html" xlink:title="ocean_dyn_step_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="124.02,-87.27 0,-87.27 0,-63 124.02,-63 124.02,-87.27"/>
+<text xml:space="preserve" text-anchor="middle" x="62.01" y="-71.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step_split</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step_split&#45;&gt;proc~apply_deferred_thermo -->
+<g id="proc~~sss_deposit_impl~~CalledByGraph_edge7" class="edge">
+<title>proc~ocean_dyn_step_split&#45;&gt;proc~apply_deferred_thermo</title>
+<path fill="none" stroke="#ff0000" d="M124.08,-82.95C131.95,-83.96 140.08,-85 148.18,-86.04"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="147.7,-89.51 158.06,-87.31 148.59,-82.56 147.7,-89.51"/>
+</g>
+<!-- proc~ocean_dyn_step_split&#45;&gt;proc~run_stage_split -->
+<g id="proc~~sss_deposit_impl~~CalledByGraph_edge9" class="edge">
+<title>proc~ocean_dyn_step_split&#45;&gt;proc~run_stage_split</title>
+<path fill="none" stroke="#0000ff" d="M124.08,-67.32C139.4,-65.35 155.76,-63.26 170.82,-61.33"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="171.08,-64.83 180.55,-60.09 170.19,-57.88 171.08,-64.83"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocsss_deposit_implCalledByGraph = svgPanZoom('#procsss_deposit_implCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-f~7"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>f</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-i~334"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>i</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-inc"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>inc</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-j~322"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>j</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-kt~32"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>kt</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ow~4"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ow</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-pw~10"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>pw</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">pure subroutine </span><span class="n">sss_deposit_impl</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">c</span><span class="p">,</span><span class="w"> </span><span class="n">budget</span><span class="p">,</span><span class="w"> </span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="n">tgt</span><span class="p">,</span><span class="w"> </span><span class="n">wet</span><span class="p">,</span><span class="w"> </span><span class="n">cover</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                    </span><span class="n">use_cover</span><span class="p">,</span><span class="w"> </span><span class="n">k_top</span><span class="p">,</span><span class="w"> </span><span class="n">coef</span><span class="p">,</span><span class="w"> </span><span class="n">max_delta</span><span class="p">,</span><span class="w"> </span><span class="n">h_min</span><span class="p">,</span><span class="w"> </span><span class="n">convert_sp</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                    </span><span class="n">net_mode</span><span class="p">,</span><span class="w"> </span><span class="n">fpos</span><span class="p">,</span><span class="w"> </span><span class="n">fneg</span><span class="p">,</span><span class="w"> </span><span class="n">shift</span><span class="p">,</span><span class="w"> </span><span class="n">inv_scale</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! Recompute `F`, apply the net adjustment, and deposit</span>
+<span class="w">      </span><span class="c">!! `inv_scale * F` (`inv_scale = dt/rho0`) into the first live layer</span>
+<span class="w">      </span><span class="c">!! and the salt budget contributor.  Over the full array (ghosts</span>
+<span class="w">      </span><span class="c">!! included - the target's ghosts were exchanged).</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">c</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">budget</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">h_layer</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">tgt</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">wet</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">cover</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">use_cover</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">k_top</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">coef</span><span class="p">,</span><span class="w"> </span><span class="n">max_delta</span><span class="p">,</span><span class="w"> </span><span class="n">h_min</span>
+<span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">convert_sp</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">net_mode</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">fpos</span><span class="p">,</span><span class="w"> </span><span class="n">fneg</span>
+<span class="w">         </span><span class="c">!! Scaling factors (`SSS_NET_SCALE`).</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">shift</span>
+<span class="w">         </span><span class="c">!! Area-mean flux to subtract (`SSS_NET_MEAN`).</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">inv_scale</span>
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">kt</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">f</span><span class="p">,</span><span class="w"> </span><span class="n">pw</span><span class="p">,</span><span class="w"> </span><span class="n">ow</span><span class="p">,</span><span class="w"> </span><span class="n">inc</span>
+<span class="w">      </span><span class="k">do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nx</span><span class="p">)</span><span class="w"> </span><span class="n">local</span><span class="p">(</span><span class="n">f</span><span class="p">,</span><span class="w"> </span><span class="n">pw</span><span class="p">,</span><span class="w"> </span><span class="n">ow</span><span class="p">,</span><span class="w"> </span><span class="n">inc</span><span class="p">,</span><span class="w"> </span><span class="n">kt</span><span class="p">)</span>
+<span class="w">         </span><span class="n">kt</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">rdb_vl_first_live</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">k_top</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">))</span>
+<span class="w">         </span><span class="n">ow</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">wet</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">use_cover</span><span class="p">)</span><span class="w"> </span><span class="n">ow</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ow</span><span class="o">*</span><span class="p">(</span><span class="mf">1.0_wp</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">cover</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">))</span>
+<span class="w">         </span><span class="k">call </span><span class="n">sss_cell_flux</span><span class="p">(</span><span class="n">c</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">kt</span><span class="p">),</span><span class="w"> </span><span class="n">h_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">kt</span><span class="p">),</span><span class="w"> </span><span class="n">tgt</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">),</span><span class="w"> </span><span class="n">ow</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                            </span><span class="n">coef</span><span class="p">,</span><span class="w"> </span><span class="n">max_delta</span><span class="p">,</span><span class="w"> </span><span class="n">h_min</span><span class="p">,</span><span class="w"> </span><span class="n">convert_sp</span><span class="p">,</span><span class="w"> </span><span class="n">f</span><span class="p">,</span><span class="w"> </span><span class="n">pw</span><span class="p">)</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">net_mode</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">SSS_NET_SCALE</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            if</span><span class="w"> </span><span class="p">(</span><span class="n">f</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               </span><span class="n">f</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">f</span><span class="o">*</span><span class="n">fpos</span>
+<span class="w">            </span><span class="k">else if</span><span class="w"> </span><span class="p">(</span><span class="n">f</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               </span><span class="n">f</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">f</span><span class="o">*</span><span class="n">fneg</span>
+<span class="w">            </span><span class="k">end if</span>
+<span class="k">         else if</span><span class="w"> </span><span class="p">(</span><span class="n">net_mode</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">SSS_NET_MEAN</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            </span><span class="n">f</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">f</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">shift</span><span class="o">*</span><span class="n">pw</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">         </span><span class="n">inc</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">inv_scale</span><span class="o">*</span><span class="n">f</span>
+<span class="w">         </span><span class="n">c</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">kt</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">rdb_conc_add_source</span><span class="p">(</span><span class="n">c</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">kt</span><span class="p">),</span><span class="w"> </span><span class="n">h_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">kt</span><span class="p">),</span><span class="w"> </span><span class="n">inc</span><span class="p">)</span>
+<span class="w">         </span><span class="n">budget</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">kt</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">budget</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">kt</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">rdb_conc_accepted_source</span><span class="p">(</span><span class="n">h_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">kt</span><span class="p">),</span><span class="w"> </span><span class="n">inc</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end do</span>
+<span class="k">   end subroutine </span><span class="n">sss_deposit_impl</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-11-13 23:21 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

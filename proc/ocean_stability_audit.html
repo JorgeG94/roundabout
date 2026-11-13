@@ -1,0 +1,1330 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>ocean_stability_audit &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>ocean_stability_audit
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.1% of total for procedures.">85 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_stability_audit.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_stability_audit.f90.html'>rdb_ocean_stability_audit.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ocean_stability_audit.html'>rdb_ocean_stability_audit</a></li>
+            <li class="breadcrumb-item active" aria-current="page">ocean_stability_audit</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/ocean_stability_audit.html#variable-ah_max">ah_max</a>
+            <a class="list-group-item" href="../proc/ocean_stability_audit.html#variable-auto_protected">auto_protected</a>
+            <a class="list-group-item" href="../proc/ocean_stability_audit.html#variable-dt~8">dt</a>
+            <a class="list-group-item" href="../proc/ocean_stability_audit.html#variable-dt_therm~2">dt_therm</a>
+            <a class="list-group-item" href="../proc/ocean_stability_audit.html#variable-dx_min~6">dx_min</a>
+            <a class="list-group-item" href="../proc/ocean_stability_audit.html#variable-i_at~3">i_at</a>
+            <a class="list-group-item" href="../proc/ocean_stability_audit.html#variable-is_x~3">is_x</a>
+            <a class="list-group-item" href="../proc/ocean_stability_audit.html#variable-j_at~4">j_at</a>
+            <a class="list-group-item" href="../proc/ocean_stability_audit.html#variable-kappa_h~2">kappa_h</a>
+            <a class="list-group-item" href="../proc/ocean_stability_audit.html#variable-nu_h~5">nu_h</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/ocean_stability_audit.html#src">ocean_stability_audit</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>public  subroutine ocean_stability_audit(cfg, metrics, grid, rank, ierr, column)  
+</h2>
+    
+
+    <p>Run all configure-time stability checks. Must run AFTER
+<code>configure_ocean_metrics</code> + <code>configure_ocean_land_mask</code> (needs
+the real filled <code>ocean_metrics_t</code>), before <code>ocean_state_enter_data</code>.
+<code>ierr</code> present -&gt; <code>OCEAN_STATUS_ERR_SETUP</code> on any hard-bound
+violation (never <code>error stop</code>); warnings always just log,
+whatever <code>ierr</code> does. Rank-0-only logging (mirrors every other
+<code>configure_ocean_*</code> info/warning line); the ERROR path itself
+always fires (every rank must agree the config is broken).</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-cfg~2"></span>
+              type(<a href='../type/config_t.html'>config_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>cfg</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-metrics~4"></span>
+              type(<a href='../type/ocean_metrics_t.html'>ocean_metrics_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>metrics</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-grid~23"></span>
+              type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>grid</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-rank"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>rank</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ierr"></span>
+              integer,
+            </td>
+<td>intent(out),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ierr</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-column~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>column</strong>(:,:)</td>
+            <td>
+                <p>Reference column thickness (m) at T cells, ghosts included —
+<code>bt_work%bt_H_ref</code>, which is <code>b - z_draft</code> afloat and <code>0</code>
+where grounded. Present ⇒ the terrain-following stiffness
+check (Check 5) runs; absent ⇒ it is skipped, which is what a
+caller with no barotropic datum yet should do.</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~ocean_stability_audit~~CallsGraph Pages: 1 -->
+<svg id="prococean_stability_auditCallsGraph" width="530pt" height="596pt"
+ viewBox="0.00 0.00 530.00 596.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~ocean_stability_audit~~CallsGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 592.27)">
+<title>proc~~ocean_stability_audit~~CallsGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-592.27 526.06,-592.27 526.06,4 -4,4"/>
+<!-- proc~ocean_stability_audit -->
+<g id="proc~~ocean_stability_audit~~CallsGraph_node1" class="node">
+<title>proc~ocean_stability_audit</title>
+<polygon fill="none" stroke="black" points="123.27,-297.27 0,-297.27 0,-273 123.27,-273 123.27,-297.27"/>
+<text xml:space="preserve" text-anchor="middle" x="61.63" y="-281.53" font-family="Helvetica,sans-Serif" font-size="10.50">ocean_stability_audit</text>
+</g>
+<!-- proc~fail -->
+<g id="proc~~ocean_stability_audit~~CallsGraph_node2" class="node">
+<title>proc~fail</title>
+<g id="a_proc~~ocean_stability_audit~~CallsGraph_node2"><a xlink:href="../proc/fail.html" xlink:title="fail">
+<polygon fill="#d9534f" stroke="#d9534f" points="283.53,-566.27 229.53,-566.27 229.53,-542 283.53,-542 283.53,-566.27"/>
+<text xml:space="preserve" text-anchor="middle" x="256.53" y="-550.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">fail</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_stability_audit&#45;&gt;proc~fail -->
+<g id="proc~~ocean_stability_audit~~CallsGraph_edge1" class="edge">
+<title>proc~ocean_stability_audit&#45;&gt;proc~fail</title>
+<path fill="none" stroke="#ff0000" d="M63.49,-297.5C66.99,-338.15 83.91,-468.75 159.27,-533.13 175.39,-546.91 198.47,-552.27 217.99,-554.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="217.58,-557.61 227.78,-554.77 218.03,-550.63 217.58,-557.61"/>
+</g>
+<!-- proc~ocean_diffusive_number -->
+<g id="proc~~ocean_stability_audit~~CallsGraph_node3" class="node">
+<title>proc~ocean_diffusive_number</title>
+<g id="a_proc~~ocean_stability_audit~~CallsGraph_node3"><a xlink:href="../proc/ocean_diffusive_number.html" xlink:title="ocean_diffusive_number">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="327.54,-524.27 185.52,-524.27 185.52,-500 327.54,-500 327.54,-524.27"/>
+<text xml:space="preserve" text-anchor="middle" x="256.53" y="-508.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_diffusive_number</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_stability_audit&#45;&gt;proc~ocean_diffusive_number -->
+<g id="proc~~ocean_stability_audit~~CallsGraph_edge2" class="edge">
+<title>proc~ocean_stability_audit&#45;&gt;proc~ocean_diffusive_number</title>
+<path fill="none" stroke="#ff0000" d="M64.92,-297.74C72.01,-333.18 97.02,-434.42 159.27,-486.13 164.01,-490.08 169.3,-493.42 174.89,-496.27"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="173.28,-499.38 183.84,-500.24 176.12,-492.98 173.28,-499.38"/>
+</g>
+<!-- proc~ocean_munk_delta_m -->
+<g id="proc~~ocean_stability_audit~~CallsGraph_node4" class="node">
+<title>proc~ocean_munk_delta_m</title>
+<g id="a_proc~~ocean_stability_audit~~CallsGraph_node4"><a xlink:href="../proc/ocean_munk_delta_m.html" xlink:title="ocean_munk_delta_m">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="519.81,-484.27 392.04,-484.27 392.04,-460 519.81,-460 519.81,-484.27"/>
+<text xml:space="preserve" text-anchor="middle" x="455.92" y="-468.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_munk_delta_m</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_stability_audit&#45;&gt;proc~ocean_munk_delta_m -->
+<g id="proc~~ocean_stability_audit~~CallsGraph_edge3" class="edge">
+<title>proc~ocean_stability_audit&#45;&gt;proc~ocean_munk_delta_m</title>
+<path fill="none" stroke="#ff0000" d="M65.52,-297.67C73.71,-330.05 100.41,-416.52 159.27,-453.13 225.5,-494.33 317.01,-493.39 380.61,-485.78"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="380.78,-489.28 390.25,-484.53 379.88,-482.34 380.78,-489.28"/>
+</g>
+<!-- proc~ocean_munk_required_nu_h -->
+<g id="proc~~ocean_stability_audit~~CallsGraph_node5" class="node">
+<title>proc~ocean_munk_required_nu_h</title>
+<g id="a_proc~~ocean_stability_audit~~CallsGraph_node5"><a xlink:href="../proc/ocean_munk_required_nu_h.html" xlink:title="ocean_munk_required_nu_h">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="336.54,-444.27 176.52,-444.27 176.52,-420 336.54,-420 336.54,-444.27"/>
+<text xml:space="preserve" text-anchor="middle" x="256.53" y="-428.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_munk_required_nu_h</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_stability_audit&#45;&gt;proc~ocean_munk_required_nu_h -->
+<g id="proc~~ocean_stability_audit~~CallsGraph_edge4" class="edge">
+<title>proc~ocean_stability_audit&#45;&gt;proc~ocean_munk_required_nu_h</title>
+<path fill="none" stroke="#ff0000" d="M68.36,-297.49C80.91,-323.1 113.42,-382.03 159.27,-411.13 161.44,-412.51 163.69,-413.8 166,-415.01"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="164.52,-418.18 175.07,-419.14 167.43,-411.81 164.52,-418.18"/>
+</g>
+<!-- proc~ocean_munk_worst_case -->
+<g id="proc~~ocean_stability_audit~~CallsGraph_node6" class="node">
+<title>proc~ocean_munk_worst_case</title>
+<g id="a_proc~~ocean_stability_audit~~CallsGraph_node6"><a xlink:href="../proc/ocean_munk_worst_case.html" xlink:title="ocean_munk_worst_case">
+<polygon fill="#d9534f" stroke="#d9534f" points="328.29,-402.27 184.77,-402.27 184.77,-378 328.29,-378 328.29,-402.27"/>
+<text xml:space="preserve" text-anchor="middle" x="256.53" y="-386.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_munk_worst_case</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_stability_audit&#45;&gt;proc~ocean_munk_worst_case -->
+<g id="proc~~ocean_stability_audit~~CallsGraph_edge5" class="edge">
+<title>proc~ocean_stability_audit&#45;&gt;proc~ocean_munk_worst_case</title>
+<path fill="none" stroke="#ff0000" d="M73.13,-297.58C89.52,-316.19 123.11,-350.99 159.27,-369.13 163.94,-371.48 168.88,-373.57 173.94,-375.42"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="172.43,-378.61 183.02,-378.43 174.63,-371.96 172.43,-378.61"/>
+</g>
+<!-- proc~ocean_sigma_stiffness_worst -->
+<g id="proc~~ocean_stability_audit~~CallsGraph_node7" class="node">
+<title>proc~ocean_sigma_stiffness_worst</title>
+<g id="a_proc~~ocean_stability_audit~~CallsGraph_node7"><a xlink:href="../proc/ocean_sigma_stiffness_worst.html" xlink:title="ocean_sigma_stiffness_worst">
+<polygon fill="#d9534f" stroke="#d9534f" points="338.79,-360.27 174.27,-360.27 174.27,-336 338.79,-336 338.79,-360.27"/>
+<text xml:space="preserve" text-anchor="middle" x="256.53" y="-344.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_sigma_stiffness_worst</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_stability_audit&#45;&gt;proc~ocean_sigma_stiffness_worst -->
+<g id="proc~~ocean_stability_audit~~CallsGraph_edge6" class="edge">
+<title>proc~ocean_stability_audit&#45;&gt;proc~ocean_sigma_stiffness_worst</title>
+<path fill="none" stroke="#ff0000" d="M87.95,-297.76C107.14,-306.93 134.38,-319.1 159.27,-327.13 165.47,-329.14 171.97,-331.01 178.52,-332.75"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="177.55,-336.11 188.1,-335.17 179.27,-329.33 177.55,-336.11"/>
+</g>
+<!-- proc~ocean_stability_min_cell -->
+<g id="proc~~ocean_stability_audit~~CallsGraph_node8" class="node">
+<title>proc~ocean_stability_min_cell</title>
+<g id="a_proc~~ocean_stability_audit~~CallsGraph_node8"><a xlink:href="../proc/ocean_stability_min_cell.html" xlink:title="ocean_stability_min_cell">
+<polygon fill="#d9534f" stroke="#d9534f" points="326.79,-318.27 186.27,-318.27 186.27,-294 326.79,-294 326.79,-318.27"/>
+<text xml:space="preserve" text-anchor="middle" x="256.53" y="-302.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_stability_min_cell</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_stability_audit&#45;&gt;proc~ocean_stability_min_cell -->
+<g id="proc~~ocean_stability_audit~~CallsGraph_edge7" class="edge">
+<title>proc~ocean_stability_audit&#45;&gt;proc~ocean_stability_min_cell</title>
+<path fill="none" stroke="#ff0000" d="M123.67,-291.78C139.88,-293.54 157.63,-295.48 174.72,-297.34"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="174,-300.78 184.32,-298.38 174.76,-293.82 174,-300.78"/>
+</g>
+<!-- proc~ocean_vcoord_is_terrain_following -->
+<g id="proc~~ocean_stability_audit~~CallsGraph_node9" class="node">
+<title>proc~ocean_vcoord_is_terrain_following</title>
+<g id="a_proc~~ocean_stability_audit~~CallsGraph_node9"><a xlink:href="../proc/ocean_vcoord_is_terrain_following.html" xlink:title="ocean_vcoord_is_terrain_following">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="353.79,-276.27 159.27,-276.27 159.27,-252 353.79,-252 353.79,-276.27"/>
+<text xml:space="preserve" text-anchor="middle" x="256.53" y="-260.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_vcoord_is_terrain_following</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_stability_audit&#45;&gt;proc~ocean_vcoord_is_terrain_following -->
+<g id="proc~~ocean_stability_audit~~CallsGraph_edge8" class="edge">
+<title>proc~ocean_stability_audit&#45;&gt;proc~ocean_vcoord_is_terrain_following</title>
+<path fill="none" stroke="#ff0000" d="M123.67,-278.49C131.41,-277.65 139.5,-276.77 147.71,-275.87"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="147.87,-279.38 157.44,-274.81 147.12,-272.42 147.87,-279.38"/>
+</g>
+<!-- proc~ocean_viscous_cfl_max_dt -->
+<g id="proc~~ocean_stability_audit~~CallsGraph_node10" class="node">
+<title>proc~ocean_viscous_cfl_max_dt</title>
+<g id="a_proc~~ocean_stability_audit~~CallsGraph_node10"><a xlink:href="../proc/ocean_viscous_cfl_max_dt.html" xlink:title="ocean_viscous_cfl_max_dt">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="332.04,-234.27 181.02,-234.27 181.02,-210 332.04,-210 332.04,-234.27"/>
+<text xml:space="preserve" text-anchor="middle" x="256.53" y="-218.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_viscous_cfl_max_dt</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_stability_audit&#45;&gt;proc~ocean_viscous_cfl_max_dt -->
+<g id="proc~~ocean_stability_audit~~CallsGraph_edge9" class="edge">
+<title>proc~ocean_stability_audit&#45;&gt;proc~ocean_viscous_cfl_max_dt</title>
+<path fill="none" stroke="#ff0000" d="M87.95,-272.51C107.14,-263.34 134.38,-251.17 159.27,-243.13 165.47,-241.13 171.97,-239.26 178.52,-237.52"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="179.27,-240.94 188.1,-235.1 177.55,-234.16 179.27,-240.94"/>
+</g>
+<!-- proc~ocean_viscous_cfl_max_nu_h -->
+<g id="proc~~ocean_stability_audit~~CallsGraph_node11" class="node">
+<title>proc~ocean_viscous_cfl_max_nu_h</title>
+<g id="a_proc~~ocean_stability_audit~~CallsGraph_node11"><a xlink:href="../proc/ocean_viscous_cfl_max_nu_h.html" xlink:title="ocean_viscous_cfl_max_nu_h">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="339.54,-192.27 173.52,-192.27 173.52,-168 339.54,-168 339.54,-192.27"/>
+<text xml:space="preserve" text-anchor="middle" x="256.53" y="-176.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_viscous_cfl_max_nu_h</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_stability_audit&#45;&gt;proc~ocean_viscous_cfl_max_nu_h -->
+<g id="proc~~ocean_stability_audit~~CallsGraph_edge10" class="edge">
+<title>proc~ocean_stability_audit&#45;&gt;proc~ocean_viscous_cfl_max_nu_h</title>
+<path fill="none" stroke="#ff0000" d="M73.13,-272.69C89.52,-254.08 123.11,-219.28 159.27,-201.13 162.56,-199.49 165.97,-197.96 169.47,-196.56"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="170.52,-199.91 178.73,-193.22 168.14,-193.32 170.52,-199.91"/>
+</g>
+<!-- proc~ocean_viscous_cfl_number -->
+<g id="proc~~ocean_stability_audit~~CallsGraph_node12" class="node">
+<title>proc~ocean_viscous_cfl_number</title>
+<g id="a_proc~~ocean_stability_audit~~CallsGraph_node12"><a xlink:href="../proc/ocean_viscous_cfl_number.html" xlink:title="ocean_viscous_cfl_number">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="333.54,-150.27 179.52,-150.27 179.52,-126 333.54,-126 333.54,-150.27"/>
+<text xml:space="preserve" text-anchor="middle" x="256.53" y="-134.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_viscous_cfl_number</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_stability_audit&#45;&gt;proc~ocean_viscous_cfl_number -->
+<g id="proc~~ocean_stability_audit~~CallsGraph_edge11" class="edge">
+<title>proc~ocean_stability_audit&#45;&gt;proc~ocean_viscous_cfl_number</title>
+<path fill="none" stroke="#ff0000" d="M68.36,-272.78C80.91,-247.17 113.42,-188.24 159.27,-159.13 162.37,-157.16 165.64,-155.38 169.01,-153.75"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="170.15,-157.07 178.01,-149.96 167.43,-150.62 170.15,-157.07"/>
+</g>
+<!-- proc~parse_vcoord_type -->
+<g id="proc~~ocean_stability_audit~~CallsGraph_node13" class="node">
+<title>proc~parse_vcoord_type</title>
+<g id="a_proc~~ocean_stability_audit~~CallsGraph_node13"><a xlink:href="../proc/parse_vcoord_type.html" xlink:title="parse_vcoord_type">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="312.54,-108.27 200.52,-108.27 200.52,-84 312.54,-84 312.54,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="256.53" y="-92.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">parse_vcoord_type</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_stability_audit&#45;&gt;proc~parse_vcoord_type -->
+<g id="proc~~ocean_stability_audit~~CallsGraph_edge12" class="edge">
+<title>proc~ocean_stability_audit&#45;&gt;proc~parse_vcoord_type</title>
+<path fill="none" stroke="#ff0000" d="M65.99,-272.64C75.12,-241.1 103.61,-157.87 159.27,-117.14 168.08,-110.69 178.48,-106.15 189.13,-102.97"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="189.98,-106.37 198.8,-100.5 188.24,-99.58 189.98,-106.37"/>
+</g>
+<!-- to_string -->
+<g id="proc~~ocean_stability_audit~~CallsGraph_node14" class="node">
+<title>to_string</title>
+<polygon fill="#777777" stroke="#777777" points="285.16,-66.27 227.89,-66.27 227.89,-42 285.16,-42 285.16,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="256.53" y="-50.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">to_string</text>
+</g>
+<!-- proc~ocean_stability_audit&#45;&gt;to_string -->
+<g id="proc~~ocean_stability_audit~~CallsGraph_edge13" class="edge">
+<title>proc~ocean_stability_audit&#45;&gt;to_string</title>
+<path fill="none" stroke="#ff0000" d="M64.47,-272.61C70.53,-235.94 93.43,-128.07 159.27,-75.14 175.17,-62.35 197.14,-56.92 216.08,-54.77"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="216.22,-58.27 225.89,-53.94 215.63,-51.29 216.22,-58.27"/>
+</g>
+<!-- warning -->
+<g id="proc~~ocean_stability_audit~~CallsGraph_node15" class="node">
+<title>warning</title>
+<polygon fill="#777777" stroke="#777777" points="283.66,-24.27 229.39,-24.27 229.39,0 283.66,0 283.66,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="256.53" y="-8.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">warning</text>
+</g>
+<!-- proc~ocean_stability_audit&#45;&gt;warning -->
+<g id="proc~~ocean_stability_audit~~CallsGraph_edge14" class="edge">
+<title>proc~ocean_stability_audit&#45;&gt;warning</title>
+<path fill="none" stroke="#ff0000" d="M63.42,-272.58C66.71,-231.29 83.03,-98.63 159.27,-33.14 175.36,-19.32 198.44,-13.96 217.96,-12.1"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="218.01,-15.61 227.76,-11.47 217.55,-8.62 218.01,-15.61"/>
+</g>
+<!-- error -->
+<g id="proc~~ocean_stability_audit~~CallsGraph_node16" class="node">
+<title>error</title>
+<polygon fill="#777777" stroke="#777777" points="482.92,-588.27 428.92,-588.27 428.92,-564 482.92,-564 482.92,-588.27"/>
+<text xml:space="preserve" text-anchor="middle" x="455.92" y="-572.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">error</text>
+</g>
+<!-- proc~fail&#45;&gt;error -->
+<g id="proc~~ocean_stability_audit~~CallsGraph_edge15" class="edge">
+<title>proc~fail&#45;&gt;error</title>
+<path fill="none" stroke="#ff0000" d="M283.74,-557.06C317.96,-560.87 378.07,-567.57 417.19,-571.93"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="416.77,-575.4 427.1,-573.03 417.55,-568.45 416.77,-575.4"/>
+</g>
+<!-- proc~error_ring_push -->
+<g id="proc~~ocean_stability_audit~~CallsGraph_node17" class="node">
+<title>proc~error_ring_push</title>
+<g id="a_proc~~ocean_stability_audit~~CallsGraph_node17"><a xlink:href="../proc/error_ring_push.html" xlink:title="error_ring_push">
+<polygon fill="#d9534f" stroke="#d9534f" points="503.31,-546.27 408.54,-546.27 408.54,-522 503.31,-522 503.31,-546.27"/>
+<text xml:space="preserve" text-anchor="middle" x="455.92" y="-530.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">error_ring_push</text>
+</a>
+</g>
+</g>
+<!-- proc~fail&#45;&gt;proc~error_ring_push -->
+<g id="proc~~ocean_stability_audit~~CallsGraph_edge16" class="edge">
+<title>proc~fail&#45;&gt;proc~error_ring_push</title>
+<path fill="none" stroke="#ff0000" d="M283.74,-551.48C312.45,-548.57 359.38,-543.82 396.85,-540.02"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="397.04,-543.52 406.63,-539.03 396.33,-536.55 397.04,-543.52"/>
+</g>
+<!-- proc~ocean_munk_worst_case&#45;&gt;proc~ocean_munk_delta_m -->
+<g id="proc~~ocean_stability_audit~~CallsGraph_edge17" class="edge">
+<title>proc~ocean_munk_worst_case&#45;&gt;proc~ocean_munk_delta_m</title>
+<path fill="none" stroke="#48ff00" d="M328.59,-400.29C337.4,-403.08 346.03,-406.62 353.79,-411.13 374.47,-423.15 369.72,-438.13 389.79,-451.13 391.66,-452.35 393.6,-453.49 395.6,-454.58"/>
+<polygon fill="#48ff00" stroke="#48ff00" points="394.06,-457.72 404.59,-458.85 397.06,-451.4 394.06,-457.72"/>
+</g>
+<!-- proc~parse_coriolis_scheme -->
+<g id="proc~~ocean_stability_audit~~CallsGraph_node19" class="node">
+<title>proc~parse_coriolis_scheme</title>
+<g id="a_proc~~ocean_stability_audit~~CallsGraph_node19"><a xlink:href="../proc/parse_coriolis_scheme.html" xlink:title="parse_coriolis_scheme">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="522.06,-442.27 389.79,-442.27 389.79,-418 522.06,-418 522.06,-442.27"/>
+<text xml:space="preserve" text-anchor="middle" x="455.92" y="-426.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">parse_coriolis_scheme</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_munk_worst_case&#45;&gt;proc~parse_coriolis_scheme -->
+<g id="proc~~ocean_stability_audit~~CallsGraph_edge18" class="edge">
+<title>proc~ocean_munk_worst_case&#45;&gt;proc~parse_coriolis_scheme</title>
+<path fill="none" stroke="#48ff00" d="M319.72,-402.74C339.36,-406.72 361.25,-411.15 381.59,-415.27"/>
+<polygon fill="#48ff00" stroke="#48ff00" points="380.73,-418.67 391.23,-417.23 382.12,-411.81 380.73,-418.67"/>
+</g>
+<!-- proc~parse_grid_config -->
+<g id="proc~~ocean_stability_audit~~CallsGraph_node20" class="node">
+<title>proc~parse_grid_config</title>
+<g id="a_proc~~ocean_stability_audit~~CallsGraph_node20"><a xlink:href="../proc/parse_grid_config.html" xlink:title="parse_grid_config">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="508.93,-400.27 402.91,-400.27 402.91,-376 508.93,-376 508.93,-400.27"/>
+<text xml:space="preserve" text-anchor="middle" x="455.92" y="-384.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">parse_grid_config</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_munk_worst_case&#45;&gt;proc~parse_grid_config -->
+<g id="proc~~ocean_stability_audit~~CallsGraph_edge19" class="edge">
+<title>proc~ocean_munk_worst_case&#45;&gt;proc~parse_grid_config</title>
+<path fill="none" stroke="#48ff00" d="M328.52,-389.42C348.93,-389.21 371.08,-388.98 391.04,-388.78"/>
+<polygon fill="#48ff00" stroke="#48ff00" points="391.03,-392.28 401,-388.68 390.96,-385.28 391.03,-392.28"/>
+</g>
+<!-- proc~ocean_sigma_stiffness -->
+<g id="proc~~ocean_stability_audit~~CallsGraph_node18" class="node">
+<title>proc~ocean_sigma_stiffness</title>
+<g id="a_proc~~ocean_stability_audit~~CallsGraph_node18"><a xlink:href="../proc/ocean_sigma_stiffness.html" xlink:title="ocean_sigma_stiffness">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="521.31,-358.27 390.54,-358.27 390.54,-334 521.31,-334 521.31,-358.27"/>
+<text xml:space="preserve" text-anchor="middle" x="455.92" y="-342.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_sigma_stiffness</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_sigma_stiffness_worst&#45;&gt;proc~ocean_sigma_stiffness -->
+<g id="proc~~ocean_stability_audit~~CallsGraph_edge20" class="edge">
+<title>proc~ocean_sigma_stiffness_worst&#45;&gt;proc~ocean_sigma_stiffness</title>
+<path fill="none" stroke="#00ff24" d="M339.24,-347.31C352.37,-347.17 365.91,-347.04 378.89,-346.91"/>
+<polygon fill="#00ff24" stroke="#00ff24" points="378.66,-350.41 388.62,-346.81 378.59,-343.41 378.66,-350.41"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~ocean_stability_audit~~CalledByGraph Pages: 1 -->
+<svg id="prococean_stability_auditCalledByGraph" width="633pt" height="158pt"
+ viewBox="0.00 0.00 633.00 158.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~ocean_stability_audit~~CalledByGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 154.27)">
+<title>proc~~ocean_stability_audit~~CalledByGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-154.27 629.08,-154.27 629.08,4 -4,4"/>
+<!-- proc~ocean_stability_audit -->
+<g id="proc~~ocean_stability_audit~~CalledByGraph_node1" class="node">
+<title>proc~ocean_stability_audit</title>
+<polygon fill="none" stroke="black" points="625.08,-66.27 501.81,-66.27 501.81,-42 625.08,-42 625.08,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="563.44" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50">ocean_stability_audit</text>
+</g>
+<!-- proc~engine_setup -->
+<g id="proc~~ocean_stability_audit~~CalledByGraph_node2" class="node">
+<title>proc~engine_setup</title>
+<g id="a_proc~~ocean_stability_audit~~CalledByGraph_node2"><a xlink:href="../proc/engine_setup.html" xlink:title="engine_setup">
+<polygon fill="#d9534f" stroke="#d9534f" points="465.81,-66.27 383.04,-66.27 383.04,-42 465.81,-42 465.81,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="424.42" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_setup</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_setup&#45;&gt;proc~ocean_stability_audit -->
+<g id="proc~~ocean_stability_audit~~CalledByGraph_edge1" class="edge">
+<title>proc~engine_setup&#45;&gt;proc~ocean_stability_audit</title>
+<path fill="none" stroke="#ff0000" d="M466.16,-54.13C473.67,-54.13 481.71,-54.13 489.83,-54.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="489.8,-57.64 499.8,-54.14 489.8,-50.64 489.8,-57.64"/>
+</g>
+<!-- proc~complete_ocean_create -->
+<g id="proc~~ocean_stability_audit~~CalledByGraph_node3" class="node">
+<title>proc~complete_ocean_create</title>
+<g id="a_proc~~ocean_stability_audit~~CalledByGraph_node3"><a xlink:href="../proc/complete_ocean_create.html" xlink:title="complete_ocean_create">
+<polygon fill="#d9534f" stroke="#d9534f" points="347.04,-108.27 208.02,-108.27 208.02,-84 347.04,-84 347.04,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="277.53" y="-92.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">complete_ocean_create</text>
+</a>
+</g>
+</g>
+<!-- proc~complete_ocean_create&#45;&gt;proc~engine_setup -->
+<g id="proc~~ocean_stability_audit~~CalledByGraph_edge2" class="edge">
+<title>proc~complete_ocean_create&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#ff0000" d="M322,-83.53C337.72,-78.98 355.61,-73.79 371.94,-69.06"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="372.87,-72.43 381.5,-66.29 370.92,-65.71 372.87,-72.43"/>
+</g>
+<!-- proc~driver_run_ocean -->
+<g id="proc~~ocean_stability_audit~~CalledByGraph_node4" class="node">
+<title>proc~driver_run_ocean</title>
+<g id="a_proc~~ocean_stability_audit~~CalledByGraph_node4"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<polygon fill="#d9534f" stroke="#d9534f" points="329.79,-66.27 225.27,-66.27 225.27,-42 329.79,-42 329.79,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="277.53" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_setup -->
+<g id="proc~~ocean_stability_audit~~CalledByGraph_edge3" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#ff0000" d="M330.02,-54.13C343.36,-54.13 357.73,-54.13 371.11,-54.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="371.05,-57.64 381.05,-54.14 371.05,-50.64 371.05,-57.64"/>
+</g>
+<!-- proc~driver_validate -->
+<g id="proc~~ocean_stability_audit~~CalledByGraph_node5" class="node">
+<title>proc~driver_validate</title>
+<g id="a_proc~~ocean_stability_audit~~CalledByGraph_node5"><a xlink:href="../proc/driver_validate.html" xlink:title="driver_validate">
+<polygon fill="#d9534f" stroke="#d9534f" points="323.04,-24.27 232.02,-24.27 232.02,0 323.04,0 323.04,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="277.53" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_validate</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_validate&#45;&gt;proc~engine_setup -->
+<g id="proc~~ocean_stability_audit~~CalledByGraph_edge4" class="edge">
+<title>proc~driver_validate&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#ff0000" d="M322,-24.74C337.72,-29.29 355.61,-34.48 371.94,-39.21"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="370.92,-42.56 381.5,-41.98 372.87,-35.84 370.92,-42.56"/>
+</g>
+<!-- proc~driver_run -->
+<g id="proc~~ocean_stability_audit~~CalledByGraph_node6" class="node">
+<title>proc~driver_run</title>
+<g id="a_proc~~ocean_stability_audit~~CalledByGraph_node6"><a xlink:href="../proc/driver_run.html" xlink:title="driver_run">
+<polygon fill="#d9534f" stroke="#d9534f" points="119.14,-66.27 52.87,-66.27 52.87,-42 119.14,-42 119.14,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="86.01" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run&#45;&gt;proc~driver_run_ocean -->
+<g id="proc~~ocean_stability_audit~~CalledByGraph_edge7" class="edge">
+<title>proc~driver_run&#45;&gt;proc~driver_run_ocean</title>
+<path fill="none" stroke="#00ff00" d="M119.59,-54.13C145.42,-54.13 182.28,-54.13 213.78,-54.13"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="213.61,-57.64 223.61,-54.14 213.61,-50.64 213.61,-57.64"/>
+</g>
+<!-- proc~rdb_ocean_create_finalize -->
+<g id="proc~~ocean_stability_audit~~CalledByGraph_node7" class="node">
+<title>proc~rdb_ocean_create_finalize</title>
+<g id="a_proc~~ocean_stability_audit~~CalledByGraph_node7"><a xlink:href="../proc/rdb_ocean_create_finalize.html" xlink:title="rdb_ocean_create_finalize">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="161.14,-150.27 10.87,-150.27 10.87,-126 161.14,-126 161.14,-150.27"/>
+<text xml:space="preserve" text-anchor="middle" x="86.01" y="-134.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_create_finalize</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_create_finalize&#45;&gt;proc~complete_ocean_create -->
+<g id="proc~~ocean_stability_audit~~CalledByGraph_edge5" class="edge">
+<title>proc~rdb_ocean_create_finalize&#45;&gt;proc~complete_ocean_create</title>
+<path fill="none" stroke="#ff0000" d="M143.87,-125.53C164.2,-121.03 187.32,-115.9 208.5,-111.21"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="209.22,-114.64 218.23,-109.05 207.71,-107.8 209.22,-114.64"/>
+</g>
+<!-- proc~rdb_ocean_create_from_string -->
+<g id="proc~~ocean_stability_audit~~CalledByGraph_node8" class="node">
+<title>proc~rdb_ocean_create_from_string</title>
+<g id="a_proc~~ocean_stability_audit~~CalledByGraph_node8"><a xlink:href="../proc/rdb_ocean_create_from_string.html" xlink:title="rdb_ocean_create_from_string">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="172.02,-108.27 0,-108.27 0,-84 172.02,-84 172.02,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="86.01" y="-92.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_create_from_string</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_create_from_string&#45;&gt;proc~complete_ocean_create -->
+<g id="proc~~ocean_stability_audit~~CalledByGraph_edge6" class="edge">
+<title>proc~rdb_ocean_create_from_string&#45;&gt;proc~complete_ocean_create</title>
+<path fill="none" stroke="#ff0000" d="M172.34,-96.14C180.27,-96.14 188.28,-96.14 196.15,-96.14"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="196.05,-99.64 206.05,-96.14 196.05,-92.64 196.05,-99.64"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ah_max"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ah_max</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-auto_protected"></span>
+              logical,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>auto_protected</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dt~8"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dt</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dt_therm~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dt_therm</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dx_min~6"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dx_min</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-i_at~3"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>i_at</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-is_x~3"></span>
+              logical,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>is_x</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-j_at~4"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>j_at</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-kappa_h~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>kappa_h</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nu_h~5"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nu_h</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">subroutine </span><span class="n">ocean_stability_audit</span><span class="p">(</span><span class="n">cfg</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">rank</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span><span class="p">,</span><span class="w"> </span><span class="n">column</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! Run all configure-time stability checks. Must run AFTER</span>
+<span class="w">      </span><span class="c">!! `configure_ocean_metrics` + `configure_ocean_land_mask` (needs</span>
+<span class="w">      </span><span class="c">!! the real filled `ocean_metrics_t`), before `ocean_state_enter_data`.</span>
+<span class="w">      </span><span class="c">!! `ierr` present -&gt; `OCEAN_STATUS_ERR_SETUP` on any hard-bound</span>
+<span class="w">      </span><span class="c">!! violation (never `error stop`); warnings always just log,</span>
+<span class="w">      </span><span class="c">!! whatever `ierr` does. Rank-0-only logging (mirrors every other</span>
+<span class="w">      </span><span class="c">!! `configure_ocean_*` info/warning line); the ERROR path itself</span>
+<span class="w">      </span><span class="c">!! always fires (every rank must agree the config is broken).</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">config_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">cfg</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_metrics_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">metrics</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">hgrid_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">grid</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">rank</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ierr</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">column</span><span class="p">(:,</span><span class="w"> </span><span class="p">:)</span>
+<span class="w">         </span><span class="c">!! Reference column thickness (m) at T cells, ghosts included —</span>
+<span class="w">         </span><span class="c">!! `bt_work%bt_H_ref`, which is `b - z_draft` afloat and `0`</span>
+<span class="w">         </span><span class="c">!! where grounded. Present ⇒ the terrain-following stiffness</span>
+<span class="w">         </span><span class="c">!! check (Check 5) runs; absent ⇒ it is skipped, which is what a</span>
+<span class="w">         </span><span class="c">!! caller with no barotropic datum yet should do.</span>
+
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dx_min</span><span class="p">,</span><span class="w"> </span><span class="n">dt</span><span class="p">,</span><span class="w"> </span><span class="n">dt_therm</span><span class="p">,</span><span class="w"> </span><span class="n">nu_h</span><span class="p">,</span><span class="w"> </span><span class="n">kappa_h</span><span class="p">,</span><span class="w"> </span><span class="n">ah_max</span>
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i_at</span><span class="p">,</span><span class="w"> </span><span class="n">j_at</span>
+<span class="w">      </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">is_x</span>
+<span class="w">      </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">auto_protected</span>
+
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">ierr</span><span class="p">))</span><span class="w"> </span><span class="n">ierr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">OCEAN_STATUS_OK</span>
+
+<span class="w">      </span><span class="n">dt</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">dt_fixed</span>
+<span class="w">      </span><span class="n">nu_h</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">hvisc</span><span class="p">%</span><span class="n">nu_h</span>
+<span class="w">      </span><span class="n">kappa_h</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">hdiff</span><span class="p">%</span><span class="n">kappa_h</span>
+<span class="w">      </span><span class="n">ah_max</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">hvisc</span><span class="p">%</span><span class="n">ah_max</span>
+
+<span class="w">      </span><span class="c">! dt_fixed &lt;= 0 =&gt; adaptive-CFL dt, not known at configure time</span>
+<span class="w">      </span><span class="c">! (matches the pre-existing kappa_h check's own gate).</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">dt</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+
+<span class="k">      call </span><span class="n">ocean_stability_min_cell</span><span class="p">(</span><span class="n">metrics</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">dx_min</span><span class="p">,</span><span class="w"> </span><span class="n">i_at</span><span class="p">,</span><span class="w"> </span><span class="n">j_at</span><span class="p">,</span><span class="w"> </span><span class="n">is_x</span><span class="p">)</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">dx_min</span><span class="w"> </span><span class="o">&lt;=</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="w"> </span><span class="p">.</span><span class="nb">or</span><span class="p">.</span><span class="w"> </span><span class="n">dx_min</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="nb">huge</span><span class="p">(</span><span class="mf">1.0_wp</span><span class="p">))</span><span class="w"> </span><span class="k">return</span>
+
+<span class="w">      </span><span class="c">! ---- Check 1: viscous CFL (nu_h*dt/dx_min^2) ----</span>
+<span class="w">      </span><span class="n">auto_protected</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">hvisc</span><span class="p">%</span><span class="n">bound_kh</span><span class="w"> </span><span class="p">.</span><span class="nb">or</span><span class="p">.</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">hvisc</span><span class="p">%</span><span class="n">stress_tensor</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">nu_h</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         block</span>
+<span class="k">            </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">cfl</span><span class="p">,</span><span class="w"> </span><span class="n">nu_h_max</span><span class="p">,</span><span class="w"> </span><span class="n">dt_max</span>
+<span class="w">            </span><span class="n">cfl</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ocean_viscous_cfl_number</span><span class="p">(</span><span class="n">nu_h</span><span class="p">,</span><span class="w"> </span><span class="n">dt</span><span class="p">,</span><span class="w"> </span><span class="n">dx_min</span><span class="p">)</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">cfl</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">VISCOUS_CFL_LIMIT</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               </span><span class="n">nu_h_max</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ocean_viscous_cfl_max_nu_h</span><span class="p">(</span><span class="n">dt</span><span class="p">,</span><span class="w"> </span><span class="n">dx_min</span><span class="p">,</span><span class="w"> </span><span class="n">VISCOUS_CFL_LIMIT</span><span class="p">)</span>
+<span class="w">               </span><span class="n">dt_max</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ocean_viscous_cfl_max_dt</span><span class="p">(</span><span class="n">nu_h</span><span class="p">,</span><span class="w"> </span><span class="n">dx_min</span><span class="p">,</span><span class="w"> </span><span class="n">VISCOUS_CFL_LIMIT</span><span class="p">)</span>
+<span class="w">               </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">auto_protected</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                  if</span><span class="w"> </span><span class="p">(</span><span class="n">rank</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                     call </span><span class="n">logger</span><span class="p">%</span><span class="n">warning</span><span class="p">(</span><span class="s2">"&amp;ocean_hvisc_nml nu_h = "</span><span class="o">//</span><span class="n">to_string</span><span class="p">(</span><span class="n">nu_h</span><span class="p">)</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                         </span><span class="s2">" with dt = "</span><span class="o">//</span><span class="n">to_string</span><span class="p">(</span><span class="n">dt</span><span class="p">)</span><span class="o">//</span><span class="s2">"s gives viscous CFL "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                         </span><span class="n">to_string</span><span class="p">(</span><span class="n">cfl</span><span class="p">)</span><span class="o">//</span><span class="s2">" at the smallest cell (dx = "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                         </span><span class="n">to_string</span><span class="p">(</span><span class="n">dx_min</span><span class="o">/</span><span class="mi">100</span><span class="mf">0.0_wp</span><span class="p">)</span><span class="o">//</span><span class="s2">" km, near i="</span><span class="o">//</span><span class="n">to_string</span><span class="p">(</span><span class="n">i_at</span><span class="p">)</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                         </span><span class="s2">" j="</span><span class="o">//</span><span class="n">to_string</span><span class="p">(</span><span class="n">j_at</span><span class="p">)</span><span class="o">//</span><span class="s2">"); limit is "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                         </span><span class="n">to_string</span><span class="p">(</span><span class="n">VISCOUS_CFL_LIMIT</span><span class="p">)</span><span class="o">//</span><span class="s2">" — but bound_kh/stress_tensor "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                         </span><span class="s2">"is enabled, so the runtime per-cell clamp will keep the "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                         </span><span class="s2">"EFFECTIVE viscosity within bound. Informational only."</span><span class="p">)</span>
+<span class="w">                  </span><span class="k">end if</span>
+<span class="k">               else</span>
+<span class="k">                  call </span><span class="n">fail</span><span class="p">(</span><span class="s2">"&amp;ocean_hvisc_nml nu_h = "</span><span class="o">//</span><span class="n">to_string</span><span class="p">(</span><span class="n">nu_h</span><span class="p">)</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                            </span><span class="s2">" with dt = "</span><span class="o">//</span><span class="n">to_string</span><span class="p">(</span><span class="n">dt</span><span class="p">)</span><span class="o">//</span><span class="s2">"s gives viscous CFL "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                            </span><span class="n">to_string</span><span class="p">(</span><span class="n">cfl</span><span class="p">)</span><span class="o">//</span><span class="s2">" at the smallest cell (dx = "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                            </span><span class="n">to_string</span><span class="p">(</span><span class="n">dx_min</span><span class="o">/</span><span class="mi">100</span><span class="mf">0.0_wp</span><span class="p">)</span><span class="o">//</span><span class="s2">" km, near i="</span><span class="o">//</span><span class="n">to_string</span><span class="p">(</span><span class="n">i_at</span><span class="p">)</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                            </span><span class="s2">" j="</span><span class="o">//</span><span class="n">to_string</span><span class="p">(</span><span class="n">j_at</span><span class="p">)</span><span class="o">//</span><span class="s2">"); limit is "</span><span class="o">//</span><span class="n">to_string</span><span class="p">(</span><span class="n">VISCOUS_CFL_LIMIT</span><span class="p">)</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                            </span><span class="s2">". Set &amp;ocean_hvisc_nml bound_kh = .true. for a per-cell clamp, "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                            </span><span class="s2">"or reduce nu_h below "</span><span class="o">//</span><span class="n">to_string</span><span class="p">(</span><span class="n">nu_h_max</span><span class="p">)</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                            </span><span class="s2">", or reduce dt below "</span><span class="o">//</span><span class="n">to_string</span><span class="p">(</span><span class="n">dt_max</span><span class="p">)</span><span class="o">//</span><span class="s2">"s."</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span><span class="p">,</span><span class="w"> </span><span class="n">OCEAN_STATUS_ERR_SETUP</span><span class="p">)</span>
+<span class="w">                  </span><span class="k">return</span>
+<span class="k">               end if</span>
+<span class="k">            end if</span>
+<span class="k">         end block</span>
+<span class="k">      end if</span>
+
+<span class="w">      </span><span class="c">! ---- Check 2: tracer diffusive number (kappa_h) ----</span>
+<span class="w">      </span><span class="c">! Absorbed + fixed from the old rdb_config.F90 check (Cartesian-only,</span>
+<span class="w">      </span><span class="c">! nominal dx/dy): now uses the REAL minimum cell, on ANY grid type.</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">kappa_h</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         block</span>
+<span class="k">            </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dnum</span>
+<span class="w">            </span><span class="n">dt_therm</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dt</span><span class="o">*</span><span class="kt">real</span><span class="p">(</span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">dt_therm_ratio</span><span class="p">,</span><span class="w"> </span><span class="n">wp</span><span class="p">)</span>
+<span class="w">            </span><span class="n">dnum</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ocean_diffusive_number</span><span class="p">(</span><span class="n">kappa_h</span><span class="p">,</span><span class="w"> </span><span class="n">dt_therm</span><span class="p">,</span><span class="w"> </span><span class="n">dx_min</span><span class="p">)</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">dnum</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">DIFFUSIVE_NUMBER_LIMIT</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               call </span><span class="n">fail</span><span class="p">(</span><span class="s2">"&amp;ocean_hdiff_nml kappa_h = "</span><span class="o">//</span><span class="n">to_string</span><span class="p">(</span><span class="n">kappa_h</span><span class="p">)</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                         </span><span class="s2">" violates the explicit forward-Euler diffusive stability bound "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                         </span><span class="s2">"kappa_h*dt_therm*(1/dx_min^2+1/dy_min^2) &lt;= "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                         </span><span class="n">to_string</span><span class="p">(</span><span class="n">DIFFUSIVE_NUMBER_LIMIT</span><span class="p">)</span><span class="o">//</span><span class="s2">" (computed "</span><span class="o">//</span><span class="n">to_string</span><span class="p">(</span><span class="n">dnum</span><span class="p">)</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                         </span><span class="s2">" using dt_therm = "</span><span class="o">//</span><span class="n">to_string</span><span class="p">(</span><span class="n">dt_therm</span><span class="p">)</span><span class="o">//</span><span class="s2">"s, dx_min = "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                         </span><span class="n">to_string</span><span class="p">(</span><span class="n">dx_min</span><span class="p">)</span><span class="o">//</span><span class="s2">"m near i="</span><span class="o">//</span><span class="n">to_string</span><span class="p">(</span><span class="n">i_at</span><span class="p">)</span><span class="o">//</span><span class="s2">" j="</span><span class="o">//</span><span class="n">to_string</span><span class="p">(</span><span class="n">j_at</span><span class="p">)</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                         </span><span class="s2">" — the ACTUAL smallest cell, not nominal dx/dy). Reduce kappa_h "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                         </span><span class="s2">"below "</span><span class="o">//</span><span class="n">to_string</span><span class="p">(</span><span class="n">DIFFUSIVE_NUMBER_LIMIT</span><span class="o">*</span><span class="n">dx_min</span><span class="o">**</span><span class="mi">2</span><span class="o">/</span><span class="p">(</span><span class="mf">2.0_wp</span><span class="o">*</span><span class="n">dt_therm</span><span class="p">))</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                         </span><span class="s2">", or reduce dt/dt_therm_ratio."</span><span class="p">,</span><span class="w"> </span><span class="n">ierr</span><span class="p">,</span><span class="w"> </span><span class="n">OCEAN_STATUS_ERR_SETUP</span><span class="p">)</span>
+<span class="w">               </span><span class="k">return</span>
+<span class="k">            end if</span>
+<span class="w">            </span><span class="c">! diabatic_first = .false.: hdiff runs once per interval with the</span>
+<span class="w">            </span><span class="c">! FULL tracer dt (no subcycling), so its explicit Laplacian sits</span>
+<span class="w">            </span><span class="c">! within a factor 2 of the forward-Euler limit well before the</span>
+<span class="w">            </span><span class="c">! hard bound above (Griffies 1998 sec. on the explicit limit).</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">diabatic_first</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">cfg</span><span class="p">%</span><span class="n">ocean</span><span class="p">%</span><span class="n">vmix</span><span class="p">%</span><span class="n">dt_therm_ratio</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">dnum</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="o">*</span><span class="n">DIFFUSIVE_NUMBER_LIMIT</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               call </span><span class="n">logger</span><span class="p">%</span><span class="n">warning</span><span class="p">(</span><span class="s2">"&amp;ocean_hdiff_nml kappa_h = "</span><span class="o">//</span><span class="n">to_string</span><span class="p">(</span><span class="n">kappa_h</span><span class="p">)</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                   </span><span class="s2">" with diabatic_first=.false.: the interval-end hdiff takes one "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                   </span><span class="s2">"step of dt_therm = "</span><span class="o">//</span><span class="n">to_string</span><span class="p">(</span><span class="n">dt_therm</span><span class="p">)</span><span class="o">//</span><span class="s2">"s, diffusive number "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                   </span><span class="n">to_string</span><span class="p">(</span><span class="n">dnum</span><span class="p">)</span><span class="o">//</span><span class="s2">" is above half the stability limit "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                   </span><span class="n">to_string</span><span class="p">(</span><span class="n">DIFFUSIVE_NUMBER_LIMIT</span><span class="p">))</span>
+<span class="w">            </span><span class="k">end if</span>
+<span class="k">         end block</span>
+<span class="k">      end if</span>
+
+<span class="w">      </span><span class="c">! ---- Check 3: Munk-layer resolution (WARNING) ----</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">nu_h</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         block</span>
+<span class="k">            </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ratio_min</span><span class="p">,</span><span class="w"> </span><span class="n">beta_at</span><span class="p">,</span><span class="w"> </span><span class="n">dx_at</span><span class="p">,</span><span class="w"> </span><span class="n">nu_h_req</span>
+<span class="w">            </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">j_munk</span>
+<span class="w">            </span><span class="k">call </span><span class="n">ocean_munk_worst_case</span><span class="p">(</span><span class="n">cfg</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">nu_h</span><span class="p">,</span><span class="w"> </span><span class="n">ratio_min</span><span class="p">,</span><span class="w"> </span><span class="n">beta_at</span><span class="p">,</span><span class="w"> </span><span class="n">dx_at</span><span class="p">,</span><span class="w"> </span><span class="n">j_munk</span><span class="p">)</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">ratio_min</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">MUNK_MIN_CELLS</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">ratio_min</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="nb">huge</span><span class="p">(</span><span class="mf">1.0_wp</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               </span><span class="n">nu_h_req</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ocean_munk_required_nu_h</span><span class="p">(</span><span class="n">beta_at</span><span class="p">,</span><span class="w"> </span><span class="n">dx_at</span><span class="p">,</span><span class="w"> </span><span class="n">MUNK_MIN_CELLS</span><span class="p">)</span>
+<span class="w">               </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">rank</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                  call </span><span class="n">logger</span><span class="p">%</span><span class="n">warning</span><span class="p">(</span><span class="s2">"Munk sidewall boundary layer under-resolved: "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="s2">"delta_M = (nu_h/beta)^(1/3) = "</span><span class="o">//</span><span class="n">to_string</span><span class="p">(</span><span class="n">ocean_munk_delta_m</span><span class="p">(</span><span class="n">nu_h</span><span class="p">,</span><span class="w"> </span><span class="n">beta_at</span><span class="p">))</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="s2">"m spans only "</span><span class="o">//</span><span class="n">to_string</span><span class="p">(</span><span class="n">ratio_min</span><span class="p">)</span><span class="o">//</span><span class="s2">" cells (dx = "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="n">to_string</span><span class="p">(</span><span class="n">dx_at</span><span class="p">)</span><span class="o">//</span><span class="s2">"m, beta = "</span><span class="o">//</span><span class="n">to_string</span><span class="p">(</span><span class="n">beta_at</span><span class="p">)</span><span class="o">//</span><span class="s2">" 1/(m*s) near j="</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="n">to_string</span><span class="p">(</span><span class="n">j_munk</span><span class="p">)</span><span class="o">//</span><span class="s2">"); need &gt;= "</span><span class="o">//</span><span class="n">to_string</span><span class="p">(</span><span class="n">MUNK_MIN_CELLS</span><span class="p">)</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="s2">" cells or the wall carries grid-scale (2-delta) noise. Raise "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="s2">"&amp;ocean_hvisc_nml nu_h to at least "</span><span class="o">//</span><span class="n">to_string</span><span class="p">(</span><span class="n">nu_h_req</span><span class="p">)</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="s2">" m2/s (and raise ah_max to match — see the next check)."</span><span class="p">)</span>
+<span class="w">               </span><span class="k">end if</span>
+<span class="k">            end if</span>
+<span class="k">         end block</span>
+<span class="k">      end if</span>
+
+<span class="w">      </span><span class="c">! ---- Check 4: ah_max clamping nu_h inert (WARNING) ----</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">nu_h</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">ah_max</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">ah_max</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">nu_h</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         if</span><span class="w"> </span><span class="p">(</span><span class="n">rank</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            call </span><span class="n">logger</span><span class="p">%</span><span class="n">warning</span><span class="p">(</span><span class="s2">"&amp;ocean_hvisc_nml ah_max = "</span><span class="o">//</span><span class="n">to_string</span><span class="p">(</span><span class="n">ah_max</span><span class="p">)</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                </span><span class="s2">" is BELOW nu_h = "</span><span class="o">//</span><span class="n">to_string</span><span class="p">(</span><span class="n">nu_h</span><span class="p">)</span><span class="o">//</span><span class="s2">" — ah_max is a hard CAP on the "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                </span><span class="s2">"per-face viscosity, so the configured nu_h is silently clamped down to "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                </span><span class="s2">"ah_max and never actually applied. Set ah_max &gt;= nu_h (e.g. ah_max = "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                </span><span class="n">to_string</span><span class="p">(</span><span class="n">nu_h</span><span class="p">)</span><span class="o">//</span><span class="s2">" or higher)."</span><span class="p">)</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">      end if</span>
+
+<span class="w">      </span><span class="c">! ---- Check 5: terrain-following stiffness rx0 (WARNING) ----</span>
+<span class="w">      </span><span class="c">! Geometry only — no dt, no nz, no viscosity. A sigma-family</span>
+<span class="w">      </span><span class="c">! coordinate divides the COLUMN into nz layers, so a big column</span>
+<span class="w">      </span><span class="c">! contrast across one face offsets the two columns' K-th interfaces</span>
+<span class="w">      </span><span class="c">! by Delta_e ~ rx0*(H_a+H_b), and the pressure-gradient truncation</span>
+<span class="w">      </span><span class="c">! goes as Delta_e^3. See SIGMA_STIFFNESS_LIMIT for the citations and</span>
+<span class="w">      </span><span class="c">! for the ISOMIP+ Ocean0 failure that motivated this.</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">column</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         if</span><span class="w"> </span><span class="p">(</span><span class="n">ocean_vcoord_is_terrain_following</span><span class="p">(</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">             </span><span class="n">parse_vcoord_type</span><span class="p">(</span><span class="n">cfg</span><span class="p">%</span><span class="n">vcoord_type</span><span class="p">,</span><span class="w"> </span><span class="n">VCOORD_SIGMA</span><span class="p">)))</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            block</span>
+<span class="k">               </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">rx0_max</span><span class="p">,</span><span class="w"> </span><span class="n">h_thin</span><span class="p">,</span><span class="w"> </span><span class="n">h_thick</span>
+<span class="w">               </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i_rx</span><span class="p">,</span><span class="w"> </span><span class="n">j_rx</span><span class="p">,</span><span class="w"> </span><span class="n">n_over</span><span class="p">,</span><span class="w"> </span><span class="n">n_face</span>
+<span class="w">               </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">rx_is_x</span>
+<span class="w">               </span><span class="k">call </span><span class="n">ocean_sigma_stiffness_worst</span><span class="p">(</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                  </span><span class="n">size</span><span class="p">(</span><span class="n">column</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">),</span><span class="w"> </span><span class="n">size</span><span class="p">(</span><span class="n">column</span><span class="p">,</span><span class="w"> </span><span class="mi">2</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                  </span><span class="n">grid</span><span class="p">%</span><span class="n">nghost</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">nghost</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                  </span><span class="n">grid</span><span class="p">%</span><span class="n">nghost</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">nghost</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">grid</span><span class="p">%</span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                  </span><span class="n">column</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">%</span><span class="n">wet_T</span><span class="p">,</span><span class="w"> </span><span class="n">rx0_max</span><span class="p">,</span><span class="w"> </span><span class="n">i_rx</span><span class="p">,</span><span class="w"> </span><span class="n">j_rx</span><span class="p">,</span><span class="w"> </span><span class="n">rx_is_x</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                  </span><span class="n">h_thin</span><span class="p">,</span><span class="w"> </span><span class="n">h_thick</span><span class="p">,</span><span class="w"> </span><span class="n">n_over</span><span class="p">,</span><span class="w"> </span><span class="n">n_face</span><span class="p">)</span>
+<span class="w">               </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">rx0_max</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">SIGMA_STIFFNESS_LIMIT</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">rank</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                  call </span><span class="n">logger</span><span class="p">%</span><span class="n">warning</span><span class="p">(</span><span class="s2">"Terrain-following stiffness rx0 = "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="n">to_string</span><span class="p">(</span><span class="n">rx0_max</span><span class="p">)</span><span class="o">//</span><span class="s2">" exceeds "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="n">to_string</span><span class="p">(</span><span class="n">SIGMA_STIFFNESS_LIMIT</span><span class="p">)</span><span class="o">//</span><span class="s2">" on the '"</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="nb">trim</span><span class="p">(</span><span class="nb">adjustl</span><span class="p">(</span><span class="n">cfg</span><span class="p">%</span><span class="n">vcoord_type</span><span class="p">))</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="s2">"' vertical coordinate: a "</span><span class="o">//</span><span class="n">to_string</span><span class="p">(</span><span class="n">h_thin</span><span class="p">)</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="s2">" m column sits beside a "</span><span class="o">//</span><span class="n">to_string</span><span class="p">(</span><span class="n">h_thick</span><span class="p">)</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="s2">" m one across a single "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="nb">merge</span><span class="p">(</span><span class="s2">"x"</span><span class="p">,</span><span class="w"> </span><span class="s2">"y"</span><span class="p">,</span><span class="w"> </span><span class="n">rx_is_x</span><span class="p">)</span><span class="o">//</span><span class="s2">" face near i="</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="n">to_string</span><span class="p">(</span><span class="n">i_rx</span><span class="p">)</span><span class="o">//</span><span class="s2">" j="</span><span class="o">//</span><span class="n">to_string</span><span class="p">(</span><span class="n">j_rx</span><span class="p">)</span><span class="o">//</span><span class="s2">" ("</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="n">to_string</span><span class="p">(</span><span class="n">n_over</span><span class="p">)</span><span class="o">//</span><span class="s2">" of "</span><span class="o">//</span><span class="n">to_string</span><span class="p">(</span><span class="n">n_face</span><span class="p">)</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="s2">" wet-wet faces are over the bound). The sigma "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="s2">"pressure-gradient truncation scales as the CUBE of the "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="s2">"interface offset between neighbouring columns, so this "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="s2">"is a LARGE spurious force, and a quiescent or long run "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="s2">"over this geometry will measure it rather than the "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="s2">"physics. A FORCED, viscous run is normally fine here — a "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="s2">"constant lateral-viscosity floor arrests a steady spurious "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="s2">"force rather than integrating it, which is what the shipped "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="s2">"nu_h = 10000 double-gyre and neverworld2 cases rely on. A "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="s2">"quiescent, weakly-damped or long spin-up run is NOT: smooth "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="s2">"the topography to rx0 &lt;= "</span><span class="o">//</span><span class="n">to_string</span><span class="p">(</span><span class="n">SIGMA_STIFFNESS_LIMIT</span><span class="p">)</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="s2">" (under an ice shelf, raising &amp;ocean_cavity_dyn_nml "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="s2">"h_min_cavity removes the thinnest columns), or use a "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="s2">"coordinate whose interfaces do not follow the topography. "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="s2">"Viscosity and a smaller dt DELAY a runaway, they do not "</span><span class="o">//</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="s2">"remove the error."</span><span class="p">)</span>
+<span class="w">               </span><span class="k">end if</span>
+<span class="k">            end block</span>
+<span class="k">         end if</span>
+<span class="k">      end if</span>
+
+<span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">ierr</span><span class="p">))</span><span class="w"> </span><span class="n">ierr</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">OCEAN_STATUS_OK</span>
+<span class="w">   </span><span class="k">end subroutine </span><span class="n">ocean_stability_audit</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-11-13 23:21 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

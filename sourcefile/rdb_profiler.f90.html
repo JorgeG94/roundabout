@@ -1,0 +1,1278 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>rdb_profiler.F90 &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>rdb_profiler.F90
+      <small>Source File</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.3% of total for source files.">199 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_profiler.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+            <li class="breadcrumb-item active" aria-current="page">rdb_profiler.F90</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+        <div id="sidebar">
+      <h3>Contents</h3>
+  
+  
+  
+  
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#mods-0"
+         aria-expanded="false" aria-controls="mods-0">
+         <h4 class="card-header bg-primary text-white">Modules</h4>
+      </a>
+      <div id="mods-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../module/rdb_profiler.html">rdb_profiler</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../sourcefile/rdb_profiler.f90.html#src">rdb_profiler.F90</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    <div class="col-md-9" id='text'>
+      <p>Named profiling regions with wall-clock timers and optional NVTX ranges.
+-DUSE_NVTX enables NVTX (else no-op); -DDISABLE_PROFILER disables everything.</p>
+      <br>
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">Files dependent on this one</h3>
+          </div>
+          <div class="card-body">
+            <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: sourcefile~~rdb_profiler.f90~~AfferentGraph Pages: 1 -->
+<svg id="sourcefilerdb_profilerf90AfferentGraph" width="641pt" height="274pt"
+ viewBox="0.00 0.00 641.00 274.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph" class="graph" transform="scale(0.373663 0.373663) rotate(0) translate(4 728.88)">
+<title>sourcefile~~rdb_profiler.f90~~AfferentGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-728.88 1711.45,-728.88 1711.45,4 -4,4"/>
+<!-- sourcefile~rdb_profiler.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_node1" class="node">
+<title>sourcefile~rdb_profiler.f90</title>
+<polygon fill="none" stroke="black" points="94.02,-594.1 0,-594.1 0,-569.83 94.02,-569.83 94.02,-594.1"/>
+<text xml:space="preserve" text-anchor="middle" x="47.01" y="-578.37" font-family="Helvetica,sans-Serif" font-size="10.50">rdb_profiler.F90</text>
+</g>
+<!-- sourcefile~rdb_barotropic_substep.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_node2" class="node">
+<title>sourcefile~rdb_barotropic_substep.f90</title>
+<g id="a_sourcefile~~rdb_profiler.f90~~AfferentGraph_node2"><a xlink:href="../sourcefile/rdb_barotropic_substep.f90.html" xlink:title="rdb_barotropic_substep.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="287.79,-594.1 130.02,-594.1 130.02,-569.83 287.79,-569.83 287.79,-594.1"/>
+<text xml:space="preserve" text-anchor="middle" x="208.9" y="-578.37" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_barotropic_substep.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_barotropic_substep.f90&#45;&gt;sourcefile~rdb_profiler.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_edge1" class="edge">
+<title>sourcefile~rdb_barotropic_substep.f90&#45;&gt;sourcefile~rdb_profiler.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M129.83,-581.97C121.63,-581.97 113.4,-581.97 105.49,-581.97"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="105.68,-578.47 95.68,-581.97 105.68,-585.47 105.68,-578.47"/>
+</g>
+<!-- sourcefile~rdb_continuity.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_node3" class="node">
+<title>sourcefile~rdb_continuity.f90</title>
+<g id="a_sourcefile~~rdb_profiler.f90~~AfferentGraph_node3"><a xlink:href="../sourcefile/rdb_continuity.f90.html" xlink:title="rdb_continuity.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="453.06,-495.1 344.79,-495.1 344.79,-470.83 453.06,-470.83 453.06,-495.1"/>
+<text xml:space="preserve" text-anchor="middle" x="398.92" y="-479.37" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_continuity.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_continuity.f90&#45;&gt;sourcefile~rdb_profiler.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_edge2" class="edge">
+<title>sourcefile~rdb_continuity.f90&#45;&gt;sourcefile~rdb_profiler.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M354,-470.36C302.38,-456.05 222.16,-435.58 209.9,-442.97"/>
+</g>
+<!-- sourcefile~rdb_driver.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_node4" class="node">
+<title>sourcefile~rdb_driver.f90</title>
+<g id="a_sourcefile~~rdb_profiler.f90~~AfferentGraph_node4"><a xlink:href="../sourcefile/rdb_driver.f90.html" xlink:title="rdb_driver.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1556.05,-506.1 1468.78,-506.1 1468.78,-481.83 1556.05,-481.83 1556.05,-506.1"/>
+<text xml:space="preserve" text-anchor="middle" x="1512.42" y="-490.37" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_driver.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_profiler.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_edge3" class="edge">
+<title>sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_profiler.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1177.88,-675.97C835.56,-727.43 742.61,-664.99 399.92,-713.97"/>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_node6" class="node">
+<title>sourcefile~rdb_ocean_dyn.f90</title>
+<g id="a_sourcefile~~rdb_profiler.f90~~AfferentGraph_node6"><a xlink:href="../sourcefile/rdb_ocean_dyn.f90.html" xlink:title="rdb_ocean_dyn.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="648.33,-614.1 533.31,-614.1 533.31,-589.83 648.33,-589.83 648.33,-614.1"/>
+<text xml:space="preserve" text-anchor="middle" x="590.82" y="-598.37" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_dyn.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_edge16" class="edge">
+<title>sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1362.27,-637.97C1286.09,-670.42 1261.77,-663.66 1179.88,-675.97"/>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1177.88,-675.97C1091.29,-688.98 1068.36,-679.34 980.86,-675.97"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_node7" class="node">
+<title>sourcefile~rdb_ocean_engine.f90</title>
+<g id="a_sourcefile~~rdb_profiler.f90~~AfferentGraph_node7"><a xlink:href="../sourcefile/rdb_ocean_engine.f90.html" xlink:title="rdb_ocean_engine.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1429.41,-286.1 1297.14,-286.1 1297.14,-261.83 1429.41,-261.83 1429.41,-286.1"/>
+<text xml:space="preserve" text-anchor="middle" x="1363.27" y="-270.37" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_engine.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_edge21" class="edge">
+<title>sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90</title>
+<path fill="none" stroke="#003fff" stroke-dasharray="5,2" d="M1503.09,-481.51C1479.07,-445.59 1409.45,-341.51 1378.92,-295.86"/>
+<polygon fill="#003fff" stroke="#003fff" points="1382.01,-294.19 1373.54,-287.82 1376.19,-298.08 1382.01,-294.19"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_node9" class="node">
+<title>sourcefile~rdb_ocean_state.f90</title>
+<g id="a_sourcefile~~rdb_profiler.f90~~AfferentGraph_node9"><a xlink:href="../sourcefile/rdb_ocean_state.f90.html" xlink:title="rdb_ocean_state.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="846.22,-228.1 724.45,-228.1 724.45,-203.83 846.22,-203.83 846.22,-228.1"/>
+<text xml:space="preserve" text-anchor="middle" x="785.34" y="-212.37" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_state.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_edge33" class="edge">
+<title>sourcefile~rdb_driver.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M1503.76,-506.43C1484.66,-536.17 1431.55,-610.79 1364.27,-637.97"/>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M1362.27,-637.97C1259.74,-679.39 968.56,-542.02 899.1,-455.97 868.38,-417.9 883.2,-396.56 863.1,-351.97 844.3,-310.26 816.93,-264.44 800.46,-238.06"/>
+<polygon fill="#ff00bf" stroke="#ff00bf" points="803.42,-236.19 795.13,-229.6 797.5,-239.93 803.42,-236.19"/>
+</g>
+<!-- sourcefile~rdb_ocean_bt_wide.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_node5" class="node">
+<title>sourcefile~rdb_ocean_bt_wide.f90</title>
+<g id="a_sourcefile~~rdb_profiler.f90~~AfferentGraph_node5"><a xlink:href="../sourcefile/rdb_ocean_bt_wide.f90.html" xlink:title="rdb_ocean_bt_wide.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="466.93,-614.1 330.91,-614.1 330.91,-589.83 466.93,-589.83 466.93,-614.1"/>
+<text xml:space="preserve" text-anchor="middle" x="398.92" y="-598.37" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_bt_wide.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_bt_wide.f90&#45;&gt;sourcefile~rdb_profiler.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_edge4" class="edge">
+<title>sourcefile~rdb_ocean_bt_wide.f90&#45;&gt;sourcefile~rdb_profiler.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M388.37,-614.41C362.35,-646.68 287.01,-729.49 209.9,-713.97"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M207.9,-713.97C142.38,-700.77 87.8,-637.28 62.75,-603.39"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="65.77,-601.61 57.09,-595.53 60.09,-605.69 65.77,-601.61"/>
+</g>
+<!-- sourcefile~rdb_ocean_bt_wide.f90&#45;&gt;sourcefile~rdb_barotropic_substep.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_edge9" class="edge">
+<title>sourcefile~rdb_ocean_bt_wide.f90&#45;&gt;sourcefile~rdb_barotropic_substep.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M330.58,-594.8C320.44,-593.72 309.85,-592.6 299.34,-591.48"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="299.81,-588.01 289.49,-590.43 299.07,-594.97 299.81,-588.01"/>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_profiler.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_edge5" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_profiler.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M576.98,-614.55C548.25,-641.49 475.33,-703.19 399.92,-713.97"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M397.92,-713.97C315.2,-725.79 291.82,-730.46 209.9,-713.97"/>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_barotropic_substep.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_edge10" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_barotropic_substep.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M552.83,-589.41C514.91,-577.67 454,-561.94 399.92,-561.97"/>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_continuity.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_edge13" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_continuity.f90</title>
+<path fill="none" stroke="#ffbf00" stroke-dasharray="5,2" d="M569.86,-589.46C536.38,-568.48 468.75,-526.1 429.66,-501.6"/>
+<polygon fill="#ffbf00" stroke="#ffbf00" points="431.52,-498.64 421.19,-496.29 427.8,-504.57 431.52,-498.64"/>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_bt_wide.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_edge15" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_bt_wide.f90</title>
+<path fill="none" stroke="#00ff3f" stroke-dasharray="5,2" d="M532.85,-601.97C515.83,-601.97 496.86,-601.97 478.71,-601.97"/>
+<polygon fill="#00ff3f" stroke="#00ff3f" points="478.74,-598.47 468.74,-601.97 478.74,-605.47 478.74,-598.47"/>
+</g>
+<!-- sourcefile~rdb_ocean_halo_state.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_node8" class="node">
+<title>sourcefile~rdb_ocean_halo_state.f90</title>
+<g id="a_sourcefile~~rdb_profiler.f90~~AfferentGraph_node8"><a xlink:href="../sourcefile/rdb_ocean_halo_state.f90.html" xlink:title="rdb_ocean_halo_state.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="474.06,-378.1 323.79,-378.1 323.79,-353.83 474.06,-353.83 474.06,-378.1"/>
+<text xml:space="preserve" text-anchor="middle" x="398.92" y="-362.37" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_halo_state.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_edge28" class="edge">
+<title>sourcefile~rdb_ocean_dyn.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M568.15,-589.55C550.61,-578.61 526.25,-561.28 510.06,-540.97 486.02,-510.79 493.98,-495.01 474.06,-461.97 457.5,-434.51 434.41,-405.75 418.42,-386.95"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="421.16,-384.77 411.98,-379.48 415.86,-389.34 421.16,-384.77"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_profiler.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_edge6" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_profiler.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M978.86,-441.97C926.3,-419.03 916.73,-478.64 863.1,-498.97 830.03,-511.5 821.37,-515.05 786.34,-519.97"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M784.34,-519.97C783.8,-520.04 474.6,-462.04 474.06,-461.97 357.32,-446.91 312.45,-385.18 209.9,-442.97"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_barotropic_substep.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_edge11" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_barotropic_substep.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1177.88,-561.97C1094.84,-585.97 486.36,-561.92 399.92,-561.97"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M397.92,-561.97C365.62,-561.8 330.37,-564.72 299.2,-568.37"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="298.93,-564.88 289.42,-569.56 299.77,-571.83 298.93,-564.88"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_edge18" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1361.81,-286.58C1359.47,-332.15 1345.34,-490.1 1261.14,-575.97 1214.84,-623.18 1046.99,-675.97 980.86,-675.97"/>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M978.86,-675.97C854.92,-678.44 712.53,-640.34 639.9,-617.86"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="641.31,-614.64 630.72,-614.98 639.22,-621.32 641.31,-614.64"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_edge29" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M784.34,-365.97C684.03,-341.69 564.63,-346.74 485.81,-354.55"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="485.58,-351.06 475.99,-355.56 486.3,-358.02 485.58,-351.06"/>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_edge38" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M1177.88,-561.97C1079.38,-590.44 1074.83,-482.97 980.86,-441.97"/>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M978.86,-441.97C945.46,-427.39 927.72,-445.53 899.1,-422.97 871.32,-401.06 879.8,-383.16 863.1,-351.97 841.39,-311.42 814.75,-264.9 799.24,-238.12"/>
+<polygon fill="#ff00bf" stroke="#ff00bf" points="802.32,-236.44 794.27,-229.55 796.26,-239.96 802.32,-236.44"/>
+</g>
+<!-- sourcefile~rdb_ice_ocean_coupler.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_node11" class="node">
+<title>sourcefile~rdb_ice_ocean_coupler.f90</title>
+<g id="a_sourcefile~~rdb_profiler.f90~~AfferentGraph_node11"><a xlink:href="../sourcefile/rdb_ice_ocean_coupler.f90.html" xlink:title="rdb_ice_ocean_coupler.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="863.1,-454.1 707.58,-454.1 707.58,-429.83 863.1,-429.83 863.1,-454.1"/>
+<text xml:space="preserve" text-anchor="middle" x="785.34" y="-438.37" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_ocean_coupler.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_ocean_coupler.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_edge46" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_ocean_coupler.f90</title>
+<path fill="none" stroke="#ff5f00" stroke-dasharray="5,2" d="M978.86,-441.97C942.77,-426.22 899.12,-424.97 862.52,-428.2"/>
+<polygon fill="#ff5f00" stroke="#ff5f00" points="862.5,-424.68 852.91,-429.18 863.21,-431.65 862.5,-424.68"/>
+</g>
+<!-- sourcefile~rdb_ice_transport.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_node12" class="node">
+<title>sourcefile~rdb_ice_transport.f90</title>
+<g id="a_sourcefile~~rdb_profiler.f90~~AfferentGraph_node12"><a xlink:href="../sourcefile/rdb_ice_transport.f90.html" xlink:title="rdb_ice_transport.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="654.33,-532.1 527.31,-532.1 527.31,-507.83 654.33,-507.83 654.33,-532.1"/>
+<text xml:space="preserve" text-anchor="middle" x="590.82" y="-516.37" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ice_transport.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_transport.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_edge47" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ice_transport.f90</title>
+<path fill="none" stroke="#ffbf00" stroke-dasharray="5,2" d="M784.34,-519.97C745.51,-525.42 701.85,-525.87 665.93,-524.77"/>
+<polygon fill="#ffbf00" stroke="#ffbf00" points="666.19,-521.27 656.07,-524.41 665.93,-528.27 666.19,-521.27"/>
+</g>
+<!-- sourcefile~rdb_ocean_bulk_forcing.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_node15" class="node">
+<title>sourcefile~rdb_ocean_bulk_forcing.f90</title>
+<g id="a_sourcefile~~rdb_profiler.f90~~AfferentGraph_node15"><a xlink:href="../sourcefile/rdb_ocean_bulk_forcing.f90.html" xlink:title="rdb_ocean_bulk_forcing.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="670.83,-338.1 510.81,-338.1 510.81,-313.83 670.83,-313.83 670.83,-338.1"/>
+<text xml:space="preserve" text-anchor="middle" x="590.82" y="-322.37" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_bulk_forcing.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_bulk_forcing.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_edge50" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_bulk_forcing.f90</title>
+<path fill="none" stroke="#1fff00" stroke-dasharray="5,2" d="M978.86,-441.97C945.46,-427.39 933.32,-435.49 899.1,-422.97 846.37,-403.66 840.92,-379.18 786.34,-365.97"/>
+<path fill="none" stroke="#1fff00" stroke-dasharray="5,2" d="M784.34,-365.97C746.47,-356.8 704.09,-347.86 668.76,-340.76"/>
+<polygon fill="#1fff00" stroke="#1fff00" points="669.53,-337.34 659.04,-338.82 668.16,-344.21 669.53,-337.34"/>
+</g>
+<!-- sourcefile~rdb_ocean_data_forcing.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_node16" class="node">
+<title>sourcefile~rdb_ocean_data_forcing.f90</title>
+<g id="a_sourcefile~~rdb_profiler.f90~~AfferentGraph_node16"><a xlink:href="../sourcefile/rdb_ocean_data_forcing.f90.html" xlink:title="rdb_ocean_data_forcing.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="671.58,-188.1 510.06,-188.1 510.06,-163.83 671.58,-163.83 671.58,-188.1"/>
+<text xml:space="preserve" text-anchor="middle" x="590.82" y="-172.37" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_data_forcing.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_data_forcing.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_edge52" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_data_forcing.f90</title>
+<path fill="none" stroke="#00ff3f" stroke-dasharray="5,2" d="M784.34,-175.97C751.44,-178.97 715.24,-179.66 683.2,-179.37"/>
+<polygon fill="#00ff3f" stroke="#00ff3f" points="683.61,-175.87 673.57,-179.24 683.52,-182.87 683.61,-175.87"/>
+</g>
+<!-- sourcefile~rdb_ocean_diag_derived.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_node17" class="node">
+<title>sourcefile~rdb_ocean_diag_derived.f90</title>
+<g id="a_sourcefile~~rdb_profiler.f90~~AfferentGraph_node17"><a xlink:href="../sourcefile/rdb_ocean_diag_derived.f90.html" xlink:title="rdb_ocean_diag_derived.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1261.14,-168.1 1096.62,-168.1 1096.62,-143.83 1261.14,-143.83 1261.14,-168.1"/>
+<text xml:space="preserve" text-anchor="middle" x="1178.88" y="-152.37" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_diag_derived.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_diag_derived.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_edge55" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_diag_derived.f90</title>
+<path fill="none" stroke="#00ff9f" stroke-dasharray="5,2" d="M1342.76,-261.34C1310.53,-240.49 1246.05,-198.77 1208.61,-174.55"/>
+<polygon fill="#00ff9f" stroke="#00ff9f" points="1210.83,-171.82 1200.53,-169.33 1207.02,-177.7 1210.83,-171.82"/>
+</g>
+<!-- sourcefile~rdb_ocean_diag_fills.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_node18" class="node">
+<title>sourcefile~rdb_ocean_diag_fills.f90</title>
+<g id="a_sourcefile~~rdb_profiler.f90~~AfferentGraph_node18"><a xlink:href="../sourcefile/rdb_ocean_diag_fills.f90.html" xlink:title="rdb_ocean_diag_fills.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1050.87,-208.1 908.85,-208.1 908.85,-183.83 1050.87,-183.83 1050.87,-208.1"/>
+<text xml:space="preserve" text-anchor="middle" x="979.86" y="-192.37" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_diag_fills.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_edge58" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1300.57,-261.35C1233.13,-247.56 1125.16,-225.48 1053.63,-210.85"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="1054.46,-207.45 1043.96,-208.87 1053.05,-214.3 1054.46,-207.45"/>
+</g>
+<!-- sourcefile~rdb_ocean_ic_inject.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_node19" class="node">
+<title>sourcefile~rdb_ocean_ic_inject.f90</title>
+<g id="a_sourcefile~~rdb_profiler.f90~~AfferentGraph_node19"><a xlink:href="../sourcefile/rdb_ocean_ic_inject.f90.html" xlink:title="rdb_ocean_ic_inject.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1248.39,-88.1 1109.37,-88.1 1109.37,-63.83 1248.39,-63.83 1248.39,-88.1"/>
+<text xml:space="preserve" text-anchor="middle" x="1178.88" y="-72.37" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_ic_inject.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_ic_inject.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_edge60" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_ic_inject.f90</title>
+<path fill="none" stroke="#009fff" stroke-dasharray="5,2" d="M1353.95,-261.34C1341.26,-241.95 1316.51,-203.55 1297.14,-169.97 1280.05,-140.35 1287.37,-123.91 1261.14,-101.97 1257.27,-98.72 1252.98,-95.88 1248.46,-93.4"/>
+<polygon fill="#009fff" stroke="#009fff" points="1250.17,-90.33 1239.64,-89.15 1247.13,-96.64 1250.17,-90.33"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_node21" class="node">
+<title>sourcefile~rdb_ocean_setup.f90</title>
+<g id="a_sourcefile~~rdb_profiler.f90~~AfferentGraph_node21"><a xlink:href="../sourcefile/rdb_ocean_setup.f90.html" xlink:title="rdb_ocean_setup.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1042.24,-414.1 917.47,-414.1 917.47,-389.83 1042.24,-389.83 1042.24,-414.1"/>
+<text xml:space="preserve" text-anchor="middle" x="979.86" y="-398.37" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_edge63" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90</title>
+<path fill="none" stroke="#1f00ff" stroke-dasharray="5,2" d="M1361.57,-286.41C1358.45,-329.24 1342.13,-471.87 1261.14,-542.97 1233.27,-567.44 1215.51,-551.67 1179.88,-561.97"/>
+<path fill="none" stroke="#1f00ff" stroke-dasharray="5,2" d="M1177.88,-561.97C1142.25,-572.27 1123.79,-568.21 1096.62,-542.97 1057.38,-506.52 1098.27,-466.06 1060.62,-427.97 1057.68,-425 1054.4,-422.36 1050.89,-420.03"/>
+<polygon fill="#1f00ff" stroke="#1f00ff" points="1052.89,-417.14 1042.46,-415.28 1049.45,-423.24 1052.89,-417.14"/>
+</g>
+<!-- sourcefile~rdb_ocean_sw_chl.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_node25" class="node">
+<title>sourcefile~rdb_ocean_sw_chl.f90</title>
+<g id="a_sourcefile~~rdb_profiler.f90~~AfferentGraph_node25"><a xlink:href="../sourcefile/rdb_ocean_sw_chl.f90.html" xlink:title="rdb_ocean_sw_chl.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="655.83,-146.1 525.81,-146.1 525.81,-121.83 655.83,-121.83 655.83,-146.1"/>
+<text xml:space="preserve" text-anchor="middle" x="590.82" y="-130.37" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_sw_chl.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_sw_chl.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_edge70" class="edge">
+<title>sourcefile~rdb_ocean_engine.f90&#45;&gt;sourcefile~rdb_ocean_sw_chl.f90</title>
+<path fill="none" stroke="#ff005f" stroke-dasharray="5,2" d="M1355.34,-261.73C1337.33,-230.42 1288.53,-148.91 1261.14,-134.97 1239.77,-124.09 906.04,-140.82 899.1,-141.97 847.46,-150.52 838.47,-171.2 786.34,-175.97"/>
+<path fill="none" stroke="#ff005f" stroke-dasharray="5,2" d="M784.34,-175.97C771.28,-176.52 705.24,-161.45 654.1,-149.21"/>
+<polygon fill="#ff005f" stroke="#ff005f" points="655.12,-145.86 644.58,-146.92 653.49,-152.66 655.12,-145.86"/>
+</g>
+<!-- sourcefile~rdb_ocean_halo_state.f90&#45;&gt;sourcefile~rdb_profiler.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_edge7" class="edge">
+<title>sourcefile~rdb_ocean_halo_state.f90&#45;&gt;sourcefile~rdb_profiler.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M357.35,-378.54C318.08,-391.62 257.65,-414.21 209.9,-442.97"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_profiler.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_edge8" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_profiler.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M729.32,-203.48C721.43,-200.02 713.87,-195.6 707.58,-189.97 679.43,-164.77 703.45,-133.25 671.58,-112.97 611.02,-74.43 575.71,-83.93 510.06,-112.97 328.74,-193.15 379.74,-340.67 209.9,-442.97"/>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M207.9,-442.97C150.12,-475.53 94.4,-531.2 66.51,-561.26"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="63.97,-558.85 59.8,-568.59 69.13,-563.58 63.97,-558.85"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_continuity.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_edge14" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_continuity.f90</title>
+<path fill="none" stroke="#ffbf00" stroke-dasharray="5,2" d="M776.31,-228.22C759.42,-253.23 717.97,-310.81 671.58,-346.97 600.26,-402.56 502.62,-444.69 445.91,-466.45"/>
+<polygon fill="#ffbf00" stroke="#ffbf00" points="445,-463.06 436.89,-469.87 447.48,-469.6 445,-463.06"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_edge20" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M775.45,-228.41C759.35,-251.57 725.39,-303.34 707.58,-351.97 678.18,-432.26 716.5,-468.2 671.58,-540.97 660.66,-558.66 642.61,-573.1 626.43,-583.49"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="624.7,-580.44 617.98,-588.63 628.34,-586.42 624.7,-580.44"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_bulk_forcing.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_edge51" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_bulk_forcing.f90</title>
+<path fill="none" stroke="#1fff00" stroke-dasharray="5,2" d="M762.26,-228.59C728.17,-248.06 662.58,-285.54 623.46,-307.89"/>
+<polygon fill="#1fff00" stroke="#1fff00" points="621.91,-304.74 614.96,-312.74 625.38,-310.82 621.91,-304.74"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_data_forcing.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_edge53" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_data_forcing.f90</title>
+<path fill="none" stroke="#00ff3f" stroke-dasharray="5,2" d="M724.22,-203.48C705.04,-199.49 683.62,-195.04 663.69,-190.9"/>
+<polygon fill="#00ff3f" stroke="#00ff3f" points="664.46,-187.49 653.96,-188.88 663.04,-194.34 664.46,-187.49"/>
+</g>
+<!-- sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_sw_chl.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_edge71" class="edge">
+<title>sourcefile~rdb_ocean_state.f90&#45;&gt;sourcefile~rdb_ocean_sw_chl.f90</title>
+<path fill="none" stroke="#ff005f" stroke-dasharray="5,2" d="M736.58,-203.47C726.62,-199.86 716.46,-195.4 707.58,-189.97 688.54,-178.32 691.01,-165.95 671.58,-154.97 668.93,-153.47 666.16,-152.07 663.32,-150.77"/>
+<polygon fill="#ff005f" stroke="#ff005f" points="664.77,-147.58 654.19,-147.05 662.13,-154.07 664.77,-147.58"/>
+</g>
+<!-- sourcefile~rdb_handle.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_node10" class="node">
+<title>sourcefile~rdb_handle.f90</title>
+<g id="a_sourcefile~~rdb_profiler.f90~~AfferentGraph_node10"><a xlink:href="../sourcefile/rdb_handle.f90.html" xlink:title="rdb_handle.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1559.43,-246.1 1465.41,-246.1 1465.41,-221.83 1559.43,-221.83 1559.43,-246.1"/>
+<text xml:space="preserve" text-anchor="middle" x="1512.42" y="-230.37" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_handle.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_handle.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_edge22" class="edge">
+<title>sourcefile~rdb_handle.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90</title>
+<path fill="none" stroke="#003fff" stroke-dasharray="5,2" d="M1465.27,-246.51C1451.36,-250.29 1435.94,-254.49 1421.41,-258.44"/>
+<polygon fill="#003fff" stroke="#003fff" points="1420.71,-255 1411.98,-261 1422.55,-261.75 1420.71,-255"/>
+</g>
+<!-- sourcefile~rdb_handle.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_edge34" class="edge">
+<title>sourcefile~rdb_handle.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M1464.96,-232.81C1341.66,-229.75 1005.53,-221.41 857.71,-217.74"/>
+<polygon fill="#ff00bf" stroke="#ff00bf" points="858.14,-214.25 848.06,-217.5 857.97,-221.25 858.14,-214.25"/>
+</g>
+<!-- sourcefile~rdb_ice_ocean_coupler.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_edge24" class="edge">
+<title>sourcefile~rdb_ice_ocean_coupler.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M720.86,-429.42C653.35,-416.07 546.64,-394.97 475,-380.81"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="475.79,-377.4 465.3,-378.89 474.43,-384.27 475.79,-377.4"/>
+</g>
+<!-- sourcefile~rdb_ice_transport.f90&#45;&gt;sourcefile~rdb_continuity.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_edge12" class="edge">
+<title>sourcefile~rdb_ice_transport.f90&#45;&gt;sourcefile~rdb_continuity.f90</title>
+<path fill="none" stroke="#ffbf00" stroke-dasharray="5,2" d="M526.85,-507.7C506.9,-503.81 484.82,-499.51 464.75,-495.6"/>
+<polygon fill="#ffbf00" stroke="#ffbf00" points="465.48,-492.17 455,-493.7 464.14,-499.05 465.48,-492.17"/>
+</g>
+<!-- sourcefile~rdb_ice_transport.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_edge25" class="edge">
+<title>sourcefile~rdb_ice_transport.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M574.2,-507.5C558.09,-494.63 532.27,-473.96 510.06,-455.97 480.34,-431.9 446.27,-404.01 423.99,-385.74"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="426.33,-383.13 416.38,-379.49 421.89,-388.54 426.33,-383.13"/>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_node13" class="node">
+<title>sourcefile~rdb_ocean_api.f90</title>
+<g id="a_sourcefile~~rdb_profiler.f90~~AfferentGraph_node13"><a xlink:href="../sourcefile/rdb_ocean_api.f90.html" xlink:title="rdb_ocean_api.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1707.45,-266.1 1595.43,-266.1 1595.43,-241.83 1707.45,-241.83 1707.45,-266.1"/>
+<text xml:space="preserve" text-anchor="middle" x="1651.44" y="-250.37" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_api.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_edge17" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1648.05,-266.47C1640.18,-305.54 1612.5,-427.89 1559.43,-514.97 1515.74,-586.65 1502.39,-610.49 1429.41,-651.97 1299.98,-725.52 1245.22,-698.92 1096.62,-689.97 1044.89,-686.85 1032.65,-677.97 980.86,-675.97"/>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_edge23" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_engine.f90</title>
+<path fill="none" stroke="#003fff" stroke-dasharray="5,2" d="M1595.26,-257.82C1551.51,-260.88 1489.85,-265.19 1441.24,-268.59"/>
+<polygon fill="#003fff" stroke="#003fff" points="1441.06,-265.09 1431.32,-269.28 1441.54,-272.08 1441.06,-265.09"/>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_handle.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_edge45" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_handle.f90</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1595.1,-245.89C1587.13,-244.73 1578.9,-243.53 1570.89,-242.36"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1571.64,-238.93 1561.24,-240.95 1570.63,-245.85 1571.64,-238.93"/>
+</g>
+<!-- sourcefile~rdb_ocean_balance.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_node14" class="node">
+<title>sourcefile~rdb_ocean_balance.f90</title>
+<g id="a_sourcefile~~rdb_profiler.f90~~AfferentGraph_node14"><a xlink:href="../sourcefile/rdb_ocean_balance.f90.html" xlink:title="rdb_ocean_balance.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1248.01,-46.1 1109.74,-46.1 1109.74,-21.83 1248.01,-21.83 1248.01,-46.1"/>
+<text xml:space="preserve" text-anchor="middle" x="1178.88" y="-30.37" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_balance.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_balance.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_edge48" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_balance.f90</title>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M1511.42,-155.97C1453.12,-126.33 1429.29,-163.02 1364.27,-155.97"/>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M1362.27,-155.97C1299.12,-149.11 1316.31,-86.47 1261.14,-54.97 1258.5,-53.46 1255.76,-52.06 1252.94,-50.76"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="1254.44,-47.6 1243.86,-47.04 1251.79,-54.07 1254.44,-47.6"/>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_diag_derived.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_edge54" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_diag_derived.f90</title>
+<path fill="none" stroke="#00ff9f" stroke-dasharray="5,2" d="M1362.27,-155.97C1333.23,-152.82 1301.44,-151.94 1272.64,-152.1"/>
+<polygon fill="#00ff9f" stroke="#00ff9f" points="1272.82,-148.6 1262.86,-152.2 1272.9,-155.6 1272.82,-148.6"/>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_edge56" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1362.27,-155.97C1316.64,-151.01 1306.62,-170.73 1261.14,-176.97 1194.58,-186.09 1118.49,-190.9 1062.4,-193.39"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="1062.46,-189.88 1052.62,-193.81 1062.76,-196.88 1062.46,-189.88"/>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_ic_inject.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_edge59" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_ic_inject.f90</title>
+<path fill="none" stroke="#009fff" stroke-dasharray="5,2" d="M1362.27,-155.97C1311.62,-150.47 1308.07,-121.81 1261.14,-101.97 1252.8,-98.44 1243.81,-95.11 1234.95,-92.1"/>
+<polygon fill="#009fff" stroke="#009fff" points="1236.3,-88.86 1225.71,-89.05 1234.11,-95.5 1236.3,-88.86"/>
+</g>
+<!-- sourcefile~rdb_ocean_reinit.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_node20" class="node">
+<title>sourcefile~rdb_ocean_reinit.f90</title>
+<g id="a_sourcefile~~rdb_profiler.f90~~AfferentGraph_node20"><a xlink:href="../sourcefile/rdb_ocean_reinit.f90.html" xlink:title="rdb_ocean_reinit.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1424.53,-67.1 1302.01,-67.1 1302.01,-42.83 1424.53,-42.83 1424.53,-67.1"/>
+<text xml:space="preserve" text-anchor="middle" x="1363.27" y="-51.37" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_reinit.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_reinit.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_edge62" class="edge">
+<title>sourcefile~rdb_ocean_api.f90&#45;&gt;sourcefile~rdb_ocean_reinit.f90</title>
+<path fill="none" stroke="#003fff" stroke-dasharray="5,2" d="M1636.19,-241.52C1612.27,-221.18 1561.91,-180.62 1513.42,-155.97"/>
+<path fill="none" stroke="#003fff" stroke-dasharray="5,2" d="M1511.42,-155.97C1465.01,-132.38 1416.14,-96.25 1388.03,-74.2"/>
+<polygon fill="#003fff" stroke="#003fff" points="1390.52,-71.71 1380.51,-68.24 1386.17,-77.2 1390.52,-71.71"/>
+</g>
+<!-- sourcefile~rdb_ocean_balance.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_edge35" class="edge">
+<title>sourcefile~rdb_ocean_balance.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M1124.18,-46.53C1114.91,-49.07 1105.43,-51.91 1096.62,-54.97 1005.99,-86.4 974.22,-82.32 899.1,-141.97 878.22,-158.55 884.7,-174.32 863.1,-189.97 858.45,-193.34 853.33,-196.29 848.01,-198.88"/>
+<polygon fill="#ff00bf" stroke="#ff00bf" points="846.75,-195.61 838.98,-202.82 849.55,-202.03 846.75,-195.61"/>
+</g>
+<!-- sourcefile~rdb_ocean_bulk_forcing.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_edge26" class="edge">
+<title>sourcefile~rdb_ocean_bulk_forcing.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M530,-338.57C511.28,-342.51 490.43,-346.9 471.02,-350.99"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="470.32,-347.56 461.25,-353.05 471.76,-354.41 470.32,-347.56"/>
+</g>
+<!-- sourcefile~rdb_ocean_data_forcing.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_edge27" class="edge">
+<title>sourcefile~rdb_ocean_data_forcing.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M577.36,-188.43C545.3,-220.52 459.69,-306.17 420.29,-345.59"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="417.85,-343.08 413.25,-352.63 422.8,-348.03 417.85,-343.08"/>
+</g>
+<!-- sourcefile~rdb_ocean_diag_derived.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_edge36" class="edge">
+<title>sourcefile~rdb_ocean_diag_derived.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M1096.24,-147.01C1060.34,-145.36 1017.99,-146.53 980.86,-155.97"/>
+</g>
+<!-- sourcefile~rdb_ocean_diag_derived.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_edge57" class="edge">
+<title>sourcefile~rdb_ocean_diag_derived.f90&#45;&gt;sourcefile~rdb_ocean_diag_fills.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M1115.81,-168.57C1096.21,-172.55 1074.36,-176.98 1054.05,-181.11"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="1053.54,-177.64 1044.44,-183.06 1054.93,-184.5 1053.54,-177.64"/>
+</g>
+<!-- sourcefile~rdb_ocean_diag_fills.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_edge37" class="edge">
+<title>sourcefile~rdb_ocean_diag_fills.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M908.54,-203.27C892.04,-204.99 874.45,-206.81 857.9,-208.53"/>
+<polygon fill="#ff00bf" stroke="#ff00bf" points="857.73,-205.03 848.14,-209.55 858.45,-211.99 857.73,-205.03"/>
+</g>
+<!-- sourcefile~rdb_ocean_ic_inject.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_edge39" class="edge">
+<title>sourcefile~rdb_ocean_ic_inject.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M1153.43,-88.46C1116.9,-106.52 1045.44,-139.56 980.86,-155.97"/>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M978.86,-155.97C943.54,-164.94 933.76,-163.7 899.1,-174.97 882.62,-180.33 879.32,-183.85 863.1,-189.97 854.4,-193.25 845.07,-196.57 836.02,-199.69"/>
+<polygon fill="#ff00bf" stroke="#ff00bf" points="834.95,-196.36 826.61,-202.9 837.21,-202.99 834.95,-196.36"/>
+</g>
+<!-- sourcefile~rdb_ocean_reinit.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_edge30" class="edge">
+<title>sourcefile~rdb_ocean_reinit.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M1339.4,-42.4C1319.42,-32.18 1289.29,-18.58 1261.14,-12.97 1138.32,11.52 1098.69,0.44 980.86,-41.97"/>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M978.86,-41.97C778.51,-107.29 677.15,15.45 510.06,-112.97 434.62,-170.95 409.94,-291.26 402.67,-342.27"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="399.24,-341.54 401.41,-351.91 406.18,-342.45 399.24,-341.54"/>
+</g>
+<!-- sourcefile~rdb_ocean_reinit.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_edge40" class="edge">
+<title>sourcefile~rdb_ocean_reinit.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M978.86,-41.97C944.26,-54.42 925.22,-38.08 899.1,-63.97 857.73,-104.96 903.28,-147.8 863.1,-189.97 860.35,-192.86 857.26,-195.42 853.95,-197.71"/>
+<polygon fill="#ff00bf" stroke="#ff00bf" points="852.32,-194.61 845.43,-202.65 855.84,-200.66 852.32,-194.61"/>
+</g>
+<!-- sourcefile~rdb_ocean_reinit.f90&#45;&gt;sourcefile~rdb_ocean_balance.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_edge49" class="edge">
+<title>sourcefile~rdb_ocean_reinit.f90&#45;&gt;sourcefile~rdb_ocean_balance.f90</title>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M1301.54,-47.97C1288.05,-46.42 1273.55,-44.75 1259.43,-43.13"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="1260.06,-39.67 1249.72,-42.01 1259.25,-46.63 1260.06,-39.67"/>
+</g>
+<!-- sourcefile~rdb_ocean_reinit.f90&#45;&gt;sourcefile~rdb_ocean_ic_inject.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_edge61" class="edge">
+<title>sourcefile~rdb_ocean_reinit.f90&#45;&gt;sourcefile~rdb_ocean_ic_inject.f90</title>
+<path fill="none" stroke="#009fff" stroke-dasharray="5,2" d="M1301.54,-61.96C1288.21,-63.49 1273.9,-65.14 1259.95,-66.75"/>
+<polygon fill="#009fff" stroke="#009fff" points="1259.89,-63.23 1250.36,-67.85 1260.69,-70.19 1259.89,-63.23"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_edge19" class="edge">
+<title>sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_dyn.f90</title>
+<path fill="none" stroke="#00ffff" stroke-dasharray="5,2" d="M928.39,-414.55C918.31,-418.12 908.08,-422.55 899.1,-427.97 880,-439.5 882.46,-451.87 863.1,-462.97 800.88,-498.63 769.8,-470.3 707.58,-505.97 688.22,-517.07 688.47,-526.39 671.58,-540.97 654.53,-555.68 634.38,-571.08 618.6,-582.72"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="616.63,-579.83 610.62,-588.56 620.76,-585.48 616.63,-579.83"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_edge31" class="edge">
+<title>sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M919.87,-389.47C912.7,-387.07 905.62,-384.26 899.1,-380.97 880.76,-371.7 881.52,-361.08 863.1,-351.97 721.22,-281.78 663.32,-265.36 510.06,-304.97 478.82,-313.04 446.99,-332.09 425.63,-346.77"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="423.7,-343.85 417.55,-352.48 427.74,-349.56 423.7,-343.85"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_edge41" class="edge">
+<title>sourcefile~rdb_ocean_setup.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M917.17,-392.58C910.54,-389.66 904.32,-385.87 899.1,-380.97 861.93,-346.02 893.15,-313.2 863.1,-271.97 851.94,-256.66 835.35,-243.81 820.44,-234.3"/>
+<polygon fill="#ff00bf" stroke="#ff00bf" points="822.62,-231.53 812.25,-229.33 818.98,-237.51 822.62,-231.53"/>
+</g>
+<!-- sourcefile~rdb_ocean_state_restart.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_node22" class="node">
+<title>sourcefile~rdb_ocean_state_restart.f90</title>
+<g id="a_sourcefile~~rdb_profiler.f90~~AfferentGraph_node22"><a xlink:href="../sourcefile/rdb_ocean_state_restart.f90.html" xlink:title="rdb_ocean_state_restart.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1060.62,-372.1 899.1,-372.1 899.1,-347.83 1060.62,-347.83 1060.62,-372.1"/>
+<text xml:space="preserve" text-anchor="middle" x="979.86" y="-356.37" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_state_restart.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_state_restart.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_edge42" class="edge">
+<title>sourcefile~rdb_ocean_state_restart.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M912.75,-347.36C907.88,-345.02 903.26,-342.25 899.1,-338.97 872.55,-318.04 885.31,-297.45 863.1,-271.97 850.3,-257.28 832.97,-244.22 818.01,-234.42"/>
+<polygon fill="#ff00bf" stroke="#ff00bf" points="820.2,-231.66 809.88,-229.27 816.46,-237.58 820.2,-231.66"/>
+</g>
+<!-- sourcefile~rdb_ocean_state_seed.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_node23" class="node">
+<title>sourcefile~rdb_ocean_state_seed.f90</title>
+<g id="a_sourcefile~~rdb_profiler.f90~~AfferentGraph_node23"><a xlink:href="../sourcefile/rdb_ocean_state_seed.f90.html" xlink:title="rdb_ocean_state_seed.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1056.12,-330.1 903.6,-330.1 903.6,-305.83 1056.12,-305.83 1056.12,-330.1"/>
+<text xml:space="preserve" text-anchor="middle" x="979.86" y="-314.37" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_state_seed.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_state_seed.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_edge43" class="edge">
+<title>sourcefile~rdb_ocean_state_seed.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M920.89,-305.39C913.41,-303 905.97,-300.2 899.1,-296.97 894.38,-294.74 844.49,-258.5 812.67,-235.25"/>
+<polygon fill="#ff00bf" stroke="#ff00bf" points="814.81,-232.48 804.67,-229.4 810.68,-238.13 814.81,-232.48"/>
+</g>
+<!-- sourcefile~rdb_ocean_state_topo.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_node24" class="node">
+<title>sourcefile~rdb_ocean_state_topo.f90</title>
+<g id="a_sourcefile~~rdb_profiler.f90~~AfferentGraph_node24"><a xlink:href="../sourcefile/rdb_ocean_state_topo.f90.html" xlink:title="rdb_ocean_state_topo.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1054.99,-288.1 904.72,-288.1 904.72,-263.83 1054.99,-263.83 1054.99,-288.1"/>
+<text xml:space="preserve" text-anchor="middle" x="979.86" y="-272.37" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_state_topo.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_state_topo.f90&#45;&gt;sourcefile~rdb_ocean_state.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_edge44" class="edge">
+<title>sourcefile~rdb_ocean_state_topo.f90&#45;&gt;sourcefile~rdb_ocean_state.f90</title>
+<path fill="none" stroke="#ff00bf" stroke-dasharray="5,2" d="M938.5,-263.39C909.11,-254.23 869.08,-241.75 837.45,-231.9"/>
+<polygon fill="#ff00bf" stroke="#ff00bf" points="838.68,-228.61 828.09,-228.98 836.6,-235.3 838.68,-228.61"/>
+</g>
+<!-- sourcefile~rdb_ocean_sw_chl.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_edge32" class="edge">
+<title>sourcefile~rdb_ocean_sw_chl.f90&#45;&gt;sourcefile~rdb_ocean_halo_state.f90</title>
+<path fill="none" stroke="#7f00ff" stroke-dasharray="5,2" d="M525.65,-145.59C520.07,-148.13 514.76,-151.22 510.06,-154.97 477.92,-180.62 429.18,-293.94 409.08,-343.09"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="405.9,-341.61 405.39,-352.19 412.39,-344.24 405.9,-341.61"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup_bc.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_node26" class="node">
+<title>sourcefile~rdb_ocean_setup_bc.f90</title>
+<g id="a_sourcefile~~rdb_profiler.f90~~AfferentGraph_node26"><a xlink:href="../sourcefile/rdb_ocean_setup_bc.f90.html" xlink:title="rdb_ocean_setup_bc.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1250.26,-366.1 1107.49,-366.1 1107.49,-341.83 1250.26,-341.83 1250.26,-366.1"/>
+<text xml:space="preserve" text-anchor="middle" x="1178.88" y="-350.37" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_bc.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_setup_bc.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_edge64" class="edge">
+<title>sourcefile~rdb_ocean_setup_bc.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90</title>
+<path fill="none" stroke="#1f00ff" stroke-dasharray="5,2" d="M1126.12,-366.58C1100.88,-372.73 1070.31,-380.17 1043.74,-386.65"/>
+<polygon fill="#1f00ff" stroke="#1f00ff" points="1042.98,-383.23 1034.09,-389 1044.64,-390.03 1042.98,-383.23"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup_bt.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_node27" class="node">
+<title>sourcefile~rdb_ocean_setup_bt.f90</title>
+<g id="a_sourcefile~~rdb_profiler.f90~~AfferentGraph_node27"><a xlink:href="../sourcefile/rdb_ocean_setup_bt.f90.html" xlink:title="rdb_ocean_setup_bt.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1249.14,-324.1 1108.62,-324.1 1108.62,-299.83 1249.14,-299.83 1249.14,-324.1"/>
+<text xml:space="preserve" text-anchor="middle" x="1178.88" y="-308.37" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_bt.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_setup_bt.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_edge65" class="edge">
+<title>sourcefile~rdb_ocean_setup_bt.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90</title>
+<path fill="none" stroke="#1f00ff" stroke-dasharray="5,2" d="M1112.71,-324.49C1107.04,-326.84 1101.58,-329.64 1096.62,-332.97 1074.46,-347.81 1082.74,-366.08 1060.62,-380.97 1058.09,-382.67 1055.43,-384.23 1052.68,-385.67"/>
+<polygon fill="#1f00ff" stroke="#1f00ff" points="1051.42,-382.4 1043.76,-389.72 1054.31,-388.77 1051.42,-382.4"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup_cavity.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_node28" class="node">
+<title>sourcefile~rdb_ocean_setup_cavity.f90</title>
+<g id="a_sourcefile~~rdb_profiler.f90~~AfferentGraph_node28"><a xlink:href="../sourcefile/rdb_ocean_setup_cavity.f90.html" xlink:title="rdb_ocean_setup_cavity.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1258.89,-534.1 1098.87,-534.1 1098.87,-509.83 1258.89,-509.83 1258.89,-534.1"/>
+<text xml:space="preserve" text-anchor="middle" x="1178.88" y="-518.37" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_cavity.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_setup_cavity.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_edge66" class="edge">
+<title>sourcefile~rdb_ocean_setup_cavity.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90</title>
+<path fill="none" stroke="#1f00ff" stroke-dasharray="5,2" d="M1110.01,-509.43C1105.22,-507.07 1100.69,-504.28 1096.62,-500.97 1068.55,-478.14 1087.96,-451.65 1060.62,-427.97 1056.87,-424.71 1052.69,-421.87 1048.29,-419.37"/>
+<polygon fill="#1f00ff" stroke="#1f00ff" points="1050.2,-416.41 1039.68,-415.13 1047.11,-422.69 1050.2,-416.41"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup_grid.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_node29" class="node">
+<title>sourcefile~rdb_ocean_setup_grid.f90</title>
+<g id="a_sourcefile~~rdb_profiler.f90~~AfferentGraph_node29"><a xlink:href="../sourcefile/rdb_ocean_setup_grid.f90.html" xlink:title="rdb_ocean_setup_grid.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1254.39,-492.1 1103.37,-492.1 1103.37,-467.83 1254.39,-467.83 1254.39,-492.1"/>
+<text xml:space="preserve" text-anchor="middle" x="1178.88" y="-476.37" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_grid.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_setup_grid.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_edge67" class="edge">
+<title>sourcefile~rdb_ocean_setup_grid.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90</title>
+<path fill="none" stroke="#1f00ff" stroke-dasharray="5,2" d="M1116.82,-467.47C1109.83,-465.09 1102.95,-462.28 1096.62,-458.97 1077.91,-449.18 1079.02,-438.33 1060.62,-427.97 1054.23,-424.36 1047.26,-421.17 1040.19,-418.37"/>
+<polygon fill="#1f00ff" stroke="#1f00ff" points="1041.83,-415.25 1031.24,-415.06 1039.41,-421.81 1041.83,-415.25"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup_lateral.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_node30" class="node">
+<title>sourcefile~rdb_ocean_setup_lateral.f90</title>
+<g id="a_sourcefile~~rdb_profiler.f90~~AfferentGraph_node30"><a xlink:href="../sourcefile/rdb_ocean_setup_lateral.f90.html" xlink:title="rdb_ocean_setup_lateral.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1261.14,-450.1 1096.62,-450.1 1096.62,-425.83 1261.14,-425.83 1261.14,-450.1"/>
+<text xml:space="preserve" text-anchor="middle" x="1178.88" y="-434.37" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_lateral.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_setup_lateral.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_edge68" class="edge">
+<title>sourcefile~rdb_ocean_setup_lateral.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90</title>
+<path fill="none" stroke="#1f00ff" stroke-dasharray="5,2" d="M1108.97,-425.38C1091.05,-422.1 1071.69,-418.56 1053.58,-415.26"/>
+<polygon fill="#1f00ff" stroke="#1f00ff" points="1054.45,-411.86 1043.98,-413.5 1053.19,-418.74 1054.45,-411.86"/>
+</g>
+<!-- sourcefile~rdb_ocean_setup_vmix.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_node31" class="node">
+<title>sourcefile~rdb_ocean_setup_vmix.f90</title>
+<g id="a_sourcefile~~rdb_profiler.f90~~AfferentGraph_node31"><a xlink:href="../sourcefile/rdb_ocean_setup_vmix.f90.html" xlink:title="rdb_ocean_setup_vmix.F90">
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="1256.64,-408.1 1101.12,-408.1 1101.12,-383.83 1256.64,-383.83 1256.64,-408.1"/>
+<text xml:space="preserve" text-anchor="middle" x="1178.88" y="-392.37" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_setup_vmix.F90</text>
+</a>
+</g>
+</g>
+<!-- sourcefile~rdb_ocean_setup_vmix.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90 -->
+<g id="sourcefile~~rdb_profiler.f90~~AfferentGraph_edge69" class="edge">
+<title>sourcefile~rdb_ocean_setup_vmix.f90&#45;&gt;sourcefile~rdb_ocean_setup.f90</title>
+<path fill="none" stroke="#1f00ff" stroke-dasharray="5,2" d="M1100.86,-398.31C1085.47,-398.78 1069.33,-399.27 1054.07,-399.74"/>
+<polygon fill="#1f00ff" stroke="#1f00ff" points="1054,-396.24 1044.11,-400.04 1054.21,-403.23 1054,-396.24"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var pansourcefilerdb_profilerf90AfferentGraph = svgPanZoom('#sourcefilerdb_profilerf90AfferentGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#AfferentGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="AfferentGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="200pt" height="32pt"
+ viewBox="0.00 0.00 200.00 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 195.52,-28.27 195.52,4 -4,4"/>
+<!-- Source File -->
+<g id="node1" class="node">
+<title>Source File</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Source File</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node2" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="191.52,-24.27 87.75,-24.27 87.75,0 191.52,0 191.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="139.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a file to a file which it depends on. A file
+is dependent upon another if the latter must be compiled before the former
+can be.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+          </div>
+        </div>
+<br>
+      <section>
+        <h2><span class="anchor" id="src"></span>Source Code</h2>
+        <div class="hl codehilite"><pre><span></span><a id="ln-1" name="ln-1" href="#ln-1"></a><span class="c">!! Named profiling regions with wall-clock timers and optional NVTX ranges.</span>
+<a id="ln-2" name="ln-2" href="#ln-2"></a><span class="c">!! -DUSE_NVTX enables NVTX (else no-op); -DDISABLE_PROFILER disables everything.</span>
+<a id="ln-3" name="ln-3" href="#ln-3"></a><span class="k">module </span><span class="n">rdb_profiler</span>
+<a id="ln-4" name="ln-4" href="#ln-4"></a><span class="w">   </span><span class="k">use</span><span class="p">,</span><span class="w"> </span><span class="k">intrinsic</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">iso_fortran_env</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">dp</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">real64</span><span class="p">,</span><span class="w"> </span><span class="n">int64</span>
+<a id="ln-5" name="ln-5" href="#ln-5"></a><span class="w">   </span><span class="k">use </span><span class="n">pic_logger</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">logger</span><span class="w"> </span><span class="o">=&gt;</span><span class="w"> </span><span class="n">global_logger</span>
+<a id="ln-6" name="ln-6" href="#ln-6"></a><span class="cp">#ifdef USE_NVTX</span>
+<a id="ln-7" name="ln-7" href="#ln-7"></a><span class="w">   </span><span class="k">use </span><span class="n">nvtx</span><span class="p">,</span><span class="w"> </span><span class="k">only</span><span class="p">:</span><span class="w"> </span><span class="n">nvtxStartRange</span><span class="p">,</span><span class="w"> </span><span class="n">nvtxEndRange</span>
+<a id="ln-8" name="ln-8" href="#ln-8"></a><span class="cp">#endif</span>
+<a id="ln-9" name="ln-9" href="#ln-9"></a><span class="w">   </span><span class="k">implicit none</span>
+<a id="ln-10" name="ln-10" href="#ln-10"></a><span class="k">   private</span>
+<a id="ln-11" name="ln-11" href="#ln-11"></a>
+<a id="ln-12" name="ln-12" href="#ln-12"></a><span class="k">   </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">parameter</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">MAX_REGIONS</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">256</span>
+<a id="ln-13" name="ln-13" href="#ln-13"></a><span class="w">   </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">parameter</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">MAX_NAME_LEN</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">64</span>
+<a id="ln-14" name="ln-14" href="#ln-14"></a>
+<a id="ln-15" name="ln-15" href="#ln-15"></a><span class="w">   </span><span class="k">type</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">tracked_region</span>
+<a id="ln-16" name="ln-16" href="#ln-16"></a><span class="w">      </span><span class="kt">character</span><span class="p">(</span><span class="nb">len</span><span class="o">=</span><span class="n">MAX_NAME_LEN</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">""</span>
+<a id="ln-17" name="ln-17" href="#ln-17"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">dp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">start_time</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_dp</span>
+<a id="ln-18" name="ln-18" href="#ln-18"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">dp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">total_time</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_dp</span>
+<a id="ln-19" name="ln-19" href="#ln-19"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">call_count</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<a id="ln-20" name="ln-20" href="#ln-20"></a><span class="w">      </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">active</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">false</span><span class="p">.</span>
+<a id="ln-21" name="ln-21" href="#ln-21"></a><span class="w">      </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nvtx_only</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">false</span><span class="p">.</span>
+<a id="ln-22" name="ln-22" href="#ln-22"></a><span class="w">         </span><span class="c">!! If true, only shows in NVTX timeline, not in text report</span>
+<a id="ln-23" name="ln-23" href="#ln-23"></a><span class="w">   </span><span class="k">end type </span><span class="n">tracked_region</span>
+<a id="ln-24" name="ln-24" href="#ln-24"></a>
+<a id="ln-25" name="ln-25" href="#ln-25"></a><span class="w">   </span><span class="k">type</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">profiler_state</span>
+<a id="ln-26" name="ln-26" href="#ln-26"></a><span class="w">      </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">initialized</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">false</span><span class="p">.</span>
+<a id="ln-27" name="ln-27" href="#ln-27"></a><span class="w">      </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">enabled</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">true</span><span class="p">.</span>
+<a id="ln-28" name="ln-28" href="#ln-28"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">num_regions</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<a id="ln-29" name="ln-29" href="#ln-29"></a><span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">tracked_region</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">regions</span><span class="p">(</span><span class="n">MAX_REGIONS</span><span class="p">)</span>
+<a id="ln-30" name="ln-30" href="#ln-30"></a><span class="w">   </span><span class="k">end type </span><span class="n">profiler_state</span>
+<a id="ln-31" name="ln-31" href="#ln-31"></a>
+<a id="ln-32" name="ln-32" href="#ln-32"></a><span class="w">   </span><span class="k">type</span><span class="p">(</span><span class="n">profiler_state</span><span class="p">),</span><span class="w"> </span><span class="k">save</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">state</span>
+<a id="ln-33" name="ln-33" href="#ln-33"></a>
+<a id="ln-34" name="ln-34" href="#ln-34"></a><span class="w">   </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">profiler_init</span><span class="p">,</span><span class="w"> </span><span class="n">profiler_end</span>
+<a id="ln-35" name="ln-35" href="#ln-35"></a><span class="w">   </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">profiler_start</span><span class="p">,</span><span class="w"> </span><span class="n">profiler_stop</span>
+<a id="ln-36" name="ln-36" href="#ln-36"></a><span class="w">   </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">profiler_enable</span><span class="p">,</span><span class="w"> </span><span class="n">profiler_disable</span>
+<a id="ln-37" name="ln-37" href="#ln-37"></a><span class="w">   </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">profiler_report</span><span class="p">,</span><span class="w"> </span><span class="n">profiler_reset</span>
+<a id="ln-38" name="ln-38" href="#ln-38"></a><span class="w">   </span><span class="k">public</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">profiler_get_time</span>
+<a id="ln-39" name="ln-39" href="#ln-39"></a>
+<a id="ln-40" name="ln-40" href="#ln-40"></a><span class="k">contains</span>
+<a id="ln-41" name="ln-41" href="#ln-41"></a>
+<a id="ln-42" name="ln-42" href="#ln-42"></a><span class="k">   function </span><span class="n">get_wall_time</span><span class="p">()</span><span class="w"> </span><span class="k">result</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+<a id="ln-43" name="ln-43" href="#ln-43"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">dp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">t</span>
+<a id="ln-44" name="ln-44" href="#ln-44"></a><span class="w">      </span><span class="kt">integer</span><span class="p">(</span><span class="n">int64</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="nb">count</span><span class="p">,</span><span class="w"> </span><span class="n">count_rate</span>
+<a id="ln-45" name="ln-45" href="#ln-45"></a><span class="w">      </span><span class="k">call </span><span class="nb">system_clock</span><span class="p">(</span><span class="nb">count</span><span class="p">,</span><span class="w"> </span><span class="n">count_rate</span><span class="p">)</span>
+<a id="ln-46" name="ln-46" href="#ln-46"></a><span class="w">      </span><span class="n">t</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kt">real</span><span class="p">(</span><span class="nb">count</span><span class="p">,</span><span class="w"> </span><span class="n">dp</span><span class="p">)</span><span class="o">/</span><span class="kt">real</span><span class="p">(</span><span class="n">count_rate</span><span class="p">,</span><span class="w"> </span><span class="n">dp</span><span class="p">)</span>
+<a id="ln-47" name="ln-47" href="#ln-47"></a><span class="w">   </span><span class="k">end function </span><span class="n">get_wall_time</span>
+<a id="ln-48" name="ln-48" href="#ln-48"></a>
+<a id="ln-49" name="ln-49" href="#ln-49"></a><span class="w">   </span><span class="k">subroutine </span><span class="n">nvtx_range_push</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+<a id="ln-50" name="ln-50" href="#ln-50"></a><span class="w">      </span><span class="kt">character</span><span class="p">(</span><span class="nb">len</span><span class="o">=*</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">name</span>
+<a id="ln-51" name="ln-51" href="#ln-51"></a><span class="cp">#ifdef USE_NVTX</span>
+<a id="ln-52" name="ln-52" href="#ln-52"></a><span class="w">      </span><span class="k">call </span><span class="n">nvtxStartRange</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+<a id="ln-53" name="ln-53" href="#ln-53"></a><span class="cp">#endif</span>
+<a id="ln-54" name="ln-54" href="#ln-54"></a><span class="w">   </span><span class="k">end subroutine </span><span class="n">nvtx_range_push</span>
+<a id="ln-55" name="ln-55" href="#ln-55"></a>
+<a id="ln-56" name="ln-56" href="#ln-56"></a><span class="w">   </span><span class="k">subroutine </span><span class="n">nvtx_range_pop</span><span class="p">()</span>
+<a id="ln-57" name="ln-57" href="#ln-57"></a><span class="cp">#ifdef USE_NVTX</span>
+<a id="ln-58" name="ln-58" href="#ln-58"></a><span class="w">      </span><span class="k">call </span><span class="n">nvtxEndRange</span><span class="p">()</span>
+<a id="ln-59" name="ln-59" href="#ln-59"></a><span class="cp">#endif</span>
+<a id="ln-60" name="ln-60" href="#ln-60"></a><span class="w">   </span><span class="k">end subroutine </span><span class="n">nvtx_range_pop</span>
+<a id="ln-61" name="ln-61" href="#ln-61"></a>
+<a id="ln-62" name="ln-62" href="#ln-62"></a><span class="w">   </span><span class="k">subroutine </span><span class="n">profiler_init</span><span class="p">(</span><span class="n">enabled</span><span class="p">)</span>
+<a id="ln-63" name="ln-63" href="#ln-63"></a><span class="w">      </span><span class="c">!! Initialise the profiler</span>
+<a id="ln-64" name="ln-64" href="#ln-64"></a><span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">enabled</span>
+<a id="ln-65" name="ln-65" href="#ln-65"></a>
+<a id="ln-66" name="ln-66" href="#ln-66"></a><span class="w">      </span><span class="n">state</span><span class="p">%</span><span class="n">initialized</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">true</span><span class="p">.</span>
+<a id="ln-67" name="ln-67" href="#ln-67"></a><span class="w">      </span><span class="n">state</span><span class="p">%</span><span class="n">enabled</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">true</span><span class="p">.</span>
+<a id="ln-68" name="ln-68" href="#ln-68"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">enabled</span><span class="p">))</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">enabled</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">enabled</span>
+<a id="ln-69" name="ln-69" href="#ln-69"></a><span class="w">      </span><span class="n">state</span><span class="p">%</span><span class="n">num_regions</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<a id="ln-70" name="ln-70" href="#ln-70"></a><span class="w">   </span><span class="k">end subroutine </span><span class="n">profiler_init</span>
+<a id="ln-71" name="ln-71" href="#ln-71"></a>
+<a id="ln-72" name="ln-72" href="#ln-72"></a><span class="w">   </span><span class="k">subroutine </span><span class="n">profiler_end</span><span class="p">()</span>
+<a id="ln-73" name="ln-73" href="#ln-73"></a><span class="w">      </span><span class="c">!! Finalise the profiler</span>
+<a id="ln-74" name="ln-74" href="#ln-74"></a><span class="w">      </span><span class="n">state</span><span class="p">%</span><span class="n">initialized</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">false</span><span class="p">.</span>
+<a id="ln-75" name="ln-75" href="#ln-75"></a><span class="w">      </span><span class="n">state</span><span class="p">%</span><span class="n">num_regions</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<a id="ln-76" name="ln-76" href="#ln-76"></a><span class="w">   </span><span class="k">end subroutine </span><span class="n">profiler_end</span>
+<a id="ln-77" name="ln-77" href="#ln-77"></a>
+<a id="ln-78" name="ln-78" href="#ln-78"></a><span class="w">   </span><span class="k">subroutine </span><span class="n">profiler_enable</span><span class="p">()</span>
+<a id="ln-79" name="ln-79" href="#ln-79"></a><span class="w">      </span><span class="c">!! Public for the unit-test suite only.</span>
+<a id="ln-80" name="ln-80" href="#ln-80"></a><span class="w">      </span><span class="n">state</span><span class="p">%</span><span class="n">enabled</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">true</span><span class="p">.</span>
+<a id="ln-81" name="ln-81" href="#ln-81"></a><span class="w">   </span><span class="k">end subroutine </span><span class="n">profiler_enable</span>
+<a id="ln-82" name="ln-82" href="#ln-82"></a>
+<a id="ln-83" name="ln-83" href="#ln-83"></a><span class="w">   </span><span class="k">subroutine </span><span class="n">profiler_disable</span><span class="p">()</span>
+<a id="ln-84" name="ln-84" href="#ln-84"></a><span class="w">      </span><span class="c">!! Public for the unit-test suite only.</span>
+<a id="ln-85" name="ln-85" href="#ln-85"></a><span class="w">      </span><span class="n">state</span><span class="p">%</span><span class="n">enabled</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">false</span><span class="p">.</span>
+<a id="ln-86" name="ln-86" href="#ln-86"></a><span class="w">   </span><span class="k">end subroutine </span><span class="n">profiler_disable</span>
+<a id="ln-87" name="ln-87" href="#ln-87"></a>
+<a id="ln-88" name="ln-88" href="#ln-88"></a><span class="w">   </span><span class="k">function </span><span class="n">find_or_create_region</span><span class="p">(</span><span class="n">name</span><span class="p">)</span><span class="w"> </span><span class="k">result</span><span class="p">(</span><span class="n">idx</span><span class="p">)</span>
+<a id="ln-89" name="ln-89" href="#ln-89"></a><span class="w">      </span><span class="kt">character</span><span class="p">(</span><span class="nb">len</span><span class="o">=*</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">name</span>
+<a id="ln-90" name="ln-90" href="#ln-90"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">idx</span>
+<a id="ln-91" name="ln-91" href="#ln-91"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i</span>
+<a id="ln-92" name="ln-92" href="#ln-92"></a>
+<a id="ln-93" name="ln-93" href="#ln-93"></a><span class="w">      </span><span class="k">do </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">num_regions</span>
+<a id="ln-94" name="ln-94" href="#ln-94"></a><span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">trim</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">regions</span><span class="p">(</span><span class="n">i</span><span class="p">)%</span><span class="n">name</span><span class="p">)</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="nb">trim</span><span class="p">(</span><span class="n">name</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-95" name="ln-95" href="#ln-95"></a><span class="k">            </span><span class="n">idx</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">i</span>
+<a id="ln-96" name="ln-96" href="#ln-96"></a><span class="w">            </span><span class="k">return</span>
+<a id="ln-97" name="ln-97" href="#ln-97"></a><span class="k">         end if</span>
+<a id="ln-98" name="ln-98" href="#ln-98"></a><span class="k">      end do</span>
+<a id="ln-99" name="ln-99" href="#ln-99"></a>
+<a id="ln-100" name="ln-100" href="#ln-100"></a><span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">num_regions</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">MAX_REGIONS</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-101" name="ln-101" href="#ln-101"></a><span class="k">         </span><span class="n">state</span><span class="p">%</span><span class="n">num_regions</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">num_regions</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-102" name="ln-102" href="#ln-102"></a><span class="w">         </span><span class="n">idx</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">num_regions</span>
+<a id="ln-103" name="ln-103" href="#ln-103"></a><span class="w">         </span><span class="n">state</span><span class="p">%</span><span class="n">regions</span><span class="p">(</span><span class="n">idx</span><span class="p">)%</span><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">trim</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+<a id="ln-104" name="ln-104" href="#ln-104"></a><span class="w">         </span><span class="n">state</span><span class="p">%</span><span class="n">regions</span><span class="p">(</span><span class="n">idx</span><span class="p">)%</span><span class="n">total_time</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_dp</span>
+<a id="ln-105" name="ln-105" href="#ln-105"></a><span class="w">         </span><span class="n">state</span><span class="p">%</span><span class="n">regions</span><span class="p">(</span><span class="n">idx</span><span class="p">)%</span><span class="n">call_count</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<a id="ln-106" name="ln-106" href="#ln-106"></a><span class="w">         </span><span class="n">state</span><span class="p">%</span><span class="n">regions</span><span class="p">(</span><span class="n">idx</span><span class="p">)%</span><span class="n">active</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">false</span><span class="p">.</span>
+<a id="ln-107" name="ln-107" href="#ln-107"></a><span class="w">         </span><span class="c">! `profiler_init` only zeroes `num_regions`, not the `regions`</span>
+<a id="ln-108" name="ln-108" href="#ln-108"></a><span class="w">         </span><span class="c">! array, so a slot index can be REUSED across an init/reset cycle</span>
+<a id="ln-109" name="ln-109" href="#ln-109"></a><span class="w">         </span><span class="c">! (e.g. a one-time nvtx_only=.true. pre-touch pass before the</span>
+<a id="ln-110" name="ln-110" href="#ln-110"></a><span class="w">         </span><span class="c">! real init) — reset nvtx_only here too, or the new region</span>
+<a id="ln-111" name="ln-111" href="#ln-111"></a><span class="w">         </span><span class="c">! silently inherits the old slot's flag and vanishes from the</span>
+<a id="ln-112" name="ln-112" href="#ln-112"></a><span class="w">         </span><span class="c">! text report despite a nonzero profiler_get_time().</span>
+<a id="ln-113" name="ln-113" href="#ln-113"></a><span class="w">         </span><span class="n">state</span><span class="p">%</span><span class="n">regions</span><span class="p">(</span><span class="n">idx</span><span class="p">)%</span><span class="n">nvtx_only</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">false</span><span class="p">.</span>
+<a id="ln-114" name="ln-114" href="#ln-114"></a><span class="w">      </span><span class="k">else</span>
+<a id="ln-115" name="ln-115" href="#ln-115"></a><span class="k">         </span><span class="n">idx</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">-</span><span class="mi">1</span>
+<a id="ln-116" name="ln-116" href="#ln-116"></a><span class="w">      </span><span class="k">end if</span>
+<a id="ln-117" name="ln-117" href="#ln-117"></a><span class="k">   end function </span><span class="n">find_or_create_region</span>
+<a id="ln-118" name="ln-118" href="#ln-118"></a>
+<a id="ln-119" name="ln-119" href="#ln-119"></a><span class="w">   </span><span class="k">subroutine </span><span class="n">profiler_start</span><span class="p">(</span><span class="n">name</span><span class="p">,</span><span class="w"> </span><span class="n">nvtx_only</span><span class="p">)</span>
+<a id="ln-120" name="ln-120" href="#ln-120"></a><span class="w">      </span><span class="c">!! Start a named profiling region</span>
+<a id="ln-121" name="ln-121" href="#ln-121"></a><span class="w">      </span><span class="c">!! If nvtx_only is true, the region only appears in NVTX timeline, not in text report</span>
+<a id="ln-122" name="ln-122" href="#ln-122"></a><span class="w">      </span><span class="kt">character</span><span class="p">(</span><span class="nb">len</span><span class="o">=*</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">name</span>
+<a id="ln-123" name="ln-123" href="#ln-123"></a><span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nvtx_only</span>
+<a id="ln-124" name="ln-124" href="#ln-124"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">idx</span>
+<a id="ln-125" name="ln-125" href="#ln-125"></a>
+<a id="ln-126" name="ln-126" href="#ln-126"></a><span class="cp">#ifdef DISABLE_PROFILER</span>
+<a id="ln-127" name="ln-127" href="#ln-127"></a><span class="w">      </span><span class="k">return</span>
+<a id="ln-128" name="ln-128" href="#ln-128"></a><span class="cp">#endif</span>
+<a id="ln-129" name="ln-129" href="#ln-129"></a>
+<a id="ln-130" name="ln-130" href="#ln-130"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">enabled</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+<a id="ln-131" name="ln-131" href="#ln-131"></a>
+<a id="ln-132" name="ln-132" href="#ln-132"></a><span class="k">      </span><span class="n">idx</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">find_or_create_region</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+<a id="ln-133" name="ln-133" href="#ln-133"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">idx</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+<a id="ln-134" name="ln-134" href="#ln-134"></a>
+<a id="ln-135" name="ln-135" href="#ln-135"></a><span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">regions</span><span class="p">(</span><span class="n">idx</span><span class="p">)%</span><span class="n">active</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+<a id="ln-136" name="ln-136" href="#ln-136"></a>
+<a id="ln-137" name="ln-137" href="#ln-137"></a><span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">nvtx_only</span><span class="p">)</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">regions</span><span class="p">(</span><span class="n">idx</span><span class="p">)%</span><span class="n">call_count</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-138" name="ln-138" href="#ln-138"></a><span class="k">         </span><span class="n">state</span><span class="p">%</span><span class="n">regions</span><span class="p">(</span><span class="n">idx</span><span class="p">)%</span><span class="n">nvtx_only</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nvtx_only</span>
+<a id="ln-139" name="ln-139" href="#ln-139"></a><span class="w">      </span><span class="k">end if</span>
+<a id="ln-140" name="ln-140" href="#ln-140"></a>
+<a id="ln-141" name="ln-141" href="#ln-141"></a><span class="k">      </span><span class="n">state</span><span class="p">%</span><span class="n">regions</span><span class="p">(</span><span class="n">idx</span><span class="p">)%</span><span class="n">active</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">true</span><span class="p">.</span>
+<a id="ln-142" name="ln-142" href="#ln-142"></a><span class="w">      </span><span class="k">call </span><span class="n">nvtx_range_push</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+<a id="ln-143" name="ln-143" href="#ln-143"></a><span class="w">      </span><span class="n">state</span><span class="p">%</span><span class="n">regions</span><span class="p">(</span><span class="n">idx</span><span class="p">)%</span><span class="n">start_time</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">get_wall_time</span><span class="p">()</span>
+<a id="ln-144" name="ln-144" href="#ln-144"></a><span class="w">   </span><span class="k">end subroutine </span><span class="n">profiler_start</span>
+<a id="ln-145" name="ln-145" href="#ln-145"></a>
+<a id="ln-146" name="ln-146" href="#ln-146"></a><span class="w">   </span><span class="k">subroutine </span><span class="n">profiler_stop</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+<a id="ln-147" name="ln-147" href="#ln-147"></a><span class="w">      </span><span class="c">!! Stop a named profiling region</span>
+<a id="ln-148" name="ln-148" href="#ln-148"></a><span class="w">      </span><span class="kt">character</span><span class="p">(</span><span class="nb">len</span><span class="o">=*</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">name</span>
+<a id="ln-149" name="ln-149" href="#ln-149"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">idx</span>
+<a id="ln-150" name="ln-150" href="#ln-150"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">dp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">elapsed</span>
+<a id="ln-151" name="ln-151" href="#ln-151"></a>
+<a id="ln-152" name="ln-152" href="#ln-152"></a><span class="cp">#ifdef DISABLE_PROFILER</span>
+<a id="ln-153" name="ln-153" href="#ln-153"></a><span class="w">      </span><span class="k">return</span>
+<a id="ln-154" name="ln-154" href="#ln-154"></a><span class="cp">#endif</span>
+<a id="ln-155" name="ln-155" href="#ln-155"></a>
+<a id="ln-156" name="ln-156" href="#ln-156"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">enabled</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+<a id="ln-157" name="ln-157" href="#ln-157"></a>
+<a id="ln-158" name="ln-158" href="#ln-158"></a><span class="k">      do </span><span class="n">idx</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">num_regions</span>
+<a id="ln-159" name="ln-159" href="#ln-159"></a><span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">trim</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">regions</span><span class="p">(</span><span class="n">idx</span><span class="p">)%</span><span class="n">name</span><span class="p">)</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="nb">trim</span><span class="p">(</span><span class="n">name</span><span class="p">))</span><span class="w"> </span><span class="k">exit</span>
+<a id="ln-160" name="ln-160" href="#ln-160"></a><span class="k">      end do</span>
+<a id="ln-161" name="ln-161" href="#ln-161"></a>
+<a id="ln-162" name="ln-162" href="#ln-162"></a><span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="n">idx</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">num_regions</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+<a id="ln-163" name="ln-163" href="#ln-163"></a><span class="k">      if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">regions</span><span class="p">(</span><span class="n">idx</span><span class="p">)%</span><span class="n">active</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+<a id="ln-164" name="ln-164" href="#ln-164"></a>
+<a id="ln-165" name="ln-165" href="#ln-165"></a><span class="k">      </span><span class="n">elapsed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">get_wall_time</span><span class="p">()</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">regions</span><span class="p">(</span><span class="n">idx</span><span class="p">)%</span><span class="n">start_time</span>
+<a id="ln-166" name="ln-166" href="#ln-166"></a><span class="w">      </span><span class="k">call </span><span class="n">nvtx_range_pop</span><span class="p">()</span>
+<a id="ln-167" name="ln-167" href="#ln-167"></a>
+<a id="ln-168" name="ln-168" href="#ln-168"></a><span class="w">      </span><span class="n">state</span><span class="p">%</span><span class="n">regions</span><span class="p">(</span><span class="n">idx</span><span class="p">)%</span><span class="n">total_time</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">regions</span><span class="p">(</span><span class="n">idx</span><span class="p">)%</span><span class="n">total_time</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">elapsed</span>
+<a id="ln-169" name="ln-169" href="#ln-169"></a><span class="w">      </span><span class="n">state</span><span class="p">%</span><span class="n">regions</span><span class="p">(</span><span class="n">idx</span><span class="p">)%</span><span class="n">call_count</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">regions</span><span class="p">(</span><span class="n">idx</span><span class="p">)%</span><span class="n">call_count</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-170" name="ln-170" href="#ln-170"></a><span class="w">      </span><span class="n">state</span><span class="p">%</span><span class="n">regions</span><span class="p">(</span><span class="n">idx</span><span class="p">)%</span><span class="n">active</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">false</span><span class="p">.</span>
+<a id="ln-171" name="ln-171" href="#ln-171"></a><span class="w">   </span><span class="k">end subroutine </span><span class="n">profiler_stop</span>
+<a id="ln-172" name="ln-172" href="#ln-172"></a>
+<a id="ln-173" name="ln-173" href="#ln-173"></a><span class="w">   </span><span class="k">function </span><span class="n">profiler_get_time</span><span class="p">(</span><span class="n">name</span><span class="p">)</span><span class="w"> </span><span class="k">result</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+<a id="ln-174" name="ln-174" href="#ln-174"></a><span class="w">      </span><span class="c">!! Accumulated time (s) for a named region. Public for the unit-test suite only.</span>
+<a id="ln-175" name="ln-175" href="#ln-175"></a><span class="w">      </span><span class="kt">character</span><span class="p">(</span><span class="nb">len</span><span class="o">=*</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">name</span>
+<a id="ln-176" name="ln-176" href="#ln-176"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">dp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">t</span>
+<a id="ln-177" name="ln-177" href="#ln-177"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">idx</span>
+<a id="ln-178" name="ln-178" href="#ln-178"></a>
+<a id="ln-179" name="ln-179" href="#ln-179"></a><span class="w">      </span><span class="n">t</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_dp</span>
+<a id="ln-180" name="ln-180" href="#ln-180"></a><span class="w">      </span><span class="k">do </span><span class="n">idx</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">num_regions</span>
+<a id="ln-181" name="ln-181" href="#ln-181"></a><span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">trim</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">regions</span><span class="p">(</span><span class="n">idx</span><span class="p">)%</span><span class="n">name</span><span class="p">)</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="nb">trim</span><span class="p">(</span><span class="n">name</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-182" name="ln-182" href="#ln-182"></a><span class="k">            </span><span class="n">t</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">regions</span><span class="p">(</span><span class="n">idx</span><span class="p">)%</span><span class="n">total_time</span>
+<a id="ln-183" name="ln-183" href="#ln-183"></a><span class="w">            </span><span class="k">return</span>
+<a id="ln-184" name="ln-184" href="#ln-184"></a><span class="k">         end if</span>
+<a id="ln-185" name="ln-185" href="#ln-185"></a><span class="k">      end do</span>
+<a id="ln-186" name="ln-186" href="#ln-186"></a><span class="k">   end function </span><span class="n">profiler_get_time</span>
+<a id="ln-187" name="ln-187" href="#ln-187"></a>
+<a id="ln-188" name="ln-188" href="#ln-188"></a><span class="w">   </span><span class="k">subroutine </span><span class="n">profiler_reset</span><span class="p">()</span>
+<a id="ln-189" name="ln-189" href="#ln-189"></a><span class="w">      </span><span class="c">!! Reset all timing data</span>
+<a id="ln-190" name="ln-190" href="#ln-190"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i</span>
+<a id="ln-191" name="ln-191" href="#ln-191"></a>
+<a id="ln-192" name="ln-192" href="#ln-192"></a><span class="w">      </span><span class="k">do </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">num_regions</span>
+<a id="ln-193" name="ln-193" href="#ln-193"></a><span class="w">         </span><span class="n">state</span><span class="p">%</span><span class="n">regions</span><span class="p">(</span><span class="n">i</span><span class="p">)%</span><span class="n">total_time</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_dp</span>
+<a id="ln-194" name="ln-194" href="#ln-194"></a><span class="w">         </span><span class="n">state</span><span class="p">%</span><span class="n">regions</span><span class="p">(</span><span class="n">i</span><span class="p">)%</span><span class="n">call_count</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<a id="ln-195" name="ln-195" href="#ln-195"></a><span class="w">         </span><span class="n">state</span><span class="p">%</span><span class="n">regions</span><span class="p">(</span><span class="n">i</span><span class="p">)%</span><span class="n">active</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">false</span><span class="p">.</span>
+<a id="ln-196" name="ln-196" href="#ln-196"></a><span class="w">      </span><span class="k">end do</span>
+<a id="ln-197" name="ln-197" href="#ln-197"></a><span class="k">   end subroutine </span><span class="n">profiler_reset</span>
+<a id="ln-198" name="ln-198" href="#ln-198"></a>
+<a id="ln-199" name="ln-199" href="#ln-199"></a><span class="w">   </span><span class="k">subroutine </span><span class="n">profiler_report</span><span class="p">(</span><span class="n">title</span><span class="p">,</span><span class="w"> </span><span class="n">root_region</span><span class="p">)</span>
+<a id="ln-200" name="ln-200" href="#ln-200"></a><span class="w">      </span><span class="c">!! Print profiling report</span>
+<a id="ln-201" name="ln-201" href="#ln-201"></a><span class="w">      </span><span class="c">!! If root_region is specified, percentages are relative to that region</span>
+<a id="ln-202" name="ln-202" href="#ln-202"></a><span class="w">      </span><span class="kt">character</span><span class="p">(</span><span class="nb">len</span><span class="o">=*</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">title</span>
+<a id="ln-203" name="ln-203" href="#ln-203"></a><span class="w">      </span><span class="kt">character</span><span class="p">(</span><span class="nb">len</span><span class="o">=*</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">root_region</span>
+<a id="ln-204" name="ln-204" href="#ln-204"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">root_idx</span><span class="p">,</span><span class="w"> </span><span class="n">n_print</span><span class="p">,</span><span class="w"> </span><span class="n">tmp_idx</span>
+<a id="ln-205" name="ln-205" href="#ln-205"></a><span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">sorted_idx</span><span class="p">(</span><span class="n">MAX_REGIONS</span><span class="p">)</span>
+<a id="ln-206" name="ln-206" href="#ln-206"></a><span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">dp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">total_time</span><span class="p">,</span><span class="w"> </span><span class="n">pct</span>
+<a id="ln-207" name="ln-207" href="#ln-207"></a><span class="w">      </span><span class="kt">character</span><span class="p">(</span><span class="nb">len</span><span class="o">=</span><span class="mi">256</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">line</span>
+<a id="ln-208" name="ln-208" href="#ln-208"></a>
+<a id="ln-209" name="ln-209" href="#ln-209"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">num_regions</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+<a id="ln-210" name="ln-210" href="#ln-210"></a>
+<a id="ln-211" name="ln-211" href="#ln-211"></a><span class="k">      </span><span class="n">root_idx</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">-</span><span class="mi">1</span>
+<a id="ln-212" name="ln-212" href="#ln-212"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">root_region</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-213" name="ln-213" href="#ln-213"></a><span class="k">         do </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">num_regions</span>
+<a id="ln-214" name="ln-214" href="#ln-214"></a><span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">trim</span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">regions</span><span class="p">(</span><span class="n">i</span><span class="p">)%</span><span class="n">name</span><span class="p">)</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="nb">trim</span><span class="p">(</span><span class="n">root_region</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-215" name="ln-215" href="#ln-215"></a><span class="k">               </span><span class="n">root_idx</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">i</span>
+<a id="ln-216" name="ln-216" href="#ln-216"></a><span class="w">               </span><span class="k">exit</span>
+<a id="ln-217" name="ln-217" href="#ln-217"></a><span class="k">            end if</span>
+<a id="ln-218" name="ln-218" href="#ln-218"></a><span class="k">         end do</span>
+<a id="ln-219" name="ln-219" href="#ln-219"></a><span class="k">      end if</span>
+<a id="ln-220" name="ln-220" href="#ln-220"></a>
+<a id="ln-221" name="ln-221" href="#ln-221"></a><span class="k">      if</span><span class="w"> </span><span class="p">(</span><span class="n">root_idx</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mi">0</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-222" name="ln-222" href="#ln-222"></a><span class="k">         </span><span class="n">total_time</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">regions</span><span class="p">(</span><span class="n">root_idx</span><span class="p">)%</span><span class="n">total_time</span>
+<a id="ln-223" name="ln-223" href="#ln-223"></a><span class="w">      </span><span class="k">else</span>
+<a id="ln-224" name="ln-224" href="#ln-224"></a><span class="k">         </span><span class="n">total_time</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_dp</span>
+<a id="ln-225" name="ln-225" href="#ln-225"></a><span class="w">         </span><span class="k">do </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">num_regions</span>
+<a id="ln-226" name="ln-226" href="#ln-226"></a><span class="w">            </span><span class="n">total_time</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">total_time</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">regions</span><span class="p">(</span><span class="n">i</span><span class="p">)%</span><span class="n">total_time</span>
+<a id="ln-227" name="ln-227" href="#ln-227"></a><span class="w">         </span><span class="k">end do</span>
+<a id="ln-228" name="ln-228" href="#ln-228"></a><span class="k">      end if</span>
+<a id="ln-229" name="ln-229" href="#ln-229"></a>
+<a id="ln-230" name="ln-230" href="#ln-230"></a><span class="k">      </span><span class="n">n_print</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<a id="ln-231" name="ln-231" href="#ln-231"></a><span class="w">      </span><span class="k">do </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">num_regions</span>
+<a id="ln-232" name="ln-232" href="#ln-232"></a><span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">/=</span><span class="w"> </span><span class="n">root_idx</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="p">.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">state</span><span class="p">%</span><span class="n">regions</span><span class="p">(</span><span class="n">i</span><span class="p">)%</span><span class="n">nvtx_only</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-233" name="ln-233" href="#ln-233"></a><span class="k">            </span><span class="n">n_print</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">n_print</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-234" name="ln-234" href="#ln-234"></a><span class="w">            </span><span class="n">sorted_idx</span><span class="p">(</span><span class="n">n_print</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">i</span>
+<a id="ln-235" name="ln-235" href="#ln-235"></a><span class="w">         </span><span class="k">end if</span>
+<a id="ln-236" name="ln-236" href="#ln-236"></a><span class="k">      end do</span>
+<a id="ln-237" name="ln-237" href="#ln-237"></a>
+<a id="ln-238" name="ln-238" href="#ln-238"></a><span class="w">      </span><span class="c">! Sort by time descending (insertion sort)</span>
+<a id="ln-239" name="ln-239" href="#ln-239"></a><span class="w">      </span><span class="k">do </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="n">n_print</span>
+<a id="ln-240" name="ln-240" href="#ln-240"></a><span class="w">         </span><span class="n">tmp_idx</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sorted_idx</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+<a id="ln-241" name="ln-241" href="#ln-241"></a><span class="w">         </span><span class="n">j</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">i</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-242" name="ln-242" href="#ln-242"></a><span class="w">         </span><span class="c">! Guard the sorted_idx(j) read with a SEPARATE bounds check: Fortran</span>
+<a id="ln-243" name="ln-243" href="#ln-243"></a><span class="w">         </span><span class="c">! does not short-circuit `.and.`, so a combined</span>
+<a id="ln-244" name="ln-244" href="#ln-244"></a><span class="w">         </span><span class="c">! `do while (j &gt;= 1 .and. ...sorted_idx(j)...)` reads sorted_idx(0)</span>
+<a id="ln-245" name="ln-245" href="#ln-245"></a><span class="w">         </span><span class="c">! when j reaches 0 (OOB — aborts under -fcheck=bounds).</span>
+<a id="ln-246" name="ln-246" href="#ln-246"></a><span class="w">         </span><span class="k">do</span>
+<a id="ln-247" name="ln-247" href="#ln-247"></a><span class="k">            if</span><span class="w"> </span><span class="p">(</span><span class="n">j</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="k">exit</span>
+<a id="ln-248" name="ln-248" href="#ln-248"></a><span class="k">            if</span><span class="w"> </span><span class="p">(</span><span class="n">state</span><span class="p">%</span><span class="n">regions</span><span class="p">(</span><span class="n">sorted_idx</span><span class="p">(</span><span class="n">j</span><span class="p">))%</span><span class="n">total_time</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-249" name="ln-249" href="#ln-249"></a><span class="w">                </span><span class="n">state</span><span class="p">%</span><span class="n">regions</span><span class="p">(</span><span class="n">tmp_idx</span><span class="p">)%</span><span class="n">total_time</span><span class="p">)</span><span class="w"> </span><span class="k">exit</span>
+<a id="ln-250" name="ln-250" href="#ln-250"></a><span class="k">            </span><span class="n">sorted_idx</span><span class="p">(</span><span class="n">j</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sorted_idx</span><span class="p">(</span><span class="n">j</span><span class="p">)</span>
+<a id="ln-251" name="ln-251" href="#ln-251"></a><span class="w">            </span><span class="n">j</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">j</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span>
+<a id="ln-252" name="ln-252" href="#ln-252"></a><span class="w">         </span><span class="k">end do</span>
+<a id="ln-253" name="ln-253" href="#ln-253"></a><span class="k">         </span><span class="n">sorted_idx</span><span class="p">(</span><span class="n">j</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">tmp_idx</span>
+<a id="ln-254" name="ln-254" href="#ln-254"></a><span class="w">      </span><span class="k">end do</span>
+<a id="ln-255" name="ln-255" href="#ln-255"></a>
+<a id="ln-256" name="ln-256" href="#ln-256"></a><span class="k">      call </span><span class="n">logger</span><span class="p">%</span><span class="n">info</span><span class="p">(</span><span class="s2">""</span><span class="p">)</span>
+<a id="ln-257" name="ln-257" href="#ln-257"></a><span class="w">      </span><span class="k">call </span><span class="n">logger</span><span class="p">%</span><span class="n">info</span><span class="p">(</span><span class="s2">"============================================================"</span><span class="p">)</span>
+<a id="ln-258" name="ln-258" href="#ln-258"></a><span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nb">present</span><span class="p">(</span><span class="n">title</span><span class="p">))</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-259" name="ln-259" href="#ln-259"></a><span class="k">         call </span><span class="n">logger</span><span class="p">%</span><span class="n">info</span><span class="p">(</span><span class="s2">"Profiler Report: "</span><span class="o">//</span><span class="nb">trim</span><span class="p">(</span><span class="n">title</span><span class="p">))</span>
+<a id="ln-260" name="ln-260" href="#ln-260"></a><span class="w">      </span><span class="k">else</span>
+<a id="ln-261" name="ln-261" href="#ln-261"></a><span class="k">         call </span><span class="n">logger</span><span class="p">%</span><span class="n">info</span><span class="p">(</span><span class="s2">"Profiler Report"</span><span class="p">)</span>
+<a id="ln-262" name="ln-262" href="#ln-262"></a><span class="w">      </span><span class="k">end if</span>
+<a id="ln-263" name="ln-263" href="#ln-263"></a><span class="k">      call </span><span class="n">logger</span><span class="p">%</span><span class="n">info</span><span class="p">(</span><span class="s2">"============================================================"</span><span class="p">)</span>
+<a id="ln-264" name="ln-264" href="#ln-264"></a><span class="w">      </span><span class="k">call </span><span class="n">logger</span><span class="p">%</span><span class="n">info</span><span class="p">(</span><span class="s2">"  Region                          Time (s)    Calls    %    "</span><span class="p">)</span>
+<a id="ln-265" name="ln-265" href="#ln-265"></a><span class="w">      </span><span class="k">call </span><span class="n">logger</span><span class="p">%</span><span class="n">info</span><span class="p">(</span><span class="s2">"------------------------------------------------------------"</span><span class="p">)</span>
+<a id="ln-266" name="ln-266" href="#ln-266"></a>
+<a id="ln-267" name="ln-267" href="#ln-267"></a><span class="w">      </span><span class="k">do </span><span class="n">i</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">n_print</span>
+<a id="ln-268" name="ln-268" href="#ln-268"></a><span class="w">         </span><span class="n">j</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sorted_idx</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+<a id="ln-269" name="ln-269" href="#ln-269"></a><span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">total_time</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0_dp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<a id="ln-270" name="ln-270" href="#ln-270"></a><span class="k">            </span><span class="n">pct</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">10</span><span class="mf">0.0_dp</span><span class="o">*</span><span class="n">state</span><span class="p">%</span><span class="n">regions</span><span class="p">(</span><span class="n">j</span><span class="p">)%</span><span class="n">total_time</span><span class="o">/</span><span class="n">total_time</span>
+<a id="ln-271" name="ln-271" href="#ln-271"></a><span class="w">         </span><span class="k">else</span>
+<a id="ln-272" name="ln-272" href="#ln-272"></a><span class="k">            </span><span class="n">pct</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_dp</span>
+<a id="ln-273" name="ln-273" href="#ln-273"></a><span class="w">         </span><span class="k">end if</span>
+<a id="ln-274" name="ln-274" href="#ln-274"></a><span class="k">         write</span><span class="w"> </span><span class="p">(</span><span class="n">line</span><span class="p">,</span><span class="w"> </span><span class="s2">"(A,A32,F12.6,I8,F8.1)"</span><span class="p">)</span><span class="w"> </span><span class="s2">"  "</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-275" name="ln-275" href="#ln-275"></a><span class="w">            </span><span class="n">state</span><span class="p">%</span><span class="n">regions</span><span class="p">(</span><span class="n">j</span><span class="p">)%</span><span class="n">name</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-276" name="ln-276" href="#ln-276"></a><span class="w">            </span><span class="n">state</span><span class="p">%</span><span class="n">regions</span><span class="p">(</span><span class="n">j</span><span class="p">)%</span><span class="n">total_time</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-277" name="ln-277" href="#ln-277"></a><span class="w">            </span><span class="n">state</span><span class="p">%</span><span class="n">regions</span><span class="p">(</span><span class="n">j</span><span class="p">)%</span><span class="n">call_count</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<a id="ln-278" name="ln-278" href="#ln-278"></a><span class="w">            </span><span class="n">pct</span>
+<a id="ln-279" name="ln-279" href="#ln-279"></a><span class="w">         </span><span class="k">call </span><span class="n">logger</span><span class="p">%</span><span class="n">info</span><span class="p">(</span><span class="nb">trim</span><span class="p">(</span><span class="n">line</span><span class="p">))</span>
+<a id="ln-280" name="ln-280" href="#ln-280"></a><span class="w">      </span><span class="k">end do</span>
+<a id="ln-281" name="ln-281" href="#ln-281"></a>
+<a id="ln-282" name="ln-282" href="#ln-282"></a><span class="k">      call </span><span class="n">logger</span><span class="p">%</span><span class="n">info</span><span class="p">(</span><span class="s2">"------------------------------------------------------------"</span><span class="p">)</span>
+<a id="ln-283" name="ln-283" href="#ln-283"></a><span class="w">      </span><span class="k">write</span><span class="w"> </span><span class="p">(</span><span class="n">line</span><span class="p">,</span><span class="w"> </span><span class="s2">"(A,F12.6)"</span><span class="p">)</span><span class="w"> </span><span class="s2">"  Total:                        "</span><span class="p">,</span><span class="w"> </span><span class="n">total_time</span>
+<a id="ln-284" name="ln-284" href="#ln-284"></a><span class="w">      </span><span class="k">call </span><span class="n">logger</span><span class="p">%</span><span class="n">info</span><span class="p">(</span><span class="nb">trim</span><span class="p">(</span><span class="n">line</span><span class="p">))</span>
+<a id="ln-285" name="ln-285" href="#ln-285"></a><span class="w">      </span><span class="k">call </span><span class="n">logger</span><span class="p">%</span><span class="n">info</span><span class="p">(</span><span class="s2">"============================================================"</span><span class="p">)</span>
+<a id="ln-286" name="ln-286" href="#ln-286"></a>
+<a id="ln-287" name="ln-287" href="#ln-287"></a><span class="cp">#ifdef USE_NVTX</span>
+<a id="ln-288" name="ln-288" href="#ln-288"></a><span class="w">      </span><span class="k">call </span><span class="n">logger</span><span class="p">%</span><span class="n">info</span><span class="p">(</span><span class="s2">"  (NVTX enabled - use Nsight Systems for GPU timeline)"</span><span class="p">)</span>
+<a id="ln-289" name="ln-289" href="#ln-289"></a><span class="cp">#else</span>
+<a id="ln-290" name="ln-290" href="#ln-290"></a><span class="w">      </span><span class="k">call </span><span class="n">logger</span><span class="p">%</span><span class="n">info</span><span class="p">(</span><span class="s2">"  (NVTX disabled - compile with -DRDB_ENABLE_NVTX to enable)"</span><span class="p">)</span>
+<a id="ln-291" name="ln-291" href="#ln-291"></a><span class="cp">#endif</span>
+<a id="ln-292" name="ln-292" href="#ln-292"></a><span class="w">   </span><span class="k">end subroutine </span><span class="n">profiler_report</span>
+<a id="ln-293" name="ln-293" href="#ln-293"></a>
+<a id="ln-294" name="ln-294" href="#ln-294"></a><span class="k">end module </span><span class="n">rdb_profiler</span>
+</pre></div>
+
+      </section>
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-11-13 23:21 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

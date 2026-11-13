@@ -1,0 +1,1254 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>cavity_mass_apply_impl &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>cavity_mass_apply_impl
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.0% of total for procedures.">41 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_cavity_flux.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_cavity_flux.f90.html'>rdb_ocean_cavity_flux.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ocean_cavity_flux.html'>rdb_ocean_cavity_flux</a></li>
+            <li class="breadcrumb-item active" aria-current="page">cavity_mass_apply_impl</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/cavity_mass_apply_impl.html#variable-c_thin">c_thin</a>
+            <a class="list-group-item" href="../proc/cavity_mass_apply_impl.html#variable-cell_s">cell_s</a>
+            <a class="list-group-item" href="../proc/cavity_mass_apply_impl.html#variable-cell_t">cell_t</a>
+            <a class="list-group-item" href="../proc/cavity_mass_apply_impl.html#variable-dh~6">dh</a>
+            <a class="list-group-item" href="../proc/cavity_mass_apply_impl.html#variable-h0~11">h0</a>
+            <a class="list-group-item" href="../proc/cavity_mass_apply_impl.html#variable-hn~3">hn</a>
+            <a class="list-group-item" href="../proc/cavity_mass_apply_impl.html#variable-i~321">i</a>
+            <a class="list-group-item" href="../proc/cavity_mass_apply_impl.html#variable-j~309">j</a>
+            <a class="list-group-item" href="../proc/cavity_mass_apply_impl.html#variable-kt~29">kt</a>
+            <a class="list-group-item" href="../proc/cavity_mass_apply_impl.html#variable-thin~6">thin</a>
+            <a class="list-group-item" href="../proc/cavity_mass_apply_impl.html#variable-virt">virt</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/cavity_mass_apply_impl.html#src">cavity_mass_apply_impl</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>public pure subroutine cavity_mass_apply_impl(nx, ny, nz, dt_over_rho0, inv_rho0_dt, s_ice, active, melt, s_far, t_b, h_layer, c_S, c_T, salt_budget, heat_budget, k_top, n_thin)  
+</h2>
+    
+
+    <p>The real-mass top-layer source: add the meltwater VOLUME to
+<code>h_layer</code> at the first LIVE layer <code>k_top(i,j)</code>, replace the
+virtual salt flux the assembler
+stamped with the real advective salt <code>w*s_ice</code>, and add the
+enthalpy <code>dh*T_b</code> — mirroring both tracer increments into the
+existing surface budget contributors.</p>
+<p>See the module docstring for the derivation.  In one line:
+<code>dh = m*dt/rho_0</code>, <code>d(hS) = dh*s_ice</code>, <code>d(hT) = dh*T_b</code>, on top
+of the <code>-q_ocean</code> the assembler already delivers through
+<code>Q_heat</code>.</p>
+<p><code>dt_over_rho0</code> and <code>inv_rho0_dt</code> are the SAME scalar, passed
+twice on purpose: the first multiplies <code>melt</code>, the second is the
+<code>dt/rho_0</code> the surface-flux apply used, and the salt undo is
+only the EXACT negation of that stamp if the two are the same
+bit pattern.  Passing one argument and reusing it makes that
+structural rather than a comment.</p>
+<p>FREEZING (<code>m &lt; 0</code>) withdraws.  A column whose top layer cannot
+give up <code>|dh|</code> without falling through <code>H_CAVITY_FLOOR</code> is
+CLAMPED to what is there above that floor and COUNTED; the
+caller treats a non-zero count as fatal
+(<code>cavity_mass_thin_is_fatal</code>), because a clamped withdrawal no
+longer matches the tracked mass source.  The clamp is a plain
+<code>max</code> on a quantity that has already been range-tested, not a
+NaN-laundering <code>if/else</code> chain: a non-finite <code>melt</code> is caught
+upstream by the solver&rsquo;s fatal status.</p>
+<p>The floor is <code>H_CAVITY_FLOOR</code>, not <code>H_VANISHED</code>, and that gap is
+load-bearing: the abort fires AFTER this kernel has written the
+state, so whatever it leaves behind gets read at least once more.
+A layer left exactly ON the marker reads as VANISHED to every
+strict-<code>&gt;</code> gate downstream (deposits refused, diffusion faces
+closed), so it drops out of tracer transport.  See
+<code>H_CAVITY_FLOOR</code>.</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx~333"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx</strong></td>
+            <td>
+                <p>First dimension (ghosts included).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny~333"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny</strong></td>
+            <td>
+                <p>Second dimension.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz~270"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz</strong></td>
+            <td>
+                <p>Layer count; <code>k = nz</code> is the surface / ice-base layer.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dt_over_rho0"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dt_over_rho0</strong></td>
+            <td>
+                <p><code>dt/rho_0</code> (m^3 s / kg) — multiplies <code>melt</code> to give <code>dh</code>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-inv_rho0_dt"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>inv_rho0_dt</strong></td>
+            <td>
+                <p>The same <code>dt/rho_0</code>, used to undo the surface-flux stamp.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-s_ice~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>s_ice</strong></td>
+            <td>
+                <p>Ice salinity (g/kg).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-active~15"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>active</strong>(nx,ny)</td>
+            <td>
+                <p>Composed solve mask; 1 only on covered, wet, sampled columns.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-melt~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>melt</strong>(nx,ny)</td>
+            <td>
+                <p>Melt mass flux (kg/m^2/s), &gt; 0 melting.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-s_far~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>s_far</strong>(nx,ny)</td>
+            <td>
+                <p>Far-field salinity (g/kg) the solve used.  The VIRTUAL salt
+component <code>-melt*(s_far - s_ice)</code> is REBUILT from it here,
+with the same expression <code>cavity_flux_fill_impl</code> uses, rather
+than read back off <code>sf</code>: on a covered column the assembler&rsquo;s
+open-water factor is exactly zero, so <code>Q_salt</code> IS that
+component bit for bit, and rebuilding it keeps this kernel
+free of the surface-flux slot.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-t_b~6"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>t_b</strong>(nx,ny)</td>
+            <td>
+                <p>Interface temperature (degC): the temperature the meltwater
+joins the column at.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_layer~70"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_layer</strong>(nx,ny,nz)</td>
+            <td>
+                <p>Layer thickness (m); only <code>k = k_top(i,j)</code> is touched.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-c_s~7"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>c_S</strong>(nx,ny,nz)</td>
+            <td>
+                <p><code>h*S</code> ((g/kg) m).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-c_t~7"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>c_T</strong>(nx,ny,nz)</td>
+            <td>
+                <p><code>h*T</code> (degC m).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-salt_budget"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>salt_budget</strong>(nx,ny,nz)</td>
+            <td>
+                <p><code>ms%salt_budget_surface</code>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-heat_budget"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>heat_budget</strong>(nx,ny,nz)</td>
+            <td>
+                <p><code>ms%heat_budget_surface</code>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-k_top~3"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>k_top</strong>(nx,ny)</td>
+            <td>
+                <p><code>ms%k_top</code> — the first LIVE layer counting down from the
+top, <code>nz</code> wherever nothing vanishes against the top.  Under
+a quasi-geopotential coordinate beneath the shelf <code>k = nz</code> is
+an inert filler on every covered column: growing IT would put
+the meltwater where the remap drain deletes it, and shrinking
+it would trip the fatal thin-withdrawal clamp on every column
+at once (a filler is already AT the marker).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-n_thin"></span>
+              integer,
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>n_thin</strong></td>
+            <td>
+                <p>Columns whose withdrawal had to be clamped.</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~cavity_mass_apply_impl~~CallsGraph Pages: 1 -->
+<svg id="proccavity_mass_apply_implCallsGraph" width="342pt" height="158pt"
+ viewBox="0.00 0.00 342.00 158.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~cavity_mass_apply_impl~~CallsGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 154.27)">
+<title>proc~~cavity_mass_apply_impl~~CallsGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-154.27 338.29,-154.27 338.29,4 -4,4"/>
+<!-- proc~cavity_mass_apply_impl -->
+<g id="proc~~cavity_mass_apply_impl~~CallsGraph_node1" class="node">
+<title>proc~cavity_mass_apply_impl</title>
+<polygon fill="none" stroke="black" points="139.02,-87.27 0,-87.27 0,-63 139.02,-63 139.02,-87.27"/>
+<text xml:space="preserve" text-anchor="middle" x="69.51" y="-71.54" font-family="Helvetica,sans-Serif" font-size="10.50">cavity_mass_apply_impl</text>
+</g>
+<!-- local -->
+<g id="proc~~cavity_mass_apply_impl~~CallsGraph_node2" class="node">
+<title>local</title>
+<polygon fill="#777777" stroke="#777777" points="281.66,-150.27 227.66,-150.27 227.66,-126 281.66,-126 281.66,-150.27"/>
+<text xml:space="preserve" text-anchor="middle" x="254.66" y="-134.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">local</text>
+</g>
+<!-- proc~cavity_mass_apply_impl&#45;&gt;local -->
+<g id="proc~~cavity_mass_apply_impl~~CallsGraph_edge1" class="edge">
+<title>proc~cavity_mass_apply_impl&#45;&gt;local</title>
+<path fill="none" stroke="#ff0000" d="M99,-87.67C119.81,-96.57 148.86,-108.42 175.02,-117.14 188.29,-121.56 203.06,-125.7 216.18,-129.12"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="215.19,-132.47 225.74,-131.55 216.91,-125.69 215.19,-132.47"/>
+</g>
+<!-- proc~cavity_melt_thickness_pair -->
+<g id="proc~~cavity_mass_apply_impl~~CallsGraph_node3" class="node">
+<title>proc~cavity_melt_thickness_pair</title>
+<g id="a_proc~~cavity_mass_apply_impl~~CallsGraph_node3"><a xlink:href="../proc/cavity_melt_thickness_pair.html" xlink:title="cavity_melt_thickness_pair">
+<polygon fill="#d9534f" stroke="#d9534f" points="331.29,-108.27 178.02,-108.27 178.02,-84 331.29,-84 331.29,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="254.66" y="-92.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">cavity_melt_thickness_pair</text>
+</a>
+</g>
+</g>
+<!-- proc~cavity_mass_apply_impl&#45;&gt;proc~cavity_melt_thickness_pair -->
+<g id="proc~~cavity_mass_apply_impl~~CallsGraph_edge2" class="edge">
+<title>proc~cavity_mass_apply_impl&#45;&gt;proc~cavity_melt_thickness_pair</title>
+<path fill="none" stroke="#ff0000" d="M139.49,-83.04C148.26,-84.05 157.32,-85.09 166.33,-86.12"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="165.85,-89.59 176.18,-87.25 166.65,-82.64 165.85,-89.59"/>
+</g>
+<!-- rdb_conc_add_source_mass -->
+<g id="proc~~cavity_mass_apply_impl~~CallsGraph_node4" class="node">
+<title>rdb_conc_add_source_mass</title>
+<polygon fill="#777777" stroke="#777777" points="334.29,-66.27 175.02,-66.27 175.02,-42 334.29,-42 334.29,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="254.66" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_conc_add_source_mass</text>
+</g>
+<!-- proc~cavity_mass_apply_impl&#45;&gt;rdb_conc_add_source_mass -->
+<g id="proc~~cavity_mass_apply_impl~~CallsGraph_edge3" class="edge">
+<title>proc~cavity_mass_apply_impl&#45;&gt;rdb_conc_add_source_mass</title>
+<path fill="none" stroke="#ff0000" d="M139.49,-67.23C147.28,-66.33 155.3,-65.41 163.3,-64.49"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="163.55,-67.99 173.09,-63.37 162.75,-61.04 163.55,-67.99"/>
+</g>
+<!-- reduce -->
+<g id="proc~~cavity_mass_apply_impl~~CallsGraph_node5" class="node">
+<title>reduce</title>
+<polygon fill="#777777" stroke="#777777" points="281.66,-24.27 227.66,-24.27 227.66,0 281.66,0 281.66,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="254.66" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">reduce</text>
+</g>
+<!-- proc~cavity_mass_apply_impl&#45;&gt;reduce -->
+<g id="proc~~cavity_mass_apply_impl~~CallsGraph_edge4" class="edge">
+<title>proc~cavity_mass_apply_impl&#45;&gt;reduce</title>
+<path fill="none" stroke="#ff0000" d="M99,-62.6C119.81,-53.7 148.86,-41.85 175.02,-33.13 188.29,-28.71 203.06,-24.57 216.18,-21.15"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="216.91,-24.58 225.74,-18.72 215.19,-17.8 216.91,-24.58"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~cavity_mass_apply_impl~~CalledByGraph Pages: 1 -->
+<svg id="proccavity_mass_apply_implCalledByGraph" width="641pt" height="55pt"
+ viewBox="0.00 0.00 641.00 55.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~cavity_mass_apply_impl~~CalledByGraph" class="graph" transform="scale(0.741366 0.741366) rotate(0) translate(4 70.27)">
+<title>proc~~cavity_mass_apply_impl~~CalledByGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-70.27 860.62,-70.27 860.62,4 -4,4"/>
+<!-- proc~cavity_mass_apply_impl -->
+<g id="proc~~cavity_mass_apply_impl~~CalledByGraph_node1" class="node">
+<title>proc~cavity_mass_apply_impl</title>
+<polygon fill="none" stroke="black" points="856.62,-45.27 717.6,-45.27 717.6,-21 856.62,-21 856.62,-45.27"/>
+<text xml:space="preserve" text-anchor="middle" x="787.11" y="-29.53" font-family="Helvetica,sans-Serif" font-size="10.50">cavity_mass_apply_impl</text>
+</g>
+<!-- proc~ocean_cavity_mass_step -->
+<g id="proc~~cavity_mass_apply_impl~~CalledByGraph_node2" class="node">
+<title>proc~ocean_cavity_mass_step</title>
+<g id="a_proc~~cavity_mass_apply_impl~~CalledByGraph_node2"><a xlink:href="../proc/ocean_cavity_mass_step.html" xlink:title="ocean_cavity_mass_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="681.6,-45.27 539.58,-45.27 539.58,-21 681.6,-21 681.6,-45.27"/>
+<text xml:space="preserve" text-anchor="middle" x="610.59" y="-29.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_cavity_mass_step</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_cavity_mass_step&#45;&gt;proc~cavity_mass_apply_impl -->
+<g id="proc~~cavity_mass_apply_impl~~CalledByGraph_edge1" class="edge">
+<title>proc~ocean_cavity_mass_step&#45;&gt;proc~cavity_mass_apply_impl</title>
+<path fill="none" stroke="#ff0000" d="M682.07,-33.13C689.98,-33.13 698.08,-33.13 706.1,-33.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="705.84,-36.64 715.84,-33.14 705.84,-29.64 705.84,-36.64"/>
+</g>
+<!-- proc~run_stage -->
+<g id="proc~~cavity_mass_apply_impl~~CalledByGraph_node3" class="node">
+<title>proc~run_stage</title>
+<g id="a_proc~~cavity_mass_apply_impl~~CalledByGraph_node3"><a xlink:href="../proc/run_stage.html" xlink:title="run_stage">
+<polygon fill="#d9534f" stroke="#d9534f" points="490.08,-66.27 426.06,-66.27 426.06,-42 490.08,-42 490.08,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="458.07" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage</text>
+</a>
+</g>
+</g>
+<!-- proc~run_stage&#45;&gt;proc~ocean_cavity_mass_step -->
+<g id="proc~~cavity_mass_apply_impl~~CalledByGraph_edge2" class="edge">
+<title>proc~run_stage&#45;&gt;proc~ocean_cavity_mass_step</title>
+<path fill="none" stroke="#ff0000" d="M490.26,-49.78C501.43,-48.23 514.59,-46.39 528.03,-44.51"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="528.42,-47.99 537.84,-43.15 527.45,-41.06 528.42,-47.99"/>
+</g>
+<!-- proc~run_stage_split -->
+<g id="proc~~cavity_mass_apply_impl~~CalledByGraph_node4" class="node">
+<title>proc~run_stage_split</title>
+<g id="a_proc~~cavity_mass_apply_impl~~CalledByGraph_node4"><a xlink:href="../proc/run_stage_split.html" xlink:title="run_stage_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="503.58,-24.27 412.56,-24.27 412.56,0 503.58,0 503.58,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="458.07" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage_split</text>
+</a>
+</g>
+</g>
+<!-- proc~run_stage_split&#45;&gt;proc~ocean_cavity_mass_step -->
+<g id="proc~~cavity_mass_apply_impl~~CalledByGraph_edge3" class="edge">
+<title>proc~run_stage_split&#45;&gt;proc~ocean_cavity_mass_step</title>
+<path fill="none" stroke="#ff0000" d="M503.82,-18.38C511.51,-19.45 519.71,-20.59 528.01,-21.75"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="527.46,-25.21 537.85,-23.13 528.43,-18.28 527.46,-25.21"/>
+</g>
+<!-- proc~ocean_dyn_step -->
+<g id="proc~~cavity_mass_apply_impl~~CalledByGraph_node5" class="node">
+<title>proc~ocean_dyn_step</title>
+<g id="a_proc~~cavity_mass_apply_impl~~CalledByGraph_node5"><a xlink:href="../proc/ocean_dyn_step.html" xlink:title="ocean_dyn_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="363.06,-66.27 266.04,-66.27 266.04,-42 363.06,-42 363.06,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="314.55" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step&#45;&gt;proc~run_stage -->
+<g id="proc~~cavity_mass_apply_impl~~CalledByGraph_edge4" class="edge">
+<title>proc~ocean_dyn_step&#45;&gt;proc~run_stage</title>
+<path fill="none" stroke="#ff0000" d="M363.46,-54.13C379.98,-54.13 398.36,-54.13 414.43,-54.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="414.15,-57.64 424.15,-54.14 414.15,-50.64 414.15,-57.64"/>
+</g>
+<!-- proc~ocean_dyn_step_split -->
+<g id="proc~~cavity_mass_apply_impl~~CalledByGraph_node6" class="node">
+<title>proc~ocean_dyn_step_split</title>
+<g id="a_proc~~cavity_mass_apply_impl~~CalledByGraph_node6"><a xlink:href="../proc/ocean_dyn_step_split.html" xlink:title="ocean_dyn_step_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="376.56,-24.27 252.54,-24.27 252.54,0 376.56,0 376.56,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="314.55" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step_split</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step_split&#45;&gt;proc~run_stage_split -->
+<g id="proc~~cavity_mass_apply_impl~~CalledByGraph_edge5" class="edge">
+<title>proc~ocean_dyn_step_split&#45;&gt;proc~run_stage_split</title>
+<path fill="none" stroke="#00ffff" d="M376.8,-12.13C384.83,-12.13 393.03,-12.13 400.97,-12.13"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="400.85,-15.64 410.85,-12.14 400.85,-8.64 400.85,-15.64"/>
+</g>
+<!-- proc~engine_step -->
+<g id="proc~~cavity_mass_apply_impl~~CalledByGraph_node7" class="node">
+<title>proc~engine_step</title>
+<g id="a_proc~~cavity_mass_apply_impl~~CalledByGraph_node7"><a xlink:href="../proc/engine_step.html" xlink:title="engine_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="216.54,-45.27 140.52,-45.27 140.52,-21 216.54,-21 216.54,-45.27"/>
+<text xml:space="preserve" text-anchor="middle" x="178.53" y="-29.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~ocean_dyn_step -->
+<g id="proc~~cavity_mass_apply_impl~~CalledByGraph_edge6" class="edge">
+<title>proc~engine_step&#45;&gt;proc~ocean_dyn_step</title>
+<path fill="none" stroke="#ff0000" d="M216.86,-38.98C228.6,-40.82 241.87,-42.9 254.72,-44.92"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="253.95,-48.34 264.37,-46.43 255.04,-41.42 253.95,-48.34"/>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~ocean_dyn_step_split -->
+<g id="proc~~cavity_mass_apply_impl~~CalledByGraph_edge7" class="edge">
+<title>proc~engine_step&#45;&gt;proc~ocean_dyn_step_split</title>
+<path fill="none" stroke="#00ffff" d="M216.86,-27.29C224.42,-26.1 232.62,-24.82 240.93,-23.51"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="241.45,-26.98 250.78,-21.97 240.36,-20.06 241.45,-26.98"/>
+</g>
+<!-- proc~driver_run_ocean -->
+<g id="proc~~cavity_mass_apply_impl~~CalledByGraph_node8" class="node">
+<title>proc~driver_run_ocean</title>
+<g id="a_proc~~cavity_mass_apply_impl~~CalledByGraph_node8"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<polygon fill="#d9534f" stroke="#d9534f" points="104.52,-66.27 0,-66.27 0,-42 104.52,-42 104.52,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="52.26" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_step -->
+<g id="proc~~cavity_mass_apply_impl~~CalledByGraph_edge8" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_step</title>
+<path fill="none" stroke="#ff0000" d="M104.88,-45.41C112.86,-44.06 121.07,-42.68 128.98,-41.34"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="129.5,-44.8 138.78,-39.68 128.34,-37.9 129.5,-44.8"/>
+</g>
+<!-- proc~rdb_ocean_step -->
+<g id="proc~~cavity_mass_apply_impl~~CalledByGraph_node9" class="node">
+<title>proc~rdb_ocean_step</title>
+<g id="a_proc~~cavity_mass_apply_impl~~CalledByGraph_node9"><a xlink:href="../proc/rdb_ocean_step.html" xlink:title="rdb_ocean_step">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="100.02,-24.27 4.5,-24.27 4.5,0 100.02,0 100.02,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="52.26" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_step</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_step&#45;&gt;proc~engine_step -->
+<g id="proc~~cavity_mass_apply_impl~~CalledByGraph_edge9" class="edge">
+<title>proc~rdb_ocean_step&#45;&gt;proc~engine_step</title>
+<path fill="none" stroke="#ff0000" d="M100.24,-20.07C109.62,-21.66 119.5,-23.33 128.93,-24.92"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="128.22,-28.35 138.67,-26.57 129.39,-21.45 128.22,-28.35"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panproccavity_mass_apply_implCalledByGraph = svgPanZoom('#proccavity_mass_apply_implCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-c_thin"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>c_thin</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-cell_s"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>cell_s</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-cell_t"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>cell_t</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dh~6"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dh</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h0~11"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h0</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hn~3"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hn</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-i~321"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>i</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-j~309"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>j</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-kt~29"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>kt</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-thin~6"></span>
+              logical,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>thin</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-virt"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>virt</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">pure subroutine </span><span class="n">cavity_mass_apply_impl</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">dt_over_rho0</span><span class="p">,</span><span class="w"> </span><span class="n">inv_rho0_dt</span><span class="p">,</span><span class="w"> </span><span class="n">s_ice</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                          </span><span class="n">active</span><span class="p">,</span><span class="w"> </span><span class="n">melt</span><span class="p">,</span><span class="w"> </span><span class="n">s_far</span><span class="p">,</span><span class="w"> </span><span class="n">t_b</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                          </span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="n">c_S</span><span class="p">,</span><span class="w"> </span><span class="n">c_T</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                          </span><span class="n">salt_budget</span><span class="p">,</span><span class="w"> </span><span class="n">heat_budget</span><span class="p">,</span><span class="w"> </span><span class="n">k_top</span><span class="p">,</span><span class="w"> </span><span class="n">n_thin</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! The real-mass top-layer source: add the meltwater VOLUME to</span>
+<span class="w">      </span><span class="c">!! `h_layer` at the first LIVE layer `k_top(i,j)`, replace the</span>
+<span class="w">      </span><span class="c">!! virtual salt flux the assembler</span>
+<span class="w">      </span><span class="c">!! stamped with the real advective salt `w*s_ice`, and add the</span>
+<span class="w">      </span><span class="c">!! enthalpy `dh*T_b` — mirroring both tracer increments into the</span>
+<span class="w">      </span><span class="c">!! existing surface budget contributors.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! See the module docstring for the derivation.  In one line:</span>
+<span class="w">      </span><span class="c">!! `dh = m*dt/rho_0`, `d(hS) = dh*s_ice`, `d(hT) = dh*T_b`, on top</span>
+<span class="w">      </span><span class="c">!! of the `-q_ocean` the assembler already delivers through</span>
+<span class="w">      </span><span class="c">!! `Q_heat`.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! `dt_over_rho0` and `inv_rho0_dt` are the SAME scalar, passed</span>
+<span class="w">      </span><span class="c">!! twice on purpose: the first multiplies `melt`, the second is the</span>
+<span class="w">      </span><span class="c">!! `dt/rho_0` the surface-flux apply used, and the salt undo is</span>
+<span class="w">      </span><span class="c">!! only the EXACT negation of that stamp if the two are the same</span>
+<span class="w">      </span><span class="c">!! bit pattern.  Passing one argument and reusing it makes that</span>
+<span class="w">      </span><span class="c">!! structural rather than a comment.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! FREEZING (`m &lt; 0`) withdraws.  A column whose top layer cannot</span>
+<span class="w">      </span><span class="c">!! give up `|dh|` without falling through `H_CAVITY_FLOOR` is</span>
+<span class="w">      </span><span class="c">!! CLAMPED to what is there above that floor and COUNTED; the</span>
+<span class="w">      </span><span class="c">!! caller treats a non-zero count as fatal</span>
+<span class="w">      </span><span class="c">!! (`cavity_mass_thin_is_fatal`), because a clamped withdrawal no</span>
+<span class="w">      </span><span class="c">!! longer matches the tracked mass source.  The clamp is a plain</span>
+<span class="w">      </span><span class="c">!! `max` on a quantity that has already been range-tested, not a</span>
+<span class="w">      </span><span class="c">!! NaN-laundering `if/else` chain: a non-finite `melt` is caught</span>
+<span class="w">      </span><span class="c">!! upstream by the solver's fatal status.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! The floor is `H_CAVITY_FLOOR`, not `H_VANISHED`, and that gap is</span>
+<span class="w">      </span><span class="c">!! load-bearing: the abort fires AFTER this kernel has written the</span>
+<span class="w">      </span><span class="c">!! state, so whatever it leaves behind gets read at least once more.</span>
+<span class="w">      </span><span class="c">!! A layer left exactly ON the marker reads as VANISHED to every</span>
+<span class="w">      </span><span class="c">!! strict-`&gt;` gate downstream (deposits refused, diffusion faces</span>
+<span class="w">      </span><span class="c">!! closed), so it drops out of tracer transport.  See</span>
+<span class="w">      </span><span class="c">!! `H_CAVITY_FLOOR`.</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nx</span>
+<span class="w">         </span><span class="c">!! First dimension (ghosts included).</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ny</span>
+<span class="w">         </span><span class="c">!! Second dimension.</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nz</span>
+<span class="w">         </span><span class="c">!! Layer count; `k = nz` is the surface / ice-base layer.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dt_over_rho0</span>
+<span class="w">         </span><span class="c">!! `dt/rho_0` (m^3 s / kg) — multiplies `melt` to give `dh`.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">inv_rho0_dt</span>
+<span class="w">         </span><span class="c">!! The same `dt/rho_0`, used to undo the surface-flux stamp.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">s_ice</span>
+<span class="w">         </span><span class="c">!! Ice salinity (g/kg).</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">active</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! Composed solve mask; 1 only on covered, wet, sampled columns.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">melt</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! Melt mass flux (kg/m^2/s), &gt; 0 melting.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">s_far</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! Far-field salinity (g/kg) the solve used.  The VIRTUAL salt</span>
+<span class="w">         </span><span class="c">!! component `-melt*(s_far - s_ice)` is REBUILT from it here,</span>
+<span class="w">         </span><span class="c">!! with the same expression `cavity_flux_fill_impl` uses, rather</span>
+<span class="w">         </span><span class="c">!! than read back off `sf`: on a covered column the assembler's</span>
+<span class="w">         </span><span class="c">!! open-water factor is exactly zero, so `Q_salt` IS that</span>
+<span class="w">         </span><span class="c">!! component bit for bit, and rebuilding it keeps this kernel</span>
+<span class="w">         </span><span class="c">!! free of the surface-flux slot.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">t_b</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! Interface temperature (degC): the temperature the meltwater</span>
+<span class="w">         </span><span class="c">!! joins the column at.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">h_layer</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! Layer thickness (m); only `k = k_top(i,j)` is touched.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">c_S</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! `h*S` ((g/kg) m).</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">c_T</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! `h*T` (degC m).</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">salt_budget</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! `ms%salt_budget_surface`.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">heat_budget</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! `ms%heat_budget_surface`.</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">k_top</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! `ms%k_top` — the first LIVE layer counting down from the</span>
+<span class="w">         </span><span class="c">!! top, `nz` wherever nothing vanishes against the top.  Under</span>
+<span class="w">         </span><span class="c">!! a quasi-geopotential coordinate beneath the shelf `k = nz` is</span>
+<span class="w">         </span><span class="c">!! an inert filler on every covered column: growing IT would put</span>
+<span class="w">         </span><span class="c">!! the meltwater where the remap drain deletes it, and shrinking</span>
+<span class="w">         </span><span class="c">!! it would trip the fatal thin-withdrawal clamp on every column</span>
+<span class="w">         </span><span class="c">!! at once (a filler is already AT the marker).</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">n_thin</span>
+<span class="w">         </span><span class="c">!! Columns whose withdrawal had to be clamped.</span>
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">kt</span><span class="p">,</span><span class="w"> </span><span class="n">c_thin</span>
+<span class="w">      </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">thin</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dh</span><span class="p">,</span><span class="w"> </span><span class="n">h0</span><span class="p">,</span><span class="w"> </span><span class="n">hn</span><span class="p">,</span><span class="w"> </span><span class="n">cell_s</span><span class="p">,</span><span class="w"> </span><span class="n">cell_t</span><span class="p">,</span><span class="w"> </span><span class="n">virt</span>
+
+<span class="w">      </span><span class="n">c_thin</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">0</span>
+<span class="w">      </span><span class="k">do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">j</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nx</span><span class="p">)</span><span class="w"> </span><span class="n">local</span><span class="p">(</span><span class="n">kt</span><span class="p">,</span><span class="w"> </span><span class="n">dh</span><span class="p">,</span><span class="w"> </span><span class="n">h0</span><span class="p">,</span><span class="w"> </span><span class="n">hn</span><span class="p">,</span><span class="w"> </span><span class="n">cell_s</span><span class="p">,</span><span class="w"> </span><span class="n">cell_t</span><span class="p">,</span><span class="w"> </span><span class="n">virt</span><span class="p">,</span><span class="w"> </span><span class="n">thin</span><span class="p">)</span><span class="w"> </span><span class="n">reduce</span><span class="p">(</span><span class="o">+</span><span class="p">:</span><span class="n">c_thin</span><span class="p">)</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">active</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            </span><span class="n">kt</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">k_top</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span>
+<span class="w">            </span><span class="n">h0</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">h_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">kt</span><span class="p">)</span>
+<span class="w">            </span><span class="n">dh</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">melt</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="o">*</span><span class="n">dt_over_rho0</span>
+<span class="w">            </span><span class="k">call </span><span class="n">cavity_melt_thickness_pair</span><span class="p">(</span><span class="n">h0</span><span class="p">,</span><span class="w"> </span><span class="n">dh</span><span class="p">,</span><span class="w"> </span><span class="n">hn</span><span class="p">,</span><span class="w"> </span><span class="n">thin</span><span class="p">)</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">thin</span><span class="p">)</span><span class="w"> </span><span class="n">c_thin</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">c_thin</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">            </span><span class="n">virt</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">-</span><span class="n">melt</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="o">*</span><span class="p">(</span><span class="n">s_far</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">s_ice</span><span class="p">)</span>
+<span class="w">            </span><span class="n">cell_s</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">-</span><span class="n">inv_rho0_dt</span><span class="o">*</span><span class="n">virt</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">dh</span><span class="o">*</span><span class="n">s_ice</span>
+<span class="w">            </span><span class="n">cell_t</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">dh</span><span class="o">*</span><span class="n">t_b</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span>
+<span class="w">            </span><span class="n">h_layer</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">kt</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">hn</span>
+<span class="w">            </span><span class="n">c_S</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">kt</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">rdb_conc_add_source_mass</span><span class="p">(</span><span class="n">c_S</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">kt</span><span class="p">),</span><span class="w"> </span><span class="n">h0</span><span class="p">,</span><span class="w"> </span><span class="n">hn</span><span class="p">,</span><span class="w"> </span><span class="n">cell_s</span><span class="p">)</span>
+<span class="w">            </span><span class="n">salt_budget</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">kt</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">salt_budget</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">kt</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">cell_s</span>
+<span class="w">            </span><span class="n">c_T</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">kt</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">rdb_conc_add_source_mass</span><span class="p">(</span><span class="n">c_T</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">kt</span><span class="p">),</span><span class="w"> </span><span class="n">h0</span><span class="p">,</span><span class="w"> </span><span class="n">hn</span><span class="p">,</span><span class="w"> </span><span class="n">cell_t</span><span class="p">)</span>
+<span class="w">            </span><span class="n">heat_budget</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">kt</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">heat_budget</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">kt</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">cell_t</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">      end do</span>
+<span class="k">      </span><span class="n">n_thin</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">c_thin</span>
+<span class="w">   </span><span class="k">end subroutine </span><span class="n">cavity_mass_apply_impl</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-11-13 23:21 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

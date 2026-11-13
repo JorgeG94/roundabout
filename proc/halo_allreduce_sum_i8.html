@@ -1,0 +1,1131 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>halo_allreduce_sum_i8 &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>halo_allreduce_sum_i8
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.0% of total for procedures.">14 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_halo.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_halo.f90.html'>rdb_halo.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_halo.html'>rdb_halo</a></li>
+            <li class="breadcrumb-item active" aria-current="page">halo_allreduce_sum_i8</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/halo_allreduce_sum_i8.html#variable-acc_global">acc_global</a>
+            <a class="list-group-item" href="../proc/halo_allreduce_sum_i8.html#variable-acc_local">acc_local</a>
+            <a class="list-group-item" href="../proc/halo_allreduce_sum_i8.html#variable-comm~19">comm</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/halo_allreduce_sum_i8.html#src">halo_allreduce_sum_i8</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>public  subroutine halo_allreduce_sum_i8(local_val, global_val)  
+</h2>
+    
+
+    <p>Cross-rank int64 sum for the decomposition-invariant chksum
+bitcount (<code>rdb_ocean_chksum</code>).  <code>pic_mpi_lib</code> exposes no
+<code>integer(int64)</code> allreduce overload (MPI_INTEGER8 reaches only
+send/recv), so the value rides the EXACT <code>real64</code> allreduce: a
+per-field POPCNT sum is bounded by (#elements x 64), which stays
+FAR below the double-mantissa bound 2<strong>53 for any realistic grid
+(2</strong>53/64 ~ 1.4e14 cells), so both the local-&gt;double cast and
+every partial MPI_SUM are exact — the invariant survives.</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-local_val~7"></span>
+              integer(kind=int64),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>local_val</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-global_val~7"></span>
+              integer(kind=int64),
+            </td>
+<td>intent(out)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>global_val</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~halo_allreduce_sum_i8~~CallsGraph Pages: 1 -->
+<svg id="prochalo_allreduce_sum_i8CallsGraph" width="454pt" height="74pt"
+ viewBox="0.00 0.00 454.00 74.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~halo_allreduce_sum_i8~~CallsGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 70.27)">
+<title>proc~~halo_allreduce_sum_i8~~CallsGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-70.27 449.56,-70.27 449.56,4 -4,4"/>
+<!-- proc~halo_allreduce_sum_i8 -->
+<g id="proc~~halo_allreduce_sum_i8~~CallsGraph_node1" class="node">
+<title>proc~halo_allreduce_sum_i8</title>
+<polygon fill="none" stroke="black" points="132.27,-45.27 0,-45.27 0,-21 132.27,-21 132.27,-45.27"/>
+<text xml:space="preserve" text-anchor="middle" x="66.13" y="-29.53" font-family="Helvetica,sans-Serif" font-size="10.50">halo_allreduce_sum_i8</text>
+</g>
+<!-- allreduce -->
+<g id="proc~~halo_allreduce_sum_i8~~CallsGraph_node2" class="node">
+<title>allreduce</title>
+<polygon fill="#777777" stroke="#777777" points="279.54,-66.27 218.52,-66.27 218.52,-42 279.54,-42 279.54,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="249.03" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">allreduce</text>
+</g>
+<!-- proc~halo_allreduce_sum_i8&#45;&gt;allreduce -->
+<g id="proc~~halo_allreduce_sum_i8~~CallsGraph_edge1" class="edge">
+<title>proc~halo_allreduce_sum_i8&#45;&gt;allreduce</title>
+<path fill="none" stroke="#ff0000" d="M132.7,-40.75C157.55,-43.63 185.13,-46.83 207.08,-49.38"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="206.48,-52.84 216.82,-50.51 207.29,-45.88 206.48,-52.84"/>
+</g>
+<!-- proc~comm_env_compute_comm -->
+<g id="proc~~halo_allreduce_sum_i8~~CallsGraph_node3" class="node">
+<title>proc~comm_env_compute_comm</title>
+<g id="a_proc~~halo_allreduce_sum_i8~~CallsGraph_node3"><a xlink:href="../proc/comm_env_compute_comm.html" xlink:title="comm_env_compute_comm">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="329.79,-24.27 168.27,-24.27 168.27,0 329.79,0 329.79,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="249.03" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">comm_env_compute_comm</text>
+</a>
+</g>
+</g>
+<!-- proc~halo_allreduce_sum_i8&#45;&gt;proc~comm_env_compute_comm -->
+<g id="proc~~halo_allreduce_sum_i8~~CallsGraph_edge2" class="edge">
+<title>proc~halo_allreduce_sum_i8&#45;&gt;proc~comm_env_compute_comm</title>
+<path fill="none" stroke="#ff0000" d="M132.7,-25.52C140.46,-24.62 148.5,-23.69 156.54,-22.76"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="156.85,-26.24 166.38,-21.61 156.05,-19.29 156.85,-26.24"/>
+</g>
+<!-- comm_world -->
+<g id="proc~~halo_allreduce_sum_i8~~CallsGraph_node4" class="node">
+<title>comm_world</title>
+<polygon fill="#777777" stroke="#777777" points="445.56,-24.27 365.79,-24.27 365.79,0 445.56,0 445.56,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="405.68" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">comm_world</text>
+</g>
+<!-- proc~comm_env_compute_comm&#45;&gt;comm_world -->
+<g id="proc~~halo_allreduce_sum_i8~~CallsGraph_edge3" class="edge">
+<title>proc~comm_env_compute_comm&#45;&gt;comm_world</title>
+<path fill="none" stroke="#00ffff" d="M330.07,-12.13C338.29,-12.13 346.47,-12.13 354.24,-12.13"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="354.15,-15.64 364.15,-12.14 354.15,-8.64 354.15,-15.64"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~halo_allreduce_sum_i8~~CalledByGraph Pages: 1 -->
+<svg id="prochalo_allreduce_sum_i8CalledByGraph" width="641pt" height="182pt"
+ viewBox="0.00 0.00 641.00 182.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~halo_allreduce_sum_i8~~CalledByGraph" class="graph" transform="scale(0.526861 0.526861) rotate(0) translate(4 342.27)">
+<title>proc~~halo_allreduce_sum_i8~~CalledByGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-342.27 1212.64,-342.27 1212.64,4 -4,4"/>
+<!-- proc~halo_allreduce_sum_i8 -->
+<g id="proc~~halo_allreduce_sum_i8~~CalledByGraph_node1" class="node">
+<title>proc~halo_allreduce_sum_i8</title>
+<polygon fill="none" stroke="black" points="1208.64,-212.27 1076.37,-212.27 1076.37,-188 1208.64,-188 1208.64,-212.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1142.51" y="-196.53" font-family="Helvetica,sans-Serif" font-size="10.50">halo_allreduce_sum_i8</text>
+</g>
+<!-- proc~chksum_row -->
+<g id="proc~~halo_allreduce_sum_i8~~CalledByGraph_node2" class="node">
+<title>proc~chksum_row</title>
+<g id="a_proc~~halo_allreduce_sum_i8~~CalledByGraph_node2"><a xlink:href="../proc/chksum_row.html" xlink:title="chksum_row">
+<polygon fill="#d9534f" stroke="#d9534f" points="1013.75,-274.27 936.98,-274.27 936.98,-250 1013.75,-250 1013.75,-274.27"/>
+<text xml:space="preserve" text-anchor="middle" x="975.36" y="-258.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">chksum_row</text>
+</a>
+</g>
+</g>
+<!-- proc~chksum_row&#45;&gt;proc~halo_allreduce_sum_i8 -->
+<g id="proc~~halo_allreduce_sum_i8~~CalledByGraph_edge1" class="edge">
+<title>proc~chksum_row&#45;&gt;proc~halo_allreduce_sum_i8</title>
+<path fill="none" stroke="#ff0000" d="M1014.08,-250.23C1022.75,-247.37 1031.91,-244.23 1040.37,-241.13 1060.74,-233.67 1083.13,-224.68 1101.65,-217.02"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1102.78,-220.35 1110.66,-213.27 1100.09,-213.88 1102.78,-220.35"/>
+</g>
+<!-- proc~engine_step_ice -->
+<g id="proc~~halo_allreduce_sum_i8~~CalledByGraph_node3" class="node">
+<title>proc~engine_step_ice</title>
+<g id="a_proc~~halo_allreduce_sum_i8~~CalledByGraph_node3"><a xlink:href="../proc/engine_step_ice.html" xlink:title="engine_step_ice">
+<polygon fill="#d9534f" stroke="#d9534f" points="424.56,-192.27 327.54,-192.27 327.54,-168 424.56,-168 424.56,-192.27"/>
+<text xml:space="preserve" text-anchor="middle" x="376.05" y="-176.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step_ice</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_step_ice&#45;&gt;proc~halo_allreduce_sum_i8 -->
+<g id="proc~~halo_allreduce_sum_i8~~CalledByGraph_edge2" class="edge">
+<title>proc~engine_step_ice&#45;&gt;proc~halo_allreduce_sum_i8</title>
+<path fill="none" stroke="#ff0000" d="M424.87,-181.39C553.46,-184.75 907.54,-194.01 1064.67,-198.12"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1064.49,-201.62 1074.57,-198.38 1064.67,-194.62 1064.49,-201.62"/>
+</g>
+<!-- proc~global_lower_median -->
+<g id="proc~~halo_allreduce_sum_i8~~CalledByGraph_node4" class="node">
+<title>proc~global_lower_median</title>
+<g id="a_proc~~halo_allreduce_sum_i8~~CalledByGraph_node4"><a xlink:href="../proc/global_lower_median.html" xlink:title="global_lower_median">
+<polygon fill="#d9534f" stroke="#d9534f" points="1037.75,-232.27 912.98,-232.27 912.98,-208 1037.75,-208 1037.75,-232.27"/>
+<text xml:space="preserve" text-anchor="middle" x="975.36" y="-216.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">global_lower_median</text>
+</a>
+</g>
+</g>
+<!-- proc~global_lower_median&#45;&gt;proc~halo_allreduce_sum_i8 -->
+<g id="proc~~halo_allreduce_sum_i8~~CalledByGraph_edge3" class="edge">
+<title>proc~global_lower_median&#45;&gt;proc~halo_allreduce_sum_i8</title>
+<path fill="none" stroke="#ff0000" d="M1037.85,-212.69C1046.62,-211.63 1055.73,-210.52 1064.75,-209.43"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1065.08,-212.92 1074.58,-208.24 1064.24,-205.97 1065.08,-212.92"/>
+</g>
+<!-- proc~grid_allreduce_sum_i8 -->
+<g id="proc~~halo_allreduce_sum_i8~~CalledByGraph_node5" class="node">
+<title>proc~grid_allreduce_sum_i8</title>
+<g id="a_proc~~halo_allreduce_sum_i8~~CalledByGraph_node5"><a xlink:href="../proc/grid_allreduce_sum_i8.html" xlink:title="grid_allreduce_sum_i8">
+<polygon fill="#d9534f" stroke="#d9534f" points="1040.37,-108.27 910.35,-108.27 910.35,-84 1040.37,-84 1040.37,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="975.36" y="-92.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">grid_allreduce_sum_i8</text>
+</a>
+</g>
+</g>
+<!-- proc~grid_allreduce_sum_i8&#45;&gt;proc~halo_allreduce_sum_i8 -->
+<g id="proc~~halo_allreduce_sum_i8~~CalledByGraph_edge4" class="edge">
+<title>proc~grid_allreduce_sum_i8&#45;&gt;proc~halo_allreduce_sum_i8</title>
+<path fill="none" stroke="#ff0000" d="M996.28,-108.68C1025.05,-126.8 1078.42,-160.41 1111.83,-181.45"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1109.91,-184.37 1120.23,-186.74 1113.64,-178.45 1109.91,-184.37"/>
+</g>
+<!-- proc~bottom_rest_scale -->
+<g id="proc~~halo_allreduce_sum_i8~~CalledByGraph_node6" class="node">
+<title>proc~bottom_rest_scale</title>
+<g id="a_proc~~halo_allreduce_sum_i8~~CalledByGraph_node6"><a xlink:href="../proc/bottom_rest_scale.html" xlink:title="bottom_rest_scale">
+<polygon fill="#d9534f" stroke="#d9534f" points="841.35,-232.27 733.83,-232.27 733.83,-208 841.35,-208 841.35,-232.27"/>
+<text xml:space="preserve" text-anchor="middle" x="787.59" y="-216.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">bottom_rest_scale</text>
+</a>
+</g>
+</g>
+<!-- proc~bottom_rest_scale&#45;&gt;proc~global_lower_median -->
+<g id="proc~~halo_allreduce_sum_i8~~CalledByGraph_edge9" class="edge">
+<title>proc~bottom_rest_scale&#45;&gt;proc~global_lower_median</title>
+<path fill="none" stroke="#00ffff" d="M841.82,-220.13C860.29,-220.13 881.32,-220.13 901.11,-220.13"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="901.08,-223.64 911.08,-220.14 901.08,-216.64 901.08,-223.64"/>
+</g>
+<!-- proc~configure_ocean_cavity_melt -->
+<g id="proc~~halo_allreduce_sum_i8~~CalledByGraph_node7" class="node">
+<title>proc~configure_ocean_cavity_melt</title>
+<g id="a_proc~~halo_allreduce_sum_i8~~CalledByGraph_node7"><a xlink:href="../proc/configure_ocean_cavity_melt.html" xlink:title="configure_ocean_cavity_melt">
+<polygon fill="#d9534f" stroke="#d9534f" points="870.6,-108.27 704.58,-108.27 704.58,-84 870.6,-84 870.6,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="787.59" y="-92.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">configure_ocean_cavity_melt</text>
+</a>
+</g>
+</g>
+<!-- proc~configure_ocean_cavity_melt&#45;&gt;proc~grid_allreduce_sum_i8 -->
+<g id="proc~~halo_allreduce_sum_i8~~CalledByGraph_edge10" class="edge">
+<title>proc~configure_ocean_cavity_melt&#45;&gt;proc~grid_allreduce_sum_i8</title>
+<path fill="none" stroke="#7f00ff" d="M870.88,-96.13C880.09,-96.13 889.45,-96.13 898.57,-96.13"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="898.47,-99.64 908.47,-96.14 898.47,-92.64 898.47,-99.64"/>
+</g>
+<!-- proc~configure_ocean_closed_faces -->
+<g id="proc~~halo_allreduce_sum_i8~~CalledByGraph_node8" class="node">
+<title>proc~configure_ocean_closed_faces</title>
+<g id="a_proc~~halo_allreduce_sum_i8~~CalledByGraph_node8"><a xlink:href="../proc/configure_ocean_closed_faces.html" xlink:title="configure_ocean_closed_faces">
+<polygon fill="#d9534f" stroke="#d9534f" points="874.35,-66.27 700.83,-66.27 700.83,-42 874.35,-42 874.35,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="787.59" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">configure_ocean_closed_faces</text>
+</a>
+</g>
+</g>
+<!-- proc~configure_ocean_closed_faces&#45;&gt;proc~grid_allreduce_sum_i8 -->
+<g id="proc~~halo_allreduce_sum_i8~~CalledByGraph_edge11" class="edge">
+<title>proc~configure_ocean_closed_faces&#45;&gt;proc~grid_allreduce_sum_i8</title>
+<path fill="none" stroke="#7f00ff" d="M844.33,-66.74C864.26,-71.24 886.92,-76.37 907.68,-81.06"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="906.66,-84.42 917.19,-83.21 908.2,-77.59 906.66,-84.42"/>
+</g>
+<!-- proc~driver_run_ocean -->
+<g id="proc~~halo_allreduce_sum_i8~~CalledByGraph_node9" class="node">
+<title>proc~driver_run_ocean</title>
+<g id="a_proc~~halo_allreduce_sum_i8~~CalledByGraph_node9"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<polygon fill="#d9534f" stroke="#d9534f" points="233.79,-150.27 129.27,-150.27 129.27,-126 233.79,-126 233.79,-150.27"/>
+<text xml:space="preserve" text-anchor="middle" x="181.53" y="-134.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_step_ice -->
+<g id="proc~~halo_allreduce_sum_i8~~CalledByGraph_edge7" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_step_ice</title>
+<path fill="none" stroke="#7fff00" d="M234.12,-149.39C259.46,-154.92 290.11,-161.6 316.34,-167.33"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="315.29,-170.68 325.8,-169.39 316.78,-163.84 315.29,-170.68"/>
+</g>
+<!-- proc~engine_step_finalize -->
+<g id="proc~~halo_allreduce_sum_i8~~CalledByGraph_node20" class="node">
+<title>proc~engine_step_finalize</title>
+<g id="a_proc~~halo_allreduce_sum_i8~~CalledByGraph_node20"><a xlink:href="../proc/engine_step_finalize.html" xlink:title="engine_step_finalize">
+<polygon fill="#d9534f" stroke="#d9534f" points="435.81,-150.27 316.29,-150.27 316.29,-126 435.81,-126 435.81,-150.27"/>
+<text xml:space="preserve" text-anchor="middle" x="376.05" y="-134.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step_finalize</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_step_finalize -->
+<g id="proc~~halo_allreduce_sum_i8~~CalledByGraph_edge27" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_step_finalize</title>
+<path fill="none" stroke="#4800ff" d="M234.12,-138.13C255.75,-138.13 281.25,-138.13 304.57,-138.13"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="304.31,-141.64 314.31,-138.14 304.31,-134.64 304.31,-141.64"/>
+</g>
+<!-- proc~engine_setup -->
+<g id="proc~~halo_allreduce_sum_i8~~CalledByGraph_node24" class="node">
+<title>proc~engine_setup</title>
+<g id="a_proc~~halo_allreduce_sum_i8~~CalledByGraph_node24"><a xlink:href="../proc/engine_setup.html" xlink:title="engine_setup">
+<polygon fill="#d9534f" stroke="#d9534f" points="417.44,-108.27 334.67,-108.27 334.67,-84 417.44,-84 417.44,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="376.05" y="-92.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_setup</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_setup -->
+<g id="proc~~halo_allreduce_sum_i8~~CalledByGraph_edge34" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#00ff66" d="M234.12,-126.88C261.73,-120.86 295.63,-113.46 323.27,-107.43"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="323.8,-110.9 332.82,-105.35 322.3,-104.06 323.8,-110.9"/>
+</g>
+<!-- proc~ocean_cavity_flux_step -->
+<g id="proc~~halo_allreduce_sum_i8~~CalledByGraph_node10" class="node">
+<title>proc~ocean_cavity_flux_step</title>
+<g id="a_proc~~halo_allreduce_sum_i8~~CalledByGraph_node10"><a xlink:href="../proc/ocean_cavity_flux_step.html" xlink:title="ocean_cavity_flux_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="644.96,-150.27 511.19,-150.27 511.19,-126 644.96,-126 644.96,-150.27"/>
+<text xml:space="preserve" text-anchor="middle" x="578.07" y="-134.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_cavity_flux_step</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_cavity_flux_step&#45;&gt;proc~grid_allreduce_sum_i8 -->
+<g id="proc~~halo_allreduce_sum_i8~~CalledByGraph_edge12" class="edge">
+<title>proc~ocean_cavity_flux_step&#45;&gt;proc~grid_allreduce_sum_i8</title>
+<path fill="none" stroke="#7f00ff" d="M645.31,-136C705.33,-133.45 796.09,-128.08 874.35,-117.13 885.87,-115.52 898.04,-113.36 909.79,-111.03"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="910.3,-114.5 919.39,-109.07 908.9,-107.64 910.3,-114.5"/>
+</g>
+<!-- proc~rdb_debug_chksum_2d -->
+<g id="proc~~halo_allreduce_sum_i8~~CalledByGraph_node11" class="node">
+<title>proc~rdb_debug_chksum_2d</title>
+<g id="a_proc~~halo_allreduce_sum_i8~~CalledByGraph_node11"><a xlink:href="../proc/rdb_debug_chksum_2d.html" xlink:title="rdb_debug_chksum_2d">
+<polygon fill="#d9534f" stroke="#d9534f" points="854.48,-316.27 720.71,-316.27 720.71,-292 854.48,-292 854.48,-316.27"/>
+<text xml:space="preserve" text-anchor="middle" x="787.59" y="-300.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_debug_chksum_2d</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_debug_chksum_2d&#45;&gt;proc~chksum_row -->
+<g id="proc~~halo_allreduce_sum_i8~~CalledByGraph_edge5" class="edge">
+<title>proc~rdb_debug_chksum_2d&#45;&gt;proc~chksum_row</title>
+<path fill="none" stroke="#ff0000" d="M844.33,-291.53C870.18,-285.69 900.64,-278.8 925.58,-273.16"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="926.15,-276.62 935.13,-271 924.61,-269.8 926.15,-276.62"/>
+</g>
+<!-- proc~rdb_debug_chksum_3d -->
+<g id="proc~~halo_allreduce_sum_i8~~CalledByGraph_node12" class="node">
+<title>proc~rdb_debug_chksum_3d</title>
+<g id="a_proc~~halo_allreduce_sum_i8~~CalledByGraph_node12"><a xlink:href="../proc/rdb_debug_chksum_3d.html" xlink:title="rdb_debug_chksum_3d">
+<polygon fill="#d9534f" stroke="#d9534f" points="854.48,-274.27 720.71,-274.27 720.71,-250 854.48,-250 854.48,-274.27"/>
+<text xml:space="preserve" text-anchor="middle" x="787.59" y="-258.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_debug_chksum_3d</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_debug_chksum_3d&#45;&gt;proc~chksum_row -->
+<g id="proc~~halo_allreduce_sum_i8~~CalledByGraph_edge6" class="edge">
+<title>proc~rdb_debug_chksum_3d&#45;&gt;proc~chksum_row</title>
+<path fill="none" stroke="#ff0000" d="M854.87,-262.13C877.99,-262.13 903.52,-262.13 925.02,-262.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="925,-265.64 935,-262.14 925,-258.64 925,-265.64"/>
+</g>
+<!-- proc~rdb_ocean_step -->
+<g id="proc~~halo_allreduce_sum_i8~~CalledByGraph_node13" class="node">
+<title>proc~rdb_ocean_step</title>
+<g id="a_proc~~halo_allreduce_sum_i8~~CalledByGraph_node13"><a xlink:href="../proc/rdb_ocean_step.html" xlink:title="rdb_ocean_step">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="229.29,-192.27 133.77,-192.27 133.77,-168 229.29,-168 229.29,-192.27"/>
+<text xml:space="preserve" text-anchor="middle" x="181.53" y="-176.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_step</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_step&#45;&gt;proc~engine_step_ice -->
+<g id="proc~~halo_allreduce_sum_i8~~CalledByGraph_edge8" class="edge">
+<title>proc~rdb_ocean_step&#45;&gt;proc~engine_step_ice</title>
+<path fill="none" stroke="#7fff00" d="M229.63,-180.13C255.65,-180.13 288.23,-180.13 315.95,-180.13"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="315.59,-183.64 325.59,-180.14 315.59,-176.64 315.59,-183.64"/>
+</g>
+<!-- proc~rdb_ocean_step&#45;&gt;proc~engine_step_finalize -->
+<g id="proc~~halo_allreduce_sum_i8~~CalledByGraph_edge28" class="edge">
+<title>proc~rdb_ocean_step&#45;&gt;proc~engine_step_finalize</title>
+<path fill="none" stroke="#4800ff" d="M229.63,-169.86C252.7,-164.83 280.94,-158.67 306.37,-153.12"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="306.94,-156.58 315.97,-151.02 305.45,-149.74 306.94,-156.58"/>
+</g>
+<!-- proc~seed_cavity_draft -->
+<g id="proc~~halo_allreduce_sum_i8~~CalledByGraph_node14" class="node">
+<title>proc~seed_cavity_draft</title>
+<g id="a_proc~~halo_allreduce_sum_i8~~CalledByGraph_node14"><a xlink:href="../proc/seed_cavity_draft.html" xlink:title="seed_cavity_draft">
+<polygon fill="#d9534f" stroke="#d9534f" points="839.85,-24.27 735.33,-24.27 735.33,0 839.85,0 839.85,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="787.59" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">seed_cavity_draft</text>
+</a>
+</g>
+</g>
+<!-- proc~seed_cavity_draft&#45;&gt;proc~grid_allreduce_sum_i8 -->
+<g id="proc~~halo_allreduce_sum_i8~~CalledByGraph_edge13" class="edge">
+<title>proc~seed_cavity_draft&#45;&gt;proc~grid_allreduce_sum_i8</title>
+<path fill="none" stroke="#7f00ff" d="M840.26,-21.93C851.71,-24.89 863.62,-28.59 874.35,-33.13 901.5,-44.65 929.69,-63.09 949.19,-77.05"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="946.92,-79.73 957.06,-82.8 951.05,-74.08 946.92,-79.73"/>
+</g>
+<!-- interface~configure_ocean_cavity_melt -->
+<g id="proc~~halo_allreduce_sum_i8~~CalledByGraph_node15" class="node">
+<title>interface~configure_ocean_cavity_melt</title>
+<g id="a_proc~~halo_allreduce_sum_i8~~CalledByGraph_node15"><a xlink:href="../interface/configure_ocean_cavity_melt.html" xlink:title="configure_ocean_cavity_melt">
+<polygon fill="#a7506f" stroke="#a7506f" points="661.08,-108.27 495.06,-108.27 495.06,-84 661.08,-84 661.08,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="578.07" y="-92.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">configure_ocean_cavity_melt</text>
+</a>
+</g>
+</g>
+<!-- interface~configure_ocean_cavity_melt&#45;&gt;proc~configure_ocean_cavity_melt -->
+<g id="proc~~halo_allreduce_sum_i8~~CalledByGraph_edge15" class="edge">
+<title>interface~configure_ocean_cavity_melt&#45;&gt;proc~configure_ocean_cavity_melt</title>
+<path fill="none" stroke="#ffaa00" stroke-dasharray="5,2" d="M661.39,-96.13C671.77,-96.13 682.46,-96.13 693.01,-96.13"/>
+<polygon fill="#ffaa00" stroke="#ffaa00" points="692.86,-99.64 702.86,-96.14 692.86,-92.64 692.86,-99.64"/>
+</g>
+<!-- interface~configure_ocean_closed_faces -->
+<g id="proc~~halo_allreduce_sum_i8~~CalledByGraph_node16" class="node">
+<title>interface~configure_ocean_closed_faces</title>
+<g id="a_proc~~halo_allreduce_sum_i8~~CalledByGraph_node16"><a xlink:href="../interface/configure_ocean_closed_faces.html" xlink:title="configure_ocean_closed_faces">
+<polygon fill="#a7506f" stroke="#a7506f" points="664.83,-66.27 491.31,-66.27 491.31,-42 664.83,-42 664.83,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="578.07" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">configure_ocean_closed_faces</text>
+</a>
+</g>
+</g>
+<!-- interface~configure_ocean_closed_faces&#45;&gt;proc~configure_ocean_closed_faces -->
+<g id="proc~~halo_allreduce_sum_i8~~CalledByGraph_edge16" class="edge">
+<title>interface~configure_ocean_closed_faces&#45;&gt;proc~configure_ocean_closed_faces</title>
+<path fill="none" stroke="#aaff00" stroke-dasharray="5,2" d="M665.27,-54.13C673.22,-54.13 681.31,-54.13 689.35,-54.13"/>
+<polygon fill="#aaff00" stroke="#aaff00" points="689.14,-57.64 699.14,-54.14 689.14,-50.64 689.14,-57.64"/>
+</g>
+<!-- interface~rdb_debug_chksum -->
+<g id="proc~~halo_allreduce_sum_i8~~CalledByGraph_node17" class="node">
+<title>interface~rdb_debug_chksum</title>
+<g id="a_proc~~halo_allreduce_sum_i8~~CalledByGraph_node17"><a xlink:href="../interface/rdb_debug_chksum.html" xlink:title="rdb_debug_chksum">
+<polygon fill="#a7506f" stroke="#a7506f" points="635.58,-306.27 520.56,-306.27 520.56,-282 635.58,-282 635.58,-306.27"/>
+<text xml:space="preserve" text-anchor="middle" x="578.07" y="-290.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_debug_chksum</text>
+</a>
+</g>
+</g>
+<!-- interface~rdb_debug_chksum&#45;&gt;proc~rdb_debug_chksum_2d -->
+<g id="proc~~halo_allreduce_sum_i8~~CalledByGraph_edge19" class="edge">
+<title>interface~rdb_debug_chksum&#45;&gt;proc~rdb_debug_chksum_2d</title>
+<path fill="none" stroke="#00a9ff" stroke-dasharray="5,2" d="M636.05,-296.88C658.63,-297.97 684.95,-299.24 709.21,-300.41"/>
+<polygon fill="#00a9ff" stroke="#00a9ff" points="708.89,-303.89 719.05,-300.88 709.23,-296.9 708.89,-303.89"/>
+</g>
+<!-- interface~rdb_debug_chksum&#45;&gt;proc~rdb_debug_chksum_3d -->
+<g id="proc~~halo_allreduce_sum_i8~~CalledByGraph_edge20" class="edge">
+<title>interface~rdb_debug_chksum&#45;&gt;proc~rdb_debug_chksum_3d</title>
+<path fill="none" stroke="#0000ff" stroke-dasharray="5,2" d="M636.05,-285.35C658.63,-281.87 684.95,-277.81 709.21,-274.07"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="709.71,-277.53 719.06,-272.55 708.65,-270.61 709.71,-277.53"/>
+</g>
+<!-- interface~seed_cavity_draft -->
+<g id="proc~~halo_allreduce_sum_i8~~CalledByGraph_node18" class="node">
+<title>interface~seed_cavity_draft</title>
+<g id="a_proc~~halo_allreduce_sum_i8~~CalledByGraph_node18"><a xlink:href="../interface/seed_cavity_draft.html" xlink:title="seed_cavity_draft">
+<polygon fill="#a7506f" stroke="#a7506f" points="630.33,-24.27 525.81,-24.27 525.81,0 630.33,0 630.33,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="578.07" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">seed_cavity_draft</text>
+</a>
+</g>
+</g>
+<!-- interface~seed_cavity_draft&#45;&gt;proc~seed_cavity_draft -->
+<g id="proc~~halo_allreduce_sum_i8~~CalledByGraph_edge21" class="edge">
+<title>interface~seed_cavity_draft&#45;&gt;proc~seed_cavity_draft</title>
+<path fill="none" stroke="#ff00aa" stroke-dasharray="5,2" d="M630.63,-12.13C658.84,-12.13 694.01,-12.13 723.8,-12.13"/>
+<polygon fill="#ff00aa" stroke="#ff00aa" points="723.42,-15.64 733.42,-12.14 723.42,-8.64 723.42,-15.64"/>
+</g>
+<!-- proc~driver_run -->
+<g id="proc~~halo_allreduce_sum_i8~~CalledByGraph_node19" class="node">
+<title>proc~driver_run</title>
+<g id="a_proc~~halo_allreduce_sum_i8~~CalledByGraph_node19"><a xlink:href="../proc/driver_run.html" xlink:title="driver_run">
+<polygon fill="#d9534f" stroke="#d9534f" points="66.27,-150.27 0,-150.27 0,-126 66.27,-126 66.27,-150.27"/>
+<text xml:space="preserve" text-anchor="middle" x="33.13" y="-134.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run&#45;&gt;proc~driver_run_ocean -->
+<g id="proc~~halo_allreduce_sum_i8~~CalledByGraph_edge17" class="edge">
+<title>proc~driver_run&#45;&gt;proc~driver_run_ocean</title>
+<path fill="none" stroke="#00ff00" d="M66.62,-138.13C81.62,-138.13 99.96,-138.13 117.5,-138.13"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="117.35,-141.64 127.35,-138.14 117.35,-134.64 117.35,-141.64"/>
+</g>
+<!-- proc~engine_step_finalize&#45;&gt;proc~ocean_cavity_flux_step -->
+<g id="proc~~halo_allreduce_sum_i8~~CalledByGraph_edge18" class="edge">
+<title>proc~engine_step_finalize&#45;&gt;proc~ocean_cavity_flux_step</title>
+<path fill="none" stroke="#00ffa9" d="M436.25,-138.13C456.08,-138.13 478.49,-138.13 499.51,-138.13"/>
+<polygon fill="#00ffa9" stroke="#00ffa9" points="499.5,-141.64 509.5,-138.14 499.5,-134.64 499.5,-141.64"/>
+</g>
+<!-- proc~ocean_balance_velocity -->
+<g id="proc~~halo_allreduce_sum_i8~~CalledByGraph_node21" class="node">
+<title>proc~ocean_balance_velocity</title>
+<g id="a_proc~~halo_allreduce_sum_i8~~CalledByGraph_node21"><a xlink:href="../proc/ocean_balance_velocity.html" xlink:title="ocean_balance_velocity">
+<polygon fill="#d9534f" stroke="#d9534f" points="647.58,-233.27 508.56,-233.27 508.56,-209 647.58,-209 647.58,-233.27"/>
+<text xml:space="preserve" text-anchor="middle" x="578.07" y="-217.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_balance_velocity</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_balance_velocity&#45;&gt;proc~bottom_rest_scale -->
+<g id="proc~~halo_allreduce_sum_i8~~CalledByGraph_edge14" class="edge">
+<title>proc~ocean_balance_velocity&#45;&gt;proc~bottom_rest_scale</title>
+<path fill="none" stroke="#ff0000" d="M647.88,-220.8C671.81,-220.69 698.55,-220.56 722.11,-220.45"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="721.9,-223.95 731.89,-220.4 721.87,-216.95 721.9,-223.95"/>
+</g>
+<!-- proc~chksum_bt -->
+<g id="proc~~halo_allreduce_sum_i8~~CalledByGraph_node22" class="node">
+<title>proc~chksum_bt</title>
+<g id="a_proc~~halo_allreduce_sum_i8~~CalledByGraph_node22"><a xlink:href="../proc/chksum_bt.html" xlink:title="chksum_bt">
+<polygon fill="#d9534f" stroke="#d9534f" points="410.31,-338.27 341.79,-338.27 341.79,-314 410.31,-314 410.31,-338.27"/>
+<text xml:space="preserve" text-anchor="middle" x="376.05" y="-322.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">chksum_bt</text>
+</a>
+</g>
+</g>
+<!-- proc~chksum_bt&#45;&gt;interface~rdb_debug_chksum -->
+<g id="proc~~halo_allreduce_sum_i8~~CalledByGraph_edge24" class="edge">
+<title>proc~chksum_bt&#45;&gt;interface~rdb_debug_chksum</title>
+<path fill="none" stroke="#48ff00" d="M410.53,-320.78C437.41,-316.48 476.02,-310.3 509.3,-304.98"/>
+<polygon fill="#48ff00" stroke="#48ff00" points="509.54,-308.48 518.86,-303.45 508.43,-301.57 509.54,-308.48"/>
+</g>
+<!-- proc~chksum_state -->
+<g id="proc~~halo_allreduce_sum_i8~~CalledByGraph_node23" class="node">
+<title>proc~chksum_state</title>
+<g id="a_proc~~halo_allreduce_sum_i8~~CalledByGraph_node23"><a xlink:href="../proc/chksum_state.html" xlink:title="chksum_state">
+<polygon fill="#d9534f" stroke="#d9534f" points="418.19,-296.27 333.92,-296.27 333.92,-272 418.19,-272 418.19,-296.27"/>
+<text xml:space="preserve" text-anchor="middle" x="376.05" y="-280.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">chksum_state</text>
+</a>
+</g>
+</g>
+<!-- proc~chksum_state&#45;&gt;interface~rdb_debug_chksum -->
+<g id="proc~~halo_allreduce_sum_i8~~CalledByGraph_edge25" class="edge">
+<title>proc~chksum_state&#45;&gt;interface~rdb_debug_chksum</title>
+<path fill="none" stroke="#48ff00" d="M418.49,-286.21C444.57,-287.51 478.85,-289.22 508.86,-290.72"/>
+<polygon fill="#48ff00" stroke="#48ff00" points="508.46,-294.21 518.62,-291.21 508.81,-287.22 508.46,-294.21"/>
+</g>
+<!-- proc~engine_setup&#45;&gt;interface~configure_ocean_cavity_melt -->
+<g id="proc~~halo_allreduce_sum_i8~~CalledByGraph_edge22" class="edge">
+<title>proc~engine_setup&#45;&gt;interface~configure_ocean_cavity_melt</title>
+<path fill="none" stroke="#ff0000" d="M417.53,-96.13C436.66,-96.13 460.36,-96.13 483.58,-96.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="483.41,-99.64 493.41,-96.14 483.41,-92.64 483.41,-99.64"/>
+</g>
+<!-- proc~engine_setup&#45;&gt;interface~configure_ocean_closed_faces -->
+<g id="proc~~halo_allreduce_sum_i8~~CalledByGraph_edge23" class="edge">
+<title>proc~engine_setup&#45;&gt;interface~configure_ocean_closed_faces</title>
+<path fill="none" stroke="#ffda00" d="M417.53,-87.64C442.83,-82.32 476.13,-75.33 505.76,-69.11"/>
+<polygon fill="#ffda00" stroke="#ffda00" points="506.36,-72.56 515.43,-67.08 504.93,-65.71 506.36,-72.56"/>
+</g>
+<!-- proc~ocean_balance_apply -->
+<g id="proc~~halo_allreduce_sum_i8~~CalledByGraph_node25" class="node">
+<title>proc~ocean_balance_apply</title>
+<g id="a_proc~~halo_allreduce_sum_i8~~CalledByGraph_node25"><a xlink:href="../proc/ocean_balance_apply.html" xlink:title="ocean_balance_apply">
+<polygon fill="#d9534f" stroke="#d9534f" points="439.56,-234.27 312.54,-234.27 312.54,-210 439.56,-210 439.56,-234.27"/>
+<text xml:space="preserve" text-anchor="middle" x="376.05" y="-218.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_balance_apply</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_balance_apply&#45;&gt;proc~ocean_balance_velocity -->
+<g id="proc~~halo_allreduce_sum_i8~~CalledByGraph_edge29" class="edge">
+<title>proc~ocean_balance_apply&#45;&gt;proc~ocean_balance_velocity</title>
+<path fill="none" stroke="#ff00da" d="M439.79,-221.82C457.9,-221.73 477.92,-221.63 496.93,-221.54"/>
+<polygon fill="#ff00da" stroke="#ff00da" points="496.81,-225.04 506.79,-221.49 496.77,-218.04 496.81,-225.04"/>
+</g>
+<!-- proc~ocean_state_seed_from_cfg -->
+<g id="proc~~halo_allreduce_sum_i8~~CalledByGraph_node26" class="node">
+<title>proc~ocean_state_seed_from_cfg</title>
+<g id="a_proc~~halo_allreduce_sum_i8~~CalledByGraph_node26"><a xlink:href="../proc/ocean_state_seed_from_cfg.html" xlink:title="ocean_state_seed_from_cfg">
+<polygon fill="#d9534f" stroke="#d9534f" points="455.31,-24.27 296.79,-24.27 296.79,0 455.31,0 455.31,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="376.05" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_state_seed_from_cfg</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_state_seed_from_cfg&#45;&gt;interface~seed_cavity_draft -->
+<g id="proc~~halo_allreduce_sum_i8~~CalledByGraph_edge26" class="edge">
+<title>proc~ocean_state_seed_from_cfg&#45;&gt;interface~seed_cavity_draft</title>
+<path fill="none" stroke="#00ff91" d="M455.53,-12.13C475.02,-12.13 495.65,-12.13 514.27,-12.13"/>
+<polygon fill="#00ff91" stroke="#00ff91" points="514.07,-15.64 524.07,-12.14 514.07,-8.64 514.07,-15.64"/>
+</g>
+<!-- interface~ocean_state_seed_from_cfg -->
+<g id="proc~~halo_allreduce_sum_i8~~CalledByGraph_node27" class="node">
+<title>interface~ocean_state_seed_from_cfg</title>
+<g id="a_proc~~halo_allreduce_sum_i8~~CalledByGraph_node27"><a xlink:href="../interface/ocean_state_seed_from_cfg.html" xlink:title="ocean_state_seed_from_cfg">
+<polygon fill="#a7506f" stroke="#a7506f" points="260.79,-24.27 102.27,-24.27 102.27,0 260.79,0 260.79,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="181.53" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_state_seed_from_cfg</text>
+</a>
+</g>
+</g>
+<!-- interface~ocean_state_seed_from_cfg&#45;&gt;proc~ocean_state_seed_from_cfg -->
+<g id="proc~~halo_allreduce_sum_i8~~CalledByGraph_edge37" class="edge">
+<title>interface~ocean_state_seed_from_cfg&#45;&gt;proc~ocean_state_seed_from_cfg</title>
+<path fill="none" stroke="#cc00ff" stroke-dasharray="5,2" d="M261.11,-12.13C269.03,-12.13 277.11,-12.13 285.13,-12.13"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="284.89,-15.64 294.89,-12.14 284.89,-8.64 284.89,-15.64"/>
+</g>
+<!-- proc~balance_and_rebaseline -->
+<g id="proc~~halo_allreduce_sum_i8~~CalledByGraph_node28" class="node">
+<title>proc~balance_and_rebaseline</title>
+<g id="a_proc~~halo_allreduce_sum_i8~~CalledByGraph_node28"><a xlink:href="../proc/balance_and_rebaseline.html" xlink:title="balance_and_rebaseline">
+<polygon fill="#d9534f" stroke="#d9534f" points="251.79,-234.27 111.27,-234.27 111.27,-210 251.79,-210 251.79,-234.27"/>
+<text xml:space="preserve" text-anchor="middle" x="181.53" y="-218.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">balance_and_rebaseline</text>
+</a>
+</g>
+</g>
+<!-- proc~balance_and_rebaseline&#45;&gt;proc~ocean_balance_apply -->
+<g id="proc~~halo_allreduce_sum_i8~~CalledByGraph_edge36" class="edge">
+<title>proc~balance_and_rebaseline&#45;&gt;proc~ocean_balance_apply</title>
+<path fill="none" stroke="#0066ff" d="M252.03,-222.13C267.81,-222.13 284.62,-222.13 300.59,-222.13"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="300.53,-225.64 310.53,-222.14 300.53,-218.64 300.53,-225.64"/>
+</g>
+<!-- proc~complete_ocean_create -->
+<g id="proc~~halo_allreduce_sum_i8~~CalledByGraph_node29" class="node">
+<title>proc~complete_ocean_create</title>
+<g id="a_proc~~halo_allreduce_sum_i8~~CalledByGraph_node29"><a xlink:href="../proc/complete_ocean_create.html" xlink:title="complete_ocean_create">
+<polygon fill="#d9534f" stroke="#d9534f" points="251.04,-66.27 112.02,-66.27 112.02,-42 251.04,-42 251.04,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="181.53" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">complete_ocean_create</text>
+</a>
+</g>
+</g>
+<!-- proc~complete_ocean_create&#45;&gt;proc~engine_setup -->
+<g id="proc~~halo_allreduce_sum_i8~~CalledByGraph_edge33" class="edge">
+<title>proc~complete_ocean_create&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#00ff66" d="M240.29,-66.74C266.73,-72.5 297.8,-79.28 323.44,-84.88"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="322.44,-88.24 332.96,-86.95 323.94,-81.4 322.44,-88.24"/>
+</g>
+<!-- proc~driver_validate -->
+<g id="proc~~halo_allreduce_sum_i8~~CalledByGraph_node30" class="node">
+<title>proc~driver_validate</title>
+<g id="a_proc~~halo_allreduce_sum_i8~~CalledByGraph_node30"><a xlink:href="../proc/driver_validate.html" xlink:title="driver_validate">
+<polygon fill="#d9534f" stroke="#d9534f" points="227.04,-108.27 136.02,-108.27 136.02,-84 227.04,-84 227.04,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="181.53" y="-92.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_validate</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_validate&#45;&gt;proc~engine_setup -->
+<g id="proc~~halo_allreduce_sum_i8~~CalledByGraph_edge35" class="edge">
+<title>proc~driver_validate&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#00ff66" d="M227.18,-96.13C255.72,-96.13 292.84,-96.13 322.76,-96.13"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="322.74,-99.64 332.74,-96.14 322.74,-92.64 322.74,-99.64"/>
+</g>
+<!-- proc~ocean_dyn_step_split -->
+<g id="proc~~halo_allreduce_sum_i8~~CalledByGraph_node31" class="node">
+<title>proc~ocean_dyn_step_split</title>
+<g id="a_proc~~halo_allreduce_sum_i8~~CalledByGraph_node31"><a xlink:href="../proc/ocean_dyn_step_split.html" xlink:title="ocean_dyn_step_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="243.54,-296.27 119.52,-296.27 119.52,-272 243.54,-272 243.54,-296.27"/>
+<text xml:space="preserve" text-anchor="middle" x="181.53" y="-280.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step_split</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step_split&#45;&gt;proc~chksum_state -->
+<g id="proc~~halo_allreduce_sum_i8~~CalledByGraph_edge31" class="edge">
+<title>proc~ocean_dyn_step_split&#45;&gt;proc~chksum_state</title>
+<path fill="none" stroke="#cbff00" d="M243.97,-284.13C269.13,-284.13 297.95,-284.13 322.15,-284.13"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="322.11,-287.64 332.11,-284.14 322.11,-280.64 322.11,-287.64"/>
+</g>
+<!-- proc~run_stage_split -->
+<g id="proc~~halo_allreduce_sum_i8~~CalledByGraph_node32" class="node">
+<title>proc~run_stage_split</title>
+<g id="a_proc~~halo_allreduce_sum_i8~~CalledByGraph_node32"><a xlink:href="../proc/run_stage_split.html" xlink:title="run_stage_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="227.04,-338.27 136.02,-338.27 136.02,-314 227.04,-314 227.04,-338.27"/>
+<text xml:space="preserve" text-anchor="middle" x="181.53" y="-322.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage_split</text>
+</a>
+</g>
+</g>
+<!-- proc~run_stage_split&#45;&gt;proc~chksum_bt -->
+<g id="proc~~halo_allreduce_sum_i8~~CalledByGraph_edge30" class="edge">
+<title>proc~run_stage_split&#45;&gt;proc~chksum_bt</title>
+<path fill="none" stroke="#ff0000" d="M227.18,-326.13C258.11,-326.13 299.13,-326.13 330.12,-326.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="329.95,-329.64 339.95,-326.14 329.95,-322.64 329.95,-329.64"/>
+</g>
+<!-- proc~run_stage_split&#45;&gt;proc~chksum_state -->
+<g id="proc~~halo_allreduce_sum_i8~~CalledByGraph_edge32" class="edge">
+<title>proc~run_stage_split&#45;&gt;proc~chksum_state</title>
+<path fill="none" stroke="#cbff00" d="M227.18,-316.39C255.65,-310.18 292.66,-302.11 322.53,-295.59"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="323.1,-299.05 332.12,-293.5 321.61,-292.21 323.1,-299.05"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprochalo_allreduce_sum_i8CalledByGraph = svgPanZoom('#prochalo_allreduce_sum_i8CalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-acc_global"></span>
+              real(kind=real64),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>acc_global</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-acc_local"></span>
+              real(kind=real64),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>acc_local</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-comm~19"></span>
+              type(comm_t),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>comm</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">subroutine </span><span class="n">halo_allreduce_sum_i8</span><span class="p">(</span><span class="n">local_val</span><span class="p">,</span><span class="w"> </span><span class="n">global_val</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! Cross-rank int64 sum for the decomposition-invariant chksum</span>
+<span class="w">      </span><span class="c">!! bitcount (`rdb_ocean_chksum`).  `pic_mpi_lib` exposes no</span>
+<span class="w">      </span><span class="c">!! `integer(int64)` allreduce overload (MPI_INTEGER8 reaches only</span>
+<span class="w">      </span><span class="c">!! send/recv), so the value rides the EXACT `real64` allreduce: a</span>
+<span class="w">      </span><span class="c">!! per-field POPCNT sum is bounded by (#elements x 64), which stays</span>
+<span class="w">      </span><span class="c">!! FAR below the double-mantissa bound 2**53 for any realistic grid</span>
+<span class="w">      </span><span class="c">!! (2**53/64 ~ 1.4e14 cells), so both the local-&gt;double cast and</span>
+<span class="w">      </span><span class="c">!! every partial MPI_SUM are exact — the invariant survives.</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">(</span><span class="n">int64</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">local_val</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">(</span><span class="n">int64</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">out</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">global_val</span>
+
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">comm_t</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">comm</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">real64</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">acc_local</span><span class="p">,</span><span class="w"> </span><span class="n">acc_global</span>
+
+<span class="w">      </span><span class="n">comm</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">comm_env_compute_comm</span><span class="p">()</span>
+<span class="w">      </span><span class="c">! Single rank: the reduction is the identity, so return this rank's</span>
+<span class="w">      </span><span class="c">! own contribution without entering a collective.  Not just an</span>
+<span class="w">      </span><span class="c">! optimisation -- pic-mpi's serial backend (PIC_ENABLE_MPI=OFF)</span>
+<span class="w">      </span><span class="c">! deliberately `error stop`s in `allreduce`, pushing the size()==1</span>
+<span class="w">      </span><span class="c">! case onto the caller.  This IS that case.</span>
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">comm</span><span class="p">%</span><span class="n">size</span><span class="p">()</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">         </span><span class="n">global_val</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">local_val</span>
+<span class="w">         </span><span class="k">return</span>
+<span class="k">      end if</span>
+
+<span class="k">      </span><span class="n">acc_local</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kt">real</span><span class="p">(</span><span class="n">local_val</span><span class="p">,</span><span class="w"> </span><span class="n">real64</span><span class="p">)</span>
+<span class="w">      </span><span class="k">call </span><span class="n">allreduce</span><span class="p">(</span><span class="n">comm</span><span class="p">,</span><span class="w"> </span><span class="n">acc_local</span><span class="p">,</span><span class="w"> </span><span class="n">acc_global</span><span class="p">,</span><span class="w"> </span><span class="n">op</span><span class="o">=</span><span class="n">MPI_SUM</span><span class="p">)</span>
+<span class="w">      </span><span class="n">global_val</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">int</span><span class="p">(</span><span class="n">acc_global</span><span class="p">,</span><span class="w"> </span><span class="n">int64</span><span class="p">)</span>
+
+<span class="w">   </span><span class="k">end subroutine </span><span class="n">halo_allreduce_sum_i8</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-11-13 23:21 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

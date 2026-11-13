@@ -1,0 +1,1102 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>fold_north_corner_2d &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>fold_north_corner_2d
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.0% of total for procedures.">24 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_fold.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_fold.f90.html'>rdb_ocean_fold.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ocean_fold.html'>rdb_ocean_fold</a></li>
+            <li class="breadcrumb-item active" aria-current="page">fold_north_corner_2d</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/fold_north_corner_2d.html#variable-fsum~5">fsum</a>
+            <a class="list-group-item" href="../proc/fold_north_corner_2d.html#variable-i~491">i</a>
+            <a class="list-group-item" href="../proc/fold_north_corner_2d.html#variable-i_lo~33">i_lo</a>
+            <a class="list-group-item" href="../proc/fold_north_corner_2d.html#variable-j~458">j</a>
+            <a class="list-group-item" href="../proc/fold_north_corner_2d.html#variable-j_fold~4">j_fold</a>
+            <a class="list-group-item" href="../proc/fold_north_corner_2d.html#variable-jsum~9">jsum</a>
+            <a class="list-group-item" href="../proc/fold_north_corner_2d.html#variable-p~34">p</a>
+            <a class="list-group-item" href="../proc/fold_north_corner_2d.html#variable-pm~4">pm</a>
+            <a class="list-group-item" href="../proc/fold_north_corner_2d.html#variable-sgn~7">sgn</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/fold_north_corner_2d.html#src">fold_north_corner_2d</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>private pure subroutine fold_north_corner_2d(fld, nx_face, ny_face, nx_phys, ny_phys, nghost, negate)  
+</h2>
+    
+
+    <p>2D Bu-corner fold: north-halo fill + on-line projection.</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-fld~40"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>fld</strong>(nx_face,ny_face)</td>
+            <td>
+                <p>Corner field, shape (nx_total+1, ny_total+1).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx_face~14"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx_face</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny_face~14"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny_face</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx_phys~43"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx_phys</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny_phys~44"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny_phys</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nghost~74"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nghost</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-negate~5"></span>
+              logical,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>negate</strong></td>
+            <td>
+                <p>.true. → negate (true-vector component); .false. → copy (scalar
+/ pseudoscalar vorticity).</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~fold_north_corner_2d~~CallsGraph Pages: 1 -->
+<svg id="procfold_north_corner_2dCallsGraph" width="223pt" height="32pt"
+ viewBox="0.00 0.00 223.00 32.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~fold_north_corner_2d~~CallsGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 28.27)">
+<title>proc~~fold_north_corner_2d~~CallsGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 218.77,-28.27 218.77,4 -4,4"/>
+<!-- proc~fold_north_corner_2d -->
+<g id="proc~~fold_north_corner_2d~~CallsGraph_node1" class="node">
+<title>proc~fold_north_corner_2d</title>
+<polygon fill="none" stroke="black" points="124.77,-24.27 0,-24.27 0,0 124.77,0 124.77,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="62.38" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">fold_north_corner_2d</text>
+</g>
+<!-- local -->
+<g id="proc~~fold_north_corner_2d~~CallsGraph_node2" class="node">
+<title>local</title>
+<polygon fill="#777777" stroke="#777777" points="214.77,-24.27 160.77,-24.27 160.77,0 214.77,0 214.77,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="187.77" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">local</text>
+</g>
+<!-- proc~fold_north_corner_2d&#45;&gt;local -->
+<g id="proc~~fold_north_corner_2d~~CallsGraph_edge1" class="edge">
+<title>proc~fold_north_corner_2d&#45;&gt;local</title>
+<path fill="none" stroke="#ff0000" d="M125.08,-12.13C133.22,-12.13 141.37,-12.13 148.94,-12.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="148.79,-15.64 158.79,-12.14 148.79,-8.64 148.79,-15.64"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~fold_north_corner_2d~~CalledByGraph Pages: 1 -->
+<svg id="procfold_north_corner_2dCalledByGraph" width="641pt" height="105pt"
+ viewBox="0.00 0.00 641.00 105.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~fold_north_corner_2d~~CalledByGraph" class="graph" transform="scale(0.522672 0.522672) rotate(0) translate(4 196.27)">
+<title>proc~~fold_north_corner_2d~~CalledByGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-196.27 1222.39,-196.27 1222.39,4 -4,4"/>
+<!-- proc~fold_north_corner_2d -->
+<g id="proc~~fold_north_corner_2d~~CalledByGraph_node1" class="node">
+<title>proc~fold_north_corner_2d</title>
+<polygon fill="none" stroke="black" points="1218.39,-87.27 1093.62,-87.27 1093.62,-63 1218.39,-63 1218.39,-87.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1156" y="-71.54" font-family="Helvetica,sans-Serif" font-size="10.50">fold_north_corner_2d</text>
+</g>
+<!-- interface~fold_north_corner -->
+<g id="proc~~fold_north_corner_2d~~CalledByGraph_node2" class="node">
+<title>interface~fold_north_corner</title>
+<g id="a_proc~~fold_north_corner_2d~~CalledByGraph_node2"><a xlink:href="../interface/fold_north_corner.html" xlink:title="fold_north_corner">
+<polygon fill="#a7506f" stroke="#a7506f" points="1057.62,-87.27 951.6,-87.27 951.6,-63 1057.62,-63 1057.62,-87.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1004.61" y="-71.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">fold_north_corner</text>
+</a>
+</g>
+</g>
+<!-- interface~fold_north_corner&#45;&gt;proc~fold_north_corner_2d -->
+<g id="proc~~fold_north_corner_2d~~CalledByGraph_edge1" class="edge">
+<title>interface~fold_north_corner&#45;&gt;proc~fold_north_corner_2d</title>
+<path fill="none" stroke="#ff0000" stroke-dasharray="5,2" d="M1057.86,-75.14C1065.64,-75.14 1073.77,-75.14 1081.89,-75.14"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1081.78,-78.64 1091.78,-75.14 1081.78,-71.64 1081.78,-78.64"/>
+</g>
+<!-- proc~fill_f_corner_seam_ghosts -->
+<g id="proc~~fold_north_corner_2d~~CalledByGraph_node3" class="node">
+<title>proc~fill_f_corner_seam_ghosts</title>
+<g id="a_proc~~fold_north_corner_2d~~CalledByGraph_node3"><a xlink:href="../proc/fill_f_corner_seam_ghosts.html" xlink:title="fill_f_corner_seam_ghosts">
+<polygon fill="#d9534f" stroke="#d9534f" points="908.85,-66.27 760.83,-66.27 760.83,-42 908.85,-42 908.85,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="834.84" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">fill_f_corner_seam_ghosts</text>
+</a>
+</g>
+</g>
+<!-- proc~fill_f_corner_seam_ghosts&#45;&gt;interface~fold_north_corner -->
+<g id="proc~~fold_north_corner_2d~~CalledByGraph_edge2" class="edge">
+<title>proc~fill_f_corner_seam_ghosts&#45;&gt;interface~fold_north_corner</title>
+<path fill="none" stroke="#ff0000" d="M908.94,-63.28C919.33,-64.59 929.95,-65.91 940.14,-67.19"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="939.57,-70.65 949.93,-68.42 940.44,-63.7 939.57,-70.65"/>
+</g>
+<!-- proc~fold_corner_2d -->
+<g id="proc~~fold_north_corner_2d~~CalledByGraph_node4" class="node">
+<title>proc~fold_corner_2d</title>
+<g id="a_proc~~fold_north_corner_2d~~CalledByGraph_node4"><a xlink:href="../proc/fold_corner_2d.html" xlink:title="fold_corner_2d">
+<polygon fill="#d9534f" stroke="#d9534f" points="880.35,-108.27 789.33,-108.27 789.33,-84 880.35,-84 880.35,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="834.84" y="-92.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">fold_corner_2d</text>
+</a>
+</g>
+</g>
+<!-- proc~fold_corner_2d&#45;&gt;interface~fold_north_corner -->
+<g id="proc~~fold_north_corner_2d~~CalledByGraph_edge3" class="edge">
+<title>proc~fold_corner_2d&#45;&gt;interface~fold_north_corner</title>
+<path fill="none" stroke="#ff0000" d="M880.8,-90.51C898.97,-88.23 920.28,-85.57 940,-83.1"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="940.4,-86.57 949.89,-81.86 939.53,-79.63 940.4,-86.57"/>
+</g>
+<!-- proc~metrics_fold_north_faces -->
+<g id="proc~~fold_north_corner_2d~~CalledByGraph_node5" class="node">
+<title>proc~metrics_fold_north_faces</title>
+<g id="a_proc~~fold_north_corner_2d~~CalledByGraph_node5"><a xlink:href="../proc/metrics_fold_north_faces.html" xlink:title="metrics_fold_north_faces">
+<polygon fill="#d9534f" stroke="#d9534f" points="718.08,-149.27 573.81,-149.27 573.81,-125 718.08,-125 718.08,-149.27"/>
+<text xml:space="preserve" text-anchor="middle" x="645.94" y="-133.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">metrics_fold_north_faces</text>
+</a>
+</g>
+</g>
+<!-- proc~metrics_fold_north_faces&#45;&gt;interface~fold_north_corner -->
+<g id="proc~~fold_north_corner_2d~~CalledByGraph_edge4" class="edge">
+<title>proc~metrics_fold_north_faces&#45;&gt;interface~fold_north_corner</title>
+<path fill="none" stroke="#ff0000" d="M718.56,-138.94C773.38,-138.62 850.4,-134.47 915.6,-117.14 935.79,-111.77 956.96,-101.82 973.48,-92.95"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="974.74,-96.26 981.79,-88.35 971.35,-90.13 974.74,-96.26"/>
+</g>
+<!-- proc~ocean_fold_wrap_evp_stress -->
+<g id="proc~~fold_north_corner_2d~~CalledByGraph_node6" class="node">
+<title>proc~ocean_fold_wrap_evp_stress</title>
+<g id="a_proc~~fold_north_corner_2d~~CalledByGraph_node6"><a xlink:href="../proc/ocean_fold_wrap_evp_stress.html" xlink:title="ocean_fold_wrap_evp_stress">
+<polygon fill="#d9534f" stroke="#d9534f" points="915.6,-24.27 754.08,-24.27 754.08,0 915.6,0 915.6,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="834.84" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_fold_wrap_evp_stress</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_fold_wrap_evp_stress&#45;&gt;interface~fold_north_corner -->
+<g id="proc~~fold_north_corner_2d~~CalledByGraph_edge5" class="edge">
+<title>proc~ocean_fold_wrap_evp_stress&#45;&gt;interface~fold_north_corner</title>
+<path fill="none" stroke="#ff0000" d="M889.04,-24.65C898,-27.18 907.13,-30.03 915.6,-33.13 934.25,-39.97 954.28,-49.36 970.52,-57.53"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="968.75,-60.55 979.24,-61.99 971.94,-54.32 968.75,-60.55"/>
+</g>
+<!-- interface~ocean_fold_north_corner -->
+<g id="proc~~fold_north_corner_2d~~CalledByGraph_node7" class="node">
+<title>interface~ocean_fold_north_corner</title>
+<g id="a_proc~~fold_north_corner_2d~~CalledByGraph_node7"><a xlink:href="../interface/ocean_fold_north_corner.html" xlink:title="ocean_fold_north_corner">
+<polygon fill="#a7506f" stroke="#a7506f" points="527.31,-108.27 383.04,-108.27 383.04,-84 527.31,-84 527.31,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="455.17" y="-92.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_fold_north_corner</text>
+</a>
+</g>
+</g>
+<!-- interface~ocean_fold_north_corner&#45;&gt;proc~fold_corner_2d -->
+<g id="proc~~fold_north_corner_2d~~CalledByGraph_edge7" class="edge">
+<title>interface~ocean_fold_north_corner&#45;&gt;proc~fold_corner_2d</title>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M527.65,-96.14C600.18,-96.14 710.96,-96.14 777.5,-96.14"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="777.48,-99.64 787.48,-96.14 777.48,-92.64 777.48,-99.64"/>
+</g>
+<!-- proc~configure_ocean_forcing -->
+<g id="proc~~fold_north_corner_2d~~CalledByGraph_node8" class="node">
+<title>proc~configure_ocean_forcing</title>
+<g id="a_proc~~fold_north_corner_2d~~CalledByGraph_node8"><a xlink:href="../proc/configure_ocean_forcing.html" xlink:title="configure_ocean_forcing">
+<polygon fill="#d9534f" stroke="#d9534f" points="716.95,-66.27 574.93,-66.27 574.93,-42 716.95,-42 716.95,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="645.94" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">configure_ocean_forcing</text>
+</a>
+</g>
+</g>
+<!-- proc~configure_ocean_forcing&#45;&gt;proc~fill_f_corner_seam_ghosts -->
+<g id="proc~~fold_north_corner_2d~~CalledByGraph_edge6" class="edge">
+<title>proc~configure_ocean_forcing&#45;&gt;proc~fill_f_corner_seam_ghosts</title>
+<path fill="none" stroke="#ff0000" d="M717.34,-54.13C727.67,-54.13 738.41,-54.13 748.99,-54.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="748.88,-57.64 758.88,-54.14 748.88,-50.64 748.88,-57.64"/>
+</g>
+<!-- proc~ice_evp_dynamics_impl -->
+<g id="proc~~fold_north_corner_2d~~CalledByGraph_node9" class="node">
+<title>proc~ice_evp_dynamics_impl</title>
+<g id="a_proc~~fold_north_corner_2d~~CalledByGraph_node9"><a xlink:href="../proc/ice_evp_dynamics_impl.html" xlink:title="ice_evp_dynamics_impl">
+<polygon fill="#d9534f" stroke="#d9534f" points="714.33,-24.27 577.56,-24.27 577.56,0 714.33,0 714.33,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="645.94" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_evp_dynamics_impl</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_evp_dynamics_impl&#45;&gt;proc~ocean_fold_wrap_evp_stress -->
+<g id="proc~~fold_north_corner_2d~~CalledByGraph_edge9" class="edge">
+<title>proc~ice_evp_dynamics_impl&#45;&gt;proc~ocean_fold_wrap_evp_stress</title>
+<path fill="none" stroke="#7f00ff" d="M714.68,-12.13C723.67,-12.13 733,-12.13 742.3,-12.13"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="742.1,-15.64 752.1,-12.14 742.1,-8.64 742.1,-15.64"/>
+</g>
+<!-- proc~metrics_fold_periodic_ghosts -->
+<g id="proc~~fold_north_corner_2d~~CalledByGraph_node10" class="node">
+<title>proc~metrics_fold_periodic_ghosts</title>
+<g id="a_proc~~fold_north_corner_2d~~CalledByGraph_node10"><a xlink:href="../proc/metrics_fold_periodic_ghosts.html" xlink:title="metrics_fold_periodic_ghosts">
+<polygon fill="#d9534f" stroke="#d9534f" points="537.81,-150.27 372.54,-150.27 372.54,-126 537.81,-126 537.81,-150.27"/>
+<text xml:space="preserve" text-anchor="middle" x="455.17" y="-134.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">metrics_fold_periodic_ghosts</text>
+</a>
+</g>
+</g>
+<!-- proc~metrics_fold_periodic_ghosts&#45;&gt;proc~metrics_fold_north_faces -->
+<g id="proc~~fold_north_corner_2d~~CalledByGraph_edge8" class="edge">
+<title>proc~metrics_fold_periodic_ghosts&#45;&gt;proc~metrics_fold_north_faces</title>
+<path fill="none" stroke="#00ffff" d="M538.15,-137.7C546.04,-137.66 554.04,-137.62 561.94,-137.57"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="561.92,-141.07 571.9,-137.52 561.88,-134.08 561.92,-141.07"/>
+</g>
+<!-- interface~configure_ocean_forcing -->
+<g id="proc~~fold_north_corner_2d~~CalledByGraph_node11" class="node">
+<title>interface~configure_ocean_forcing</title>
+<g id="a_proc~~fold_north_corner_2d~~CalledByGraph_node11"><a xlink:href="../interface/configure_ocean_forcing.html" xlink:title="configure_ocean_forcing">
+<polygon fill="#a7506f" stroke="#a7506f" points="526.18,-66.27 384.16,-66.27 384.16,-42 526.18,-42 526.18,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="455.17" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">configure_ocean_forcing</text>
+</a>
+</g>
+</g>
+<!-- interface~configure_ocean_forcing&#45;&gt;proc~configure_ocean_forcing -->
+<g id="proc~~fold_north_corner_2d~~CalledByGraph_edge11" class="edge">
+<title>interface~configure_ocean_forcing&#45;&gt;proc~configure_ocean_forcing</title>
+<path fill="none" stroke="#7fff00" stroke-dasharray="5,2" d="M526.47,-54.13C538.5,-54.13 551.1,-54.13 563.41,-54.13"/>
+<polygon fill="#7fff00" stroke="#7fff00" points="563.08,-57.64 573.08,-54.14 563.08,-50.64 563.08,-57.64"/>
+</g>
+<!-- proc~engine_setup -->
+<g id="proc~~fold_north_corner_2d~~CalledByGraph_node12" class="node">
+<title>proc~engine_setup</title>
+<g id="a_proc~~fold_north_corner_2d~~CalledByGraph_node12"><a xlink:href="../proc/engine_setup.html" xlink:title="engine_setup">
+<polygon fill="#d9534f" stroke="#d9534f" points="300.16,-87.27 217.39,-87.27 217.39,-63 300.16,-63 300.16,-87.27"/>
+<text xml:space="preserve" text-anchor="middle" x="258.78" y="-71.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_setup</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_setup&#45;&gt;interface~ocean_fold_north_corner -->
+<g id="proc~~fold_north_corner_2d~~CalledByGraph_edge10" class="edge">
+<title>proc~engine_setup&#45;&gt;interface~ocean_fold_north_corner</title>
+<path fill="none" stroke="#ff0000" d="M300.53,-79.54C321.19,-81.77 347.06,-84.56 371.65,-87.22"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="371.01,-90.67 381.33,-88.27 371.76,-83.71 371.01,-90.67"/>
+</g>
+<!-- proc~engine_setup&#45;&gt;proc~metrics_fold_periodic_ghosts -->
+<g id="proc~~fold_north_corner_2d~~CalledByGraph_edge13" class="edge">
+<title>proc~engine_setup&#45;&gt;proc~metrics_fold_periodic_ghosts</title>
+<path fill="none" stroke="#7f00ff" d="M290.59,-87.61C313.08,-96.47 344.44,-108.31 372.54,-117.14 378.62,-119.04 385,-120.91 391.39,-122.7"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="390.09,-125.97 400.66,-125.22 391.93,-119.22 390.09,-125.97"/>
+</g>
+<!-- proc~engine_setup&#45;&gt;interface~configure_ocean_forcing -->
+<g id="proc~~fold_north_corner_2d~~CalledByGraph_edge16" class="edge">
+<title>proc~engine_setup&#45;&gt;interface~configure_ocean_forcing</title>
+<path fill="none" stroke="#ff0000" d="M300.53,-70.73C321.48,-68.47 347.79,-65.63 372.68,-62.94"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="372.92,-66.43 382.49,-61.88 372.17,-59.47 372.92,-66.43"/>
+</g>
+<!-- proc~ice_evp_dynamics -->
+<g id="proc~~fold_north_corner_2d~~CalledByGraph_node13" class="node">
+<title>proc~ice_evp_dynamics</title>
+<g id="a_proc~~fold_north_corner_2d~~CalledByGraph_node13"><a xlink:href="../proc/ice_evp_dynamics.html" xlink:title="ice_evp_dynamics">
+<polygon fill="#d9534f" stroke="#d9534f" points="509.31,-24.27 401.04,-24.27 401.04,0 509.31,0 509.31,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="455.17" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_evp_dynamics</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_evp_dynamics&#45;&gt;proc~ice_evp_dynamics_impl -->
+<g id="proc~~fold_north_corner_2d~~CalledByGraph_edge12" class="edge">
+<title>proc~ice_evp_dynamics&#45;&gt;proc~ice_evp_dynamics_impl</title>
+<path fill="none" stroke="#00ffff" d="M509.76,-12.13C527.18,-12.13 546.88,-12.13 565.76,-12.13"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="565.55,-15.64 575.55,-12.14 565.55,-8.64 565.55,-15.64"/>
+</g>
+<!-- proc~metrics_fill_from_supergrid -->
+<g id="proc~~fold_north_corner_2d~~CalledByGraph_node14" class="node">
+<title>proc~metrics_fill_from_supergrid</title>
+<g id="a_proc~~fold_north_corner_2d~~CalledByGraph_node14"><a xlink:href="../proc/metrics_fill_from_supergrid.html" xlink:title="metrics_fill_from_supergrid">
+<polygon fill="#d9534f" stroke="#d9534f" points="336.54,-192.27 181.02,-192.27 181.02,-168 336.54,-168 336.54,-192.27"/>
+<text xml:space="preserve" text-anchor="middle" x="258.78" y="-176.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">metrics_fill_from_supergrid</text>
+</a>
+</g>
+</g>
+<!-- proc~metrics_fill_from_supergrid&#45;&gt;proc~metrics_fold_periodic_ghosts -->
+<g id="proc~~fold_north_corner_2d~~CalledByGraph_edge14" class="edge">
+<title>proc~metrics_fill_from_supergrid&#45;&gt;proc~metrics_fold_periodic_ghosts</title>
+<path fill="none" stroke="#7f00ff" d="M318.1,-167.53C339.06,-163.01 362.89,-157.86 384.7,-153.15"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="385.38,-156.58 394.41,-151.05 383.9,-149.74 385.38,-156.58"/>
+</g>
+<!-- proc~metrics_fill_tripolar_whole -->
+<g id="proc~~fold_north_corner_2d~~CalledByGraph_node15" class="node">
+<title>proc~metrics_fill_tripolar_whole</title>
+<g id="a_proc~~fold_north_corner_2d~~CalledByGraph_node15"><a xlink:href="../proc/metrics_fill_tripolar_whole.html" xlink:title="metrics_fill_tripolar_whole">
+<polygon fill="#d9534f" stroke="#d9534f" points="333.91,-150.27 183.64,-150.27 183.64,-126 333.91,-126 333.91,-150.27"/>
+<text xml:space="preserve" text-anchor="middle" x="258.78" y="-134.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">metrics_fill_tripolar_whole</text>
+</a>
+</g>
+</g>
+<!-- proc~metrics_fill_tripolar_whole&#45;&gt;proc~metrics_fold_periodic_ghosts -->
+<g id="proc~~fold_north_corner_2d~~CalledByGraph_edge15" class="edge">
+<title>proc~metrics_fill_tripolar_whole&#45;&gt;proc~metrics_fold_periodic_ghosts</title>
+<path fill="none" stroke="#7f00ff" d="M334.38,-138.13C343.12,-138.13 352.11,-138.13 361.05,-138.13"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="360.82,-141.64 370.82,-138.14 360.82,-134.64 360.82,-141.64"/>
+</g>
+<!-- proc~complete_ocean_create -->
+<g id="proc~~fold_north_corner_2d~~CalledByGraph_node16" class="node">
+<title>proc~complete_ocean_create</title>
+<g id="a_proc~~fold_north_corner_2d~~CalledByGraph_node16"><a xlink:href="../proc/complete_ocean_create.html" xlink:title="complete_ocean_create">
+<polygon fill="#d9534f" stroke="#d9534f" points="142.02,-108.27 3,-108.27 3,-84 142.02,-84 142.02,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="72.51" y="-92.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">complete_ocean_create</text>
+</a>
+</g>
+</g>
+<!-- proc~complete_ocean_create&#45;&gt;proc~engine_setup -->
+<g id="proc~~fold_north_corner_2d~~CalledByGraph_edge17" class="edge">
+<title>proc~complete_ocean_create&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#cbff00" d="M142.39,-88.29C163.41,-85.89 186.16,-83.3 205.86,-81.05"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="206.02,-84.56 215.56,-79.95 205.23,-77.6 206.02,-84.56"/>
+</g>
+<!-- proc~configure_ocean_metrics -->
+<g id="proc~~fold_north_corner_2d~~CalledByGraph_node17" class="node">
+<title>proc~configure_ocean_metrics</title>
+<g id="a_proc~~fold_north_corner_2d~~CalledByGraph_node17"><a xlink:href="../proc/configure_ocean_metrics.html" xlink:title="configure_ocean_metrics">
+<polygon fill="#d9534f" stroke="#d9534f" points="145.02,-192.27 0,-192.27 0,-168 145.02,-168 145.02,-192.27"/>
+<text xml:space="preserve" text-anchor="middle" x="72.51" y="-176.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">configure_ocean_metrics</text>
+</a>
+</g>
+</g>
+<!-- proc~configure_ocean_metrics&#45;&gt;proc~metrics_fill_from_supergrid -->
+<g id="proc~~fold_north_corner_2d~~CalledByGraph_edge21" class="edge">
+<title>proc~configure_ocean_metrics&#45;&gt;proc~metrics_fill_from_supergrid</title>
+<path fill="none" stroke="#0066ff" d="M145.28,-180.13C153.18,-180.13 161.29,-180.13 169.36,-180.13"/>
+<polygon fill="#0066ff" stroke="#0066ff" points="169.21,-183.64 179.21,-180.14 169.21,-176.64 169.21,-183.64"/>
+</g>
+<!-- proc~driver_run_ocean -->
+<g id="proc~~fold_north_corner_2d~~CalledByGraph_node18" class="node">
+<title>proc~driver_run_ocean</title>
+<g id="a_proc~~fold_north_corner_2d~~CalledByGraph_node18"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<polygon fill="#d9534f" stroke="#d9534f" points="124.77,-66.27 20.25,-66.27 20.25,-42 124.77,-42 124.77,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="72.51" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_setup -->
+<g id="proc~~fold_north_corner_2d~~CalledByGraph_edge18" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#cbff00" d="M124.84,-59.98C150.05,-62.86 180.37,-66.31 205.68,-69.2"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="205.09,-72.65 215.42,-70.31 205.88,-65.7 205.09,-72.65"/>
+</g>
+<!-- proc~driver_validate -->
+<g id="proc~~fold_north_corner_2d~~CalledByGraph_node19" class="node">
+<title>proc~driver_validate</title>
+<g id="a_proc~~fold_north_corner_2d~~CalledByGraph_node19"><a xlink:href="../proc/driver_validate.html" xlink:title="driver_validate">
+<polygon fill="#d9534f" stroke="#d9534f" points="118.02,-24.27 27,-24.27 27,0 118.02,0 118.02,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="72.51" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_validate</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_validate&#45;&gt;proc~engine_setup -->
+<g id="proc~~fold_north_corner_2d~~CalledByGraph_edge19" class="edge">
+<title>proc~driver_validate&#45;&gt;proc~engine_setup</title>
+<path fill="none" stroke="#cbff00" d="M118.29,-24.76C127.18,-27.41 136.43,-30.28 145.02,-33.13 168.48,-40.94 194.36,-50.51 215.39,-58.54"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="213.91,-61.72 224.5,-62.04 216.42,-55.18 213.91,-61.72"/>
+</g>
+<!-- proc~ice_evp_step -->
+<g id="proc~~fold_north_corner_2d~~CalledByGraph_node20" class="node">
+<title>proc~ice_evp_step</title>
+<g id="a_proc~~fold_north_corner_2d~~CalledByGraph_node20"><a xlink:href="../proc/ice_evp_step.html" xlink:title="ice_evp_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="298.66,-24.27 218.89,-24.27 218.89,0 298.66,0 298.66,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="258.78" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_evp_step</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_evp_step&#45;&gt;proc~ice_evp_dynamics -->
+<g id="proc~~fold_north_corner_2d~~CalledByGraph_edge20" class="edge">
+<title>proc~ice_evp_step&#45;&gt;proc~ice_evp_dynamics</title>
+<path fill="none" stroke="#00ff66" d="M299.12,-12.13C325.09,-12.13 359.73,-12.13 389.67,-12.13"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="389.38,-15.64 399.38,-12.14 389.38,-8.64 389.38,-15.64"/>
+</g>
+<!-- proc~metrics_fill_tripolar -->
+<g id="proc~~fold_north_corner_2d~~CalledByGraph_node21" class="node">
+<title>proc~metrics_fill_tripolar</title>
+<g id="a_proc~~fold_north_corner_2d~~CalledByGraph_node21"><a xlink:href="../proc/metrics_fill_tripolar.html" xlink:title="metrics_fill_tripolar">
+<polygon fill="#d9534f" stroke="#d9534f" points="129.27,-150.27 15.75,-150.27 15.75,-126 129.27,-126 129.27,-150.27"/>
+<text xml:space="preserve" text-anchor="middle" x="72.51" y="-134.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">metrics_fill_tripolar</text>
+</a>
+</g>
+</g>
+<!-- proc~metrics_fill_tripolar&#45;&gt;proc~metrics_fill_tripolar_whole -->
+<g id="proc~~fold_north_corner_2d~~CalledByGraph_edge22" class="edge">
+<title>proc~metrics_fill_tripolar&#45;&gt;proc~metrics_fill_tripolar_whole</title>
+<path fill="none" stroke="#cc00ff" d="M129.55,-138.13C142.92,-138.13 157.49,-138.13 171.86,-138.13"/>
+<polygon fill="#cc00ff" stroke="#cc00ff" points="171.8,-141.64 181.8,-138.14 171.8,-134.64 171.8,-141.64"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocfold_north_corner_2dCalledByGraph = svgPanZoom('#procfold_north_corner_2dCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-fsum~5"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>fsum</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-i~491"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>i</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-i_lo~33"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>i_lo</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-j~458"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>j</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-j_fold~4"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>j_fold</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-jsum~9"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>jsum</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-p~34"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>p</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-pm~4"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>pm</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sgn~7"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>sgn</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">pure subroutine </span><span class="n">fold_north_corner_2d</span><span class="p">(</span><span class="n">fld</span><span class="p">,</span><span class="w"> </span><span class="n">nx_face</span><span class="p">,</span><span class="w"> </span><span class="n">ny_face</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                        </span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="n">negate</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! 2D Bu-corner fold: north-halo fill + on-line projection.</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nx_face</span><span class="p">,</span><span class="w"> </span><span class="n">ny_face</span><span class="p">,</span><span class="w"> </span><span class="n">nx_phys</span><span class="p">,</span><span class="w"> </span><span class="n">ny_phys</span><span class="p">,</span><span class="w"> </span><span class="n">nghost</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">fld</span><span class="p">(</span><span class="n">nx_face</span><span class="p">,</span><span class="w"> </span><span class="n">ny_face</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! Corner field, shape (nx_total+1, ny_total+1).</span>
+<span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">negate</span>
+<span class="w">         </span><span class="c">!! .true. → negate (true-vector component); .false. → copy (scalar</span>
+<span class="w">         </span><span class="c">!! / pseudoscalar vorticity).</span>
+
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">fsum</span><span class="p">,</span><span class="w"> </span><span class="n">jsum</span><span class="p">,</span><span class="w"> </span><span class="n">j_fold</span><span class="p">,</span><span class="w"> </span><span class="n">i_lo</span><span class="p">,</span><span class="w"> </span><span class="n">p</span><span class="p">,</span><span class="w"> </span><span class="n">pm</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">sgn</span>
+
+<span class="w">      </span><span class="n">fsum</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">2</span><span class="o">*</span><span class="n">nghost</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">nx_phys</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">2</span>
+<span class="w">      </span><span class="n">jsum</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">2</span><span class="o">*</span><span class="n">nghost</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">2</span><span class="o">*</span><span class="n">ny_phys</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">2</span><span class="w">   </span><span class="c">! corner is SW: y = j-1</span>
+<span class="w">      </span><span class="n">j_fold</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nghost</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">ny_phys</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">      </span><span class="n">i_lo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nghost</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">      </span><span class="n">sgn</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">merge</span><span class="p">(</span><span class="o">-</span><span class="mf">1.0_wp</span><span class="p">,</span><span class="w"> </span><span class="mf">1.0_wp</span><span class="p">,</span><span class="w"> </span><span class="n">negate</span><span class="p">)</span>
+
+<span class="w">      </span><span class="c">! Halo rows strictly beyond the fold row.</span>
+<span class="w">      </span><span class="k">do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">j</span><span class="o">=</span><span class="n">j_fold</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">:</span><span class="n">ny_face</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nx_face</span><span class="p">)</span>
+<span class="w">         </span><span class="n">fld</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sgn</span><span class="o">*</span><span class="n">fld</span><span class="p">(</span><span class="n">fsum</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">jsum</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">j</span><span class="p">)</span>
+<span class="w">      </span><span class="k">end do</span>
+
+<span class="w">      </span><span class="c">! On-line projection at j = j_fold over EVERY storage column</span>
+<span class="w">      </span><span class="c">! (periodic ghosts included).  Physical corner index p ∈ 1..ni</span>
+<span class="w">      </span><span class="c">! (c = ni+1 is the periodic image of c = 1); mirror p' = ni+2-p</span>
+<span class="w">      </span><span class="c">! modulo ni.  The two self-conjugate corners p = 1 and p = ni/2+1 are</span>
+<span class="w">      </span><span class="c">! the bipoles: a vector component is zeroed there, a scalar is left</span>
+<span class="w">      </span><span class="c">! as is.  West-half columns take sgn*mirror; the east half is the</span>
+<span class="w">      </span><span class="c">! read-only source.</span>
+<span class="w">      </span><span class="k">do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">i</span><span class="o">=</span><span class="mi">1</span><span class="p">:</span><span class="n">nx_face</span><span class="p">)</span><span class="w"> </span><span class="n">local</span><span class="p">(</span><span class="n">p</span><span class="p">,</span><span class="w"> </span><span class="n">pm</span><span class="p">)</span>
+<span class="w">         </span><span class="n">p</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">modulo</span><span class="p">(</span><span class="n">i</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">i_lo</span><span class="p">,</span><span class="w"> </span><span class="n">nx_phys</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">         </span><span class="n">pm</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">modulo</span><span class="p">(</span><span class="n">nx_phys</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">p</span><span class="p">,</span><span class="w"> </span><span class="n">nx_phys</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">p</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">pm</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            </span><span class="n">fld</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j_fold</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sgn</span><span class="o">*</span><span class="n">fld</span><span class="p">(</span><span class="n">nghost</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">pm</span><span class="p">,</span><span class="w"> </span><span class="n">j_fold</span><span class="p">)</span>
+<span class="w">         </span><span class="k">else if</span><span class="w"> </span><span class="p">(</span><span class="n">p</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="n">pm</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">negate</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">            </span><span class="n">fld</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j_fold</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">         </span><span class="k">end if</span>
+<span class="k">      end do</span>
+<span class="k">   end subroutine </span><span class="n">fold_north_corner_2d</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-11-13 23:21 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

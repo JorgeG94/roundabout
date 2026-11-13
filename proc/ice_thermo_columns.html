@@ -1,0 +1,1811 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>ice_thermo_columns &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>ice_thermo_columns
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.1% of total for procedures.">75 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ice_column.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ice_column.f90.html'>rdb_ice_column.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ice_column.html'>rdb_ice_column</a></li>
+            <li class="breadcrumb-item active" aria-current="page">ice_thermo_columns</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/ice_thermo_columns.html#variable-cat">cat</a>
+            <a class="list-group-item" href="../proc/ice_thermo_columns.html#variable-enth_ice_col">enth_ice_col</a>
+            <a class="list-group-item" href="../proc/ice_thermo_columns.html#variable-enth_snow_pt~2">enth_snow_pt</a>
+            <a class="list-group-item" href="../proc/ice_thermo_columns.html#variable-h2o_ice_to_ocn_pt">h2o_ice_to_ocn_pt</a>
+            <a class="list-group-item" href="../proc/ice_thermo_columns.html#variable-h2o_ocn_to_ice_pt">h2o_ocn_to_ice_pt</a>
+            <a class="list-group-item" href="../proc/ice_thermo_columns.html#variable-heat_to_ocn_pt">heat_to_ocn_pt</a>
+            <a class="list-group-item" href="../proc/ice_thermo_columns.html#variable-i~33">i</a>
+            <a class="list-group-item" href="../proc/ice_thermo_columns.html#variable-i_hi">i_hi</a>
+            <a class="list-group-item" href="../proc/ice_thermo_columns.html#variable-i_lo">i_lo</a>
+            <a class="list-group-item" href="../proc/ice_thermo_columns.html#variable-j~33">j</a>
+            <a class="list-group-item" href="../proc/ice_thermo_columns.html#variable-j_hi">j_hi</a>
+            <a class="list-group-item" href="../proc/ice_thermo_columns.html#variable-j_lo">j_lo</a>
+            <a class="list-group-item" href="../proc/ice_thermo_columns.html#variable-m_ice_pt">m_ice_pt</a>
+            <a class="list-group-item" href="../proc/ice_thermo_columns.html#variable-m_snow_pt">m_snow_pt</a>
+            <a class="list-group-item" href="../proc/ice_thermo_columns.html#variable-melt_bot_pt">melt_bot_pt</a>
+            <a class="list-group-item" href="../proc/ice_thermo_columns.html#variable-melt_top_pt">melt_top_pt</a>
+            <a class="list-group-item" href="../proc/ice_thermo_columns.html#variable-sal_ice_col">sal_ice_col</a>
+            <a class="list-group-item" href="../proc/ice_thermo_columns.html#variable-snow_to_ice_pt">snow_to_ice_pt</a>
+            <a class="list-group-item" href="../proc/ice_thermo_columns.html#variable-sw_thru_pt">sw_thru_pt</a>
+            <a class="list-group-item" href="../proc/ice_thermo_columns.html#variable-tsurf_pt">tsurf_pt</a>
+            <a class="list-group-item" href="../proc/ice_thermo_columns.html#variable-want_melt">want_melt</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/ice_thermo_columns.html#src">ice_thermo_columns</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>public pure subroutine ice_thermo_columns(nghost, nx, ny, ncat, nk, dtt, do_snow_ice, wet_mask, m_ice, m_snow, enth_ice, enth_snow, sal_ice, sf_0, dsf_dt, sw_dn, fprec, tfw, fb, sst, s_surf, tsurf_out, h2o_ocn_to_ice, h2o_ice_to_ocn, heat_to_ocn, sw_thru, snow_to_ice, melt_top_ice, melt_bot_ice)  
+</h2>
+    
+
+    <p><code>do concurrent</code> cell driver: PHYSICAL cells only, inner <code>if</code>
+gate (never a masked DC header), serial <code>do cat</code> loop inside.
+Per (i,j,cat): outputs zeroed unconditionally, then gated on
+<code>wet_mask &gt; 0.5 .and. m_ice &gt; ICE_RHO_ICE*H_VANISHED</code> (dynamic-
+vanish taxonomy: skip intact, never clamp/divide a vanished
+column). <code>part_size</code> is deliberately NOT an argument — thermo
+is per unit ice area.</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nghost"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nghost</strong></td>
+            <td>
+                <p>Grid + category + layer extents (declared first — decl-order).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx~32"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx</strong></td>
+            <td>
+                <p>Grid + category + layer extents (declared first — decl-order).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny~32"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny</strong></td>
+            <td>
+                <p>Grid + category + layer extents (declared first — decl-order).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ncat"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ncat</strong></td>
+            <td>
+                <p>Grid + category + layer extents (declared first — decl-order).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nk~3"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nk</strong></td>
+            <td>
+                <p>Grid + category + layer extents (declared first — decl-order).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dtt~5"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dtt</strong></td>
+            <td>
+                <p>Timestep (s).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-do_snow_ice~2"></span>
+              logical,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>do_snow_ice</strong></td>
+            <td>
+                <p>Archimedes freeboard flood gate (<code>&amp;ocean_ice_nml snow_ice</code>,
+PR 27), captured by value into the DC loop (same treatment
+as <code>dtt</code>). <code>.false.</code> (the default) is a bit-identical no-op.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-wet_mask~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>wet_mask</strong>(nx,ny)</td>
+            <td>
+                <p>Ocean wet mask (&gt;0.5 = wet).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-m_ice"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>m_ice</strong>(nx,ny,ncat)</td>
+            <td>
+                <p>Total ice mass per unit area per category (kg/m²).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-m_snow~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>m_snow</strong>(nx,ny,ncat)</td>
+            <td>
+                <p>Snow mass per unit area per category (kg/m²).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-enth_ice"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>enth_ice</strong>(nx,ny,ncat,nk)</td>
+            <td>
+                <p>Ice specific enthalpy (J/kg), BOTTOM-UP (k=1 = ice bottom).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-enth_snow"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>enth_snow</strong>(nx,ny,ncat,1)</td>
+            <td>
+                <p>Snow specific enthalpy (J/kg).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sal_ice"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>sal_ice</strong>(nx,ny,ncat,nk)</td>
+            <td>
+                <p>Ice bulk salinity (PSU), BOTTOM-UP.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sf_0~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>sf_0</strong>(nx,ny)</td>
+            <td>
+                <p>Linearized SEB intercept (W/m²), upward-positive.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dsf_dt~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dsf_dt</strong>(nx,ny)</td>
+            <td>
+                <p>Linearized SEB slope (W/m²/K), upward-positive.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sw_dn~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>sw_dn</strong>(nx,ny)</td>
+            <td>
+                <p>Downwelling shortwave at the surface (W/m²).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-fprec"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>fprec</strong>(nx,ny)</td>
+            <td>
+                <p>Frozen-precipitation rate onto the ice top (kg/m²/s), &gt;= 0 —
+PR 26 snowfall seam (<code>ice%atm_fprec</code>). Passed to
+<code>ice_column_step</code> as <code>fprec(i,j)*dtt</code>; 0 (the
+<code>&amp;ocean_ice_nml snowfall=0</code> default) is a bit-identical no-op.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-tfw~3"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>tfw</strong>(nx,ny)</td>
+            <td>
+                <p>Seawater freezing temperature at the ice base (degC).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-fb~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>fb</strong>(nx,ny)</td>
+            <td>
+                <p>Ocean -&gt; ice-base heat flux (W/m²).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sst~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>sst</strong>(nx,ny)</td>
+            <td>
+                <p>Sea-surface temperature (degC).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-s_surf~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>s_surf</strong>(nx,ny)</td>
+            <td>
+                <p>Sea-surface salinity (PSU).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-tsurf_out"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>tsurf_out</strong>(nx,ny,ncat)</td>
+            <td>
+                <p>Surface skin temperature (degC).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h2o_ocn_to_ice~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h2o_ocn_to_ice</strong>(nx,ny,ncat)</td>
+            <td>
+                <p>Mass flux frozen from the ocean onto the ice base (kg/m²).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h2o_ice_to_ocn~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h2o_ice_to_ocn</strong>(nx,ny,ncat)</td>
+            <td>
+                <p>Meltwater mass flux to the ocean (kg/m²).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-heat_to_ocn~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>heat_to_ocn</strong>(nx,ny,ncat)</td>
+            <td>
+                <p>Leftover melt heat dumped to the ocean (J/m²).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sw_thru~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>sw_thru</strong>(nx,ny,ncat)</td>
+            <td>
+                <p>Shortwave transmitted through the ice to the ocean (W/m²).</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-snow_to_ice~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>snow_to_ice</strong>(nx,ny,ncat)</td>
+            <td>
+                <p>Mass converted from snow to the top ice layer this call
+(kg/m²), &gt;= 0 — snow-to-ice conversion (PR 27). Zeroed unconditionally
+every thermo step, same lifecycle as <code>sw_thru</code>.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-melt_top_ice~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>melt_top_ice</strong>(nx,ny,ncat)</td>
+            <td>
+                <p>ICE-only top-melt share per category (kg/m², k &gt;= 1). Optional
+(the window-mass diagnostics); zeroed every step when present.</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-melt_bot_ice~2"></span>
+              real(kind=wp),
+            </td>
+<td>intent(inout),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>melt_bot_ice</strong>(nx,ny,ncat)</td>
+            <td>
+                <p>ICE-only bottom-melt share per category (kg/m², k &gt;= 1).</p>
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~ice_thermo_columns~~CallsGraph Pages: 1 -->
+<svg id="procice_thermo_columnsCallsGraph" width="641pt" height="453pt"
+ viewBox="0.00 0.00 641.00 453.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~ice_thermo_columns~~CallsGraph" class="graph" transform="scale(0.81985 0.81985) rotate(0) translate(4 548.27)">
+<title>proc~~ice_thermo_columns~~CallsGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-548.27 777.85,-548.27 777.85,4 -4,4"/>
+<!-- proc~ice_thermo_columns -->
+<g id="proc~~ice_thermo_columns~~CallsGraph_node1" class="node">
+<title>proc~ice_thermo_columns</title>
+<polygon fill="none" stroke="black" points="121.77,-249.27 0,-249.27 0,-225 121.77,-225 121.77,-249.27"/>
+<text xml:space="preserve" text-anchor="middle" x="60.88" y="-233.53" font-family="Helvetica,sans-Serif" font-size="10.50">ice_thermo_columns</text>
+</g>
+<!-- local -->
+<g id="proc~~ice_thermo_columns~~CallsGraph_node2" class="node">
+<title>local</title>
+<polygon fill="#777777" stroke="#777777" points="234.78,-270.27 180.78,-270.27 180.78,-246 234.78,-246 234.78,-270.27"/>
+<text xml:space="preserve" text-anchor="middle" x="207.78" y="-254.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">local</text>
+</g>
+<!-- proc~ice_thermo_columns&#45;&gt;local -->
+<g id="proc~~ice_thermo_columns~~CallsGraph_edge1" class="edge">
+<title>proc~ice_thermo_columns&#45;&gt;local</title>
+<path fill="none" stroke="#ff0000" d="M122.07,-245.86C138.15,-248.19 155.05,-250.64 169.49,-252.73"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="168.59,-256.14 178.99,-254.11 169.59,-249.21 168.59,-256.14"/>
+</g>
+<!-- proc~ice_column_step -->
+<g id="proc~~ice_thermo_columns~~CallsGraph_node3" class="node">
+<title>proc~ice_column_step</title>
+<g id="a_proc~~ice_thermo_columns~~CallsGraph_node3"><a xlink:href="../proc/ice_column_step.html" xlink:title="ice_column_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="257.79,-228.27 157.77,-228.27 157.77,-204 257.79,-204 257.79,-228.27"/>
+<text xml:space="preserve" text-anchor="middle" x="207.78" y="-212.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_column_step</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_thermo_columns&#45;&gt;proc~ice_column_step -->
+<g id="proc~~ice_thermo_columns~~CallsGraph_edge2" class="edge">
+<title>proc~ice_thermo_columns&#45;&gt;proc~ice_column_step</title>
+<path fill="none" stroke="#ff0000" d="M122.07,-228.41C130.11,-227.25 138.35,-226.05 146.38,-224.89"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="146.67,-228.38 156.07,-223.48 145.67,-221.46 146.67,-228.38"/>
+</g>
+<!-- proc~ice_bottom_freeze -->
+<g id="proc~~ice_thermo_columns~~CallsGraph_node4" class="node">
+<title>proc~ice_bottom_freeze</title>
+<g id="a_proc~~ice_thermo_columns~~CallsGraph_node4"><a xlink:href="../proc/ice_bottom_freeze.html" xlink:title="ice_bottom_freeze">
+<polygon fill="#d9534f" stroke="#d9534f" points="412.18,-544.27 303.16,-544.27 303.16,-520 412.18,-520 412.18,-544.27"/>
+<text xml:space="preserve" text-anchor="middle" x="357.67" y="-528.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_bottom_freeze</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_column_step&#45;&gt;proc~ice_bottom_freeze -->
+<g id="proc~~ice_thermo_columns~~CallsGraph_edge3" class="edge">
+<title>proc~ice_column_step&#45;&gt;proc~ice_bottom_freeze</title>
+<path fill="none" stroke="#00ffff" d="M248.41,-228.5C251.98,-230.89 255.21,-233.74 257.79,-237.13 330.74,-333.2 220.23,-410.54 293.79,-506.13 295.82,-508.77 298.16,-511.14 300.72,-513.27"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="298.64,-516.08 308.88,-518.78 302.55,-510.28 298.64,-516.08"/>
+</g>
+<!-- proc~ice_bottom_melt_peel -->
+<g id="proc~~ice_thermo_columns~~CallsGraph_node5" class="node">
+<title>proc~ice_bottom_melt_peel</title>
+<g id="a_proc~~ice_thermo_columns~~CallsGraph_node5"><a xlink:href="../proc/ice_bottom_melt_peel.html" xlink:title="ice_bottom_melt_peel">
+<polygon fill="#d9534f" stroke="#d9534f" points="586.08,-510.27 457.56,-510.27 457.56,-486 586.08,-486 586.08,-510.27"/>
+<text xml:space="preserve" text-anchor="middle" x="521.82" y="-494.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_bottom_melt_peel</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_column_step&#45;&gt;proc~ice_bottom_melt_peel -->
+<g id="proc~~ice_thermo_columns~~CallsGraph_edge4" class="edge">
+<title>proc~ice_column_step&#45;&gt;proc~ice_bottom_melt_peel</title>
+<path fill="none" stroke="#00ffff" d="M248.33,-228.56C251.92,-230.95 255.17,-233.78 257.79,-237.13 320.55,-317.73 221.25,-392.22 293.79,-464.13 332.91,-502.92 395.98,-509.74 445.73,-507.79"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="445.78,-511.3 455.58,-507.27 445.41,-504.31 445.78,-511.3"/>
+</g>
+<!-- proc~ice_enth_from_ts -->
+<g id="proc~~ice_thermo_columns~~CallsGraph_node6" class="node">
+<title>proc~ice_enth_from_ts</title>
+<g id="a_proc~~ice_thermo_columns~~CallsGraph_node6"><a xlink:href="../proc/ice_enth_from_ts.html" xlink:title="ice_enth_from_ts">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="748.35,-390.27 647.58,-390.27 647.58,-366 748.35,-366 748.35,-390.27"/>
+<text xml:space="preserve" text-anchor="middle" x="697.96" y="-374.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_enth_from_ts</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_column_step&#45;&gt;proc~ice_enth_from_ts -->
+<g id="proc~~ice_thermo_columns~~CallsGraph_edge5" class="edge">
+<title>proc~ice_column_step&#45;&gt;proc~ice_enth_from_ts</title>
+<path fill="none" stroke="#00ffff" d="M245.39,-228.72C249.83,-231.12 254.09,-233.91 257.79,-237.13 281.22,-257.58 271.29,-275.67 293.79,-297.13 353.58,-354.16 377.43,-364.97 457.56,-385.13 516.92,-400.07 587.17,-395.52 636.16,-388.95"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="636.6,-392.42 646.01,-387.55 635.62,-385.49 636.6,-392.42"/>
+</g>
+<!-- proc~ice_enthalpy_liquid -->
+<g id="proc~~ice_thermo_columns~~CallsGraph_node7" class="node">
+<title>proc~ice_enthalpy_liquid</title>
+<g id="a_proc~~ice_thermo_columns~~CallsGraph_node7"><a xlink:href="../proc/ice_enthalpy_liquid.html" xlink:title="ice_enthalpy_liquid">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="754.72,-186.27 641.2,-186.27 641.2,-162 754.72,-162 754.72,-186.27"/>
+<text xml:space="preserve" text-anchor="middle" x="697.96" y="-170.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_enthalpy_liquid</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_column_step&#45;&gt;proc~ice_enthalpy_liquid -->
+<g id="proc~~ice_thermo_columns~~CallsGraph_edge6" class="edge">
+<title>proc~ice_column_step&#45;&gt;proc~ice_enthalpy_liquid</title>
+<path fill="none" stroke="#00ffff" d="M238.26,-203.6C254.43,-197.09 274.96,-189.42 293.79,-184.13 419.57,-148.84 456.02,-140.93 586.08,-153.13 600.54,-154.49 615.92,-156.82 630.47,-159.45"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="629.45,-162.82 639.93,-161.23 630.74,-155.94 629.45,-162.82"/>
+</g>
+<!-- proc~ice_optics_csim4 -->
+<g id="proc~~ice_thermo_columns~~CallsGraph_node8" class="node">
+<title>proc~ice_optics_csim4</title>
+<g id="a_proc~~ice_thermo_columns~~CallsGraph_node8"><a xlink:href="../proc/ice_optics_csim4.html" xlink:title="ice_optics_csim4">
+<polygon fill="#d9534f" stroke="#d9534f" points="572.2,-186.27 471.43,-186.27 471.43,-162 572.2,-162 572.2,-186.27"/>
+<text xml:space="preserve" text-anchor="middle" x="521.82" y="-170.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_optics_csim4</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_column_step&#45;&gt;proc~ice_optics_csim4 -->
+<g id="proc~~ice_thermo_columns~~CallsGraph_edge7" class="edge">
+<title>proc~ice_column_step&#45;&gt;proc~ice_optics_csim4</title>
+<path fill="none" stroke="#00ffff" d="M258.22,-209.48C312.84,-202.13 400.83,-190.29 459.72,-182.36"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="460.15,-185.83 469.59,-181.03 459.21,-178.9 460.15,-185.83"/>
+</g>
+<!-- proc~ice_rebalance_layers -->
+<g id="proc~~ice_thermo_columns~~CallsGraph_node9" class="node">
+<title>proc~ice_rebalance_layers</title>
+<g id="a_proc~~ice_thermo_columns~~CallsGraph_node9"><a xlink:href="../proc/ice_rebalance_layers.html" xlink:title="ice_rebalance_layers">
+<polygon fill="#d9534f" stroke="#d9534f" points="419.31,-108.27 296.04,-108.27 296.04,-84 419.31,-84 419.31,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="357.67" y="-92.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_rebalance_layers</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_column_step&#45;&gt;proc~ice_rebalance_layers -->
+<g id="proc~~ice_thermo_columns~~CallsGraph_edge8" class="edge">
+<title>proc~ice_column_step&#45;&gt;proc~ice_rebalance_layers</title>
+<path fill="none" stroke="#00ffff" d="M217.32,-203.54C231.26,-183.81 260.69,-145.45 293.79,-122.13 298.38,-118.9 303.43,-115.97 308.62,-113.34"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="309.71,-116.7 317.3,-109.31 306.76,-110.35 309.71,-116.7"/>
+</g>
+<!-- proc~ice_snow_accumulate -->
+<g id="proc~~ice_thermo_columns~~CallsGraph_node10" class="node">
+<title>proc~ice_snow_accumulate</title>
+<g id="a_proc~~ice_thermo_columns~~CallsGraph_node10"><a xlink:href="../proc/ice_snow_accumulate.html" xlink:title="ice_snow_accumulate">
+<polygon fill="#d9534f" stroke="#d9534f" points="421.56,-66.27 293.79,-66.27 293.79,-42 421.56,-42 421.56,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="357.67" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_snow_accumulate</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_column_step&#45;&gt;proc~ice_snow_accumulate -->
+<g id="proc~~ice_thermo_columns~~CallsGraph_edge9" class="edge">
+<title>proc~ice_column_step&#45;&gt;proc~ice_snow_accumulate</title>
+<path fill="none" stroke="#00ffff" d="M212.94,-203.57C222.65,-176.17 249.39,-110.69 293.79,-75.13 295.08,-74.1 296.43,-73.12 297.81,-72.18"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="299.22,-75.4 306.18,-67.41 295.76,-69.32 299.22,-75.4"/>
+</g>
+<!-- proc~ice_snow_ice_flood -->
+<g id="proc~~ice_thermo_columns~~CallsGraph_node11" class="node">
+<title>proc~ice_snow_ice_flood</title>
+<g id="a_proc~~ice_thermo_columns~~CallsGraph_node11"><a xlink:href="../proc/ice_snow_ice_flood.html" xlink:title="ice_snow_ice_flood">
+<polygon fill="#d9534f" stroke="#d9534f" points="414.06,-24.27 301.29,-24.27 301.29,0 414.06,0 414.06,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="357.67" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_snow_ice_flood</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_column_step&#45;&gt;proc~ice_snow_ice_flood -->
+<g id="proc~~ice_thermo_columns~~CallsGraph_edge10" class="edge">
+<title>proc~ice_column_step&#45;&gt;proc~ice_snow_ice_flood</title>
+<path fill="none" stroke="#00ffff" d="M210.99,-203.9C217.51,-171.28 239.71,-81.45 293.79,-33.13 294.71,-32.31 295.67,-31.52 296.65,-30.76"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="298.34,-33.83 304.9,-25.52 294.59,-27.92 298.34,-33.83"/>
+</g>
+<!-- proc~ice_temp_from_en_s -->
+<g id="proc~~ice_thermo_columns~~CallsGraph_node12" class="node">
+<title>proc~ice_temp_from_en_s</title>
+<g id="a_proc~~ice_thermo_columns~~CallsGraph_node12"><a xlink:href="../proc/ice_temp_from_en_s.html" xlink:title="ice_temp_from_en_s">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="581.58,-228.27 462.06,-228.27 462.06,-204 581.58,-204 581.58,-228.27"/>
+<text xml:space="preserve" text-anchor="middle" x="521.82" y="-212.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_temp_from_en_s</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_column_step&#45;&gt;proc~ice_temp_from_en_s -->
+<g id="proc~~ice_thermo_columns~~CallsGraph_edge11" class="edge">
+<title>proc~ice_column_step&#45;&gt;proc~ice_temp_from_en_s</title>
+<path fill="none" stroke="#00ffff" d="M258.22,-216.13C310.02,-216.13 391.84,-216.13 450.38,-216.13"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="450.25,-219.64 460.25,-216.14 450.25,-212.64 450.25,-219.64"/>
+</g>
+<!-- proc~ice_temp_sis2 -->
+<g id="proc~~ice_thermo_columns~~CallsGraph_node13" class="node">
+<title>proc~ice_temp_sis2</title>
+<g id="a_proc~~ice_thermo_columns~~CallsGraph_node13"><a xlink:href="../proc/ice_temp_sis2.html" xlink:title="ice_temp_sis2">
+<polygon fill="#d9534f" stroke="#d9534f" points="400.56,-288.27 314.79,-288.27 314.79,-264 400.56,-264 400.56,-288.27"/>
+<text xml:space="preserve" text-anchor="middle" x="357.67" y="-272.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_temp_sis2</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_column_step&#45;&gt;proc~ice_temp_sis2 -->
+<g id="proc~~ice_thermo_columns~~CallsGraph_edge12" class="edge">
+<title>proc~ice_column_step&#45;&gt;proc~ice_temp_sis2</title>
+<path fill="none" stroke="#00ffff" d="M239.78,-228.71C261.67,-237.59 291.24,-249.59 315.17,-259.3"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="313.73,-262.49 324.31,-263 316.36,-256 313.73,-262.49"/>
+</g>
+<!-- proc~ice_top_melt_peel -->
+<g id="proc~~ice_thermo_columns~~CallsGraph_node14" class="node">
+<title>proc~ice_top_melt_peel</title>
+<g id="a_proc~~ice_thermo_columns~~CallsGraph_node14"><a xlink:href="../proc/ice_top_melt_peel.html" xlink:title="ice_top_melt_peel">
+<polygon fill="#d9534f" stroke="#d9534f" points="575.58,-468.27 468.06,-468.27 468.06,-444 575.58,-444 575.58,-468.27"/>
+<text xml:space="preserve" text-anchor="middle" x="521.82" y="-452.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_top_melt_peel</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_column_step&#45;&gt;proc~ice_top_melt_peel -->
+<g id="proc~~ice_thermo_columns~~CallsGraph_edge13" class="edge">
+<title>proc~ice_column_step&#45;&gt;proc~ice_top_melt_peel</title>
+<path fill="none" stroke="#00ffff" d="M248.24,-228.63C251.84,-231 255.13,-233.81 257.79,-237.13 312.33,-305.25 229.96,-370.64 293.79,-430.13 336.69,-470.12 405.74,-472.6 456.44,-467.55"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="456.56,-471.06 466.11,-466.46 455.78,-464.1 456.56,-471.06"/>
+</g>
+<!-- proc~ice_enthalpy_liquid_freeze -->
+<g id="proc~~ice_thermo_columns~~CallsGraph_node15" class="node">
+<title>proc~ice_enthalpy_liquid_freeze</title>
+<g id="a_proc~~ice_thermo_columns~~CallsGraph_node15"><a xlink:href="../proc/ice_enthalpy_liquid_freeze.html" xlink:title="ice_enthalpy_liquid_freeze">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="773.85,-468.27 622.08,-468.27 622.08,-444 773.85,-444 773.85,-468.27"/>
+<text xml:space="preserve" text-anchor="middle" x="697.96" y="-452.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_enthalpy_liquid_freeze</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_bottom_melt_peel&#45;&gt;proc~ice_enthalpy_liquid_freeze -->
+<g id="proc~~ice_thermo_columns~~CallsGraph_edge14" class="edge">
+<title>proc~ice_bottom_melt_peel&#45;&gt;proc~ice_enthalpy_liquid_freeze</title>
+<path fill="none" stroke="#ff8b00" d="M575.07,-485.53C593.49,-481.09 614.41,-476.05 633.65,-471.41"/>
+<polygon fill="#ff8b00" stroke="#ff8b00" points="634.38,-474.83 643.28,-469.08 632.74,-468.02 634.38,-474.83"/>
+</g>
+<!-- proc~ice_t_freeze -->
+<g id="proc~~ice_thermo_columns~~CallsGraph_node16" class="node">
+<title>proc~ice_t_freeze</title>
+<g id="a_proc~~ice_thermo_columns~~CallsGraph_node16"><a xlink:href="../proc/ice_t_freeze.html" xlink:title="ice_t_freeze">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="735.22,-268.27 660.7,-268.27 660.7,-244 735.22,-244 735.22,-268.27"/>
+<text xml:space="preserve" text-anchor="middle" x="697.96" y="-252.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_t_freeze</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_optics_csim4&#45;&gt;proc~ice_t_freeze -->
+<g id="proc~~ice_thermo_columns~~CallsGraph_edge15" class="edge">
+<title>proc~ice_optics_csim4&#45;&gt;proc~ice_t_freeze</title>
+<path fill="none" stroke="#00ff2e" d="M564.4,-186.73C571.72,-189.29 579.19,-192.12 586.08,-195.13 614.41,-207.51 645.1,-224.71 666.99,-237.69"/>
+<polygon fill="#00ff2e" stroke="#00ff2e" points="665.02,-240.59 675.39,-242.73 668.62,-234.58 665.02,-240.59"/>
+</g>
+<!-- proc~ice_temp_sis2&#45;&gt;proc~ice_enth_from_ts -->
+<g id="proc~~ice_thermo_columns~~CallsGraph_edge16" class="edge">
+<title>proc~ice_temp_sis2&#45;&gt;proc~ice_enth_from_ts</title>
+<path fill="none" stroke="#e700ff" d="M368.95,-288.74C385.38,-307.86 419.6,-343.59 457.56,-359.13 514.83,-382.59 586.18,-385.24 636.02,-383.31"/>
+<polygon fill="#e700ff" stroke="#e700ff" points="635.92,-386.82 645.75,-382.86 635.6,-379.83 635.92,-386.82"/>
+</g>
+<!-- proc~ice_temp_sis2&#45;&gt;proc~ice_temp_from_en_s -->
+<g id="proc~~ice_thermo_columns~~CallsGraph_edge18" class="edge">
+<title>proc~ice_temp_sis2&#45;&gt;proc~ice_temp_from_en_s</title>
+<path fill="none" stroke="#e700ff" d="M392.67,-263.56C416.99,-254.56 449.96,-242.36 476.37,-232.58"/>
+<polygon fill="#e700ff" stroke="#e700ff" points="477.29,-235.97 485.45,-229.22 474.86,-229.41 477.29,-235.97"/>
+</g>
+<!-- proc~ice_temp_sis2&#45;&gt;proc~ice_t_freeze -->
+<g id="proc~~ice_thermo_columns~~CallsGraph_edge17" class="edge">
+<title>proc~ice_temp_sis2&#45;&gt;proc~ice_t_freeze</title>
+<path fill="none" stroke="#e700ff" d="M400.84,-273.64C463.91,-269.91 582.5,-262.9 648.87,-258.98"/>
+<polygon fill="#e700ff" stroke="#e700ff" points="648.95,-262.48 658.73,-258.4 648.54,-255.49 648.95,-262.48"/>
+</g>
+<!-- proc~laytemp_sis2 -->
+<g id="proc~~ice_thermo_columns~~CallsGraph_node17" class="node">
+<title>proc~laytemp_sis2</title>
+<g id="a_proc~~ice_thermo_columns~~CallsGraph_node17"><a xlink:href="../proc/laytemp_sis2.html" xlink:title="laytemp_sis2">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="562.08,-350.27 481.56,-350.27 481.56,-326 562.08,-326 562.08,-350.27"/>
+<text xml:space="preserve" text-anchor="middle" x="521.82" y="-334.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">laytemp_sis2</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_temp_sis2&#45;&gt;proc~laytemp_sis2 -->
+<g id="proc~~ice_thermo_columns~~CallsGraph_edge19" class="edge">
+<title>proc~ice_temp_sis2&#45;&gt;proc~laytemp_sis2</title>
+<path fill="none" stroke="#e700ff" d="M387.45,-288.71C407.06,-297.13 433.7,-308.24 457.56,-317.13 461.89,-318.75 466.41,-320.37 470.95,-321.96"/>
+<polygon fill="#e700ff" stroke="#e700ff" points="469.49,-325.16 480.09,-325.09 471.76,-318.54 469.49,-325.16"/>
+</g>
+<!-- proc~update_lay_enth -->
+<g id="proc~~ice_thermo_columns~~CallsGraph_node18" class="node">
+<title>proc~update_lay_enth</title>
+<g id="a_proc~~ice_thermo_columns~~CallsGraph_node18"><a xlink:href="../proc/update_lay_enth.html" xlink:title="update_lay_enth">
+<polygon fill="#d9534f" stroke="#d9534f" points="571.45,-308.27 472.18,-308.27 472.18,-284 571.45,-284 571.45,-308.27"/>
+<text xml:space="preserve" text-anchor="middle" x="521.82" y="-292.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">update_lay_enth</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_temp_sis2&#45;&gt;proc~update_lay_enth -->
+<g id="proc~~ice_thermo_columns~~CallsGraph_edge20" class="edge">
+<title>proc~ice_temp_sis2&#45;&gt;proc~update_lay_enth</title>
+<path fill="none" stroke="#e700ff" d="M400.85,-281.34C419.14,-283.59 440.88,-286.27 460.8,-288.73"/>
+<polygon fill="#e700ff" stroke="#e700ff" points="460.1,-292.17 470.46,-289.92 460.96,-285.22 460.1,-292.17"/>
+</g>
+<!-- proc~ice_top_melt_peel&#45;&gt;proc~ice_enthalpy_liquid_freeze -->
+<g id="proc~~ice_thermo_columns~~CallsGraph_edge21" class="edge">
+<title>proc~ice_top_melt_peel&#45;&gt;proc~ice_enthalpy_liquid_freeze</title>
+<path fill="none" stroke="#ff008b" d="M576.02,-456.13C586.93,-456.13 598.69,-456.13 610.43,-456.13"/>
+<polygon fill="#ff008b" stroke="#ff008b" points="610.15,-459.64 620.15,-456.14 610.14,-452.64 610.15,-459.64"/>
+</g>
+<!-- proc~update_lay_enth&#45;&gt;proc~ice_enth_from_ts -->
+<g id="proc~~ice_thermo_columns~~CallsGraph_edge22" class="edge">
+<title>proc~update_lay_enth&#45;&gt;proc~ice_enth_from_ts</title>
+<path fill="none" stroke="#7f00ff" d="M564.4,-308.73C571.72,-311.29 579.19,-314.12 586.08,-317.13 614.41,-329.51 645.1,-346.71 666.99,-359.69"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="665.02,-362.59 675.39,-364.73 668.62,-356.58 665.02,-362.59"/>
+</g>
+<!-- proc~update_lay_enth&#45;&gt;proc~ice_enthalpy_liquid -->
+<g id="proc~~ice_thermo_columns~~CallsGraph_edge23" class="edge">
+<title>proc~update_lay_enth&#45;&gt;proc~ice_enthalpy_liquid</title>
+<path fill="none" stroke="#7f00ff" d="M540.8,-283.54C571.38,-262.11 633.7,-218.46 669.68,-193.25"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="671.66,-196.14 677.84,-187.53 667.64,-190.4 671.66,-196.14"/>
+</g>
+<!-- proc~update_lay_enth&#45;&gt;proc~ice_enthalpy_liquid_freeze -->
+<g id="proc~~ice_thermo_columns~~CallsGraph_edge24" class="edge">
+<title>proc~update_lay_enth&#45;&gt;proc~ice_enthalpy_liquid_freeze</title>
+<path fill="none" stroke="#7f00ff" d="M571.79,-307.63C576.98,-310.19 581.89,-313.32 586.08,-317.13 615.5,-343.94 597.46,-367.86 622.08,-399.13 634.02,-414.3 650.88,-427.61 665.59,-437.54"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="663.3,-440.23 673.59,-442.74 667.12,-434.36 663.3,-440.23"/>
+</g>
+<!-- proc~update_lay_enth&#45;&gt;proc~ice_t_freeze -->
+<g id="proc~~ice_thermo_columns~~CallsGraph_edge25" class="edge">
+<title>proc~update_lay_enth&#45;&gt;proc~ice_t_freeze</title>
+<path fill="none" stroke="#7f00ff" d="M571.79,-284.89C596.02,-279.32 625.16,-272.63 649.22,-267.1"/>
+<polygon fill="#7f00ff" stroke="#7f00ff" points="649.79,-270.56 658.75,-264.91 648.22,-263.74 649.79,-270.56"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocice_thermo_columnsCallsGraph = svgPanZoom('#procice_thermo_columnsCallsGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~ice_thermo_columns~~CalledByGraph Pages: 1 -->
+<svg id="procice_thermo_columnsCalledByGraph" width="641pt" height="70pt"
+ viewBox="0.00 0.00 641.00 70.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~ice_thermo_columns~~CalledByGraph" class="graph" transform="scale(0.945986 0.945986) rotate(0) translate(4 70.27)">
+<title>proc~~ice_thermo_columns~~CalledByGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-70.27 673.6,-70.27 673.6,4 -4,4"/>
+<!-- proc~ice_thermo_columns -->
+<g id="proc~~ice_thermo_columns~~CalledByGraph_node1" class="node">
+<title>proc~ice_thermo_columns</title>
+<polygon fill="none" stroke="black" points="669.6,-45.27 547.83,-45.27 547.83,-21 669.6,-21 669.6,-45.27"/>
+<text xml:space="preserve" text-anchor="middle" x="608.72" y="-29.53" font-family="Helvetica,sans-Serif" font-size="10.50">ice_thermo_columns</text>
+</g>
+<!-- proc~ice_thermo_driver_step -->
+<g id="proc~~ice_thermo_columns~~CalledByGraph_node2" class="node">
+<title>proc~ice_thermo_driver_step</title>
+<g id="a_proc~~ice_thermo_columns~~CalledByGraph_node2"><a xlink:href="../proc/ice_thermo_driver_step.html" xlink:title="ice_thermo_driver_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="511.83,-45.27 375.81,-45.27 375.81,-21 511.83,-21 511.83,-45.27"/>
+<text xml:space="preserve" text-anchor="middle" x="443.82" y="-29.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ice_thermo_driver_step</text>
+</a>
+</g>
+</g>
+<!-- proc~ice_thermo_driver_step&#45;&gt;proc~ice_thermo_columns -->
+<g id="proc~~ice_thermo_columns~~CalledByGraph_edge1" class="edge">
+<title>proc~ice_thermo_driver_step&#45;&gt;proc~ice_thermo_columns</title>
+<path fill="none" stroke="#ff0000" d="M512.02,-33.13C520,-33.13 528.17,-33.13 536.21,-33.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="535.94,-36.64 545.94,-33.14 535.94,-29.64 535.94,-36.64"/>
+</g>
+<!-- proc~engine_step_ice -->
+<g id="proc~~ice_thermo_columns~~CalledByGraph_node3" class="node">
+<title>proc~engine_step_ice</title>
+<g id="a_proc~~ice_thermo_columns~~CalledByGraph_node3"><a xlink:href="../proc/engine_step_ice.html" xlink:title="engine_step_ice">
+<polygon fill="#d9534f" stroke="#d9534f" points="339.81,-45.27 242.79,-45.27 242.79,-21 339.81,-21 339.81,-45.27"/>
+<text xml:space="preserve" text-anchor="middle" x="291.3" y="-29.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step_ice</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_step_ice&#45;&gt;proc~ice_thermo_driver_step -->
+<g id="proc~~ice_thermo_columns~~CalledByGraph_edge2" class="edge">
+<title>proc~engine_step_ice&#45;&gt;proc~ice_thermo_driver_step</title>
+<path fill="none" stroke="#ff0000" d="M339.93,-33.13C347.68,-33.13 355.89,-33.13 364.16,-33.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="363.92,-36.64 373.92,-33.14 363.92,-29.64 363.92,-36.64"/>
+</g>
+<!-- proc~driver_run_ocean -->
+<g id="proc~~ice_thermo_columns~~CalledByGraph_node4" class="node">
+<title>proc~driver_run_ocean</title>
+<g id="a_proc~~ice_thermo_columns~~CalledByGraph_node4"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<polygon fill="#d9534f" stroke="#d9534f" points="206.79,-66.27 102.27,-66.27 102.27,-42 206.79,-42 206.79,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="154.53" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_step_ice -->
+<g id="proc~~ice_thermo_columns~~CalledByGraph_edge3" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_step_ice</title>
+<path fill="none" stroke="#ff0000" d="M207.25,-46.08C215.12,-44.85 223.29,-43.58 231.31,-42.33"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="231.64,-45.82 240.98,-40.82 230.56,-38.9 231.64,-45.82"/>
+</g>
+<!-- proc~rdb_ocean_step -->
+<g id="proc~~ice_thermo_columns~~CalledByGraph_node5" class="node">
+<title>proc~rdb_ocean_step</title>
+<g id="a_proc~~ice_thermo_columns~~CalledByGraph_node5"><a xlink:href="../proc/rdb_ocean_step.html" xlink:title="rdb_ocean_step">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="202.29,-24.27 106.77,-24.27 106.77,0 202.29,0 202.29,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="154.53" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_step</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_step&#45;&gt;proc~engine_step_ice -->
+<g id="proc~~ice_thermo_columns~~CalledByGraph_edge4" class="edge">
+<title>proc~rdb_ocean_step&#45;&gt;proc~engine_step_ice</title>
+<path fill="none" stroke="#ff0000" d="M202.67,-19.48C211.94,-20.92 221.78,-22.46 231.39,-23.95"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="230.59,-27.37 241.01,-25.45 231.67,-20.46 230.59,-27.37"/>
+</g>
+<!-- proc~driver_run -->
+<g id="proc~~ice_thermo_columns~~CalledByGraph_node6" class="node">
+<title>proc~driver_run</title>
+<g id="a_proc~~ice_thermo_columns~~CalledByGraph_node6"><a xlink:href="../proc/driver_run.html" xlink:title="driver_run">
+<polygon fill="#d9534f" stroke="#d9534f" points="66.27,-66.27 0,-66.27 0,-42 66.27,-42 66.27,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="33.13" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run&#45;&gt;proc~driver_run_ocean -->
+<g id="proc~~ice_thermo_columns~~CalledByGraph_edge5" class="edge">
+<title>proc~driver_run&#45;&gt;proc~driver_run_ocean</title>
+<path fill="none" stroke="#ff0000" d="M66.76,-54.13C74.26,-54.13 82.48,-54.13 90.79,-54.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="90.58,-57.64 100.58,-54.14 90.58,-50.64 90.58,-57.64"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprocice_thermo_columnsCalledByGraph = svgPanZoom('#procice_thermo_columnsCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-cat"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>cat</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-enth_ice_col"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>enth_ice_col</strong>(ICE_NK_MAX)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-enth_snow_pt~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>enth_snow_pt</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h2o_ice_to_ocn_pt"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h2o_ice_to_ocn_pt</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h2o_ocn_to_ice_pt"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h2o_ocn_to_ice_pt</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-heat_to_ocn_pt"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>heat_to_ocn_pt</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-i~33"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>i</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-i_hi"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>i_hi</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-i_lo"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>i_lo</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-j~33"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>j</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-j_hi"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>j_hi</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-j_lo"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>j_lo</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-m_ice_pt"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>m_ice_pt</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-m_snow_pt"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>m_snow_pt</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-melt_bot_pt"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>melt_bot_pt</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-melt_top_pt"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>melt_top_pt</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sal_ice_col"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>sal_ice_col</strong>(ICE_NK_MAX)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-snow_to_ice_pt"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>snow_to_ice_pt</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sw_thru_pt"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>sw_thru_pt</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-tsurf_pt"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>tsurf_pt</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-want_melt"></span>
+              logical,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>want_melt</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">pure subroutine </span><span class="n">ice_thermo_columns</span><span class="p">(</span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">ncat</span><span class="p">,</span><span class="w"> </span><span class="n">nk</span><span class="p">,</span><span class="w"> </span><span class="n">dtt</span><span class="p">,</span><span class="w"> </span><span class="n">do_snow_ice</span><span class="p">,</span><span class="w"> </span><span class="n">wet_mask</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="n">m_ice</span><span class="p">,</span><span class="w"> </span><span class="n">m_snow</span><span class="p">,</span><span class="w"> </span><span class="n">enth_ice</span><span class="p">,</span><span class="w"> </span><span class="n">enth_snow</span><span class="p">,</span><span class="w"> </span><span class="n">sal_ice</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="n">sf_0</span><span class="p">,</span><span class="w"> </span><span class="n">dsf_dt</span><span class="p">,</span><span class="w"> </span><span class="n">sw_dn</span><span class="p">,</span><span class="w"> </span><span class="n">fprec</span><span class="p">,</span><span class="w"> </span><span class="n">tfw</span><span class="p">,</span><span class="w"> </span><span class="n">fb</span><span class="p">,</span><span class="w"> </span><span class="n">sst</span><span class="p">,</span><span class="w"> </span><span class="n">s_surf</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="n">tsurf_out</span><span class="p">,</span><span class="w"> </span><span class="n">h2o_ocn_to_ice</span><span class="p">,</span><span class="w"> </span><span class="n">h2o_ice_to_ocn</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="n">heat_to_ocn</span><span class="p">,</span><span class="w"> </span><span class="n">sw_thru</span><span class="p">,</span><span class="w"> </span><span class="n">snow_to_ice</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                      </span><span class="n">melt_top_ice</span><span class="p">,</span><span class="w"> </span><span class="n">melt_bot_ice</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! `do concurrent` cell driver: PHYSICAL cells only, inner `if`</span>
+<span class="w">      </span><span class="c">!! gate (never a masked DC header), serial `do cat` loop inside.</span>
+<span class="w">      </span><span class="c">!! Per (i,j,cat): outputs zeroed unconditionally, then gated on</span>
+<span class="w">      </span><span class="c">!! `wet_mask &gt; 0.5 .and. m_ice &gt; ICE_RHO_ICE*H_VANISHED` (dynamic-</span>
+<span class="w">      </span><span class="c">!! vanish taxonomy: skip intact, never clamp/divide a vanished</span>
+<span class="w">      </span><span class="c">!! column). `part_size` is deliberately NOT an argument — thermo</span>
+<span class="w">      </span><span class="c">!! is per unit ice area.</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nghost</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">ncat</span><span class="p">,</span><span class="w"> </span><span class="n">nk</span>
+<span class="w">         </span><span class="c">!! Grid + category + layer extents (declared first — decl-order).</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dtt</span>
+<span class="w">         </span><span class="c">!! Timestep (s).</span>
+<span class="w">      </span><span class="kt">logical</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">do_snow_ice</span>
+<span class="w">         </span><span class="c">!! Archimedes freeboard flood gate (`&amp;ocean_ice_nml snow_ice`,</span>
+<span class="w">         </span><span class="c">!! PR 27), captured by value into the DC loop (same treatment</span>
+<span class="w">         </span><span class="c">!! as `dtt`). `.false.` (the default) is a bit-identical no-op.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">wet_mask</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! Ocean wet mask (&gt;0.5 = wet).</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">m_ice</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">ncat</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! Total ice mass per unit area per category (kg/m²).</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">m_snow</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">ncat</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! Snow mass per unit area per category (kg/m²).</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">enth_ice</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">ncat</span><span class="p">,</span><span class="w"> </span><span class="n">nk</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! Ice specific enthalpy (J/kg), BOTTOM-UP (k=1 = ice bottom).</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">enth_snow</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">ncat</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! Snow specific enthalpy (J/kg).</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">sal_ice</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">ncat</span><span class="p">,</span><span class="w"> </span><span class="n">nk</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! Ice bulk salinity (PSU), BOTTOM-UP.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">sf_0</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! Linearized SEB intercept (W/m²), upward-positive.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dsf_dt</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! Linearized SEB slope (W/m²/K), upward-positive.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">sw_dn</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! Downwelling shortwave at the surface (W/m²).</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">fprec</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! Frozen-precipitation rate onto the ice top (kg/m²/s), &gt;= 0 —</span>
+<span class="w">         </span><span class="c">!! PR 26 snowfall seam (`ice%atm_fprec`). Passed to</span>
+<span class="w">         </span><span class="c">!! `ice_column_step` as `fprec(i,j)*dtt`; 0 (the</span>
+<span class="w">         </span><span class="c">!! `&amp;ocean_ice_nml snowfall=0` default) is a bit-identical no-op.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">tfw</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! Seawater freezing temperature at the ice base (degC).</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">fb</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! Ocean -&gt; ice-base heat flux (W/m²).</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">sst</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! Sea-surface temperature (degC).</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">s_surf</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! Sea-surface salinity (PSU).</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">tsurf_out</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">ncat</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! Surface skin temperature (degC).</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">h2o_ocn_to_ice</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">ncat</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! Mass flux frozen from the ocean onto the ice base (kg/m²).</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">h2o_ice_to_ocn</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">ncat</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! Meltwater mass flux to the ocean (kg/m²).</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">heat_to_ocn</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">ncat</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! Leftover melt heat dumped to the ocean (J/m²).</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">sw_thru</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">ncat</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! Shortwave transmitted through the ice to the ocean (W/m²).</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">snow_to_ice</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">ncat</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! Mass converted from snow to the top ice layer this call</span>
+<span class="w">         </span><span class="c">!! (kg/m²), &gt;= 0 — snow-to-ice conversion (PR 27). Zeroed unconditionally</span>
+<span class="w">         </span><span class="c">!! every thermo step, same lifecycle as `sw_thru`.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">melt_top_ice</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">ncat</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! ICE-only top-melt share per category (kg/m², k &gt;= 1). Optional</span>
+<span class="w">         </span><span class="c">!! (the window-mass diagnostics); zeroed every step when present.</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">melt_bot_ice</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">ncat</span><span class="p">)</span>
+<span class="w">         </span><span class="c">!! ICE-only bottom-melt share per category (kg/m², k &gt;= 1).</span>
+
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">cat</span><span class="p">,</span><span class="w"> </span><span class="n">i_lo</span><span class="p">,</span><span class="w"> </span><span class="n">i_hi</span><span class="p">,</span><span class="w"> </span><span class="n">j_lo</span><span class="p">,</span><span class="w"> </span><span class="n">j_hi</span>
+<span class="w">      </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">want_melt</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">m_snow_pt</span><span class="p">,</span><span class="w"> </span><span class="n">m_ice_pt</span><span class="p">,</span><span class="w"> </span><span class="n">enth_snow_pt</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">enth_ice_col</span><span class="p">(</span><span class="n">ICE_NK_MAX</span><span class="p">),</span><span class="w"> </span><span class="n">sal_ice_col</span><span class="p">(</span><span class="n">ICE_NK_MAX</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">tsurf_pt</span><span class="p">,</span><span class="w"> </span><span class="n">h2o_ocn_to_ice_pt</span><span class="p">,</span><span class="w"> </span><span class="n">h2o_ice_to_ocn_pt</span><span class="p">,</span><span class="w"> </span><span class="n">heat_to_ocn_pt</span><span class="p">,</span><span class="w"> </span><span class="n">sw_thru_pt</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">snow_to_ice_pt</span><span class="p">,</span><span class="w"> </span><span class="n">melt_top_pt</span><span class="p">,</span><span class="w"> </span><span class="n">melt_bot_pt</span>
+
+<span class="w">      </span><span class="n">i_lo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nghost</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">      </span><span class="n">i_hi</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nx</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">nghost</span>
+<span class="w">      </span><span class="n">j_lo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nghost</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">      </span><span class="n">j_hi</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ny</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">nghost</span>
+<span class="w">      </span><span class="n">want_melt</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">present</span><span class="p">(</span><span class="n">melt_top_ice</span><span class="p">)</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="nb">present</span><span class="p">(</span><span class="n">melt_bot_ice</span><span class="p">)</span>
+
+<span class="w">      </span><span class="k">do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">j</span><span class="o">=</span><span class="n">j_lo</span><span class="p">:</span><span class="n">j_hi</span><span class="p">,</span><span class="w"> </span><span class="n">i</span><span class="o">=</span><span class="n">i_lo</span><span class="p">:</span><span class="n">i_hi</span><span class="p">)</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">         </span><span class="n">local</span><span class="p">(</span><span class="n">cat</span><span class="p">,</span><span class="w"> </span><span class="n">m_snow_pt</span><span class="p">,</span><span class="w"> </span><span class="n">m_ice_pt</span><span class="p">,</span><span class="w"> </span><span class="n">enth_snow_pt</span><span class="p">,</span><span class="w"> </span><span class="n">enth_ice_col</span><span class="p">,</span><span class="w"> </span><span class="n">sal_ice_col</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">               </span><span class="n">tsurf_pt</span><span class="p">,</span><span class="w"> </span><span class="n">h2o_ocn_to_ice_pt</span><span class="p">,</span><span class="w"> </span><span class="n">h2o_ice_to_ocn_pt</span><span class="p">,</span><span class="w"> </span><span class="n">heat_to_ocn_pt</span><span class="p">,</span><span class="w"> </span><span class="n">sw_thru_pt</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">               </span><span class="n">snow_to_ice_pt</span><span class="p">,</span><span class="w"> </span><span class="n">melt_top_pt</span><span class="p">,</span><span class="w"> </span><span class="n">melt_bot_pt</span><span class="p">)</span>
+<span class="w">         </span><span class="k">do </span><span class="n">cat</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ncat</span>
+<span class="w">            </span><span class="n">tsurf_out</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">cat</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">            </span><span class="n">h2o_ocn_to_ice</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">cat</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">            </span><span class="n">h2o_ice_to_ocn</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">cat</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">            </span><span class="n">heat_to_ocn</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">cat</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">            </span><span class="n">sw_thru</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">cat</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">            </span><span class="n">snow_to_ice</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">cat</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">            </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">want_melt</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               </span><span class="n">melt_top_ice</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">cat</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">               </span><span class="n">melt_bot_ice</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">cat</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">            </span><span class="k">end if</span>
+
+<span class="k">            if</span><span class="w"> </span><span class="p">(</span><span class="n">wet_mask</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.5_wp</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="n">m_ice</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">cat</span><span class="p">)</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="n">ICE_RHO_ICE</span><span class="o">*</span><span class="n">H_VANISHED</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">               </span><span class="n">m_snow_pt</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">m_snow</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">cat</span><span class="p">)</span>
+<span class="w">               </span><span class="n">m_ice_pt</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">m_ice</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">cat</span><span class="p">)</span>
+<span class="w">               </span><span class="n">enth_snow_pt</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">enth_snow</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">cat</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">               </span><span class="n">enth_ice_col</span><span class="p">(</span><span class="mi">1</span><span class="p">:</span><span class="n">nk</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">enth_ice</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">cat</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">:</span><span class="n">nk</span><span class="p">)</span>
+<span class="w">               </span><span class="n">sal_ice_col</span><span class="p">(</span><span class="mi">1</span><span class="p">:</span><span class="n">nk</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sal_ice</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">cat</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">:</span><span class="n">nk</span><span class="p">)</span>
+
+<span class="w">               </span><span class="k">call </span><span class="n">ice_column_step</span><span class="p">(</span><span class="n">nk</span><span class="p">,</span><span class="w"> </span><span class="n">m_snow_pt</span><span class="p">,</span><span class="w"> </span><span class="n">m_ice_pt</span><span class="p">,</span><span class="w"> </span><span class="n">enth_snow_pt</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                    </span><span class="n">enth_ice_col</span><span class="p">(</span><span class="mi">1</span><span class="p">:</span><span class="n">nk</span><span class="p">),</span><span class="w"> </span><span class="n">sal_ice_col</span><span class="p">(</span><span class="mi">1</span><span class="p">:</span><span class="n">nk</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                    </span><span class="n">sf_0</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">),</span><span class="w"> </span><span class="n">dsf_dt</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">),</span><span class="w"> </span><span class="n">sw_dn</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">),</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                    </span><span class="n">tfw</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">),</span><span class="w"> </span><span class="n">fb</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">),</span><span class="w"> </span><span class="n">sst</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">),</span><span class="w"> </span><span class="n">s_surf</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">),</span><span class="w"> </span><span class="n">dtt</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                    </span><span class="n">do_snow_ice</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                    </span><span class="n">fprec</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">)</span><span class="o">*</span><span class="n">dtt</span><span class="p">,</span><span class="w"> </span><span class="n">tsurf_pt</span><span class="p">,</span><span class="w"> </span><span class="n">h2o_ocn_to_ice_pt</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                    </span><span class="n">h2o_ice_to_ocn_pt</span><span class="p">,</span><span class="w"> </span><span class="n">heat_to_ocn_pt</span><span class="p">,</span><span class="w"> </span><span class="n">sw_thru_pt</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                    </span><span class="n">snow_to_ice_pt</span><span class="p">,</span><span class="w"> </span><span class="n">melt_top_pt</span><span class="p">,</span><span class="w"> </span><span class="n">melt_bot_pt</span><span class="p">)</span>
+
+<span class="w">               </span><span class="n">m_snow</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">cat</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">m_snow_pt</span>
+<span class="w">               </span><span class="n">m_ice</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">cat</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">m_ice_pt</span>
+<span class="w">               </span><span class="n">enth_snow</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">cat</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">enth_snow_pt</span>
+<span class="w">               </span><span class="n">enth_ice</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">cat</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">:</span><span class="n">nk</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">enth_ice_col</span><span class="p">(</span><span class="mi">1</span><span class="p">:</span><span class="n">nk</span><span class="p">)</span>
+<span class="w">               </span><span class="n">sal_ice</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">cat</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">:</span><span class="n">nk</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sal_ice_col</span><span class="p">(</span><span class="mi">1</span><span class="p">:</span><span class="n">nk</span><span class="p">)</span>
+<span class="w">               </span><span class="n">tsurf_out</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">cat</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">tsurf_pt</span>
+<span class="w">               </span><span class="n">h2o_ocn_to_ice</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">cat</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">h2o_ocn_to_ice_pt</span>
+<span class="w">               </span><span class="n">h2o_ice_to_ocn</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">cat</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">h2o_ice_to_ocn_pt</span>
+<span class="w">               </span><span class="n">heat_to_ocn</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">cat</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">heat_to_ocn_pt</span>
+<span class="w">               </span><span class="n">sw_thru</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">cat</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">sw_thru_pt</span>
+<span class="w">               </span><span class="n">snow_to_ice</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">cat</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">snow_to_ice_pt</span>
+<span class="w">               </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">want_melt</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                  </span><span class="n">melt_top_ice</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">cat</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">melt_top_pt</span>
+<span class="w">                  </span><span class="n">melt_bot_ice</span><span class="p">(</span><span class="n">i</span><span class="p">,</span><span class="w"> </span><span class="n">j</span><span class="p">,</span><span class="w"> </span><span class="n">cat</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">melt_bot_pt</span>
+<span class="w">               </span><span class="k">end if</span>
+<span class="k">            end if</span>
+<span class="k">         end do</span>
+<span class="k">      end do</span>
+<span class="k">   end subroutine </span><span class="n">ice_thermo_columns</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-11-13 23:21 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

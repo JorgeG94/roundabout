@@ -1,0 +1,1778 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>kappa_shear_vertex_kernel &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>kappa_shear_vertex_kernel
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.1% of total for procedures.">68 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_kappa_shear.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_kappa_shear.f90.html'>rdb_ocean_kappa_shear.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ocean_kappa_shear.html'>rdb_ocean_kappa_shear</a></li>
+            <li class="breadcrumb-item active" aria-current="page">kappa_shear_vertex_kernel</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+      <div class="card mb-4">
+      <a data-bs-toggle="collapse" href="#vars-0"
+         aria-expanded="false" aria-controls="vars-0">
+         <h4 class="card-header bg-primary text-white">Variables</h4>
+      </a>
+      <div id="vars-0" class="collapse">
+        <div class="list-group list-group-flush">
+            <a class="list-group-item" href="../proc/kappa_shear_vertex_kernel.html#variable-col_ok">col_ok</a>
+            <a class="list-group-item" href="../proc/kappa_shear_vertex_kernel.html#variable-do_merge~2">do_merge</a>
+            <a class="list-group-item" href="../proc/kappa_shear_vertex_kernel.html#variable-f2_val~2">f2_val</a>
+            <a class="list-group-item" href="../proc/kappa_shear_vertex_kernel.html#variable-h_sd~3">h_sd</a>
+            <a class="list-group-item" href="../proc/kappa_shear_vertex_kernel.html#variable-hc~3">hc</a>
+            <a class="list-group-item" href="../proc/kappa_shear_vertex_kernel.html#variable-hint_s~2">hint_s</a>
+            <a class="list-group-item" href="../proc/kappa_shear_vertex_kernel.html#variable-ic~7">ic</a>
+            <a class="list-group-item" href="../proc/kappa_shear_vertex_kernel.html#variable-idz_int_s~2">idz_int_s</a>
+            <a class="list-group-item" href="../proc/kappa_shear_vertex_kernel.html#variable-idz_s~2">idz_s</a>
+            <a class="list-group-item" href="../proc/kappa_shear_vertex_kernel.html#variable-il2_s~2">il2_s</a>
+            <a class="list-group-item" href="../proc/kappa_shear_vertex_kernel.html#variable-jc~6">jc</a>
+            <a class="list-group-item" href="../proc/kappa_shear_vertex_kernel.html#variable-k~98">k</a>
+            <a class="list-group-item" href="../proc/kappa_shear_vertex_kernel.html#variable-kappa_avg_sd~2">kappa_avg_sd</a>
+            <a class="list-group-item" href="../proc/kappa_shear_vertex_kernel.html#variable-kappa_c~2">kappa_c</a>
+            <a class="list-group-item" href="../proc/kappa_shear_vertex_kernel.html#variable-kc~2">kc</a>
+            <a class="list-group-item" href="../proc/kappa_shear_vertex_kernel.html#variable-kf~4">kf</a>
+            <a class="list-group-item" href="../proc/kappa_shear_vertex_kernel.html#variable-kg~3">kg</a>
+            <a class="list-group-item" href="../proc/kappa_shear_vertex_kernel.html#variable-merge_on~2">merge_on</a>
+            <a class="list-group-item" href="../proc/kappa_shear_vertex_kernel.html#variable-nzc~2">nzc</a>
+            <a class="list-group-item" href="../proc/kappa_shear_vertex_kernel.html#variable-s_sd~3">s_sd</a>
+            <a class="list-group-item" href="../proc/kappa_shear_vertex_kernel.html#variable-sc~2">sc</a>
+            <a class="list-group-item" href="../proc/kappa_shear_vertex_kernel.html#variable-t_sd~3">t_sd</a>
+            <a class="list-group-item" href="../proc/kappa_shear_vertex_kernel.html#variable-tc~2">tc</a>
+            <a class="list-group-item" href="../proc/kappa_shear_vertex_kernel.html#variable-tke_avg_sd~2">tke_avg_sd</a>
+            <a class="list-group-item" href="../proc/kappa_shear_vertex_kernel.html#variable-tke_c~2">tke_c</a>
+            <a class="list-group-item" href="../proc/kappa_shear_vertex_kernel.html#variable-u_sd~3">u_sd</a>
+            <a class="list-group-item" href="../proc/kappa_shear_vertex_kernel.html#variable-uc~2">uc</a>
+            <a class="list-group-item" href="../proc/kappa_shear_vertex_kernel.html#variable-v_sd~3">v_sd</a>
+            <a class="list-group-item" href="../proc/kappa_shear_vertex_kernel.html#variable-vc~2">vc</a>
+        </div>
+      </div>
+    </div>
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/kappa_shear_vertex_kernel.html#src">kappa_shear_vertex_kernel</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>private pure subroutine kappa_shear_vertex_kernel(this, nx, ny, nz, dt, h_layer, u_face, v_face, hT, hS, wet_t, wet_u, wet_v)  
+</h2>
+    
+
+    <p>Per-CORNER JHL08 solve (MOM6 vertex form, Pass B).  One
+<code>do concurrent (jc, ic)</code> over the interior corners
+[2,nx]x[2,ny] — the set whose full 2x2 cell patch exists
+in-array, which covers every corner any owned tracer cell
+needs (nghost &gt;= 1).  Ring corners stay 0.</p>
+<p>Per corner: activity test = ANY adjacent velocity face open
+(NOT the 4-cell corner mask — a coastline corner with 1-3 wet
+cells IS solved, from the mask-weighted average of the wet
+cells); gather (<code>ks_gather_corner</code>); non-finite guard (an
+unfilled OBC ghost corner must yield kd=0, not a laundered
+clamp value); floor-or-merge exactly as the column path; the
+SAME shared column solve (<code>ks_precompute</code> + <code>ks_solve_column</code>);
+scatter into <code>kd_corner</code> with the surface-down -&gt; bottom-up
+flip.  f^2 is taken straight at the corner (no averaging).</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-this~111"></span>
+              type(<a href='../type/ocean_kappa_shear_t.html'>ocean_kappa_shear_t</a>),
+            </td>
+<td>intent(inout)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>this</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nx~123"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nx</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ny~123"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ny</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nz~103"></span>
+              integer,
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nz</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dt~39"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dt</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_layer~29"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_layer</strong>(nx,ny,nz)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-u_face~5"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>u_face</strong>(nx+1,ny,nz)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-v_face~5"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>v_face</strong>(nx,ny+1,nz)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ht~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hT</strong>(nx,ny,nz)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hs~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hS</strong>(nx,ny,nz)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-wet_t~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>wet_t</strong>(nx,ny)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-wet_u~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>wet_u</strong>(nx+1,ny)</td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-wet_v~4"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>wet_v</strong>(nx,ny+1)</td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~kappa_shear_vertex_kernel~~CallsGraph Pages: 1 -->
+<svg id="prockappa_shear_vertex_kernelCallsGraph" width="641pt" height="193pt"
+ viewBox="0.00 0.00 641.00 193.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~kappa_shear_vertex_kernel~~CallsGraph" class="graph" transform="scale(0.678939 0.678939) rotate(0) translate(4 280.27)">
+<title>proc~~kappa_shear_vertex_kernel~~CallsGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-280.27 940.12,-280.27 940.12,4 -4,4"/>
+<!-- proc~kappa_shear_vertex_kernel -->
+<g id="proc~~kappa_shear_vertex_kernel~~CallsGraph_node1" class="node">
+<title>proc~kappa_shear_vertex_kernel</title>
+<polygon fill="none" stroke="black" points="157.02,-150.27 0,-150.27 0,-126 157.02,-126 157.02,-150.27"/>
+<text xml:space="preserve" text-anchor="middle" x="78.51" y="-134.53" font-family="Helvetica,sans-Serif" font-size="10.50">kappa_shear_vertex_kernel</text>
+</g>
+<!-- local -->
+<g id="proc~~kappa_shear_vertex_kernel~~CallsGraph_node2" class="node">
+<title>local</title>
+<polygon fill="#777777" stroke="#777777" points="286.9,-276.27 232.9,-276.27 232.9,-252 286.9,-252 286.9,-276.27"/>
+<text xml:space="preserve" text-anchor="middle" x="259.9" y="-260.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">local</text>
+</g>
+<!-- proc~kappa_shear_vertex_kernel&#45;&gt;local -->
+<g id="proc~~kappa_shear_vertex_kernel~~CallsGraph_edge1" class="edge">
+<title>proc~kappa_shear_vertex_kernel&#45;&gt;local</title>
+<path fill="none" stroke="#ff0000" d="M89.76,-150.7C108.2,-172.53 149.18,-217.59 193.02,-243.13 201.74,-248.22 211.85,-252.23 221.48,-255.32"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="220.43,-258.66 231.01,-258.11 222.4,-251.94 220.43,-258.66"/>
+</g>
+<!-- proc~ks_gather_corner -->
+<g id="proc~~kappa_shear_vertex_kernel~~CallsGraph_node3" class="node">
+<title>proc~ks_gather_corner</title>
+<g id="a_proc~~kappa_shear_vertex_kernel~~CallsGraph_node3"><a xlink:href="../proc/ks_gather_corner.html" xlink:title="ks_gather_corner">
+<polygon fill="#d9534f" stroke="#d9534f" points="311.79,-234.27 208.02,-234.27 208.02,-210 311.79,-210 311.79,-234.27"/>
+<text xml:space="preserve" text-anchor="middle" x="259.9" y="-218.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ks_gather_corner</text>
+</a>
+</g>
+</g>
+<!-- proc~kappa_shear_vertex_kernel&#45;&gt;proc~ks_gather_corner -->
+<g id="proc~~kappa_shear_vertex_kernel~~CallsGraph_edge2" class="edge">
+<title>proc~kappa_shear_vertex_kernel&#45;&gt;proc~ks_gather_corner</title>
+<path fill="none" stroke="#ff0000" d="M99.4,-150.77C121.59,-164.48 158.88,-186.39 193.02,-201.13 196.77,-202.75 200.68,-204.31 204.65,-205.8"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="203.2,-209 213.79,-209.05 205.54,-202.4 203.2,-209"/>
+</g>
+<!-- proc~ks_precompute -->
+<g id="proc~~kappa_shear_vertex_kernel~~CallsGraph_node4" class="node">
+<title>proc~ks_precompute</title>
+<g id="a_proc~~kappa_shear_vertex_kernel~~CallsGraph_node4"><a xlink:href="../proc/ks_precompute.html" xlink:title="ks_precompute">
+<polygon fill="#d9534f" stroke="#d9534f" points="306.16,-192.27 213.64,-192.27 213.64,-168 306.16,-168 306.16,-192.27"/>
+<text xml:space="preserve" text-anchor="middle" x="259.9" y="-176.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ks_precompute</text>
+</a>
+</g>
+</g>
+<!-- proc~kappa_shear_vertex_kernel&#45;&gt;proc~ks_precompute -->
+<g id="proc~~kappa_shear_vertex_kernel~~CallsGraph_edge3" class="edge">
+<title>proc~kappa_shear_vertex_kernel&#45;&gt;proc~ks_precompute</title>
+<path fill="none" stroke="#ff0000" d="M133.33,-150.74C155.04,-155.82 180.11,-161.69 202.11,-166.84"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="201.29,-170.24 211.82,-169.11 202.88,-163.42 201.29,-170.24"/>
+</g>
+<!-- proc~ks_solve_column -->
+<g id="proc~~kappa_shear_vertex_kernel~~CallsGraph_node5" class="node">
+<title>proc~ks_solve_column</title>
+<g id="a_proc~~kappa_shear_vertex_kernel~~CallsGraph_node5"><a xlink:href="../proc/ks_solve_column.html" xlink:title="ks_solve_column">
+<polygon fill="#d9534f" stroke="#d9534f" points="310.29,-150.27 209.52,-150.27 209.52,-126 310.29,-126 310.29,-150.27"/>
+<text xml:space="preserve" text-anchor="middle" x="259.9" y="-134.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ks_solve_column</text>
+</a>
+</g>
+</g>
+<!-- proc~kappa_shear_vertex_kernel&#45;&gt;proc~ks_solve_column -->
+<g id="proc~~kappa_shear_vertex_kernel~~CallsGraph_edge4" class="edge">
+<title>proc~kappa_shear_vertex_kernel&#45;&gt;proc~ks_solve_column</title>
+<path fill="none" stroke="#ff0000" d="M157.41,-138.13C171.02,-138.13 184.99,-138.13 198.05,-138.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="197.74,-141.64 207.74,-138.14 197.74,-134.64 197.74,-141.64"/>
+</g>
+<!-- proc~massless_build_maps -->
+<g id="proc~~kappa_shear_vertex_kernel~~CallsGraph_node6" class="node">
+<title>proc~massless_build_maps</title>
+<g id="a_proc~~kappa_shear_vertex_kernel~~CallsGraph_node6"><a xlink:href="../proc/massless_build_maps.html" xlink:title="massless_build_maps">
+<polygon fill="#d9534f" stroke="#d9534f" points="322.66,-108.27 197.14,-108.27 197.14,-84 322.66,-84 322.66,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="259.9" y="-92.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">massless_build_maps</text>
+</a>
+</g>
+</g>
+<!-- proc~kappa_shear_vertex_kernel&#45;&gt;proc~massless_build_maps -->
+<g id="proc~~kappa_shear_vertex_kernel~~CallsGraph_edge5" class="edge">
+<title>proc~kappa_shear_vertex_kernel&#45;&gt;proc~massless_build_maps</title>
+<path fill="none" stroke="#ff0000" d="M133.33,-125.53C152.4,-121.07 174.06,-116 193.96,-111.34"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="194.71,-114.76 203.64,-109.07 193.11,-107.94 194.71,-114.76"/>
+</g>
+<!-- proc~massless_interp_back -->
+<g id="proc~~kappa_shear_vertex_kernel~~CallsGraph_node7" class="node">
+<title>proc~massless_interp_back</title>
+<g id="a_proc~~kappa_shear_vertex_kernel~~CallsGraph_node7"><a xlink:href="../proc/massless_interp_back.html" xlink:title="massless_interp_back">
+<polygon fill="#d9534f" stroke="#d9534f" points="323.41,-66.27 196.39,-66.27 196.39,-42 323.41,-42 323.41,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="259.9" y="-50.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">massless_interp_back</text>
+</a>
+</g>
+</g>
+<!-- proc~kappa_shear_vertex_kernel&#45;&gt;proc~massless_interp_back -->
+<g id="proc~~kappa_shear_vertex_kernel~~CallsGraph_edge6" class="edge">
+<title>proc~kappa_shear_vertex_kernel&#45;&gt;proc~massless_interp_back</title>
+<path fill="none" stroke="#ff0000" d="M99.4,-125.5C121.59,-111.79 158.88,-89.88 193.02,-75.14 196.77,-73.52 200.68,-71.96 204.65,-70.47"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="205.54,-73.87 213.79,-67.22 203.2,-67.27 205.54,-73.87"/>
+</g>
+<!-- proc~massless_merge_fields -->
+<g id="proc~~kappa_shear_vertex_kernel~~CallsGraph_node8" class="node">
+<title>proc~massless_merge_fields</title>
+<g id="a_proc~~kappa_shear_vertex_kernel~~CallsGraph_node8"><a xlink:href="../proc/massless_merge_fields.html" xlink:title="massless_merge_fields">
+<polygon fill="#d9534f" stroke="#d9534f" points="326.79,-24.27 193.02,-24.27 193.02,0 326.79,0 326.79,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="259.9" y="-8.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">massless_merge_fields</text>
+</a>
+</g>
+</g>
+<!-- proc~kappa_shear_vertex_kernel&#45;&gt;proc~massless_merge_fields -->
+<g id="proc~~kappa_shear_vertex_kernel~~CallsGraph_edge7" class="edge">
+<title>proc~kappa_shear_vertex_kernel&#45;&gt;proc~massless_merge_fields</title>
+<path fill="none" stroke="#ff0000" d="M89.76,-125.57C108.2,-103.74 149.18,-58.68 193.02,-33.14 195.34,-31.78 197.76,-30.51 200.24,-29.31"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="201.53,-32.56 209.31,-25.37 198.74,-26.14 201.53,-32.56"/>
+</g>
+<!-- proc~eos_specvol_derivs -->
+<g id="proc~~kappa_shear_vertex_kernel~~CallsGraph_node9" class="node">
+<title>proc~eos_specvol_derivs</title>
+<g id="a_proc~~kappa_shear_vertex_kernel~~CallsGraph_node9"><a xlink:href="../proc/eos_specvol_derivs.html" xlink:title="eos_specvol_derivs">
+<polygon fill="#d9534f" stroke="#d9534f" points="476.31,-230.27 362.79,-230.27 362.79,-206 476.31,-206 476.31,-230.27"/>
+<text xml:space="preserve" text-anchor="middle" x="419.55" y="-214.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">eos_specvol_derivs</text>
+</a>
+</g>
+</g>
+<!-- proc~ks_solve_column&#45;&gt;proc~eos_specvol_derivs -->
+<g id="proc~~kappa_shear_vertex_kernel~~CallsGraph_edge8" class="edge">
+<title>proc~ks_solve_column&#45;&gt;proc~eos_specvol_derivs</title>
+<path fill="none" stroke="#00ff91" d="M308.76,-150.65C315.01,-153.07 321.18,-155.88 326.79,-159.13 345.57,-170.02 344.74,-180.07 362.79,-192.13 367.27,-195.13 372.15,-197.96 377.1,-200.56"/>
+<polygon fill="#00ff91" stroke="#00ff91" points="375.38,-203.61 385.9,-204.91 378.49,-197.34 375.38,-203.61"/>
+</g>
+<!-- proc~ks_adaptive_dt -->
+<g id="proc~~kappa_shear_vertex_kernel~~CallsGraph_node10" class="node">
+<title>proc~ks_adaptive_dt</title>
+<g id="a_proc~~kappa_shear_vertex_kernel~~CallsGraph_node10"><a xlink:href="../proc/ks_adaptive_dt.html" xlink:title="ks_adaptive_dt">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="464.68,-150.27 374.41,-150.27 374.41,-126 464.68,-126 464.68,-150.27"/>
+<text xml:space="preserve" text-anchor="middle" x="419.55" y="-134.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ks_adaptive_dt</text>
+</a>
+</g>
+</g>
+<!-- proc~ks_solve_column&#45;&gt;proc~ks_adaptive_dt -->
+<g id="proc~~kappa_shear_vertex_kernel~~CallsGraph_edge9" class="edge">
+<title>proc~ks_solve_column&#45;&gt;proc~ks_adaptive_dt</title>
+<path fill="none" stroke="#00ff91" d="M310.78,-138.13C327.28,-138.13 345.73,-138.13 362.64,-138.13"/>
+<polygon fill="#00ff91" stroke="#00ff91" points="362.55,-141.64 372.55,-138.14 362.55,-134.64 362.55,-141.64"/>
+</g>
+<!-- proc~ks_find_kappa_tke -->
+<g id="proc~~kappa_shear_vertex_kernel~~CallsGraph_node11" class="node">
+<title>proc~ks_find_kappa_tke</title>
+<g id="a_proc~~kappa_shear_vertex_kernel~~CallsGraph_node11"><a xlink:href="../proc/ks_find_kappa_tke.html" xlink:title="ks_find_kappa_tke">
+<polygon fill="#d9534f" stroke="#d9534f" points="473.68,-108.27 365.41,-108.27 365.41,-84 473.68,-84 473.68,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="419.55" y="-92.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ks_find_kappa_tke</text>
+</a>
+</g>
+</g>
+<!-- proc~ks_solve_column&#45;&gt;proc~ks_find_kappa_tke -->
+<g id="proc~~kappa_shear_vertex_kernel~~CallsGraph_edge10" class="edge">
+<title>proc~ks_solve_column&#45;&gt;proc~ks_find_kappa_tke</title>
+<path fill="none" stroke="#00ff91" d="M308.2,-125.53C324.57,-121.17 343.11,-116.23 360.26,-111.67"/>
+<polygon fill="#00ff91" stroke="#00ff91" points="361.06,-115.07 369.82,-109.12 359.26,-108.31 361.06,-115.07"/>
+</g>
+<!-- proc~ks_projected_state -->
+<g id="proc~~kappa_shear_vertex_kernel~~CallsGraph_node12" class="node">
+<title>proc~ks_projected_state</title>
+<g id="a_proc~~kappa_shear_vertex_kernel~~CallsGraph_node12"><a xlink:href="../proc/ks_projected_state.html" xlink:title="ks_projected_state">
+<polygon fill="#d9534f" stroke="#d9534f" points="622.08,-169.27 512.31,-169.27 512.31,-145 622.08,-145 622.08,-169.27"/>
+<text xml:space="preserve" text-anchor="middle" x="567.19" y="-153.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ks_projected_state</text>
+</a>
+</g>
+</g>
+<!-- proc~ks_solve_column&#45;&gt;proc~ks_projected_state -->
+<g id="proc~~kappa_shear_vertex_kernel~~CallsGraph_edge11" class="edge">
+<title>proc~ks_solve_column&#45;&gt;proc~ks_projected_state</title>
+<path fill="none" stroke="#00ff91" d="M310.6,-150.48C327.1,-154.02 345.63,-157.39 362.79,-159.13 412.98,-164.25 425.86,-159.7 476.31,-159.13 484.16,-159.05 492.4,-158.92 500.56,-158.76"/>
+<polygon fill="#00ff91" stroke="#00ff91" points="500.57,-162.27 510.5,-158.57 500.43,-155.27 500.57,-162.27"/>
+</g>
+<!-- proc~ks_src_func -->
+<g id="proc~~kappa_shear_vertex_kernel~~CallsGraph_node13" class="node">
+<title>proc~ks_src_func</title>
+<g id="a_proc~~kappa_shear_vertex_kernel~~CallsGraph_node13"><a xlink:href="../proc/ks_src_func.html" xlink:title="ks_src_func">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="602.95,-108.27 531.43,-108.27 531.43,-84 602.95,-84 602.95,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="567.19" y="-92.54" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ks_src_func</text>
+</a>
+</g>
+</g>
+<!-- proc~ks_solve_column&#45;&gt;proc~ks_src_func -->
+<g id="proc~~kappa_shear_vertex_kernel~~CallsGraph_edge12" class="edge">
+<title>proc~ks_solve_column&#45;&gt;proc~ks_src_func</title>
+<path fill="none" stroke="#00ff91" d="M310.51,-125.67C316.22,-123.27 321.79,-120.45 326.79,-117.14 347.28,-103.55 340.45,-85.41 362.79,-75.14 414.9,-51.17 482.25,-65.82 524.85,-79.89"/>
+<polygon fill="#00ff91" stroke="#00ff91" points="523.62,-83.16 534.22,-83.12 525.91,-76.55 523.62,-83.16"/>
+</g>
+<!-- proc~roquet_rho_point -->
+<g id="proc~~kappa_shear_vertex_kernel~~CallsGraph_node14" class="node">
+<title>proc~roquet_rho_point</title>
+<g id="a_proc~~kappa_shear_vertex_kernel~~CallsGraph_node14"><a xlink:href="../proc/roquet_rho_point.html" xlink:title="roquet_rho_point">
+<polygon fill="#d9534f" stroke="#d9534f" points="617.95,-262.27 516.43,-262.27 516.43,-238 617.95,-238 617.95,-262.27"/>
+<text xml:space="preserve" text-anchor="middle" x="567.19" y="-246.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">roquet_rho_point</text>
+</a>
+</g>
+</g>
+<!-- proc~eos_specvol_derivs&#45;&gt;proc~roquet_rho_point -->
+<g id="proc~~kappa_shear_vertex_kernel~~CallsGraph_edge13" class="edge">
+<title>proc~eos_specvol_derivs&#45;&gt;proc~roquet_rho_point</title>
+<path fill="none" stroke="#ff0000" d="M476.44,-230.42C485.9,-232.49 495.76,-234.66 505.33,-236.76"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="504.41,-240.14 514.93,-238.87 505.91,-233.31 504.41,-240.14"/>
+</g>
+<!-- proc~roquet_spv_point -->
+<g id="proc~~kappa_shear_vertex_kernel~~CallsGraph_node15" class="node">
+<title>proc~roquet_spv_point</title>
+<g id="a_proc~~kappa_shear_vertex_kernel~~CallsGraph_node15"><a xlink:href="../proc/roquet_spv_point.html" xlink:title="roquet_spv_point">
+<polygon fill="#d9534f" stroke="#d9534f" points="617.95,-220.27 516.43,-220.27 516.43,-196 617.95,-196 617.95,-220.27"/>
+<text xml:space="preserve" text-anchor="middle" x="567.19" y="-204.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">roquet_spv_point</text>
+</a>
+</g>
+</g>
+<!-- proc~eos_specvol_derivs&#45;&gt;proc~roquet_spv_point -->
+<g id="proc~~kappa_shear_vertex_kernel~~CallsGraph_edge14" class="edge">
+<title>proc~eos_specvol_derivs&#45;&gt;proc~roquet_spv_point</title>
+<path fill="none" stroke="#ff0000" d="M476.44,-214.3C485.8,-213.66 495.54,-212.99 505.02,-212.34"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="505.16,-215.83 514.89,-211.66 504.68,-208.85 505.16,-215.83"/>
+</g>
+<!-- proc~ks_adaptive_dt&#45;&gt;proc~ks_projected_state -->
+<g id="proc~~kappa_shear_vertex_kernel~~CallsGraph_edge15" class="edge">
+<title>proc~ks_adaptive_dt&#45;&gt;proc~ks_projected_state</title>
+<path fill="none" stroke="#cbff00" d="M465.04,-143.94C476.26,-145.4 488.54,-147.01 500.57,-148.57"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="500.1,-152.04 510.46,-149.86 501,-145.1 500.1,-152.04"/>
+</g>
+<!-- proc~ks_adaptive_dt&#45;&gt;proc~ks_src_func -->
+<g id="proc~~kappa_shear_vertex_kernel~~CallsGraph_edge16" class="edge">
+<title>proc~ks_adaptive_dt&#45;&gt;proc~ks_src_func</title>
+<path fill="none" stroke="#cbff00" d="M464.25,-125.53C481.93,-120.44 502.35,-114.55 520.25,-109.38"/>
+<polygon fill="#cbff00" stroke="#cbff00" points="521.22,-112.75 529.86,-106.61 519.28,-106.02 521.22,-112.75"/>
+</g>
+<!-- proc~ks_find_kappa_tke&#45;&gt;proc~ks_src_func -->
+<g id="proc~~kappa_shear_vertex_kernel~~CallsGraph_edge17" class="edge">
+<title>proc~ks_find_kappa_tke&#45;&gt;proc~ks_src_func</title>
+<path fill="none" stroke="#00ff66" d="M473.96,-96.14C488.95,-96.14 505.12,-96.14 519.68,-96.14"/>
+<polygon fill="#00ff66" stroke="#00ff66" points="519.43,-99.64 529.43,-96.14 519.43,-92.64 519.43,-99.64"/>
+</g>
+<!-- proc~roquet_model_ct_derivs -->
+<g id="proc~~kappa_shear_vertex_kernel~~CallsGraph_node16" class="node">
+<title>proc~roquet_model_ct_derivs</title>
+<g id="a_proc~~kappa_shear_vertex_kernel~~CallsGraph_node16"><a xlink:href="../proc/roquet_model_ct_derivs.html" xlink:title="roquet_model_ct_derivs">
+<polygon fill="#d9534f" stroke="#d9534f" points="795.6,-241.27 658.08,-241.27 658.08,-217 795.6,-217 795.6,-241.27"/>
+<text xml:space="preserve" text-anchor="middle" x="726.84" y="-225.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">roquet_model_ct_derivs</text>
+</a>
+</g>
+</g>
+<!-- proc~roquet_rho_point&#45;&gt;proc~roquet_model_ct_derivs -->
+<g id="proc~~kappa_shear_vertex_kernel~~CallsGraph_edge18" class="edge">
+<title>proc~roquet_rho_point&#45;&gt;proc~roquet_model_ct_derivs</title>
+<path fill="none" stroke="#ff0000" d="M618.07,-243.49C627.15,-242.28 636.82,-240.99 646.51,-239.7"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="646.89,-243.18 656.34,-238.39 645.97,-236.24 646.89,-243.18"/>
+</g>
+<!-- proc~roquet_spv_point&#45;&gt;proc~roquet_model_ct_derivs -->
+<g id="proc~~kappa_shear_vertex_kernel~~CallsGraph_edge19" class="edge">
+<title>proc~roquet_spv_point&#45;&gt;proc~roquet_model_ct_derivs</title>
+<path fill="none" stroke="#00ffff" d="M618.07,-214.78C627.15,-215.99 636.82,-217.28 646.51,-218.57"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="645.97,-222.03 656.34,-219.88 646.89,-215.09 645.97,-222.03"/>
+</g>
+<!-- proc~ct_from_pt_derivs -->
+<g id="proc~~kappa_shear_vertex_kernel~~CallsGraph_node17" class="node">
+<title>proc~ct_from_pt_derivs</title>
+<g id="a_proc~~kappa_shear_vertex_kernel~~CallsGraph_node17"><a xlink:href="../proc/ct_from_pt_derivs.html" xlink:title="ct_from_pt_derivs">
+<polygon fill="#d9534f" stroke="#d9534f" points="936.12,-241.27 831.6,-241.27 831.6,-217 936.12,-217 936.12,-241.27"/>
+<text xml:space="preserve" text-anchor="middle" x="883.86" y="-225.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ct_from_pt_derivs</text>
+</a>
+</g>
+</g>
+<!-- proc~roquet_model_ct_derivs&#45;&gt;proc~ct_from_pt_derivs -->
+<g id="proc~~kappa_shear_vertex_kernel~~CallsGraph_edge20" class="edge">
+<title>proc~roquet_model_ct_derivs&#45;&gt;proc~ct_from_pt_derivs</title>
+<path fill="none" stroke="#ff0000" d="M795.83,-229.13C803.81,-229.13 811.93,-229.13 819.84,-229.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="819.72,-232.64 829.72,-229.14 819.72,-225.64 819.72,-232.64"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprockappa_shear_vertex_kernelCallsGraph = svgPanZoom('#prockappa_shear_vertex_kernelCallsGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~kappa_shear_vertex_kernel~~CalledByGraph Pages: 1 -->
+<svg id="prockappa_shear_vertex_kernelCalledByGraph" width="641pt" height="59pt"
+ viewBox="0.00 0.00 641.00 59.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~kappa_shear_vertex_kernel~~CalledByGraph" class="graph" transform="scale(0.519382 0.519382) rotate(0) translate(4 110.27)">
+<title>proc~~kappa_shear_vertex_kernel~~CalledByGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-110.27 1230.16,-110.27 1230.16,4 -4,4"/>
+<!-- proc~kappa_shear_vertex_kernel -->
+<g id="proc~~kappa_shear_vertex_kernel~~CalledByGraph_node1" class="node">
+<title>proc~kappa_shear_vertex_kernel</title>
+<polygon fill="none" stroke="black" points="1226.16,-45.27 1069.14,-45.27 1069.14,-21 1226.16,-21 1226.16,-45.27"/>
+<text xml:space="preserve" text-anchor="middle" x="1147.65" y="-29.53" font-family="Helvetica,sans-Serif" font-size="10.50">kappa_shear_vertex_kernel</text>
+</g>
+<!-- proc~kappa_shear_compute -->
+<g id="proc~~kappa_shear_vertex_kernel~~CalledByGraph_node2" class="node">
+<title>proc~kappa_shear_compute</title>
+<g id="a_proc~~kappa_shear_vertex_kernel~~CalledByGraph_node2"><a xlink:href="../proc/kappa_shear_compute.html" xlink:title="kappa_shear_compute">
+<polygon fill="#d9534f" stroke="#d9534f" points="1033.14,-45.27 900.87,-45.27 900.87,-21 1033.14,-21 1033.14,-45.27"/>
+<text xml:space="preserve" text-anchor="middle" x="967.01" y="-29.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">kappa_shear_compute</text>
+</a>
+</g>
+</g>
+<!-- proc~kappa_shear_compute&#45;&gt;proc~kappa_shear_vertex_kernel -->
+<g id="proc~~kappa_shear_vertex_kernel~~CalledByGraph_edge1" class="edge">
+<title>proc~kappa_shear_compute&#45;&gt;proc~kappa_shear_vertex_kernel</title>
+<path fill="none" stroke="#ff0000" d="M1033.51,-33.13C1041.3,-33.13 1049.34,-33.13 1057.38,-33.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="1057.21,-36.64 1067.21,-33.14 1057.21,-29.64 1057.21,-36.64"/>
+</g>
+<!-- proc~kshear_stage_merge -->
+<g id="proc~~kappa_shear_vertex_kernel~~CalledByGraph_node3" class="node">
+<title>proc~kshear_stage_merge</title>
+<g id="a_proc~~kappa_shear_vertex_kernel~~CalledByGraph_node3"><a xlink:href="../proc/kshear_stage_merge.html" xlink:title="kshear_stage_merge">
+<polygon fill="#d9534f" stroke="#d9534f" points="864.87,-25.27 742.35,-25.27 742.35,-1 864.87,-1 864.87,-25.27"/>
+<text xml:space="preserve" text-anchor="middle" x="803.61" y="-9.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">kshear_stage_merge</text>
+</a>
+</g>
+</g>
+<!-- proc~kshear_stage_merge&#45;&gt;proc~kappa_shear_compute -->
+<g id="proc~~kappa_shear_vertex_kernel~~CalledByGraph_edge2" class="edge">
+<title>proc~kshear_stage_merge&#45;&gt;proc~kappa_shear_compute</title>
+<path fill="none" stroke="#ff0000" d="M865.17,-20.64C873.01,-21.61 881.12,-22.62 889.19,-23.62"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="888.66,-27.08 899.01,-24.83 889.52,-20.13 888.66,-27.08"/>
+</g>
+<!-- proc~vmix_build_coefficients -->
+<g id="proc~~kappa_shear_vertex_kernel~~CalledByGraph_node4" class="node">
+<title>proc~vmix_build_coefficients</title>
+<g id="a_proc~~kappa_shear_vertex_kernel~~CalledByGraph_node4"><a xlink:href="../proc/vmix_build_coefficients.html" xlink:title="vmix_build_coefficients">
+<polygon fill="#d9534f" stroke="#d9534f" points="706.35,-45.27 571.08,-45.27 571.08,-21 706.35,-21 706.35,-45.27"/>
+<text xml:space="preserve" text-anchor="middle" x="638.72" y="-29.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vmix_build_coefficients</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_build_coefficients&#45;&gt;proc~kappa_shear_compute -->
+<g id="proc~~kappa_shear_vertex_kernel~~CalledByGraph_edge3" class="edge">
+<title>proc~vmix_build_coefficients&#45;&gt;proc~kappa_shear_compute</title>
+<path fill="none" stroke="#ff0000" d="M706.79,-33.88C718.64,-33.99 730.86,-34.08 742.35,-34.13 796.8,-34.4 810.42,-34.4 864.87,-34.13 872.69,-34.1 880.84,-34.04 888.99,-33.98"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="888.97,-37.48 898.94,-33.89 888.91,-30.48 888.97,-37.48"/>
+</g>
+<!-- proc~vmix_build_coefficients&#45;&gt;proc~kshear_stage_merge -->
+<g id="proc~~kappa_shear_vertex_kernel~~CalledByGraph_edge4" class="edge">
+<title>proc~vmix_build_coefficients&#45;&gt;proc~kshear_stage_merge</title>
+<path fill="none" stroke="#ff0000" d="M706.44,-24.94C714.44,-23.96 722.64,-22.95 730.71,-21.96"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="731.01,-25.45 740.5,-20.76 730.15,-18.51 731.01,-25.45"/>
+</g>
+<!-- proc~apply_deferred_thermo -->
+<g id="proc~~kappa_shear_vertex_kernel~~CalledByGraph_node5" class="node">
+<title>proc~apply_deferred_thermo</title>
+<g id="a_proc~~kappa_shear_vertex_kernel~~CalledByGraph_node5"><a xlink:href="../proc/apply_deferred_thermo.html" xlink:title="apply_deferred_thermo">
+<polygon fill="#d9534f" stroke="#d9534f" points="535.08,-24.27 399.06,-24.27 399.06,0 535.08,0 535.08,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="467.07" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">apply_deferred_thermo</text>
+</a>
+</g>
+</g>
+<!-- proc~apply_deferred_thermo&#45;&gt;proc~vmix_build_coefficients -->
+<g id="proc~~kappa_shear_vertex_kernel~~CalledByGraph_edge5" class="edge">
+<title>proc~apply_deferred_thermo&#45;&gt;proc~vmix_build_coefficients</title>
+<path fill="none" stroke="#00ffff" d="M535.12,-20.43C543.05,-21.42 551.2,-22.43 559.27,-23.42"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="558.74,-26.89 569.1,-24.64 559.6,-19.94 558.74,-26.89"/>
+</g>
+<!-- proc~vmix_apply_in_stage -->
+<g id="proc~~kappa_shear_vertex_kernel~~CalledByGraph_node6" class="node">
+<title>proc~vmix_apply_in_stage</title>
+<g id="a_proc~~kappa_shear_vertex_kernel~~CalledByGraph_node6"><a xlink:href="../proc/vmix_apply_in_stage.html" xlink:title="vmix_apply_in_stage">
+<polygon fill="#d9534f" stroke="#d9534f" points="527.58,-66.27 406.56,-66.27 406.56,-42 527.58,-42 527.58,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="467.07" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">vmix_apply_in_stage</text>
+</a>
+</g>
+</g>
+<!-- proc~vmix_apply_in_stage&#45;&gt;proc~vmix_build_coefficients -->
+<g id="proc~~kappa_shear_vertex_kernel~~CalledByGraph_edge6" class="edge">
+<title>proc~vmix_apply_in_stage&#45;&gt;proc~vmix_build_coefficients</title>
+<path fill="none" stroke="#00ffff" d="M527.88,-46.73C538.04,-45.47 548.72,-44.15 559.27,-42.85"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="559.64,-46.33 569.14,-41.62 558.78,-39.38 559.64,-46.33"/>
+</g>
+<!-- proc~ocean_dyn_step_split -->
+<g id="proc~~kappa_shear_vertex_kernel~~CalledByGraph_node7" class="node">
+<title>proc~ocean_dyn_step_split</title>
+<g id="a_proc~~kappa_shear_vertex_kernel~~CalledByGraph_node7"><a xlink:href="../proc/ocean_dyn_step_split.html" xlink:title="ocean_dyn_step_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="236.04,-44.27 112.02,-44.27 112.02,-20 236.04,-20 236.04,-44.27"/>
+<text xml:space="preserve" text-anchor="middle" x="174.03" y="-28.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step_split</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step_split&#45;&gt;proc~apply_deferred_thermo -->
+<g id="proc~~kappa_shear_vertex_kernel~~CalledByGraph_edge7" class="edge">
+<title>proc~ocean_dyn_step_split&#45;&gt;proc~apply_deferred_thermo</title>
+<path fill="none" stroke="#ff0000" d="M236.4,-27.92C280.31,-24.9 339.79,-20.81 387.22,-17.55"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="387.45,-21.05 397.18,-16.87 386.97,-14.06 387.45,-21.05"/>
+</g>
+<!-- proc~run_stage_split -->
+<g id="proc~~kappa_shear_vertex_kernel~~CalledByGraph_node9" class="node">
+<title>proc~run_stage_split</title>
+<g id="a_proc~~kappa_shear_vertex_kernel~~CalledByGraph_node9"><a xlink:href="../proc/run_stage_split.html" xlink:title="run_stage_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="363.06,-64.27 272.04,-64.27 272.04,-40 363.06,-40 363.06,-64.27"/>
+<text xml:space="preserve" text-anchor="middle" x="317.55" y="-48.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage_split</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step_split&#45;&gt;proc~run_stage_split -->
+<g id="proc~~kappa_shear_vertex_kernel~~CalledByGraph_edge12" class="edge">
+<title>proc~ocean_dyn_step_split&#45;&gt;proc~run_stage_split</title>
+<path fill="none" stroke="#0000ff" d="M236.28,-40.79C244.31,-41.93 252.51,-43.08 260.45,-44.21"/>
+<polygon fill="#0000ff" stroke="#0000ff" points="259.96,-47.67 270.35,-45.61 260.93,-40.74 259.96,-47.67"/>
+</g>
+<!-- proc~run_stage -->
+<g id="proc~~kappa_shear_vertex_kernel~~CalledByGraph_node8" class="node">
+<title>proc~run_stage</title>
+<g id="a_proc~~kappa_shear_vertex_kernel~~CalledByGraph_node8"><a xlink:href="../proc/run_stage.html" xlink:title="run_stage">
+<polygon fill="#d9534f" stroke="#d9534f" points="349.56,-106.27 285.54,-106.27 285.54,-82 349.56,-82 349.56,-106.27"/>
+<text xml:space="preserve" text-anchor="middle" x="317.55" y="-90.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">run_stage</text>
+</a>
+</g>
+</g>
+<!-- proc~run_stage&#45;&gt;proc~vmix_apply_in_stage -->
+<g id="proc~~kappa_shear_vertex_kernel~~CalledByGraph_edge8" class="edge">
+<title>proc~run_stage&#45;&gt;proc~vmix_apply_in_stage</title>
+<path fill="none" stroke="#00ffff" d="M349.84,-85.65C366.96,-81.01 388.72,-75.11 408.77,-69.67"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="409.5,-73.1 418.24,-67.11 407.67,-66.34 409.5,-73.1"/>
+</g>
+<!-- proc~run_stage_split&#45;&gt;proc~vmix_apply_in_stage -->
+<g id="proc~~kappa_shear_vertex_kernel~~CalledByGraph_edge9" class="edge">
+<title>proc~run_stage_split&#45;&gt;proc~vmix_apply_in_stage</title>
+<path fill="none" stroke="#00ffff" d="M363.21,-52.74C373.28,-52.88 384.21,-53.03 395.07,-53.17"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="394.75,-56.67 404.79,-53.3 394.84,-49.67 394.75,-56.67"/>
+</g>
+<!-- proc~engine_step -->
+<g id="proc~~kappa_shear_vertex_kernel~~CalledByGraph_node10" class="node">
+<title>proc~engine_step</title>
+<g id="a_proc~~kappa_shear_vertex_kernel~~CalledByGraph_node10"><a xlink:href="../proc/engine_step.html" xlink:title="engine_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="76.02,-44.27 0,-44.27 0,-20 76.02,-20 76.02,-44.27"/>
+<text xml:space="preserve" text-anchor="middle" x="38.01" y="-28.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~ocean_dyn_step_split -->
+<g id="proc~~kappa_shear_vertex_kernel~~CalledByGraph_edge10" class="edge">
+<title>proc~engine_step&#45;&gt;proc~ocean_dyn_step_split</title>
+<path fill="none" stroke="#ff0000" d="M76.34,-32.13C83.9,-32.13 92.1,-32.13 100.41,-32.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="100.25,-35.64 110.25,-32.14 100.25,-28.64 100.25,-35.64"/>
+</g>
+<!-- proc~ocean_dyn_step -->
+<g id="proc~~kappa_shear_vertex_kernel~~CalledByGraph_node11" class="node">
+<title>proc~ocean_dyn_step</title>
+<g id="a_proc~~kappa_shear_vertex_kernel~~CalledByGraph_node11"><a xlink:href="../proc/ocean_dyn_step.html" xlink:title="ocean_dyn_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="222.54,-106.27 125.52,-106.27 125.52,-82 222.54,-82 222.54,-106.27"/>
+<text xml:space="preserve" text-anchor="middle" x="174.03" y="-90.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step&#45;&gt;proc~run_stage -->
+<g id="proc~~kappa_shear_vertex_kernel~~CalledByGraph_edge11" class="edge">
+<title>proc~ocean_dyn_step&#45;&gt;proc~run_stage</title>
+<path fill="none" stroke="#00ff00" d="M222.94,-94.13C239.46,-94.13 257.84,-94.13 273.91,-94.13"/>
+<polygon fill="#00ff00" stroke="#00ff00" points="273.63,-97.64 283.63,-94.14 273.63,-90.64 273.63,-97.64"/>
+</g>
+</g>
+</svg>
+</div>                <script>
+                  var panprockappa_shear_vertex_kernelCalledByGraph = svgPanZoom('#prockappa_shear_vertex_kernelCalledByGraph',
+                    {zoomEnabled: true, controlIconsEnabled: true, fit: true, center: true,}
+                  );
+                </script>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    <section>    
+      <h2>Variables</h2>
+      <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Visibility</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+<th></th><th scope="col">Initial</th>        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-col_ok"></span>
+              logical,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>col_ok</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-do_merge~2"></span>
+              logical,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>do_merge</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-f2_val~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>f2_val</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-h_sd~3"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>h_sd</strong>(NZL)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hc~3"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hc</strong>(NZL)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hint_s~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hint_s</strong>(NZLI)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ic~7"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ic</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-idz_int_s~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>idz_int_s</strong>(NZLI)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-idz_s~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>idz_s</strong>(NZL)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-il2_s~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>il2_s</strong>(NZLI)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-jc~6"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>jc</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-k~98"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>k</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-kappa_avg_sd~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>kappa_avg_sd</strong>(NZLI)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-kappa_c~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>kappa_c</strong>(NZLI)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-kc~2"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>kc</strong>(NZL+1)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-kf~4"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>kf</strong>(NZL+1)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-kg~3"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>kg</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-merge_on~2"></span>
+              logical,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>merge_on</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-nzc~2"></span>
+              integer,
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>nzc</strong></td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-s_sd~3"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>s_sd</strong>(NZL)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-sc~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>sc</strong>(NZL)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-t_sd~3"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>t_sd</strong>(NZL)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-tc~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>tc</strong>(NZL)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-tke_avg_sd~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>tke_avg_sd</strong>(NZLI)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-tke_c~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>tke_c</strong>(NZLI)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-u_sd~3"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>u_sd</strong>(NZL)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-uc~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>uc</strong>(NZL)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-v_sd~3"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>v_sd</strong>(NZL)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-vc~2"></span>
+              real(kind=wp),
+            </td>
+              <td>private</td>
+            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>vc</strong>(NZL)</td>
+                <td></td>
+                <td></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    </section>
+    <br>
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">pure subroutine </span><span class="n">kappa_shear_vertex_kernel</span><span class="p">(</span><span class="n">this</span><span class="p">,</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">dt</span><span class="p">,</span><span class="w"> </span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                             </span><span class="n">u_face</span><span class="p">,</span><span class="w"> </span><span class="n">v_face</span><span class="p">,</span><span class="w"> </span><span class="n">hT</span><span class="p">,</span><span class="w"> </span><span class="n">hS</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                             </span><span class="n">wet_t</span><span class="p">,</span><span class="w"> </span><span class="n">wet_u</span><span class="p">,</span><span class="w"> </span><span class="n">wet_v</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! Per-CORNER JHL08 solve (MOM6 vertex form, Pass B).  One</span>
+<span class="w">      </span><span class="c">!! `do concurrent (jc, ic)` over the interior corners</span>
+<span class="w">      </span><span class="c">!! [2,nx]x[2,ny] — the set whose full 2x2 cell patch exists</span>
+<span class="w">      </span><span class="c">!! in-array, which covers every corner any owned tracer cell</span>
+<span class="w">      </span><span class="c">!! needs (nghost &gt;= 1).  Ring corners stay 0.</span>
+<span class="w">      </span><span class="c">!!</span>
+<span class="w">      </span><span class="c">!! Per corner: activity test = ANY adjacent velocity face open</span>
+<span class="w">      </span><span class="c">!! (NOT the 4-cell corner mask — a coastline corner with 1-3 wet</span>
+<span class="w">      </span><span class="c">!! cells IS solved, from the mask-weighted average of the wet</span>
+<span class="w">      </span><span class="c">!! cells); gather (`ks_gather_corner`); non-finite guard (an</span>
+<span class="w">      </span><span class="c">!! unfilled OBC ghost corner must yield kd=0, not a laundered</span>
+<span class="w">      </span><span class="c">!! clamp value); floor-or-merge exactly as the column path; the</span>
+<span class="w">      </span><span class="c">!! SAME shared column solve (`ks_precompute` + `ks_solve_column`);</span>
+<span class="w">      </span><span class="c">!! scatter into `kd_corner` with the surface-down -&gt; bottom-up</span>
+<span class="w">      </span><span class="c">!! flip.  f^2 is taken straight at the corner (no averaging).</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_kappa_shear_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">this</span>
+<span class="w">      </span><span class="kt">integer</span><span class="p">,</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dt</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">h_layer</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">u_face</span><span class="p">(</span><span class="n">nx</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">v_face</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">hT</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">hS</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">wet_t</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">wet_u</span><span class="p">(</span><span class="n">nx</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">wet_v</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ic</span><span class="p">,</span><span class="w"> </span><span class="n">jc</span><span class="p">,</span><span class="w"> </span><span class="n">k</span><span class="p">,</span><span class="w"> </span><span class="n">kg</span><span class="p">,</span><span class="w"> </span><span class="n">nzc</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">f2_val</span>
+<span class="w">      </span><span class="kt">logical</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">merge_on</span><span class="p">,</span><span class="w"> </span><span class="n">do_merge</span><span class="p">,</span><span class="w"> </span><span class="n">col_ok</span>
+<span class="w">      </span><span class="c">! gathered surface-down corner column</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">h_sd</span><span class="p">(</span><span class="n">NZL</span><span class="p">),</span><span class="w"> </span><span class="n">u_sd</span><span class="p">(</span><span class="n">NZL</span><span class="p">),</span><span class="w"> </span><span class="n">v_sd</span><span class="p">(</span><span class="n">NZL</span><span class="p">),</span><span class="w"> </span><span class="n">t_sd</span><span class="p">(</span><span class="n">NZL</span><span class="p">),</span><span class="w"> </span><span class="n">s_sd</span><span class="p">(</span><span class="n">NZL</span><span class="p">)</span>
+<span class="w">      </span><span class="c">! precomputed interface/layer grids</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">idz_s</span><span class="p">(</span><span class="n">NZL</span><span class="p">),</span><span class="w"> </span><span class="n">idz_int_s</span><span class="p">(</span><span class="n">NZLI</span><span class="p">),</span><span class="w"> </span><span class="n">hint_s</span><span class="p">(</span><span class="n">NZLI</span><span class="p">),</span><span class="w"> </span><span class="n">il2_s</span><span class="p">(</span><span class="n">NZLI</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">kappa_avg_sd</span><span class="p">(</span><span class="n">NZLI</span><span class="p">),</span><span class="w"> </span><span class="n">tke_avg_sd</span><span class="p">(</span><span class="n">NZLI</span><span class="p">)</span>
+<span class="w">      </span><span class="c">! D4 massless-merge per-column scratch (same set as the column kernel)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">hc</span><span class="p">(</span><span class="n">NZL</span><span class="p">),</span><span class="w"> </span><span class="n">uc</span><span class="p">(</span><span class="n">NZL</span><span class="p">),</span><span class="w"> </span><span class="n">vc</span><span class="p">(</span><span class="n">NZL</span><span class="p">),</span><span class="w"> </span><span class="n">tc</span><span class="p">(</span><span class="n">NZL</span><span class="p">),</span><span class="w"> </span><span class="n">sc</span><span class="p">(</span><span class="n">NZL</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">kappa_c</span><span class="p">(</span><span class="n">NZLI</span><span class="p">),</span><span class="w"> </span><span class="n">tke_c</span><span class="p">(</span><span class="n">NZLI</span><span class="p">),</span><span class="w"> </span><span class="n">kf</span><span class="p">(</span><span class="n">NZL</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+<span class="w">      </span><span class="kt">integer</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">kc</span><span class="p">(</span><span class="n">NZL</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span>
+
+<span class="w">      </span><span class="n">merge_on</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">massless_merge</span>
+
+<span class="w">      </span><span class="k">do</span><span class="w"> </span><span class="k">concurrent</span><span class="p">(</span><span class="n">jc</span><span class="o">=</span><span class="mi">2</span><span class="p">:</span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">ic</span><span class="o">=</span><span class="mi">2</span><span class="p">:</span><span class="n">nx</span><span class="p">)</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">         </span><span class="n">local</span><span class="p">(</span><span class="n">k</span><span class="p">,</span><span class="w"> </span><span class="n">kg</span><span class="p">,</span><span class="w"> </span><span class="n">nzc</span><span class="p">,</span><span class="w"> </span><span class="n">f2_val</span><span class="p">,</span><span class="w"> </span><span class="n">do_merge</span><span class="p">,</span><span class="w"> </span><span class="n">col_ok</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">               </span><span class="n">h_sd</span><span class="p">,</span><span class="w"> </span><span class="n">u_sd</span><span class="p">,</span><span class="w"> </span><span class="n">v_sd</span><span class="p">,</span><span class="w"> </span><span class="n">t_sd</span><span class="p">,</span><span class="w"> </span><span class="n">s_sd</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">               </span><span class="n">idz_s</span><span class="p">,</span><span class="w"> </span><span class="n">idz_int_s</span><span class="p">,</span><span class="w"> </span><span class="n">hint_s</span><span class="p">,</span><span class="w"> </span><span class="n">il2_s</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">               </span><span class="n">kappa_avg_sd</span><span class="p">,</span><span class="w"> </span><span class="n">tke_avg_sd</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">               </span><span class="n">hc</span><span class="p">,</span><span class="w"> </span><span class="n">uc</span><span class="p">,</span><span class="w"> </span><span class="n">vc</span><span class="p">,</span><span class="w"> </span><span class="n">tc</span><span class="p">,</span><span class="w"> </span><span class="n">sc</span><span class="p">,</span><span class="w"> </span><span class="n">kappa_c</span><span class="p">,</span><span class="w"> </span><span class="n">tke_c</span><span class="p">,</span><span class="w"> </span><span class="n">kc</span><span class="p">,</span><span class="w"> </span><span class="n">kf</span><span class="p">)</span>
+
+<span class="w">         </span><span class="c">! ---- Default outputs (kept for inactive / non-finite corners) ----</span>
+<span class="w">         </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">            </span><span class="n">kappa_avg_sd</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">            </span><span class="n">tke_avg_sd</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">         </span><span class="k">end do</span>
+
+<span class="w">         </span><span class="c">! ---- Activity test: any adjacent velocity face open ----</span>
+<span class="w">         </span><span class="k">if</span><span class="w"> </span><span class="p">((</span><span class="n">wet_u</span><span class="p">(</span><span class="n">ic</span><span class="p">,</span><span class="w"> </span><span class="n">jc</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">wet_u</span><span class="p">(</span><span class="n">ic</span><span class="p">,</span><span class="w"> </span><span class="n">jc</span><span class="p">))</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">             </span><span class="p">(</span><span class="n">wet_v</span><span class="p">(</span><span class="n">ic</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">jc</span><span class="p">)</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">wet_v</span><span class="p">(</span><span class="n">ic</span><span class="p">,</span><span class="w"> </span><span class="n">jc</span><span class="p">))</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0.0_wp</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+
+<span class="k">            call </span><span class="n">ks_gather_corner</span><span class="p">(</span><span class="n">nx</span><span class="p">,</span><span class="w"> </span><span class="n">ny</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">ic</span><span class="p">,</span><span class="w"> </span><span class="n">jc</span><span class="p">,</span><span class="w"> </span><span class="n">h_layer</span><span class="p">,</span><span class="w"> </span><span class="n">u_face</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                  </span><span class="n">v_face</span><span class="p">,</span><span class="w"> </span><span class="n">hT</span><span class="p">,</span><span class="w"> </span><span class="n">hS</span><span class="p">,</span><span class="w"> </span><span class="n">wet_t</span><span class="p">,</span><span class="w"> </span><span class="n">wet_u</span><span class="p">,</span><span class="w"> </span><span class="n">wet_v</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                  </span><span class="n">h_sd</span><span class="p">,</span><span class="w"> </span><span class="n">u_sd</span><span class="p">,</span><span class="w"> </span><span class="n">v_sd</span><span class="p">,</span><span class="w"> </span><span class="n">t_sd</span><span class="p">,</span><span class="w"> </span><span class="n">s_sd</span><span class="p">)</span>
+
+<span class="w">            </span><span class="c">! ---- Non-finite guard (OBC ghost-corner armour).  max()</span>
+<span class="w">            </span><span class="c">! and comparisons LAUNDER/skip NaN under relaxed FP, so an</span>
+<span class="w">            </span><span class="c">! explicit finite check is the only reliable gate; a corrupt</span>
+<span class="w">            </span><span class="c">! gather yields kd=0 for this corner, never a plausible</span>
+<span class="w">            </span><span class="c">! laundered value. ----</span>
+<span class="w">            </span><span class="n">col_ok</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">true</span><span class="p">.</span>
+<span class="w">            </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span>
+<span class="w">               </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="p">(</span><span class="n">ieee_is_finite</span><span class="p">(</span><span class="n">h_sd</span><span class="p">(</span><span class="n">k</span><span class="p">))</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                          </span><span class="n">ieee_is_finite</span><span class="p">(</span><span class="n">u_sd</span><span class="p">(</span><span class="n">k</span><span class="p">))</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                          </span><span class="n">ieee_is_finite</span><span class="p">(</span><span class="n">v_sd</span><span class="p">(</span><span class="n">k</span><span class="p">))</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                          </span><span class="n">ieee_is_finite</span><span class="p">(</span><span class="n">t_sd</span><span class="p">(</span><span class="n">k</span><span class="p">))</span><span class="w"> </span><span class="p">.</span><span class="nb">and</span><span class="p">.</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                          </span><span class="n">ieee_is_finite</span><span class="p">(</span><span class="n">s_sd</span><span class="p">(</span><span class="n">k</span><span class="p">))))</span><span class="w"> </span><span class="n">col_ok</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">false</span><span class="p">.</span>
+<span class="w">            </span><span class="k">end do</span>
+
+<span class="k">            if</span><span class="w"> </span><span class="p">(</span><span class="n">col_ok</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="w">               </span><span class="c">! ---- I1 precheck: merge only when the knob is on AND the</span>
+<span class="w">               </span><span class="c">! corner column actually carries a vanished layer.</span>
+<span class="w">               </span><span class="n">do_merge</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">false</span><span class="p">.</span>
+<span class="w">               </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">merge_on</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                  do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span>
+<span class="w">                     </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">h_sd</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">&lt;</span><span class="w"> </span><span class="n">H_VANISHED</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                        </span><span class="n">do_merge</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">.</span><span class="n">true</span><span class="p">.</span>
+<span class="w">                        </span><span class="k">exit</span>
+<span class="k">                     end if</span>
+<span class="k">                  end do</span>
+<span class="k">               end if</span>
+
+<span class="w">               </span><span class="c">! f^2 straight at the corner — f is natively a corner</span>
+<span class="w">               </span><span class="c">! quantity on the C-grid (signed; square it).</span>
+<span class="w">               </span><span class="n">f2_val</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">f_corner</span><span class="p">(</span><span class="n">ic</span><span class="p">,</span><span class="w"> </span><span class="n">jc</span><span class="p">)</span><span class="o">*</span><span class="n">this</span><span class="p">%</span><span class="n">f_corner</span><span class="p">(</span><span class="n">ic</span><span class="p">,</span><span class="w"> </span><span class="n">jc</span><span class="p">)</span>
+
+<span class="w">               </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">do_merge</span><span class="p">)</span><span class="w"> </span><span class="k">then</span>
+<span class="k">                  call </span><span class="n">massless_build_maps</span><span class="p">(</span><span class="n">h_sd</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">H_VANISHED</span><span class="p">,</span><span class="w"> </span><span class="n">nzc</span><span class="p">,</span><span class="w"> </span><span class="n">hc</span><span class="p">,</span><span class="w"> </span><span class="n">kc</span><span class="p">,</span><span class="w"> </span><span class="n">kf</span><span class="p">)</span>
+<span class="w">                  </span><span class="k">call </span><span class="n">massless_merge_fields</span><span class="p">(</span><span class="n">h_sd</span><span class="p">,</span><span class="w"> </span><span class="n">kc</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">nzc</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                             </span><span class="n">u_sd</span><span class="p">,</span><span class="w"> </span><span class="n">v_sd</span><span class="p">,</span><span class="w"> </span><span class="n">t_sd</span><span class="p">,</span><span class="w"> </span><span class="n">s_sd</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                             </span><span class="n">uc</span><span class="p">,</span><span class="w"> </span><span class="n">vc</span><span class="p">,</span><span class="w"> </span><span class="n">tc</span><span class="p">,</span><span class="w"> </span><span class="n">sc</span><span class="p">)</span>
+<span class="w">                  </span><span class="k">call </span><span class="n">ks_precompute</span><span class="p">(</span><span class="n">nzc</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">lz_rescale</span><span class="p">,</span><span class="w"> </span><span class="n">hc</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                     </span><span class="n">idz_s</span><span class="p">,</span><span class="w"> </span><span class="n">idz_int_s</span><span class="p">,</span><span class="w"> </span><span class="n">hint_s</span><span class="p">,</span><span class="w"> </span><span class="n">il2_s</span><span class="p">)</span>
+<span class="w">                  </span><span class="k">call </span><span class="n">ks_solve_column</span><span class="p">(</span><span class="n">nzc</span><span class="p">,</span><span class="w"> </span><span class="n">dt</span><span class="p">,</span><span class="w"> </span><span class="n">f2_val</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">rho0</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                       </span><span class="n">this</span><span class="p">%</span><span class="n">ri_crit</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">shearmix_rate</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                       </span><span class="n">this</span><span class="p">%</span><span class="n">fri_curvature</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">c_n</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">c_s</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                       </span><span class="n">this</span><span class="p">%</span><span class="n">lambda</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">kappa_0</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">kappa_seed</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                       </span><span class="n">this</span><span class="p">%</span><span class="n">kappa_trunc</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">tke_bg</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">tol_err</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                       </span><span class="n">this</span><span class="p">%</span><span class="n">max_inner_it</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">max_substep_it</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                       </span><span class="n">this</span><span class="p">%</span><span class="n">src_max_chg</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">vel_underflow</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                       </span><span class="n">this</span><span class="p">%</span><span class="n">eos</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                       </span><span class="n">hc</span><span class="p">,</span><span class="w"> </span><span class="n">uc</span><span class="p">,</span><span class="w"> </span><span class="n">vc</span><span class="p">,</span><span class="w"> </span><span class="n">tc</span><span class="p">,</span><span class="w"> </span><span class="n">sc</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                       </span><span class="n">idz_s</span><span class="p">,</span><span class="w"> </span><span class="n">idz_int_s</span><span class="p">,</span><span class="w"> </span><span class="n">hint_s</span><span class="p">,</span><span class="w"> </span><span class="n">il2_s</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                       </span><span class="n">kappa_c</span><span class="p">,</span><span class="w"> </span><span class="n">tke_c</span><span class="p">)</span>
+<span class="w">                  </span><span class="k">call </span><span class="n">massless_interp_back</span><span class="p">(</span><span class="n">kappa_c</span><span class="p">,</span><span class="w"> </span><span class="n">kc</span><span class="p">,</span><span class="w"> </span><span class="n">kf</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">kappa_avg_sd</span><span class="p">)</span>
+<span class="w">                  </span><span class="k">call </span><span class="n">massless_interp_back</span><span class="p">(</span><span class="n">tke_c</span><span class="p">,</span><span class="w"> </span><span class="n">kc</span><span class="p">,</span><span class="w"> </span><span class="n">kf</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">tke_avg_sd</span><span class="p">)</span>
+<span class="w">               </span><span class="k">else</span>
+<span class="w">                  </span><span class="c">! Blunt gather floor at H_VANISHED, solve on nz —</span>
+<span class="w">                  </span><span class="c">! mirrors the column path (T,S need no back-out: the</span>
+<span class="w">                  </span><span class="c">! gather already returns layer values).</span>
+<span class="w">                  </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span>
+<span class="w">                     </span><span class="n">h_sd</span><span class="p">(</span><span class="n">k</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nb">max</span><span class="p">(</span><span class="n">h_sd</span><span class="p">(</span><span class="n">k</span><span class="p">),</span><span class="w"> </span><span class="n">H_VANISHED</span><span class="p">)</span>
+<span class="w">                  </span><span class="k">end do</span>
+<span class="k">                  call </span><span class="n">ks_precompute</span><span class="p">(</span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">lz_rescale</span><span class="p">,</span><span class="w"> </span><span class="n">h_sd</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                     </span><span class="n">idz_s</span><span class="p">,</span><span class="w"> </span><span class="n">idz_int_s</span><span class="p">,</span><span class="w"> </span><span class="n">hint_s</span><span class="p">,</span><span class="w"> </span><span class="n">il2_s</span><span class="p">)</span>
+<span class="w">                  </span><span class="k">call </span><span class="n">ks_solve_column</span><span class="p">(</span><span class="n">nz</span><span class="p">,</span><span class="w"> </span><span class="n">dt</span><span class="p">,</span><span class="w"> </span><span class="n">f2_val</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">rho0</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                       </span><span class="n">this</span><span class="p">%</span><span class="n">ri_crit</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">shearmix_rate</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                       </span><span class="n">this</span><span class="p">%</span><span class="n">fri_curvature</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">c_n</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">c_s</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                       </span><span class="n">this</span><span class="p">%</span><span class="n">lambda</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">kappa_0</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">kappa_seed</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                       </span><span class="n">this</span><span class="p">%</span><span class="n">kappa_trunc</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">tke_bg</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">tol_err</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                       </span><span class="n">this</span><span class="p">%</span><span class="n">max_inner_it</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">max_substep_it</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                       </span><span class="n">this</span><span class="p">%</span><span class="n">src_max_chg</span><span class="p">,</span><span class="w"> </span><span class="n">this</span><span class="p">%</span><span class="n">vel_underflow</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                       </span><span class="n">this</span><span class="p">%</span><span class="n">eos</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                       </span><span class="n">h_sd</span><span class="p">,</span><span class="w"> </span><span class="n">u_sd</span><span class="p">,</span><span class="w"> </span><span class="n">v_sd</span><span class="p">,</span><span class="w"> </span><span class="n">t_sd</span><span class="p">,</span><span class="w"> </span><span class="n">s_sd</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                       </span><span class="n">idz_s</span><span class="p">,</span><span class="w"> </span><span class="n">idz_int_s</span><span class="p">,</span><span class="w"> </span><span class="n">hint_s</span><span class="p">,</span><span class="w"> </span><span class="n">il2_s</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                                       </span><span class="n">kappa_avg_sd</span><span class="p">,</span><span class="w"> </span><span class="n">tke_avg_sd</span><span class="p">)</span>
+<span class="w">               </span><span class="k">end if</span>
+<span class="k">            end if</span>
+<span class="k">         end if</span>
+
+<span class="w">         </span><span class="c">! ---- Scatter with the flip; force exact 0 at bed + surface.</span>
+<span class="w">         </span><span class="c">! No mask multiply here (the non-bug store): land is handled by</span>
+<span class="w">         </span><span class="c">! the activity test, and Pass C masks the tracer-point output. ----</span>
+<span class="w">         </span><span class="k">do </span><span class="n">k</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span>
+<span class="w">            </span><span class="n">kg</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">nz</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">2</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">k</span>
+<span class="w">            </span><span class="n">this</span><span class="p">%</span><span class="n">kd_corner</span><span class="p">(</span><span class="n">ic</span><span class="p">,</span><span class="w"> </span><span class="n">jc</span><span class="p">,</span><span class="w"> </span><span class="n">kg</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">kappa_avg_sd</span><span class="p">(</span><span class="n">k</span><span class="p">)</span>
+<span class="w">         </span><span class="k">end do</span>
+<span class="k">         </span><span class="n">this</span><span class="p">%</span><span class="n">kd_corner</span><span class="p">(</span><span class="n">ic</span><span class="p">,</span><span class="w"> </span><span class="n">jc</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">         </span><span class="n">this</span><span class="p">%</span><span class="n">kd_corner</span><span class="p">(</span><span class="n">ic</span><span class="p">,</span><span class="w"> </span><span class="n">jc</span><span class="p">,</span><span class="w"> </span><span class="n">nz</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="p">)</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">0.0_wp</span>
+<span class="w">      </span><span class="k">end do</span>
+<span class="k">   end subroutine </span><span class="n">kappa_shear_vertex_kernel</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-11-13 23:21 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>

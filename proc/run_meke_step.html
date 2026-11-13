@@ -1,0 +1,1003 @@
+<!-- -*- mode: jinja2 -*- -->
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+      <meta name="description" content="GPU-native regional ocean solver — Arakawa C-grid, continuity-PPM, split-explicit RK2, ALE vertical coordinates, portable across NVHPC/gfortran/ifx.">
+    <meta name="author" content="Jorge Luis Galvez Vallejo" >
+    <link rel="icon" href="../favicon.png">
+
+    <title>run_meke_step &ndash; Roundabout</title>
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
+    <!-- Font Awesome -->
+    <link href="../css/fontawesome.min.css" rel="stylesheet">
+    <link href="../css/brands.min.css" rel="stylesheet">
+    <link href="../css/regular.min.css" rel="stylesheet">
+    <link href="../css/solid.min.css" rel="stylesheet">
+    <link href="../css/v4-font-face.min.css" rel="stylesheet">
+    <link href="../css/v4-shims.min.css" rel="stylesheet">
+    <!-- MathJax -->
+    <script type="text/x-mathjax-config">
+      MathJax.Hub.Config({
+        TeX: { equationNumbers: { autoNumber: "AMS" } }
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML" async
+            integrity="sha256-DViIOMYdwlM/axqoGDPeUyf0urLoHMN4QACBKyB58Uw=" crossorigin="anonymous"></script>
+    <!-- Other scripts and stylesheets -->
+    <link href="../css/local.css" rel="stylesheet">
+    <link href="../css/pygments.css" rel="stylesheet">
+    <script src="../js/svg-pan-zoom.min.js"></script>
+  </head>
+
+  <body>
+
+    <!-- Fixed navbar -->
+    <div class="container-fluid mb-sm-4 mb-xl-2">
+      <nav class="navbar navbar-expand-lg navbar-dark bg-dark fixed-top">
+        <div class="container">
+          <a class="navbar-brand" href="../index.html">Roundabout </a>
+          <button type="button" class="navbar-toggler" data-bs-toggle="collapse" data-bs-target="#navbar"
+                  aria-expanded="false" aria-controls="navbar" aria-label="Toggle navigation">
+                  <span class="navbar-toggler-icon">
+          </button>
+
+          <div id="navbar" class="navbar-collapse collapse">
+            <ul class="navbar-nav">
+                <li class="nav-item"><a class="nav-link" href="../page/index.html">Roundabout</a></li>
+                  <li class="nav-item">
+                    <a class="nav-link" href="../lists/files.html">Source Files</a>
+                  </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/modules.html">Modules</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/procedures.html">Procedures</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/absint.html">Abstract Interfaces</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link" href="../lists/types.html">Derived Types</a>
+                </li>
+            </ul>
+              <div class="d-flex align-items-end flex-grow-1">
+                <form action="../search.html" role="search" class="ms-auto">
+                  <input type="text" class="form-control" aria-label="Search" placeholder="Search" name="q" id="tipue_search_input" autocomplete="off" required>
+                </form>
+              </div>
+          </div><!--/.nav-collapse -->
+        </div>
+      </nav>
+    </div>
+
+    <div class="container">
+  <div class="row">
+    <h1>run_meke_step
+      <small>Subroutine</small>
+      
+    </h1>
+      <div class="container p-2 mb-4 bg-light border rounded-3">
+    <div class="row align-items-center justify-content-between" id="info-bar">
+      <div class="col">
+        <ul class="list-inline" style="margin-bottom:0px;display:inline">
+
+            <li class="list-inline-item" id="statements"><i class="fa fa-list-ol"></i>
+              <a data-bs-toggle="tooltip" data-bs-placement="bottom" data-bs-html="true"
+                 title=" 0.0% of total for procedures.">14 statements</a>
+            </li>
+
+            <li class="list-inline-item" id="source-file">
+              <i class="fa fa-code"></i>
+              <a href="../src/rdb_ocean_dyn.F90"> Source File</a>
+            </li>
+        </ul>
+      </div>
+      <div class="col">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb justify-content-end mb-0">
+                <li class="breadcrumb-item"><a href='../sourcefile/rdb_ocean_dyn.f90.html'>rdb_ocean_dyn.F90</a></li>
+                <li class="breadcrumb-item"><a href='../module/rdb_ocean_dyn.html'>rdb_ocean_dyn</a></li>
+            <li class="breadcrumb-item active" aria-current="page">run_meke_step</li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </div>
+  <script>
+    // Enable Bootstrap tooltips
+    (function () {
+      const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+      const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
+    })();
+  </script>
+
+  </div>
+  
+  <div class="row">
+    <div class="col-md-3 hidden-xs hidden-sm visible-md visible-lg">
+      <div id="sidebar">
+      <h3>Contents</h3>
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+    <div class="card card-primary">
+      <div class="card-header text-left"><h3 class="card-title">Source Code</h3></div>
+      <div class="list-group">
+        <a class="list-group-item" href="../proc/run_meke_step.html#src">run_meke_step</a>
+      </div>
+    </div>
+
+
+  </div>
+
+    </div>
+    
+    <div class="col-md-9" id='text'>
+    <h2>private  subroutine run_meke_step(grid, metrics, gm, varmix, wavespeed, hv, ms, dt, meke)  
+</h2>
+    
+
+    <p>Thin dispatcher: call <code>meke_step</code> only when the MEKE slot is present
+AND enabled, forwarding the (also-optional) VarMix + wavespeed slots
+so the feedback seam + length scales engage when those are on.
+<code>meke_step</code> itself no-ops on <code>enable=.false.</code>; this guard avoids the
+call (and the present-propagation noise) when the slot is absent.
+<code>hv%ke_diss</code> (the lateral-viscosity KE dissipation rate) is forwarded
+for the frictional source; it is 0 unless <code>hv%compute_ke_diss</code> is set
+(and <code>meke%frcoeff&lt;0</code> ignores it) ⇒ inert by default.</p>
+
+
+    <h3>Arguments</h3>
+        <table class="table table-striped varlist">
+    <thead>
+      <tr>
+        <th scope="col">Type</th>
+<th scope="col">Intent</th><th scope="col">Optional</th>        <th scope="col">Attributes</th>
+        <th scope="col"></th>
+        <th scope="col">Name</th>
+        <th scope="col"></th>
+    </thead>
+    <tbody>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-grid~343"></span>
+              type(<a href='../type/hgrid_t.html'>hgrid_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>grid</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-metrics~98"></span>
+              type(<a href='../type/ocean_metrics_t.html'>ocean_metrics_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>metrics</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-gm~7"></span>
+              type(<a href='../type/ocean_gm_t.html'>ocean_gm_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>gm</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-varmix~8"></span>
+              type(<a href='../type/ocean_varmix_t.html'>ocean_varmix_t</a>),
+            </td>
+<td>intent(inout),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>varmix</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-wavespeed~7"></span>
+              type(<a href='../type/ocean_wave_speed_t.html'>ocean_wave_speed_t</a>),
+            </td>
+<td>intent(in),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>wavespeed</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-hv~7"></span>
+              type(<a href='../type/ocean_horizontal_viscosity_t.html'>ocean_horizontal_viscosity_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>hv</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-ms~150"></span>
+              type(<a href='../type/multilayer_state_t.html'>multilayer_state_t</a>),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>ms</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-dt~144"></span>
+              real(kind=wp),
+            </td>
+<td>intent(in)</td>
+              <td></td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>dt</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+        <tr>
+            <td>
+              <span class="anchor" id="variable-meke~12"></span>
+              type(<a href='../type/ocean_meke_t.html'>ocean_meke_t</a>),
+            </td>
+<td>intent(inout),</td>
+              <td>optional</td>            <td>
+              
+            </td>
+            <td>::</td>
+            <td><strong>meke</strong></td>
+            <td>
+                
+            </td>
+        </tr>
+    </tbody>
+  </table>
+
+    <br>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Calls</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~run_meke_step~~CallsGraph Pages: 1 -->
+<svg id="procrun_meke_stepCallsGraph" width="493pt" height="578pt"
+ viewBox="0.00 0.00 493.00 578.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~run_meke_step~~CallsGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 574.27)">
+<title>proc~~run_meke_step~~CallsGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-574.27 488.83,-574.27 488.83,4 -4,4"/>
+<!-- proc~run_meke_step -->
+<g id="proc~~run_meke_step~~CallsGraph_node1" class="node">
+<title>proc~run_meke_step</title>
+<polygon fill="none" stroke="black" points="92.52,-297.27 0,-297.27 0,-273 92.52,-273 92.52,-297.27"/>
+<text xml:space="preserve" text-anchor="middle" x="46.26" y="-281.53" font-family="Helvetica,sans-Serif" font-size="10.50">run_meke_step</text>
+</g>
+<!-- proc~meke_step -->
+<g id="proc~~run_meke_step~~CallsGraph_node2" class="node">
+<title>proc~meke_step</title>
+<g id="a_proc~~run_meke_step~~CallsGraph_node2"><a xlink:href="../proc/meke_step.html" xlink:title="meke_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="197.79,-297.27 128.52,-297.27 128.52,-273 197.79,-273 197.79,-297.27"/>
+<text xml:space="preserve" text-anchor="middle" x="163.15" y="-281.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">meke_step</text>
+</a>
+</g>
+</g>
+<!-- proc~run_meke_step&#45;&gt;proc~meke_step -->
+<g id="proc~~run_meke_step~~CallsGraph_edge1" class="edge">
+<title>proc~run_meke_step&#45;&gt;proc~meke_step</title>
+<path fill="none" stroke="#ff0000" d="M93,-285.13C100.9,-285.13 109.12,-285.13 117.01,-285.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="116.74,-288.64 126.74,-285.14 116.74,-281.64 116.74,-288.64"/>
+</g>
+<!-- proc~meke_advect -->
+<g id="proc~~run_meke_step~~CallsGraph_node3" class="node">
+<title>proc~meke_advect</title>
+<g id="a_proc~~run_meke_step~~CallsGraph_node3"><a xlink:href="../proc/meke_advect.html" xlink:title="meke_advect">
+<polygon fill="#d9534f" stroke="#d9534f" points="337.56,-528.27 254.79,-528.27 254.79,-504 337.56,-504 337.56,-528.27"/>
+<text xml:space="preserve" text-anchor="middle" x="296.17" y="-512.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">meke_advect</text>
+</a>
+</g>
+</g>
+<!-- proc~meke_step&#45;&gt;proc~meke_advect -->
+<g id="proc~~run_meke_step~~CallsGraph_edge2" class="edge">
+<title>proc~meke_step&#45;&gt;proc~meke_advect</title>
+<path fill="none" stroke="#ff0000" d="M164.61,-297.75C166.58,-333.73 177.16,-437.97 233.79,-495.13 236.91,-498.29 240.52,-500.96 244.4,-503.24"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="242.58,-506.25 253.11,-507.45 245.63,-499.95 242.58,-506.25"/>
+</g>
+<!-- proc~meke_baro_transport -->
+<g id="proc~~run_meke_step~~CallsGraph_node4" class="node">
+<title>proc~meke_baro_transport</title>
+<g id="a_proc~~run_meke_step~~CallsGraph_node4"><a xlink:href="../proc/meke_baro_transport.html" xlink:title="meke_baro_transport">
+<polygon fill="#d9534f" stroke="#d9534f" points="358.56,-486.27 233.79,-486.27 233.79,-462 358.56,-462 358.56,-486.27"/>
+<text xml:space="preserve" text-anchor="middle" x="296.17" y="-470.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">meke_baro_transport</text>
+</a>
+</g>
+</g>
+<!-- proc~meke_step&#45;&gt;proc~meke_baro_transport -->
+<g id="proc~~run_meke_step~~CallsGraph_edge3" class="edge">
+<title>proc~meke_step&#45;&gt;proc~meke_baro_transport</title>
+<path fill="none" stroke="#ff0000" d="M165.79,-297.66C170.49,-328.55 186.83,-409.06 233.79,-453.13 234.56,-453.86 235.36,-454.56 236.18,-455.24"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="234.21,-458.13 244.48,-460.76 238.09,-452.3 234.21,-458.13"/>
+</g>
+<!-- proc~meke_bbl_speed2 -->
+<g id="proc~~run_meke_step~~CallsGraph_node5" class="node">
+<title>proc~meke_bbl_speed2</title>
+<g id="a_proc~~run_meke_step~~CallsGraph_node5"><a xlink:href="../proc/meke_bbl_speed2.html" xlink:title="meke_bbl_speed2">
+<polygon fill="#d9534f" stroke="#d9534f" points="349.93,-570.27 242.41,-570.27 242.41,-546 349.93,-546 349.93,-570.27"/>
+<text xml:space="preserve" text-anchor="middle" x="296.17" y="-554.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">meke_bbl_speed2</text>
+</a>
+</g>
+</g>
+<!-- proc~meke_step&#45;&gt;proc~meke_bbl_speed2 -->
+<g id="proc~~run_meke_step~~CallsGraph_edge4" class="edge">
+<title>proc~meke_step&#45;&gt;proc~meke_bbl_speed2</title>
+<path fill="none" stroke="#ff0000" d="M163.79,-297.55C163.28,-337.84 167.2,-466.42 233.79,-537.13 234.27,-537.65 234.77,-538.15 235.28,-538.64"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="233.11,-541.39 243.21,-544.61 237.32,-535.8 233.11,-541.39"/>
+</g>
+<!-- proc~meke_drag -->
+<g id="proc~~run_meke_step~~CallsGraph_node6" class="node">
+<title>proc~meke_drag</title>
+<g id="a_proc~~run_meke_step~~CallsGraph_node6"><a xlink:href="../proc/meke_drag.html" xlink:title="meke_drag">
+<polygon fill="#d9534f" stroke="#d9534f" points="331.93,-444.27 260.41,-444.27 260.41,-420 331.93,-420 331.93,-444.27"/>
+<text xml:space="preserve" text-anchor="middle" x="296.17" y="-428.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">meke_drag</text>
+</a>
+</g>
+</g>
+<!-- proc~meke_step&#45;&gt;proc~meke_drag -->
+<g id="proc~~run_meke_step~~CallsGraph_edge5" class="edge">
+<title>proc~meke_step&#45;&gt;proc~meke_drag</title>
+<path fill="none" stroke="#ff0000" d="M167.65,-297.47C175.38,-322.52 196.25,-379.66 233.79,-411.13 238.48,-415.07 243.95,-418.28 249.66,-420.9"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="248.06,-424.03 258.65,-424.44 250.63,-417.52 248.06,-424.03"/>
+</g>
+<!-- proc~meke_feed_khth -->
+<g id="proc~~run_meke_step~~CallsGraph_node7" class="node">
+<title>proc~meke_feed_khth</title>
+<g id="a_proc~~run_meke_step~~CallsGraph_node7"><a xlink:href="../proc/meke_feed_khth.html" xlink:title="meke_feed_khth">
+<polygon fill="#d9534f" stroke="#d9534f" points="345.81,-402.27 246.54,-402.27 246.54,-378 345.81,-378 345.81,-402.27"/>
+<text xml:space="preserve" text-anchor="middle" x="296.17" y="-386.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">meke_feed_khth</text>
+</a>
+</g>
+</g>
+<!-- proc~meke_step&#45;&gt;proc~meke_feed_khth -->
+<g id="proc~~run_meke_step~~CallsGraph_edge6" class="edge">
+<title>proc~meke_step&#45;&gt;proc~meke_feed_khth</title>
+<path fill="none" stroke="#ff0000" d="M171.32,-297.52C182.45,-315.73 205.57,-349.66 233.79,-369.13 235.56,-370.36 237.41,-371.52 239.32,-372.61"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="237.36,-375.55 247.87,-376.9 240.5,-369.29 237.36,-375.55"/>
+</g>
+<!-- proc~meke_kh_closure -->
+<g id="proc~~run_meke_step~~CallsGraph_node8" class="node">
+<title>proc~meke_kh_closure</title>
+<g id="a_proc~~run_meke_step~~CallsGraph_node8"><a xlink:href="../proc/meke_kh_closure.html" xlink:title="meke_kh_closure">
+<polygon fill="#d9534f" stroke="#d9534f" points="347.68,-360.27 244.66,-360.27 244.66,-336 347.68,-336 347.68,-360.27"/>
+<text xml:space="preserve" text-anchor="middle" x="296.17" y="-344.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">meke_kh_closure</text>
+</a>
+</g>
+</g>
+<!-- proc~meke_step&#45;&gt;proc~meke_kh_closure -->
+<g id="proc~~run_meke_step~~CallsGraph_edge7" class="edge">
+<title>proc~meke_step&#45;&gt;proc~meke_kh_closure</title>
+<path fill="none" stroke="#ff0000" d="M182.47,-297.66C196.18,-306.67 215.62,-318.67 233.79,-327.13 237.06,-328.66 240.47,-330.13 243.93,-331.53"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="242.4,-334.7 252.99,-335.01 244.91,-328.16 242.4,-334.7"/>
+</g>
+<!-- proc~meke_ku_closure -->
+<g id="proc~~run_meke_step~~CallsGraph_node9" class="node">
+<title>proc~meke_ku_closure</title>
+<g id="a_proc~~run_meke_step~~CallsGraph_node9"><a xlink:href="../proc/meke_ku_closure.html" xlink:title="meke_ku_closure">
+<polygon fill="#d9534f" stroke="#d9534f" points="347.68,-318.27 244.66,-318.27 244.66,-294 347.68,-294 347.68,-318.27"/>
+<text xml:space="preserve" text-anchor="middle" x="296.17" y="-302.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">meke_ku_closure</text>
+</a>
+</g>
+</g>
+<!-- proc~meke_step&#45;&gt;proc~meke_ku_closure -->
+<g id="proc~~run_meke_step~~CallsGraph_edge8" class="edge">
+<title>proc~meke_step&#45;&gt;proc~meke_ku_closure</title>
+<path fill="none" stroke="#ff0000" d="M198.24,-290.6C209.03,-292.33 221.32,-294.3 233.44,-296.24"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="232.55,-299.64 242.98,-297.77 233.66,-292.73 232.55,-299.64"/>
+</g>
+<!-- proc~meke_lateral -->
+<g id="proc~~run_meke_step~~CallsGraph_node10" class="node">
+<title>proc~meke_lateral</title>
+<g id="a_proc~~run_meke_step~~CallsGraph_node10"><a xlink:href="../proc/meke_lateral.html" xlink:title="meke_lateral">
+<polygon fill="#d9534f" stroke="#d9534f" points="336.81,-276.27 255.54,-276.27 255.54,-252 336.81,-252 336.81,-276.27"/>
+<text xml:space="preserve" text-anchor="middle" x="296.17" y="-260.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">meke_lateral</text>
+</a>
+</g>
+</g>
+<!-- proc~meke_step&#45;&gt;proc~meke_lateral -->
+<g id="proc~~run_meke_step~~CallsGraph_edge9" class="edge">
+<title>proc~meke_step&#45;&gt;proc~meke_lateral</title>
+<path fill="none" stroke="#ff0000" d="M198.24,-279.67C212.27,-277.42 228.82,-274.77 244.24,-272.3"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="244.4,-275.82 253.72,-270.78 243.3,-268.91 244.4,-275.82"/>
+</g>
+<!-- proc~meke_length_scales -->
+<g id="proc~~run_meke_step~~CallsGraph_node11" class="node">
+<title>proc~meke_length_scales</title>
+<g id="a_proc~~run_meke_step~~CallsGraph_node11"><a xlink:href="../proc/meke_length_scales.html" xlink:title="meke_length_scales">
+<polygon fill="#d9534f" stroke="#d9534f" points="355.56,-150.27 236.79,-150.27 236.79,-126 355.56,-126 355.56,-150.27"/>
+<text xml:space="preserve" text-anchor="middle" x="296.17" y="-134.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">meke_length_scales</text>
+</a>
+</g>
+</g>
+<!-- proc~meke_step&#45;&gt;proc~meke_length_scales -->
+<g id="proc~~run_meke_step~~CallsGraph_edge10" class="edge">
+<title>proc~meke_step&#45;&gt;proc~meke_length_scales</title>
+<path fill="none" stroke="#ff0000" d="M167.65,-272.8C175.38,-247.75 196.25,-190.61 233.79,-159.13 234.91,-158.2 236.07,-157.3 237.26,-156.45"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="238.94,-159.52 245.74,-151.4 235.36,-153.51 238.94,-159.52"/>
+</g>
+<!-- proc~meke_mass -->
+<g id="proc~~run_meke_step~~CallsGraph_node12" class="node">
+<title>proc~meke_mass</title>
+<g id="a_proc~~run_meke_step~~CallsGraph_node12"><a xlink:href="../proc/meke_mass.html" xlink:title="meke_mass">
+<polygon fill="#d9534f" stroke="#d9534f" points="333.43,-234.27 258.91,-234.27 258.91,-210 333.43,-210 333.43,-234.27"/>
+<text xml:space="preserve" text-anchor="middle" x="296.17" y="-218.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">meke_mass</text>
+</a>
+</g>
+</g>
+<!-- proc~meke_step&#45;&gt;proc~meke_mass -->
+<g id="proc~~run_meke_step~~CallsGraph_edge11" class="edge">
+<title>proc~meke_step&#45;&gt;proc~meke_mass</title>
+<path fill="none" stroke="#ff0000" d="M182.47,-272.61C196.18,-263.6 215.62,-251.6 233.79,-243.13 238.33,-241.02 243.15,-239 248.02,-237.11"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="249.04,-240.47 257.22,-233.73 246.63,-233.9 249.04,-240.47"/>
+</g>
+<!-- proc~meke_source -->
+<g id="proc~~run_meke_step~~CallsGraph_node13" class="node">
+<title>proc~meke_source</title>
+<g id="a_proc~~run_meke_step~~CallsGraph_node13"><a xlink:href="../proc/meke_source.html" xlink:title="meke_source">
+<polygon fill="#d9534f" stroke="#d9534f" points="337.18,-192.27 255.16,-192.27 255.16,-168 337.18,-168 337.18,-192.27"/>
+<text xml:space="preserve" text-anchor="middle" x="296.17" y="-176.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">meke_source</text>
+</a>
+</g>
+</g>
+<!-- proc~meke_step&#45;&gt;proc~meke_source -->
+<g id="proc~~run_meke_step~~CallsGraph_edge12" class="edge">
+<title>proc~meke_step&#45;&gt;proc~meke_source</title>
+<path fill="none" stroke="#ff0000" d="M171.32,-272.75C182.45,-254.54 205.57,-220.61 233.79,-201.13 237.04,-198.89 240.55,-196.87 244.19,-195.05"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="245.55,-198.28 253.3,-191.05 242.73,-191.87 245.55,-198.28"/>
+</g>
+<!-- proc~meke_stage_rd -->
+<g id="proc~~run_meke_step~~CallsGraph_node14" class="node">
+<title>proc~meke_stage_rd</title>
+<g id="a_proc~~run_meke_step~~CallsGraph_node14"><a xlink:href="../proc/meke_stage_rd.html" xlink:title="meke_stage_rd">
+<polygon fill="#d9534f" stroke="#d9534f" points="342.43,-108.27 249.91,-108.27 249.91,-84 342.43,-84 342.43,-108.27"/>
+<text xml:space="preserve" text-anchor="middle" x="296.17" y="-92.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">meke_stage_rd</text>
+</a>
+</g>
+</g>
+<!-- proc~meke_step&#45;&gt;proc~meke_stage_rd -->
+<g id="proc~~run_meke_step~~CallsGraph_edge13" class="edge">
+<title>proc~meke_step&#45;&gt;proc~meke_stage_rd</title>
+<path fill="none" stroke="#ff0000" d="M165.79,-272.61C170.49,-241.72 186.83,-161.21 233.79,-117.13 235.63,-115.41 237.61,-113.83 239.7,-112.38"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="241.18,-115.56 248.11,-107.56 237.7,-109.49 241.18,-115.56"/>
+</g>
+<!-- proc~meke_stage_sn -->
+<g id="proc~~run_meke_step~~CallsGraph_node15" class="node">
+<title>proc~meke_stage_sn</title>
+<g id="a_proc~~run_meke_step~~CallsGraph_node15"><a xlink:href="../proc/meke_stage_sn.html" xlink:title="meke_stage_sn">
+<polygon fill="#d9534f" stroke="#d9534f" points="342.81,-66.27 249.54,-66.27 249.54,-42 342.81,-42 342.81,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="296.17" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">meke_stage_sn</text>
+</a>
+</g>
+</g>
+<!-- proc~meke_step&#45;&gt;proc~meke_stage_sn -->
+<g id="proc~~run_meke_step~~CallsGraph_edge14" class="edge">
+<title>proc~meke_step&#45;&gt;proc~meke_stage_sn</title>
+<path fill="none" stroke="#ff0000" d="M164.61,-272.52C166.58,-236.54 177.16,-132.3 233.79,-75.13 235.56,-73.35 237.49,-71.71 239.54,-70.21"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="241.03,-73.4 247.83,-65.28 237.45,-67.38 241.03,-73.4"/>
+</g>
+<!-- proc~meke_zero_2d -->
+<g id="proc~~run_meke_step~~CallsGraph_node16" class="node">
+<title>proc~meke_zero_2d</title>
+<g id="a_proc~~run_meke_step~~CallsGraph_node16"><a xlink:href="../proc/meke_zero_2d.html" xlink:title="meke_zero_2d">
+<polygon fill="#d9534f" stroke="#d9534f" points="340.18,-24.27 252.16,-24.27 252.16,0 340.18,0 340.18,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="296.17" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">meke_zero_2d</text>
+</a>
+</g>
+</g>
+<!-- proc~meke_step&#45;&gt;proc~meke_zero_2d -->
+<g id="proc~~run_meke_step~~CallsGraph_edge15" class="edge">
+<title>proc~meke_step&#45;&gt;proc~meke_zero_2d</title>
+<path fill="none" stroke="#ff0000" d="M163.79,-272.72C163.28,-232.43 167.2,-103.85 233.79,-33.13 236.18,-30.59 238.9,-28.36 241.82,-26.39"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="243.29,-29.58 250.39,-21.72 239.94,-23.44 243.29,-29.58"/>
+</g>
+<!-- local -->
+<g id="proc~~run_meke_step~~CallsGraph_node17" class="node">
+<title>local</title>
+<polygon fill="#777777" stroke="#777777" points="466.69,-360.27 412.69,-360.27 412.69,-336 466.69,-336 466.69,-360.27"/>
+<text xml:space="preserve" text-anchor="middle" x="439.69" y="-344.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">local</text>
+</g>
+<!-- proc~meke_advect&#45;&gt;local -->
+<g id="proc~~run_meke_step~~CallsGraph_edge16" class="edge">
+<title>proc~meke_advect&#45;&gt;local</title>
+<path fill="none" stroke="#ff0000" d="M337.76,-507.04C345.21,-504.09 352.53,-500.22 358.56,-495.13 398.16,-461.73 421.46,-403.59 431.97,-371.34"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="435.31,-372.39 434.92,-361.8 428.62,-370.32 435.31,-372.39"/>
+</g>
+<!-- proc~meke_baro_transport&#45;&gt;local -->
+<g id="proc~~run_meke_step~~CallsGraph_edge17" class="edge">
+<title>proc~meke_baro_transport&#45;&gt;local</title>
+<path fill="none" stroke="#ff6d00" d="M343.57,-461.62C348.86,-459.23 353.99,-456.43 358.56,-453.13 389.06,-431.17 413.35,-394.29 426.88,-370.6"/>
+<polygon fill="#ff6d00" stroke="#ff6d00" points="429.82,-372.51 431.6,-362.07 423.7,-369.13 429.82,-372.51"/>
+</g>
+<!-- proc~meke_bbl_speed2&#45;&gt;local -->
+<g id="proc~~run_meke_step~~CallsGraph_edge18" class="edge">
+<title>proc~meke_bbl_speed2&#45;&gt;local</title>
+<path fill="none" stroke="#ffda00" d="M346.58,-545.57C350.93,-543.22 355.02,-540.44 358.56,-537.13 407.39,-491.67 427.65,-411.64 435.02,-371.91"/>
+<polygon fill="#ffda00" stroke="#ffda00" points="438.44,-372.67 436.69,-362.22 431.54,-371.48 438.44,-372.67"/>
+</g>
+<!-- rdb_blf_is_live -->
+<g id="proc~~run_meke_step~~CallsGraph_node19" class="node">
+<title>rdb_blf_is_live</title>
+<polygon fill="#777777" stroke="#777777" points="482.58,-570.27 396.81,-570.27 396.81,-546 482.58,-546 482.58,-570.27"/>
+<text xml:space="preserve" text-anchor="middle" x="439.69" y="-554.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_blf_is_live</text>
+</g>
+<!-- proc~meke_bbl_speed2&#45;&gt;rdb_blf_is_live -->
+<g id="proc~~run_meke_step~~CallsGraph_edge19" class="edge">
+<title>proc~meke_bbl_speed2&#45;&gt;rdb_blf_is_live</title>
+<path fill="none" stroke="#ffda00" d="M350.27,-558.13C361.69,-558.13 373.75,-558.13 385.18,-558.13"/>
+<polygon fill="#ffda00" stroke="#ffda00" points="384.83,-561.64 394.83,-558.14 384.83,-554.64 384.83,-561.64"/>
+</g>
+<!-- proc~meke_drag&#45;&gt;local -->
+<g id="proc~~run_meke_step~~CallsGraph_edge20" class="edge">
+<title>proc~meke_drag&#45;&gt;local</title>
+<path fill="none" stroke="#b6ff00" d="M332.13,-422.44C341.01,-419.38 350.35,-415.6 358.56,-411.13 380.27,-399.34 402.13,-381.67 417.52,-368.05"/>
+<polygon fill="#b6ff00" stroke="#b6ff00" points="419.6,-370.89 424.67,-361.58 414.9,-365.7 419.6,-370.89"/>
+</g>
+<!-- proc~meke_feed_khth&#45;&gt;local -->
+<g id="proc~~run_meke_step~~CallsGraph_edge21" class="edge">
+<title>proc~meke_feed_khth&#45;&gt;local</title>
+<path fill="none" stroke="#48ff00" d="M339.64,-377.53C359.28,-371.7 382.41,-364.84 401.38,-359.21"/>
+<polygon fill="#48ff00" stroke="#48ff00" points="402.25,-362.6 410.84,-356.4 400.26,-355.89 402.25,-362.6"/>
+</g>
+<!-- proc~meke_kh_closure&#45;&gt;local -->
+<g id="proc~~run_meke_step~~CallsGraph_edge22" class="edge">
+<title>proc~meke_kh_closure&#45;&gt;local</title>
+<path fill="none" stroke="#00ff24" d="M347.87,-348.13C365.48,-348.13 384.91,-348.13 401.25,-348.13"/>
+<polygon fill="#00ff24" stroke="#00ff24" points="401.03,-351.64 411.03,-348.14 401.03,-344.64 401.03,-351.64"/>
+</g>
+<!-- proc~meke_ku_closure&#45;&gt;local -->
+<g id="proc~~run_meke_step~~CallsGraph_edge23" class="edge">
+<title>proc~meke_ku_closure&#45;&gt;local</title>
+<path fill="none" stroke="#00ff91" d="M339.64,-318.74C359.28,-324.57 382.41,-331.43 401.38,-337.06"/>
+<polygon fill="#00ff91" stroke="#00ff91" points="400.26,-340.38 410.84,-339.87 402.25,-333.67 400.26,-340.38"/>
+</g>
+<!-- proc~meke_lateral&#45;&gt;local -->
+<g id="proc~~run_meke_step~~CallsGraph_edge24" class="edge">
+<title>proc~meke_lateral&#45;&gt;local</title>
+<path fill="none" stroke="#00ffff" d="M337.31,-275.68C344.57,-278.37 351.93,-281.53 358.56,-285.13 380.27,-296.93 402.13,-314.6 417.52,-328.22"/>
+<polygon fill="#00ffff" stroke="#00ffff" points="414.9,-330.57 424.67,-334.69 419.6,-325.38 414.9,-330.57"/>
+</g>
+<!-- proc~meke_length_scales&#45;&gt;local -->
+<g id="proc~~run_meke_step~~CallsGraph_edge25" class="edge">
+<title>proc~meke_length_scales&#45;&gt;local</title>
+<path fill="none" stroke="#0091ff" d="M346.58,-150.7C350.93,-153.05 355.02,-155.83 358.56,-159.13 407.39,-204.6 427.65,-284.63 435.02,-324.36"/>
+<polygon fill="#0091ff" stroke="#0091ff" points="431.54,-324.79 436.69,-334.05 438.44,-323.6 431.54,-324.79"/>
+</g>
+<!-- proc~meke_inv_lmix -->
+<g id="proc~~run_meke_step~~CallsGraph_node18" class="node">
+<title>proc~meke_inv_lmix</title>
+<g id="a_proc~~run_meke_step~~CallsGraph_node18"><a xlink:href="../proc/meke_inv_lmix.html" xlink:title="meke_inv_lmix">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="484.83,-150.27 394.56,-150.27 394.56,-126 484.83,-126 484.83,-150.27"/>
+<text xml:space="preserve" text-anchor="middle" x="439.69" y="-134.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">meke_inv_lmix</text>
+</a>
+</g>
+</g>
+<!-- proc~meke_length_scales&#45;&gt;proc~meke_inv_lmix -->
+<g id="proc~~run_meke_step~~CallsGraph_edge26" class="edge">
+<title>proc~meke_length_scales&#45;&gt;proc~meke_inv_lmix</title>
+<path fill="none" stroke="#0091ff" d="M355.96,-138.13C364.83,-138.13 373.96,-138.13 382.77,-138.13"/>
+<polygon fill="#0091ff" stroke="#0091ff" points="382.6,-141.64 392.6,-138.14 382.6,-134.64 382.6,-141.64"/>
+</g>
+<!-- proc~meke_mass&#45;&gt;local -->
+<g id="proc~~run_meke_step~~CallsGraph_edge27" class="edge">
+<title>proc~meke_mass&#45;&gt;local</title>
+<path fill="none" stroke="#0024ff" d="M333.63,-230.68C342.29,-233.74 351.16,-237.8 358.56,-243.13 389.06,-265.1 413.35,-301.98 426.88,-325.67"/>
+<polygon fill="#0024ff" stroke="#0024ff" points="423.7,-327.14 431.6,-334.2 429.82,-323.76 423.7,-327.14"/>
+</g>
+<!-- proc~meke_source&#45;&gt;local -->
+<g id="proc~~run_meke_step~~CallsGraph_edge28" class="edge">
+<title>proc~meke_source&#45;&gt;local</title>
+<path fill="none" stroke="#4800ff" d="M337.44,-189.11C345,-192.07 352.45,-195.98 358.56,-201.13 398.16,-234.54 421.46,-292.68 431.97,-324.93"/>
+<polygon fill="#4800ff" stroke="#4800ff" points="428.62,-325.95 434.92,-334.47 435.31,-323.88 428.62,-325.95"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CallsGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CallsGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+  <h3 class="card-title">Called by</h3>
+      </div>
+      <div class="card-body">
+  <div class="depgraph"><?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: proc~~run_meke_step~~CalledByGraph Pages: 1 -->
+<svg id="procrun_meke_stepCalledByGraph" width="615pt" height="74pt"
+ viewBox="0.00 0.00 615.00 74.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="proc~~run_meke_step~~CalledByGraph" class="graph" transform="scale(1 1) rotate(0) translate(4 70.27)">
+<title>proc~~run_meke_step~~CalledByGraph</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-70.27 611.35,-70.27 611.35,4 -4,4"/>
+<!-- proc~run_meke_step -->
+<g id="proc~~run_meke_step~~CalledByGraph_node1" class="node">
+<title>proc~run_meke_step</title>
+<polygon fill="none" stroke="black" points="607.35,-45.27 514.83,-45.27 514.83,-21 607.35,-21 607.35,-45.27"/>
+<text xml:space="preserve" text-anchor="middle" x="561.09" y="-29.53" font-family="Helvetica,sans-Serif" font-size="10.50">run_meke_step</text>
+</g>
+<!-- proc~ocean_dyn_step_split -->
+<g id="proc~~run_meke_step~~CalledByGraph_node2" class="node">
+<title>proc~ocean_dyn_step_split</title>
+<g id="a_proc~~run_meke_step~~CalledByGraph_node2"><a xlink:href="../proc/ocean_dyn_step_split.html" xlink:title="ocean_dyn_step_split">
+<polygon fill="#d9534f" stroke="#d9534f" points="478.83,-45.27 354.81,-45.27 354.81,-21 478.83,-21 478.83,-45.27"/>
+<text xml:space="preserve" text-anchor="middle" x="416.82" y="-29.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">ocean_dyn_step_split</text>
+</a>
+</g>
+</g>
+<!-- proc~ocean_dyn_step_split&#45;&gt;proc~run_meke_step -->
+<g id="proc~~run_meke_step~~CalledByGraph_edge1" class="edge">
+<title>proc~ocean_dyn_step_split&#45;&gt;proc~run_meke_step</title>
+<path fill="none" stroke="#ff0000" d="M478.98,-33.13C486.98,-33.13 495.14,-33.13 503.07,-33.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="502.94,-36.64 512.94,-33.14 502.94,-29.64 502.94,-36.64"/>
+</g>
+<!-- proc~engine_step -->
+<g id="proc~~run_meke_step~~CalledByGraph_node3" class="node">
+<title>proc~engine_step</title>
+<g id="a_proc~~run_meke_step~~CalledByGraph_node3"><a xlink:href="../proc/engine_step.html" xlink:title="engine_step">
+<polygon fill="#d9534f" stroke="#d9534f" points="318.81,-45.27 242.79,-45.27 242.79,-21 318.81,-21 318.81,-45.27"/>
+<text xml:space="preserve" text-anchor="middle" x="280.8" y="-29.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">engine_step</text>
+</a>
+</g>
+</g>
+<!-- proc~engine_step&#45;&gt;proc~ocean_dyn_step_split -->
+<g id="proc~~run_meke_step~~CalledByGraph_edge2" class="edge">
+<title>proc~engine_step&#45;&gt;proc~ocean_dyn_step_split</title>
+<path fill="none" stroke="#ff0000" d="M319.13,-33.13C326.69,-33.13 334.89,-33.13 343.2,-33.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="343.04,-36.64 353.04,-33.14 343.04,-29.64 343.04,-36.64"/>
+</g>
+<!-- proc~driver_run_ocean -->
+<g id="proc~~run_meke_step~~CalledByGraph_node4" class="node">
+<title>proc~driver_run_ocean</title>
+<g id="a_proc~~run_meke_step~~CalledByGraph_node4"><a xlink:href="../proc/driver_run_ocean.html" xlink:title="driver_run_ocean">
+<polygon fill="#d9534f" stroke="#d9534f" points="206.79,-66.27 102.27,-66.27 102.27,-42 206.79,-42 206.79,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="154.53" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run_ocean</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run_ocean&#45;&gt;proc~engine_step -->
+<g id="proc~~run_meke_step~~CalledByGraph_edge3" class="edge">
+<title>proc~driver_run_ocean&#45;&gt;proc~engine_step</title>
+<path fill="none" stroke="#ff0000" d="M207.15,-45.41C215.13,-44.06 223.34,-42.68 231.25,-41.34"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="231.77,-44.8 241.05,-39.68 230.61,-37.9 231.77,-44.8"/>
+</g>
+<!-- proc~rdb_ocean_step -->
+<g id="proc~~run_meke_step~~CalledByGraph_node5" class="node">
+<title>proc~rdb_ocean_step</title>
+<g id="a_proc~~run_meke_step~~CalledByGraph_node5"><a xlink:href="../proc/rdb_ocean_step.html" xlink:title="rdb_ocean_step">
+<polygon fill="#d94e8f" stroke="#d94e8f" points="202.29,-24.27 106.77,-24.27 106.77,0 202.29,0 202.29,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="154.53" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">rdb_ocean_step</text>
+</a>
+</g>
+</g>
+<!-- proc~rdb_ocean_step&#45;&gt;proc~engine_step -->
+<g id="proc~~run_meke_step~~CalledByGraph_edge4" class="edge">
+<title>proc~rdb_ocean_step&#45;&gt;proc~engine_step</title>
+<path fill="none" stroke="#ff0000" d="M202.51,-20.07C211.89,-21.66 221.77,-23.33 231.2,-24.92"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="230.49,-28.35 240.94,-26.57 231.66,-21.45 230.49,-28.35"/>
+</g>
+<!-- proc~driver_run -->
+<g id="proc~~run_meke_step~~CalledByGraph_node6" class="node">
+<title>proc~driver_run</title>
+<g id="a_proc~~run_meke_step~~CalledByGraph_node6"><a xlink:href="../proc/driver_run.html" xlink:title="driver_run">
+<polygon fill="#d9534f" stroke="#d9534f" points="66.27,-66.27 0,-66.27 0,-42 66.27,-42 66.27,-66.27"/>
+<text xml:space="preserve" text-anchor="middle" x="33.13" y="-50.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">driver_run</text>
+</a>
+</g>
+</g>
+<!-- proc~driver_run&#45;&gt;proc~driver_run_ocean -->
+<g id="proc~~run_meke_step~~CalledByGraph_edge5" class="edge">
+<title>proc~driver_run&#45;&gt;proc~driver_run_ocean</title>
+<path fill="none" stroke="#ff0000" d="M66.76,-54.13C74.26,-54.13 82.48,-54.13 90.79,-54.13"/>
+<polygon fill="#ff0000" stroke="#ff0000" points="90.58,-57.64 100.58,-54.14 90.58,-50.64 90.58,-57.64"/>
+</g>
+</g>
+</svg>
+</div>          <div>
+            <a type="button" class="graph-help" data-bs-toggle="modal" href="#CalledByGraph-help-text">Help</a>
+          </div>
+          <div class="modal fade" id="CalledByGraph-help-text" tabindex="-1" role="dialog">
+            <div class="modal-dialog modal-lg" role="document">
+              <div class="modal-content">
+                <div class="modal-header">
+                  <h4 class="modal-title" id="-graph-help-label">Graph Key</h4>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+<p>Nodes of different colours represent the following: </p>
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+ "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<!-- Generated by graphviz version 14.1.2 (0)
+ -->
+<!-- Title: Graph Key Pages: 1 -->
+<svg width="641pt" height="28pt"
+ viewBox="0.00 0.00 641.00 28.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<g id="graph0" class="graph" transform="scale(0.873868 0.873868) rotate(0) translate(4 28.27)">
+<title>Graph Key</title>
+<polygon fill="white" stroke="none" points="-4,4 -4,-28.27 729.52,-28.27 729.52,4 -4,4"/>
+<!-- Subroutine -->
+<g id="node1" class="node">
+<title>Subroutine</title>
+<polygon fill="#d9534f" stroke="#d9534f" points="69.27,-24.27 0,-24.27 0,0 69.27,0 69.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="34.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Subroutine</text>
+</g>
+<!-- Function -->
+<g id="node2" class="node">
+<title>Function</title>
+<polygon fill="#d94e8f" stroke="#d94e8f" points="143.89,-24.27 87.38,-24.27 87.38,0 143.89,0 143.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="115.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Function</text>
+</g>
+<!-- Interface -->
+<g id="node3" class="node">
+<title>Interface</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="221.39,-24.27 161.88,-24.27 161.88,0 221.39,0 221.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="191.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Interface</text>
+</g>
+<!-- Type Bound Procedure -->
+<g id="node4" class="node">
+<title>Type Bound Procedure</title>
+<polygon fill="#a7506f" stroke="#a7506f" points="368.27,-24.27 239,-24.27 239,0 368.27,0 368.27,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="303.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Type Bound Procedure</text>
+</g>
+<!-- Unknown Procedure Type -->
+<g id="node5" class="node">
+<title>Unknown Procedure Type</title>
+<polygon fill="#777777" stroke="#777777" points="529.39,-24.27 385.88,-24.27 385.88,0 529.39,0 529.39,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="457.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Unknown Procedure Type</text>
+</g>
+<!-- Program -->
+<g id="node6" class="node">
+<title>Program</title>
+<polygon fill="#f0ad4e" stroke="#f0ad4e" points="603.89,-24.27 547.38,-24.27 547.38,0 603.89,0 603.89,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="575.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50" fill="white">Program</text>
+</g>
+<!-- This Page&#39;s Entity -->
+<g id="node7" class="node">
+<title>This Page&#39;s Entity</title>
+<polygon fill="none" stroke="black" points="725.52,-24.27 621.75,-24.27 621.75,0 725.52,0 725.52,-24.27"/>
+<text xml:space="preserve" text-anchor="middle" x="673.63" y="-8.53" font-family="Helvetica,sans-Serif" font-size="10.50">This Page&#39;s Entity</text>
+</g>
+</g>
+</svg>
+
+<p>Solid arrows point from a procedure to one which it calls. Dashed 
+arrows point from an interface to procedures which implement that interface.
+This could include the module procedures in a generic interface or the
+implementation in a submodule of an interface in a parent module.
+</p>
+ Where possible, edges connecting nodes are
+given different colours to make them easier to distinguish in
+large graphs.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <br>
+
+
+    
+    
+
+    
+    
+
+
+
+    
+    <section>
+    <h2><span class="anchor" id="src"></span>Source Code</h2>
+    <div class="hl codehilite"><pre><span></span><span class="w">   </span><span class="k">subroutine </span><span class="n">run_meke_step</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">,</span><span class="w"> </span><span class="n">gm</span><span class="p">,</span><span class="w"> </span><span class="n">varmix</span><span class="p">,</span><span class="w"> </span><span class="n">wavespeed</span><span class="p">,</span><span class="w"> </span><span class="n">hv</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">,</span><span class="w"> </span><span class="n">dt</span><span class="p">,</span><span class="w"> </span><span class="n">meke</span><span class="p">)</span>
+<span class="w">      </span><span class="c">!! Thin dispatcher: call `meke_step` only when the MEKE slot is present</span>
+<span class="w">      </span><span class="c">!! AND enabled, forwarding the (also-optional) VarMix + wavespeed slots</span>
+<span class="w">      </span><span class="c">!! so the feedback seam + length scales engage when those are on.</span>
+<span class="w">      </span><span class="c">!! `meke_step` itself no-ops on `enable=.false.`; this guard avoids the</span>
+<span class="w">      </span><span class="c">!! call (and the present-propagation noise) when the slot is absent.</span>
+<span class="w">      </span><span class="c">!! `hv%ke_diss` (the lateral-viscosity KE dissipation rate) is forwarded</span>
+<span class="w">      </span><span class="c">!! for the frictional source; it is 0 unless `hv%compute_ke_diss` is set</span>
+<span class="w">      </span><span class="c">!! (and `meke%frcoeff&lt;0` ignores it) ⇒ inert by default.</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">hgrid_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">grid</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_metrics_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">metrics</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_gm_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">gm</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_varmix_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">varmix</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_wave_speed_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">wavespeed</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_horizontal_viscosity_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">hv</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">multilayer_state_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">ms</span>
+<span class="w">      </span><span class="kt">real</span><span class="p">(</span><span class="n">wp</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">in</span><span class="p">)</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">dt</span>
+<span class="w">      </span><span class="k">type</span><span class="p">(</span><span class="n">ocean_meke_t</span><span class="p">),</span><span class="w"> </span><span class="k">intent</span><span class="p">(</span><span class="n">inout</span><span class="p">),</span><span class="w"> </span><span class="k">optional</span><span class="w"> </span><span class="kd">::</span><span class="w"> </span><span class="n">meke</span>
+
+<span class="w">      </span><span class="k">if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="nb">present</span><span class="p">(</span><span class="n">meke</span><span class="p">))</span><span class="w"> </span><span class="k">return</span>
+<span class="k">      if</span><span class="w"> </span><span class="p">(.</span><span class="nb">not</span><span class="p">.</span><span class="w"> </span><span class="n">meke</span><span class="p">%</span><span class="n">enable</span><span class="p">)</span><span class="w"> </span><span class="k">return</span>
+<span class="k">      call </span><span class="n">meke_step</span><span class="p">(</span><span class="n">grid</span><span class="p">,</span><span class="w"> </span><span class="n">metrics</span><span class="p">,</span><span class="w"> </span><span class="n">meke</span><span class="p">,</span><span class="w"> </span><span class="n">gm</span><span class="p">,</span><span class="w"> </span><span class="n">varmix</span><span class="p">,</span><span class="w"> </span><span class="n">wavespeed</span><span class="p">,</span><span class="w"> </span><span class="n">ms</span><span class="p">,</span><span class="w"> </span><span class="n">dt</span><span class="p">,</span><span class="w"> </span><span class="p">&amp;</span>
+<span class="w">                     </span><span class="n">ke_diss_ext</span><span class="o">=</span><span class="n">hv</span><span class="p">%</span><span class="n">ke_diss</span><span class="p">)</span>
+<span class="w">   </span><span class="k">end subroutine </span><span class="n">run_meke_step</span>
+</pre></div>
+
+    </section>
+    <br>
+    
+    </div>
+  </div>
+
+      <hr>
+    </div> <!-- /container -->
+    <footer>
+      <div class="container">
+        <div class="row justify-content-between">
+          <div class="col">
+            <p>
+              Roundabout
+ was developed by Jorge Luis Galvez Vallejo<br>              &copy; 2026 
+</p>
+          </div>
+          <div class="col">
+            <p class="text-end">
+              Documentation generated by
+              <a href="https://github.com/Fortran-FOSS-Programmers/ford">FORD</a>
+ on 2026-11-13 23:21 +0000             </p>
+          </div>
+        </div>
+        <br>
+      </div> <!-- /container -->
+    </footer>
+  </body>
+</html>
