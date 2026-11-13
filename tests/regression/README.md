@@ -1451,10 +1451,15 @@ go through a stdlib classic-NetCDF writer — nothing to install):
   `remap_boundary_extrap`, `remap_nonuniform_weights`,
   and `remap_check_preconditions`;
 * edge variants: `closed` (walls + island), `channel` (re-entrant in x, a
-  north sponge band), `obc` (a Flather open east edge), and the single-rank
-  rows `tripolar` (the analytic tripolar generator: 15 x 1 degree from 59 N,
-  bipolar cap above 70 N, north fold, px = 1) and `cavity` (a flat 200 m ice
-  draft over the deep northern third); and `cliff` (walls + island, but the
+  north sponge band), `obc` (a Flather open east edge), the single-rank
+  row `tripolar` (the analytic tripolar generator: 15 x 1 degree from 59 N,
+  bipolar cap above 70 N, north fold, px = 1) and `cavity` (runs on any rank
+  count, DECOMP leg included; a flat 200 m ice
+  draft over the deep northern third; it enables the cavity dynamics and the
+  draft only, NEITHER the basal melt NOR the top drag, so its PASS says nothing
+  about the melt path -- that is covered by the `cavity_*` cases of
+  `test_ocean_decomp_bitid_mpi`; the axis is not extended because the RESTART
+  leg would hit the known one-rank melt warm-restart defect); and `cliff` (walls + island, but the
   staircase replaced by a 10 m shelf dropping straight to 2000 m, rx0 ~ 0.99 —
   the 1-degree Southern Ocean's coastal cliffs; its own bathymetry file);
 * `grid`: Cartesian, or a 0.25 x 0.18 degree spherical sector at 40 N.
@@ -1792,7 +1797,6 @@ stack (CPU + MPI, restart and decomp legs): 25 PASS, 11 REFUSED_PHYSICAL,
 | ~~`restart_visc_rem`~~ | RESTART | CLOSED (PR-2, bt-rem-from-av-rem, 2026-10-05): the real root cause was `visc_rem_precompute` reading the previous stage's `vmix%kv`, never checkpointed — registering `vmix_kv` closes it; row deleted from `compat_expect.py` |
 | ~~`restart_meke_gm_src_lag`~~ | RESTART | MEKE reads the previous step's `gm%gm_src`, which was not checkpointed (3 % off at step 24). Retired 2026-10-05: `gm_src` (and the slopes / VarMix KhTh the GM operator reads between thermo refreshes) are restart-registered |
 | `restart_mle_mld_filter` | RESTART | MLE's running-mean `mld_filtered` (mld_decay_time > 0) is persistent state outside the registry |
-| `cavity_single_rank` | DECOMP (multirank) | the configure refusal on > 1 rank (the tripolar fold row `tripolar_fold_px1` was retired when the distributed fold lifted the `px > 1` refusal) |
 | `gpu_eulerian_z_epbl_mle_drift` | GPU | eulerian_z + ssp_rk2 + EPBL + MLE ends 1.6e-7 from gfortran, 3000x the population spread (an order-sensitive amplification; per-tile ghost h / tracers may have fed it: re-test on a GPU leg) |
 
 Closed since: `decomp_weno_pv` (WENO PV interpolation at the smallest halo its gate

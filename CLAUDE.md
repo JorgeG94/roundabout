@@ -319,8 +319,8 @@ non-hydrostatic on the C-grid, per-layer Orlanski
 phase-speed radiation + file-backed boundary-data backends (Flather +
 zero-gradient anomaly and the constant backend ship today), MPI
 per-feature multi-rank support for the
-single-rank closures (wet/dry, the ice-shelf cavity, Chapman
-edges), restarts across a rank-count change,
+single-rank closures (wet/dry, Chapman
+edges, and the cavity's `freshwater='mass'`, file draft, fold, bulk and open-edge combinations), restarts across a rank-count change,
 a bit-identical barotropic march-in — the C-grid MPI halo itself ships,
 bit-identical to one rank.
 
@@ -367,7 +367,7 @@ Tripolar fold under MPI: every seam site runs exchange → periodic wrap → fol
 
 **A decomposed run IS the serial run — bitwise.** `tests/mpi/test_ocean_decomp_bitid_mpi` (ctest at 1/2/4 ranks) compares every restart-registry field, owned cells, bitwise, on every `px x py` factorisation (2x1, 1x2, 4x1, 2x2, 1x4) of every case in its `CASES` list, each under both split schemes unless it pins one (walls + island, periodic z* + porous, periodic + north sponge, tidal/Flather OBC, spherical, Orlanski/clamped/sponge OBC, the closure set, the windowed file readers, a tripolar cap whose x splits run the distributed fold, sea ice under that fold with and without EVP dynamics, and sea ice: thermo + ITD + EVP + the stress blend, without and with the category transport, the windowed tracer drain at `dt_tracer_advect_ratio > 1` (ppm, ppm_h3, WENO5/7/9, and across the tripolar fold), the balanced-vortex IC, the atmosphere-driven bulk forcing (basin, with sea ice, under the tripolar fold), and the OM3-parity closure cases — each sea-ice case also checkpointed mid-run to per-rank files and resumed, bitwise against the straight decomposed run, ghosts included). Any mismatch is a bug. The recurring bug class it finds: a pass that writes a tile's PHYSICAL span only (an OBC fill, a sponge, a wall re-close) or keys a closure on the global edge TAG without `has_*` — at an MPI seam the neighbour's ghost copy goes stale or the seam is treated as a wall. Gate new edge/ghost writers on `has_*`, and refresh seam ghosts (collective, gated on rank-uniform tags) after any physical-span-only writer that something reads before the next exchange. `&mpi_nml px/py` unset on N ranks is auto-factored (north-south under a tripolar fold). The supergrid, bathymetry and z-level IC readers are windowed per rank (start/count). The console uses the EFP reproducing sums by default (`&ocean_diag_nml reproducing_sums`), so it prints the same digits on any rank count. The barotropic march-in (`&ocean_bt_nml bt_halo > 0`) is OPT-IN — AUTO resolves to 0 — because it is not bit-identical over variable bathymetry / with OBCs.
 
-**Single-rank features fail loud at configure on >1 rank** (in `engine_setup`, keyed on the actual rank count): ice-shelf cavity, wet/dry, Chapman OBC edges, a tripolar tile shorter than `nghost+1` rows (or, with `px > 1`, narrower than `nghost+1` columns), in-memory (staged) geometry injection, `nghost < 3`, an explicit `bt_halo` wider than the smallest tile. Restarts resume on the same decomposition only. Full list + the known non-bit-identical paths: `docs/CAPABILITIES_AND_LIMITATIONS.md`, *MPI (domain decomposition)*.
+**Single-rank features fail loud at configure on >1 rank** (in `engine_setup`, keyed on the actual rank count): wet/dry, Chapman OBC edges, the ice-shelf cavity's unproven combinations (`freshwater='mass'`, `draft_config='file'`, a tripolar fold, bulk forcing, or an edge other than wall/periodic), a tripolar tile shorter than `nghost+1` rows (or, with `px > 1`, narrower than `nghost+1` columns), in-memory (staged) geometry injection, `nghost < 3`, an explicit `bt_halo` wider than the smallest tile. Restarts resume on the same decomposition only. Full list + the known non-bit-identical paths: `docs/CAPABILITIES_AND_LIMITATIONS.md`, *MPI (domain decomposition)*.
 
 ### I/O
 

@@ -304,6 +304,7 @@ contains
          block
             real(wp) :: rho_surf, drho_dz
             logical :: trim_ok
+            real(wp) :: ok_flag, ok_flag_glob, eta_lo, eta_hi
             rho_surf = cfg%ocean%ic%rho_0 + &
                        cfg%ocean%ic%beta_S*(cfg%ocean%zinit%lin_s_ref - cfg%ocean%ic%S_ref) - &
                        cfg%ocean%ic%alpha_T*(cfg%ocean%zinit%lin_t_ref - cfg%ocean%ic%T_ref)
@@ -312,7 +313,13 @@ contains
             call cavity_trim_eta_linear_impl(eta_trim, trim_ok, state%metrics%z_draft, &
                                              water, cfg%ocean%cavity_dyn%h_min_cavity, &
                                              cfg%ocean%ic%rho_0, rho_surf, drho_dz, nx, ny)
-            if (.not. trim_ok) then
+            ! Rank-uniform verdict: a tile-local `trim_ok` would refuse on one
+            ! rank while the others carry on into the next collective.
+            ok_flag = merge(0.0_wp, 1.0_wp, trim_ok)
+            call grid_allreduce_max(grid, ok_flag, ok_flag_glob)
+            call grid_allreduce_min(grid, minval(eta_trim), eta_lo)
+            call grid_allreduce_max(grid, maxval(eta_trim), eta_hi)
+            if (ok_flag_glob > 0.5_wp) then
                call fail("ocean_state_seed_from_cfg: &ocean_cavity_dyn_nml "// &
                          "trim_ic_for_p_surf found no admissible trim depth (the "// &
                          "initial density must be positive and stably stratified, "// &
@@ -320,10 +327,11 @@ contains
                          ierr, OCEAN_STATUS_ERR_IC_SEED)
                return
             end if
-            call logger%info("ocean_cavity: trimmed the initial column under the ice "// &
-                             "to the load (MOM6 TRIM_IC_FOR_P_SURF): eta in ["// &
-                             to_string(minval(eta_trim))//", "// &
-                             to_string(maxval(eta_trim))//"] m")
+            if (comm_env_rank() == 0) then
+               call logger%info("ocean_cavity: trimmed the initial column under the ice "// &
+                                "to the load (MOM6 TRIM_IC_FOR_P_SURF): eta in ["// &
+                                to_string(eta_lo)//", "//to_string(eta_hi)//"] m")
+            end if
          end block
       end if
       allocate (h_col(nx, ny))
@@ -1929,13 +1937,17 @@ contains
       integer, intent(out) :: ierr
 
       integer :: draft_code, source_code, nx, ny, ng
-      integer :: n_over_land, n_grounded, n_interior
+      integer :: n_over_land, n_grounded, n_interior, n_over_land_all
       integer :: sign_code, local_ierr
       real(wp) :: per_metre, x0_g, x1_g, y0_g, y1_g, slope_g, amp
       logical :: geographic
          !! Grid positions are in degrees: the input to
          !! `topo_length_to_grid_units` (#203).
       real(wp) :: grounded_frac
+      integer(int64) :: n_grounded_loc, n_interior_loc, n_grounded_glob, n_interior_glob
+      integer(int64) :: n_over_land_loc, n_over_land_glob
+      real(wp) :: draft_max, draft_bad, draft_bad_glob
+         !! Global max of the owned-cell draft (layout-independent log).
 
       ierr = OCEAN_STATUS_OK
       nx = size(state%metrics%z_draft, 1)
@@ -2007,14 +2019,16 @@ contains
       case (CAVITY_DRAFT_FILE)
 #ifndef RDB_NO_NETCDF
          ! Static 2-D NetCDF draft, through the PR-14 reader.  SINGLE
-         ! RANK: the loader itself applies the global offset correctly,
-         ! but the grounding statistics a few lines below are single-rank
-         ! reductions and the whole cavity is fenced that way, so the
-         ! restriction is asserted here rather than left implicit.
+         ! RANK until a decomposed case exists: the loader applies the
+         ! global offset, but no bit-identity case covers a windowed draft
+         ! read, so `engine_setup` refuses it on more than one rank and
+         ! the restriction is re-asserted here (every rank sees a tile
+         ! smaller than the global grid, so all fail together).
          if (grid%nx_phys /= grid%nx_global .or. grid%ny_phys /= grid%ny_global) then
-            call fail("&ocean_cavity_dyn_nml draft_config='file' is single-rank "// &
-                      "only (the cavity's grounding statistics are single-rank "// &
-                      "reductions).  Run on one rank or use an analytic draft.", &
+            call fail("&ocean_cavity_dyn_nml draft_config='file' is "// &
+                      "unproven on a decomposed domain (no multi-rank bit-identity "// &
+                      "case covers the windowed draft read).  Run on one rank or "// &
+                      "use an analytic draft.", &
                       ierr, OCEAN_STATUS_ERR_IC_SEED)
             return
          end if
@@ -2060,7 +2074,10 @@ contains
       ! Guard the field itself before anything derives geometry from it.
       ! Written as `.not. (z >= 0)` inside the helper so a NaN FAILS
       ! rather than sliding through a `z < 0` test that is false for NaN.
-      if (.not. cavity_draft_is_finite_nonneg(state%metrics%z_draft, nx, ny)) then
+      ! Rank-uniform verdict (global max of the local "bad" flag).
+      draft_bad = merge(0.0_wp, 1.0_wp, cavity_draft_is_finite_nonneg(state%metrics%z_draft, nx, ny))
+      call grid_allreduce_max(grid, draft_bad, draft_bad_glob)
+      if (draft_bad_glob > 0.5_wp) then
          call fail("&ocean_cavity_dyn_nml: z_draft must be finite and >= 0 "// &
                    "everywhere (it is a DEPTH below z = 0, positive down)", &
                    ierr, OCEAN_STATUS_ERR_IC_SEED)
@@ -2071,13 +2088,38 @@ contains
       ! says land, so land columns keep the datum they always had
       ! (`bt_H_ref = b`) and the counted-once invariant stays exact on
       ! every column.
+      ! The PRINTED count is the OWNED cells' (global, layout-independent);
+      ! the helper below still zeroes the ghost ring too.
+      n_over_land = count(state%barotropic%b(ng + 1:ng + grid%nx_phys, ng + 1:ng + grid%ny_phys) &
+                          < LAND_DEPTH_THRESHOLD .and. &
+                          state%metrics%z_draft(ng + 1:ng + grid%nx_phys, ng + 1:ng + grid%ny_phys) &
+                          /= 0.0_wp)
       call cavity_apply_land_exclusion(state%metrics%z_draft, state%barotropic%b, &
-                                       nx, ny, n_over_land)
+                                       nx, ny, n_over_land_all)
 
       call cavity_count_grounded(state%barotropic%b, state%metrics%z_draft, &
                                  cfg%ocean%cavity_dyn%h_min_cavity, ng, &
                                  grid%nx_phys, grid%ny_phys, nx, ny, &
                                  n_grounded, n_interior)
+      ! The verdict is taken on the GLOBAL counts.  A per-tile fraction is
+      ! wrong both ways (an all-grounded tile reads 1.0 and refuses a run
+      ! the serial model accepts) and, worse, desynchronises the ranks: one
+      ! refuses while the others carry on into the next collective.  The
+      ! counts are exact integers (owned cells only, no ghosts), so the
+      ! global fraction is the 1-rank fraction and every rank takes the
+      ! same branch.
+      n_grounded_loc = int(n_grounded, int64)
+      n_interior_loc = int(n_interior, int64)
+      call grid_allreduce_sum_i8(grid, n_grounded_loc, n_grounded_glob)
+      call grid_allreduce_sum_i8(grid, n_interior_loc, n_interior_glob)
+      n_over_land_loc = int(n_over_land, int64)
+      call grid_allreduce_sum_i8(grid, n_over_land_loc, n_over_land_glob)
+      n_over_land = int(n_over_land_glob)
+      call grid_allreduce_max(grid, maxval(state%metrics%z_draft(ng + 1:ng + grid%nx_phys, &
+                                                                 ng + 1:ng + grid%ny_phys)), &
+                              draft_max)
+      n_grounded = int(n_grounded_glob)
+      n_interior = int(n_interior_glob)
       grounded_frac = real(n_grounded, wp)/real(max(n_interior, 1), wp)
       if (grounded_frac > cfg%ocean%cavity_dyn%grounded_max_frac) then
          call fail("&ocean_cavity_dyn_nml: the prescribed draft grounds "// &
@@ -2098,7 +2140,7 @@ contains
          call logger%info("Ice-shelf cavity: ON  draft_config='"// &
                           trim(cfg%ocean%cavity_dyn%draft_config)//"' source='"// &
                           trim(cfg%ocean%cavity_dyn%draft_source)//"' max draft = "// &
-                          to_string(maxval(state%metrics%z_draft))//" m, "// &
+                          to_string(draft_max)//" m, "// &
                           "h_min_cavity = "// &
                           to_string(cfg%ocean%cavity_dyn%h_min_cavity)//" m")
          call logger%info("                  datum bt_H_ref = b - z_draft afloat, "// &
