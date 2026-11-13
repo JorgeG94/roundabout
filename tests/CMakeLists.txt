@@ -362,6 +362,7 @@ set(RDB_TESTS
     "test_ocean_wave_drag|test_ocean_wave_drag|collect_ocean_wave_drag_tests|ocean_wave_drag|ocean"
     "test_ocean_wetdry|test_ocean_wetdry|collect_ocean_wetdry_tests|ocean_wetdry|ocean"
     "test_ocean_wetdry_driver|test_ocean_wetdry_driver|collect_ocean_wetdry_driver_tests|ocean_wetdry_driver|ocean"
+    "test_ocean_wetdry_engine|test_ocean_wetdry_engine|collect_ocean_wetdry_engine_tests|ocean_wetdry_engine|ocean"
     "test_ocean_surface_stress|test_ocean_surface_stress|collect_ocean_surface_stress_tests|ocean_surface_stress|ocean"
     "test_coriolis_inertial|test_coriolis_inertial|collect_coriolis_inertial_tests|coriolis_inertial|ocean"
     "test_coriolis_multilayer|test_coriolis_multilayer|collect_coriolis_multilayer_tests|coriolis_multilayer|ocean"
@@ -654,7 +655,8 @@ if(RDB_ENABLE_MPI)
       test_ocean_tripolar_fold_mpi
       test_ocean_fold_exchange_mpi
       test_ocean_fold_sites_mpi
-      test_ocean_decomp_bitid_mpi)
+      test_ocean_decomp_bitid_mpi
+      test_ocean_ke_probe_mpi)
   set(MPI_TEST_NPROCS_test_halo_mpi 4)
   set(MPI_TEST_NPROCS_test_halo_ocean_mpi 4)
   set(MPI_TEST_NPROCS_test_ocean_dyn_mpi 2)
@@ -664,6 +666,7 @@ if(RDB_ENABLE_MPI)
   set(MPI_TEST_NPROCS_test_ocean_fold_exchange_mpi 2)
   set(MPI_TEST_NPROCS_test_ocean_fold_sites_mpi 2)
   set(MPI_TEST_NPROCS_test_ocean_decomp_bitid_mpi 2)
+  set(MPI_TEST_NPROCS_test_ocean_ke_probe_mpi 4)
   # Per-test regime label (same values as the RDB_TESTS 5th field;
   # classification is by the source path of the modules each test imports).
   set(MPI_TEST_REGIME_test_halo_mpi core)
@@ -675,6 +678,7 @@ if(RDB_ENABLE_MPI)
   set(MPI_TEST_REGIME_test_ocean_fold_exchange_mpi ocean)
   set(MPI_TEST_REGIME_test_ocean_fold_sites_mpi ocean)
   set(MPI_TEST_REGIME_test_ocean_decomp_bitid_mpi ocean)
+  set(MPI_TEST_REGIME_test_ocean_ke_probe_mpi ocean)
   # Writes + reads NetCDF inputs (the per-rank windowed readers).
   set(MPI_NETCDF_TESTS test_ocean_decomp_bitid_mpi)
   foreach(test ${MPI_TESTS})
@@ -701,6 +705,15 @@ if(RDB_ENABLE_MPI)
       # 2-rank leg; same 4 h TIMEOUT and rationale as the 1/4-rank legs below.
       set_tests_properties(rdb_${test} PROPERTIES TIMEOUT 14400)
     endif()
+  endforeach()
+  # The KE probe reduction must give the same digits on any rank count: the
+  # registered 4-rank run covers 4x1/1x4/2x2; add the 1- and 2-rank runs.
+  foreach(np 1 2)
+    add_test(NAME rdb_test_ocean_ke_probe_mpi_${np}rank
+             COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${np}
+                     $<TARGET_FILE:test_ocean_ke_probe_mpi>)
+    set_tests_properties(rdb_test_ocean_ke_probe_mpi_${np}rank
+                         PROPERTIES LABELS "ocean")
   endforeach()
   # test_ocean_dyn_mpi uses ocean_test_metrics from rdb_analytical.
   target_link_libraries(test_ocean_dyn_mpi PRIVATE rdb_analytical)

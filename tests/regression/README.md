@@ -1797,8 +1797,7 @@ stack (CPU + MPI, restart and decomp legs): 25 PASS, 11 REFUSED_PHYSICAL,
 | ~~`restart_visc_rem`~~ | RESTART | CLOSED (PR-2, bt-rem-from-av-rem, 2026-10-05): the real root cause was `visc_rem_precompute` reading the previous stage's `vmix%kv`, never checkpointed — registering `vmix_kv` closes it; row deleted from `compat_expect.py` |
 | ~~`restart_meke_gm_src_lag`~~ | RESTART | MEKE reads the previous step's `gm%gm_src`, which was not checkpointed (3 % off at step 24). Retired 2026-10-05: `gm_src` (and the slopes / VarMix KhTh the GM operator reads between thermo refreshes) are restart-registered |
 | `restart_mle_mld_filter` | RESTART | MLE's running-mean `mld_filtered` (mld_decay_time > 0) is persistent state outside the registry |
-| `decomp_eulerian_z_ssp_rk2` | DECOMP | eulerian_z + ssp_rk2 + EPBL + MLE: last-bit differences in all owned cells on 2x2 / 4x1 (minimised); the visc_rem half was fixed (post-fold ghost refresh) |
-| `gpu_eulerian_z_epbl_mle_drift` | GPU | eulerian_z + ssp_rk2 + EPBL + MLE ends 1.6e-7 from gfortran, 3000x the population spread (the same combination is decomposition-sensitive) |
+| `gpu_eulerian_z_epbl_mle_drift` | GPU | eulerian_z + ssp_rk2 + EPBL + MLE ends 1.6e-7 from gfortran, 3000x the population spread (an order-sensitive amplification; per-tile ghost h / tracers may have fed it: re-test on a GPU leg) |
 
 Closed since: `decomp_weno_pv` (WENO PV interpolation at the smallest halo its gate
 accepted -- weno7 at `nghost = 4`, weno5 at 3 -- drifted at the last bit on 2x2 / 4x1).

@@ -34,6 +34,7 @@ module test_ocean_sw_chl
                              KPP_SW_ALL, KPP_SW_MXL
    use rdb_ocean_epbl, only: ocean_epbl_t, epbl_compute, EPBL_MSTAR_CONSTANT
    use rdb_ocean_data_input, only: ocean_data_input_t, ocean_data_input_update_all
+   use rdb_ocean_boundary_types, only: ocean_bc_state_t
    use rdb_ocean_sw_chl, only: ocean_sw_chl_t, sw_chl_configure, sw_chl_apply, &
                                sw_chl_fill_kappa, SW_CHL_FLOOR, SW_CHL_YEAR_SECONDS
    use rdb_io_netcdf, only: nc_create_file, nc_close, nc_def_dim, nc_def_var_3d, &
@@ -383,6 +384,7 @@ contains
       type(ocean_data_input_t) :: reader
       type(ocean_sw_chl_t) :: sc
       type(ocean_surface_flux_t) :: sf
+      type(ocean_bc_state_t) :: bc
       type(hgrid_t) :: grid
       real(wp), allocatable :: wet(:, :)
       real(wp) :: t_axis(NT), tq(3), mid, want
@@ -418,7 +420,7 @@ contains
       !$acc enter data copyin(wet)
       do iq = 1, 3
          call ocean_data_input_update_all(reader, tq(iq))
-         call sw_chl_apply(sc, reader, grid, wet, sf, tq(iq))
+         call sw_chl_apply(sc, reader, grid, wet, sf, bc, tq(iq))
          !$acc update self(sf%sw_chl_field, sf%sw_kappa)
          do j = NGHOST + 1, NGHOST + NYP
             do i = NGHOST + 1, NGHOST + NXP
