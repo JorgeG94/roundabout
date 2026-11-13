@@ -89,7 +89,23 @@
 !!     only): an emergent shoal whose front crosses every seam, on closed walls,
 !!     with periodic west/east, and with the bathymetry read from a file; the
 !!     refreshed ghosts are compared too, and the shoal is checkpointed and
-!!     resumed.  Wet/dry with the tripolar fold or an open-type edge is a fence;
+!!     resumed;
+!!   * wetdry_tidal_flat / wetdry_open_flat - dynamic wet/dry tidal flats on
+!!     file-bathymetry beaches with shoals: a TIDAL east edge, and a TIDAL south
+!!     plus Flather OPEN east edge, the fronts reaching the open edges (split by
+!!     the 1x2 / 2x2 / 1x4 / 4x1 seams) and the corner where a seam meets them;
+!!     ghosts (outside-domain ones included), budget and the checkpoint/resume leg
+!!     compared.  Bitwise equal to one rank on the GPU build; CPU builds need
+!!     FMA contraction off and, with gfortran, a scalar (non-libmvec) cosine in
+!!     the tidal forcing.  NOTE: the cases do NOT show the positive-definite
+!!     limiter acting (theta < 1) at an open face: the open-edge columns are
+!!     >= 0.6 m (a shallower one is refused at configure) and a per-step sample
+!!     of the last substep's theta never saw theta < 1 within 3 cells of the
+!!     open edge; what they do exercise is wetting and drying fronts at and
+!!     beside the open edge, the outside-corner ghosts the limiter reads, and
+!!     the seam/edge corner.  Wet/dry with the tripolar fold,
+!!     a clamped / chapman / sponge edge or Orlanski / full-Flather / nudging /
+!!     reservoirs on an open edge is a fence;
 !!   * sss_restore - the island basin with FILE sea-surface-salinity restoring
 !!     (per-rank windowed two-record target, halo-exchanged, piston salt flux,
 !!     net-zero shift through the EFP allreduce); needs NetCDF;
@@ -255,6 +271,10 @@ program test_ocean_decomp_bitid_mpi
    character(len=*), parameter :: SG_FILE = "bitid_supergrid.nc"
    character(len=*), parameter :: BATHY_FILE = "bitid_bathy.nc"
    character(len=*), parameter :: WD_BATHY_FILE = "bitid_wd_bathy.nc"
+   character(len=*), parameter :: WDT_BATHY_FILE = "bitid_wdt_bathy.nc"
+      !! The `wetdry_tidal_flat` beach (east tidal edge), written by rank 0.
+   character(len=*), parameter :: WDO_BATHY_FILE = "bitid_wdo_bathy.nc"
+      !! The `wetdry_open_flat` beach (south tidal + east Flather edges), written by rank 0.
       !! The `wetdry_file` case's emergent-shoal bathymetry (written by rank 0).
    character(len=*), parameter :: ZINIT_FILE = "bitid_zinit.nc"
    character(len=*), parameter :: SSS_FILE = "bitid_sss.nc"
@@ -282,10 +302,12 @@ program test_ocean_decomp_bitid_mpi
          !! Mid-run regrows of the fold-exchange buffers (must stay 0).
       integer :: drain_iter = 0
          !! Largest windowed-drain pass count used (0 when the drain never ran).
-      integer :: flips(6) = 0
+      integer :: flips(10) = 0
          !! Wet/dry runs: owned-cell flips of `wd_wet_dyn`, sampled once per outer
          !! step, in the seam bands of the shoal -- (wet->dry, dry->wet) x
-         !! (i-line band, j-line band, corner box).  Zero on every other case.
+         !! (i-line band, j-line band, corner box), then (open-edge band, open-edge
+         !! band crossed by the orthogonal seam band).  Entries 7-10 are only
+         !! counted (and required non-zero) on the open-edge cases.  Zero elsewhere.
       integer :: ncav(6) = 0
          !! Cavity non-vacuity counts over the OWNED cells: covered wet, open wet,
          !! grounded, melting, top-drag stress > 0, k_top < nz.
@@ -297,6 +319,8 @@ program test_ocean_decomp_bitid_mpi
    end type snap_t
 
    integer :: rank, nprocs, n_fail, total_fail, ic
+   logical :: wd_edge_e = .false., wd_edge_s = .false.
+      !! The wet/dry case under way has an open east / south edge (open-edge flip bands).
    integer :: n_steps_cur = N_STEPS
    character(len=16) :: balance_ref = ""
       !! Non-empty: `run_one` calls `ocean_balance_apply` with this `ref_level`
@@ -306,7 +330,7 @@ program test_ocean_decomp_bitid_mpi
       !! `RDB_BITID_CASES`: run only the cases whose name contains this substring.
    type(comm_t) :: comm
    character(len=16), parameter :: SCHEMES(2) = [character(len=16) :: "pred_corr", "ssp_rk2"]
-   character(len=24), parameter :: CASES(69) = [character(len=24) :: &
+   character(len=24), parameter :: CASES(71) = [character(len=24) :: &
                                                 "island_basin", "weno7_pv", &
                                                 "periodic_channel_zstar", &
                                                 "visc_rem_zstar", &
@@ -337,7 +361,8 @@ program test_ocean_decomp_bitid_mpi
                                                 "cavity_zfixed", "cavity_sigma", &
                                                 "cavity_sigma_ratio2", "cavity_gall", "cavity_melt_only", "cavity_periodic", &
                                                 "cavity_combo", "wetdry_shoal", &
-                                                "wetdry_periodic", "wetdry_file", "chapman_obc", "obc_epbl"]
+                                                "wetdry_periodic", "wetdry_file", "chapman_obc", "obc_epbl", &
+                                                "wetdry_tidal_flat", "wetdry_open_flat"]
 
    call comm_env_init()
    call comm_env_setup_roles(.false.)
@@ -362,6 +387,8 @@ program test_ocean_decomp_bitid_mpi
           trim(CASES(ic)) == "sss_restore" .or. &
           trim(CASES(ic)) == "wetdry_file" .or. &
           trim(CASES(ic)) == "manizza" .or. &
+          trim(CASES(ic)) == "wetdry_tidal_flat" .or. &
+          trim(CASES(ic)) == "wetdry_open_flat" .or. &
           trim(CASES(ic)) == "tidal_files" .or. &
           trim(CASES(ic)) == "tidal_polzin" .or. &
           index(trim(CASES(ic)), "bulk_flux") == 1 .or. &
@@ -779,6 +806,42 @@ contains
                "edge_depth = 3000.0, slope_scale = 60000.0 /"//NL// &
                "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
                "north = 'wall' /"//NL
+      case ("wetdry_tidal_flat")
+         ! Tidal flat: a beach (file bathymetry, 0.02 m at the west wall deepening
+         ! to 1.0 m by i = 8, east edge column floored at 0.6 m) plus two shoals on the line j = 9.5 (one
+         ! beside the east edge, one on the i-seam), under an M2-like TIDAL east
+         ! edge: the shoreline and the shoals wet and dry with the tide, the
+         ! open edge is split by py > 1 and the front reaches the corner where
+         ! the j seam meets it.  Sigma, ssp_rk2.
+         nml = common// &
+               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
+               "dx = 4000.0, dy = 4000.0 /"//NL// &
+               "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 0.0, wind_stress_y = 0.0 /"//NL// &
+               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
+               "&ocean_topo_nml topo_config = 'file', max_depth = 2.0, wind_config = 'constant' /"//NL// &
+               "&output_nml bathymetry_file = '"//WDT_BATHY_FILE//"', output_to_file = .false. /"//NL// &
+               "&ocean_continuity_nml ppm_limit_pos = .true. /"//NL// &
+               "&ocean_wetdry_nml enable = .true. /"//NL// &
+               "&ocean_bc_nml west = 'wall', east = 'tidal', south = 'wall', north = 'wall', "// &
+               "east_n_tidal = 1, east_tidal_amp = 0.25, east_tidal_phase = 0.0, "// &
+               "east_tidal_omega = 1.4051890e-4 /"//NL
+      case ("wetdry_open_flat")
+         ! The beach turned north-south (shallow north, 1.0 m at the south edge)
+         ! under a TIDAL south edge and a Flather OPEN east edge (an open x open
+         ! corner); shoals near the south edge at the i seam, beside the east edge
+         ! and on the i seam (edge columns floored at 0.6 m).
+         nml = common// &
+               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
+               "dx = 4000.0, dy = 4000.0 /"//NL// &
+               "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 0.0, wind_stress_y = 0.0 /"//NL// &
+               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
+               "&ocean_topo_nml topo_config = 'file', max_depth = 2.0, wind_config = 'constant' /"//NL// &
+               "&output_nml bathymetry_file = '"//WDO_BATHY_FILE//"', output_to_file = .false. /"//NL// &
+               "&ocean_continuity_nml ppm_limit_pos = .true. /"//NL// &
+               "&ocean_wetdry_nml enable = .true. /"//NL// &
+               "&ocean_bc_nml west = 'wall', east = 'open', south = 'tidal', north = 'wall', "// &
+               "south_n_tidal = 1, south_tidal_amp = 0.25, south_tidal_phase = 0.0, "// &
+               "south_tidal_omega = 1.4051890e-4 /"//NL
       case ("tracer_ppm_h3")
          ! Re-entrant channel (periodic west/east) over a seamount, sigma, with
          ! the ppm_h3 horizontal tracer advection (Huynh edges + limiter, a
@@ -1276,7 +1339,8 @@ contains
          nml = nml//"&vcoord_nml vcoord_type = 'zstar', zfixed_closed_faces = .true. /"//NL
       end if
       if (label /= "file_readers" .and. label /= "file_readers_zstar_full" .and. &
-          label /= "file_readers_zstar" .and. label /= "wetdry_file") then
+          label /= "file_readers_zstar" .and. label /= "wetdry_file" .and. &
+          label /= "wetdry_tidal_flat" .and. label /= "wetdry_open_flat") then
          nml = nml//"&output_nml output_to_file = .false. /"//NL
       end if
    end function case_nml
@@ -1500,6 +1564,12 @@ contains
          !$acc update device(uf, vf, huf, hvf)
       end associate
    end subroutine poison_velocity_ghosts
+   subroutine set_wd_edges(label)
+      !! Which open edges the wet/dry case carries (for the open-edge flip bands).
+      character(len=*), intent(in) :: label
+      wd_edge_e = label == "wetdry_tidal_flat" .or. label == "wetdry_open_flat"
+      wd_edge_s = label == "wetdry_open_flat"
+   end subroutine set_wd_edges
 
    subroutine count_wd_flips(engine, prev, flips)
       !! Accumulate the wet<->dry flips of this rank's OWNED cells of
@@ -1509,9 +1579,9 @@ contains
       !! 4 x 4 corner box.  Sampled once per outer step, so a lower bound.
       type(ocean_engine_t), intent(inout), target :: engine
       real(wp), allocatable, intent(inout) :: prev(:, :)
-      integer, intent(inout) :: flips(6)
+      integer, intent(inout) :: flips(10)
       integer :: i, j, ig, jg, ng, nxo, nyo
-      logical :: in_i, in_j, was, now
+      logical :: in_i, in_j, was, now, in_e, in_ec
 
       !$acc update self(engine%state%dyn%bt_work%wd_wet_dyn)
       ng = engine%grid%nghost
@@ -1533,6 +1603,14 @@ contains
             if (in_i) flips(merge(1, 2, was)) = flips(merge(1, 2, was)) + 1
             if (in_j) flips(merge(3, 4, was)) = flips(merge(3, 4, was)) + 1
             if (in_i .and. in_j) flips(merge(5, 6, was)) = flips(merge(5, 6, was)) + 1
+            ! Open-edge band: the 3 cells inside the tidal / open edge(s) of the
+            ! case (east: columns NX_G-2..NX_G; south: rows 1..3), and its
+            ! crossing with the orthogonal seam band.
+            in_e = (wd_edge_e .and. ig >= NX_G - 2) .or. (wd_edge_s .and. jg <= 3)
+            in_ec = (wd_edge_e .and. ig >= NX_G - 2 .and. in_j) .or. &
+                    (wd_edge_s .and. jg <= 3 .and. in_i)
+            if (in_e) flips(merge(7, 8, was)) = flips(merge(7, 8, was)) + 1
+            if (in_ec) flips(merge(9, 10, was)) = flips(merge(9, 10, was)) + 1
          end do
       end do
       prev = engine%state%dyn%bt_work%wd_wet_dyn
@@ -1930,7 +2008,7 @@ contains
    end subroutine compare_ghosts
 
    pure logical function is_wetdry_case(label)
-      !! The dynamic wet/dry cases (`wetdry_shoal`, `wetdry_periodic`, `wetdry_file`).
+      !! The dynamic wet/dry cases (`wetdry_*`).
       character(len=*), intent(in) :: label
       is_wetdry_case = index(label, "wetdry_") == 1
    end function is_wetdry_case
@@ -2031,6 +2109,7 @@ contains
       ! stale seam-ghost mask is still latched to the owner's value, by 96 the
       ! front has moved a ghost cell of `wd_wet_dyn` (and `wd_open_*`) off it.
       if (is_wetdry_case(label)) n_steps_cur = 2*N_STEPS
+      call set_wd_edges(label)
       if (len(label) > 3) then
          if (label(len(label) - 2:) == "_t0") n_steps_cur = 0
       end if
@@ -2045,11 +2124,12 @@ contains
       if (is_wetdry_case(label)) then
          ! Non-vacuity: the front must cross every seam band in BOTH directions
          ! in the serial reference (the decomposed runs are then compared to it).
-         if (any(ref%flips == 0)) then
-            write (*, '(3a,6(1x,i0))') "FAIL ", label, ": a seam band never flips in the reference:", ref%flips
+         if (any(ref%flips(1:6) == 0) .or. (wd_edge_e .and. any(ref%flips(7:10) == 0))) then
+            write (*, '(3a,10(1x,i0))') "FAIL ", label, ": a seam / open-edge band never flips in the reference:", ref%flips
             n_fail = n_fail + 1
          else if (rank == 0) then
-         write (*, '(3a,6(1x,i0))') "case ", label, ": reference seam-band flips (i w>d d>w, j w>d d>w, corner w>d d>w):", ref%flips
+            write (*, '(3a,10(1x,i0))') "case ", label, ": reference seam-band flips (i w>d d>w, j w>d d>w, corner w>d d>w, "// &
+               "edge w>d d>w, edge-x-seam w>d d>w):", ref%flips
          end if
       end if
       if (index(label, "cavity_") == 1) call check_cavity_counters(ref, label, trim(label)//"/"//scheme)
@@ -2562,13 +2642,14 @@ contains
       character(len=:), allocatable :: nml
       character(len=1400) :: lab
       character(len=64) :: want
+      character(len=96) :: rep
       integer :: ik, ierr, im, ie
       logical :: why_found, engine_ran, must_validate
 
-      ! Entries 1..size(KNOBS) share one namelist template; the last two are
+      ! Entries 1..size(KNOBS) share one namelist template; the last seven are
       ! the dynamic wet/dry refusals, built from gate cases (wet/dry itself
       ! runs decomposed: the `wetdry_*` cases).
-      do ik = 1, size(KNOBS) + 2
+      do ik = 1, size(KNOBS) + 7
          if (ik <= size(KNOBS)) then
             lab = KNOBS(ik)
             want = WHY(ik)
@@ -2595,11 +2676,36 @@ contains
             nml = case_nml("tripolar", "ssp_rk2", 1, 1)//"&ocean_continuity_nml ppm_limit_pos = .true. /"//NL// &
                   "&ocean_wetdry_nml enable = .true. /"//NL
          else
-            ! The shoal (valid under validate_config) with an OPEN east edge: the
-            ! limiter at a boundary face reads fluxes outside the domain.
-            lab = "&ocean_wetdry_nml enable = .true. / with an open east edge"
-            want = "neither wall nor periodic"
+            ! The shoal (valid under validate_config) with an east edge or an
+            ! open-edge option that has no decomposition case: every one must be
+            ! refused by the ENGINE gate, naming what it refused.
             must_validate = .true.
+            select case (ik - size(KNOBS) - 1)
+            case (1)
+               lab = "&ocean_wetdry_nml enable = .true. / with a clamped east edge"
+               want = "edge 'clamped' is unproven"
+               rep = "east = 'clamped'"
+            case (2)
+               lab = "&ocean_wetdry_nml enable = .true. / with a chapman east edge"
+               want = "edge 'chapman' is unproven"
+               rep = "east = 'chapman'"
+            case (3)
+               lab = "&ocean_wetdry_nml enable = .true. / with an open east edge and Orlanski radiation"
+               want = "Orlanski radiation, full Flather"
+               rep = "east = 'open', radiation_scheme = 'orlanski'"
+            case (4)
+               lab = "&ocean_wetdry_nml enable = .true. / with an open east edge and full Flather"
+               want = "Orlanski radiation, full Flather"
+               rep = "east = 'open', flather_form = 'full'"
+            case (5)
+               lab = "&ocean_wetdry_nml enable = .true. / with an open east edge and inflow nudging"
+               want = "Orlanski radiation, full Flather"
+               rep = "east = 'open', nudge_tau_in = 3600.0"
+            case default
+               lab = "&ocean_wetdry_nml enable = .true. / with an open east edge and tracer reservoirs"
+               want = "reservoirs are unproven"
+               rep = "east = 'open', res_lscale_out = 20000.0"
+            end select
             nml = case_nml("wetdry_shoal", "ssp_rk2", 1, 1)
             ie = index(nml, "east = 'wall'")
             if (ie < 1) then
@@ -2607,7 +2713,7 @@ contains
                n_fail = n_fail + 1
                cycle
             end if
-            nml = nml(1:ie - 1)//"east = 'open'"//nml(ie + len("east = 'wall'"):)
+            nml = nml(1:ie - 1)//trim(rep)//nml(ie + len("east = 'wall'"):)
          end if
          call read_config_from_string(nml, cfg, ierr=ierr)
          if (ierr == OCEAN_STATUS_OK) call validate_config(cfg, ierr)
@@ -2651,6 +2757,14 @@ contains
    end subroutine check_single_rank_fences
 
 #ifndef RDB_NO_NETCDF
+   pure real(wp) function shoal(i, j, xc, yc)
+      !! Depth of a small shoal about cell-index centre (`xc`, `yc`): a 0.02 m
+      !! crest (below `dry_depth`, so the crest starts dry) with a quadratic flank.
+      integer, intent(in) :: i, j
+      real(wp), intent(in) :: xc, yc
+      shoal = 0.02_wp + 0.02_wp*((real(i, wp) - xc)**2 + (real(j, wp) - yc)**2)
+   end function shoal
+
    subroutine write_input_files()
       !! Rank 0 writes the three whole-grid input files the "file_readers"
       !! case reads through the per-rank windowed readers: a periodic lon-lat
@@ -2737,6 +2851,45 @@ contains
          end do
       end do
       call nc_create_file(WD_BATHY_FILE, ncid)
+      call nc_def_dim(ncid, "y", NY_G, dy_)
+      call nc_def_dim(ncid, "x", NX_G, dx_)
+      call nc_def_var_2d(ncid, "depth", [dy_, dx_], v1)
+      call nc_enddef(ncid)
+      call nc_put_var_2d(ncid, v1, byx)
+      call nc_close(ncid)
+
+      ! `wetdry_tidal_flat` / `wetdry_open_flat` beaches (C-order (y, x)): a plane
+      ! beach from 0.02 m, deepening by 0.15 m per cell and capped at 1.0 m (deeper
+      ! to the east for the tidal flat, to the south for the open flat), with
+      ! shoals (0.02 m crest, quadratic flank; two on the tidal flat, three on
+      ! the open flat) that dry at low tide.  The open-edge columns are floored
+      ! at 0.6 m (above the configure-time minimum for an open / tidal edge).
+      do i = 1, NX_G
+         do j = 1, NY_G
+            byx(j, i) = min(1.0_wp, 0.02_wp + 0.15_wp*real(i - 1, wp))
+            byx(j, i) = min(byx(j, i), shoal(i, j, 24.5_wp, 9.5_wp))
+            byx(j, i) = min(byx(j, i), shoal(i, j, 13.5_wp, 9.5_wp))
+            ! The open edge column stays deep enough for the radiation closure.
+            if (i == NX_G) byx(j, i) = max(byx(j, i), 0.6_wp)
+         end do
+      end do
+      call nc_create_file(WDT_BATHY_FILE, ncid)
+      call nc_def_dim(ncid, "y", NY_G, dy_)
+      call nc_def_dim(ncid, "x", NX_G, dx_)
+      call nc_def_var_2d(ncid, "depth", [dy_, dx_], v1)
+      call nc_enddef(ncid)
+      call nc_put_var_2d(ncid, v1, byx)
+      call nc_close(ncid)
+      do i = 1, NX_G
+         do j = 1, NY_G
+            byx(j, i) = min(1.0_wp, 0.02_wp + 0.15_wp*real(NY_G - j, wp))
+            byx(j, i) = min(byx(j, i), shoal(i, j, 13.5_wp, 2.5_wp))
+            byx(j, i) = min(byx(j, i), shoal(i, j, 24.5_wp, 9.5_wp))
+            byx(j, i) = min(byx(j, i), shoal(i, j, 13.5_wp, 9.5_wp))
+            if (i == NX_G .or. j == 1) byx(j, i) = max(byx(j, i), 0.6_wp)
+         end do
+      end do
+      call nc_create_file(WDO_BATHY_FILE, ncid)
       call nc_def_dim(ncid, "y", NY_G, dy_)
       call nc_def_dim(ncid, "x", NX_G, dx_)
       call nc_def_var_2d(ncid, "depth", [dy_, dx_], v1)
