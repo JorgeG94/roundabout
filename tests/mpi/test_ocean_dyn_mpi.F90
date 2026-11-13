@@ -1191,8 +1191,11 @@ contains
    ! over the N_STEPS step loop must equal the hand-derived exchange
    ! topology of the split-RK2 step (the RK2 step comm-topology map):
    !
-   !   ml_state  = 3 * 2 * N_STEPS     (stage entry + post-continuity +
-   !                                    stage tail, per RK2 stage)
+   !   ml_state  = 4 * 2 * N_STEPS     (stage entry + post-continuity +
+   !                                    stage tail + the refresh after the
+   !                                    Eulerian-z vertical advection, per
+   !                                    RK2 stage; the step here is driven
+   !                                    without a `vcoord`, i.e. Eulerian)
    !   centre_3d = 3 * 2 * N_STEPS     (continuity mid-Lie-split: h + the
    !                                    2 registered tracers, per stage)
    !   bt_group  = (N_INNER + 1) * 2 * N_STEPS  (one grouped BT exchange per
@@ -1278,7 +1281,7 @@ contains
       ! bug was this stale formula, not the exchange.
       visc_rem_per_stage = pc_per_stage
 
-      expect_ml = int(3*2*N_STEPS, int64)
+      expect_ml = int(4*2*N_STEPS, int64)
       expect_c3d = (3_int64 + pc_per_stage + pc_refresh_per_stage)*2_int64*int(N_STEPS, int64)
       expect_fx3d = (pc_per_stage + visc_rem_per_stage)*2_int64*int(N_STEPS, int64)
       expect_fy3d = (pc_per_stage + visc_rem_per_stage)*2_int64*int(N_STEPS, int64)
@@ -1310,15 +1313,16 @@ contains
          ! bt exchange carries 3 prims (eta, ubt, vbt) = 3 Isends, and a
          ! face_y array still exchanges its x-seam columns (py=1 only kills
          ! the y-direction sends, not the x-seam of v-located arrays).
-         !   ml_state + continuity: 36 Isends/step (unchanged from v1)
+         !   ml_state + continuity: 46 Isends/step (v1's 36 + the 10 of the
+         !     post-vertical-advection ml_state refresh: 5 prims x 2 stages)
          !   entry_exchange (per stage): bt_group_wide(3) + centre_wide(1)
          !     + 3×face_x_wide(3) + 3×face_y_wide(3) = 10 Isends; ×2 stages = 20
          !   in-loop wide (per stage): bt_group_wide(3) Isends; ×2 stages = 6
          !   exit freshen (per stage): bt_group(3) Isends; ×2 stages = 6
-         !   total: 36 + 20 + 6 + 6 = 68 Isends/step × N_STEPS = 6800
+         !   total: 46 + 20 + 6 + 6 = 78 Isends/step × N_STEPS = 7800
          block
             integer(int64) :: isends_per_step
-            isends_per_step = 36_int64 + 20_int64 + 6_int64 + 6_int64 &
+            isends_per_step = 46_int64 + 20_int64 + 6_int64 + 6_int64 &
                               + pc_isends_per_step
             expect_msgs = isends_per_step*int(N_STEPS, int64)
          end block
@@ -1333,16 +1337,16 @@ contains
          ! MPI isend count formula (nprocs==2 rank 0, py=1):
          !   Rank 0 = west edge rank.  X-directions active: 1 (wall) or 2 (periodic).
          !   Per outer step per direction:
-         !     ml_state:    3 calls/stage × 2 stages × 5 prims (h, ux, vy, S, T) = 30
+         !     ml_state:    4 calls/stage × 2 stages × 5 prims (h, ux, vy, S, T) = 40
          !     continuity:  1 call/stage  × 2 stages × 3 prims (h, S, T)         = 6
          !     bt_group:    (N_INNER+1)/stage × 2 stages × 3 prims (η, ubt, vbt) = N_INNER*6 + 6
          !     bt_u_mid:    N_INNER/stage  × 2 stages × 1 prim  (ubt face_x)     = N_INNER*2
-         !   = (42 + N_INNER*8) × N_STEPS × n_x_dirs
+         !   = (52 + N_INNER*8) × N_STEPS × n_x_dirs
          block
             integer(int64) :: isends_per_step_per_dir, n_x_dirs
             n_x_dirs = 1_int64
             if (periodic .and. decomposed) n_x_dirs = 2_int64
-            isends_per_step_per_dir = 42_int64 + int(N_INNER, int64)*8_int64 &
+            isends_per_step_per_dir = 52_int64 + int(N_INNER, int64)*8_int64 &
                                       + pc_isends_per_step
             expect_msgs = isends_per_step_per_dir*int(N_STEPS, int64)*n_x_dirs
          end block

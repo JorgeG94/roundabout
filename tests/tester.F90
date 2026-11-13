@@ -73,6 +73,8 @@ program rdb_tests
                                       collect_ocean_cavity_diags_tests
    use test_ocean_cavity_grounded_budget, only: ocean_cavity_grounded_budget_collect => &
                                                 collect_ocean_cavity_grounded_budget_tests
+   use test_ocean_cavity_engine, only: ocean_cavity_engine_collect => &
+                                       collect_ocean_cavity_engine_tests
    use test_ocean_cavity_freshwater, only: ocean_cavity_freshwater_collect => &
                                            collect_ocean_cavity_freshwater_tests
    use test_ocean_pgf_wright, only: ocean_pgf_wright_collect => collect_ocean_pgf_wright_tests
@@ -341,6 +343,8 @@ program rdb_tests
                 new_testsuite("ocean_cavity_diags", ocean_cavity_diags_collect), &
                 new_testsuite("ocean_cavity_grounded_budget", &
                               ocean_cavity_grounded_budget_collect), &
+                new_testsuite("ocean_cavity_engine", &
+                              ocean_cavity_engine_collect), &
                 new_testsuite("ocean_cavity_freshwater", &
                               ocean_cavity_freshwater_collect), &
                 new_testsuite("ocean_pgf_wright", ocean_pgf_wright_collect), &

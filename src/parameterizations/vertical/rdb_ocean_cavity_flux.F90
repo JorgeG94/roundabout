@@ -1512,7 +1512,7 @@ contains
    ! The driver
    ! ======================================================================
 
-   subroutine ocean_cavity_flux_step(grid, cav, metrics, ms, eos, sf, active)
+   subroutine ocean_cavity_flux_step(grid, cav, metrics, ms, eos, sf, active, ierr)
       !! One cavity basal-melt update: sample the far field, solve the
       !! three-equation interface on every covered column, deliver the
       !! two owned surface-flux components, and account for the solver
@@ -1536,7 +1536,8 @@ contains
       use pic_logger, only: global_logger
       use pic_strings, only: to_string
       use rdb_error_ring, only: fail
-      use rdb_ocean_status, only: OCEAN_STATUS_ERR_SETUP
+      use rdb_ocean_status, only: OCEAN_STATUS_OK, OCEAN_STATUS_ERR_SETUP
+      use rdb_grid_reduce, only: grid_allreduce_sum_i8
       type(hgrid_t), intent(in) :: grid
          !! Horizontal grid (for `nx_total`/`ny_total`).
       type(ocean_cavity_flux_t), intent(inout) :: cav
@@ -1554,8 +1555,16 @@ contains
       logical, intent(in), optional :: active
          !! Thermo-cadence gate.  Present-and-false ⇒ early return;
          !! absent ⇒ run (the `ocean_surface_flux_assemble` convention).
+      integer, intent(out), optional :: ierr
+         !! `OCEAN_STATUS_OK`, or `OCEAN_STATUS_ERR_SETUP` after a non-finite
+         !! column.  The count is reduced over the tiles, so EVERY rank
+         !! gets the same verdict; a present `ierr` lets the driver abort
+         !! ALL ranks (`comm_env_abort`) instead of this rank `error stop`-ping while the others block in
+         !! the next collective.  Absent ⇒ `error stop` (single-rank callers).
       integer :: nx, ny, nz, idx_t, idx_s
+      integer(int64) :: nf_loc, nf_glob
 
+      if (present(ierr)) ierr = OCEAN_STATUS_OK
       if (.not. cav%is_init) return
       if (.not. cav%enable) return
       if (present(active)) then
@@ -1602,6 +1611,15 @@ contains
       cav%n_no_root_total = cav%n_no_root_total + int(cav%n_no_root_step, int64)
       cav%n_other_total = cav%n_other_total + int(cav%n_other_step, int64)
 
+      ! Rank-uniform verdict: the non-finite count is per TILE, so reduce it
+      ! (one integer per thermo step, melt on only: every early return above
+      ! is config-uniform; an identity on an untiled grid).  EVERY rank then
+      ! reports the same failure, whichever caller (driver, API, bench, test)
+      ! handles `ierr`.
+      nf_loc = int(cav%n_nonfinite_step, int64)
+      call grid_allreduce_sum_i8(grid, nf_loc, nf_glob)
+      cav%n_nonfinite_step = int(nf_glob)
+
       if (cavity_melt_status_is_fatal(cav%n_nonfinite_step)) then
          call fail("&ocean_cavity_melt_nml: "//to_string(cav%n_nonfinite_step)// &
                    " ice-covered column(s) fed the basal-melt solver a non-finite "// &
@@ -1609,7 +1627,8 @@ contains
                    "(CAVITY_MELT_NONFINITE_*).  The kernel's safe state is zero melt, "// &
                    "which would hide an already-corrupt column behind a plausible "// &
                    "run, so this is fatal.  NOT_CONVERGED / NO_PHYSICAL_ROOT are "// &
-                   "counted and warned instead.", code=OCEAN_STATUS_ERR_SETUP)
+                   "counted and warned instead.", ierr, OCEAN_STATUS_ERR_SETUP)
+         return
       end if
 
       if (cav%n_not_converged_step > 0 .or. cav%n_no_root_step > 0 .or. &
