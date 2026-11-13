@@ -843,6 +843,27 @@ if(RDB_ENABLE_MPI)
   set_tests_properties(
     rdb_test_ocean_atm_state_mpi_1rank rdb_test_ocean_atm_state_mpi_4rank
     PROPERTIES LABELS "ocean" ENVIRONMENT "OMP_NUM_THREADS=1")
+
+  # Bulk-forcing wind stress under the tripolar fold: 1 rank vs 2x2 / 4x1 (the
+  # distributed fold) / 1x4, owned tau_x / tau_y / stress_mag, bitwise.
+  add_executable(test_ocean_bulk_stress_fold_mpi
+                 mpi/test_ocean_bulk_stress_fold_mpi.F90)
+  target_include_directories(
+    test_ocean_bulk_stress_fold_mpi PRIVATE "${CMAKE_BINARY_DIR}/modules"
+                                            "${RDB_SHARED_INCLUDE_DIR}")
+  target_link_libraries(
+    test_ocean_bulk_stress_fold_mpi PRIVATE rdb_analytical ${main_lib}
+                                            test-drive::test-drive)
+  add_test(NAME rdb_test_ocean_bulk_stress_fold_mpi_1rank
+           COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 1
+                   $<TARGET_FILE:test_ocean_bulk_stress_fold_mpi>)
+  add_test(NAME rdb_test_ocean_bulk_stress_fold_mpi_4rank
+           COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 4
+                   $<TARGET_FILE:test_ocean_bulk_stress_fold_mpi>)
+  set_tests_properties(
+    rdb_test_ocean_bulk_stress_fold_mpi_1rank
+    rdb_test_ocean_bulk_stress_fold_mpi_4rank
+    PROPERTIES LABELS "ocean" ENVIRONMENT "OMP_NUM_THREADS=1")
 endif()
 
 # --------------------------------------------------------------------------
