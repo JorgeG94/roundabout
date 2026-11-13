@@ -1,5 +1,9 @@
 !! Sponge relaxation kernel.
 module rdb_ocean_sponge
+   !! **Reproducibility.**  Every exp/cos/atan here is the module-local
+   !! `rdb_sm_*` body (`rdb_safe_math_*.inc`), so a cell's value does not depend
+   !! on its vector position or tile.
+   !!
    !! Two sponge implementations share this module.
    !!
    !! LEGACY BAND PATH (`ocean_sponge_apply` / `ocean_sponge_apply_tracers`,
@@ -50,7 +54,7 @@ module rdb_ocean_sponge
    !! Divergences from MOM6's ALE-sponge / sponge approach (deliberate,
    !! documented per CLAUDE.md "cite the paper not other codebases" — this
    !! list records WHERE we differ, not MOM6's implementation):
-   !!   1. Exponential relaxation `decay = exp(-Idamp*dt); phi <-
+   !!   1. Exponential relaxation `decay = rdb_sm_exp(-Idamp*dt); phi <-
    !!      decay*phi + (1-decay)*phi_ref` (exact for constant phi_ref over
    !!      the step, unconditionally stable, monotone) instead of MOM6's
    !!      backward-Euler `I1pdamp = 1/(1+Idamp*dt)` (physics-equivalent to
@@ -91,6 +95,7 @@ module rdb_ocean_sponge
    !! `test_ocean_sponge::sponge_reference_is_the_ic_not_the_restart` pins
    !! it).
    use rdb_constants, only: wp, H_DIV_EPS, H_VANISHED
+   use, intrinsic :: ieee_arithmetic, only: ieee_is_nan, ieee_is_finite
    use, intrinsic :: iso_fortran_env, only: int64
    use rdb_grid, only: hgrid_t
    use rdb_multilayer_state, only: multilayer_state_t
@@ -110,7 +115,7 @@ module rdb_ocean_sponge
 
    integer, parameter :: SPONGE_RAMP_COSINE = 0
       !! `&ocean_sponge_nml ramp = "cosine"` (default): the legacy band
-      !! kernel's `0.5*(1 + cos(pi*d/band))`.
+      !! kernel's `0.5*(1 + rdb_sm_cos(pi*d/band))`.
    integer, parameter :: SPONGE_RAMP_LINEAR = 1
       !! `&ocean_sponge_nml ramp = "linear"`: `(band - d - 0.5)/band`.
 
@@ -209,6 +214,10 @@ module rdb_ocean_sponge
       procedure, non_overridable :: exit_data => ocean_sponge_exit_data
       procedure, non_overridable :: bytes => ocean_sponge_bytes
    end type ocean_sponge_t
+
+   ! Position-independent exp/cos (`rdb_sm_*`): the band ramp and the decay
+   ! factors must not depend on a cell's place in a vector loop or tile.
+#include "rdb_safe_math_consts.inc"
 
 contains
 
@@ -528,7 +537,7 @@ contains
       !! (0 = hard against the sponge-tagged wall) for a band of `band`
       !! cells.  The per-cell rate is `sponge_strength * alpha`.
       !!
-      !!   * `SPONGE_RAMP_COSINE` (default): `0.5*(1 + cos(pi*d/band))` —
+      !!   * `SPONGE_RAMP_COSINE` (default): `0.5*(1 + rdb_sm_cos(pi*d/band))` —
       !!     the legacy band kernel's own ramp, reproduced bit-for-bit
       !!     (including its `acos(-1)` spelling of pi) so `ramp="cosine"`
       !!     stays byte-identical to every shipped namelist.
@@ -549,7 +558,7 @@ contains
       case (SPONGE_RAMP_LINEAR)
          alpha = (real(band - d, wp) - 0.5_wp)/real(band, wp)
       case default   ! SPONGE_RAMP_COSINE
-         alpha = 0.5_wp*(1.0_wp + cos(PI_LOCAL*real(d, wp)/real(band, wp)))
+         alpha = 0.5_wp*(1.0_wp + rdb_sm_cos(PI_LOCAL*real(d, wp)/real(band, wp)))
       end select
    end function sponge_band_alpha
 
@@ -612,7 +621,7 @@ contains
       !! shape dummies, dims declared first (decl-order hook). `idamp_u(i,j)
       !! <= 0` is a bit-exact no-op (Idamp = 0 IS the sponge mask; also
       !! guarantees `sponge_idamp_zero_is_exact_identity`, since `decay =
-      !! exp(-0*dt) = 1.0` exactly would already be a no-op algebraically —
+      !! rdb_sm_exp(-0*dt) = 1.0` exactly would already be a no-op algebraically —
       !! the early `if` skips the arithmetic entirely instead of relying on
       !! that).
       integer, intent(in)    :: nxu, ny, nz
@@ -624,7 +633,7 @@ contains
       real(wp) :: decay
       do concurrent(k=1:nz, j=1:ny, i=1:nxu) local(decay)
          if (idamp_u(i, j) > 0.0_wp) then
-            decay = exp(-idamp_u(i, j)*dt)
+            decay = rdb_sm_exp(-idamp_u(i, j)*dt)
             u(i, j, k) = relax_toward(u(i, j, k), u_ref(i, j, k), decay)
          end if
       end do
@@ -642,7 +651,7 @@ contains
       real(wp) :: decay
       do concurrent(k=1:nz, j=1:nyv, i=1:nx) local(decay)
          if (idamp_v(i, j) > 0.0_wp) then
-            decay = exp(-idamp_v(i, j)*dt)
+            decay = rdb_sm_exp(-idamp_v(i, j)*dt)
             v(i, j, k) = relax_toward(v(i, j, k), v_ref(i, j, k), decay)
          end if
       end do
@@ -666,7 +675,7 @@ contains
       real(wp) :: decay, tgt
       do concurrent(k=1:nz, j=1:ny, i=1:nx) local(decay, tgt)
          if (idamp_h(i, j) > 0.0_wp) then
-            decay = exp(-idamp_h(i, j)*dt)
+            decay = rdb_sm_exp(-idamp_h(i, j)*dt)
             tgt = ref_tracer(i, j, k, it)
             c(i, j, k) = relax_toward(c(i, j, k), tgt, decay)
          end if
@@ -693,7 +702,7 @@ contains
       real(wp) :: decay, tgt, delta, p_new, p_old
       do concurrent(k=1:nz, j=1:ny, i=1:nx) local(decay, tgt, delta, p_new, p_old)
          if (idamp_h(i, j) > 0.0_wp) then
-            decay = exp(-idamp_h(i, j)*dt)
+            decay = rdb_sm_exp(-idamp_h(i, j)*dt)
             tgt = ref_tracer(i, j, k, it)
             delta = (1.0_wp - decay)*(tgt - c(i, j, k))
             p_old = h_layer(i, j, k)*c(i, j, k)
@@ -708,7 +717,7 @@ contains
       !! Shared core algebra for BOTH sponge paths: `cur*decay +
       !! tgt*(1-decay)` — the exact solution of `dphi/dt = -Idamp*(phi -
       !! phi_ref)` over one step at constant `phi_ref`, for whatever
-      !! `decay = exp(-rate*dt)` the caller derived (`relax_one` derives it
+      !! `decay = rdb_sm_exp(-rate*dt)` the caller derived (`relax_one` derives it
       !! from the legacy edge/band cosine ramp; the map kernels above derive
       !! it directly from a per-cell `Idamp`). "One home" for the algebra
       !! per the plan (§3.1 / step 10).
@@ -758,9 +767,9 @@ contains
          do concurrent(k=1:nz, j=j0:j1, d=0:band - 1) local(alpha, tau, decay, i)
             ! Cosine ramp: τ peaks at d=0 (outer), tapers to 0 at the
             ! interior edge of the band.
-            alpha = 0.5_wp*(1.0_wp + cos(PI*real(d, wp)/real(band, wp)))
+            alpha = 0.5_wp*(1.0_wp + rdb_sm_cos(PI*real(d, wp)/real(band, wp)))
             tau = strength*alpha
-            decay = exp(-tau*dt)
+            decay = rdb_sm_exp(-tau*dt)
             ! u-face just east of the west wall sits at (wall_face + d + 1)
             i = wall_face + d + 1
             if (i >= 1 .and. i <= nx_u) then
@@ -768,9 +777,9 @@ contains
             end if
          end do
          do concurrent(k=1:nz, j=j0:j1 + 1, d=0:band - 1) local(alpha, tau, decay, i)
-            alpha = 0.5_wp*(1.0_wp + cos(PI*real(d, wp)/real(band, wp)))
+            alpha = 0.5_wp*(1.0_wp + rdb_sm_cos(PI*real(d, wp)/real(band, wp)))
             tau = strength*alpha
-            decay = exp(-tau*dt)
+            decay = rdb_sm_exp(-tau*dt)
             i = wall_face + d
             if (i >= 1 .and. i <= nx_v) then
                ms%v_face_y_layer(i, j, k) = decay*ms%v_face_y_layer(i, j, k)
@@ -784,18 +793,18 @@ contains
          strength = bc%east%sponge_strength
          wall_face = grid%nghost + grid%nx_phys + 1
          do concurrent(k=1:nz, j=j0:j1, d=0:band - 1) local(alpha, tau, decay, i)
-            alpha = 0.5_wp*(1.0_wp + cos(PI*real(d, wp)/real(band, wp)))
+            alpha = 0.5_wp*(1.0_wp + rdb_sm_cos(PI*real(d, wp)/real(band, wp)))
             tau = strength*alpha
-            decay = exp(-tau*dt)
+            decay = rdb_sm_exp(-tau*dt)
             i = wall_face - d - 1
             if (i >= 1 .and. i <= nx_u) then
                ms%u_face_x_layer(i, j, k) = decay*ms%u_face_x_layer(i, j, k)
             end if
          end do
          do concurrent(k=1:nz, j=j0:j1 + 1, d=0:band - 1) local(alpha, tau, decay, i)
-            alpha = 0.5_wp*(1.0_wp + cos(PI*real(d, wp)/real(band, wp)))
+            alpha = 0.5_wp*(1.0_wp + rdb_sm_cos(PI*real(d, wp)/real(band, wp)))
             tau = strength*alpha
-            decay = exp(-tau*dt)
+            decay = rdb_sm_exp(-tau*dt)
             i = wall_face - d - 1
             if (i >= 1 .and. i <= nx_v) then
                ms%v_face_y_layer(i, j, k) = decay*ms%v_face_y_layer(i, j, k)
@@ -809,18 +818,18 @@ contains
          strength = bc%south%sponge_strength
          wall_face = grid%nghost + 1
          do concurrent(k=1:nz, i=i0:i1 + 1, d=0:band - 1) local(alpha, tau, decay, j)
-            alpha = 0.5_wp*(1.0_wp + cos(PI*real(d, wp)/real(band, wp)))
+            alpha = 0.5_wp*(1.0_wp + rdb_sm_cos(PI*real(d, wp)/real(band, wp)))
             tau = strength*alpha
-            decay = exp(-tau*dt)
+            decay = rdb_sm_exp(-tau*dt)
             j = wall_face + d
             if (j >= 1 .and. j <= ny_u) then
                ms%u_face_x_layer(i, j, k) = decay*ms%u_face_x_layer(i, j, k)
             end if
          end do
          do concurrent(k=1:nz, i=i0:i1, d=0:band - 1) local(alpha, tau, decay, j)
-            alpha = 0.5_wp*(1.0_wp + cos(PI*real(d, wp)/real(band, wp)))
+            alpha = 0.5_wp*(1.0_wp + rdb_sm_cos(PI*real(d, wp)/real(band, wp)))
             tau = strength*alpha
-            decay = exp(-tau*dt)
+            decay = rdb_sm_exp(-tau*dt)
             j = wall_face + d + 1
             if (j >= 1 .and. j <= ny_v) then
                ms%v_face_y_layer(i, j, k) = decay*ms%v_face_y_layer(i, j, k)
@@ -834,18 +843,18 @@ contains
          strength = bc%north%sponge_strength
          wall_face = grid%nghost + grid%ny_phys + 1
          do concurrent(k=1:nz, i=i0:i1 + 1, d=0:band - 1) local(alpha, tau, decay, j)
-            alpha = 0.5_wp*(1.0_wp + cos(PI*real(d, wp)/real(band, wp)))
+            alpha = 0.5_wp*(1.0_wp + rdb_sm_cos(PI*real(d, wp)/real(band, wp)))
             tau = strength*alpha
-            decay = exp(-tau*dt)
+            decay = rdb_sm_exp(-tau*dt)
             j = wall_face - d - 1
             if (j >= 1 .and. j <= ny_u) then
                ms%u_face_x_layer(i, j, k) = decay*ms%u_face_x_layer(i, j, k)
             end if
          end do
          do concurrent(k=1:nz, i=i0:i1, d=0:band - 1) local(alpha, tau, decay, j)
-            alpha = 0.5_wp*(1.0_wp + cos(PI*real(d, wp)/real(band, wp)))
+            alpha = 0.5_wp*(1.0_wp + rdb_sm_cos(PI*real(d, wp)/real(band, wp)))
             tau = strength*alpha
-            decay = exp(-tau*dt)
+            decay = rdb_sm_exp(-tau*dt)
             j = wall_face - d - 1
             if (j >= 1 .and. j <= ny_v) then
                ms%v_face_y_layer(i, j, k) = decay*ms%v_face_y_layer(i, j, k)
@@ -1084,7 +1093,7 @@ contains
 
    pure real(wp) function relax_one(c_cur, tgt, strength, d, band, dt) result(res)
       !! Cosine-ramp implicit relaxation of one cell toward `tgt`.
-      !! `decay = exp(-strength*alpha*dt)`, alpha the cosine ramp at band
+      !! `decay = rdb_sm_exp(-strength*alpha*dt)`, alpha the cosine ramp at band
       !! position `d`; result = c_cur*decay + tgt*(1-decay). Funnels
       !! through `relax_toward` for the shared core algebra (§3.1 / step 10
       !! "one home" — the map-driven kernels derive `decay` from a per-cell
@@ -1095,11 +1104,15 @@ contains
       integer, intent(in) :: d, band
       real(wp) :: alpha, decay
       real(wp), parameter :: PI = acos(-1.0_wp)
-      alpha = 0.5_wp*(1.0_wp + cos(PI*real(d, wp)/real(band, wp)))
-      decay = exp(-strength*alpha*dt)
+      alpha = 0.5_wp*(1.0_wp + rdb_sm_cos(PI*real(d, wp)/real(band, wp)))
+      decay = rdb_sm_exp(-strength*alpha*dt)
       res = relax_toward(c_cur, tgt, decay)
    end function relax_one
 
 #include "rdb_tracer_conc.inc"
+
+#include "rdb_safe_math_core.inc"
+
+#include "rdb_safe_math_trig.inc"
 
 end module rdb_ocean_sponge
