@@ -101,7 +101,11 @@
 !! cavity it is the zero array and `stress_mag + 0.0` is `stress_mag`
 !! bit-for-bit under IEEE-754 (both are finite and non-negative).
 module rdb_ocean_surface_stress
+   !! **Reproducibility.**  In this module the analytic wind-stress profiles (setup-time host
+   !! loops) use `safe_sin`/`safe_cos` (`rdb_safe_math`).
+   !!
    use rdb_constants, only: wp
+   use rdb_safe_math, only: safe_sin, safe_cos
    use rdb_grid, only: hgrid_t
    use rdb_multilayer_state, only: multilayer_state_t
    use rdb_scratch_3d, only: scratch_3d_buffer_t, &
@@ -373,7 +377,7 @@ contains
          ! global physical row index; ny_global is the global extent.
          y_rel = (real(j_phys + joff, wp) - 0.5_wp)/real(nyg, wp)
          do i = 1, size(this%tau_x, 1)
-            this%tau_x(i, j) = taux_mag*(1.0_wp - cos(TWO_PI*y_rel))
+            this%tau_x(i, j) = taux_mag*(1.0_wp - safe_cos(TWO_PI*y_rel))
          end do
       end do
       call ocean_surfstress_refresh_stress_mag(this)
@@ -432,12 +436,12 @@ contains
          do i = 1, size(this%tau_x, 1)
             if (y <= 0.29_wp) then
                this%tau_x(i, j) = taux_mag*((1.0_wp/0.29_wp)*y &
-                                            - (1.0_wp/TWO_PI)*sin(TWO_PI*y/0.29_wp))
+                                            - (1.0_wp/TWO_PI)*safe_sin(TWO_PI*y/0.29_wp))
             else if (y <= 0.8_wp - OFF) then
-               this%tau_x(i, j) = taux_mag*(0.35_wp + 0.65_wp*cos(PI*(y - 0.29_wp)/(0.51_wp - OFF)))
+               this%tau_x(i, j) = taux_mag*(0.35_wp + 0.65_wp*safe_cos(PI*(y - 0.29_wp)/(0.51_wp - OFF)))
             else if (y <= 1.0_wp - OFF) then
                this%tau_x(i, j) = taux_mag*(1.5_wp*((y - 1.0_wp + OFF) &
-                                                    - (0.1_wp/PI)*sin(10.0_wp*PI*(y - 0.8_wp + OFF))))
+                                                    - (0.1_wp/PI)*safe_sin(10.0_wp*PI*(y - 0.8_wp + OFF))))
             end if
          end do
       end do

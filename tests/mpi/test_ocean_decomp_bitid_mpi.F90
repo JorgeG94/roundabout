@@ -328,7 +328,7 @@ program test_ocean_decomp_bitid_mpi
       !! `RDB_BITID_CASES`: run only the cases whose name contains this substring.
    type(comm_t) :: comm
    character(len=16), parameter :: SCHEMES(2) = [character(len=16) :: "pred_corr", "ssp_rk2"]
-   character(len=24), parameter :: CASES(71) = [character(len=24) :: &
+   character(len=24), parameter :: CASES(72) = [character(len=24) :: &
                                                 "island_basin", "weno7_pv", &
                                                 "periodic_channel_zstar", &
                                                 "visc_rem_zstar", &
@@ -354,7 +354,7 @@ program test_ocean_decomp_bitid_mpi
                                                 "drain_ratio_weno9", "drain_ratio_fold", &
                                                 "drain_ratio_fold_h3", "eulz", "eulz_periodic", &
                                                 "eulz_tripolar", "eulz_epbl_mle", "bulk_flux", &
-                                                "bulk_flux_ice", "bulk_flux_fold", "manizza", "dtbt_reset", &
+                                                "bulk_flux_ice", "bulk_flux_fold", "bulk_flux_sw", "manizza", "dtbt_reset", &
                                                 "dtbt_reset_period", &
                                                 "cavity_zfixed", "cavity_sigma", &
                                                 "cavity_sigma_ratio2", "cavity_gall", "cavity_melt_only", "cavity_periodic", &
@@ -515,7 +515,11 @@ contains
       end if
       ! Odd extents put the trench centre in the middle of a cell, so the CFL-controlling
       ! (deepest) cell is unique and sits beside the 2-way seam on both axes.
-      if (index(label, "dtbt_reset") == 1) then
+      ! `bulk_flux_sw` needs the same: every x split of an odd extent puts the
+      ! rank seam at a column that is not a multiple of the AVX2 vector width, so
+      ! a cell sits in a different vector lane (or in the scalar tail) on a
+      ! different rank count, which is what a vector-math-library call sees.
+      if (index(label, "dtbt_reset") == 1 .or. label == "bulk_flux_sw") then
          snx = "27"
          sny = "19"
       end if
@@ -1225,7 +1229,7 @@ contains
                "&ocean_ice_ic_nml conc_config = 'uniform', h_ice = 1.0, conc = 0.7 /"//NL// &
                "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
                "north = 'tripolar_fold' /"//NL
-      case ("bulk_flux", "bulk_flux_ice", "bulk_flux_fold")
+      case ("bulk_flux", "bulk_flux_ice", "bulk_flux_fold", "bulk_flux_sw")
          ! Atmosphere-driven bulk forcing (`&ocean_atm_forcing_nml` +
          ! `&ocean_bulk_flux_nml`): nine prescribed atmospheric fields from
          ! files the test writes (spatially NON-uniform, non-symmetric in
@@ -1236,6 +1240,13 @@ contains
          ! (EVP + category transport) whose open-water fraction scales the
          ! bulk fluxes and whose surface stress is blended.  `bulk_flux_fold`:
          ! the tripolar cap, so the stress crosses the north fold.
+         ! `bulk_flux_sw`: `bulk_flux` with the two-band shortwave penetrating
+         ! (`sw_pen_frac = 0.6`, `sw_source = 'q_sw'`), so the diurnal zenith
+         ! factor on `rsds` (`sw_interp = 'coszen'`, per-cell sin/cos), the
+         ! saturation humidity and stability functions, AND the penetration
+         ! profile `exp` all feed the heating: any of them rounding by tile
+         ! position shows in T.  Gate for the safe-math adoption of
+         ! `rdb_atm_state`/`rdb_ocean_bulk_flux`/`rdb_ocean_surface_flux`.
          nml = "&sim_nml sim_type = 'ocean' /"//NL// &
                "&mpi_nml px = "//trim(spx)//", py = "//trim(spy)//" /"//NL// &
                "&time_nml t_end = 86400.0, dt_fixed = 900.0, start_date = '2000-06-21' /"//NL// &
@@ -1244,8 +1255,14 @@ contains
                "&ocean_hvisc_nml nu_h = 200.0, lateral_closure = 'smagorinsky', "// &
                "smag_ah = .true. /"//NL// &
                "&ocean_diag_nml enabled = .false. /"//NL// &
-               "&ocean_eos_nml eos = 'wright' /"//NL// &
-               "&ocean_thermo_nml enable_thermodynamics = .true. /"//NL// &
+               "&ocean_eos_nml eos = 'wright' /"//NL
+         if (label == "bulk_flux_sw") then
+            nml = nml//"&ocean_thermo_nml enable_thermodynamics = .true., sw_pen_frac = 0.6, "// &
+                  "sw_source = 'q_sw' /"//NL
+         else
+            nml = nml//"&ocean_thermo_nml enable_thermodynamics = .true. /"//NL
+         end if
+         nml = nml// &
                "&ocean_forcing_nml enable_components = .true. /"//NL// &
                "&ocean_bulk_flux_nml enable = .true., n_iter = 5, z_wind = 10.0, "// &
                "z_ta = 10.0 /"//NL
