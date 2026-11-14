@@ -232,6 +232,11 @@ set(CORE_SOURCES
     # the driver's thermo-cadence block (mandated order).
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/thermo/rdb_ice_snow.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/coupling/rdb_ice_ocean_coupler.F90
+    # CICE-port ocean-ice coupling library (D11.2): import, window-mean flux
+    # averager, Q_* adapters.  Not called by any step driver yet.
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/coupling/rdb_ice_import_ocean.F90
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/coupling/rdb_ice_flux_avg.F90
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/coupling/rdb_ice_cice_adapters.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/state/rdb_ocean_state.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/state/ocean_state/rdb_ocean_state_seed.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/state/ocean_state/rdb_ocean_state_topo.F90

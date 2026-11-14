@@ -28,6 +28,7 @@ is the bug.
 | Diagnostics are pull-only | module header of `src/core/ocean/diag/rdb_ocean_diag.F90` |
 | Order-invariant global sums | `src/framework/rdb_efp.F90` |
 | CICE-port ice step order, hook contracts, error enforcement between stage groups | module header of `src/core/ice/coupling/rdb_ice_step_cice.F90` |
+| CICE-port ocean-ice flux hand-off (import, window-mean averager + restart tags, `Q_*` adapters, virtual-salt form, own `ice_heat`/`ice_sw`/`ice_salt` surface-flux components, stress blend + restart mirror, melt-potential cap) | module headers of `src/core/ice/coupling/rdb_ice_import_ocean.F90`, `rdb_ice_flux_avg.F90`, `rdb_ice_cice_adapters.F90` |
 | Who reads / writes what in each slot | the `!!` docstring of each slot type, composed in `src/core/ocean/state/rdb_ocean_state.F90` |
 
 ## Conventions that apply everywhere

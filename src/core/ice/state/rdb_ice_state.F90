@@ -1486,10 +1486,11 @@ contains
       !! state changes -- so the ghosts hold the neighbour's aggregates.  No
       !! per-step transfer; the aggregates are not restart state.
       !!
-      !! **CICE hook (D1.6, not wired):** under `scheme = "cice"` the same
-      !! four arrays are to be filled from `this%cice%aice/vice/vsno/aice0`
-      !! (a straight copy kernel, same shape) instead of from the SIS2
-      !! category state; every consumer already reads these slot arrays.
+      !! **CICE hook (D11.2, wired, inert under `sis2`):** once `this%cice` is
+      !! initialised the same four arrays are copied from
+      !! `this%cice%aice/vice/vsno/aice0` (a straight copy kernel, same shape)
+      !! instead of being built from the SIS2 category state; every consumer
+      !! already reads these slot arrays.
       !! Swapping the SOURCE of the fill is not enough: a later scheme must
       !! also call this fill after EVERY change to its own state (including
       !! transport or any step running on a different cadence than the
@@ -1498,11 +1499,41 @@ contains
       type(ocean_sea_ice_t), intent(inout) :: this
       if (.not. this%is_init) return
       if (.not. allocated(this%aice)) return
-      ! HOOK (scheme = "cice"): if (this%cice%is_init) then <copy cice aggregates>; return.
+      ! CICE hook (D1.6 / D11.2): the CICE-port slot owns the aggregates; copy them over
+      ! (inert under `scheme = "sis2"`, where `cice` is never initialised).
+      if (this%cice%is_init) then
+         if (this%cice%nx /= this%nx_total .or. this%cice%ny /= this%ny_total) then
+            error stop "ice_aggregates_fill: cice slot and ice slot disagree on shape"
+         end if
+         call ice_aggregates_from_cice_impl(this%nx_total, this%ny_total, &
+                                            this%cice%aice, this%cice%vice, this%cice%vsno, this%cice%aice0, &
+                                            this%aice, this%vice, this%vsno, this%aice0)
+         return
+      end if
       call ice_aggregates_fill_impl(this%ncat, this%nx_total, this%ny_total, &
                                     this%part_size, this%m_ice, this%m_snow, &
                                     this%aice, this%vice, this%vsno, this%aice0)
    end subroutine ice_aggregates_fill
+
+   pure subroutine ice_aggregates_from_cice_impl(nx, ny, c_aice, c_vice, c_vsno, c_aice0, &
+                                                 aice, vice, vsno, aice0)
+      !! Straight copy of the CICE-port aggregates into the scheme-neutral slot
+      !! arrays, FULL (ghost-inclusive) extent, one launch.  The CICE aggregates
+      !! are rebuilt by `ice_update_state` (two sites per step, MASTER_PLAN C.6-5);
+      !! the caller must call `ice_aggregates_fill` after each, because the
+      !! consumers (`aice0` in the bulk forcing) read the copy.
+      integer, intent(in) :: nx, ny
+      real(wp), intent(in) :: c_aice(nx, ny), c_vice(nx, ny), c_vsno(nx, ny), c_aice0(nx, ny)
+      real(wp), intent(inout) :: aice(nx, ny), vice(nx, ny), vsno(nx, ny), aice0(nx, ny)
+      integer :: i, j
+
+      do concurrent(j=1:ny, i=1:nx)
+         aice(i, j) = c_aice(i, j)
+         vice(i, j) = c_vice(i, j)
+         vsno(i, j) = c_vsno(i, j)
+         aice0(i, j) = c_aice0(i, j)
+      end do
+   end subroutine ice_aggregates_from_cice_impl
 
    pure subroutine ice_aggregates_fill_impl(ncat, nx, ny, part_size, m_ice, m_snow, &
                                             aice, vice, vsno, aice0)

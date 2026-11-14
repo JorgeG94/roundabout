@@ -94,7 +94,13 @@
 !!     `&ocean_dataovr_nml tau_x/tau_y/heat/evap/lprec` file).  `q_sw` also
 !!     gates `has_q_sw`.
 !!   * `heat_added` (either sign) and `salt_flux` (positive SALINIFIES): the
-!!     sea-ice coupler, as a FULL OVERWRITE.  Do not add a second contributor.
+!!     SIS2 sea-ice coupler, as a FULL OVERWRITE.  Do not add a second contributor.
+!!   * `ice_heat`, `ice_sw`, `ice_salt` (allocated only by `set_ice_components`,
+!!     i.e. only under the CICE-port ice): that scheme's adapters, as a full
+!!     overwrite of THEIR OWN fields at every hand-off.  The assembler adds them
+!!     after the shared components, so the open-water `q_sw` of the bulk forcing
+!!     and a reader's `heat_added` survive the ice (the SIS2 coupler's overwrite
+!!     of `q_sw`/`heat_added` is the hazard this avoids).
 !!   * `heat_cavity` (`= -q_ocean`, melting cools) and `salt_cavity`
 !!     (`= -m_mass*(S_far - s_ice)`, melting freshens): the ice-shelf cavity
 !!     (`ocean_cavity_flux_step`) and nothing else.  They are separate from
@@ -455,8 +461,28 @@ module rdb_ocean_surface_flux
          !! ratchets the load across outer steps with no bound).  No
          !! consumer in this PR; ships zeroed alongside `p_surf_atm` so
          !! the follow-up PGF fold needs no further plumbing.
+
+      ! ---- CICE-port sea-ice components — allocated iff `use_ice_components` ----
+      logical :: use_ice_components = .false.
+         !! `.true.` only under the CICE-port ice (`set_ice_components`), and only
+         !! with `use_components`.  `.false.` (default): the three arrays below
+         !! do not exist and the assembler runs exactly as before.
+      real(wp), allocatable :: ice_heat(:, :)
+         !! Ice -> ocean heat (W/m^2, + warms) = the window-mean `fhocn`.  OWNED
+         !! by `rdb_ice_cice_adapters`; the assembler ADDS it to `Q_heat`.
+      real(wp), allocatable :: ice_sw(:, :)
+         !! Shortwave through the ice (W/m^2, + down) = the window-mean `fswthru`.
+         !! Owned by the CICE adapters; ADDED to `Q_heat`.  A SEPARATE field from
+         !! `q_sw` (the open-water shortwave of the bulk forcing / a reader), so
+         !! neither writer can erase the other.  It is not penetrated by
+         !! `sw_source = "q_sw"` (which reads `q_sw` only): the under-ice
+         !! visible-band path is a later PR.
+      real(wp), allocatable :: ice_salt(:, :)
+         !! Ice -> ocean virtual salt (psu kg m-2 s-1, + salinifies).  Owned by
+         !! the CICE adapters; ADDED to `Q_salt`.
    contains
       procedure, non_overridable :: init => ocean_surfflux_init
+      procedure, non_overridable :: set_ice_components => ocean_surfflux_set_ice_components
       procedure, non_overridable :: destroy => ocean_surfflux_destroy
       procedure, non_overridable :: enter_data => ocean_surfflux_enter_data
       procedure, non_overridable :: exit_data => ocean_surfflux_exit_data
@@ -498,6 +524,10 @@ contains
       if (allocated(this%sw_kappa)) deallocate (this%sw_kappa)
       if (allocated(this%sw_chl_field)) deallocate (this%sw_chl_field)
       call ocean_surfflux_dealloc_components(this)
+      this%use_ice_components = .false.
+      if (allocated(this%ice_heat)) deallocate (this%ice_heat)
+      if (allocated(this%ice_sw)) deallocate (this%ice_sw)
+      if (allocated(this%ice_salt)) deallocate (this%ice_salt)
    end subroutine ocean_surfflux_destroy
 
    subroutine ocean_surfflux_dealloc_components(this)
@@ -575,6 +605,10 @@ contains
          !$acc&               this%salt_flux, this%salt_cavity, &
          !$acc&               this%p_surf_atm, this%p_surf)
       end if
+      if (this%use_ice_components) then
+         !$acc enter data copyin(this%ice_heat, this%ice_sw, this%ice_salt)
+         !$acc update device(this%ice_heat, this%ice_sw, this%ice_salt)
+      end if
    end subroutine ocean_surfflux_enter_data_impl
 
    subroutine ocean_surfflux_exit_data(this)
@@ -587,6 +621,9 @@ contains
 
    subroutine ocean_surfflux_exit_data_impl(this)
       type(ocean_surface_flux_t), intent(inout) :: this
+      if (this%use_ice_components) then
+         !$acc exit data delete(this%ice_heat, this%ice_sw, this%ice_salt)
+      end if
       if (this%use_components) then
          !$acc exit data delete(this%q_sw, this%q_lw, this%q_lat, this%q_sens, &
          !$acc&                 this%heat_added, this%heat_cavity, this%evap, &
@@ -804,6 +841,25 @@ contains
       this%p_surf_atm = p_surf_val
       this%p_surf = p_surf_val
    end subroutine ocean_surfflux_set_p_surf_const
+
+   subroutine ocean_surfflux_set_ice_components(this, grid, enable)
+      !! Allocate (zero) or release the three CICE-port ice components.  Needs
+      !! `use_components` (the assembler is where they are summed); a request
+      !! without it is ignored.  Call BEFORE `enter_data`.  `enable = .false.`
+      !! (default state) allocates nothing: the assembler is byte-identical.
+      class(ocean_surface_flux_t), intent(inout) :: this
+      type(hgrid_t), intent(in) :: grid
+      logical, intent(in) :: enable
+      if (allocated(this%ice_heat)) deallocate (this%ice_heat)
+      if (allocated(this%ice_sw)) deallocate (this%ice_sw)
+      if (allocated(this%ice_salt)) deallocate (this%ice_salt)
+      this%use_ice_components = .false.
+      if (.not. (enable .and. this%use_components)) return
+      allocate (this%ice_heat(grid%nx_total, grid%ny_total), source=0.0_wp)
+      allocate (this%ice_sw(grid%nx_total, grid%ny_total), source=0.0_wp)
+      allocate (this%ice_salt(grid%nx_total, grid%ny_total), source=0.0_wp)
+      this%use_ice_components = .true.
+   end subroutine ocean_surfflux_set_ice_components
 
    subroutine ocean_surfflux_set_components(this, grid, enable)
       !! Configure-time gate for the PR-12 component set
@@ -1826,7 +1882,8 @@ contains
                + arr_bytes(this%heat_content_massout) &
                + arr_bytes(this%salt_flux) &
                + arr_bytes(this%salt_cavity) &
-               + arr_bytes(this%p_surf_atm) + arr_bytes(this%p_surf)
+               + arr_bytes(this%p_surf_atm) + arr_bytes(this%p_surf) &
+               + arr_bytes(this%ice_heat) + arr_bytes(this%ice_sw) + arr_bytes(this%ice_salt)
    end function ocean_surface_flux_bytes
 
    pure subroutine ocean_surface_flux_apply_cover_const(sf, cover_frac)
@@ -1967,6 +2024,8 @@ contains
             ms%tracers(idx_T)%c, ms%h_layer, ms%wet_mask, cover_frac, &
             sf%Q_heat_const, sf%Q_salt_const, sf%cp, sf%h_min, ms%k_top, nz, nx, ny)
          sf%q_assembled = 1.0_wp
+         if (sf%use_ice_components) call ocean_surfflux_add_ice_impl(sf%Q_heat, sf%Q_salt, sf%ice_heat, &
+                                                                     sf%ice_sw, sf%ice_salt, ms%wet_mask, nx, ny)
          return
       end if
 
@@ -1979,7 +2038,26 @@ contains
          ms%tracers(idx_T)%c, ms%h_layer, ms%wet_mask, &
          sf%Q_heat_const, sf%Q_salt_const, sf%cp, sf%h_min, ms%k_top, nz, nx, ny)
       sf%q_assembled = 1.0_wp
+      ! CICE-port ice components (never allocated under the runnable scheme):
+      ! summed AFTER the shared components, so no other writer can erase them.
+      if (sf%use_ice_components) call ocean_surfflux_add_ice_impl(sf%Q_heat, sf%Q_salt, sf%ice_heat, &
+                                                                  sf%ice_sw, sf%ice_salt, ms%wet_mask, nx, ny)
    end subroutine ocean_surface_flux_assemble
+
+   pure subroutine ocean_surfflux_add_ice_impl(Q_heat, Q_salt, ice_heat, ice_sw, ice_salt, wet_mask, nx, ny)
+      !! `Q_heat += wet*(ice_heat + ice_sw)`, `Q_salt += wet*ice_salt` over the full
+      !! array, the land mask applied as the shared assembler does.  Reached only
+      !! when the ice components exist.
+      integer, intent(in) :: nx, ny
+      real(wp), intent(inout) :: Q_heat(nx, ny), Q_salt(nx, ny)
+      real(wp), intent(in) :: ice_heat(nx, ny), ice_sw(nx, ny), ice_salt(nx, ny), wet_mask(nx, ny)
+      integer :: i, j
+
+      do concurrent(j=1:ny, i=1:nx)
+         Q_heat(i, j) = Q_heat(i, j) + wet_mask(i, j)*(ice_heat(i, j) + ice_sw(i, j))
+         Q_salt(i, j) = Q_salt(i, j) + wet_mask(i, j)*ice_salt(i, j)
+      end do
+   end subroutine ocean_surfflux_add_ice_impl
 
    pure subroutine ocean_surfflux_assemble_impl(heat_content_massin, heat_content_massout, &
                                                 Q_heat, Q_salt, &
