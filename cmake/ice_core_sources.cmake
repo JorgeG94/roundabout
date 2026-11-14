@@ -8,9 +8,11 @@ set(RDB_ICE_CORE_SOURCES
     ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_bl99.F90
     ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_dims.F90
     ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_errors.F90
+    ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_flux.F90
     ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_itd_params.F90
     ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_itd_shift.F90
     ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_lateral_melt.F90
+    ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_ledger_sums.F90
     ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_params.F90
     ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_ridge.F90
     ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_ridge_itd.F90

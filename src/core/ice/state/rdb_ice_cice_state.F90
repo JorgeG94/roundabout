@@ -40,7 +40,7 @@ module rdb_ice_cice_state
    !! mapped later (its `p` sub-object is already present: "partially present").
    !! Persistent state, the aggregates and `ice_err` are `copyin` (host
    !! initialised or restart-seeded first); the start-of-step copies are
-   !! `create` (written on the device before they are read).  `exit_data`
+   !! `copyin` (host zeros until `ice_save_init` writes them).  `exit_data`
    !! copies the persistent state and aggregates back and deletes the rest.
    !!
    !! **Aggregates and warm starts (for the driver PRs).**  `aice0, aice, vice,
@@ -282,7 +282,8 @@ contains
 
    subroutine cice_state_enter_data_impl(this)
       !! `copyin` the persistent state, the aggregates, `hin_max`, `ice_err` and
-      !! the parameter bundle; `create` the start-of-step copies.  COMPONENT
+      !! the parameter bundle; `copyin` the start-of-step copies too (host zeros, so
+      !! a reader before the first `ice_save_init` sees zeros).  COMPONENT
       !! arrays only.  Restart reads and seeding land on the host first.
       type(ice_cice_state_t), intent(inout) :: this
       if (.not. this%is_init .or. this%mapped) return
@@ -291,8 +292,8 @@ contains
       !$acc enter data copyin(this%qicen, this%sicen, this%qsnon)
       !$acc enter data copyin(this%aice0, this%aice, this%vice, this%vsno)
       !$acc enter data copyin(this%hin_max, this%ice_err)
-      !$acc enter data create(this%aice_init, this%aicen_init, this%vicen_init)
-      !$acc enter data create(this%vsnon_init, this%Tsfcn_init)
+      !$acc enter data copyin(this%aice_init, this%aicen_init, this%vicen_init)
+      !$acc enter data copyin(this%vsnon_init, this%Tsfcn_init)
       this%mapped = .true.
    end subroutine cice_state_enter_data_impl
 

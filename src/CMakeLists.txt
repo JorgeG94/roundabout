@@ -168,6 +168,8 @@ set(CORE_SOURCES
     # CICE-port ice state slot (D1.4): composed into ocean_sea_ice_t, so it
     # precedes rdb_ice_state.
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/state/rdb_ice_cice_state.F90
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/state/rdb_ice_flux_state.F90
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/coupling/rdb_ice_ledger.F90
     # (rdb_ice_state, the SIS2 slot, continues the comment above.)
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/state/rdb_ice_state.F90
     # Sea-ice PR 24: analytic initial-condition path (uniform/latitudes
