@@ -223,6 +223,7 @@ module rdb_ice_evp
    public :: ice_evp_params_t
    public :: ice_evp_params_from_config
    public :: ice_evp_dynamics
+   public :: evp_wrap_corner_impl
    public :: ice_evp_step
    public :: ice_evp_mi_ratio_point
    public :: evp_truncate_final_impl
@@ -1395,7 +1396,8 @@ contains
       !! Periodic ghost-wrap for a corner-staggered field (e.g. `str_s`),
       !! shape (nx_total+1, ny_total+1). No corner-wrap helper exists in
       !! `rdb_ocean_periodic` (only centre/face_x/face_y) — this is the
-      !! EVP-local twin, same two-pass (x-then-y) structure.
+      !! EVP-local twin, same two-pass (x-then-y) structure.  PUBLIC: the
+      !! C-grid dynamics reuses it for its corner-staggered persistent stress.
       integer, intent(in) :: nx_face, ny_face, nx_phys, ny_phys, nghost
       real(wp), intent(inout) :: fld(nx_face, ny_face)
       logical, intent(in) :: wrap_x, wrap_y

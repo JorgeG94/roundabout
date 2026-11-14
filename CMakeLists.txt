@@ -82,7 +82,7 @@ list(APPEND RDB_COMPILE_DEFS RDB_NZ_STACK_MAX=${RDB_NZ_STACK_MAX})
 # (device code device-links into each exe).  The app has no device kernels of
 # its own into the core, so it can link the SHARED core (.so) when
 # RDB_BUILD_SHARED=ON.
-set(core_objs ${main_lib}_objs)
+set(core_objs rdb_ocean_core_objs)
 add_library(${core_objs} OBJECT)
 set_target_properties(${core_objs} PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_compile_definitions(${core_objs} PUBLIC ${RDB_COMPILE_DEFS})
@@ -98,6 +98,40 @@ target_include_directories(${core_objs} PUBLIC ${CMAKE_BINARY_DIR}/modules)
 set(RDB_SHARED_INCLUDE_DIR
     ${CMAKE_CURRENT_SOURCE_DIR}/src/shared_module_utilities)
 target_include_directories(${core_objs} PUBLIC ${RDB_SHARED_INCLUDE_DIR})
+
+# Three object-library layers, each compiled ONCE: rdb_core_objs      shared
+# infrastructure (rdb_constants, rdb_safe_math) rdb_ocean_core_objs the ocean
+# (${core_objs}, above; legacy sea-ice sources under src/core/ice stay here:
+# they use ocean types) rdb_ice_core_objs  the CICE-port ice core
+# (cmake/ice_core_sources.cmake); depends only on rdb_core_objs + pic All three
+# end up in the same final libraries (below); the `rdb_test_cice_*` tests link
+# only the ice and core layers, so they build without the ocean.
+add_library(
+  rdb_core_objs OBJECT
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/core/rdb_constants.F90
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/framework/rdb_safe_math.F90)
+set_target_properties(
+  rdb_core_objs PROPERTIES POSITION_INDEPENDENT_CODE ON
+                           Fortran_MODULE_DIRECTORY ${CMAKE_BINARY_DIR}/modules)
+target_compile_definitions(rdb_core_objs PUBLIC ${RDB_COMPILE_DEFS})
+target_include_directories(rdb_core_objs PUBLIC ${CMAKE_BINARY_DIR}/modules
+                                                ${RDB_SHARED_INCLUDE_DIR})
+target_link_libraries(rdb_core_objs PUBLIC pic::pic)
+
+include(ice_core_sources)
+add_library(rdb_ice_core_objs OBJECT ${RDB_ICE_CORE_SOURCES})
+set_target_properties(
+  rdb_ice_core_objs
+  PROPERTIES POSITION_INDEPENDENT_CODE ON Fortran_MODULE_DIRECTORY
+                                          ${CMAKE_BINARY_DIR}/modules)
+target_compile_definitions(rdb_ice_core_objs PUBLIC ${RDB_COMPILE_DEFS})
+target_include_directories(rdb_ice_core_objs PUBLIC ${CMAKE_BINARY_DIR}/modules
+                                                    ${RDB_SHARED_INCLUDE_DIR})
+target_link_libraries(rdb_ice_core_objs PUBLIC rdb_core_objs pic::pic)
+# REAL link edges (not add_dependencies): Ninja's Fortran dyndep scan only sees
+# the module directories of targets that are LINKED, so the ocean objects need
+# these to find rdb_constants.mod etc. and to recompile when they change.
+target_link_libraries(${core_objs} PUBLIC rdb_core_objs rdb_ice_core_objs)
 
 set(libraries_to_link)
 
@@ -129,6 +163,10 @@ add_library(${main_lib} STATIC)
 target_link_libraries(${main_lib} PUBLIC ${core_objs})
 set_target_properties(${main_lib} PROPERTIES POSITION_INDEPENDENT_CODE ON
                                              LINKER_LANGUAGE Fortran)
+# The infrastructure and ice objects are compiled once and archived here (an
+# OBJECT library does not propagate objects added to another OBJECT library).
+target_sources(${main_lib} PRIVATE $<TARGET_OBJECTS:rdb_core_objs>
+                                   $<TARGET_OBJECTS:rdb_ice_core_objs>)
 
 # SHARED core (.so) — same object library as the static core, so no second
 # compile.  Two consumers: the app when RDB_BUILD_SHARED is on (it crosses no
@@ -140,6 +178,8 @@ if(RDB_BUILD_SHARED OR (RDB_TESTS_LINK_SHARED AND (RDB_ENABLE_TESTING
                                                    OR RDB_BUILD_BENCHMARKS)))
   add_library(${main_lib}_shared SHARED)
   target_link_libraries(${main_lib}_shared PUBLIC ${core_objs})
+  target_sources(${main_lib}_shared PRIVATE $<TARGET_OBJECTS:rdb_core_objs>
+                                            $<TARGET_OBJECTS:rdb_ice_core_objs>)
   set_target_properties(
     ${main_lib}_shared
     PROPERTIES POSITION_INDEPENDENT_CODE ON

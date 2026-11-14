@@ -57,6 +57,7 @@ module rdb_config
    public :: ocean_config_t, ocean_grid_config_t, &
              ocean_coriolis_config_t, ocean_thermo_config_t, &
              ocean_ice_config_t, ocean_ice_ic_config_t, &
+             ocean_ice_thermo_config_t, ocean_ice_sw_config_t, &
              ocean_restore_config_t, &
              ocean_geothermal_config_t, &
              ocean_sponge_config_t, &
@@ -517,7 +518,92 @@ module rdb_config
          !! convergence (and weakening it under divergence) within the
          !! call. `.false.` (Roundabout default, house bit-identity rule) holds
          !! `pres_mice` at its pre-loop value for all subcycles => byte-identical.
+      ! ---- CICE port (CICE6/Icepack) structure keys ----
+      character(len=8) :: scheme = "sis2"
+         !! Ice model: `"sis2"` (default, the shipped SIS2-derived model,
+         !! byte-identical) or `"cice"` (the CICE6/Icepack port; accepted by
+         !! the parser, refused at configure until the port is runnable).
+      integer :: nilyr = 7
+         !! `scheme="cice"` ice layers per category (upstream default 7;
+         !! OM3 4).  `scheme="sis2"` keeps `nk_ice`.  `1 < nilyr <=
+         !! ICE_NILYR_MAX`.
+      integer :: nslyr = 1
+         !! `scheme="cice"` snow layers per category; only 1 is supported.
+      integer :: kcatbound = 1
+         !! `scheme="cice"` category-bound formula (upstream default 1; OM3
+         !! 0).  0..3 accepted.
+      character(len=8) :: constants_set = "icepack"
+         !! `scheme="cice"` physical-constants table: `"icepack"` (upstream
+         !! code defaults) or `"cesm"` (the CESM-coupled override set).
    end type ocean_ice_config_t
+
+   type :: ocean_ice_thermo_config_t
+      !! `&ocean_ice_thermo_nml`: CICE-port thermodynamics + ITD knobs
+      !! (`scheme="cice"` only; inert under `"sis2"`).  Every default is the
+      !! upstream CICE code default except `tfrz_option` (OM3's
+      !! `linear_salt`; upstream's `mushy` is refused); OM3 values go in the OM3 example
+      !! namelist.  Options outside the supported set are refused by
+      !! `validate_config`.
+      integer :: ktherm = 1
+         !! Thermodynamics: 1 = Bitz-Lipscomb (1999); 2 (mushy) is refused.
+      character(len=8) :: conduct = "bubbly"
+         !! Ice conductivity: `"bubbly"` (Pringle et al. 2007) / `"MU71"`.
+      character(len=16) :: tfrz_option = "linear_salt"
+         !! Sea freezing point used by the ice: `linear_salt` / `constant` /
+         !! `minus1p8`; `"mushy"` is refused.
+      real(wp) :: ice_ref_salinity = 4.0_wp
+         !! Salt-flux reference salinity [ppt] (OM3 5.0).
+      character(len=16) :: saltflux_option = "constant"
+         !! `"constant"` only; `"prognostic"` is refused.
+      character(len=16) :: congel_freeze = "two-step"
+         !! Congelation freezing: `"two-step"` / `"one-step"`.
+      character(len=24) :: cpl_frazil = "fresh_ice_correction"
+         !! Frazil coupling: only `"fresh_ice_correction"` is supported.
+      logical :: update_ocn_f = .false.
+         !! Frazil fresh water / salt fluxes to the ocean (OM3 `.true.`).
+      real(wp) :: hfrazilmin = 0.05_wp
+         !! Minimum new-frazil thickness [m].
+      real(wp) :: hi_min = 0.01_wp
+         !! Minimum ice thickness for thermodynamics [m].
+      real(wp) :: ustar_min = 0.005_wp
+         !! Friction-velocity floor [m/s] (OM3 5e-4).
+      character(len=8) :: fbot_xfer_type = "constant"
+         !! Basal heat-transfer coefficient: `"constant"` only;
+         !! `"Cdn_ocn"` is refused.
+      real(wp) :: floediam = 300.0_wp
+         !! Floe diameter for lateral melt [m].
+      real(wp) :: ksno = 0.3_wp
+         !! Snow thermal conductivity [W/m/K].
+      real(wp) :: emissivity = 0.985_wp
+         !! Surface emissivity (OM3 0.95).
+      integer :: kitd = 1
+         !! Thickness-distribution conversion: 1 = linear remap; 0 (delta)
+         !! is refused.
+      logical :: calc_tsfc = .true.
+         !! Solve for the surface temperature; `.false.` is refused.
+      logical :: semi_implicit_tsfc = .false.
+         !! Semi-implicit surface-temperature coupling; `.true.` is refused.
+   end type ocean_ice_thermo_config_t
+
+   type :: ocean_ice_sw_config_t
+      !! `&ocean_ice_sw_nml`: CICE-port shortwave albedo parameters
+      !! (`scheme="cice"` only).  Upstream code defaults; OM3 values go in
+      !! the OM3 example namelist.
+      real(wp) :: albicev = 0.78_wp
+         !! Visible albedo of thick ice (OM3 0.86).
+      real(wp) :: albicei = 0.36_wp
+         !! Near-infrared albedo of thick ice (OM3 0.44).
+      real(wp) :: albsnowv = 0.98_wp
+         !! Visible albedo of cold snow.
+      real(wp) :: albsnowi = 0.70_wp
+         !! Near-infrared albedo of cold snow.
+      real(wp) :: ahmax = 0.3_wp
+         !! Thickness above which the ice albedo is constant [m] (OM3 0.1);
+         !! must be > 0 (it divides the thin-ice albedo ramp).
+      real(wp) :: snowpatch = -1.0_wp
+         !! Snow-cover patchiness length [m]; negative (default) follows
+         !! `constants_set` (0.02 icepack, 0.005 cesm).
+   end type ocean_ice_sw_config_t
 
    type :: ocean_ice_ic_config_t
       !! `&ocean_ice_ic_nml`: sea-ice ANALYTIC initial-condition path (PR
@@ -3909,6 +3995,10 @@ module rdb_config
       type(ocean_ice_config_t)        :: ice
          !! Sea-ice slot config (`&ocean_ice_nml`).  Default off ⇒
          !! byte-identical (PR 0 scaffold).
+      type(ocean_ice_thermo_config_t) :: ice_thermo
+         !! CICE-port thermo/ITD knobs (`&ocean_ice_thermo_nml`).
+      type(ocean_ice_sw_config_t)     :: ice_sw
+         !! CICE-port albedo knobs (`&ocean_ice_sw_nml`).
       type(ocean_ice_ic_config_t)     :: ice_ic
          !! Sea-ice initial-condition config (`&ocean_ice_ic_nml`, PR 24).
          !! Default `conc_config="zero"` ⇒ byte-identical.
@@ -5046,6 +5136,13 @@ module rdb_config
          type(config_t), target, intent(in) :: cfg
          type(nml_schema_t), intent(inout) :: schema
       end subroutine register_ocean_ice
+
+      module subroutine register_ocean_ice_cice(cfg, schema)
+            !! See submodule [[rdb_config_register_forcing]].
+         implicit none
+         type(config_t), target, intent(in) :: cfg
+         type(nml_schema_t), intent(inout) :: schema
+      end subroutine register_ocean_ice_cice
 
       module subroutine register_ocean_ice_ic(cfg, schema)
             !! See submodule [[rdb_config_register_forcing]].

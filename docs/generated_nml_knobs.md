@@ -637,6 +637,49 @@ Sea-ice model (SIS2 port) master switch + category/layer counts.
 | `cfl_trunc` | `0.0000000000E+00` |  | Transport-CFL ceiling on the final ice velocity (SIS2 CFL_TRUNCATE, default 0.5 there); 0 disables |
 | `cfl_trunc_dyn_its` | `.false.` |  | Also clip the ice velocity every EVP subcycle (SIS2 CFL_TRUNC_DYN_ITS) |
 | `project_ci` | `.false.` |  | Project ice concentration forward within the EVP subcycle loop and recompute the ice strength (SIS2 PROJECT_ICE_CONCENTRATION) |
+| `scheme` | `"sis2"` |  | Ice model: 'sis2' (default) or 'cice' (CICE6/Icepack port; refused at configure until runnable) |
+| `nilyr` | `7` |  | scheme='cice': ice layers per category (upstream 7; OM3 4) |
+| `nslyr` | `1` |  | scheme='cice': snow layers per category (only 1 supported) |
+| `kcatbound` | `1` |  | scheme='cice': category-bound formula 0..3 (upstream 1; OM3 0) |
+| `constants_set` | `"icepack"` |  | scheme='cice': physical-constants table: 'icepack' (upstream) or 'cesm' (CESM-coupled override set) |
+
+### &ocean_ice_thermo_nml
+
+CICE-port ice thermodynamics and thickness-distribution knobs (scheme='cice'; upstream CICE defaults).
+
+| Knob | Default | Units | Description |
+|------|---------|-------|-------------|
+| `ktherm` | `1` |  | Thermodynamics: 1 = Bitz-Lipscomb 1999 (2 = mushy is refused) |
+| `conduct` | `"bubbly"` |  | Ice conductivity: bubbly (Pringle 2007) or MU71 |
+| `tfrz_option` | `"linear_salt"` |  | Ice-side sea freezing point (default linear_salt is OM3's value, NOT upstream's mushy; mushy is refused) |
+| `ice_ref_salinity` | `0.4000000000E+01` | ppt | Salt-flux reference salinity (OM3 5.0) |
+| `saltflux_option` | `"constant"` |  | Salt flux: constant (prognostic is refused) |
+| `congel_freeze` | `"two-step"` |  | Congelation freezing: two-step or one-step |
+| `cpl_frazil` | `"fresh_ice_correction"` |  | Frazil coupling (only fresh_ice_correction is supported) |
+| `update_ocn_f` | `.false.` |  | Frazil fresh water/salt fluxes to the ocean (OM3 .true.) |
+| `hfrazilmin` | `0.5000000000E-01` | m | Minimum new-frazil thickness |
+| `hi_min` | `0.1000000000E-01` | m | Minimum ice thickness for thermodynamics |
+| `ustar_min` | `0.5000000000E-02` | m/s | Friction-velocity floor (OM3 5e-4) |
+| `fbot_xfer_type` | `"constant"` |  | Basal heat-transfer coefficient: constant (Cdn_ocn is refused) |
+| `floediam` | `0.3000000000E+03` | m | Floe diameter for lateral melt |
+| `ksno` | `0.3000000000E+00` | W/m/K | Snow thermal conductivity |
+| `emissivity` | `0.9850000000E+00` |  | Surface emissivity (OM3 0.95) |
+| `kitd` | `1` |  | ITD conversion: 1 = linear remap (0 = delta function is refused) |
+| `calc_Tsfc` | `.true.` |  | Solve for the surface temperature (.false. is refused) |
+| `semi_implicit_Tsfc` | `.false.` |  | Semi-implicit surface temperature coupling (.true. is refused) |
+
+### &ocean_ice_sw_nml
+
+CICE-port ice shortwave albedo parameters (scheme='cice'; upstream CICE defaults).
+
+| Knob | Default | Units | Description |
+|------|---------|-------|-------------|
+| `albicev` | `0.7800000000E+00` |  | Visible albedo of thick ice (OM3 0.86) |
+| `albicei` | `0.3600000000E+00` |  | Near-infrared albedo of thick ice (OM3 0.44) |
+| `albsnowv` | `0.9800000000E+00` |  | Visible albedo of cold snow |
+| `albsnowi` | `0.7000000000E+00` |  | Near-infrared albedo of cold snow |
+| `ahmax` | `0.3000000000E+00` | m | Thickness above which the ice albedo is constant (OM3 0.1); must be > 0 |
+| `snowpatch` | `-0.1000000000E+01` | m | Snow-cover patchiness length; negative follows constants_set (0.02 icepack, 0.005 cesm) |
 
 ### &ocean_ice_ic_nml
 

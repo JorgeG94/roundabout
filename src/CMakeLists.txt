@@ -1,6 +1,7 @@
 # Core infrastructure sources
 set(CORE_SOURCES
-    ${CMAKE_CURRENT_SOURCE_DIR}/core/rdb_constants.F90
+    # rdb_constants and rdb_safe_math compile in `rdb_core_objs` (root
+    # CMakeLists.txt); core_rdb archives those objects.
     # Leaf module (only dep: rdb_constants): proleptic-Gregorian calendar
     # arithmetic (date<->seconds-since-epoch, CF time-units parsing, RYF
     # date-arithmetic wrap). Used by rdb_ocean_tide_astro, rdb_config,
@@ -31,10 +32,12 @@ set(CORE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/core/config/rdb_config_register_lateral.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/config/rdb_config_register_forcing.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/rdb_config_schema.F90
+    # CICE port: config -> ice_params_t + configure-time refusals (needs
+    # rdb_config, so it is NOT part of rdb_ice_core_objs).
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/cice/rdb_ice_config.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/rdb_grid.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/rdb_tracer.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/framework/rdb_scratch_3d.F90
-    ${CMAKE_CURRENT_SOURCE_DIR}/framework/rdb_safe_math.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/framework/rdb_efp.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/framework/rdb_mem_report.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/rdb_barotropic_state.F90
@@ -185,6 +188,10 @@ set(CORE_SOURCES
     # face/centre ghost-wrap helpers, declared earlier in this file at the
     # ocean/boundary entry).
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/dynamics/rdb_ice_evp.F90
+    # CICE6 port D9.0: C-grid ice metrics name map + face-pair halo wrapper;
+    # depends on rdb_ocean_metrics, rdb_ocean_halo, rdb_ocean_periodic,
+    # rdb_ocean_fold_apply (all declared earlier in this file).
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/cice/rdb_ice_cgrid_metrics.F90
     # Sea-ice PR 1: ocean-side frazil accumulator (freezing-point clamp), called
     # from the driver after each ocean outer step.
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/thermo/rdb_ice_frazil.F90

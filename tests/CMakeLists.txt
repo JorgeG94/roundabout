@@ -25,8 +25,16 @@ file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/tmp_local_artifacts)
 
 # Helper modules used by some unit tests (Ritter dam-break + Thacker bowl
 # analytical solutions). Built as a static lib and linked into every test.
-add_library(rdb_analytical STATIC ritter_dambreak.F90 thacker_bowl.F90
-                                  ocean_test_metrics.F90 lcg_deterministic.F90)
+# lcg_deterministic compiles ONCE (rdb_test_lcg) and is archived here; the
+# standalone ice tests link the same objects.
+add_library(rdb_test_lcg OBJECT lcg_deterministic.F90)
+set_target_properties(
+  rdb_test_lcg PROPERTIES POSITION_INDEPENDENT_CODE ON
+                          Fortran_MODULE_DIRECTORY ${CMAKE_BINARY_DIR}/modules)
+target_link_libraries(rdb_test_lcg PUBLIC pic::pic)
+add_library(
+  rdb_analytical STATIC ritter_dambreak.F90 thacker_bowl.F90
+                        ocean_test_metrics.F90 $<TARGET_OBJECTS:rdb_test_lcg>)
 set_target_properties(rdb_analytical PROPERTIES Fortran_MODULE_DIRECTORY
                                                 ${CMAKE_BINARY_DIR}/modules)
 target_include_directories(rdb_analytical PRIVATE "${CMAKE_BINARY_DIR}/modules"
@@ -101,6 +109,7 @@ set(RDB_TESTS
     "test_efp|test_efp|collect_efp_tests|efp|core"
     "test_ocean_console_stats_efp|test_ocean_console_stats_efp|collect_ocean_console_stats_efp_tests|ocean_console_stats_efp|ocean"
     "test_config|test_config|collect_config_tests|config|ocean+core"
+    "test_cice_config|test_cice_config|collect_cice_config_tests|cice_config|ocean"
     "test_nml_schema|test_nml_schema|collect_nml_schema_tests|nml_schema|core"
     "test_config_schema|test_config_schema|collect_config_schema_tests|config_schema|core"
     "test_ocean_knob_retirement|test_ocean_knob_retirement|collect_ocean_knob_retirement_tests|ocean_knob_retirement|ocean"
@@ -244,6 +253,7 @@ set(RDB_TESTS
     "test_ocean_ice_transport|test_ocean_ice_transport|collect_ocean_ice_transport_tests|ocean_ice_transport|ocean"
     "test_ocean_ice_fold|test_ocean_ice_fold|collect_ocean_ice_fold_tests|ocean_ice_fold|ocean"
     "test_ocean_ice_evp|test_ocean_ice_evp|collect_ocean_ice_evp_tests|ocean_ice_evp|ocean"
+    "test_cice_cgrid_metrics|test_cice_cgrid_metrics|collect_cice_cgrid_metrics_tests|cice_cgrid_metrics|ocean"
     "test_ocean_ice_evp_fold|test_ocean_ice_evp_fold|collect_ocean_ice_evp_fold_tests|ocean_ice_evp_fold|ocean"
     "test_ocean_ice_restart|test_ocean_ice_restart|collect_ocean_ice_restart_tests|ocean_ice_restart|ocean"
     "test_ocean_ice_diags|test_ocean_ice_diags|collect_ocean_ice_diags_tests|ocean_ice_diags|ocean"
@@ -640,6 +650,71 @@ foreach(row ${RDB_TESTS})
      AND (RDB_ENABLE_GPU OR RDB_ENABLE_THREADS))
     set_tests_properties(rdb_${test_name} PROPERTIES WILL_FAIL TRUE)
   endif()
+endforeach()
+
+# Standalone CICE-port tests: link `rdb_ice_core_objs` + test-drive only (no
+# ocean core), so they build in seconds.  Row:
+# <test-name>|<module>|<collect-fn>|<suite>|<regime>.
+set(RDB_CICE_TESTS
+    "test_cice_conversions|test_cice_conversions|collect_cice_conversions_tests|cice_conversions|ocean"
+    "test_cice_device|test_cice_device|collect_cice_device_tests|cice_device|ocean"
+    "test_cice_errors|test_cice_errors|collect_cice_errors_tests|cice_errors|ocean"
+    "test_cice_golden|test_cice_golden|collect_cice_golden_tests|cice_golden|ocean"
+    "test_cice_params|test_cice_params|collect_cice_params_tests|cice_params|ocean"
+    "test_cice_shortwave|test_cice_shortwave|collect_cice_shortwave_tests|cice_shortwave|ocean"
+    "test_cice_golden_thermo_shared|test_cice_golden_thermo_shared|collect_cice_golden_thermo_shared_tests|cice_golden_thermo_shared|ocean"
+    "test_cice_thermo_shared|test_cice_thermo_shared|collect_cice_thermo_shared_tests|cice_thermo_shared|ocean"
+    "test_cice_itd_params|test_cice_itd_params|collect_cice_itd_params_tests|cice_itd_params|ocean"
+    "test_cice_lateral_melt|test_cice_lateral_melt|collect_cice_lateral_melt_tests|cice_lateral_melt|ocean"
+    "test_cice_bl99_pieces|test_cice_bl99_pieces|collect_cice_bl99_pieces_tests|cice_bl99_pieces|ocean"
+    "test_cice_golden_bl99_pieces|test_cice_golden_bl99_pieces|collect_cice_golden_bl99_pieces_tests|cice_golden_bl99_pieces|ocean"
+    "test_cice_ridge_itd|test_cice_ridge_itd|collect_cice_ridge_itd_tests|cice_ridge_itd|ocean"
+    "test_cice_atmo|test_cice_atmo|collect_cice_atmo_tests|cice_atmo|ocean"
+    "test_cice_golden_atmo|test_cice_golden_atmo|collect_cice_golden_atmo_tests|cice_golden_atmo|ocean"
+    "test_cice_thickness_pieces|test_cice_thickness_pieces|collect_cice_thickness_pieces_tests|cice_thickness_pieces|ocean"
+    "test_cice_golden_thickness_pieces|test_cice_golden_thickness_pieces|collect_cice_golden_thickness_pieces_tests|cice_golden_thickness_pieces|ocean"
+    "test_cice_bl99_solver|test_cice_bl99_solver|collect_cice_bl99_solver_tests|cice_bl99_solver|ocean"
+    "test_cice_golden_bl99_solver|test_cice_golden_bl99_solver|collect_cice_golden_bl99_solver_tests|cice_golden_bl99_solver|ocean"
+)
+
+# Shared helpers of the ice tests (deterministic columns, ledger, golden
+# compare); objects are linked into each ice test directly.
+add_library(rdb_cice_test_util OBJECT test_cice_util.F90)
+set_target_properties(
+  rdb_cice_test_util
+  PROPERTIES POSITION_INDEPENDENT_CODE ON Fortran_MODULE_DIRECTORY
+                                          ${CMAKE_BINARY_DIR}/modules_cice_test)
+target_link_libraries(rdb_cice_test_util PUBLIC rdb_test_lcg rdb_ice_core_objs
+                                                test-drive::test-drive)
+target_include_directories(rdb_cice_test_util
+                           PUBLIC ${CMAKE_BINARY_DIR}/modules_cice_test)
+foreach(row ${RDB_CICE_TESTS})
+  string(REPLACE "|" ";" fields "${row}")
+  list(GET fields 0 test_name)
+  list(GET fields 1 MODULE_NAME)
+  list(GET fields 2 COLLECT_FN)
+  list(GET fields 3 SUITE_NAME)
+  list(GET fields 4 TEST_REGIME)
+  set(TESTER_NAME "tester_${test_name}")
+  set(driver_path "${CMAKE_CURRENT_BINARY_DIR}/generated/${TESTER_NAME}.F90")
+  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/tester_cice_template.F90.in
+                 ${driver_path} @ONLY)
+  add_executable(${test_name} ${CMAKE_CURRENT_SOURCE_DIR}/${MODULE_NAME}.F90
+                              ${driver_path})
+  set_target_properties(
+    ${test_name} PROPERTIES Fortran_MODULE_DIRECTORY
+                            "${CMAKE_CURRENT_BINARY_DIR}/modules/${test_name}")
+  target_include_directories(
+    ${test_name}
+    PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/modules/${test_name}"
+            "${CMAKE_BINARY_DIR}/modules" "${RDB_SHARED_INCLUDE_DIR}")
+  target_link_libraries(
+    ${test_name} PRIVATE rdb_cice_test_util rdb_test_lcg rdb_ice_core_objs
+                         rdb_core_objs test-drive::test-drive)
+  add_test(NAME rdb_${test_name} COMMAND ${test_name})
+  set_tests_properties(
+    rdb_${test_name} PROPERTIES LABELS "${TEST_REGIME}" ENVIRONMENT
+                                "OMP_NUM_THREADS=1")
 endforeach()
 
 # MPI integration tests (only when MPI is enabled). Per-test rank counts because

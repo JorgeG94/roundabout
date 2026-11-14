@@ -54,6 +54,7 @@ contains
       call register_ocean_thermo(cfg, schema)
       call register_ocean_forcing(cfg, schema)
       call register_ocean_ice(cfg, schema)
+      call register_ocean_ice_cice(cfg, schema)
       call register_ocean_ice_ic(cfg, schema)
       call register_ocean_restore(cfg, schema)
       call register_ocean_geothermal(cfg, schema)
