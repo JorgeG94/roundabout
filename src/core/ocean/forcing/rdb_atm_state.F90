@@ -1,5 +1,11 @@
 !! JRA55-do-style prescribed atmospheric-state provider (OM3 wave-3, C2c-2b).
 module rdb_atm_state
+   !! **Reproducibility.**  The solar-position sin/cos are `safe_sin`/`safe_cos`
+   !! (host, `rdb_safe_math`) and `rdb_sm_sin`/`rdb_sm_cos` (the per-cell zenith
+   !! kernel), so `cosz` does not depend on a cell's vector position or tile width.
+   !! Every phase is bounded (day-of-year angle in [0, 2 pi), hour angle within a
+   !! few hundred degrees), so no time-growing argument reaches the library.
+   !!
    !! Builds the nine-field atmospheric state `tas, huss, uas, vas, psl,
    !! rlds, rsds, prra, prsn` (Tsujino et al. 2018, JRA55-do) on the model
    !! T-grid: time-blend each field's current bracket on the shared PR-14
@@ -70,7 +76,9 @@ module rdb_atm_state
    !! one is the data-forcing anti-pattern `rdb_ocean_data_forcing`'s
    !! docstring already warns against.
    use, intrinsic :: iso_fortran_env, only: int64
+   use, intrinsic :: ieee_arithmetic, only: ieee_is_nan, ieee_is_finite
    use rdb_constants, only: wp, TWO_PI, DEG2RAD
+   use rdb_safe_math, only: safe_sin, safe_cos
    use rdb_grid, only: hgrid_t
    use rdb_config, only: config_t
    use rdb_ocean_metrics, only: ocean_metrics_t
@@ -178,6 +186,10 @@ module rdb_atm_state
       procedure, non_overridable :: bytes => atm_state_bytes
       procedure, non_overridable :: destroy => atm_state_destroy
    end type atm_state_t
+
+   ! Position-independent sin/cos for the per-cell zenith kernel
+   ! (`rdb_sm_*`): constants once here, bodies at the end of `contains`.
+#include "rdb_safe_math_consts.inc"
 
 contains
 
@@ -784,6 +796,8 @@ contains
       real(wp) :: hour_frac_inst, decl_inst, eqtime_inst
       real(wp) :: hour_frac_q(ATM_COSZ_NQUAD), decl_q(ATM_COSZ_NQUAD), &
                   eqtime_q(ATM_COSZ_NQUAD)
+      real(wp) :: sdec_inst, cdec_inst
+      real(wp) :: sdec_q(ATM_COSZ_NQUAD), cdec_q(ATM_COSZ_NQUAD)
       integer :: k
 
       call atm_spencer_sun(this%epoch, t, hour_frac_inst, decl_inst, eqtime_inst)
@@ -795,10 +809,19 @@ contains
          call atm_spencer_sun(this%epoch, t_node, hour_frac_q(k), decl_q(k), eqtime_q(k))
       end do
 
+      ! Declination sin/cos are scalars of the step: evaluate them once here (the
+      ! same library routine as the kernel's `rdb_sm_*`, so the same bits), not
+      ! once per cell per node.
+      sdec_inst = safe_sin(decl_inst)
+      cdec_inst = safe_cos(decl_inst)
+      sdec_q = safe_sin(decl_q)
+      cdec_q = safe_cos(decl_q)
+
       call atm_coszen_apply_impl(this%nx_total, this%ny_total, this%nghost, &
                                  this%nx_phys, this%ny_phys, ATM_COSZ_NQUAD, &
-                                 hour_frac_q, decl_q, eqtime_q, &
-                                 hour_frac_inst, decl_inst, eqtime_inst, &
+                                 hour_frac_q, eqtime_q, &
+                                 hour_frac_inst, sdec_inst, cdec_inst, eqtime_inst, &
+                                 sdec_q, cdec_q, &
                                  metrics%geolonT, metrics%geolatT, &
                                  this%rsds_rec, this%cosz, this%cosz_mean, this%rsds)
    end subroutine atm_sw_coszen_refresh
@@ -824,17 +847,18 @@ contains
 
       gamma = TWO_PI*(real(doy - 1, wp) + (hour_frac - 12.0_wp)/24.0_wp)/365.0_wp
 
-      decl = 0.006918_wp - 0.399912_wp*cos(gamma) + 0.070257_wp*sin(gamma) &
-             - 0.006758_wp*cos(2.0_wp*gamma) + 0.000907_wp*sin(2.0_wp*gamma) &
-             - 0.002697_wp*cos(3.0_wp*gamma) + 0.001480_wp*sin(3.0_wp*gamma)
+      decl = 0.006918_wp - 0.399912_wp*safe_cos(gamma) + 0.070257_wp*safe_sin(gamma) &
+             - 0.006758_wp*safe_cos(2.0_wp*gamma) + 0.000907_wp*safe_sin(2.0_wp*gamma) &
+             - 0.002697_wp*safe_cos(3.0_wp*gamma) + 0.001480_wp*safe_sin(3.0_wp*gamma)
 
-      eqtime_min = 229.18_wp*(0.000075_wp + 0.001868_wp*cos(gamma) - 0.032077_wp*sin(gamma) &
-                              - 0.014615_wp*cos(2.0_wp*gamma) - 0.040849_wp*sin(2.0_wp*gamma))
+      eqtime_min = 229.18_wp*(0.000075_wp + 0.001868_wp*safe_cos(gamma) - 0.032077_wp*safe_sin(gamma) &
+                              - 0.014615_wp*safe_cos(2.0_wp*gamma) - 0.040849_wp*safe_sin(2.0_wp*gamma))
    end subroutine atm_spencer_sun
 
    pure subroutine atm_coszen_apply_impl(nx_total, ny_total, nghost, nx_phys, ny_phys, nq, &
-                                         hour_frac_q, decl_q, eqtime_q, &
-                                         hour_frac_inst, decl_inst, eqtime_inst, &
+                                         hour_frac_q, eqtime_q, &
+                                         hour_frac_inst, sdec_inst, cdec_inst, eqtime_inst, &
+                                         sdec_q, cdec_q, &
                                          geolonT, geolatT, rsds_rec, cosz, cosz_mean, rsds)
       !! The ONE device kernel: per physical T-cell, the instantaneous
       !! `cos Z` (clamped >= 0) at `(hour_frac_inst, decl_inst,
@@ -845,32 +869,35 @@ contains
       !! `geolonT`/`geolatT` is a host-precomputed scalar/short array
       !! (CLAUDE.md `do-concurrent` dummy + device-safety rules).
       integer, intent(in) :: nx_total, ny_total, nghost, nx_phys, ny_phys, nq
-      real(wp), intent(in) :: hour_frac_q(nq), decl_q(nq), eqtime_q(nq)
-      real(wp), intent(in) :: hour_frac_inst, decl_inst, eqtime_inst
+      real(wp), intent(in) :: hour_frac_q(nq), eqtime_q(nq)
+      real(wp), intent(in) :: sdec_q(nq), cdec_q(nq)
+      real(wp), intent(in) :: hour_frac_inst, sdec_inst, cdec_inst, eqtime_inst
       real(wp), intent(in) :: geolonT(nx_total, ny_total), geolatT(nx_total, ny_total)
       real(wp), intent(in) :: rsds_rec(nx_total, ny_total)
       real(wp), intent(inout) :: cosz(nx_total, ny_total), cosz_mean(nx_total, ny_total)
       real(wp), intent(inout) :: rsds(nx_total, ny_total)
 
       integer :: i, j, ii, jj, k
-      real(wp) :: lat_r, lon_deg, tst_min, ha, cz, acc, mean_val
+      real(wp) :: lat_r, slat, clat, lon_deg, tst_min, ha, cz, acc, mean_val
 
       do concurrent(j=1:ny_phys, i=1:nx_phys)
          ii = nghost + i
          jj = nghost + j
          lat_r = geolatT(ii, jj)*DEG2RAD
          lon_deg = geolonT(ii, jj)
+         slat = rdb_sm_sin(lat_r)
+         clat = rdb_sm_cos(lat_r)
 
          tst_min = hour_frac_inst*60.0_wp + eqtime_inst + 4.0_wp*lon_deg
          ha = (tst_min/4.0_wp - 180.0_wp)*DEG2RAD
-         cz = sin(lat_r)*sin(decl_inst) + cos(lat_r)*cos(decl_inst)*cos(ha)
+         cz = slat*sdec_inst + clat*cdec_inst*rdb_sm_cos(ha)
          cosz(ii, jj) = max(0.0_wp, cz)
 
          acc = 0.0_wp
          do k = 1, nq
             tst_min = hour_frac_q(k)*60.0_wp + eqtime_q(k) + 4.0_wp*lon_deg
             ha = (tst_min/4.0_wp - 180.0_wp)*DEG2RAD
-            cz = sin(lat_r)*sin(decl_q(k)) + cos(lat_r)*cos(decl_q(k))*cos(ha)
+            cz = slat*sdec_q(k) + clat*cdec_q(k)*rdb_sm_cos(ha)
             acc = acc + max(0.0_wp, cz)
          end do
          mean_val = acc/real(nq, wp)
@@ -932,5 +959,9 @@ contains
          dst(nghost + i, nghost + j) = src(i, j)
       end do
    end subroutine atm_state_scatter_impl
+
+#include "rdb_safe_math_core.inc"
+
+#include "rdb_safe_math_trig.inc"
 
 end module rdb_atm_state
