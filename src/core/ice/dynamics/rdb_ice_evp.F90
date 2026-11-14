@@ -1,5 +1,9 @@
 !! C-grid elastic-viscous-plastic (EVP) sea-ice rheology (SIS2 port, PR 5).
 module rdb_ice_evp
+   !! **Reproducibility.**  Every exp/cos/atan here is the module-local
+   !! `rdb_sm_*` body (`rdb_safe_math_*.inc`), so a cell's value does not depend
+   !! on its vector position or tile.
+   !!
    !! Mechanical transliteration of the validated Python prototype
    !! `tmp_local_artifacts/proto_evp_core.py` (`Channel1D`) +
    !! `tmp_local_artifacts/proto_evp_validate.py` (`Box2D`), grounded
@@ -204,6 +208,8 @@ module rdb_ice_evp
    !!       (D8 is otherwise unchanged: the mediation is still one-step
    !!       lagged, only the RESUME path changed).
    use rdb_constants, only: wp
+   use, intrinsic :: ieee_arithmetic, only: ieee_is_nan, ieee_is_finite
+   use, intrinsic :: iso_fortran_env, only: int64
    use rdb_grid, only: hgrid_t
    use rdb_ocean_metrics, only: ocean_metrics_t
    use rdb_multilayer_state, only: multilayer_state_t
@@ -294,6 +300,11 @@ module rdb_ice_evp
          !! Project `ci` forward along the current divergence each subcycle
          !! and recompute `pres_mice` from it.
    end type ice_evp_params_t
+
+   ! Position-independent exp (`rdb_sm_exp`): the strength exponentials are
+   ! evaluated per cell, and a vector-library exp rounds by loop position,
+   ! so a decomposed tile would differ from one rank.
+#include "rdb_safe_math_consts.inc"
 
 contains
 
@@ -1010,7 +1021,7 @@ contains
 
    pure subroutine evp_pres_mice_impl(dxT, dyT, ci, p0_rho, c0, del_sh_min_scale, &
                                       tdamp_eff, dt, pres_mice, del_sh_min_pr, nx, ny)
-      !! `pres_mice = p0_rho*exp(-c0*max(1-ci,0))` (:878); `dxharm =
+      !! `pres_mice = p0_rho*rdb_sm_exp(-c0*max(1-ci,0))` (:878); `dxharm =
       !! 2*dxT*dyT/(dxT+dyT)`; `del_sh_min_pr = 2*del_sh_min_scale*dt^2 /
       !! (Tdamp*dxharm^2)` guarded on `dxharm > 0` (:880-890).
       integer, intent(in) :: nx, ny
@@ -1021,7 +1032,7 @@ contains
       real(wp) :: dxharm
 
       do concurrent(j=1:ny, i=1:nx) local(dxharm)
-         pres_mice(i, j) = p0_rho*exp(-c0*max(1.0_wp - ci(i, j), 0.0_wp))
+         pres_mice(i, j) = p0_rho*rdb_sm_exp(-c0*max(1.0_wp - ci(i, j), 0.0_wp))
          dxharm = 2.0_wp*dxT(i, j)*dyT(i, j)/(dxT(i, j) + dyT(i, j))
          if (dxharm > 0.0_wp) then
             del_sh_min_pr(i, j) = (2.0_wp*del_sh_min_scale*dt**2)/(tdamp_eff*dxharm**2)
@@ -1034,7 +1045,7 @@ contains
    pure subroutine evp_project_ci_impl(ci, sh_dd, dt_cum, p0_rho, c0, pres_mice, nx, ny)
       !! PR 36: `PROJECT_ICE_CONCENTRATION` (SIS2 `SIS_dyn_cgrid.F90:1064-
       !! 1077`). `ci_proj = ci*exp(-dt_cum*sh_dd)` then `pres_mice =
-      !! p0_rho*exp(-c0*max(1-ci_proj, 0))`. `ci_proj` is a `local()`
+      !! p0_rho*rdb_sm_exp(-c0*max(1-ci_proj, 0))`. `ci_proj` is a `local()`
       !! scalar, NOT an array: SIS2 materialises it only for the
       !! sigI/sigII/find_ice_strength diagnostics Roundabout does not have
       !! (documented divergence). `del_sh_min_pr` is NOT recomputed here
@@ -1050,11 +1061,21 @@ contains
       real(wp), intent(in) :: dt_cum, p0_rho, c0
       real(wp), intent(inout) :: pres_mice(nx, ny)
       integer :: i, j
-      real(wp) :: ci_proj
+      real(wp) :: ci_proj, p_open
 
+      ! An ice-free cell (`ci == 0`) projects to `0*exp(finite) = 0` whatever
+      ! `sh_dd` is, so its strength is the one constant `exp(-c0)`: evaluate
+      ! it once and skip both per-cell exponentials (same two library calls
+      ! on the same arguments, so bit-identical).  A non-finite or huge
+      ! exponent argument (`exp` overflow, NaN) keeps the full path.
+      p_open = p0_rho*rdb_sm_exp(-c0*max(1.0_wp - 0.0_wp, 0.0_wp))
       do concurrent(j=1:ny, i=1:nx) local(ci_proj)
-         ci_proj = ci(i, j)*exp(-dt_cum*sh_dd(i, j))
-         pres_mice(i, j) = p0_rho*exp(-c0*max(1.0_wp - ci_proj, 0.0_wp))
+         if (ci(i, j) == 0.0_wp .and. abs(dt_cum*sh_dd(i, j)) < 700.0_wp) then
+            pres_mice(i, j) = p_open
+         else
+            ci_proj = ci(i, j)*rdb_sm_exp(-dt_cum*sh_dd(i, j))
+            pres_mice(i, j) = p0_rho*rdb_sm_exp(-c0*max(1.0_wp - ci_proj, 0.0_wp))
+         end if
       end do
    end subroutine evp_project_ci_impl
 
@@ -1907,5 +1928,7 @@ contains
          fyoc(i, j) = fyoc(i, j)*(mask_v(i, j)*i_sub_steps)
       end do
    end subroutine evp_average_stress_impl
+
+#include "rdb_safe_math_core.inc"
 
 end module rdb_ice_evp
