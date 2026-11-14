@@ -243,11 +243,52 @@ contains
       end if
 
       ! ---- shortwave albedo parameters ----
-      if (cfg%ocean%ice_sw%ahmax <= 0.0_wp) then
+      if (.not. (cfg%ocean%ice_sw%ahmax > 0.0_wp)) then
          call add_msg(msgs, n, "&ocean_ice_sw_nml ahmax must be > 0 (it divides "// &
                       "the thin-ice albedo ramp)")
       end if
+      if (trim(adjustl(cfg%ocean%ice_sw%shortwave)) /= "ccsm3") then
+         call add_msg(msgs, n, "&ocean_ice_sw_nml shortwave='"// &
+                      trim(adjustl(cfg%ocean%ice_sw%shortwave))// &
+                      "' is not ported (only the CCSM3 scheme; no delta-Eddington, "// &
+                      "melt ponds or SNICAR)")
+      end if
+      if (trim(adjustl(cfg%ocean%ice_sw%albedo_type)) /= "ccsm3") then
+         call add_msg(msgs, n, "&ocean_ice_sw_nml albedo_type='"// &
+                      trim(adjustl(cfg%ocean%ice_sw%albedo_type))// &
+                      "' is not ported (only the CCSM3 albedo parameterisation)")
+      end if
+      if (.not. unit_closed(cfg%ocean%ice_sw%albicev)) then
+         call add_msg(msgs, n, "&ocean_ice_sw_nml albicev must lie in [0, 1]")
+      end if
+      if (.not. unit_closed(cfg%ocean%ice_sw%albicei)) then
+         call add_msg(msgs, n, "&ocean_ice_sw_nml albicei must lie in [0, 1]")
+      end if
+      if (.not. unit_closed(cfg%ocean%ice_sw%albsnowv)) then
+         call add_msg(msgs, n, "&ocean_ice_sw_nml albsnowv must lie in [0, 1]")
+      end if
+      if (.not. unit_closed(cfg%ocean%ice_sw%albsnowi)) then
+         call add_msg(msgs, n, "&ocean_ice_sw_nml albsnowi must lie in [0, 1]")
+      end if
+      if (.not. (cfg%ocean%ice_sw%sw_frac > 0.0_wp .and. cfg%ocean%ice_sw%sw_frac <= 1.0_wp)) then
+         call add_msg(msgs, n, "&ocean_ice_sw_nml sw_frac must lie in (0, 1] (the "// &
+                      "fraction of the internal shortwave moved to the surface)")
+      end if
+      if (.not. (cfg%ocean%ice_sw%sw_dtemp >= 0.0_wp)) then
+         call add_msg(msgs, n, "&ocean_ice_sw_nml sw_dtemp must be >= 0")
+      end if
+      if (.not. unit_closed(cfg%ocean%ice_sw%sw_vis_frac)) then
+         call add_msg(msgs, n, "&ocean_ice_sw_nml sw_vis_frac must lie in [0, 1] "// &
+                      "(the near-IR band is 1 - sw_vis_frac, so the two sum to 1)")
+      end if
    end subroutine ice_config_check
+
+   pure function unit_closed(x) result(ok)
+      !! `x` in [0, 1]; `.false.` for NaN.
+      real(wp), intent(in) :: x
+      logical :: ok
+      ok = x >= 0.0_wp .and. x <= 1.0_wp
+   end function unit_closed
 
    subroutine ice_config_validate(cfg, has_error)
       !! Log every refusal from `ice_config_check` and set `has_error`.
@@ -325,6 +366,10 @@ contains
       p%sw%albsnowv = cfg%ocean%ice_sw%albsnowv
       p%sw%albsnowi = cfg%ocean%ice_sw%albsnowi
       p%sw%ahmax = cfg%ocean%ice_sw%ahmax
+      p%sw%sw_redist = cfg%ocean%ice_sw%sw_redist
+      p%sw%sw_frac = cfg%ocean%ice_sw%sw_frac
+      p%sw%sw_dtemp = cfg%ocean%ice_sw%sw_dtemp
+      p%sw%sw_vis_frac = cfg%ocean%ice_sw%sw_vis_frac
       if (cfg%ocean%ice_sw%snowpatch >= 0.0_wp) p%c%snowpatch = cfg%ocean%ice_sw%snowpatch
    end function ice_params_from_config
 

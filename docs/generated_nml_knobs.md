@@ -671,16 +671,22 @@ CICE-port ice thermodynamics and thickness-distribution knobs (scheme='cice'; up
 
 ### &ocean_ice_sw_nml
 
-CICE-port ice shortwave albedo parameters (scheme='cice'; upstream CICE defaults).
+CICE-port ice shortwave knobs of the CCSM3 scheme (Briegleb et al. 2004; scheme='cice'; upstream CICE defaults).
 
 | Knob | Default | Units | Description |
 |------|---------|-------|-------------|
-| `albicev` | `0.7800000000E+00` |  | Visible albedo of thick ice (OM3 0.86) |
-| `albicei` | `0.3600000000E+00` |  | Near-infrared albedo of thick ice (OM3 0.44) |
-| `albsnowv` | `0.9800000000E+00` |  | Visible albedo of cold snow |
-| `albsnowi` | `0.7000000000E+00` |  | Near-infrared albedo of cold snow |
+| `shortwave` | `"ccsm3"` |  | Shortwave scheme: ccsm3 (Briegleb et al. 2004); the delta-Eddington options are refused (not ported) |
+| `albedo_type` | `"ccsm3"` |  | Albedo parameterisation: ccsm3 (Briegleb et al. 2004); constant is refused (not ported) |
+| `albicev` | `0.7800000000E+00` |  | Visible albedo of cold thick bare ice, in [0, 1] (OM3 0.86) |
+| `albicei` | `0.3600000000E+00` |  | Near-infrared albedo of cold thick bare ice, in [0, 1] (OM3 0.44) |
+| `albsnowv` | `0.9800000000E+00` |  | Visible albedo of cold snow, in [0, 1] |
+| `albsnowi` | `0.7000000000E+00` |  | Near-infrared albedo of cold snow, in [0, 1] |
 | `ahmax` | `0.3000000000E+00` | m | Thickness above which the ice albedo is constant (OM3 0.1); must be > 0 |
 | `snowpatch` | `-0.1000000000E+01` | m | Snow-cover patchiness length; negative follows constants_set (0.02 icepack, 0.005 cesm) |
+| `sw_redist` | `.false.` |  | Move shortwave absorbed in a near-melting layer to the surface (OM3 .true.) |
+| `sw_frac` | `0.9000000000E+00` |  | Fraction of the internal shortwave sw_redist moves to the surface; must be in (0, 1] |
+| `sw_dtemp` | `0.2000000000E-01` | K | sw_redist temperature offset from melting; must be >= 0 |
+| `sw_vis_frac` | `0.5200000000E+00` |  | Visible fraction of the broadband downwelling shortwave in a forced run (near-IR is the complement); must be in [0, 1] |
 
 ### &ocean_ice_ridge_nml
 

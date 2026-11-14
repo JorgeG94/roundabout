@@ -589,9 +589,17 @@ module rdb_config
    end type ocean_ice_thermo_config_t
 
    type :: ocean_ice_sw_config_t
-      !! `&ocean_ice_sw_nml`: CICE-port shortwave albedo parameters
-      !! (`scheme="cice"` only).  Upstream code defaults; OM3 values go in
-      !! the OM3 example namelist.
+      !! `&ocean_ice_sw_nml`: CICE-port shortwave parameters of the CCSM3
+      !! scheme (Briegleb et al. 2004, NCAR/TN-463+STR; `scheme="cice"`
+      !! only).  Upstream code defaults; OM3 values go in the OM3 example
+      !! namelist.
+      character(len=16) :: shortwave = "ccsm3"
+         !! Shortwave scheme.  Only `"ccsm3"` is ported; `"dEdd"` and
+         !! `"dEdd_snicar_ad"` are accepted by the schema and refused by
+         !! `ice_config_check`.
+      character(len=16) :: albedo_type = "ccsm3"
+         !! Albedo parameterisation.  `"ccsm3"` is ported; `"constant"` is
+         !! refused.
       real(wp) :: albicev = 0.78_wp
          !! Visible albedo of thick ice (OM3 0.86).
       real(wp) :: albicei = 0.36_wp
@@ -606,6 +614,19 @@ module rdb_config
       real(wp) :: snowpatch = -1.0_wp
          !! Snow-cover patchiness length [m]; negative (default) follows
          !! `constants_set` (0.02 icepack, 0.005 cesm).
+      logical :: sw_redist = .false.
+         !! Move shortwave absorbed in a near-melting layer to the surface
+         !! (Bitz and Lipscomb 1999 thermodynamics; OM3 `.true.`).
+      real(wp) :: sw_frac = 0.9_wp
+         !! Fraction of the internal shortwave `sw_redist` moves to the
+         !! surface; must lie in (0, 1].
+      real(wp) :: sw_dtemp = 0.02_wp
+         !! `sw_redist` temperature offset from melting [K]; must be >= 0.
+      real(wp) :: sw_vis_frac = 0.52_wp
+         !! Visible fraction of the broadband downwelling shortwave in a
+         !! forced run (the near-IR band is the complement); must lie in
+         !! [0, 1].  roundabout knob, not an Icepack name.  Interim value
+         !! 0.52 = 0.28 + 0.24, the CICE standalone forcing split.
    end type ocean_ice_sw_config_t
 
    type :: ocean_ice_ridge_config_t

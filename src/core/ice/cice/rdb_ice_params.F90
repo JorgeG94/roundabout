@@ -162,15 +162,20 @@ module rdb_ice_params
    end type ice_itd_params_t
 
    type :: ice_sw_params_t
-      !! Shortwave albedo parameters (CCSM3 albedo; upstream code defaults).
-      !! D1.3 owns this type and the `&ocean_ice_sw_nml` group; the shortwave
-      !! driver PR (D7.1) EXTENDS both and adds the refusals for unsupported
-      !! shortwave options.  Do not create a second type.
+      !! Shortwave parameters of the CCSM3 scheme (Briegleb et al. 2004;
+      !! upstream code defaults).  Owns the `&ocean_ice_sw_nml` knobs; the
+      !! scheme and albedo-type selectors are not carried (only `ccsm3` is
+      !! ported and `ice_config_check` refuses the rest).  Do not create a
+      !! second type.
       real(wp) :: albicev             !! visible albedo of thick ice
       real(wp) :: albicei             !! near-infrared albedo of thick ice
       real(wp) :: albsnowv            !! visible albedo of cold snow
       real(wp) :: albsnowi            !! near-infrared albedo of cold snow
       real(wp) :: ahmax               !! thickness above which the ice albedo is constant [m]
+      logical :: sw_redist            !! move near-melting-layer shortwave to the surface
+      real(wp) :: sw_frac             !! fraction of the internal shortwave moved, (0, 1]
+      real(wp) :: sw_dtemp            !! `sw_redist` offset from melting [K]
+      real(wp) :: sw_vis_frac         !! visible share of the broadband shortwave (forced run)
    end type ice_sw_params_t
    type :: ice_ridge_params_t
       !! Ridging and ice-strength knobs (Thorndike et al. 1975; Rothrock 1975;
@@ -332,6 +337,10 @@ contains
       p%sw%albsnowv = 0.98_wp
       p%sw%albsnowi = 0.70_wp
       p%sw%ahmax = 0.3_wp
+      p%sw%sw_redist = .false.
+      p%sw%sw_frac = 0.9_wp
+      p%sw%sw_dtemp = 0.02_wp
+      p%sw%sw_vis_frac = 0.52_wp
       p%ridge = ice_ridge_params_default()
       p%atm%highfreq = .false.
       p%atm%natmiter = 5

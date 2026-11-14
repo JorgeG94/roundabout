@@ -14,6 +14,9 @@ module test_cice_config
    use rdb_ice_params, only: ice_params_t, ICE_CONSTANTS_ICEPACK, ICE_CONSTANTS_CESM, &
                              ICE_TFRZ_LINEAR_SALT, ICE_TFRZ_CONSTANT, ICE_TFRZ_MINUS1P8, &
                              ICE_CONDUCT_BUBBLY, ICE_CONDUCT_MU71
+   use rdb_ice_shortwave, only: ice_albedo_fhtan, ice_albedos_ccsm3, ice_absorbed_ccsm3, &
+                                ICE_ALBICEV_DEFAULT, ICE_ALBICEI_DEFAULT, ICE_ALBSNOWV_DEFAULT, &
+                                ICE_ALBSNOWI_DEFAULT, ICE_AHMAX_DEFAULT, ICE_SNOWPATCH_DEFAULT
    use rdb_ice_config, only: ice_params_from_config, ice_config_check, &
                              ICE_CONFIG_MSG_LEN, ICE_CONFIG_MAX_MSGS
    implicit none
@@ -46,7 +49,13 @@ contains
                   new_unittest("atm_floe_refusals", test_atm_floe_refusals), &
                   new_unittest("atm_cesm_constants", test_atm_cesm_constants), &
                   new_unittest("ridge_atm_all_reasons_reported", test_ridge_atm_all_reasons), &
-                  new_unittest("ridge_atm_round_trip_om3", test_ridge_atm_round_trip) &
+                  new_unittest("ridge_atm_round_trip_om3", test_ridge_atm_round_trip), &
+                  new_unittest("sw_defaults_are_upstream", test_sw_defaults), &
+                  new_unittest("sw_refusals", test_sw_refusals), &
+                  new_unittest("sw_edge_values_accepted", test_sw_edges), &
+                  new_unittest("sw_all_reasons_reported", test_sw_all_reasons), &
+                  new_unittest("sw_round_trip_om3", test_sw_round_trip), &
+                  new_unittest("sw_kernel_default_params_bitwise", test_sw_kernel_defaults) &
                   ]
    end subroutine collect_cice_config_tests
 
@@ -670,5 +679,159 @@ contains
       if (allocated(error)) return
       call check(error, abs(p%thermo%floediam - 250.0_wp) < tol, "floediam")
    end subroutine test_ridge_atm_round_trip
+
+   subroutine test_sw_defaults(error)
+      !! Upstream code defaults of the shortwave knobs (the values are written here from
+      !! the upstream parameter tables, not read back from the module under test).
+      type(error_type), allocatable, intent(out) :: error
+      type(config_t) :: cfg
+      type(ice_params_t) :: p
+      real(wp), parameter :: tol = 1.0e-15_wp
+
+      cfg = config_t()
+      call check(error, trim(cfg%ocean%ice_sw%shortwave), "ccsm3", "shortwave default ccsm3")
+      if (allocated(error)) return
+      call check(error, trim(cfg%ocean%ice_sw%albedo_type), "ccsm3", "albedo_type default ccsm3")
+      if (allocated(error)) return
+      p = ice_params_from_config(cfg)
+      call check(error, p%sw%sw_redist, .false., "sw_redist upstream default .false.")
+      if (allocated(error)) return
+      call check(error, abs(p%sw%sw_frac - 0.9_wp) < tol, "sw_frac upstream default 0.9")
+      if (allocated(error)) return
+      call check(error, abs(p%sw%sw_dtemp - 0.02_wp) < tol, "sw_dtemp upstream default 0.02")
+      if (allocated(error)) return
+      ! Interim roundabout choice, not an upstream value: CICE standalone 0.28 + 0.24.
+      call check(error, abs(p%sw%sw_vis_frac - 0.52_wp) < tol, "sw_vis_frac interim 0.52")
+   end subroutine test_sw_defaults
+
+   subroutine test_sw_refusals(error)
+      type(error_type), allocatable, intent(out) :: error
+
+      call expect_refusal("&ocean_ice_sw_nml shortwave='dEdd' /", "shortwave='dEdd' is not ported", error)
+      if (allocated(error)) return
+      call expect_refusal("&ocean_ice_sw_nml shortwave='dEdd_snicar_ad' /", "is not ported", error)
+      if (allocated(error)) return
+      call expect_refusal("&ocean_ice_sw_nml albedo_type='constant' /", &
+                          "albedo_type='constant' is not ported", error)
+      if (allocated(error)) return
+      call expect_refusal("&ocean_ice_sw_nml albicev=1.01 /", "albicev must lie in [0, 1]", error)
+      if (allocated(error)) return
+      call expect_refusal("&ocean_ice_sw_nml albicei=-0.01 /", "albicei must lie in [0, 1]", error)
+      if (allocated(error)) return
+      call expect_refusal("&ocean_ice_sw_nml albsnowv=1.5 /", "albsnowv must lie in [0, 1]", error)
+      if (allocated(error)) return
+      call expect_refusal("&ocean_ice_sw_nml albsnowi=-1.0 /", "albsnowi must lie in [0, 1]", error)
+      if (allocated(error)) return
+      call expect_refusal("&ocean_ice_sw_nml sw_frac=0.0 /", "sw_frac must lie in (0, 1]", error)
+      if (allocated(error)) return
+      call expect_refusal("&ocean_ice_sw_nml sw_frac=1.2 /", "sw_frac must lie in (0, 1]", error)
+      if (allocated(error)) return
+      call expect_refusal("&ocean_ice_sw_nml sw_dtemp=-0.01 /", "sw_dtemp must be >= 0", error)
+      if (allocated(error)) return
+      call expect_refusal("&ocean_ice_sw_nml sw_vis_frac=-0.1 /", "sw_vis_frac must lie in [0, 1]", error)
+      if (allocated(error)) return
+      call expect_refusal("&ocean_ice_sw_nml sw_vis_frac=1.1 /", "sw_vis_frac must lie in [0, 1]", error)
+   end subroutine test_sw_refusals
+
+   subroutine test_sw_edges(error)
+      !! The closed ends of every range are legal.
+      type(error_type), allocatable, intent(out) :: error
+      type(config_t) :: cfg
+
+      call parse("&ocean_ice_sw_nml albicev=0.0, albicei=1.0, albsnowv=1.0, albsnowi=0.0, "// &
+                 "sw_frac=1.0, sw_dtemp=0.0, sw_vis_frac=0.0 /", cfg, error)
+      if (allocated(error)) return
+      call check(error, count_msgs(cfg), 0, "closed range ends accepted (vis_frac 0)")
+      if (allocated(error)) return
+      call parse("&ocean_ice_sw_nml sw_vis_frac=1.0, sw_frac=1.0e-6, shortwave='ccsm3', "// &
+                 "albedo_type='ccsm3' /", cfg, error)
+      if (allocated(error)) return
+      call check(error, count_msgs(cfg), 0, "sw_vis_frac 1 and tiny sw_frac accepted")
+   end subroutine test_sw_edges
+
+   subroutine test_sw_all_reasons(error)
+      !! Every shortwave reason is reported together, none hidden by the schema.
+      type(error_type), allocatable, intent(out) :: error
+      type(config_t) :: cfg
+
+      call parse("&ocean_ice_sw_nml shortwave='dEdd', albedo_type='constant', albicev=2.0, "// &
+                 "albicei=-1.0, albsnowv=3.0, albsnowi=-3.0, ahmax=0.0, sw_frac=0.0, "// &
+                 "sw_dtemp=-1.0, sw_vis_frac=2.0 /", cfg, error)
+      if (allocated(error)) return
+      call check(error, count_msgs(cfg), 10, "ten shortwave reasons at once")
+      if (allocated(error)) return
+      call check(error, has_msg(cfg, "shortwave='dEdd'"), "scheme reason")
+      if (allocated(error)) return
+      call check(error, has_msg(cfg, "albedo_type='constant'"), "albedo_type reason")
+      if (allocated(error)) return
+      call check(error, has_msg(cfg, "sw_vis_frac"), "band fraction reason")
+   end subroutine test_sw_all_reasons
+
+   subroutine test_sw_round_trip(error)
+      !! OM3 values (`ice_in`: albicev .86, albicei .44, albsnowv .98, albsnowi .7, ahmax .1,
+      !! sw_redist .true.; sw_frac and sw_dtemp unset so upstream) reach `ice_sw_params_t`.
+      type(error_type), allocatable, intent(out) :: error
+      type(config_t) :: cfg
+      type(ice_params_t) :: p
+      real(wp), parameter :: tol = 1.0e-15_wp
+
+      call parse("&ocean_ice_sw_nml shortwave='ccsm3', albedo_type='ccsm3', albicev=0.86, "// &
+                 "albicei=0.44, albsnowv=0.98, albsnowi=0.7, ahmax=0.1, sw_redist=.true., "// &
+                 "sw_frac=0.8, sw_dtemp=0.03, sw_vis_frac=0.6 /", cfg, error)
+      if (allocated(error)) return
+      call check(error, count_msgs(cfg), 0, "OM3 shortwave values accepted")
+      if (allocated(error)) return
+      p = ice_params_from_config(cfg)
+      call check(error, abs(p%sw%albicev - 0.86_wp) < tol, "albicev")
+      if (allocated(error)) return
+      call check(error, abs(p%sw%albicei - 0.44_wp) < tol, "albicei")
+      if (allocated(error)) return
+      call check(error, abs(p%sw%albsnowv - 0.98_wp) < tol, "albsnowv")
+      if (allocated(error)) return
+      call check(error, abs(p%sw%albsnowi - 0.7_wp) < tol, "albsnowi")
+      if (allocated(error)) return
+      call check(error, abs(p%sw%ahmax - 0.1_wp) < tol, "ahmax")
+      if (allocated(error)) return
+      call check(error, p%sw%sw_redist, .true., "sw_redist")
+      if (allocated(error)) return
+      call check(error, abs(p%sw%sw_frac - 0.8_wp) < tol, "sw_frac")
+      if (allocated(error)) return
+      call check(error, abs(p%sw%sw_dtemp - 0.03_wp) < tol, "sw_dtemp")
+      if (allocated(error)) return
+      call check(error, abs(p%sw%sw_vis_frac - 0.6_wp) < tol, "sw_vis_frac")
+   end subroutine test_sw_round_trip
+
+   subroutine test_sw_kernel_defaults(error)
+      !! The D7.2 kernels fed with the parameters of the default config give bit-for-bit the
+      !! result they give with their own module defaults.
+      type(error_type), allocatable, intent(out) :: error
+      type(config_t) :: cfg
+      type(ice_params_t) :: p
+      real(wp), parameter :: hi(4) = [0.05_wp, 0.4_wp, 1.3_wp, 3.0_wp]
+      real(wp), parameter :: hs(4) = [0.0_wp, 0.03_wp, 0.2_wp, 0.0_wp]
+      real(wp), parameter :: ts(4) = [-15.0_wp, -0.5_wp, 0.0_wp, -3.0_wp]
+      real(wp) :: a(8), b(8), fa(3), fb(3), ia(4), ib(4), fhp, fhd
+      integer :: m
+
+      cfg = config_t()
+      p = ice_params_from_config(cfg)
+      fhp = ice_albedo_fhtan(p%sw%ahmax)
+      fhd = ice_albedo_fhtan(ICE_AHMAX_DEFAULT)
+      do m = 1, 4
+         call ice_albedos_ccsm3(hi(m), hs(m), ts(m), p%sw%albicev, p%sw%albicei, p%sw%albsnowv, &
+                                p%sw%albsnowi, fhp, p%c%snowpatch, a(1), a(2), a(3), a(4), a(5), a(6), a(7))
+         call ice_albedos_ccsm3(hi(m), hs(m), ts(m), ICE_ALBICEV_DEFAULT, ICE_ALBICEI_DEFAULT, &
+                                ICE_ALBSNOWV_DEFAULT, ICE_ALBSNOWI_DEFAULT, fhd, ICE_SNOWPATCH_DEFAULT, &
+                                b(1), b(2), b(3), b(4), b(5), b(6), b(7))
+         call check(error, all(a(1:7) == b(1:7)), "albedos bitwise equal")
+         if (allocated(error)) return
+         call ice_absorbed_ccsm3(4, hi(m), a(5), 100.0_wp*p%sw%sw_vis_frac, 100.0_wp*(1.0_wp - p%sw%sw_vis_frac), &
+                                 a(1), a(2), a(3), a(4), fa(1), fa(2), fa(3), ia)
+         call ice_absorbed_ccsm3(4, hi(m), b(5), 100.0_wp*0.52_wp, 100.0_wp*(1.0_wp - 0.52_wp), b(1), b(2), b(3), b(4), &
+                                 fb(1), fb(2), fb(3), ib)
+         call check(error, all(fa == fb) .and. all(ia == ib), "absorbed solar bitwise equal")
+         if (allocated(error)) return
+      end do
+   end subroutine test_sw_kernel_defaults
 
 end module test_cice_config

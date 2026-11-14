@@ -3821,59 +3821,63 @@ class OceanIceThermo(Group):
 
 
 class OceanIceSw(Group):
-    """`&ocean_ice_sw_nml` -- CICE-port ice shortwave albedo parameters (scheme='cice'; upstream CICE defaults)."""
+    """`&ocean_ice_sw_nml` -- CICE-port ice shortwave knobs of the CCSM3 scheme (Briegleb et al. 2004; scheme='cice'; upstream CICE defaults)."""
 
     _nml_name = 'ocean_ice_sw'
 
+    shortwave = Enum(
+        'shortwave',
+        doc='Shortwave scheme: ccsm3 (Briegleb et al. 2004); the delta-Eddington options are refused (not ported)',
+        units='',
+        required=False,
+        default='ccsm3',
+        allowed=('ccsm3', 'dEdd', 'dEdd_snicar_ad'),
+        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+    )
+
+    albedo_type = Enum(
+        'albedo_type',
+        doc='Albedo parameterisation: ccsm3 (Briegleb et al. 2004); constant is refused (not ported)',
+        units='',
+        required=False,
+        default='ccsm3',
+        allowed=('ccsm3', 'constant'),
+        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+    )
+
     albicev = Real(
         'albicev',
-        doc='Visible albedo of thick ice (OM3 0.86)',
+        doc='Visible albedo of cold thick bare ice, in [0, 1] (OM3 0.86)',
         units='',
         required=False,
         default=0.78,
-        has_min=True,
-        vmin=0.0,
-        has_max=True,
-        vmax=1.0,
         dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
     )
 
     albicei = Real(
         'albicei',
-        doc='Near-infrared albedo of thick ice (OM3 0.44)',
+        doc='Near-infrared albedo of cold thick bare ice, in [0, 1] (OM3 0.44)',
         units='',
         required=False,
         default=0.36,
-        has_min=True,
-        vmin=0.0,
-        has_max=True,
-        vmax=1.0,
         dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
     )
 
     albsnowv = Real(
         'albsnowv',
-        doc='Visible albedo of cold snow',
+        doc='Visible albedo of cold snow, in [0, 1]',
         units='',
         required=False,
         default=0.98,
-        has_min=True,
-        vmin=0.0,
-        has_max=True,
-        vmax=1.0,
         dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
     )
 
     albsnowi = Real(
         'albsnowi',
-        doc='Near-infrared albedo of cold snow',
+        doc='Near-infrared albedo of cold snow, in [0, 1]',
         units='',
         required=False,
         default=0.7,
-        has_min=True,
-        vmin=0.0,
-        has_max=True,
-        vmax=1.0,
         dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
     )
 
@@ -3892,6 +3896,42 @@ class OceanIceSw(Group):
         units='m',
         required=False,
         default=-1.0,
+        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+    )
+
+    sw_redist = Bool(
+        'sw_redist',
+        doc='Move shortwave absorbed in a near-melting layer to the surface (OM3 .true.)',
+        units='',
+        required=False,
+        default=False,
+        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+    )
+
+    sw_frac = Real(
+        'sw_frac',
+        doc='Fraction of the internal shortwave sw_redist moves to the surface; must be in (0, 1]',
+        units='',
+        required=False,
+        default=0.9,
+        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+    )
+
+    sw_dtemp = Real(
+        'sw_dtemp',
+        doc='sw_redist temperature offset from melting; must be >= 0',
+        units='K',
+        required=False,
+        default=0.02,
+        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+    )
+
+    sw_vis_frac = Real(
+        'sw_vis_frac',
+        doc='Visible fraction of the broadband downwelling shortwave in a forced run (near-IR is the complement); must be in [0, 1]',
+        units='',
+        required=False,
+        default=0.52,
         dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
     )
 
@@ -7796,4 +7836,4 @@ GENERATED_GROUPS = {
 }
 
 N_GROUPS = 67
-N_KNOBS = 851
+N_KNOBS = 857

@@ -537,23 +537,31 @@ contains
       call schema%add_group(g)
 
       gs%name = "ocean_ice_sw"
-      gs%doc = "CICE-port ice shortwave albedo parameters (scheme='cice'; "// &
-               "upstream CICE defaults)."
+      gs%doc = "CICE-port ice shortwave knobs of the CCSM3 scheme (Briegleb et al. "// &
+               "2004; scheme='cice'; upstream CICE defaults)."
+      ps => cfg%ocean%ice_sw%shortwave
+      call gs%add(nml_enum("shortwave", ps, "Shortwave scheme: ccsm3 (Briegleb et al. "// &
+                           "2004); the delta-Eddington options are refused (not ported)", &
+                           allowed=[character(len=16) :: "ccsm3", "dEdd", "dEdd_snicar_ad"], &
+                           dead_on_ocean_path=ICE_DEAD))
+      ps => cfg%ocean%ice_sw%albedo_type
+      call gs%add(nml_enum("albedo_type", ps, "Albedo parameterisation: ccsm3 "// &
+                           "(Briegleb et al. 2004); constant is refused (not ported)", &
+                           allowed=[character(len=16) :: "ccsm3", "constant"], &
+                           dead_on_ocean_path=ICE_DEAD))
       pr => cfg%ocean%ice_sw%albicev
-      call gs%add(nml_real("albicev", pr, "Visible albedo of thick ice (OM3 0.86)", &
-                           min=0.0_wp, max=1.0_wp, &
+      call gs%add(nml_real("albicev", pr, "Visible albedo of cold thick bare ice, "// &
+                           "in [0, 1] (OM3 0.86)", &
                            dead_on_ocean_path=ICE_DEAD))
       pr => cfg%ocean%ice_sw%albicei
-      call gs%add(nml_real("albicei", pr, "Near-infrared albedo of thick ice (OM3 0.44)", &
-                           min=0.0_wp, max=1.0_wp, &
+      call gs%add(nml_real("albicei", pr, "Near-infrared albedo of cold thick bare "// &
+                           "ice, in [0, 1] (OM3 0.44)", &
                            dead_on_ocean_path=ICE_DEAD))
       pr => cfg%ocean%ice_sw%albsnowv
-      call gs%add(nml_real("albsnowv", pr, "Visible albedo of cold snow", &
-                           min=0.0_wp, max=1.0_wp, &
+      call gs%add(nml_real("albsnowv", pr, "Visible albedo of cold snow, in [0, 1]", &
                            dead_on_ocean_path=ICE_DEAD))
       pr => cfg%ocean%ice_sw%albsnowi
-      call gs%add(nml_real("albsnowi", pr, "Near-infrared albedo of cold snow", &
-                           min=0.0_wp, max=1.0_wp, &
+      call gs%add(nml_real("albsnowi", pr, "Near-infrared albedo of cold snow, in [0, 1]", &
                            dead_on_ocean_path=ICE_DEAD))
       pr => cfg%ocean%ice_sw%ahmax
       call gs%add(nml_real("ahmax", pr, "Thickness above which the ice albedo is "// &
@@ -563,6 +571,23 @@ contains
       call gs%add(nml_real("snowpatch", pr, "Snow-cover patchiness length; negative "// &
                            "follows constants_set (0.02 icepack, 0.005 cesm)", &
                            units="m", &
+                           dead_on_ocean_path=ICE_DEAD))
+      pl => cfg%ocean%ice_sw%sw_redist
+      call gs%add(nml_logical("sw_redist", pl, "Move shortwave absorbed in a "// &
+                              "near-melting layer to the surface (OM3 .true.)", &
+                              dead_on_ocean_path=ICE_DEAD))
+      pr => cfg%ocean%ice_sw%sw_frac
+      call gs%add(nml_real("sw_frac", pr, "Fraction of the internal shortwave "// &
+                           "sw_redist moves to the surface; must be in (0, 1]", &
+                           dead_on_ocean_path=ICE_DEAD))
+      pr => cfg%ocean%ice_sw%sw_dtemp
+      call gs%add(nml_real("sw_dtemp", pr, "sw_redist temperature offset from "// &
+                           "melting; must be >= 0", units="K", &
+                           dead_on_ocean_path=ICE_DEAD))
+      pr => cfg%ocean%ice_sw%sw_vis_frac
+      call gs%add(nml_real("sw_vis_frac", pr, "Visible fraction of the broadband "// &
+                           "downwelling shortwave in a forced run (near-IR is the "// &
+                           "complement); must be in [0, 1]", &
                            dead_on_ocean_path=ICE_DEAD))
       call schema%add_group(gs)
 
