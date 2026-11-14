@@ -695,6 +695,7 @@ set(RDB_CICE_TESTS
     "test_cice_evp_c|test_cice_evp_c|collect_cice_evp_c_tests|cice_evp_c|ocean"
     "test_cice_upwind|test_cice_upwind|collect_cice_upwind_tests|cice_upwind|ocean"
     "test_cice_ridge_ice|test_cice_ridge_ice|collect_cice_ridge_ice_tests|cice_ridge_ice|ocean"
+    "test_cice_atm_inputs|test_cice_atm_inputs|collect_cice_atm_inputs_tests|cice_atm_inputs|ocean"
 )
 
 # Shared helpers of the ice tests (deterministic columns, ledger, golden

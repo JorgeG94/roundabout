@@ -78,7 +78,7 @@ module rdb_ice_evp_c
    public :: ice_evp_c_wrap_faces, ice_evp_c_div_stress, ice_evp_c_copy_faces
    public :: evp_strain_u_impl, evp_stress_t_impl, evp_stress_u_impl, evp_momentum_impl
    public :: evp_average_impl, evp_copy_faces_impl, evp_finish_impl, evp_div_stress_impl, evp_wrap_u_impl, evp_wrap_v_impl
-   public :: evp_div_x, evp_div_y, evp_visc_replpress
+   public :: evp_div_x, evp_div_y, evp_visc_replpress, evp_wavg2
 
    real(wp), parameter :: EPS13 = 1.0e-13_wp
 
