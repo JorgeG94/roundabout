@@ -1,9 +1,12 @@
 !! Sea-ice horizontal transport step of the CICE-port scheme: checks, pack,
-!! upwind advection, conservation test, unpack, post-transport state update.
+!! upwind or incremental-remapping advection, conservation test, unpack,
+!! post-transport state update.
 module rdb_ice_transport_cice
    !! Roundabout-original driver (no upstream ancestry; the kernels it calls
    !! carry their own attribution).  Donor-cell advection: Lipscomb and Hunke
-   !! (2004, Mon. Wea. Rev. 132 1341) for the tracer hierarchy it carries.
+   !! (2004, Mon. Wea. Rev. 132 1341) for the tracer hierarchy it carries; the
+   !! remap branch is the incremental remapping of Dukowicz and Baumgardner
+   !! (2000, J. Comput. Phys. 160 318) and Lipscomb and Hunke (2004).
    !!
    !! **What one call does** (`ice_step_transport`, in this order; every step
    !! is one device launch over the cells, no host loop over cells, no
@@ -23,7 +26,11 @@ module rdb_ice_transport_cice
    !!    sums "before" and the monotonicity bounds (only if the workspace was
    !!    built `want_bounds`);
    !! 4. if any entry check fired: STOP here (the state was never written);
-   !! 5. upwind advection into the second workspace (`rdb_ice_upwind`);
+   !! 5. advection into the second workspace: `advection = "upwind"` runs
+   !!    `rdb_ice_upwind` (one launch); `advection = "remap"` runs
+   !!    `rdb_ice_remap_flux::remap_advect` (departure geometry once, the
+   !!    reconstruction, then per category batch the edge fluxes and the update;
+   !!    five launches per category batch plus nine once), see below;
    !! 6. the advection counts non-finite new products and new areas below
    !!    `-puny`; when it counted any, and under `transport_check`, the per-cell
    !!    checks run on the result; under `transport_check` also the EFP sums
@@ -38,6 +45,23 @@ module rdb_ice_transport_cice
    !!    `vice`, `vsno`, and `aice0 = max(1 - aice, 0)`) or
    !!    `ICE_TRANSPORT_POST_CLEANUP` (the clean-up of the ridging step,
    !!    `ice_cleanup_itd_step` with rebin, `limit_aice` and the aggregate).
+   !!
+   !! **The remap branch.**  It needs the corner metrics of the C grid
+   !! (`dxU, dyU, earea, narea, uvm`, the optional trailing arguments; without them
+   !! the call is refused with `TRANSPORT_CFG_PARAMS`) and a workspace built with
+   !! `init(..., remap = .true.)` (`TRANSPORT_CFG_REMAP` otherwise).  HALO: three
+   !! ghost cells (`is >= 4`, `ie <= nx - 3`, likewise in `j`: `TRANSPORT_CFG_RANGE`)
+   !! with the state valid on the owned window plus TWO rings (the packed fields are
+   !! formed on `is-2:ie+2, js-2:je+2`; the reconstruction reads one ring, the flux
+   !! integrals of an owned edge one more), the face velocities and the metrics on the
+   !! geometry's documented windows (`rdb_ice_remap_geom`).  The geometry's own error
+   !! word (CFL: a departure displacement beyond a corner length, crossing departure
+   !! points; non-finite input; the edge flux adjustment not closing) is folded into
+   !! `ice_err` and `res%n_geom` counts the cells; a non-finite value in the
+   !! reconstruction's read ring, or a land mask other than 0/1, refuses the step.
+   !! `hm` must be exactly 0/1.  Memory: the geometry, the reconstruction and the
+   !! flux and reconstruction buffers of one category batch (`remap_flux_bytes_max`, default 1 GiB)
+   !! on top of the two packed workspaces; `tcw_bytes` reports the total.
    !!
    !! **The reference sequence, and which post step the step driver uses.**
    !! The reference runs transport, then the ridging (which closes the ADVECTED
@@ -104,7 +128,7 @@ module rdb_ice_transport_cice
    use rdb_efp, only: efp_t, efp_to_real
    use rdb_ice_errors, only: ICE_ERR_NONE, ICE_ERR_NONFINITE, ICE_ERR_TRANSPORT_CFL, &
                              ICE_ERR_TRANSPORT_NEG_AREA, ICE_ERR_TRANSPORT_CONSERV
-   use rdb_ice_params, only: ice_params_t, ice_transport_params_valid, ICE_ADVECT_UPWIND
+   use rdb_ice_params, only: ice_params_t, ice_transport_params_valid, ICE_ADVECT_UPWIND, ICE_ADVECT_REMAP
    use rdb_ice_aggregate, only: ice_aggregate_state_impl
    use rdb_ice_itd_cleanup, only: ice_cleanup_itd_step
    use rdb_ice_transport_pack, only: transport_workspace_t, transport_tracer_table_build, TT_OK, &
@@ -112,6 +136,11 @@ module rdb_ice_transport_cice
    use rdb_ice_transport_checks, only: transport_check_workspace_t, transport_nquantities, &
                                        transport_check_finite, transport_check_neg_area, transport_check_cfl, &
                                        transport_conserved_sums, transport_bounds, transport_check_monotone
+   use rdb_ice_remap_geom, only: remap_geom_workspace_t
+   use rdb_ice_remap_recon, only: recon_table_ok
+   use rdb_ice_remap_recon_batch, only: remap_recon_batch_t
+   use rdb_ice_remap_flux, only: remap_flux_workspace_t, remap_ledger_t, remap_advect, remap_default_nbatch, REMAP_CFG_OK, &
+                                 REMAP_CFG_TABLE, REMAP_CFG_RANGE
    use rdb_ice_upwind, only: upwind_advect, upwind_empty_tsfc, upwind_table_ok, UPWIND_CFG_OK, UPWIND_CFG_DEPEND, &
                              UPWIND_THICK_FLOOR
    implicit none
@@ -119,6 +148,7 @@ module rdb_ice_transport_cice
 
    public :: ICE_TRANSPORT_POST_NONE, ICE_TRANSPORT_POST_AGGREGATE, ICE_TRANSPORT_POST_CLEANUP
    public :: TRANSPORT_CFG_OK, TRANSPORT_CFG_PARAMS, TRANSPORT_CFG_WORKSPACE, TRANSPORT_CFG_TABLE, TRANSPORT_CFG_RANGE
+   public :: TRANSPORT_CFG_REMAP, TRANSPORT_REMAP_FLUX_BYTES_MAX
    public :: transport_cice_ws_t, transport_result_t
    public :: ice_step_transport, transport_conservation_compare_floor
 
@@ -132,13 +162,19 @@ module rdb_ice_transport_cice
    integer, parameter :: TRANSPORT_CFG_OK = 0
       !! Call accepted.
    integer, parameter :: TRANSPORT_CFG_PARAMS = 1
-      !! `advection` is not `ICE_ADVECT_UPWIND`, or `ncat`/`nilyr`/`nslyr` differ from the workspace's.
+      !! `advection` is not one the transport implements, `ncat`/`nilyr`/`nslyr` differ from the workspace's, or
+      !! `advection = remap` without the corner metrics (`dxU, dyU, earea, narea, uvm`).
    integer, parameter :: TRANSPORT_CFG_WORKSPACE = 2
       !! The workspace is not initialised / not the shape of the arrays.
    integer, parameter :: TRANSPORT_CFG_TABLE = 3
       !! The tracer table carries a dependent of a parent tracer (not supported by the upwind kernel).
    integer, parameter :: TRANSPORT_CFG_RANGE = 4
-      !! The range has no room for the one-cell ghost ring.
+      !! The range has no room for the ghost ring (one cell for upwind, THREE for remap).
+   integer, parameter :: TRANSPORT_CFG_REMAP = 5
+      !! `advection = remap` and the workspace was not built with `remap = .true.`, or the remap refused (land mask not 0/1,
+      !! workspaces of different extents).
+   integer(int64), parameter :: TRANSPORT_REMAP_FLUX_BYTES_MAX = 1073741824_int64
+      !! Default budget of the remap flux and reconstruction buffers (1 GiB): the category batch is the largest that fits.
 
    type :: transport_cice_ws_t
       !! Persistent buffers of the driver (see the module docstring, Memory).
@@ -150,6 +186,14 @@ module rdb_ice_transport_cice
       type(transport_workspace_t) :: b
          !! Advected output.
       type(transport_check_workspace_t) :: chk
+      logical :: remap = .false.
+         !! Built with the remap buffers (`gw`, `rw`, `fw`).
+      type(remap_geom_workspace_t) :: gw
+         !! Departure geometry (category independent, built once per step).
+      type(remap_recon_batch_t) :: rb
+         !! Reconstruction of one category batch (no stored masks).
+      type(remap_flux_workspace_t) :: fw
+         !! Flux buffers of one category batch.
       type(efp_t), allocatable :: before(:), after(:)
       real(wp), allocatable :: uE(:, :), vN(:, :)
          !! Face velocities shifted to the T-cell index (`uE(i,j) = u(i+1,j)`) for the CFL check.
@@ -187,6 +231,10 @@ module rdb_ice_transport_cice
          !! The conservation comparison ran (check on and the range small enough for the EFP sums).
       integer :: n_launch = 0
          !! Device launches issued by the driver (kernels, not the one-off host work).
+      type(remap_ledger_t) :: ledger
+         !! Remap: what the update's guards created or dropped (for the conservation ledger).
+      integer :: n_geom = 0
+         !! Remap: cells whose departure geometry raised a fatal bit (CFL, non-finite, area mismatch).
    end type transport_result_t
 
 contains
@@ -195,16 +243,24 @@ contains
    ! workspace
    ! ------------------------------------------------------------------
 
-   subroutine tcw_init(this, nx, ny, ncat, nilyr, nslyr, want_bounds, ierr)
+   subroutine tcw_init(this, nx, ny, ncat, nilyr, nslyr, want_bounds, ierr, remap, remap_nbatch, remap_flux_bytes_max)
       !! Build the table for `nilyr`/`nslyr`, allocate both packed workspaces
       !! and the check scratch.  `ierr /= 0` (a `TT_ERR_*` or
-      !! `TRANSPORT_CFG_*`): nothing is left allocated.
+      !! `TRANSPORT_CFG_*`): nothing is left allocated.  `remap = .true.`
+      !! also allocates the incremental-remapping buffers (geometry,
+      !! reconstruction, flux); the flux buffers hold `remap_nbatch` category
+      !! indices (`1..ncat+1`), by default the largest batch within
+      !! `remap_flux_bytes_max` (default `TRANSPORT_REMAP_FLUX_BYTES_MAX`).
       class(transport_cice_ws_t), intent(inout) :: this
       integer, intent(in) :: nx, ny, ncat, nilyr, nslyr
       logical, intent(in) :: want_bounds
       integer, intent(out) :: ierr
+      logical, intent(in), optional :: remap
+      integer, intent(in), optional :: remap_nbatch
+      integer(int64), intent(in), optional :: remap_flux_bytes_max
       type(transport_workspace_t) :: tmp
-      integer :: ierr2
+      integer :: ierr2, nbatch
+      integer(int64) :: bmax
 
       ierr = 0
       call this%destroy()
@@ -240,6 +296,21 @@ contains
       allocate (this%uE(nx, ny), this%vN(nx, ny))
       this%uE = 0.0_wp
       this%vN = 0.0_wp
+      if (present(remap)) this%remap = remap
+      if (this%remap) then
+         bmax = TRANSPORT_REMAP_FLUX_BYTES_MAX
+         if (present(remap_flux_bytes_max)) bmax = remap_flux_bytes_max
+         nbatch = remap_default_nbatch(nx, ny, ncat, this%ntrace, bmax)
+         if (present(remap_nbatch)) nbatch = remap_nbatch
+         call this%gw%init(nx, ny)
+         call this%rb%init(nx, ny, ncat, this%ntrace, nbatch, ierr2)
+         if (ierr2 == 0) call this%fw%init(nx, ny, ncat, this%ntrace, nbatch, ierr2)
+         if (ierr2 /= 0) then
+            call this%destroy()
+            ierr = TRANSPORT_CFG_REMAP
+            return
+         end if
+      end if
       this%is_init = .true.
    end subroutine tcw_init
 
@@ -250,6 +321,11 @@ contains
       call this%a%enter_data()
       call this%b%enter_data()
       call this%chk%enter_data()
+      if (this%remap) then
+         call this%gw%enter_data()
+         call this%rb%enter_data()
+         call this%fw%enter_data()
+      end if
       !$acc enter data copyin(this%uE, this%vN)
       this%mapped = .true.
    end subroutine tcw_enter_data
@@ -258,6 +334,11 @@ contains
       class(transport_cice_ws_t), intent(inout) :: this
       if (.not. this%mapped) return
       !$acc exit data delete(this%uE, this%vN)
+      if (this%remap) then
+         call this%fw%exit_data()
+         call this%rb%exit_data()
+         call this%gw%exit_data()
+      end if
       call this%chk%exit_data()
       call this%b%exit_data()
       call this%a%exit_data()
@@ -270,6 +351,10 @@ contains
       call this%a%destroy()
       call this%b%destroy()
       call this%chk%destroy()
+      call this%fw%destroy()
+      call this%rb%destroy()
+      call this%gw%destroy()
+      this%remap = .false.
       if (allocated(this%before)) deallocate (this%before)
       if (allocated(this%after)) deallocate (this%after)
       if (allocated(this%uE)) deallocate (this%uE)
@@ -289,6 +374,7 @@ contains
       class(transport_cice_ws_t), intent(in) :: this
       integer(int64) :: b
       b = this%a%bytes() + this%b%bytes() + this%chk%bytes()
+      if (this%remap) b = b + this%gw%bytes() + this%rb%bytes() + this%fw%bytes()
       if (allocated(this%uE)) b = b + int(size(this%uE), int64)*8_int64
       if (allocated(this%vN)) b = b + int(size(this%vN), int64)*8_int64
    end function tcw_bytes
@@ -299,7 +385,8 @@ contains
 
    subroutine ice_step_transport(w, p, dt, post, is, ie, js, je, u, v, HTE, HTN, tarea, dxT, dyT, epm, npm, hm, Tf, &
                                  hin_max, aice0, aicen, vicen, vsnon, Tsfcn, qicen, sicen, qsnon, &
-                                 aice, vice, vsno, Tsfc_c, qice_c, sice_c, qsno_c, fresh, fsalt, fhocn, ice_err, res)
+                                 aice, vice, vsno, Tsfc_c, qice_c, sice_c, qsno_c, fresh, fsalt, fhocn, ice_err, res, &
+                                 dxU, dyU, earea, narea, uvm)
       !! One transport step of the owned cells `is:ie, js:je` over the
       !! SoA state (see the module docstring for the order, the entry/exit
       !! contract and what the post step is).  Every array must be
@@ -327,11 +414,15 @@ contains
       real(wp), intent(inout) :: fresh(w%nx, w%ny), fsalt(w%nx, w%ny), fhocn(w%nx, w%ny)
       integer(int32), intent(inout) :: ice_err(w%nx, w%ny)
       type(transport_result_t), intent(out) :: res
+      real(wp), intent(in), optional :: dxU(w%nx, w%ny), dyU(w%nx, w%ny), earea(w%nx, w%ny), narea(w%nx, w%ny)
+      real(wp), intent(in), optional :: uvm(w%nx, w%ny)
 
       integer :: nxg, nyg, ncatg, nilg, nslg, ntrg
       integer :: ni, nviol, nbad, nneg, cfg, nbadv
+      integer :: nrecon, nlaunch, pi0, pi1, pj0, pj1
+      integer :: ngeo(3)
       integer(int32) :: ierr_pack, ierr_cmp
-      logical :: check, ok, okb
+      logical :: check, ok, okb, remap
       real(wp) :: puny
 
       res%ierr = ICE_ERR_NONE
@@ -346,18 +437,47 @@ contains
       nilg = w%nilyr
       nslg = w%nslyr
       ntrg = w%ntrace
-      if (p%transport%advection /= ICE_ADVECT_UPWIND .or. .not. ice_transport_params_valid(p%transport) &
+      if (.not. ice_transport_params_valid(p%transport) &
           .or. p%ncat /= ncatg .or. p%nilyr /= nilg .or. p%nslyr /= nslg) then
          res%cfg = TRANSPORT_CFG_PARAMS
          return
       end if
-      if (.not. upwind_table_ok(w%a)) then
-         res%cfg = TRANSPORT_CFG_TABLE
-         return
-      end if
-      if (is < 2 .or. ie > nxg - 1 .or. js < 2 .or. je > nyg - 1 .or. ie < is .or. je < js) then
-         res%cfg = TRANSPORT_CFG_RANGE
-         return
+      remap = p%transport%advection == ICE_ADVECT_REMAP
+      if (remap) then
+         if (.not. (present(dxU) .and. present(dyU) .and. present(earea) .and. present(narea) .and. present(uvm))) then
+            res%cfg = TRANSPORT_CFG_PARAMS
+            return
+         end if
+         if (.not. w%remap) then
+            res%cfg = TRANSPORT_CFG_REMAP
+            return
+         end if
+         if (.not. recon_table_ok(w%a)) then
+            res%cfg = TRANSPORT_CFG_TABLE
+            return
+         end if
+         ! three ghost cells: the departure geometry reads `earea` three cells to the west / south of the window
+         if (is < 4 .or. ie > nxg - 3 .or. js < 4 .or. je > nyg - 3 .or. ie < is .or. je < js) then
+            res%cfg = TRANSPORT_CFG_RANGE
+            return
+         end if
+         pi0 = is - 2
+         pi1 = ie + 2
+         pj0 = js - 2
+         pj1 = je + 2
+      else
+         if (.not. upwind_table_ok(w%a)) then
+            res%cfg = TRANSPORT_CFG_TABLE
+            return
+         end if
+         if (is < 2 .or. ie > nxg - 1 .or. js < 2 .or. je > nyg - 1 .or. ie < is .or. je < js) then
+            res%cfg = TRANSPORT_CFG_RANGE
+            return
+         end if
+         pi0 = is - 1
+         pi1 = ie + 1
+         pj0 = js - 1
+         pj1 = je + 1
       end if
       puny = p%c%puny
       check = p%transport%check
@@ -373,21 +493,21 @@ contains
       res%n_nonfinite = res%n_nonfinite + nbadv
       if (res%ierr /= ICE_ERR_NONE) return
 
-      ! 2. pack over the owned cells plus one ring; volumes of negligible areas are carried
-      call transport_pack(w%a, p%c, nilg, nslg, is - 1, ie + 1, js - 1, je + 1, aice0, aicen, vicen, vsnon, &
+      ! 2. pack over the owned cells plus one ring (remap: two); volumes of negligible areas are carried
+      call transport_pack(w%a, p%c, nilg, nslg, pi0, pi1, pj0, pj1, aice0, aicen, vicen, vsnon, &
                           Tsfcn, qicen, sicen, qsnon, ierr_pack, thick_floor=UPWIND_THICK_FLOOR)
       res%n_launch = res%n_launch + 1
       res%ierr = ior(res%ierr, ierr_pack)
 
       ! 3. entry checks on the packed fields (per cell: always when the pack saw a non-finite value)
       if (check .or. ierr_pack /= ICE_ERR_NONE) then
-         call transport_check_finite(nxg, nyg, ncatg, ntrg, is - 1, ie + 1, js - 1, je + 1, w%a%aim, w%a%trm, ice_err, nviol)
+         call transport_check_finite(nxg, nyg, ncatg, ntrg, pi0, pi1, pj0, pj1, w%a%aim, w%a%trm, ice_err, nviol)
          if (nviol > 0) res%ierr = ior(res%ierr, ICE_ERR_NONFINITE)
          res%n_nonfinite = res%n_nonfinite + nviol
          res%n_launch = res%n_launch + 1
       end if
       if (check) then
-         call transport_check_neg_area(nxg, nyg, ncatg, is - 1, ie + 1, js - 1, je + 1, puny, w%a%aim, ice_err, nviol)
+         call transport_check_neg_area(nxg, nyg, ncatg, pi0, pi1, pj0, pj1, puny, w%a%aim, ice_err, nviol)
          if (nviol > 0) res%ierr = ior(res%ierr, ICE_ERR_TRANSPORT_NEG_AREA)
          res%n_neg = res%n_neg + nviol
          res%n_launch = res%n_launch + 1
@@ -406,13 +526,39 @@ contains
          end if
       end if
 
-      ! 5. advection (one launch)
-      call upwind_advect(w%a, w%b, is, ie, js, je, dt, puny, u, v, HTE, HTN, tarea, epm, npm, nbad, nneg, cfg)
-      if (cfg /= UPWIND_CFG_OK) then
-         res%cfg = merge(TRANSPORT_CFG_TABLE, TRANSPORT_CFG_WORKSPACE, cfg == UPWIND_CFG_DEPEND)
-         return
+      ! 5. advection: upwind (one launch) or incremental remapping (geometry, reconstruction, fluxes, update)
+      if (remap) then
+         call remap_advect(w%a, w%b, w%gw, w%rb, w%fw, is, ie, js, je, dt, puny, u, v, dxU, dyU, HTE, HTN, tarea, earea, &
+                           narea, epm, npm, uvm, hm, ice_err, nbad, nneg, ngeo, nrecon, nlaunch, res%ledger, cfg)
+         if (cfg /= REMAP_CFG_OK) then
+            if (cfg == REMAP_CFG_TABLE) then
+               res%cfg = TRANSPORT_CFG_TABLE
+            else if (cfg == REMAP_CFG_RANGE) then
+               res%cfg = TRANSPORT_CFG_RANGE
+            else
+               res%cfg = TRANSPORT_CFG_REMAP
+            end if
+            return
+         end if
+         res%n_launch = res%n_launch + nlaunch
+         res%n_geom = sum(ngeo)
+         if (ngeo(1) > 0) res%ierr = ior(res%ierr, ICE_ERR_TRANSPORT_CFL)
+         if (ngeo(2) > 0) res%ierr = ior(res%ierr, ICE_ERR_NONFINITE)
+         if (ngeo(3) > 0) res%ierr = ior(res%ierr, ICE_ERR_TRANSPORT_CONSERV)
+         if (nrecon > 0) then
+            res%ierr = ior(res%ierr, ICE_ERR_NONFINITE)
+            res%n_nonfinite = res%n_nonfinite + nrecon
+            call mark_first_cell(ice_err, nxg, nyg, is, js, ICE_ERR_NONFINITE)
+         end if
+         if (res%ierr /= ICE_ERR_NONE) return
+      else
+         call upwind_advect(w%a, w%b, is, ie, js, je, dt, puny, u, v, HTE, HTN, tarea, epm, npm, nbad, nneg, cfg)
+         if (cfg /= UPWIND_CFG_OK) then
+            res%cfg = merge(TRANSPORT_CFG_TABLE, TRANSPORT_CFG_WORKSPACE, cfg == UPWIND_CFG_DEPEND)
+            return
+         end if
+         res%n_launch = res%n_launch + 1
       end if
-      res%n_launch = res%n_launch + 1
       res%n_nonfinite = res%n_nonfinite + nbad
       res%n_neg = res%n_neg + nneg
       if (nbad > 0) res%ierr = ior(res%ierr, ICE_ERR_NONFINITE)
@@ -472,14 +618,23 @@ contains
       !! A global conservation failure has no cell: mark the first owned cell so the cell error word carries it.
       integer, intent(in) :: nx, ny, is, js
       integer(int32), intent(inout) :: ice_err(nx, ny)
+
+      call mark_first_cell(ice_err, nx, ny, is, js, ICE_ERR_TRANSPORT_CONSERV)
+   end subroutine mark_all_conserv
+
+   subroutine mark_first_cell(ice_err, nx, ny, is, js, bit)
+      !! OR `bit` into the first owned cell (a failure with no cell of its own).
+      integer, intent(in) :: nx, ny, is, js
+      integer(int32), intent(inout) :: ice_err(nx, ny)
+      integer(int32), intent(in) :: bit
       integer :: i, j
 
       i = is
       j = js
       !$acc serial present(ice_err)
-      ice_err(i, j) = ior(ice_err(i, j), ICE_ERR_TRANSPORT_CONSERV)
+      ice_err(i, j) = ior(ice_err(i, j), bit)
       !$acc end serial
-   end subroutine mark_all_conserv
+   end subroutine mark_first_cell
 
    subroutine transport_conservation_compare_floor(ncat, ntrace, before, after, puny, ierr, worst_rel, worst_q)
       !! Conservation comparison with an absolute floor (host, a few scalars).  Quantity order as

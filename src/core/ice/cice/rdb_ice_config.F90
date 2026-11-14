@@ -8,8 +8,8 @@
 !! ITD and floe-geometry knobs), `&ocean_ice_sw_nml` (albedo parameters),
 !! `&ocean_ice_ridge_nml` (ridging and strength), `&ocean_ice_dyn_nml` (C-grid
 !! EVP dynamics keys, `dyn_scheme` ("sis2_c" | "cice_c": which C-grid core runs under
-!! `scheme="sis2"`), and the transport keys `advection`, `transport_check`;
-!! `advection="remap"` is refused under `scheme="cice"` until the remap PR) and
+!! `scheme="sis2"`), and the transport keys `advection` ("remap" | "upwind", both
+!! runnable) and `transport_check`) and
 !! `&ocean_ice_atm_nml`
 !! (atmosphere-ice boundary layer; the option keys the port supports one value
 !! of are refused here with a message naming the value); every default is the
@@ -31,7 +31,7 @@ module rdb_ice_config
    use rdb_config, only: config_t, ocean_ice_atm_config_t
    use rdb_ice_dims, only: ICE_NCAT_MAX, ICE_NILYR_MAX
    use rdb_ice_params, only: ICE_ADVECT_UPWIND, ICE_ADVECT_REMAP, &
-             ice_transport_params_t, ice_transport_params_valid, ice_params_t, ice_params_default, ice_constants, ice_constants_t, &
+                             ice_params_t, ice_params_default, ice_constants, ice_constants_t, &
                              ice_atm_params_finalize, ice_ridge_params_t, ice_ridge_params_default, &
                              ice_ridge_params_valid, ice_dyn_params_t, ice_dyn_params_default, &
                              ice_dyn_params_check, ICE_DYN_NMSG, ICE_VISC_AVG_ZETA, ICE_VISC_AVG_STRENGTH, &
@@ -97,7 +97,6 @@ contains
       type(ice_dyn_params_t) :: dyp
       integer :: dcodes(ICE_DYN_NMSG)
       integer :: ndc, k
-      type(ice_transport_params_t) :: tp
 
       msgs = ""
       n = 0
@@ -427,16 +426,8 @@ contains
 
       ! ---- horizontal transport ----
       select case (trim(adjustl(cfg%ocean%ice_dyn%advection)))
-      case ("upwind")
+      case ("upwind", "remap")
          continue
-      case ("remap")
-         tp%advection = ICE_ADVECT_REMAP
-         tp%check = .false.
-         if (ice_scheme_is_cice(cfg) .and. .not. ice_transport_params_valid(tp)) then
-            call add_msg(msgs, n, "&ocean_ice_dyn_nml advection='remap' is not runnable "// &
-                         "yet (incremental remapping arrives with the remap PR); "// &
-                         "use advection='upwind'")
-         end if
       case default
          call add_msg(msgs, n, "&ocean_ice_dyn_nml advection must be 'remap' or 'upwind'")
       end select

@@ -761,8 +761,8 @@ contains
                            units="m/s"))
       ps => cfg%ocean%ice_dyn%advection
       call gd%add(nml_enum("advection", ps, "Horizontal transport: remap = incremental "// &
-                           "remapping (Lipscomb and Hunke 2004; upstream default, refused "// &
-                           "until the remap PR), upwind = first-order upwind", &
+                           "remapping (Lipscomb and Hunke 2004; upstream default), "// &
+                           "upwind = first-order upwind", &
                            allowed=[character(len=8) :: "remap", "upwind"], &
                            dead_on_ocean_path=ICE_DEAD))
       pl => cfg%ocean%ice_dyn%transport_check

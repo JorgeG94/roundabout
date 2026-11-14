@@ -4306,7 +4306,7 @@ class OceanIceDyn(Group):
 
     advection = Enum(
         'advection',
-        doc='Horizontal transport: remap = incremental remapping (Lipscomb and Hunke 2004; upstream default, refused until the remap PR), upwind = first-order upwind',
+        doc='Horizontal transport: remap = incremental remapping (Lipscomb and Hunke 2004; upstream default), upwind = first-order upwind',
         units='',
         required=False,
         default='remap',

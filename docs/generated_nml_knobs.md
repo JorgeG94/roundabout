@@ -748,7 +748,7 @@ CICE-port ice dynamics and transport knobs (upstream CICE code defaults; the EVP
 | `visc_method` | `"avg_zeta"` |  | Corner shear viscosity: avg_zeta (mean of the T viscosities) or avg_strength (rebuilt from the mean strength); other values are refused |
 | `cdn_ocn` | `0.5360000000E-02` |  | Ice-ocean drag coefficient (upstream dragio); must be >= 0 |
 | `vel_cap` | `0.1000000000E+02` | m/s | Face speed above which the velocity guard raises ICE_ERR_DYN_VEL (never clamps); must be > 0 |
-| `advection` | `"remap"` |  | Horizontal transport: remap = incremental remapping (Lipscomb and Hunke 2004; upstream default, refused until the remap PR), upwind = first-order upwind |
+| `advection` | `"remap"` |  | Horizontal transport: remap = incremental remapping (Lipscomb and Hunke 2004; upstream default), upwind = first-order upwind |
 | `transport_check` | `.false.` |  | Run the transport checks (non-finite entry, negative area, CFL, conservation of area and tracers, monotonicity) |
 | `ndtd` | `1` |  | Dynamics substeps per ice step; only 1 is supported (refused otherwise) |
 

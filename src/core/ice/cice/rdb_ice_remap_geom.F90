@@ -81,6 +81,10 @@ module rdb_ice_remap_geom
    !! in either component, or departure points that cross (`DR` not east of
    !! `DL`), raise `ICE_ERR_TRANSPORT_CFL` (the reference checks only one
    !! sign, against the wrong length); outputs are then unspecified.
+   !! (Regression: a departure point a hair off a cell side puts the axis crossing `IC`
+   !! of `DL-DR` ON the corner after rounding; the pinned-crossing tests of the edge flux
+   !! adjustment are closed intervals, `xcl <= xic < 0` and `0 <= xic <= xcr`, so such an
+   !! edge is adjusted instead of falling through unadjusted, `test_cice_remap_flux`.)
    !!
    !! **The case table.**  The side cells are decided by where the lines
    !! `DL-DM`, `DM-DR` cut the sides `x = -+1/2` and the line `DL-DR` cuts the
@@ -742,7 +746,7 @@ contains
                xicr = 0.0_wp
             end if
             yicr = 0.0_wp
-         else if (xic < 0.0_wp .and. xic > xcl) then
+         else if (xic < 0.0_wp .and. xic >= xcl) then
             ! different sides, axis crossing left of centre: pin ICL = IC
             ic_e = 2
             xicl = xic
@@ -763,7 +767,7 @@ contains
                xicr = 0.0_wp
             end if
             yicr = 0.0_wp
-         else if (xic >= 0.0_wp .and. xic < xcr) then
+         else if (xic >= 0.0_wp .and. xic <= xcr) then
             ! different sides, axis crossing right of centre: pin ICR = IC
             ic_e = 3
             xicr = xic

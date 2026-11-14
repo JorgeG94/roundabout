@@ -23,8 +23,10 @@ set(RDB_ICE_CORE_SOURCES
     ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_params.F90
     ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_rad_state.F90
     ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_radiation.F90
+    ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_remap_flux.F90
     ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_remap_geom.F90
     ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_remap_recon.F90
+    ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_remap_recon_batch.F90
     ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_restart_convert.F90
     ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_ridge.F90
     ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_ridge_itd.F90

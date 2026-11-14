@@ -868,15 +868,16 @@ contains
       type(error_type), allocatable, intent(out) :: error
       type(config_t) :: cfg
 
-      ! remap is parsed and accepted under sis2 (inert), refused under cice
+      ! remap and upwind are both accepted (remap is runnable since the remap PR), under sis2 and under cice
       call parse("&ocean_ice_dyn_nml advection='remap' /", cfg, error)
       if (allocated(error)) return
-      call check(error, has_msg(cfg, "advection='remap' is not runnable"), .false., "remap inert under sis2")
+      call check(error, has_msg(cfg, "advection="), .false., "remap accepted under sis2")
       if (allocated(error)) return
-      call expect_refusal("&ocean_ice_nml scheme='cice' /"//new_line('a')// &
-                          "&ocean_ice_dyn_nml advection='remap' /", "advection='remap' is not runnable", error)
+      call parse("&ocean_ice_nml scheme='cice' /"//new_line('a')// &
+                 "&ocean_ice_dyn_nml advection='remap' /", cfg, error)
       if (allocated(error)) return
-      ! upwind is accepted under cice (the scheme itself is still refused: not runnable)
+      call check(error, has_msg(cfg, "advection="), .false., "remap accepted under cice (the scheme itself is still refused: not runnable)")
+      if (allocated(error)) return
       call parse("&ocean_ice_nml scheme='cice' /"//new_line('a')// &
                  "&ocean_ice_dyn_nml advection='upwind' /", cfg, error)
       if (allocated(error)) return

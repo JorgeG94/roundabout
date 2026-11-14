@@ -745,8 +745,8 @@ module rdb_config
          !! Face speed above which `ICE_ERR_DYN_VEL` is raised [m/s]; > 0.
       character(len=8) :: advection = "remap"
          !! Horizontal transport of the ice state: `"remap"` (incremental
-         !! remapping, Lipscomb and Hunke 2004; upstream default, REFUSED until
-         !! the remap PR) or `"upwind"` (first-order upwind).
+         !! remapping, Lipscomb and Hunke 2004; upstream default; needs three
+         !! ghost cells) or `"upwind"` (first-order upwind).
       logical :: transport_check = .false.
          !! Run the transport checks (non-finite entry, negative area, CFL,
          !! conservation of area and of area-weighted tracers, monotonicity);
