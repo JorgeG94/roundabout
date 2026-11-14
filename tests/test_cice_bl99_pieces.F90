@@ -12,14 +12,15 @@ module test_cice_bl99_pieces
    !! `do concurrent` device test.  Expected values are closed forms written
    !! here, never the port's own output.
    use, intrinsic :: iso_fortran_env, only: int32, int64
-   use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan
+   use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan, ieee_positive_inf, ieee_negative_inf
    use testdrive, only: new_unittest, unittest_type, error_type, check
    use rdb_constants, only: wp
    use rdb_ice_errors, only: ICE_ERR_NONFINITE, ICE_ERR_NEG_THICK, ICE_ERR_TSN_RANGE, ICE_ERR_SIN_LOW, ICE_ERR_TIN_RANGE
    use rdb_ice_params, only: ice_constants_t, ice_constants, ICE_CONSTANTS_ICEPACK, ICE_CONSTANTS_CESM, &
                              ICE_CONDUCT_BUBBLY, ICE_CONDUCT_MU71, ice_q_from_T
    use rdb_ice_bl99, only: ICE_NMAT_MAX, ICE_KIMIN, ICE_BETAK, ice_layer_conductivity, ice_conductivity, &
-                           ice_matrix_calc_Tsfc, ice_tridiag_solver
+                           ice_matrix_calc_Tsfc, ice_tridiag_solver, ice_conductivity_core, ice_matrix_calc_Tsfc_core, &
+                           ice_tridiag_solver_core
    use rdb_ice_vprofile, only: ICE_TMIN, ice_init_vertical_profile
    use lcg_deterministic, only: lcg_next, lcg_unit
    use test_cice_util, only: ice_random_columns
@@ -47,6 +48,9 @@ contains
                   new_unittest("vprofile_repairs", test_vp_repairs), &
                   new_unittest("vprofile_range_errors", test_vp_range), &
                   new_unittest("nan_in_flags_and_leaves_columns", test_nan), &
+                  new_unittest("core_tridiag_nonfinite_flags", test_core_tridiag_nonfinite), &
+                  new_unittest("core_chain_nonfinite_flags", test_core_chain_nonfinite), &
+                  new_unittest("wrappers_equal_cores_bitwise", test_wrappers_equal_cores), &
                   new_unittest("device_chain_matches_host", test_device) &
                   ]
    end subroutine collect_cice_bl99_pieces_tests
@@ -867,6 +871,150 @@ contains
                                      hin, hl, hsn, hsl, einit, ierr)
       call check(error, ierr == ICE_ERR_NEG_THICK .and. hin == 0.0_wp .and. einit == 0.0_wp, "vicen = 0 flagged NEG_THICK")
    end subroutine test_vp_range
+
+   ! ------------------------------------------------------------------
+   ! unchecked cores: non-finite input must still end in the error bit
+   ! ------------------------------------------------------------------
+
+   subroutine test_core_tridiag_nonfinite(error)
+      !! `ice_tridiag_solver_core` has no entry scan: NaN, +Inf and -Inf placed in
+      !! `diag(k)`, `sbdiag(k)`, `spdiag(k-1)` and `rhs(k)` (every k > 1), with
+      !! and without a coupled super-diagonal, must each raise `ICE_ERR_NONFINITE`
+      !! (through the pivot or the solution test).
+      type(error_type), allocatable, intent(out) :: error
+      integer, parameter :: NM = 5
+      real(wp) :: bad(3), sb(NM), dg(NM), sp(NM), rh(NM), x(NM), spbase
+      integer(int32) :: ierr
+      integer :: ib, k, which, isp
+      character(len=64) :: msg
+
+      bad = [ieee_value(1.0_wp, ieee_quiet_nan), ieee_value(1.0_wp, ieee_positive_inf), &
+             ieee_value(1.0_wp, ieee_negative_inf)]
+      do isp = 1, 2
+         spbase = merge(0.0_wp, -0.1_wp, isp == 1)
+         do ib = 1, 3
+            do k = 2, NM
+               do which = 1, 4
+                  sb = -0.1_wp; dg = 2.0_wp; sp = spbase; rh = 1.0_wp
+                  if (which == 1) dg(k) = bad(ib)
+                  if (which == 2) sb(k) = bad(ib)
+                  if (which == 3) sp(k - 1) = bad(ib)
+                  if (which == 4) rh(k) = bad(ib)
+                  x = 0.0_wp
+                  ierr = 0_int32
+                  call ice_tridiag_solver_core(NM, sb, dg, sp, rh, x, ierr)
+                  write (msg, '(a,i0,a,i0,a,i0,a,i0)') "core tridiag flags: bad ", ib, " k ", k, " array ", which, " sp ", isp
+                  call check(error, iand(ierr, ICE_ERR_NONFINITE) /= 0_int32, trim(msg))
+                  if (allocated(error)) return
+               end do
+            end do
+         end do
+      end do
+   end subroutine test_core_tridiag_nonfinite
+
+   subroutine test_core_chain_nonfinite(error)
+      !! The unchecked matrix + Thomas chain flags a NaN `kh(k)` or `etai(k)` and
+      !! an Inf `kh(1)` on a snow column, for the cold and the melting surface.
+      type(error_type), allocatable, intent(out) :: error
+      integer, parameter :: NIL = 4, NM = NIL + 2
+      real(wp) :: kh(NM), etai(NIL), Tin(NIL), Isw(NIL), Ts1(1), etas(1), Ssw(1)
+      real(wp) :: sb(NM), dg(NM), sp(NM), rh(NM), x(NM), nan, inf
+      integer(int32) :: ierr
+      integer :: icase, icold
+      logical :: l_cold
+      character(len=64) :: msg
+
+      nan = ieee_value(1.0_wp, ieee_quiet_nan)
+      inf = ieee_value(1.0_wp, ieee_positive_inf)
+      Tin = -5.0_wp
+      Isw = 0.0_wp
+      Ts1 = -5.0_wp
+      Ssw = 0.0_wp
+      etas = 0.1_wp
+      do icold = 1, 2
+         l_cold = icold == 1
+         ! cases 1..NM: NaN kh(k); NM+1..NM+NIL: NaN etai(k); last: Inf kh(1)
+         do icase = 1, NM + NIL + 1
+            kh = 3.0_wp
+            etai = 0.02_wp
+            if (icase <= NM) kh(icase) = nan
+            if (icase > NM .and. icase <= NM + NIL) etai(icase - NM) = nan
+            if (icase == NM + NIL + 1) kh(1) = inf
+            sb = 0.0_wp; dg = 1.0_wp; sp = 0.0_wp; rh = 0.0_wp; x = 0.0_wp
+            ierr = 0_int32
+            call ice_matrix_calc_Tsfc_core(.true., l_cold, NIL, 1, -0.5_wp, -1.8_wp, 1.0_wp, -10.0_wp, Tin, Ts1, kh, Ssw, Isw, &
+                                           etai, etas, sb, dg, sp, rh)
+            call ice_tridiag_solver_core(NM, sb, dg, sp, rh, x, ierr)
+            write (msg, '(a,i0,a,i0)') "core chain flags: case ", icase, " cold ", icold
+            call check(error, iand(ierr, ICE_ERR_NONFINITE) /= 0_int32, trim(msg))
+            if (allocated(error)) return
+         end do
+      end do
+   end subroutine test_core_chain_nonfinite
+
+   subroutine test_wrappers_equal_cores(error)
+      !! Each public checked routine equals its core bitwise on finite input.
+      type(error_type), allocatable, intent(out) :: error
+      type(ice_constants_t) :: c
+      integer, parameter :: NIL = 4, NM = NIL + 2
+      real(wp) :: T(NIL), S(NIL), khw(NM), khc(NM), Tin(NIL), Isw(NIL), etai(NIL), Ts1(1), Ssw(1), etas(1)
+      real(wp) :: sbw(NM), dgw(NM), spw(NM), rhw(NM), sbc(NM), dgc(NM), spc(NM), rhc(NM), xw(NM), xc(NM)
+      integer(int32) :: ierr
+      integer :: icold, isnow
+      logical :: l_cold, l_snow
+
+      c = ice_constants(ICE_CONSTANTS_ICEPACK)
+      T = [-9.0_wp, -6.5_wp, -4.0_wp, -2.5_wp]
+      S = [1.0_wp, 2.0_wp, 3.0_wp, 3.5_wp]
+      Tin = T
+      Isw = [3.0_wp, 2.0_wp, 1.0_wp, 0.5_wp]
+      etai = [0.021_wp, 0.019_wp, 0.023_wp, 0.02_wp]
+      Ts1 = -7.0_wp
+      Ssw = 0.7_wp
+      etas = 0.13_wp
+      do isnow = 1, 2
+         l_snow = isnow == 1
+         do icold = 1, 2
+            l_cold = icold == 1
+            khw = -1.0_wp
+            khc = -1.0_wp
+            ierr = 0_int32
+            call ice_conductivity(l_snow, NIL, 1, 0.31_wp, 0.07_wp, T, S, c, ICE_CONDUCT_BUBBLY, khw, ierr)
+            call ice_conductivity_core(l_snow, NIL, 1, 0.31_wp, 0.07_wp, T, S, c, ICE_CONDUCT_BUBBLY, khc)
+            call check(error, ierr == 0_int32 .and. same_bits(khw, khc), "conductivity wrapper == core")
+            if (allocated(error)) return
+            sbw = 9.0_wp; dgw = 9.0_wp; spw = 9.0_wp; rhw = 9.0_wp
+            sbc = 9.0_wp; dgc = 9.0_wp; spc = 9.0_wp; rhc = 9.0_wp
+            call ice_matrix_calc_Tsfc(l_snow, l_cold, NIL, 1, -0.4_wp, -1.8_wp, 2.0_wp, -9.0_wp, Tin, Ts1, khw, Ssw, Isw, &
+                                      etai, etas, sbw, dgw, spw, rhw, ierr)
+            call ice_matrix_calc_Tsfc_core(l_snow, l_cold, NIL, 1, -0.4_wp, -1.8_wp, 2.0_wp, -9.0_wp, Tin, Ts1, khc, Ssw, Isw, &
+                                           etai, etas, sbc, dgc, spc, rhc)
+            call check(error, ierr == 0_int32 .and. same_bits(sbw, sbc) .and. same_bits(dgw, dgc) .and. same_bits(spw, spc) &
+                       .and. same_bits(rhw, rhc), "matrix wrapper == core")
+            if (allocated(error)) return
+            xw = 0.0_wp
+            xc = 0.0_wp
+            call ice_tridiag_solver(NM, sbw, dgw, spw, rhw, xw, ierr)
+            call ice_tridiag_solver_core(NM, sbc, dgc, spc, rhc, xc, ierr)
+            call check(error, ierr == 0_int32 .and. same_bits(xw, xc), "tridiag wrapper == core")
+            if (allocated(error)) return
+         end do
+      end do
+   end subroutine test_wrappers_equal_cores
+
+   function same_bits(a, b) result(ok)
+      real(wp), intent(in) :: a(:), b(:)
+      logical :: ok
+      integer :: i
+      ok = size(a) == size(b)
+      if (.not. ok) return
+      do i = 1, size(a)
+         if (transfer(a(i), 1_int64) /= transfer(b(i), 1_int64)) then
+            ok = .false.
+            return
+         end if
+      end do
+   end function same_bits
 
    ! ------------------------------------------------------------------
    ! NaN-in, device

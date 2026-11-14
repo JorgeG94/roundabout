@@ -33,6 +33,9 @@ GPU). `-Minfo=accel -gpu=ptxinfo` for the benchmark file shows why: the BL99 ker
 `bench_ice_kernels.F90` by hand with the flags of `benchmarks/CMakeFiles/bench_ice_kernels.dir/flags.make` plus
 `-Minfo=accel -gpu=ptxinfo`.
 
+Note (G.2): the BL99 row times the unchecked `*_core` routines, as `ice_temperature_changes` calls them, so a
+before/after across that change includes the removed per-routine finiteness scans.
+
 Update (2026-11-13, profile built once before the 6 passes, extrapolation to 1440 x 1152, V100, 1440 x 1152 run):
 BL99 takes 307.7 ms with the random ~30 %-ice-free mask (70 % active, 52.97 ns per active cell-category) and
 47.2 ms with `--band` (a coherent band, first 20 % of rows: 28.51 ns per active cell-category). The aggregate

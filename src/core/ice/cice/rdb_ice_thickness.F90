@@ -615,7 +615,8 @@ contains
       !! sea level.  `hin, hsn` [m] total thicknesses, `zqin, zqsn` layer
       !! enthalpies [J/m3], `dzi, dzs` layer thicknesses [m] (all updated);
       !! `snoice` [m] and `dsnow` [m] are accumulated.  Bitwise no-op when the
-      !! freeboard is not negative.
+      !! freeboard is not negative.  `dzs` is updated in place, so after an
+      !! error return (the final finiteness check) it is unspecified.
       !$acc routine seq
       integer, intent(in) :: nilyr, nslyr
       type(ice_constants_t), intent(in) :: c
@@ -628,7 +629,6 @@ contains
       integer :: k
       real(wp) :: dhin, dhsn, hqs, wk1, dhs
       real(wp) :: hin_l, hsn_l, snoice_l, dsnow_l, zq1, dz1
-      real(wp) :: dzs_l(ICE_NSLYR_MAX)
 
       if (nilyr < 1 .or. nilyr > ICE_NILYR_MAX .or. nslyr < 1 .or. nslyr > ICE_NSLYR_MAX) then
          ierr = ior(ierr, ICE_ERR_NONFINITE)
@@ -660,14 +660,11 @@ contains
       hsn_l = hsn
       snoice_l = snoice
       dsnow_l = dsnow
-      do k = 1, nslyr
-         dzs_l(k) = dzs(k)
-      end do
       do k = nslyr, 1, -1
-         dhs = min(dhsn, dzs_l(k))
+         dhs = min(dhsn, dzs(k))
          hsn_l = hsn_l - dhs
          dsnow_l = dsnow_l - dhs
-         dzs_l(k) = dzs_l(k) - dhs
+         dzs(k) = dzs(k) - dhs
          dhsn = dhsn - dhs
          dhsn = max(dhsn, 0.0_wp)
          hqs = hqs + dhs*zqsn(k)
@@ -688,9 +685,6 @@ contains
       dsnow = dsnow_l
       zqin(1) = zq1
       dzi(1) = dz1
-      do k = 1, nslyr
-         dzs(k) = dzs_l(k)
-      end do
    end subroutine ice_freeboard
 
    pure subroutine ice_relayer(nilyr, nslyr, c, dzi, dzs, hin, hsn, zqin, zqsn, hilyr, hslyr, ierr)
@@ -698,7 +692,8 @@ contains
       !! the thickness-weighted enthalpy.  `dzi, dzs` are the unequal layer
       !! thicknesses on entry and the new equal ones on exit; `hin, hsn` are
       !! set to exactly 0 when not positive; `hilyr, hslyr` are the new layer
-      !! thicknesses.
+      !! thicknesses.  `zqin, zqsn` are relayered in place: after an error
+      !! return they are unspecified (`hin, hsn, dzi, dzs` untouched).
       !$acc routine seq
       integer, intent(in) :: nilyr, nslyr
       type(ice_constants_t), intent(in) :: c
@@ -712,7 +707,6 @@ contains
       real(wp) :: hin_l, hsn_l, hil, hsl
       real(wp) :: zi1(ICE_NILYR_MAX + 1), zi2(ICE_NILYR_MAX + 1)
       real(wp) :: zs1(ICE_NSLYR_MAX + 1), zs2(ICE_NSLYR_MAX + 1)
-      real(wp) :: zqi_l(ICE_NILYR_MAX), zqs_l(ICE_NSLYR_MAX)
 
       hilyr = 0.0_wp
       hslyr = 0.0_wp
@@ -760,15 +754,9 @@ contains
          zi1(k + 1) = zi1(k) + dzi(k)
          zi2(k + 1) = zi2(k) + hil
       end do
-      do k = 1, nilyr
-         zqi_l(k) = zqin(k)
-      end do
       ierr_l = 0_int32
-      call adjust_enthalpy(nilyr, zi1, zi2, hil, hin_l, zqi_l, c, ierr_l)
+      call adjust_enthalpy(nilyr, zi1, zi2, hil, hin_l, zqin, c, ierr_l)
 
-      do k = 1, nslyr
-         zqs_l(k) = zqsn(k)
-      end do
       if (nslyr > 1) then
          zs1(1) = 0.0_wp
          zs1(1 + nslyr) = hsn_l
@@ -778,7 +766,7 @@ contains
             zs1(k + 1) = zs1(k) + dzs(k)
             zs2(k + 1) = zs2(k) + hsl
          end do
-         call adjust_enthalpy(nslyr, zs1, zs2, hsl, hsn_l, zqs_l, c, ierr_l)
+         call adjust_enthalpy(nslyr, zs1, zs2, hsl, hsn_l, zqsn, c, ierr_l)
       end if
 
       if (ierr_l /= 0_int32) then
@@ -790,11 +778,9 @@ contains
       hilyr = hil
       hslyr = hsl
       do k = 1, nilyr
-         zqin(k) = zqi_l(k)
          dzi(k) = hil
       end do
       do k = 1, nslyr
-         zqsn(k) = zqs_l(k)
          dzs(k) = hsl
       end do
    end subroutine ice_relayer

@@ -17,7 +17,7 @@ module bench_ice_kernels_mod
    use rdb_ice_dims, only: ICE_NCAT_MAX, ICE_NILYR_MAX, ICE_NSLYR_MAX, ICE_NTRCR_MAX
    use rdb_ice_params, only: ice_constants_t, ice_params_t, ice_params_default, ICE_CONSTANTS_ICEPACK, &
                              ICE_CONDUCT_BUBBLY, ice_q_from_T, ice_qsno_from_T, ice_ntrcr, ice_trcr_get, ice_trcr_set_mean
-   use rdb_ice_bl99, only: ICE_NMAT_MAX, ice_conductivity, ice_matrix_calc_Tsfc, ice_tridiag_solver
+   use rdb_ice_bl99, only: ICE_NMAT_MAX, ice_conductivity_core, ice_matrix_calc_Tsfc_core, ice_tridiag_solver_core
    use rdb_ice_vprofile, only: ice_init_vertical_profile
    use rdb_ice_shortwave, only: ice_albedo_fhtan, ice_albedos_ccsm3, ice_absorbed_ccsm3
    use rdb_ice_itd_shift, only: itd_aggregate, itd_aggregate_cell
@@ -118,10 +118,10 @@ contains
             etas(k) = dt/(c%rhos*c%cp_ice*max(hslyr, c%hs_min))
          end do
          do it = 1, 6                                       ! the surface iteration: conductivity, matrix, solve
-            call ice_conductivity(l_snow, nilyr, nslyr, hilyr, hslyr, zT, zS, c, ICE_CONDUCT_BUBBLY, kh, ierr)
-            call ice_matrix_calc_Tsfc(l_snow, .true., nilyr, nslyr, Tsf, -1.8_wp, 20.0_wp - Tsf, -9.0_wp, zT, zTs, kh, &
-                                      Ssw, Isw, etai, etas, sb, dg, sp, rh, ierr)
-            call ice_tridiag_solver(nilyr + nslyr + 1, sb, dg, sp, rh, x, ierr)
+            call ice_conductivity_core(l_snow, nilyr, nslyr, hilyr, hslyr, zT, zS, c, ICE_CONDUCT_BUBBLY, kh)
+            call ice_matrix_calc_Tsfc_core(l_snow, .true., nilyr, nslyr, Tsf, -1.8_wp, 20.0_wp - Tsf, -9.0_wp, zT, zTs, kh, &
+                                           Ssw, Isw, etai, etas, sb, dg, sp, rh)
+            call ice_tridiag_solver_core(nilyr + nslyr + 1, sb, dg, sp, rh, x, ierr)
             if (ierr /= 0_int32) exit
             Tsf = max(min(x(1), 0.0_wp), -60.0_wp)
          end do

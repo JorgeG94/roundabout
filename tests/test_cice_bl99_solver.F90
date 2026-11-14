@@ -101,6 +101,7 @@ contains
                   new_unittest("sw_redist_bounded_by_fswint", test_swredist_bound), &
                   new_unittest("no_convergence_bit", test_noconv), &
                   new_unittest("nonfinite_flags_and_leaves_arguments", test_nonfinite), &
+                  new_unittest("cell_midway_nonfinite_not_committed", test_cell_midway), &
                   new_unittest("device_matches_host", test_device) &
                   ]
    end subroutine collect_cice_bl99_solver_tests
@@ -918,6 +919,74 @@ contains
       if (allocated(error)) return
       call check(error, same_bits_in(col, ref), "nilyr = 9 leaves arguments untouched")
    end subroutine test_nonfinite
+
+   subroutine test_cell_midway(error)
+      !! A column whose inputs pass the entry check but go non-finite on a later
+      !! iteration (zero start temperature with zero salinity: 0/0 in the brine
+      !! heat capacity) raises `ICE_ERR_NONFINITE` through the core routine, and
+      !! `ice_temperature_changes_cell` does not commit it: every state array of
+      !! that cell is bitwise unchanged while the neighbouring good cell is solved.
+      type(error_type), allocatable, intent(out) :: error
+      type(ice_constants_t) :: c
+      type(col_t) :: good, bad
+      integer(int64) :: st
+      integer, parameter :: NX = 2, NL = 4
+      real(wp) :: hilyr(NX, 1, 1), hslyr(NX, 1, 1), einit(NX, 1, 1), S(NX, 1, 1, NL)
+      real(wp) :: fsw(NX, 1, 1), fsi(NX, 1, 1), Tsf(NX, 1, 1), Ssw(NX, 1, 1, 1), qsn(NX, 1, 1, 1), Tsn(NX, 1, 1, 1)
+      real(wp) :: Isw(NX, 1, 1, NL), q(NX, 1, 1, NL), T(NX, 1, 1, NL)
+      real(wp) :: fsens(NX, 1, 1), flat(NX, 1, 1), flwout(NX, 1, 1), fsurf(NX, 1, 1), fct(NX, 1, 1), fcb(NX, 1, 1)
+      real(wp) :: einex(NX, 1, 1)
+      real(wp) :: T0(NL), q0(NL), Isw0(NL), sc0(10)
+      integer(int32) :: niter(NX, 1, 1), ierr(NX, 1, 1)
+      integer :: i, k
+
+      c = ice_constants(ICE_CONSTANTS_ICEPACK)
+      st = 77_int64
+      call random_col(st, NL, .true., .true., good, c)
+      call random_col(st, NL, .true., .true., bad, c)
+      bad%S(1) = 0.0_wp
+      bad%T(1) = 0.0_wp
+      do i = 1, NX
+         call put_col(merge(bad, good, i == 1), i)
+      end do
+      fsens = 0.0_wp; flat = 0.0_wp; flwout = 0.0_wp; fsurf = 0.0_wp; fct = 0.0_wp; fcb = 0.0_wp; einex = 0.0_wp
+      niter = 0_int32
+      ierr = 0_int32
+      T0 = T(1, 1, 1, :)
+      q0 = q(1, 1, 1, :)
+      Isw0 = Isw(1, 1, 1, :)
+      sc0 = [Tsf(1, 1, 1), fsw(1, 1, 1), fsi(1, 1, 1), Tsn(1, 1, 1, 1), qsn(1, 1, 1, 1), Ssw(1, 1, 1, 1), 0.0_wp, 0.0_wp, &
+             0.0_wp, 0.0_wp]
+      do i = 1, NX
+         call ice_temperature_changes_cell(i, 1, 1, NX, 1, 1, NL, 1, good%dt, good%rhoa, good%flw, good%potT, good%Qa, &
+                                           good%shcoef, good%lhcoef, good%emis, ICE_SFC_BULK, 0.0_wp, 0.0_wp, c, good%conduct, &
+                                           .true., .false., ICE_SW_FRAC, ICE_SW_DTEMP, ICE_NITERMAX, good%Tbot, &
+                                           hilyr, hslyr, S, einit, fsw, fsi, Ssw, Isw, q, T, qsn, Tsn, Tsf, &
+                                           fsens, flat, flwout, fsurf, fct, fcb, einex, niter, ierr)
+      end do
+      call check(error, iand(ierr(1, 1, 1), ICE_ERR_NONFINITE) /= 0_int32, "mid-iteration non-finite flagged")
+      if (allocated(error)) return
+      call check(error, ierr(2, 1, 1) == 0_int32, "the good neighbour is clean")
+      if (allocated(error)) return
+      call check(error, same_real_bits(T0, T(1, 1, 1, :)) .and. same_real_bits(q0, q(1, 1, 1, :)) &
+                 .and. same_real_bits(Isw0, Isw(1, 1, 1, :)) .and. same_real_bits(sc0(1:6), &
+                                    [Tsf(1, 1, 1), fsw(1, 1, 1), fsi(1, 1, 1), Tsn(1, 1, 1, 1), qsn(1, 1, 1, 1), Ssw(1, 1, 1, 1)]) &
+                 .and. fsens(1, 1, 1) == 0.0_wp .and. fct(1, 1, 1) == 0.0_wp .and. niter(1, 1, 1) == 0_int32, &
+                 "failed cell: state and fluxes bitwise unchanged")
+      if (allocated(error)) return
+      call check(error, any(T(2, 1, 1, :) /= good%T(1:NL)), "the good cell was solved and committed")
+   contains
+      subroutine put_col(col, ii)
+         type(col_t), intent(in) :: col
+         integer, intent(in) :: ii
+         hilyr(ii, 1, 1) = col%hilyr; hslyr(ii, 1, 1) = col%hslyr; einit(ii, 1, 1) = col%einit
+         fsw(ii, 1, 1) = col%fswsfc; fsi(ii, 1, 1) = col%fswint; Tsf(ii, 1, 1) = col%Tsf
+         Ssw(ii, 1, 1, 1) = col%Ssw; qsn(ii, 1, 1, 1) = col%qsn; Tsn(ii, 1, 1, 1) = col%Tsn
+         do k = 1, NL
+            S(ii, 1, 1, k) = col%S(k); Isw(ii, 1, 1, k) = col%Isw(k); q(ii, 1, 1, k) = col%q(k); T(ii, 1, 1, k) = col%T(k)
+         end do
+      end subroutine put_col
+   end subroutine test_cell_midway
 
    subroutine run_col_c(col, c)
       !! `run_col` with a possibly corrupted constants bundle.

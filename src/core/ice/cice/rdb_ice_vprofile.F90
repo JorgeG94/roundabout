@@ -45,11 +45,14 @@ module rdb_ice_vprofile
    !!
    !! **Kernel contract.**  `pure`, `!$acc routine seq`, explicit shapes,
    !! `ICE_NILYR_MAX`/`ICE_NSLYR_MAX` locals, constants in the `intent(in)`
-   !! bundle, `ierr` only OR-ed into.  ERROR-RETURN CONTRACT: on ANY error
-   !! (entry check or range check) the layer arrays `zqin, zqsn, zTin, zTsn,
-   !! Tmlts` are left untouched and ALL scalar outputs (`hin, hilyr, hsn,
-   !! hslyr, einit`) are zero.  Non-finite input, or a layer count out of
-   !! range, sets `ICE_ERR_NONFINITE`; `aicen <= 0` or `vicen <= 0` (the caller
+   !! bundle, `ierr` only OR-ed into.  ERROR-RETURN CONTRACT: the layer arrays
+   !! `zqin, zqsn, zTin, zTsn, Tmlts` are written in place (no buffered copy).
+   !! Only an ENTRY-check failure (layer counts, finiteness, `aicen`/`vicen`)
+   !! leaves them untouched; after any later error (a snow layer `k >= 2`, any
+   !! ice-layer failure, the final non-finite check) they are UNSPECIFIED and
+   !! the caller must not commit them.  ALL scalar outputs
+   !! (`hin, hilyr, hsn, hslyr, einit`) are zero.  Non-finite input, or a
+   !! layer count out of range, sets `ICE_ERR_NONFINITE`; `aicen <= 0` or `vicen <= 0` (the caller
    !! gates on ice-covered categories; both divide) sets `ICE_ERR_NEG_THICK`.
    !! A finite `vsnon <= 0` (round-off negative snow volume) is "no snow", as
    !! upstream: the thin-snow reset applies.  Every comparison is guarded by an
@@ -88,9 +91,7 @@ contains
       real(wp), intent(out) :: hin, hilyr, hsn, hslyr, einit
       integer(int32), intent(inout) :: ierr
       integer :: k
-      real(wp) :: rnslyr, Tmax, ein
-      real(wp) :: qn(ICE_NILYR_MAX), Tn(ICE_NILYR_MAX), Tm(ICE_NILYR_MAX)
-      real(wp) :: qs(ICE_NSLYR_MAX), Ts(ICE_NSLYR_MAX)
+      real(wp) :: rnslyr, Tmax, ein, qs, Ts
       logical :: bad
 
       hin = 0.0_wp
@@ -144,15 +145,15 @@ contains
 
       ! Snow: enthalpy of thin snow reset, temperature, bounds, round-off repair.
       do k = 1, nslyr
-         qs(k) = zqsn(k)
+         qs = zqsn(k)
          if (hslyr > c%hs_min/rnslyr) then
-            Tmax = -qs(k)*c%puny*rnslyr/(c%rhos*c%cp_ice*vsnon)
+            Tmax = -qs*c%puny*rnslyr/(c%rhos*c%cp_ice*vsnon)
          else
-            qs(k) = -c%rhos*c%Lfresh
+            qs = -c%rhos*c%Lfresh
             Tmax = c%puny
          end if
-         Ts(k) = ice_Tsno_from_q(qs(k), c)
-         if (Ts(k) > Tmax .or. Ts(k) < ICE_TMIN .or. .not. ieee_is_finite(Ts(k))) then
+         Ts = ice_Tsno_from_q(qs, c)
+         if (Ts > Tmax .or. Ts < ICE_TMIN .or. .not. ieee_is_finite(Ts)) then
             hin = 0.0_wp
             hilyr = 0.0_wp
             hsn = 0.0_wp
@@ -161,11 +162,13 @@ contains
             ierr = ior(ierr, ICE_ERR_TSN_RANGE)
             return
          end if
-         if (Ts(k) > 0.0_wp) then
-            Ts(k) = 0.0_wp
-            qs(k) = -c%rhos*c%Lfresh
+         if (Ts > 0.0_wp) then
+            Ts = 0.0_wp
+            qs = -c%rhos*c%Lfresh
          end if
-         ein = ein + hslyr*qs(k)
+         zqsn(k) = qs
+         zTsn(k) = Ts
+         ein = ein + hslyr*qs
       end do
 
       ! Ice layers, top-down.
@@ -179,9 +182,8 @@ contains
             ierr = ior(ierr, ICE_ERR_SIN_LOW)
             return
          end if
-         Tm(k) = -zSin(k)*c%depressT
-         qn(k) = zqin(k)
-         call ice_T_from_q(qn(k), zSin(k), c, l_brine, Tn(k), bad)
+         Tmlts(k) = -zSin(k)*c%depressT
+         call ice_T_from_q(zqin(k), zSin(k), c, l_brine, zTin(k), bad)
          if (bad) then
             hin = 0.0_wp
             hilyr = 0.0_wp
@@ -192,11 +194,11 @@ contains
             return
          end if
          if (l_brine) then
-            Tmax = Tm(k)
+            Tmax = Tmlts(k)
          else
-            Tmax = -qn(k)*c%puny/(c%rhos*c%cp_ice*vicen)
+            Tmax = -zqin(k)*c%puny/(c%rhos*c%cp_ice*vicen)
          end if
-         if (Tn(k) > Tmax .or. Tn(k) < ICE_TMIN .or. .not. ieee_is_finite(Tn(k))) then
+         if (zTin(k) > Tmax .or. zTin(k) < ICE_TMIN .or. .not. ieee_is_finite(zTin(k))) then
             hin = 0.0_wp
             hilyr = 0.0_wp
             hsn = 0.0_wp
@@ -205,15 +207,15 @@ contains
             ierr = ior(ierr, ICE_ERR_TIN_RANGE)
             return
          end if
-         if (Tn(k) > 0.0_wp) then
-            Tn(k) = 0.0_wp
-            qn(k) = -c%rhoi*c%Lfresh
+         if (zTin(k) > 0.0_wp) then
+            zTin(k) = 0.0_wp
+            zqin(k) = -c%rhoi*c%Lfresh
          end if
-         if (Tn(k) >= -zSin(k)*c%depressT) then
-            Tn(k) = -zSin(k)*c%depressT - c%puny
-            qn(k) = -zSin(k)*c%depressT*c%rhoi*c%cp_ocn
+         if (zTin(k) >= -zSin(k)*c%depressT) then
+            zTin(k) = -zSin(k)*c%depressT - c%puny
+            zqin(k) = -zSin(k)*c%depressT*c%rhoi*c%cp_ocn
          end if
-         ein = ein + hilyr*qn(k)
+         ein = ein + hilyr*zqin(k)
       end do
 
       if (.not. ieee_is_finite(ein)) then
@@ -226,15 +228,6 @@ contains
          return
       end if
 
-      do k = 1, nslyr
-         zqsn(k) = qs(k)
-         zTsn(k) = Ts(k)
-      end do
-      do k = 1, nilyr
-         zqin(k) = qn(k)
-         zTin(k) = Tn(k)
-         Tmlts(k) = Tm(k)
-      end do
       einit = ein
 
    end subroutine ice_init_vertical_profile

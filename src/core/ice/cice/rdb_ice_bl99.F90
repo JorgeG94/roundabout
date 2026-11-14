@@ -120,6 +120,7 @@ module rdb_ice_bl99
    public :: ICE_NMAT_MAX, ICE_KIMIN, ICE_BETAK
    public :: ice_layer_conductivity, ice_conductivity
    public :: ice_matrix_calc_Tsfc, ice_tridiag_solver
+   public :: ice_conductivity_core, ice_matrix_calc_Tsfc_core, ice_tridiag_solver_core
    public :: ice_temperature_changes, ice_temperature_changes_cell
    public :: ICE_NITERMAX, ICE_TSF_ERRMAX, ICE_FERRMAX, ICE_SW_FRAC, ICE_SW_DTEMP
 
@@ -168,7 +169,9 @@ contains
       !! Interface conductances `kh(1:nilyr+nslyr+1)` of the snow/ice column
       !! (see the module header).  Without snow (`l_snow = .false.`) the snow
       !! interfaces are zero and `kh(1+nslyr)` is `2*k1/hilyr`.  Requires
-      !! `hilyr > 0` and, with snow, `hslyr > 0`.
+      !! `hilyr > 0` and, with snow, `hslyr > 0`.  An entry-check failure
+      !! leaves `kh` untouched; a non-finite result is only found after `kh`
+      !! was written, so on any later error `kh` is unspecified.
       !$acc routine seq
       logical, intent(in) :: l_snow
       integer, intent(in) :: nilyr, nslyr, conduct
@@ -178,8 +181,6 @@ contains
       real(wp), intent(inout) :: kh(nilyr + nslyr + 1)
       integer(int32), intent(inout) :: ierr
       integer :: k
-      real(wp) :: kslyr
-      real(wp) :: kilyr(ICE_NILYR_MAX), khl(ICE_NMAT_MAX)
 
       if (nilyr < 1 .or. nilyr > ICE_NILYR_MAX .or. nslyr < 1 .or. nslyr > ICE_NSLYR_MAX) then
          ierr = ior(ierr, ICE_ERR_NONFINITE)
@@ -202,44 +203,60 @@ contains
          end if
       end do
 
+      call ice_conductivity_core(l_snow, nilyr, nslyr, hilyr, hslyr, zTin, zSin, c, conduct, kh)
+      do k = 1, nilyr + nslyr + 1
+         if (.not. ieee_is_finite(kh(k))) then
+            ierr = ior(ierr, ICE_ERR_NONFINITE)
+            return
+         end if
+      end do
+   end subroutine ice_conductivity
+
+   pure subroutine ice_conductivity_core(l_snow, nilyr, nslyr, hilyr, hslyr, zTin, zSin, c, conduct, kh)
+      !! `ice_conductivity` without any check: the caller has validated the
+      !! layer counts, `hilyr > 0`, `hslyr` and the temperatures / salinities
+      !! (the temperature solve does it once at entry).  A non-finite result
+      !! is caught downstream, by the pivot and the solution test of
+      !! `ice_tridiag_solver_core`.
+      !$acc routine seq
+      logical, intent(in) :: l_snow
+      integer, intent(in) :: nilyr, nslyr, conduct
+      real(wp), intent(in) :: hilyr, hslyr
+      real(wp), intent(in) :: zTin(nilyr), zSin(nilyr)
+      type(ice_constants_t), intent(in) :: c
+      real(wp), intent(inout) :: kh(nilyr + nslyr + 1)
+      integer :: k
+      real(wp) :: kslyr
+      real(wp) :: kilyr(ICE_NILYR_MAX)
+
       kslyr = c%ksno
       do k = 1, nilyr
          kilyr(k) = ice_layer_conductivity(zTin(k), zSin(k), c, conduct)
       end do
 
       if (l_snow) then
-         khl(1) = 2.0_wp*kslyr/hslyr
-         khl(1 + nslyr) = 2.0_wp*kslyr*kilyr(1)/(kslyr*hilyr + kilyr(1)*hslyr)
+         kh(1) = 2.0_wp*kslyr/hslyr
+         kh(1 + nslyr) = 2.0_wp*kslyr*kilyr(1)/(kslyr*hilyr + kilyr(1)*hslyr)
       else
-         khl(1) = 0.0_wp
-         khl(1 + nslyr) = 2.0_wp*kilyr(1)/hilyr
+         kh(1) = 0.0_wp
+         kh(1 + nslyr) = 2.0_wp*kilyr(1)/hilyr
       end if
-      khl(1 + nslyr + nilyr) = 2.0_wp*kilyr(nilyr)/hilyr
+      kh(1 + nslyr + nilyr) = 2.0_wp*kilyr(nilyr)/hilyr
 
       if (nslyr > 1) then
          do k = 2, nslyr
             if (l_snow) then
-               khl(k) = 2.0_wp*kslyr*kslyr/((kslyr + kslyr)*hslyr)
+               kh(k) = 2.0_wp*kslyr*kslyr/((kslyr + kslyr)*hslyr)
             else
-               khl(k) = 0.0_wp
+               kh(k) = 0.0_wp
             end if
          end do
       end if
 
       do k = 2, nilyr
-         khl(k + nslyr) = 2.0_wp*kilyr(k - 1)*kilyr(k)/((kilyr(k - 1) + kilyr(k))*hilyr)
+         kh(k + nslyr) = 2.0_wp*kilyr(k - 1)*kilyr(k)/((kilyr(k - 1) + kilyr(k))*hilyr)
       end do
-
-      do k = 1, nilyr + nslyr + 1
-         if (.not. ieee_is_finite(khl(k))) then
-            ierr = ior(ierr, ICE_ERR_NONFINITE)
-            return
-         end if
-      end do
-      do k = 1, nilyr + nslyr + 1
-         kh(k) = khl(k)
-      end do
-   end subroutine ice_conductivity
+   end subroutine ice_conductivity_core
 
    pure subroutine ice_matrix_calc_Tsfc(l_snow, l_cold, nilyr, nslyr, Tsf, Tbot, fsurfn, dfsurf_dT, &
                                         Tin_init, Tsn_init, kh, Sswabs, Iswabs, etai, etas, &
@@ -261,8 +278,7 @@ contains
       real(wp), intent(inout) :: sbdiag(nilyr + nslyr + 1), diag(nilyr + nslyr + 1)
       real(wp), intent(inout) :: spdiag(nilyr + nslyr + 1), rhs(nilyr + nslyr + 1)
       integer(int32), intent(inout) :: ierr
-      integer :: k, ki, kr, nmat
-      real(wp) :: sb(ICE_NMAT_MAX), dg(ICE_NMAT_MAX), sp(ICE_NMAT_MAX), rh(ICE_NMAT_MAX)
+      integer :: k, nmat
 
       if (nilyr < 1 .or. nilyr > ICE_NILYR_MAX .or. nslyr < 1 .or. nslyr > ICE_NSLYR_MAX) then
          ierr = ior(ierr, ICE_ERR_NONFINITE)
@@ -293,12 +309,34 @@ contains
          end if
       end do
 
+      call ice_matrix_calc_Tsfc_core(l_snow, l_cold, nilyr, nslyr, Tsf, Tbot, fsurfn, dfsurf_dT, &
+                                     Tin_init, Tsn_init, kh, Sswabs, Iswabs, etai, etas, &
+                                     sbdiag, diag, spdiag, rhs)
+   end subroutine ice_matrix_calc_Tsfc
+
+   pure subroutine ice_matrix_calc_Tsfc_core(l_snow, l_cold, nilyr, nslyr, Tsf, Tbot, fsurfn, dfsurf_dT, &
+                                             Tin_init, Tsn_init, kh, Sswabs, Iswabs, etai, etas, &
+                                             sbdiag, diag, spdiag, rhs)
+      !! `ice_matrix_calc_Tsfc` without any check: the caller has validated the
+      !! layer counts and the finiteness of the inputs (or relies on the
+      !! pivot / solution test of `ice_tridiag_solver_core`, which a
+      !! non-finite coefficient cannot pass).
+      !$acc routine seq
+      logical, intent(in) :: l_snow, l_cold
+      integer, intent(in) :: nilyr, nslyr
+      real(wp), intent(in) :: Tsf, Tbot, fsurfn, dfsurf_dT
+      real(wp), intent(in) :: Tin_init(nilyr), Tsn_init(nslyr), Sswabs(nslyr), Iswabs(nilyr)
+      real(wp), intent(in) :: etai(nilyr), etas(nslyr), kh(nilyr + nslyr + 1)
+      real(wp), intent(inout) :: sbdiag(nilyr + nslyr + 1), diag(nilyr + nslyr + 1)
+      real(wp), intent(inout) :: spdiag(nilyr + nslyr + 1), rhs(nilyr + nslyr + 1)
+      integer :: k, ki, kr
+
       ! Dummy rows (solution T = 0) for the surface and snow rows.
       do k = 1, nslyr + 1
-         sb(k) = 0.0_wp
-         dg(k) = 1.0_wp
-         sp(k) = 0.0_wp
-         rh(k) = 0.0_wp
+         sbdiag(k) = 0.0_wp
+         diag(k) = 1.0_wp
+         spdiag(k) = 0.0_wp
+         rhs(k) = 0.0_wp
       end do
 
       ! Surface equation, cold surface (with or without snow).
@@ -309,24 +347,24 @@ contains
             k = 1 + nslyr
          end if
          kr = k
-         sb(kr) = 0.0_wp
-         dg(kr) = dfsurf_dT - kh(k)
-         sp(kr) = kh(k)
-         rh(kr) = dfsurf_dT*Tsf - fsurfn
+         sbdiag(kr) = 0.0_wp
+         diag(kr) = dfsurf_dT - kh(k)
+         spdiag(kr) = kh(k)
+         rhs(kr) = dfsurf_dT*Tsf - fsurfn
       end if
 
       ! Top snow layer.
       if (l_snow) then
          if (l_cold) then
-            sb(2) = -etas(1)*kh(1)
-            sp(2) = -etas(1)*kh(2)
-            dg(2) = 1.0_wp + etas(1)*(kh(1) + kh(2))
-            rh(2) = Tsn_init(1) + etas(1)*Sswabs(1)
+            sbdiag(2) = -etas(1)*kh(1)
+            spdiag(2) = -etas(1)*kh(2)
+            diag(2) = 1.0_wp + etas(1)*(kh(1) + kh(2))
+            rhs(2) = Tsn_init(1) + etas(1)*Sswabs(1)
          else
-            sb(2) = 0.0_wp
-            sp(2) = -etas(1)*kh(2)
-            dg(2) = 1.0_wp + etas(1)*(kh(1) + kh(2))
-            rh(2) = Tsn_init(1) + etas(1)*kh(1)*Tsf + etas(1)*Sswabs(1)
+            sbdiag(2) = 0.0_wp
+            spdiag(2) = -etas(1)*kh(2)
+            diag(2) = 1.0_wp + etas(1)*(kh(1) + kh(2))
+            rhs(2) = Tsn_init(1) + etas(1)*kh(1)*Tsf + etas(1)*Sswabs(1)
          end if
       end if
 
@@ -335,10 +373,10 @@ contains
          do k = 2, nslyr
             kr = k + 1
             if (l_snow) then
-               sb(kr) = -etas(k)*kh(k)
-               sp(kr) = -etas(k)*kh(k + 1)
-               dg(kr) = 1.0_wp + etas(k)*(kh(k) + kh(k + 1))
-               rh(kr) = Tsn_init(k) + etas(k)*Sswabs(k)
+               sbdiag(kr) = -etas(k)*kh(k)
+               spdiag(kr) = -etas(k)*kh(k + 1)
+               diag(kr) = 1.0_wp + etas(k)*(kh(k) + kh(k + 1))
+               rhs(kr) = Tsn_init(k) + etas(k)*Sswabs(k)
             end if
          end do
       end if
@@ -349,40 +387,40 @@ contains
          k = ki + nslyr
          kr = k + 1
          if (l_snow .or. l_cold) then
-            sb(kr) = -etai(ki)*kh(k)
-            sp(kr) = -etai(ki)*kh(k + 1)
-            dg(kr) = 1.0_wp + etai(ki)*(kh(k) + kh(k + 1))
-            rh(kr) = Tin_init(ki) + etai(ki)*Iswabs(ki)
+            sbdiag(kr) = -etai(ki)*kh(k)
+            spdiag(kr) = -etai(ki)*kh(k + 1)
+            diag(kr) = 1.0_wp + etai(ki)*(kh(k) + kh(k + 1))
+            rhs(kr) = Tin_init(ki) + etai(ki)*Iswabs(ki)
          else
-            sb(kr) = 0.0_wp
-            sp(kr) = -etai(ki)*kh(k + 1)
-            dg(kr) = 1.0_wp + etai(ki)*(kh(k) + kh(k + 1))
-            rh(kr) = Tin_init(ki) + etai(ki)*Iswabs(ki) + etai(ki)*kh(k)*Tsf
+            sbdiag(kr) = 0.0_wp
+            spdiag(kr) = -etai(ki)*kh(k + 1)
+            diag(kr) = 1.0_wp + etai(ki)*(kh(k) + kh(k + 1))
+            rhs(kr) = Tin_init(ki) + etai(ki)*Iswabs(ki) + etai(ki)*kh(k)*Tsf
          end if
 
          ! Bottom ice layer.
          ki = nilyr
          k = ki + nslyr
          kr = k + 1
-         sb(kr) = -etai(ki)*kh(k)
-         sp(kr) = 0.0_wp
-         dg(kr) = 1.0_wp + etai(ki)*(kh(k) + kh(k + 1))
-         rh(kr) = Tin_init(ki) + etai(ki)*Iswabs(ki) + etai(ki)*kh(k + 1)*Tbot
+         sbdiag(kr) = -etai(ki)*kh(k)
+         spdiag(kr) = 0.0_wp
+         diag(kr) = 1.0_wp + etai(ki)*(kh(k) + kh(k + 1))
+         rhs(kr) = Tin_init(ki) + etai(ki)*Iswabs(ki) + etai(ki)*kh(k + 1)*Tbot
       else
          ! Single ice layer.
          ki = 1
          k = ki + nslyr
          kr = k + 1
          if (l_snow .or. l_cold) then
-            sb(kr) = -etai(ki)*kh(k)
-            sp(kr) = 0.0_wp
-            dg(kr) = 1.0_wp + etai(ki)*(kh(k) + kh(k + 1))
-            rh(kr) = Tin_init(ki) + etai(ki)*Iswabs(ki) + etai(ki)*kh(k + 1)*Tbot
+            sbdiag(kr) = -etai(ki)*kh(k)
+            spdiag(kr) = 0.0_wp
+            diag(kr) = 1.0_wp + etai(ki)*(kh(k) + kh(k + 1))
+            rhs(kr) = Tin_init(ki) + etai(ki)*Iswabs(ki) + etai(ki)*kh(k + 1)*Tbot
          else
-            sb(kr) = 0.0_wp
-            sp(kr) = 0.0_wp
-            dg(kr) = 1.0_wp + etai(ki)*(kh(k) + kh(k + 1))
-            rh(kr) = Tin_init(ki) + etai(ki)*Iswabs(ki) + etai(ki)*kh(k)*Tsf + etai(ki)*kh(k + 1)*Tbot
+            sbdiag(kr) = 0.0_wp
+            spdiag(kr) = 0.0_wp
+            diag(kr) = 1.0_wp + etai(ki)*(kh(k) + kh(k + 1))
+            rhs(kr) = Tin_init(ki) + etai(ki)*Iswabs(ki) + etai(ki)*kh(k)*Tsf + etai(ki)*kh(k + 1)*Tbot
          end if
       end if
 
@@ -390,34 +428,27 @@ contains
       do ki = 2, nilyr - 1
          k = ki + nslyr
          kr = k + 1
-         sb(kr) = -etai(ki)*kh(k)
-         sp(kr) = -etai(ki)*kh(k + 1)
-         dg(kr) = 1.0_wp + etai(ki)*(kh(k) + kh(k + 1))
-         rh(kr) = Tin_init(ki) + etai(ki)*Iswabs(ki)
+         sbdiag(kr) = -etai(ki)*kh(k)
+         spdiag(kr) = -etai(ki)*kh(k + 1)
+         diag(kr) = 1.0_wp + etai(ki)*(kh(k) + kh(k + 1))
+         rhs(kr) = Tin_init(ki) + etai(ki)*Iswabs(ki)
       end do
 
-      do k = 1, nmat
-         sbdiag(k) = sb(k)
-         diag(k) = dg(k)
-         spdiag(k) = sp(k)
-         rhs(k) = rh(k)
-      end do
-   end subroutine ice_matrix_calc_Tsfc
+   end subroutine ice_matrix_calc_Tsfc_core
 
    pure subroutine ice_tridiag_solver(nmat, sbdiag, diag, spdiag, rhs, xout, ierr)
-      !! Thomas algorithm for `sbdiag(k)*x(k-1) + diag(k)*x(k) +
-      !! spdiag(k)*x(k+1) = rhs(k)`, `k = 1..nmat` (`sbdiag(1)` and
+      !! Thomas algorithm for `sbdiag(k)*xout(k-1) + diag(k)*xout(k) +
+      !! spdiag(k)*xout(k+1) = rhs(k)`, `k = 1..nmat` (`sbdiag(1)` and
       !! `spdiag(nmat)` unused), no pivoting: the BL99 rows are diagonally
       !! dominant.  A non-finite coefficient or a zero/non-finite pivot sets
-      !! `ICE_ERR_NONFINITE` and leaves `xout` untouched.
+      !! `ICE_ERR_NONFINITE` and is returned with `xout` unspecified (non-finite
+      !! coefficients are caught before `xout` is written).
       !$acc routine seq
       integer, intent(in) :: nmat
       real(wp), intent(in) :: sbdiag(nmat), diag(nmat), spdiag(nmat), rhs(nmat)
       real(wp), intent(inout) :: xout(nmat)
       integer(int32), intent(inout) :: ierr
       integer :: k
-      real(wp) :: wbeta
-      real(wp) :: wgamma(ICE_NMAT_MAX), x(ICE_NMAT_MAX)
 
       if (nmat < 1 .or. nmat > ICE_NMAT_MAX) then
          ierr = ior(ierr, ICE_ERR_NONFINITE)
@@ -431,36 +462,53 @@ contains
          end if
       end do
 
+      call ice_tridiag_solver_core(nmat, sbdiag, diag, spdiag, rhs, xout, ierr)
+   end subroutine ice_tridiag_solver
+
+   pure subroutine ice_tridiag_solver_core(nmat, sbdiag, diag, spdiag, rhs, xout, ierr)
+      !! `ice_tridiag_solver` without the entry scan of the coefficients: the
+      !! caller has validated `1 <= nmat <= ICE_NMAT_MAX`; `sbdiag(1)` and
+      !! `spdiag(nmat)` are never read.  A non-finite
+      !! coefficient cannot pass unnoticed: it makes a pivot non-finite, or
+      !! (`rhs`, `spdiag`) a solution entry, and both are tested, with
+      !! `ieee_is_finite`, so the same `ICE_ERR_NONFINITE` is raised.  `xout`
+      !! is written as the sweep goes, so it is unspecified on error.
+      !$acc routine seq
+      integer, intent(in) :: nmat
+      real(wp), intent(in) :: sbdiag(nmat), diag(nmat), spdiag(nmat), rhs(nmat)
+      real(wp), intent(inout) :: xout(nmat)
+      integer(int32), intent(inout) :: ierr
+      integer :: k
+      real(wp) :: wbeta
+      real(wp) :: wgamma(ICE_NMAT_MAX)
+
       wbeta = diag(1)
-      if (.not. (abs(wbeta) > tiny(1.0_wp))) then
+      if (.not. (ieee_is_finite(wbeta) .and. abs(wbeta) > tiny(1.0_wp))) then
          ierr = ior(ierr, ICE_ERR_NONFINITE)
          return
       end if
-      x(1) = rhs(1)/wbeta
+      xout(1) = rhs(1)/wbeta
       wgamma(1) = 0.0_wp
       do k = 2, nmat
          wgamma(k) = spdiag(k - 1)/wbeta
          wbeta = diag(k) - sbdiag(k)*wgamma(k)
-         if (.not. (abs(wbeta) > tiny(1.0_wp))) then
+         if (.not. (ieee_is_finite(wbeta) .and. abs(wbeta) > tiny(1.0_wp))) then
             ierr = ior(ierr, ICE_ERR_NONFINITE)
             return
          end if
-         x(k) = (rhs(k) - sbdiag(k)*x(k - 1))/wbeta
+         xout(k) = (rhs(k) - sbdiag(k)*xout(k - 1))/wbeta
       end do
       do k = nmat - 1, 1, -1
-         x(k) = x(k) - wgamma(k + 1)*x(k + 1)
+         xout(k) = xout(k) - wgamma(k + 1)*xout(k + 1)
       end do
 
       do k = 1, nmat
-         if (.not. ieee_is_finite(x(k))) then
+         if (.not. ieee_is_finite(xout(k))) then
             ierr = ior(ierr, ICE_ERR_NONFINITE)
             return
          end if
       end do
-      do k = 1, nmat
-         xout(k) = x(k)
-      end do
-   end subroutine ice_tridiag_solver
+   end subroutine ice_tridiag_solver_core
 
    pure subroutine ice_temperature_changes(nilyr, nslyr, dt, rhoa, flw, potT, Qa, shcoef, lhcoef, &
                                            emissivity, sfc_kind, sf_0, dsf_dT, c, conduct, l_brine, &
@@ -548,7 +596,10 @@ contains
          end if
       end do
 
-      ! ---- initialise (working copies; the arguments are written at the end)
+      ! ---- initialise.  The temperature, enthalpy and shortwave arguments are
+      !      overwritten in place at every pass; after an error return they hold
+      !      the last iterate and must not be used (the cell entry gathers the
+      !      column into local buffers and commits them only on success).
       ierl = 0_int32
       nmat = nilyr + nslyr + 1
       einex_sfc_calc = 0.0_wp
@@ -586,11 +637,7 @@ contains
          LfTm(k) = c%Lfresh*Tmlts(k)
       end do
 
-      call ice_conductivity(l_snow, nilyr, nslyr, hilyr, hslyr, zTin, zSin, c, conduct, kh, ierl)
-      if (ierl /= 0_int32) then
-         ierr = ior(ierr, ierl)
-         return
-      end if
+      call ice_conductivity_core(l_snow, nilyr, nslyr, hilyr, hslyr, zTin, zSin, c, conduct, kh)
 
       ! ---- shortwave redistribution: energy beyond what warms a layer to
       !      near melting goes to the surface instead
@@ -673,10 +720,10 @@ contains
          Tsf_start = Tsf
          l_cold = Tsf < 0.0_wp
 
-         call ice_matrix_calc_Tsfc(l_snow, l_cold, nilyr, nslyr, Tsf, Tbot, fsurfn, dfsurf_dT, &
-                                   Tin_init, Tsn_init, kh, Sswabs, Iswabs, etai, etas, &
-                                   sbdiag, diagm, spdiag, rhs, ierl)
-         if (ierl == 0_int32) call ice_tridiag_solver(nmat, sbdiag, diagm, spdiag, rhs, Tmat, ierl)
+         call ice_matrix_calc_Tsfc_core(l_snow, l_cold, nilyr, nslyr, Tsf, Tbot, fsurfn, dfsurf_dT, &
+                                        Tin_init, Tsn_init, kh, Sswabs, Iswabs, etai, etas, &
+                                        sbdiag, diagm, spdiag, rhs)
+         call ice_tridiag_solver_core(nmat, sbdiag, diagm, spdiag, rhs, Tmat, ierl)
          if (ierl /= 0_int32) then
             ierr = ior(ierr, ierl)
             return
