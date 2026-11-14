@@ -9,6 +9,7 @@ module rdb_ocean_lateral_mix
    !! defaults to Leith, which scales with vorticity gradient and avoids
    !! over-damping coherent eddies.  Leith (1968); Smagorinsky (1963);
    !! Fox-Kemper & Menemenlis (2008); Griffies & Hallberg (2000).
+   use rdb_safe_math, only: safe_pow, safe_sin
    use rdb_constants, only: wp, PI, DEG2RAD
    use rdb_grid, only: hgrid_t
    use rdb_ocean_metrics, only: ocean_metrics_t
@@ -206,7 +207,7 @@ contains
       !! and the T/corner point statics (stress path).
       real(wp), intent(in) :: lat_deg, ks, p
       real(wp) :: f
-      f = ks*abs(sin(lat_deg*DEG2RAD))**p
+      f = ks*safe_pow(abs(safe_sin(lat_deg*DEG2RAD)), p)
    end function kh_lat_floor
 
    pure elemental function vel_scale_floor(c, dx2, dy2) result(f)
