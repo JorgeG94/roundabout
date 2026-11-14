@@ -10,6 +10,8 @@ set(RDB_ICE_CORE_SOURCES
     ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_itd_shift.F90
     ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_lateral_melt.F90
     ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_params.F90
+    ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_ridge.F90
+    ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_ridge_itd.F90
     ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_shortwave.F90
     ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_thermo_shared.F90
     ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_vprofile.F90)

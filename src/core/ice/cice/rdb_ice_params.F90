@@ -57,6 +57,7 @@ module rdb_ice_params
    public :: ICE_CONDUCT_BUBBLY, ICE_CONDUCT_MU71
    public :: ice_constants_t, ice_thermo_params_t, ice_itd_params_t, ice_params_t
    public :: ice_sw_params_t
+   public :: ice_ridge_params_t, ice_ridge_params_default, ice_ridge_params_valid
    public :: ice_constants, ice_params_default
    public :: ice_nt_Tsfc, ice_nt_qice, ice_nt_qsno, ice_nt_sice, ice_ntrcr
    public :: ice_trcr_depend, ice_trcr_base, ice_intensive
@@ -158,6 +159,23 @@ module rdb_ice_params
       real(wp) :: albsnowi            !! near-infrared albedo of cold snow
       real(wp) :: ahmax               !! thickness above which the ice albedo is constant [m]
    end type ice_sw_params_t
+   type :: ice_ridge_params_t
+      !! Ridging and ice-strength knobs (Thorndike et al. 1975; Rothrock 1975;
+      !! Hibler 1979, 1980; Flato and Hibler 1995; Lipscomb et al. 2007).
+      !! Scalars only, no default initialisers (safe `intent(in)` into device
+      !! code).  Only true knobs live here: the constants the upstream source
+      !! fixes are module parameters of `rdb_ice_ridge_itd`, and everything
+      !! derived from them or from the physical constants (`Cp`, `1/G*`,
+      !! `1/a*`, the exponential normaliser) is computed where it is used, so
+      !! no derived value can go stale.
+      integer :: kstrength            !! 0 = Hibler (1979), 1 = Rothrock (1975)
+      integer :: krdg_partic          !! participation: 0 = Thorndike (1975), 1 = Lipscomb (2007)
+      integer :: krdg_redist          !! redistribution: 0 = Hibler (1980), 1 = Lipscomb (2007)
+      real(wp) :: mu_rdg              !! e-folding scale of ridged ice, krdg_redist=1 [m^0.5]
+      real(wp) :: Cf                  !! frictional-dissipation factor of the strength
+      real(wp) :: Pstar               !! Hibler strength constant [N/m]
+      real(wp) :: Cstar               !! Hibler concentration constant
+   end type ice_ridge_params_t
 
    type :: ice_params_t
       !! All sea-ice parameters: scalars only, no allocatables, no strings.
@@ -171,6 +189,7 @@ module rdb_ice_params
       type(ice_thermo_params_t) :: thermo
       type(ice_itd_params_t) :: itd
       type(ice_sw_params_t) :: sw
+      type(ice_ridge_params_t) :: ridge
    end type ice_params_t
 
 contains
@@ -291,7 +310,34 @@ contains
       p%sw%albsnowv = 0.98_wp
       p%sw%albsnowi = 0.70_wp
       p%sw%ahmax = 0.3_wp
+      p%ridge = ice_ridge_params_default()
    end function ice_params_default
+
+   pure function ice_ridge_params_default() result(rp)
+      !! Ridging knobs at the upstream code defaults (`kstrength = 1`,
+      !! `krdg_partic = 1`, `krdg_redist = 1`, `mu_rdg = 3`, `Cf = 17`,
+      !! `Pstar = 2.75e4`, `Cstar = 20`).
+      type(ice_ridge_params_t) :: rp
+
+      rp%kstrength = 1
+      rp%krdg_partic = 1
+      rp%krdg_redist = 1
+      rp%mu_rdg = 3.0_wp
+      rp%Cf = 17.0_wp
+      rp%Pstar = 2.75e4_wp
+      rp%Cstar = 20.0_wp
+   end function ice_ridge_params_default
+
+   pure function ice_ridge_params_valid(rp) result(ok)
+      !! `.true.` when every option of `rp` is one the kernels implement
+      !! (`kstrength`, `krdg_partic`, `krdg_redist` each 0 or 1).  Host check
+      !! for the drivers and the configure-time refusal.
+      type(ice_ridge_params_t), intent(in) :: rp
+      logical :: ok
+
+      ok = (rp%kstrength == 0 .or. rp%kstrength == 1) .and. (rp%krdg_partic == 0 .or. rp%krdg_partic == 1) &
+           .and. (rp%krdg_redist == 0 .or. rp%krdg_redist == 1)
+   end function ice_ridge_params_valid
 
    ! ------------------------------------------------------------------
    ! Tracer index model (packed column: Tsfc | qice | qsno | sice)
