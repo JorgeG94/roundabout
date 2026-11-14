@@ -681,6 +681,7 @@ set(RDB_CICE_TESTS
     "test_cice_agg_cell|test_cice_agg_cell|collect_cice_agg_cell_tests|cice_agg_cell|ocean"
     "test_cice_thickness_changes|test_cice_thickness_changes|collect_cice_thickness_changes_tests|cice_thickness_changes|ocean"
     "test_cice_basal_heat|test_cice_basal_heat|collect_cice_basal_heat_tests|cice_basal_heat|ocean"
+    "test_cice_itd_linear|test_cice_itd_linear|collect_cice_itd_linear_tests|cice_itd_linear|ocean"
 )
 
 # Shared helpers of the ice tests (deterministic columns, ledger, golden
