@@ -77,7 +77,7 @@ module rdb_ice_errors
    integer(int32), parameter :: ICE_ERR_NEG_THICK = ishft(1_int32, 8)
       !! F. Negative layer thickness.
    integer(int32), parameter :: ICE_ERR_NEW_ICE_AREA = ishft(1_int32, 9)
-      !! F. New-ice step produced a negative category or open-water area.
+      !! F. New-ice step: a category area below `-puny` at entry, or a negative open-water area at exit.
    integer(int32), parameter :: ICE_ERR_ITD_HBNEW_ORDER = ishft(1_int32, 10)
       !! C (F with `fatal_on_error`). Category-boundary order violated; the cell falls back to a rebin.
    integer(int32), parameter :: ICE_ERR_ITD_SHIFT_RANGE = ishft(1_int32, 11)
