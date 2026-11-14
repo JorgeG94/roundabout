@@ -22,55 +22,62 @@ module rdb_ice_evp_c
    !! `NOTICE`).  The index convention of `rdb_ice_evp_c_prep` applies
    !! (`E(i,j) = u(i+1,j)`, `N(i,j) = v(i,j+1)`, `U(i,j) = stress12U(i+1,j+1)`).
    !!
-   !! **One subcycle** (5 launches, all `do concurrent`, explicit-shape
-   !! dummies, no host data motion):
+   !! **One subcycle** (4 launches, all `do concurrent`, explicit-shape
+   !! dummies, scalars by value, no host data motion):
    !!
    !! | launch | kernel | writes |
    !! |--------|--------|--------|
    !! | K1 | corner strain rate (`shearU`, `deltaU` for `avg_strength`) | `shearU`, `deltaU` |
    !! | K2 | T strain rates, viscosities, replacement pressure, T stresses | `zetax2T`, `etax2T`, `stresspT`, `stressmT` |
    !! | K3 | corner viscosity (T average or strength average), corner stress | `stress12U` |
-   !! | K4 | stress divergence + momentum at E and N (in place) | `u`, `v` |
-   !! | K5 | tangential and corner velocity averages | `uvelN`, `vvelE`, `uvelU`, `vvelU` |
+   !! | K4 | stress divergence + momentum at E and N | `un`, `vn` |
    !!
-   !! K4 is the only kernel that writes the velocity and it reads no
-   !! neighbour's velocity (only the tangential/corner arrays K5 filled), so
-   !! the in-place update is race-free; the divergence is a local scalar (no
-   !! array).  A step is `prep (7 launches) + K5 + ndte * 5 + finish (1)` ,
-   !! `5 ndte + 9` launches.
+   !! The velocity is PING-PONGED between two face pairs: every kernel reads the
+   !! old pair `(uo, vo)` and K4 writes the new pair `(un, vn)` at the ice faces
+   !! only.  The tangential and corner velocity components (formerly a fifth
+   !! launch, `evp_average_impl`, and four arrays) are interpolated INLINE, with
+   !! the same expressions, by K1 (corner) and K4 (face), so the old pair is
+   !! the only velocity read.  The ice masks are packed in one byte per point
+   !! (`imask`, built once per step), the ice-free corners' `shearU`/`deltaU`
+   !! are zeroed once per step in the preparation, and the kernels skip every
+   !! point off its mask.  A step is the preparation, 2 face copies, `4 ndte`
+   !! launches (+ the wraps), the averages once and the finish kernel.
    !!
-   !! **Halo (multi-rank PR).**  Between K4 and K5 of EVERY subcycle, and once
-   !! after `ice_evp_c_prep`, the face pair `(u, v)` must be refreshed with
-   !! `ice_halo_faces` (`rdb_ice_cgrid_metrics`: exchange on split axes,
-   !! periodic wrap, tripolar fold) -- nothing else is exchanged: the T
-   !! stresses and viscosities, the corner shear and stress, the tangential
-   !! and corner velocities are recomputed in the ghost rings (width 3, see
-   !! `rdb_ice_evp_c_prep`) from the haloed faces.  Under the fold every
-   !! stress component is invariant (a 180 degree rotation flips both axes),
-   !! so the ghost value computed from the folded velocities is the rotated
-   !! image.  This single-rank PR provides `ice_evp_c_substep` (K1-K4) and
-   !! `ice_evp_c_average` (K5) as the two pieces the caller interleaves with
-   !! that exchange, and a local periodic wrap in `ice_evp_c_step`
-   !! (`wrap_x`, `wrap_y`) for the one-rank periodic case.
+   !! **Halo (multi-rank PR).**  Between K4 and the next K1 of EVERY subcycle,
+   !! and once after `ice_evp_c_prep`, the face pair holding the latest velocity
+   !! must be refreshed with `ice_halo_faces` (`rdb_ice_cgrid_metrics`: exchange
+   !! on split axes, periodic wrap, tripolar fold) -- nothing else is exchanged:
+   !! the T stresses and viscosities and the corner shear and stress are
+   !! recomputed in the ghost rings (width 3, see `rdb_ice_evp_c_prep`) from the
+   !! haloed faces.  Under the fold every stress component is invariant (a 180
+   !! degree rotation flips both axes), so the ghost value computed from the
+   !! folded velocities is the rotated image.  `ice_evp_c_step` shows the
+   !! sequence (wrap, `ice_evp_c_copy_faces`, then `ice_evp_c_substep` with the
+   !! two pairs swapped each subcycle, a wrap of the new pair after each, and a
+   !! copy back when `ndte` is odd); a multi-rank caller replaces the wrap by
+   !! the halo exchange.  `ice_evp_c_average` (the interpolation, now off the
+   !! subcycle path) runs once after the loop because `ice_evp_c_finish` reads
+   !! its `uvelN`/`vvelE`.  Single rank periodic: `wrap_x`, `wrap_y`.
    !!
    !! **Errors.**  A face speed that is non-finite or above `vel_cap` raises
    !! `ICE_ERR_DYN_VEL` in the error word of the owning cell, after the loop;
    !! nothing is clamped.  Non-finite input propagates (every max/min on the
    !! viscosity path is `ieee_is_finite`-guarded so a NaN is never turned into
    !! a plausible number).
-   use, intrinsic :: iso_fortran_env, only: int32
+   use, intrinsic :: iso_fortran_env, only: int8, int32
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    use rdb_constants, only: wp
    use rdb_ice_errors, only: ICE_ERR_DYN_VEL
    use rdb_ice_params, only: ice_constants_t, ice_ridge_params_t
-   use rdb_ice_evp_c_prep, only: ice_evp_c_const_t, ice_evp_c_work_t, ice_evp_c_prep
+   use rdb_ice_evp_c_prep, only: ice_evp_c_const_t, ice_evp_c_work_t, ice_evp_c_prep, EVP_BIT_T, EVP_BIT_U, &
+                                 EVP_BIT_E, EVP_BIT_N
    implicit none
    private
 
    public :: ice_evp_c_step, ice_evp_c_substep, ice_evp_c_average, ice_evp_c_finish
-   public :: ice_evp_c_wrap_faces, ice_evp_c_div_stress
+   public :: ice_evp_c_wrap_faces, ice_evp_c_div_stress, ice_evp_c_copy_faces
    public :: evp_strain_u_impl, evp_stress_t_impl, evp_stress_u_impl, evp_momentum_impl
-   public :: evp_average_impl, evp_finish_impl, evp_div_stress_impl, evp_wrap_u_impl, evp_wrap_v_impl
+   public :: evp_average_impl, evp_copy_faces_impl, evp_finish_impl, evp_div_stress_impl, evp_wrap_u_impl, evp_wrap_v_impl
    public :: evp_div_x, evp_div_y, evp_visc_replpress
 
    real(wp), parameter :: EPS13 = 1.0e-13_wp
@@ -89,8 +96,8 @@ contains
       !! `eta2 = zeta2 / e_plasticpot^2`.  A non-finite `Delta` is not
       !! capped (the cap would turn NaN into `Dmin`); it propagates.
       !$acc routine seq
-      real(wp), intent(in) :: strength, dmin, delta, ktens, epp2i
-      logical, intent(in) :: cap_max
+      real(wp), value :: strength, dmin, delta, ktens, epp2i
+      logical, value :: cap_max
       real(wp), intent(out) :: zetax2, etax2, rep_prs
       real(wp) :: tmp, dd
 
@@ -114,7 +121,7 @@ contains
       !! x stress divergence at E(i,j) [N/m2] (Lemieux et al. 2024):
       !! `T(i+1)` is index 1, `T(i)` index 0, `U(i,j)` index 1, `U(i,j-1)` 0.
       !$acc routine seq
-      real(wp), intent(in) :: dxE, dyE, dyT1, dyT0, dxU1, dxU0, sp1, sp0, sm1, sm0, s121, s120, arear, rheo
+      real(wp), value :: dxE, dyE, dyT1, dyT0, dxU1, dxU0, sp1, sp0, sm1, sm0, s121, s120, arear, rheo
       real(wp) :: f
       f = rheo*arear*(0.5_wp*dyE*(sp1 - sp0) &
                       + (0.5_wp/dyE)*(dyT1*dyT1*sm1 - dyT0*dyT0*sm0) &
@@ -126,45 +133,78 @@ contains
       !! y stress divergence at N(i,j) [N/m2]: `T(j+1)` index 1, `T(j)` 0,
       !! `U(i,j)` 1, `U(i-1,j)` 0.
       !$acc routine seq
-      real(wp), intent(in) :: dxN, dyN, dxT1, dxT0, dyU1, dyU0, sp1, sp0, sm1, sm0, s121, s120, arear, rheo
+      real(wp), value :: dxN, dyN, dxT1, dxT0, dyU1, dyU0, sp1, sp0, sm1, sm0, s121, s120, arear, rheo
       real(wp) :: f
       f = rheo*arear*(0.5_wp*dxN*(sp1 - sp0) &
                       - (0.5_wp/dxN)*(dxT1*dxT1*sm1 - dxT0*dxT0*sm0) &
                       + (1.0_wp/dyN)*(dyU1*dyU1*s121 - dyU0*dyU0*s120))
    end function evp_div_y
 
+   pure function evp_wavg4(a1, a2, a3, a4, w1, w2, w3, w4) result(s)
+      !! Area-weighted mean of four face values (0 when the weights sum to 0):
+      !! the tangential velocity interpolation of the C grid, written once so the
+      !! kernels that need it inline compute it with the same operands, same order.
+      !$acc routine seq
+      real(wp), value :: a1, a2, a3, a4, w1, w2, w3, w4
+      real(wp) :: s
+      real(wp) :: wt
+      wt = w1 + w2 + w3 + w4
+      s = 0.0_wp
+      if (wt /= 0.0_wp) s = (a1*w1 + a2*w2 + a3*w3 + a4*w4)/wt
+   end function evp_wavg4
+
+   pure function evp_wavg2(a1, a2, w1, w2) result(s)
+      !! Two-point version of `evp_wavg4` (corner velocities).
+      !$acc routine seq
+      real(wp), value :: a1, a2, w1, w2
+      real(wp) :: s
+      real(wp) :: wt
+      wt = w1 + w2
+      s = 0.0_wp
+      if (wt /= 0.0_wp) s = (a1*w1 + a2*w2)/wt
+   end function evp_wavg2
+
    ! ------------------------------------------------------------------
    ! K1: corner strain rate
    ! ------------------------------------------------------------------
 
-   subroutine evp_strain_u_impl(nx, ny, is, ie, js, je, e_factor, avg_strength, u, v, uvelN, vvelE, uvelU, vvelU, &
-                                dxE, dyN, dxU, dyU, ratiodxN, ratiodxNr, ratiodyE, ratiodyEr, epm, npm, &
-                                iceUmask, shearU, deltaU)
+   subroutine evp_strain_u_impl(nx, ny, is, ie, js, je, e_factor, avg_strength, u, v, earea, narea, &
+                                dxE, dyN, dxU, dyU, ratiodxN, ratiodxNr, ratiodyE, ratiodyEr, epm, npm, uvm, &
+                                imask, shearU, deltaU)
       !! K1.  Shear strain rate x corner area, `shearU`, at
-      !! `U(is-2:ie+1, js-2:je+1)` where the corner carries ice (0 elsewhere);
+      !! `U(is-2:ie+1, js-2:je+1)` where the corner carries ice (the ice-free
+      !! corners were zeroed once in the preparation and are skipped);
       !! with `avg_strength` also `deltaU = sqrt(div^2 + e_factor (tension^2
-      !! + shear^2))`.  The C-grid lateral boundary condition is the `ratiodxN`
-      !! / `ratiodyE` extrapolation of the tangential face velocities (a
-      !! closed face contributes the mirrored (sign-reversed) value of the open
-      !! one, so the wall-parallel velocity vanishes at a straight wall: NO
-      !! slip, Hunke and Dukowicz (2002) / Lemieux et al. (2024)).  It acts at
-      !! the corners where at least two of the four T cells are wet.
-      integer, intent(in) :: nx, ny, is, ie, js, je
-      real(wp), intent(in) :: e_factor
-      logical, intent(in) :: avg_strength
+      !! + shear^2))`.  The tangential velocities at the corner (and, for
+      !! `deltaU`, at the four surrounding faces) are interpolated here from
+      !! `(u, v)` with the same expressions as `evp_average_impl`, so no
+      !! averaged array is read.  The C-grid lateral boundary condition is the
+      !! `ratiodxN` / `ratiodyE` extrapolation of the tangential face
+      !! velocities (a closed face contributes the mirrored (sign-reversed)
+      !! value of the open one, so the wall-parallel velocity vanishes at a
+      !! straight wall: NO slip, Hunke and Dukowicz (2002) / Lemieux et al.
+      !! (2024)).  It acts at the corners where at least two of the four T
+      !! cells are wet.
+      integer, value :: nx, ny, is, ie, js, je
+      real(wp), value :: e_factor
+      logical, value :: avg_strength
       real(wp), intent(in) :: u(nx + 1, ny), v(nx, ny + 1)
-      real(wp), intent(in) :: uvelN(nx, ny), vvelE(nx, ny), uvelU(nx, ny), vvelU(nx, ny)
+      real(wp), intent(in) :: earea(nx, ny), narea(nx, ny)
       real(wp), intent(in) :: dxE(nx, ny), dyN(nx, ny), dxU(nx, ny), dyU(nx, ny)
       real(wp), intent(in) :: ratiodxN(nx, ny), ratiodxNr(nx, ny), ratiodyE(nx, ny), ratiodyEr(nx, ny)
-      real(wp), intent(in) :: epm(nx, ny), npm(nx, ny)
-      logical, intent(in) :: iceUmask(nx, ny)
+      real(wp), intent(in) :: epm(nx, ny), npm(nx, ny), uvm(nx, ny)
+      integer(int8), intent(in) :: imask(nx, ny)
       real(wp), intent(inout) :: shearU(nx, ny), deltaU(nx, ny)
       integer :: i, j
-      real(wp) :: uEijp1, uEij, vNip1j, vNij, uNip1j, uNij, vEijp1, vEij, shr, dvg, ten
+      real(wp) :: uEijp1, uEij, vNip1j, vNij, uNip1j, uNij, vEijp1, vEij, shr, dvg, ten, uvelU, vvelU
+      real(wp) :: uvelNij, uvelNip1j, vvelEij, vvelEjp1
 
       do concurrent(j=js - 2:je + 1, i=is - 2:ie + 1) local(uEijp1, uEij, vNip1j, vNij, uNip1j, uNij, &
-                                                            vEijp1, vEij, shr, dvg, ten)
-         if (iceUmask(i, j)) then
+                                                            vEijp1, vEij, shr, dvg, ten, uvelU, vvelU, &
+                                                            uvelNij, uvelNip1j, vvelEij, vvelEjp1)
+         if (iand(imask(i, j), EVP_BIT_U) /= 0_int8) then
+            uvelU = evp_wavg2(u(i + 1, j), u(i + 1, j + 1), earea(i, j), earea(i, j + 1))*uvm(i, j)
+            vvelU = evp_wavg2(v(i, j + 1), v(i + 1, j + 1), narea(i, j), narea(i + 1, j))*uvm(i, j)
             uEijp1 = u(i + 1, j + 1)*epm(i, j + 1) &
                      + (epm(i, j) - epm(i, j + 1))*epm(i, j)*ratiodyE(i, j)*u(i + 1, j)
             uEij = u(i + 1, j)*epm(i, j) &
@@ -173,27 +213,32 @@ contains
                      + (npm(i, j) - npm(i + 1, j))*npm(i, j)*ratiodxN(i, j)*v(i, j + 1)
             vNij = v(i, j + 1)*npm(i, j) &
                    + (npm(i + 1, j) - npm(i, j))*npm(i + 1, j)*ratiodxNr(i, j)*v(i + 1, j + 1)
-            shr = dxU(i, j)*(uEijp1 - uEij) - uvelU(i, j)*(dxE(i, j + 1) - dxE(i, j)) &
-                  + dyU(i, j)*(vNip1j - vNij) - vvelU(i, j)*(dyN(i + 1, j) - dyN(i, j))
+            shr = dxU(i, j)*(uEijp1 - uEij) - uvelU*(dxE(i, j + 1) - dxE(i, j)) &
+                  + dyU(i, j)*(vNip1j - vNij) - vvelU*(dyN(i + 1, j) - dyN(i, j))
             shearU(i, j) = shr
             if (avg_strength) then
-               uNip1j = uvelN(i + 1, j)*npm(i + 1, j) &
-                        + (npm(i, j) - npm(i + 1, j))*npm(i, j)*ratiodxN(i, j)*uvelN(i, j)
-               uNij = uvelN(i, j)*npm(i, j) &
-                      + (npm(i + 1, j) - npm(i, j))*npm(i + 1, j)*ratiodxNr(i, j)*uvelN(i + 1, j)
-               vEijp1 = vvelE(i, j + 1)*epm(i, j + 1) &
-                        + (epm(i, j) - epm(i, j + 1))*epm(i, j)*ratiodyE(i, j)*vvelE(i, j)
-               vEij = vvelE(i, j)*epm(i, j) &
-                      + (epm(i, j + 1) - epm(i, j))*epm(i, j + 1)*ratiodyEr(i, j)*vvelE(i, j + 1)
-               dvg = dyU(i, j)*(uNip1j - uNij) + uvelU(i, j)*(dyN(i + 1, j) - dyN(i, j)) &
-                     + dxU(i, j)*(vEijp1 - vEij) + vvelU(i, j)*(dxE(i, j + 1) - dxE(i, j))
-               ten = dyU(i, j)*(uNip1j - uNij) - uvelU(i, j)*(dyN(i + 1, j) - dyN(i, j)) &
-                     - dxU(i, j)*(vEijp1 - vEij) + vvelU(i, j)*(dxE(i, j + 1) - dxE(i, j))
+               uvelNij = evp_wavg4(u(i, j), u(i + 1, j), u(i, j + 1), u(i + 1, j + 1), &
+                                   earea(i - 1, j), earea(i, j), earea(i - 1, j + 1), earea(i, j + 1))*npm(i, j)
+               uvelNip1j = evp_wavg4(u(i + 1, j), u(i + 2, j), u(i + 1, j + 1), u(i + 2, j + 1), &
+                                     earea(i, j), earea(i + 1, j), earea(i, j + 1), earea(i + 1, j + 1))*npm(i + 1, j)
+               vvelEij = evp_wavg4(v(i, j), v(i + 1, j), v(i, j + 1), v(i + 1, j + 1), &
+                                   narea(i, j - 1), narea(i + 1, j - 1), narea(i, j), narea(i + 1, j))*epm(i, j)
+               vvelEjp1 = evp_wavg4(v(i, j + 1), v(i + 1, j + 1), v(i, j + 2), v(i + 1, j + 2), &
+                                    narea(i, j), narea(i + 1, j), narea(i, j + 1), narea(i + 1, j + 1))*epm(i, j + 1)
+               uNip1j = uvelNip1j*npm(i + 1, j) &
+                        + (npm(i, j) - npm(i + 1, j))*npm(i, j)*ratiodxN(i, j)*uvelNij
+               uNij = uvelNij*npm(i, j) &
+                      + (npm(i + 1, j) - npm(i, j))*npm(i + 1, j)*ratiodxNr(i, j)*uvelNip1j
+               vEijp1 = vvelEjp1*epm(i, j + 1) &
+                        + (epm(i, j) - epm(i, j + 1))*epm(i, j)*ratiodyE(i, j)*vvelEij
+               vEij = vvelEij*epm(i, j) &
+                      + (epm(i, j + 1) - epm(i, j))*epm(i, j + 1)*ratiodyEr(i, j)*vvelEjp1
+               dvg = dyU(i, j)*(uNip1j - uNij) + uvelU*(dyN(i + 1, j) - dyN(i, j)) &
+                     + dxU(i, j)*(vEijp1 - vEij) + vvelU*(dxE(i, j + 1) - dxE(i, j))
+               ten = dyU(i, j)*(uNip1j - uNij) - uvelU*(dyN(i + 1, j) - dyN(i, j)) &
+                     - dxU(i, j)*(vEijp1 - vEij) + vvelU*(dxE(i, j + 1) - dxE(i, j))
                deltaU(i, j) = sqrt(dvg*dvg + e_factor*(ten*ten + shr*shr))
             end if
-         else
-            shearU(i, j) = 0.0_wp
-            deltaU(i, j) = 0.0_wp
          end if
       end do
    end subroutine evp_strain_u_impl
@@ -203,20 +248,20 @@ contains
    ! ------------------------------------------------------------------
 
    subroutine evp_stress_t_impl(nx, ny, is, ie, js, je, arlx1i, revp, denom1, epp2i, e_factor, ktens, deltamin, &
-                                cap_max, u, v, dxN, dyE, dxT, dyT, uarea, tarea, strength, shearU, iceTmask, &
+                                cap_max, u, v, dxN, dyE, dxT, dyT, uarea, tarea, strength, shearU, imask, &
                                 zetax2T, etax2T, stresspT, stressmT)
       !! K2.  Divergence and tension at T from the faces, the shear squared
       !! as the area-weighted mean of the four corner values, Delta, the
       !! viscosities and replacement pressure, and the elastic update of
       !! `stresspT`/`stressmT` (Hunke and Dukowicz 1997; Bouillon et al. 2013)
       !! over `T(is-1:ie+1, js-1:je+1)` where `iceTmask`.
-      integer, intent(in) :: nx, ny, is, ie, js, je
-      real(wp), intent(in) :: arlx1i, revp, denom1, epp2i, e_factor, ktens, deltamin
-      logical, intent(in) :: cap_max
+      integer, value :: nx, ny, is, ie, js, je
+      real(wp), value :: arlx1i, revp, denom1, epp2i, e_factor, ktens, deltamin
+      logical, value :: cap_max
       real(wp), intent(in) :: u(nx + 1, ny), v(nx, ny + 1)
       real(wp), intent(in) :: dxN(nx, ny), dyE(nx, ny), dxT(nx, ny), dyT(nx, ny)
       real(wp), intent(in) :: uarea(nx, ny), tarea(nx, ny), strength(nx, ny), shearU(nx, ny)
-      logical, intent(in) :: iceTmask(nx, ny)
+      integer(int8), intent(in) :: imask(nx, ny)
       real(wp), intent(inout) :: zetax2T(nx, ny), etax2T(nx, ny), stresspT(nx, ny), stressmT(nx, ny)
       integer :: i, j
       real(wp) :: uE1, uE0, vN1, vN0, divT, tenT, w1, w2, w3, w4, ssq, delta, zeta2, eta2, rep, keep
@@ -224,7 +269,7 @@ contains
       keep = 1.0_wp - arlx1i*revp
       do concurrent(j=js - 1:je + 1, i=is - 1:ie + 1) local(uE1, uE0, vN1, vN0, divT, tenT, w1, w2, w3, w4, &
                                                             ssq, delta, zeta2, eta2, rep)
-         if (iceTmask(i, j)) then
+         if (iand(imask(i, j), EVP_BIT_T) /= 0_int8) then
             uE1 = u(i + 1, j)
             uE0 = u(i, j)
             vN1 = v(i, j + 1)
@@ -255,26 +300,26 @@ contains
    ! ------------------------------------------------------------------
 
    subroutine evp_stress_u_impl(nx, ny, is, ie, js, je, arlx1i, revp, denom1, epp2i, ktens, deltamin, cap_max, &
-                                avg_strength, hm, tarea, uarea, etax2T, strengthU, deltaU, shearU, iceUmask, &
+                                avg_strength, hm, tarea, uarea, etax2T, strengthU, deltaU, shearU, imask, &
                                 stress12U)
       !! K3.  Corner shear stress over `U(is-1:ie, js-1:je)` where
       !! `iceUmask`.  `avg_zeta` (CICE default): the shear viscosity at the
       !! corner is the masked, area-weighted mean of the four T viscosities;
       !! `avg_strength`: it is rebuilt from the averaged strength and the
       !! corner Delta (`deltaminEVP * uarea` regularisation).
-      integer, intent(in) :: nx, ny, is, ie, js, je
-      real(wp), intent(in) :: arlx1i, revp, denom1, epp2i, ktens, deltamin
-      logical, intent(in) :: cap_max, avg_strength
+      integer, value :: nx, ny, is, ie, js, je
+      real(wp), value :: arlx1i, revp, denom1, epp2i, ktens, deltamin
+      logical, value :: cap_max, avg_strength
       real(wp), intent(in) :: hm(nx, ny), tarea(nx, ny), uarea(nx, ny), etax2T(nx, ny)
       real(wp), intent(in) :: strengthU(nx, ny), deltaU(nx, ny), shearU(nx, ny)
-      logical, intent(in) :: iceUmask(nx, ny)
+      integer(int8), intent(in) :: imask(nx, ny)
       real(wp), intent(inout) :: stress12U(nx + 1, ny + 1)
       integer :: i, j
       real(wp) :: w1, w2, w3, w4, wt, etaU, zeta2, rep, keep
 
       keep = 1.0_wp - arlx1i*revp
       do concurrent(j=js - 1:je, i=is - 1:ie) local(w1, w2, w3, w4, wt, etaU, zeta2, rep)
-         if (iceUmask(i, j)) then
+         if (iand(imask(i, j), EVP_BIT_U) /= 0_int8) then
             if (avg_strength) then
                call evp_visc_replpress(strengthU(i, j), deltamin*uarea(i, j), deltaU(i, j), cap_max, ktens, &
                                        epp2i, zeta2, etaU, rep)
@@ -300,9 +345,9 @@ contains
    ! ------------------------------------------------------------------
 
    subroutine evp_momentum_impl(nx, ny, is, ie, js, je, revp, brlx, rhow, cw, cosw, sinw, free_drift, rheo_amin, &
-                                u, v, uvelN, vvelE, dxE, dyE, dxN, dyN, dxU, dyU, dxT, dyT, earear, narear, &
-                                stresspT, stressmT, stress12U, iceEmask, iceNmask, aiE, aiN, emassdti, nmassdti, &
-                                fmE, fmN, forcexE, forceyN, uinit, vinit, uocnE, vocnE, uocnN, vocnN)
+                                uo, vo, un, vn, earea, narea, epm, npm, dxE, dyE, dxN, dyN, dxU, dyU, dxT, dyT, &
+                                earear, narear, stresspT, stressmT, stress12U, imask, aiE, aiN, emassdti, &
+                                nmassdti, fmE, fmN, forcexE, forceyN, uinit, vinit, uocnE, vocnE, uocnN, vocnN)
       !! K4.  For the owned faces `E(is:ie, js:je)` and `N(is:ie, js:je)`
       !! where they carry ice: the stress divergence (a local scalar, with
       !! the rheology dropped where `free_drift` and the concentration is
@@ -311,59 +356,67 @@ contains
       !!   `cca = (brlx + revp) m/dt + vrel cosw`, `ccb = f m + sgn(f) vrel sinw`,
       !!   `cc1 = strint + force + vrel water + (m/dt)(brlx u + revp u_init)`
       !! with `vrel = a rho_w C_w |u_ocn - u|` evaluated at the old velocity
-      !! and `(u_t, v_t)` the tangential components interpolated by
-      !! `evp_average_impl`.  The update is in place: the thread that owns a
-      !! face is the only one that reads or writes its velocity.
-      integer, intent(in) :: nx, ny, is, ie, js, je
-      real(wp), intent(in) :: revp, brlx, rhow, cw, cosw, sinw, rheo_amin
-      logical, intent(in) :: free_drift
-      real(wp), intent(inout) :: u(nx + 1, ny), v(nx, ny + 1)
-      real(wp), intent(in) :: uvelN(nx, ny), vvelE(nx, ny)
+      !! and `(u_t, v_t)` the tangential components interpolated from the OLD
+      !! velocity here (same expressions as `evp_average_impl`).  Ping-pong: the
+      !! old pair `(uo, vo)` is only read, the new pair `(un, vn)` only written at
+      !! the ice faces; at every other face `(un, vn)` must already hold the old
+      !! value (the caller copies the pair once per step) and the ghost ring is the
+      !! caller's (wrap or halo exchange of `(un, vn)`, then swap).
+      integer, value :: nx, ny, is, ie, js, je
+      real(wp), value :: revp, brlx, rhow, cw, cosw, sinw, rheo_amin
+      logical, value :: free_drift
+      real(wp), intent(in) :: uo(nx + 1, ny), vo(nx, ny + 1)
+      real(wp), intent(inout) :: un(nx + 1, ny), vn(nx, ny + 1)
+      real(wp), intent(in) :: earea(nx, ny), narea(nx, ny), epm(nx, ny), npm(nx, ny)
       real(wp), intent(in) :: dxE(nx, ny), dyE(nx, ny), dxN(nx, ny), dyN(nx, ny), dxU(nx, ny), dyU(nx, ny)
       real(wp), intent(in) :: dxT(nx, ny), dyT(nx, ny), earear(nx, ny), narear(nx, ny)
       real(wp), intent(in) :: stresspT(nx, ny), stressmT(nx, ny), stress12U(nx + 1, ny + 1)
-      logical, intent(in) :: iceEmask(nx, ny), iceNmask(nx, ny)
+      integer(int8), intent(in) :: imask(nx, ny)
       real(wp), intent(in) :: aiE(nx, ny), aiN(nx, ny), emassdti(nx, ny), nmassdti(nx, ny)
       real(wp), intent(in) :: fmE(nx, ny), fmN(nx, ny), forcexE(nx, ny), forceyN(nx, ny)
       real(wp), intent(in) :: uinit(nx, ny), vinit(nx, ny)
       real(wp), intent(in) :: uocnE(nx, ny), vocnE(nx, ny), uocnN(nx, ny), vocnN(nx, ny)
       integer :: i, j
       real(wp) :: rheo, strint, uold, vold, vrel, sg, cca, ccb, cc, wat
+      integer(int8) :: mk
 
-      do concurrent(j=js:je, i=is:ie) local(rheo, strint, uold, vold, vrel, sg, cca, ccb, cc, wat)
+      do concurrent(j=js:je, i=is:ie) local(rheo, strint, uold, vold, vrel, sg, cca, ccb, cc, wat, mk)
+         mk = imask(i, j)
          ! ---- u at E(i,j) ----
-         if (iceEmask(i, j)) then
+         if (iand(mk, EVP_BIT_E) /= 0_int8) then
             rheo = 1.0_wp
             if (free_drift .and. .not. (aiE(i, j) > rheo_amin)) rheo = 0.0_wp
             strint = evp_div_x(dxE(i, j), dyE(i, j), dyT(i + 1, j), dyT(i, j), dxU(i, j), dxU(i, j - 1), &
                                stresspT(i + 1, j), stresspT(i, j), stressmT(i + 1, j), stressmT(i, j), &
                                stress12U(i + 1, j + 1), stress12U(i + 1, j), earear(i, j), rheo)
-            uold = u(i + 1, j)
-            vold = vvelE(i, j)
+            uold = uo(i + 1, j)
+            vold = evp_wavg4(vo(i, j), vo(i + 1, j), vo(i, j + 1), vo(i + 1, j + 1), &
+                             narea(i, j - 1), narea(i + 1, j - 1), narea(i, j), narea(i + 1, j))*epm(i, j)
             vrel = aiE(i, j)*rhow*cw*sqrt((uocnE(i, j) - uold)**2 + (vocnE(i, j) - vold)**2)
             sg = sign(1.0_wp, fmE(i, j))
             wat = uocnE(i, j)*cosw - vocnE(i, j)*sinw*sg
             cca = (brlx + revp)*emassdti(i, j) + vrel*cosw
             ccb = fmE(i, j) + sg*vrel*sinw
             cc = strint + forcexE(i, j) + vrel*wat + emassdti(i, j)*(brlx*uold + revp*uinit(i, j))
-            u(i + 1, j) = (ccb*vold + cc)/cca
+            un(i + 1, j) = (ccb*vold + cc)/cca
          end if
          ! ---- v at N(i,j) ----
-         if (iceNmask(i, j)) then
+         if (iand(mk, EVP_BIT_N) /= 0_int8) then
             rheo = 1.0_wp
             if (free_drift .and. .not. (aiN(i, j) > rheo_amin)) rheo = 0.0_wp
             strint = evp_div_y(dxN(i, j), dyN(i, j), dxT(i, j + 1), dxT(i, j), dyU(i, j), dyU(i - 1, j), &
                                stresspT(i, j + 1), stresspT(i, j), stressmT(i, j + 1), stressmT(i, j), &
                                stress12U(i + 1, j + 1), stress12U(i, j + 1), narear(i, j), rheo)
-            uold = uvelN(i, j)
-            vold = v(i, j + 1)
+            uold = evp_wavg4(uo(i, j), uo(i + 1, j), uo(i, j + 1), uo(i + 1, j + 1), &
+                             earea(i - 1, j), earea(i, j), earea(i - 1, j + 1), earea(i, j + 1))*npm(i, j)
+            vold = vo(i, j + 1)
             vrel = aiN(i, j)*rhow*cw*sqrt((uocnN(i, j) - uold)**2 + (vocnN(i, j) - vold)**2)
             sg = sign(1.0_wp, fmN(i, j))
             wat = vocnN(i, j)*cosw + uocnN(i, j)*sinw*sg
             cca = (brlx + revp)*nmassdti(i, j) + vrel*cosw
             ccb = fmN(i, j) + sg*vrel*sinw
             cc = strint + forceyN(i, j) + vrel*wat + nmassdti(i, j)*(brlx*vold + revp*vinit(i, j))
-            v(i, j + 1) = (-ccb*uold + cc)/cca
+            vn(i, j + 1) = (-ccb*uold + cc)/cca
          end if
       end do
    end subroutine evp_momentum_impl
@@ -406,7 +459,7 @@ contains
    end subroutine evp_div_stress_impl
 
    ! ------------------------------------------------------------------
-   ! K5: averages
+   ! K5: averages (once per step, for the finish kernel)
    ! ------------------------------------------------------------------
 
    subroutine evp_average_impl(nx, ny, is, ie, js, je, u, v, earea, narea, epm, npm, uvm, uvelN, vvelE, uvelU, vvelU)
@@ -465,8 +518,8 @@ contains
    ! ------------------------------------------------------------------
 
    subroutine evp_finish_impl(nx, ny, is, ie, js, je, e_factor, epp2i, rhow, cw, cosw, sinw, vel_cap, u, v, &
-                              uvelN, vvelE, shearU, dxN, dyE, dxT, dyT, uarea, tarear, iceTmask, iceEmask, &
-                              iceNmask, aiE, aiN, fmE, fmN, uocnE, vocnE, uocnN, vocnN, divu, shear, vort, &
+                              uvelN, vvelE, shearU, dxN, dyE, dxT, dyT, uarea, tarear, imask, &
+                              aiE, aiN, fmE, fmN, uocnE, vocnE, uocnN, vocnN, divu, shear, vort, &
                               rdg_conv, rdg_shear, strocnxE, strocnyN, ice_err)
       !! Over the owned cells: the strain-rate diagnostics at T
       !! (`deformationsC_T`: `divu`, `shear`, `vort`, and the ridging
@@ -479,7 +532,7 @@ contains
       real(wp), intent(in) :: e_factor, epp2i, rhow, cw, cosw, sinw, vel_cap
       real(wp), intent(in) :: u(nx + 1, ny), v(nx, ny + 1), uvelN(nx, ny), vvelE(nx, ny), shearU(nx, ny)
       real(wp), intent(in) :: dxN(nx, ny), dyE(nx, ny), dxT(nx, ny), dyT(nx, ny), uarea(nx, ny), tarear(nx, ny)
-      logical, intent(in) :: iceTmask(nx, ny), iceEmask(nx, ny), iceNmask(nx, ny)
+      integer(int8), intent(in) :: imask(nx, ny)
       real(wp), intent(in) :: aiE(nx, ny), aiN(nx, ny), fmE(nx, ny), fmN(nx, ny)
       real(wp), intent(in) :: uocnE(nx, ny), vocnE(nx, ny), uocnN(nx, ny), vocnN(nx, ny)
       real(wp), intent(inout) :: divu(nx, ny), shear(nx, ny), vort(nx, ny), rdg_conv(nx, ny), rdg_shear(nx, ny)
@@ -498,7 +551,7 @@ contains
          vort(i, j) = 0.0_wp
          rdg_conv(i, j) = 0.0_wp
          rdg_shear(i, j) = 0.0_wp
-         if (iceTmask(i, j)) then
+         if (iand(imask(i, j), EVP_BIT_T) /= 0_int8) then
             uE1 = u(i + 1, j)
             uE0 = u(i, j)
             vN1 = v(i, j + 1)
@@ -539,14 +592,14 @@ contains
          strocnxE(i, j) = 0.0_wp
          strocnyN(i, j) = 0.0_wp
          bad = nonfin
-         if (iceEmask(i, j)) then
+         if (iand(imask(i, j), EVP_BIT_E) /= 0_int8) then
             vrel = aiE(i, j)*rhow*cw*sqrt((uocnE(i, j) - u(i + 1, j))**2 + (vocnE(i, j) - vvelE(i, j))**2)
             sg = sign(1.0_wp, fmE(i, j))
             strocnxE(i, j) = vrel*((uocnE(i, j) - u(i + 1, j))*cosw - (vocnE(i, j) - vvelE(i, j))*sinw*sg)
             bad = .not. ieee_is_finite(u(i + 1, j))
             if (.not. bad) bad = abs(u(i + 1, j)) > vel_cap
          end if
-         if (iceNmask(i, j)) then
+         if (iand(imask(i, j), EVP_BIT_N) /= 0_int8) then
             vrel = aiN(i, j)*rhow*cw*sqrt((uocnN(i, j) - uvelN(i, j))**2 + (vocnN(i, j) - v(i, j + 1))**2)
             sg = sign(1.0_wp, fmN(i, j))
             strocnyN(i, j) = vrel*((vocnN(i, j) - v(i, j + 1))*cosw + (uocnN(i, j) - uvelN(i, j))*sinw*sg)
@@ -624,9 +677,36 @@ contains
       call evp_wrap_v_impl(nx, ny, is, ie, js, je, is - 1, wrap_x, wrap_y, v)
    end subroutine ice_evp_c_wrap_faces
 
+   subroutine evp_copy_faces_impl(nx, ny, us, vs, ud, vd)
+      !! `(ud, vd) = (us, vs)` on the whole face pair (one launch).
+      integer, intent(in) :: nx, ny
+      real(wp), intent(in) :: us(nx + 1, ny), vs(nx, ny + 1)
+      real(wp), intent(inout) :: ud(nx + 1, ny), vd(nx, ny + 1)
+      integer :: i, j
+
+      do concurrent(j=1:ny, i=1:nx + 1)
+         ud(i, j) = us(i, j)
+      end do
+      do concurrent(j=1:ny + 1, i=1:nx)
+         vd(i, j) = vs(i, j)
+      end do
+   end subroutine evp_copy_faces_impl
+
+   subroutine ice_evp_c_copy_faces(nx, ny, us, vs, ud, vd)
+      !! Copy the face pair `(us, vs)` to `(ud, vd)` on the device (the
+      !! per-step set-up of the ping-pong buffers, and the copy back).
+      integer, intent(in) :: nx, ny
+      real(wp), intent(in) :: us(nx + 1, ny), vs(nx, ny + 1)
+      real(wp), intent(inout) :: ud(nx + 1, ny), vd(nx, ny + 1)
+      call evp_copy_faces_impl(nx, ny, us, vs, ud, vd)
+   end subroutine ice_evp_c_copy_faces
+
    subroutine ice_evp_c_average(w, nx, ny, is, ie, js, je, u, v, earea, narea, epm, npm, uvm)
-      !! K5 on the work arrays: call after the face halo of `(u, v)` (and
-      !! once after `ice_evp_c_prep`).
+      !! K5 on the work arrays: fills `uvelN`, `vvelE`, `uvelU`, `vvelU`
+      !! from the face pair.  The subcycles no longer need them (K1 and K4
+      !! interpolate inline); `ice_evp_c_step` calls it once after the last
+      !! subcycle for `ice_evp_c_finish`, and diagnostics may call it any time
+      !! after the face halo of `(u, v)`.
       type(ice_evp_c_work_t), intent(inout) :: w
       integer, intent(in) :: nx, ny, is, ie, js, je
       real(wp), intent(in) :: u(nx + 1, ny), v(nx, ny + 1)
@@ -635,38 +715,44 @@ contains
                             w%uvelN, w%vvelE, w%uvelU, w%vvelU)
    end subroutine ice_evp_c_average
 
-   subroutine ice_evp_c_substep(w, k, nx, ny, is, ie, js, je, u, v, &
-                                dxE, dyE, dxN, dyN, dxU, dyU, dxT, dyT, uarea, tarea, earear, narear, &
-                                ratiodxN, ratiodxNr, ratiodyE, ratiodyEr, epm, npm, hm, &
+   subroutine ice_evp_c_substep(w, k, nx, ny, is, ie, js, je, uo, vo, un, vn, &
+                                dxE, dyE, dxN, dyN, dxU, dyU, dxT, dyT, uarea, tarea, earea, narea, earear, narear, &
+                                ratiodxN, ratiodxNr, ratiodyE, ratiodyEr, epm, npm, uvm, hm, &
                                 uocnE, vocnE, uocnN, vocnN)
-      !! K1-K4 of one subcycle (no halo, no K5): the piece a multi-rank
-      !! caller runs between two face exchanges.  `u`, `v` are updated in
-      !! place.  Call `ice_evp_c_average` (after the exchange) before the next
-      !! one.
+      !! K1-K4 of one subcycle (4 launches, no halo): the piece a multi-rank
+      !! caller runs between two face exchanges.  Ping-pong: reads `(uo, vo)`,
+      !! writes the owned ice faces of `(un, vn)`; at every other face `(un, vn)`
+      !! must already equal `(uo, vo)` (copy the pair once per step with
+      !! `ice_evp_c_copy_faces`, after the first halo).  The caller then
+      !! refreshes the ghost ring of `(un, vn)` (`ice_halo_faces`, or
+      !! `ice_evp_c_wrap_faces` on one periodic rank) and swaps the roles of
+      !! the two pairs for the next subcycle.
       type(ice_evp_c_work_t), intent(inout) :: w
       type(ice_evp_c_const_t), intent(in) :: k
       integer, intent(in) :: nx, ny, is, ie, js, je
-      real(wp), intent(inout) :: u(nx + 1, ny), v(nx, ny + 1)
+      real(wp), intent(in) :: uo(nx + 1, ny), vo(nx, ny + 1)
+      real(wp), intent(inout) :: un(nx + 1, ny), vn(nx, ny + 1)
       real(wp), intent(in) :: dxE(nx, ny), dyE(nx, ny), dxN(nx, ny), dyN(nx, ny), dxU(nx, ny), dyU(nx, ny)
-      real(wp), intent(in) :: dxT(nx, ny), dyT(nx, ny), uarea(nx, ny), tarea(nx, ny), earear(nx, ny), narear(nx, ny)
+      real(wp), intent(in) :: dxT(nx, ny), dyT(nx, ny), uarea(nx, ny), tarea(nx, ny), earea(nx, ny), narea(nx, ny)
+      real(wp), intent(in) :: earear(nx, ny), narear(nx, ny)
       real(wp), intent(in) :: ratiodxN(nx, ny), ratiodxNr(nx, ny), ratiodyE(nx, ny), ratiodyEr(nx, ny)
-      real(wp), intent(in) :: epm(nx, ny), npm(nx, ny), hm(nx, ny)
+      real(wp), intent(in) :: epm(nx, ny), npm(nx, ny), uvm(nx, ny), hm(nx, ny)
       real(wp), intent(in) :: uocnE(nx, ny), vocnE(nx, ny), uocnN(nx, ny), vocnN(nx, ny)
 
-      call evp_strain_u_impl(nx, ny, is, ie, js, je, k%e_factor, k%avg_strength, u, v, w%uvelN, w%vvelE, &
-                             w%uvelU, w%vvelU, dxE, dyN, dxU, dyU, ratiodxN, ratiodxNr, ratiodyE, ratiodyEr, &
-                             epm, npm, w%iceUmask, w%shearU, w%deltaU)
+      call evp_strain_u_impl(nx, ny, is, ie, js, je, k%e_factor, k%avg_strength, uo, vo, earea, narea, &
+                             dxE, dyN, dxU, dyU, ratiodxN, ratiodxNr, ratiodyE, ratiodyEr, &
+                             epm, npm, uvm, w%imask, w%shearU, w%deltaU)
       call evp_stress_t_impl(nx, ny, is, ie, js, je, k%arlx1i, k%revp, k%denom1, k%epp2i, k%e_factor, k%Ktens, &
-                             k%deltamin, k%cap_max, u, v, dxN, dyE, dxT, dyT, uarea, tarea, w%strength, &
-                             w%shearU, w%iceTmask, w%zetax2T, w%etax2T, w%stresspT, w%stressmT)
+                             k%deltamin, k%cap_max, uo, vo, dxN, dyE, dxT, dyT, uarea, tarea, w%strength, &
+                             w%shearU, w%imask, w%zetax2T, w%etax2T, w%stresspT, w%stressmT)
       call evp_stress_u_impl(nx, ny, is, ie, js, je, k%arlx1i, k%revp, k%denom1, k%epp2i, k%Ktens, k%deltamin, &
                              k%cap_max, k%avg_strength, hm, tarea, uarea, w%etax2T, w%strengthU, w%deltaU, &
-                             w%shearU, w%iceUmask, w%stress12U)
+                             w%shearU, w%imask, w%stress12U)
       call evp_momentum_impl(nx, ny, is, ie, js, je, k%revp, k%brlx, k%rhow, k%cw, k%cosw, k%sinw, &
-                             k%free_drift, k%rheo_amin, u, v, w%uvelN, w%vvelE, dxE, dyE, dxN, dyN, dxU, dyU, &
-                             dxT, dyT, earear, narear, w%stresspT, w%stressmT, w%stress12U, w%iceEmask, &
-                             w%iceNmask, w%aiE, w%aiN, w%emassdti, w%nmassdti, w%fmE, w%fmN, w%forcexE, &
-                             w%forceyN, w%uinit, w%vinit, uocnE, vocnE, uocnN, vocnN)
+                             k%free_drift, k%rheo_amin, uo, vo, un, vn, earea, narea, epm, npm, &
+                             dxE, dyE, dxN, dyN, dxU, dyU, dxT, dyT, earear, narear, w%stresspT, w%stressmT, &
+                             w%stress12U, w%imask, w%aiE, w%aiN, w%emassdti, w%nmassdti, w%fmE, w%fmN, &
+                             w%forcexE, w%forceyN, w%uinit, w%vinit, uocnE, vocnE, uocnN, vocnN)
    end subroutine ice_evp_c_substep
 
    subroutine ice_evp_c_finish(w, k, nx, ny, is, ie, js, je, u, v, dxN, dyE, dxT, dyT, uarea, tarear, &
@@ -683,8 +769,8 @@ contains
       integer(int32), intent(inout) :: ice_err(nx, ny)
 
       call evp_finish_impl(nx, ny, is, ie, js, je, k%e_factor, k%epp2i, k%rhow, k%cw, k%cosw, k%sinw, k%vel_cap, &
-                           u, v, w%uvelN, w%vvelE, w%shearU, dxN, dyE, dxT, dyT, uarea, tarear, w%iceTmask, &
-                           w%iceEmask, w%iceNmask, w%aiE, w%aiN, w%fmE, w%fmN, uocnE, vocnE, uocnN, vocnN, &
+                           u, v, w%uvelN, w%vvelE, w%shearU, dxN, dyE, dxT, dyT, uarea, tarear, w%imask, &
+                           w%aiE, w%aiN, w%fmE, w%fmN, uocnE, vocnE, uocnN, vocnN, &
                            w%divu, w%shear, w%vort, w%rdg_conv, w%rdg_shear, w%strocnxE, w%strocnyN, ice_err)
    end subroutine ice_evp_c_finish
 
@@ -744,14 +830,22 @@ contains
                           aicen, vicen, tarea, epm, npm, fcorE, fcorN, strairxE, strairyN, ss_tltxE, &
                           ss_tltyN, uocnE, vocnN, u, v, ice_err)
       call ice_evp_c_wrap_faces(nx, ny, is, ie, js, je, wrap_x, wrap_y, u, v)
-      call ice_evp_c_average(w, nx, ny, is, ie, js, je, u, v, earea, narea, epm, npm, uvm)
+      call ice_evp_c_copy_faces(nx, ny, u, v, w%u2, w%v2)
       do ksub = 1, k%ndte
-         call ice_evp_c_substep(w, k, nx, ny, is, ie, js, je, u, v, dxE, dyE, dxN, dyN, dxU, dyU, dxT, dyT, &
-                                uarea, tarea, earear, narear, ratiodxN, ratiodxNr, ratiodyE, ratiodyEr, &
-                                epm, npm, hm, uocnE, vocnE, uocnN, vocnN)
-         call ice_evp_c_wrap_faces(nx, ny, is, ie, js, je, wrap_x, wrap_y, u, v)
-         call ice_evp_c_average(w, nx, ny, is, ie, js, je, u, v, earea, narea, epm, npm, uvm)
+         if (mod(ksub, 2) == 1) then          ! old pair (u, v) -> new pair (u2, v2)
+            call ice_evp_c_substep(w, k, nx, ny, is, ie, js, je, u, v, w%u2, w%v2, dxE, dyE, dxN, dyN, dxU, dyU, &
+                                   dxT, dyT, uarea, tarea, earea, narea, earear, narear, ratiodxN, ratiodxNr, &
+                                   ratiodyE, ratiodyEr, epm, npm, uvm, hm, uocnE, vocnE, uocnN, vocnN)
+            call ice_evp_c_wrap_faces(nx, ny, is, ie, js, je, wrap_x, wrap_y, w%u2, w%v2)
+         else                                 ! old pair (u2, v2) -> new pair (u, v)
+            call ice_evp_c_substep(w, k, nx, ny, is, ie, js, je, w%u2, w%v2, u, v, dxE, dyE, dxN, dyN, dxU, dyU, &
+                                   dxT, dyT, uarea, tarea, earea, narea, earear, narear, ratiodxN, ratiodxNr, &
+                                   ratiodyE, ratiodyEr, epm, npm, uvm, hm, uocnE, vocnE, uocnN, vocnN)
+            call ice_evp_c_wrap_faces(nx, ny, is, ie, js, je, wrap_x, wrap_y, u, v)
+         end if
       end do
+      if (mod(k%ndte, 2) == 1) call ice_evp_c_copy_faces(nx, ny, w%u2, w%v2, u, v)
+      call ice_evp_c_average(w, nx, ny, is, ie, js, je, u, v, earea, narea, epm, npm, uvm)
       call ice_evp_c_finish(w, k, nx, ny, is, ie, js, je, u, v, dxN, dyE, dxT, dyT, uarea, tarear, &
                             uocnE, vocnE, uocnN, vocnN, ice_err)
    end subroutine ice_evp_c_step

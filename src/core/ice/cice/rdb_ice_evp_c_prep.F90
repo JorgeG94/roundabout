@@ -34,7 +34,7 @@ module rdb_ice_evp_c_prep
    !! 3x3 dilation of the cells that pass it (so a stress is computed one cell
    !! beyond the ice edge).  A face that becomes ice-covered starts at the
    !! ocean velocity.
-   use, intrinsic :: iso_fortran_env, only: int32, int64
+   use, intrinsic :: iso_fortran_env, only: int8, int32, int64
    use rdb_constants, only: wp
    use rdb_ice_params, only: ice_params_t, ice_constants_t, ice_ridge_params_t, &
                              ICE_VISC_AVG_STRENGTH
@@ -44,6 +44,16 @@ module rdb_ice_evp_c_prep
 
    public :: ice_evp_c_const_t, ice_evp_c_work_t
    public :: ice_evp_c_constants, ice_evp_c_prep, ice_evp_c_ghost_ok
+   public :: EVP_BIT_T, EVP_BIT_U, EVP_BIT_E, EVP_BIT_N
+
+   integer(int8), parameter :: EVP_BIT_T = 1_int8
+      !! `imask` bit: the T cell is a stress point (`iceTmask`, window `T(is-1:ie+1, js-1:je+1)`).
+   integer(int8), parameter :: EVP_BIT_U = 2_int8
+      !! `imask` bit: the corner carries ice (`iceUmask`, window `U(is-2:ie+1, js-2:je+1)`).
+   integer(int8), parameter :: EVP_BIT_E = 4_int8
+      !! `imask` bit: the E face carries ice (`iceEmask`, owned faces).
+   integer(int8), parameter :: EVP_BIT_N = 8_int8
+      !! `imask` bit: the N face carries ice (`iceNmask`, owned faces).
 
    type :: ice_evp_c_const_t
       !! Everything the kernels read as scalars (derived once per step on the
@@ -95,6 +105,7 @@ module rdb_ice_evp_c_prep
       logical, allocatable :: tmphm(:, :)       !! cell passes the thresholds
       logical, allocatable :: iceTmask(:, :)    !! 3x3 dilation of `tmphm`
       logical, allocatable :: iceUmask(:, :)    !! ice mask at the corner
+      integer(int8), allocatable :: imask(:, :)   !! the four ice masks, one byte per point (`EVP_BIT_*`), built per step
       real(wp), allocatable :: strength(:, :)   !! ice strength at T [N/m]
       real(wp), allocatable :: strengthU(:, :)  !! strength at the corner (avg_strength only)
       real(wp), allocatable :: aiE(:, :)        !! concentration at E
@@ -108,6 +119,8 @@ module rdb_ice_evp_c_prep
       real(wp), allocatable :: uinit(:, :)      !! u at E at the start of the step [m/s]
       real(wp), allocatable :: vinit(:, :)      !! v at N at the start of the step [m/s]
       ! ---- per-subcycle ----
+      real(wp), allocatable :: u2(:, :)         !! ping-pong partner of `u`, `(nx+1, ny)` (scratch of the subcycle loop)
+      real(wp), allocatable :: v2(:, :)         !! ping-pong partner of `v`, `(nx, ny+1)`
       real(wp), allocatable :: uvelN(:, :)      !! u interpolated to N [m/s]
       real(wp), allocatable :: vvelE(:, :)      !! v interpolated to E [m/s]
       real(wp), allocatable :: uvelU(:, :)      !! u interpolated to the corner [m/s]
@@ -211,6 +224,7 @@ contains
       allocate (this%stress12U(nx + 1, ny + 1))
       allocate (this%iceEmask(nx, ny), this%iceNmask(nx, ny))
       allocate (this%tmass(nx, ny), this%tmphm(nx, ny), this%iceTmask(nx, ny), this%iceUmask(nx, ny))
+      allocate (this%imask(nx, ny), this%u2(nx + 1, ny), this%v2(nx, ny + 1))
       allocate (this%strength(nx, ny), this%strengthU(nx, ny))
       allocate (this%aiE(nx, ny), this%aiN(nx, ny), this%emassdti(nx, ny), this%nmassdti(nx, ny))
       allocate (this%fmE(nx, ny), this%fmN(nx, ny), this%forcexE(nx, ny), this%forceyN(nx, ny))
@@ -231,6 +245,9 @@ contains
       this%tmphm = .false.
       this%iceTmask = .false.
       this%iceUmask = .false.
+      this%imask = 0_int8
+      this%u2 = 0.0_wp
+      this%v2 = 0.0_wp
       this%strength = 0.0_wp
       this%strengthU = 0.0_wp
       this%aiE = 0.0_wp
@@ -265,7 +282,7 @@ contains
       if (this%mapped) error stop "ice_evp_c_work_t%destroy: exit_data first"
       if (.not. allocated(this%stresspT)) return
       deallocate (this%stresspT, this%stressmT, this%zetax2T, this%etax2T, this%stress12U)
-      deallocate (this%iceEmask, this%iceNmask, this%tmass, this%tmphm, this%iceTmask, this%iceUmask)
+      deallocate (this%iceEmask, this%iceNmask, this%tmass, this%tmphm, this%iceTmask, this%iceUmask, this%imask, this%u2, this%v2)
       deallocate (this%strength, this%strengthU, this%aiE, this%aiN, this%emassdti, this%nmassdti)
       deallocate (this%fmE, this%fmN, this%forcexE, this%forceyN, this%uinit, this%vinit)
       deallocate (this%uvelN, this%vvelE, this%uvelU, this%vvelU, this%shearU, this%deltaU)
@@ -330,14 +347,18 @@ contains
            + larr_bytes(this%iceNmask) &
            + larr_bytes(this%tmphm) &
            + larr_bytes(this%iceTmask) &
-           + larr_bytes(this%iceUmask)
+           + larr_bytes(this%iceUmask) &
+           + int(size(this%imask), int64) &
+           + arr_bytes(this%u2) &
+           + arr_bytes(this%v2)
    end function work_bytes
 
    subroutine work_enter_data(this)
       !! Map every array to the device (`copyin`: the zero state).
       class(ice_evp_c_work_t), intent(inout) :: this
       !$acc enter data copyin(this%stresspT, this%stressmT, this%zetax2T, this%etax2T, this%stress12U)
-      !$acc enter data copyin(this%iceEmask, this%iceNmask, this%tmass, this%tmphm, this%iceTmask, this%iceUmask)
+      !$acc enter data copyin(this%iceEmask, this%iceNmask, this%tmass, this%tmphm, this%iceTmask, this%iceUmask, this%imask)
+      !$acc enter data copyin(this%u2, this%v2)
       !$acc enter data copyin(this%strength, this%strengthU, this%aiE, this%aiN, this%emassdti, this%nmassdti)
       !$acc enter data copyin(this%fmE, this%fmN, this%forcexE, this%forceyN, this%uinit, this%vinit)
       !$acc enter data copyin(this%uvelN, this%vvelE, this%uvelU, this%vvelU, this%shearU, this%deltaU)
@@ -349,7 +370,8 @@ contains
    subroutine work_exit_data(this)
       class(ice_evp_c_work_t), intent(inout) :: this
       !$acc exit data delete(this%stresspT, this%stressmT, this%zetax2T, this%etax2T, this%stress12U)
-      !$acc exit data delete(this%iceEmask, this%iceNmask, this%tmass, this%tmphm, this%iceTmask, this%iceUmask)
+      !$acc exit data delete(this%iceEmask, this%iceNmask, this%tmass, this%tmphm, this%iceTmask, this%iceUmask, this%imask)
+      !$acc exit data delete(this%u2, this%v2)
       !$acc exit data delete(this%strength, this%strengthU, this%aiE, this%aiN, this%emassdti, this%nmassdti)
       !$acc exit data delete(this%fmE, this%fmN, this%forcexE, this%forceyN, this%uinit, this%vinit)
       !$acc exit data delete(this%uvelN, this%vvelE, this%uvelU, this%vvelU, this%shearU, this%deltaU)
@@ -369,7 +391,7 @@ contains
                              uocnE, vocnN, u, v, ice_err)
       !! Once-per-step preparation: masses, ice-free masks, strength, the
       !! forcing at E and N, the new-ice start velocity.  Call BEFORE the face
-      !! halo of `(u, v)`; the solver then needs `ice_evp_c_average` once.
+      !! halo of `(u, v)`.
       !!
       !! Inputs at T (`hm` = the wet-T mask, real 0/1, ghost band included,
       !! `aice_init` = concentration at the START of the thermodynamic step,
@@ -412,12 +434,13 @@ contains
                           uocnE, vocnN, u, v, w%iceEmask, w%iceNmask, w%aiE, w%aiN, w%emassdti, &
                           w%nmassdti, w%fmE, w%fmN, w%forcexE, w%forceyN, w%uinit, w%vinit)
       call prep_corner_impl(nx, ny, is, ie, js, je, k%amin, k%mmin, hm, w%tmass, aice_init, tarea, &
-                            w%iceUmask, w%stress12U)
+                            w%iceUmask, w%stress12U, w%shearU, w%deltaU)
       call ice_compute_strength(nx, ny, ncat, is - 1, ie + 1, js - 1, je + 1, rp, c, w%iceTmask, &
                                 aice, vice, aice0, aicen, vicen, w%strength, ice_err)
       if (k%avg_strength) then
          call prep_strength_u_impl(nx, ny, is, ie, js, je, hm, tarea, w%strength, w%strengthU)
       end if
+      call prep_pack_impl(nx, ny, is, ie, js, je, w%iceTmask, w%iceUmask, w%iceEmask, w%iceNmask, w%imask)
    end subroutine ice_evp_c_prep
 
    subroutine prep_tmass_impl(nx, ny, is, ie, js, je, hm, vice, vsno, aice, rhoi, rhos, amin, mmin, &
@@ -554,7 +577,7 @@ contains
    end subroutine prep_face_impl
 
    subroutine prep_corner_impl(nx, ny, is, ie, js, je, amin, mmin, hm, tmass, aice_init, tarea, &
-                               iceUmask, stress12U)
+                               iceUmask, stress12U, shearU, deltaU)
       !! Ice mask at the corners `U(is-2:ie+1, js-2:je+1)` (four-point masked
       !! area-weighted means of T) and the corner stress reset off the mask.
       !! The corner is a stress point when AT LEAST TWO of its four T cells are
@@ -563,12 +586,14 @@ contains
       !! `evp_strain_u_impl` then gives a no-slip wall (the mirrored tangential
       !! velocity makes the wall-parallel flow vanish at the wall) and a
       !! non-zero wall shear stress.  The corner VELOCITIES keep the all-wet
-      !! `uvm` mask (`evp_average_impl`).
+      !! `uvm` mask (`evp_average_impl`).  Off the mask the corner shear and
+      !! `deltaU` are zeroed here, once per step: the subcycle kernel `K1`
+      !! skips the ice-free corners and leaves exactly these zeros.
       integer, intent(in) :: nx, ny, is, ie, js, je
       real(wp), intent(in) :: amin, mmin
       real(wp), intent(in) :: hm(nx, ny), tmass(nx, ny), aice_init(nx, ny), tarea(nx, ny)
       logical, intent(inout) :: iceUmask(nx, ny)
-      real(wp), intent(inout) :: stress12U(nx + 1, ny + 1)
+      real(wp), intent(inout) :: stress12U(nx + 1, ny + 1), shearU(nx, ny), deltaU(nx, ny)
       integer :: i, j
       real(wp) :: w1, w2, w3, w4, wt, m, a
       logical :: ice
@@ -588,9 +613,38 @@ contains
          end if
          ice = (hm(i, j) + hm(i + 1, j) + hm(i, j + 1) + hm(i + 1, j + 1)) > 1.5_wp .and. a > amin .and. m > mmin
          iceUmask(i, j) = ice
-         if (.not. ice) stress12U(i + 1, j + 1) = 0.0_wp
+         if (.not. ice) then
+            stress12U(i + 1, j + 1) = 0.0_wp
+            shearU(i, j) = 0.0_wp
+            deltaU(i, j) = 0.0_wp
+         end if
       end do
    end subroutine prep_corner_impl
+
+   subroutine prep_pack_impl(nx, ny, is, ie, js, je, iceTmask, iceUmask, iceEmask, iceNmask, imask)
+      !! Pack the four ice masks into one byte per point (`EVP_BIT_*`), each
+      !! bit set only inside the window where its mask is computed (T: owned
+      !! + 1 ring, U: owned + 2 rings toward the SW, E/N: owned), so the
+      !! subcycle kernels read one byte instead of up to four logicals.
+      integer, intent(in) :: nx, ny, is, ie, js, je
+      logical, intent(in) :: iceTmask(nx, ny), iceUmask(nx, ny), iceEmask(nx, ny), iceNmask(nx, ny)
+      integer(int8), intent(inout) :: imask(nx, ny)
+      integer :: i, j
+      integer(int8) :: b
+
+      do concurrent(j=js - 2:je + 1, i=is - 2:ie + 1) local(b)
+         b = 0_int8
+         if (iceUmask(i, j)) b = EVP_BIT_U
+         if (i >= is - 1 .and. j >= js - 1) then
+            if (iceTmask(i, j)) b = ior(b, EVP_BIT_T)
+         end if
+         if (i >= is .and. j >= js .and. i <= ie .and. j <= je) then
+            if (iceEmask(i, j)) b = ior(b, EVP_BIT_E)
+            if (iceNmask(i, j)) b = ior(b, EVP_BIT_N)
+         end if
+         imask(i, j) = b
+      end do
+   end subroutine prep_pack_impl
 
    subroutine prep_strength_u_impl(nx, ny, is, ie, js, je, hm, tarea, strength, strengthU)
       !! `strengthU = T2US(strength)` over `U(is-1:ie, js-1:je)` (masked,

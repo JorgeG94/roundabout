@@ -29,7 +29,11 @@
 !!   * `python_transcript` T stress and one momentum update vs the Python numbers.
 !!   * `reference_*`       every output on every cell vs the scalar re-transcription
 !!                         on a random masked state (classic, revised, avg_strength).
-!!   * `throughput`        opt-in (`RDB_CICE_EVP_BENCH=1`).
+!!   * `answer_checksum`   bitwise FNV fold of every output of two full steps (both EVP variants, both
+!!                         viscosity options, free drift on, a doubly periodic case) against literals taken from the unoptimised
+!!                         solver: a single-bit change in a single cell changes the checksum (CPU builds).
+!!   * `throughput`        opt-in (`RDB_CICE_EVP_BENCH=1`): the random 100 %-ice state and a polar-band
+!!                         state (ice in ~20 % of the cells, two land masses).
 module test_cice_evp_c
    use, intrinsic :: iso_fortran_env, only: int32, int64, error_unit
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite, ieee_value, ieee_quiet_nan
@@ -43,7 +47,7 @@ module test_cice_evp_c
    use rdb_ice_evp_c_prep, only: ice_evp_c_const_t, ice_evp_c_work_t, ice_evp_c_constants, ice_evp_c_prep, &
                                  ice_evp_c_ghost_ok
    use rdb_ice_evp_c, only: ice_evp_c_step, ice_evp_c_substep, ice_evp_c_average, ice_evp_c_finish, &
-                            ice_evp_c_wrap_faces, ice_evp_c_div_stress, evp_strain_u_impl, evp_stress_t_impl, &
+                           ice_evp_c_wrap_faces, ice_evp_c_div_stress, ice_evp_c_copy_faces, evp_strain_u_impl, evp_stress_t_impl, &
                             evp_stress_u_impl
    implicit none
    private
@@ -51,6 +55,28 @@ module test_cice_evp_c
    public :: collect_cice_evp_c_tests
 
    integer, parameter :: NG = 3
+   integer, parameter :: NCK = 15      !! fields folded by `checksum_case`
+   integer, parameter :: NCASE = 5      !! cases of `test_answer_checksum`
+   integer(int64), parameter :: CK_EXPECT(NCK, NCASE) = reshape([ &
+                                                           3672465734_int64, 3793768097_int64, 2719027941_int64, 1083302876_int64, &
+                                                             1849156868_int64, 3057707553_int64, 15422020_int64, 3940043077_int64, &
+                                                            2579016520_int64, 2470850579_int64, 559760298_int64, 2929549489_int64, &
+                                                            1440712517_int64, 937724703_int64, 3908318183_int64, 2200440962_int64, &
+                                                             3992021511_int64, 636275948_int64, 785764210_int64, 4020694775_int64, &
+                                                            1453091715_int64, 115485369_int64, 1970733581_int64, 2547477749_int64, &
+                                                           4186841131_int64, 3288347023_int64, 2445538429_int64, 4172960110_int64, &
+                                                            2915623319_int64, 1211261220_int64, 1260107636_int64, 673717827_int64, &
+                                                            1036617256_int64, 2012484705_int64, 1603400844_int64, 412294587_int64, &
+                                                              11455634_int64, 578963376_int64, 4233942813_int64, 1417831090_int64, &
+                                                           3950798593_int64, 1514853396_int64, 1766958365_int64, 2867373005_int64, &
+                                                            1686108483_int64, 4289786975_int64, 1047469709_int64, 780607979_int64, &
+                                                             619975318_int64, 2057258650_int64, 3033353260_int64, 467048847_int64, &
+                                                           1492626605_int64, 2432498424_int64, 2893378650_int64, 1236937511_int64, &
+                                                            1439998177_int64, 4265816931_int64, 327043826_int64, 4067133520_int64, &
+                                                           2707763138_int64, 3277802210_int64, 1339175735_int64, 2677015544_int64, &
+                                                           1168371529_int64, 3605900733_int64, 1398605617_int64, 3576842214_int64, &
+                                                              4289180181_int64, 796147999_int64, 2313427203_int64, 52261271_int64, &
+                                                                93337576_int64, 377867828_int64, 3068225428_int64], [NCK, NCASE])
    real(wp), parameter :: PI = 3.14159265358979323846_wp
 #ifdef RDB_GPU_OFFLOAD
    real(wp), parameter :: TOL_REF = 1.0e-12_wp   ! FMA on host code too; measured worst 1e-15 relative (V100)
@@ -109,6 +135,7 @@ contains
                   new_unittest("reference_classic", test_reference_classic), &
                   new_unittest("reference_revised", test_reference_revised), &
                   new_unittest("reference_avg_strength_sum", test_reference_avg_strength), &
+                  new_unittest("answer_checksum", test_answer_checksum), &
                   new_unittest("throughput", test_throughput) &
                   ]
    end subroutine collect_cice_evp_c_tests
@@ -266,7 +293,7 @@ contains
       type(fx_t), intent(inout) :: fx
       !$acc update self(fx%u, fx%v, fx%ice_err)
       !$acc update self(fx%w%stresspT, fx%w%stressmT, fx%w%zetax2T, fx%w%etax2T, fx%w%stress12U)
-      !$acc update self(fx%w%iceEmask, fx%w%iceNmask, fx%w%tmass, fx%w%tmphm, fx%w%iceTmask, fx%w%iceUmask)
+      !$acc update self(fx%w%iceEmask, fx%w%iceNmask, fx%w%tmass, fx%w%tmphm, fx%w%iceTmask, fx%w%iceUmask, fx%w%imask)
       !$acc update self(fx%w%strength, fx%w%strengthU, fx%w%aiE, fx%w%aiN, fx%w%emassdti, fx%w%nmassdti)
       !$acc update self(fx%w%fmE, fx%w%fmN, fx%w%forcexE, fx%w%forceyN, fx%w%uinit, fx%w%vinit)
       !$acc update self(fx%w%uvelN, fx%w%vvelE, fx%w%uvelU, fx%w%vvelU, fx%w%shearU, fx%w%deltaU)
@@ -301,11 +328,14 @@ contains
    end subroutine fx_avg
 
    subroutine fx_sub(fx)
+      !! One subcycle on the fixture's own `(u, v)` (K1-K4 ping-pong through `w%u2`, copied back).
       type(fx_t), intent(inout) :: fx
-      call ice_evp_c_substep(fx%w, fx%k, fx%nx, fx%ny, fx%is, fx%ie, fx%js, fx%je, fx%u, fx%v, fx%dxE, fx%dyE, &
-                             fx%dxN, fx%dyN, fx%dxU, fx%dyU, fx%dxT, fx%dyT, fx%uarea, fx%tarea, fx%earear, &
-                             fx%narear, fx%rdxN, fx%rdxNr, fx%rdyE, fx%rdyEr, fx%epm, fx%npm, fx%hm, &
-                             fx%uocnE, fx%vocnE, fx%uocnN, fx%vocnN)
+      call ice_evp_c_copy_faces(fx%nx, fx%ny, fx%u, fx%v, fx%w%u2, fx%w%v2)
+      call ice_evp_c_substep(fx%w, fx%k, fx%nx, fx%ny, fx%is, fx%ie, fx%js, fx%je, fx%u, fx%v, fx%w%u2, fx%w%v2, &
+                             fx%dxE, fx%dyE, fx%dxN, fx%dyN, fx%dxU, fx%dyU, fx%dxT, fx%dyT, fx%uarea, fx%tarea, &
+                             fx%earea, fx%narea, fx%earear, fx%narear, fx%rdxN, fx%rdxNr, fx%rdyE, fx%rdyEr, &
+                             fx%epm, fx%npm, fx%uvm, fx%hm, fx%uocnE, fx%vocnE, fx%uocnN, fx%vocnN)
+      call ice_evp_c_copy_faces(fx%nx, fx%ny, fx%w%u2, fx%w%v2, fx%u, fx%v)
    end subroutine fx_sub
 
    subroutine fx_k123(fx)
@@ -313,17 +343,17 @@ contains
       !! (the velocity stays the prescribed field).
       type(fx_t), intent(inout) :: fx
       call evp_strain_u_impl(fx%nx, fx%ny, fx%is, fx%ie, fx%js, fx%je, fx%k%e_factor, fx%k%avg_strength, fx%u, &
-                             fx%v, fx%w%uvelN, fx%w%vvelE, fx%w%uvelU, fx%w%vvelU, fx%dxE, fx%dyN, fx%dxU, fx%dyU, &
-                             fx%rdxN, fx%rdxNr, fx%rdyE, fx%rdyEr, fx%epm, fx%npm, fx%w%iceUmask, fx%w%shearU, &
-                             fx%w%deltaU)
+                             fx%v, fx%earea, fx%narea, fx%dxE, fx%dyN, fx%dxU, fx%dyU, &
+                             fx%rdxN, fx%rdxNr, fx%rdyE, fx%rdyEr, fx%epm, fx%npm, fx%uvm, fx%w%imask, &
+                             fx%w%shearU, fx%w%deltaU)
       call evp_stress_t_impl(fx%nx, fx%ny, fx%is, fx%ie, fx%js, fx%je, fx%k%arlx1i, fx%k%revp, fx%k%denom1, &
                              fx%k%epp2i, fx%k%e_factor, fx%k%Ktens, fx%k%deltamin, fx%k%cap_max, fx%u, fx%v, fx%dxN, &
-                             fx%dyE, fx%dxT, fx%dyT, fx%uarea, fx%tarea, fx%w%strength, fx%w%shearU, fx%w%iceTmask, &
+                             fx%dyE, fx%dxT, fx%dyT, fx%uarea, fx%tarea, fx%w%strength, fx%w%shearU, fx%w%imask, &
                              fx%w%zetax2T, fx%w%etax2T, fx%w%stresspT, fx%w%stressmT)
       call evp_stress_u_impl(fx%nx, fx%ny, fx%is, fx%ie, fx%js, fx%je, fx%k%arlx1i, fx%k%revp, fx%k%denom1, &
                              fx%k%epp2i, fx%k%Ktens, fx%k%deltamin, fx%k%cap_max, fx%k%avg_strength, fx%hm, &
                              fx%tarea, fx%uarea, fx%w%etax2T, fx%w%strengthU, fx%w%deltaU, fx%w%shearU, &
-                             fx%w%iceUmask, fx%w%stress12U)
+                             fx%w%imask, fx%w%stress12U)
    end subroutine fx_k123
 
    subroutine fx_fin(fx)
@@ -1515,7 +1545,7 @@ contains
       call near(error, fx%w%stressmT(i0, j0), py_sm, 1.0e-11_wp, 0.0_wp, "python stressmT")
       call near(error, fx%w%etax2T(i0, j0), py_eta, 1.0e-11_wp, 0.0_wp, "python etax2T")
       call near(error, fx%w%stress12U(i0 + 1, j0 + 1), py_s12, 1.0e-11_wp, 0.0_wp, "python stress12U")
-      ! the new u uses the OLD tangential average (the substep reads w%vvelE from the previous K5)
+      ! the new u uses the OLD tangential average (interpolated inline from the old pair)
       call near(error, fx%u(i0 + 1, j0), py_unew, 1.0e-10_wp, 0.0_wp, "python u at E(7,7)")
       call fx_destroy(fx)
    end subroutine test_python_transcript
@@ -2073,38 +2103,217 @@ contains
       call reference_case(error, "ref avg_strength+sum", .false., .true., .true.)
    end subroutine test_reference_avg_strength
 
+   subroutine polar_state(fx, seed)
+      !! Realistic state: two continents with ragged coasts, ice only in two polar bands
+      !! (~20 % of the grid, a ragged edge), open ocean elsewhere; random forcing and
+      !! velocity as `random_state` (the solver zeroes them off the ice mask).
+      type(fx_t), intent(inout) :: fx
+      integer(int64), intent(in) :: seed
+      integer :: i, j
+      real(wp) :: x, y, a, h, edge
+
+      call random_state(fx, seed, .false.)
+      do j = 1, fx%ny
+         do i = 1, fx%nx
+            x = real(i - fx%is, wp)/real(fx%nxp, wp)
+            y = real(j - fx%js, wp)/real(fx%nyp, wp)
+            if (fx%hm(i, j) < 0.5_wp) cycle
+            if (((x - 0.35_wp + 0.01_wp*sin(0.9_wp*real(j, wp)))/0.10_wp)**2 + ((y - 0.5_wp)/0.30_wp)**2 < 1.0_wp) &
+               fx%hm(i, j) = 0.0_wp
+            if (((x - 0.75_wp + 0.01_wp*sin(0.7_wp*real(j, wp)))/0.08_wp)**2 + ((y - 0.45_wp)/0.25_wp)**2 < 1.0_wp) &
+               fx%hm(i, j) = 0.0_wp
+         end do
+      end do
+      call rebuild_masks(fx)
+      do j = 1, fx%ny
+         do i = 1, fx%nx
+            y = real(j - fx%js, wp)/real(fx%nyp, wp)
+            edge = 0.11_wp + 0.004_wp*sin(0.37_wp*real(i, wp))
+            a = 0.0_wp
+            h = 0.0_wp
+            if (fx%hm(i, j) > 0.5_wp .and. (y < edge .or. y > 1.0_wp - edge)) then
+               a = 0.7_wp + 0.25_wp*sin(0.05_wp*real(i, wp))*cos(0.11_wp*real(j, wp))
+               h = 1.5_wp + 0.5_wp*cos(0.03_wp*real(i + j, wp))
+            end if
+            fx%aice(i, j) = a
+            fx%aice_init(i, j) = a
+            fx%vice(i, j) = a*h
+            fx%vsno(i, j) = 0.1_wp*a*h
+            fx%aicen(i, j, 1) = a
+            fx%vicen(i, j, 1) = a*h
+            fx%aice0(i, j) = 1.0_wp - a
+         end do
+      end do
+   end subroutine polar_state
+
    subroutine test_throughput(error)
       !! Opt-in (`RDB_CICE_EVP_BENCH=1`): wall time of one step at the OM3 grid
-      !! (1440 x 1152) with the CICE default ndte = 120.
+      !! (1440 x 1152) with the CICE default ndte = 120, on (a) the random state
+      !! (about 70 % ice, scattered) and (b) the polar-band state (about 20 % ice,
+      !! two continents).
       type(error_type), allocatable, intent(out) :: error
       type(fx_t) :: fx
       character(len=16) :: env
-      integer :: stat, nxp, nyp, c0, c1, cr, irep, nrep
+      integer :: stat, nxp, nyp, c0, c1, cr, irep, nrep, istate, only
       real(wp) :: tstep
+      logical :: ok
 
       call get_environment_variable("RDB_CICE_EVP_BENCH", env, status=stat)
       if (stat /= 0) return
       if (trim(env) /= "1") return
       nxp = 1440
       nyp = 1152
-      call fx_build(fx, nxp, nyp, .true., 2.5e4_wp, 2.5e4_wp, 120)
-      call random_state(fx, 4242_int64, .true.)
-      fx%w%iceEmask = .true.; fx%w%iceNmask = .true.
-      call fx_map(fx)
-      call fx_step(fx, .false., .false.)                 ! warm-up
-      call fx_pull(fx)
-      nrep = 3
-      call system_clock(c0, cr)
-      do irep = 1, nrep
-         call fx_step(fx, .false., .false.)
+      ok = .true.
+      call get_environment_variable("RDB_CICE_EVP_STATE", env, status=stat)     ! optional: run one state only
+      only = 0
+      if (stat == 0) read (env, *, iostat=stat) only
+      do istate = 1, 2
+         if (only /= 0 .and. only /= istate) cycle
+         call fx_build(fx, nxp, nyp, .true., 2.5e4_wp, 2.5e4_wp, 120)
+         if (istate == 1) then
+            call random_state(fx, 4242_int64, .true.)
+         else
+            call polar_state(fx, 4242_int64)
+         end if
+         fx%w%iceEmask = .true.; fx%w%iceNmask = .true.
+         call fx_map(fx)
+         call fx_step(fx, .false., .false.)                 ! warm-up
+         !$acc update self(fx%ice_err(1:1, 1:1))
+         nrep = 3
+         call system_clock(c0, cr)
+         do irep = 1, nrep
+            call fx_step(fx, .false., .false.)
+         end do
+         !$acc update self(fx%ice_err(1:1, 1:1))            ! synchronise (one element: no bulk transfer in the timing)
+         call system_clock(c1)
+         call fx_pull(fx)
+         tstep = real(c1 - c0, wp)/real(cr, wp)/real(nrep, wp)
+         write (error_unit, '(a,i0,a,i0,a,i0,a,f9.4,a,f9.3,a,f6.1,a)') "  [evp_c] state ", istate, ": ", nxp, " x ", nyp, &
+            " ndte=120: ", tstep, " s per step, ", tstep/120.0_wp*1.0e3_wp, " ms per subcycle, ice T cells ", &
+            100.0_wp*real(count(fx%w%iceTmask(fx%is:fx%ie, fx%js:fx%je)), wp)/real(nxp*nyp, wp), " %"
+         ok = ok .and. tstep > 0.0_wp
+         call fx_destroy(fx)
       end do
-      call fx_pull(fx)                                   ! synchronise
-      call system_clock(c1)
-      tstep = real(c1 - c0, wp)/real(cr, wp)/real(nrep, wp)
-      write (error_unit, '(a,i0,a,i0,a,f9.4,a,f9.3,a)') "  [evp_c] ", nxp, " x ", nyp, " ndte=120: ", tstep, &
-         " s per step, ", tstep/120.0_wp*1.0e3_wp, " ms per subcycle"
-      call check(error, tstep > 0.0_wp, .true., "timed")
-      call fx_destroy(fx)
+      call check(error, ok, .true., "timed")
    end subroutine test_throughput
+
+   ! ------------------------------------------------------------------
+   ! answer neutrality: bitwise checksums
+   ! ------------------------------------------------------------------
+
+   pure function fold_bits(a, h0) result(h)
+      !! 32-bit FNV-1 fold of the bit patterns of `a` (column-major, low word then high word).
+      !! Every step is a bijection of the running value (xor, then a multiplication by an odd
+      !! prime, modulo 2**32), so a change of one bit of one element ALWAYS changes the result;
+      !! the sign of a zero and NaN payloads count.
+      real(wp), intent(in) :: a(:, :)
+      integer(int64), intent(in) :: h0
+      integer(int64) :: h
+      integer(int64), parameter :: M32 = 4294967295_int64, PRIME = 16777619_int64
+      integer(int64) :: b
+      integer :: i, j
+
+      h = h0
+      do j = 1, size(a, 2)
+         do i = 1, size(a, 1)
+            b = transfer(a(i, j), 0_int64)
+            h = iand(ieor(h, iand(b, M32))*PRIME, M32)
+            h = iand(ieor(h, iand(ishft(b, -32), M32))*PRIME, M32)
+         end do
+      end do
+   end function fold_bits
+
+   subroutine checksum_case(fx, wx, wy, ck)
+      !! Two full steps on the random masked state (wall box, island, free-drift cells), then
+      !! the fold of every output field: u, v, the three stresses, the two viscosities, the
+      !! last-subcycle corner shear, the five deformation rates and the two ocean stresses.
+      type(fx_t), intent(inout) :: fx
+      logical, intent(in) :: wx, wy
+      integer(int64), intent(out) :: ck(NCK)
+      integer :: nstep
+      integer(int64), parameter :: OFFSET = 2166136261_int64
+
+      call fx_map(fx)
+      do nstep = 1, 2
+         call fx_step(fx, wx, wy)
+      end do
+      call fx_pull(fx)
+      ck(1) = fold_bits(fx%u, OFFSET)
+      ck(2) = fold_bits(fx%v, OFFSET)
+      ck(3) = fold_bits(fx%w%stresspT, OFFSET)
+      ck(4) = fold_bits(fx%w%stressmT, OFFSET)
+      ck(5) = fold_bits(fx%w%stress12U, OFFSET)
+      ck(6) = fold_bits(fx%w%zetax2T, OFFSET)
+      ck(7) = fold_bits(fx%w%etax2T, OFFSET)
+      ck(8) = fold_bits(fx%w%shearU, OFFSET)
+      ck(9) = fold_bits(fx%w%divu, OFFSET)
+      ck(10) = fold_bits(fx%w%shear, OFFSET)
+      ck(11) = fold_bits(fx%w%vort, OFFSET)
+      ck(12) = fold_bits(fx%w%rdg_conv, OFFSET)
+      ck(13) = fold_bits(fx%w%rdg_shear, OFFSET)
+      ck(14) = fold_bits(fx%w%strocnxE, OFFSET)
+      ck(15) = fold_bits(fx%w%strocnyN, OFFSET)
+   end subroutine checksum_case
+
+   subroutine test_answer_checksum(error)
+      !! The optimised solver reproduces the unoptimised one bit for bit: classic and revised
+      !! EVP x avg_zeta / avg_strength (+ sum capping and tensile strength), `free_drift_approx`
+      !! on, on a 14 x 12 box with an island, scattered free-drift cells and ice-free cells.
+      !! The literals come from the solver before the G.3 restructuring (gfortran, `-O2`-class
+      !! flags, FMA contraction off); the check is skipped on the offload build, where FMA
+      !! contraction is on for host code and the `reference_*` tests bound the device.
+      type(error_type), allocatable, intent(out) :: error
+      type(fx_t) :: fx
+      integer(int64) :: ck(NCK), dump
+      integer :: icase, f, nmis
+      character(len=16) :: env
+      logical :: revised, avg_strength, periodic
+      character(len=12) :: tag
+      integer :: stat
+
+      call get_environment_variable("RDB_CICE_EVP_DUMP", env, status=stat)
+      do icase = 1, NCASE
+         periodic = icase == NCASE            ! doubly periodic, no coast, island kept
+         revised = icase == 2 .or. icase == 4
+         avg_strength = icase >= 3 .and. icase < NCASE
+         call fx_build(fx, 14, 12,.not. periodic, 2.0e4_wp, 1.5e4_wp, merge(7, 8, icase == 2 .or. periodic))   ! odd ndte: ping-pong ends in the partner
+         fx%p%dyn%revised_evp = revised
+         fx%p%dyn%arlx = 40.0_wp
+         fx%p%dyn%brlx = 20.0_wp
+         fx%p%dyn%cosw = cos(20.0_wp*PI/180.0_wp)
+         fx%p%dyn%sinw = sin(20.0_wp*PI/180.0_wp)
+         fx%p%dyn%e_plasticpot = 2.3_wp
+         fx%p%dyn%free_drift_approx = .true.
+         if (avg_strength) then
+            fx%p%dyn%visc_method = ICE_VISC_AVG_STRENGTH
+            fx%p%dyn%capping_max = .false.
+            fx%p%dyn%Ktens = 0.1_wp
+         end if
+         call fx_consts(fx)
+         call random_state(fx, 99173_int64 + int(icase, int64), .true.)
+         call checksum_case(fx, periodic, periodic, ck)
+         call fx_destroy(fx)
+         if (stat == 0 .and. trim(env) == "1") then
+            write (tag, '(a,i0)') "case", icase
+            do f = 1, NCK
+               write (error_unit, '(a,i0,a,i0,a,i0)') "  [dump] ck(", f, ",", icase, ") = ", ck(f)
+            end do
+            cycle
+         end if
+#ifndef RDB_GPU_OFFLOAD
+         nmis = 0
+         do f = 1, NCK
+            if (ck(f) /= CK_EXPECT(f, icase)) then
+               nmis = nmis + 1
+               write (error_unit, '(a,i0,a,i0,a,i0,a,i0)') "  checksum mismatch field ", f, " case ", icase, ": got ", &
+                  ck(f), " expected ", CK_EXPECT(f, icase)
+            end if
+         end do
+         call check(error, nmis, 0, "answer checksum: bitwise identical to the unoptimised solver")
+         if (allocated(error)) return
+#endif
+      end do
+      dump = 0
+   end subroutine test_answer_checksum
 
 end module test_cice_evp_c
