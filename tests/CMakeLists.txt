@@ -25,8 +25,16 @@ file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/tmp_local_artifacts)
 
 # Helper modules used by some unit tests (Ritter dam-break + Thacker bowl
 # analytical solutions). Built as a static lib and linked into every test.
-add_library(rdb_analytical STATIC ritter_dambreak.F90 thacker_bowl.F90
-                                  ocean_test_metrics.F90 lcg_deterministic.F90)
+# lcg_deterministic compiles ONCE (rdb_test_lcg) and is archived here; the
+# standalone ice tests link the same objects.
+add_library(rdb_test_lcg OBJECT lcg_deterministic.F90)
+set_target_properties(
+  rdb_test_lcg PROPERTIES POSITION_INDEPENDENT_CODE ON
+                          Fortran_MODULE_DIRECTORY ${CMAKE_BINARY_DIR}/modules)
+target_link_libraries(rdb_test_lcg PUBLIC pic::pic)
+add_library(
+  rdb_analytical STATIC ritter_dambreak.F90 thacker_bowl.F90
+                        ocean_test_metrics.F90 $<TARGET_OBJECTS:rdb_test_lcg>)
 set_target_properties(rdb_analytical PROPERTIES Fortran_MODULE_DIRECTORY
                                                 ${CMAKE_BINARY_DIR}/modules)
 target_include_directories(rdb_analytical PRIVATE "${CMAKE_BINARY_DIR}/modules"
@@ -640,6 +648,57 @@ foreach(row ${RDB_TESTS})
      AND (RDB_ENABLE_GPU OR RDB_ENABLE_THREADS))
     set_tests_properties(rdb_${test_name} PROPERTIES WILL_FAIL TRUE)
   endif()
+endforeach()
+
+# Standalone CICE-port tests: link `rdb_ice_core_objs` + test-drive only (no
+# ocean core), so they build in seconds.  Row:
+# <test-name>|<module>|<collect-fn>|<suite>|<regime>.
+set(RDB_CICE_TESTS
+    "test_cice_conversions|test_cice_conversions|collect_cice_conversions_tests|cice_conversions|ocean"
+    "test_cice_device|test_cice_device|collect_cice_device_tests|cice_device|ocean"
+    "test_cice_errors|test_cice_errors|collect_cice_errors_tests|cice_errors|ocean"
+    "test_cice_golden|test_cice_golden|collect_cice_golden_tests|cice_golden|ocean"
+    "test_cice_params|test_cice_params|collect_cice_params_tests|cice_params|ocean"
+)
+
+# Shared helpers of the ice tests (deterministic columns, ledger, golden
+# compare); objects are linked into each ice test directly.
+add_library(rdb_cice_test_util OBJECT test_cice_util.F90)
+set_target_properties(
+  rdb_cice_test_util
+  PROPERTIES POSITION_INDEPENDENT_CODE ON Fortran_MODULE_DIRECTORY
+                                          ${CMAKE_BINARY_DIR}/modules_cice_test)
+target_link_libraries(rdb_cice_test_util PUBLIC rdb_test_lcg rdb_ice_core_objs
+                                                test-drive::test-drive)
+target_include_directories(rdb_cice_test_util
+                           PUBLIC ${CMAKE_BINARY_DIR}/modules_cice_test)
+foreach(row ${RDB_CICE_TESTS})
+  string(REPLACE "|" ";" fields "${row}")
+  list(GET fields 0 test_name)
+  list(GET fields 1 MODULE_NAME)
+  list(GET fields 2 COLLECT_FN)
+  list(GET fields 3 SUITE_NAME)
+  list(GET fields 4 TEST_REGIME)
+  set(TESTER_NAME "tester_${test_name}")
+  set(driver_path "${CMAKE_CURRENT_BINARY_DIR}/generated/${TESTER_NAME}.F90")
+  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/tester_cice_template.F90.in
+                 ${driver_path} @ONLY)
+  add_executable(${test_name} ${CMAKE_CURRENT_SOURCE_DIR}/${MODULE_NAME}.F90
+                              ${driver_path})
+  set_target_properties(
+    ${test_name} PROPERTIES Fortran_MODULE_DIRECTORY
+                            "${CMAKE_CURRENT_BINARY_DIR}/modules/${test_name}")
+  target_include_directories(
+    ${test_name}
+    PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/modules/${test_name}"
+            "${CMAKE_BINARY_DIR}/modules" "${RDB_SHARED_INCLUDE_DIR}")
+  target_link_libraries(
+    ${test_name} PRIVATE rdb_cice_test_util rdb_test_lcg rdb_ice_core_objs
+                         rdb_core_objs test-drive::test-drive)
+  add_test(NAME rdb_${test_name} COMMAND ${test_name})
+  set_tests_properties(
+    rdb_${test_name} PROPERTIES LABELS "${TEST_REGIME}" ENVIRONMENT
+                                "OMP_NUM_THREADS=1")
 endforeach()
 
 # MPI integration tests (only when MPI is enabled). Per-test rank counts because
