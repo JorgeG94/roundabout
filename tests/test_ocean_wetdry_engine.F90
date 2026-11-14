@@ -26,6 +26,7 @@ module test_ocean_wetdry_engine
                                engine_step, engine_step_finalize, &
                                engine_exit_data, engine_teardown
    use rdb_ocean_status, only: OCEAN_STATUS_OK
+   use rdb_error_ring, only: error_ring_clear, error_ring_get, ERROR_RING_MSG_LEN
    use rdb_comm_env, only: comm_env_init, comm_env_setup_roles
    implicit none
    private
@@ -57,7 +58,8 @@ contains
    subroutine collect_ocean_wetdry_engine_tests(testsuite)
       type(unittest_type), allocatable, intent(out) :: testsuite(:)
       testsuite = [ &
-                  new_unittest("wetdry_shoal_engine_front_crosses_seams", test_shoal) &
+                  new_unittest("wetdry_shoal_engine_front_crosses_seams", test_shoal), &
+                  new_unittest("wetdry_open_edge_shallow_column_refused", test_open_edge_depth) &
                   ]
    end subroutine collect_ocean_wetdry_engine_tests
 
@@ -97,6 +99,71 @@ contains
             "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL// &
             "&output_nml output_to_file = .false. /"//NL
    end function shoal_nml
+
+   subroutine test_open_edge_depth(error)
+      !! A wet column shallower than `WETDRY_OPEN_EDGE_MIN_FACTOR * dry_depth` on
+      !! an OPEN or TIDAL edge is refused at configure (naming the edge, the
+      !! depth and the threshold); a deep enough edge, or a wall edge over the
+      !! same shallow bed, is accepted.
+      type(error_type), allocatable, intent(out) :: error
+      character(len=:), allocatable :: nml_shallow, nml_deep, nml_wall, nml_tidal
+      character(len=ERROR_RING_MSG_LEN) :: got
+      integer :: ierr
+
+      call ensure_comm()
+      ! A flat 0.3 m bed (wet, below 10 x dry_depth = 0.5 m) with an open east edge.
+      nml_shallow = replace_text(replace_text(shoal_nml(), "east = 'wall'", "east = 'open'"), &
+                                 "topo_config = 'seamount', max_depth = 2.0", "topo_config = 'flat', max_depth = 0.3")
+      nml_tidal = replace_text(replace_text(shoal_nml(), "south = 'wall'", &
+                                            "south = 'tidal', south_n_tidal = 1, south_tidal_amp = 0.1"), &
+                               "topo_config = 'seamount', max_depth = 2.0", "topo_config = 'flat', max_depth = 0.3")
+      nml_deep = replace_text(nml_shallow, "max_depth = 0.3", "max_depth = 2.0")
+      nml_wall = replace_text(shoal_nml(), "topo_config = 'seamount', max_depth = 2.0", "topo_config = 'flat', max_depth = 0.3")
+
+      call error_ring_clear()
+      call setup_only(nml_shallow, ierr)
+      got = error_ring_get(0)
+      call check(error, ierr /= OCEAN_STATUS_OK, "shallow OPEN edge under wet/dry was accepted")
+      if (allocated(error)) return
+      call check(error, index(got, "east edge 'open'") > 0 .and. index(got, "resting depth of") > 0 &
+                 .and. index(got, "below the minimum") > 0, "refusal message does not name edge/depth/threshold: "// &
+                 trim(got(1:min(len_trim(got), 200))))
+      if (allocated(error)) return
+
+      call error_ring_clear()
+      call setup_only(nml_tidal, ierr)
+      got = error_ring_get(0)
+      call check(error, ierr /= OCEAN_STATUS_OK .and. index(got, "south edge 'tidal'") > 0, &
+                 "shallow TIDAL edge under wet/dry was not refused by name")
+      if (allocated(error)) return
+
+      call setup_only(nml_deep, ierr)
+      call check(error, ierr == OCEAN_STATUS_OK, "deep OPEN edge under wet/dry was refused")
+      if (allocated(error)) return
+      call setup_only(nml_wall, ierr)
+      call check(error, ierr == OCEAN_STATUS_OK, "wall edges over the shallow bed were refused")
+   end subroutine test_open_edge_depth
+
+   function replace_text(txt, old, new) result(out)
+      character(len=*), intent(in) :: txt, old, new
+      character(len=:), allocatable :: out
+      integer :: k
+      k = index(txt, old)
+      if (k < 1) error stop "test_ocean_wetdry_engine: replace_text found nothing"
+      out = txt(1:k - 1)//new//txt(k + len(old):)
+   end function replace_text
+
+   subroutine setup_only(nml, ierr)
+      character(len=*), intent(in) :: nml
+      integer, intent(out) :: ierr
+      type(ocean_engine_t) :: engine
+      type(config_t) :: cfg
+      call read_config_from_string(nml, cfg, ierr=ierr)
+      if (ierr == OCEAN_STATUS_OK) call validate_config(cfg, ierr)
+      if (ierr /= OCEAN_STATUS_OK) error stop "test_ocean_wetdry_engine: config rejected before the engine gate"
+      call engine_setup(engine, cfg, ierr)
+      call engine_teardown(engine)
+   end subroutine setup_only
 
    subroutine test_shoal(error)
       type(error_type), allocatable, intent(out) :: error
