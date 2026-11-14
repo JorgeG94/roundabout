@@ -451,7 +451,7 @@ contains
       js = flux%nghost + 1
       je = flux%nghost + flux%ny_phys
       call ice_flux_merge_impl(flux%nx, flux%ny, flux%ncat, is, ie, js, je, &
-                               cice%p%thermo%emissivity, flw, cice%aicen_init, &
+                               cice%p%thermo%emissivity, cice%p%c%puny, flw, cice%aicen_init, &
                                flux%freshn, flux%fsaltn, flux%fhocnn, &
                                flux%evapn, flux%fsensn, flux%flatn, &
                                flux%flwoutn, flux%fswabsn, flux%melttn, &

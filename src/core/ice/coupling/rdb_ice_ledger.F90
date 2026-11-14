@@ -23,11 +23,13 @@ module rdb_ice_ledger
    !!   contains `evap`: pure sublimation, `evap < 0`, has `fresh = 0` and loses
    !!   mass);
    !! - salt:  `S1 - S0 = -dt*sum A*fsalt`;
-   !! - heat:  `E1 - E0 = H_ext + dt*sum A*(fswabs - fswthru + flwout + fsens - fhocn)`.
-   !! `flat` is NOT in the heat line: the latent heat leaves with the vapour mass
-   !! (upstream `einp = (fsurfn - flatn + fswint - fhocnn - fsnow*Lfresh)*dt`,
-   !! where `fsurfn` contains `flatn`, so it cancels; `fswabs = fswsfc + fswint +
-   !! fswthru`).  `W_ext` and `H_ext` [kg, J] are the external sources the caller
+   !! - heat:  `E1 - E0 = H_ext + dt*sum A*(fswabs - fswthru + flwout + fsens - fhocn + Lvap*evap)`.
+   !! `flat` is NOT in the heat line: it cancels in upstream's `einp = (fsurfn - flatn
+   !! + fswint - fhocnn - fsnow*Lfresh)*dt` (`fsurfn` contains `flatn`; `fswabs =
+   !! fswsfc + fswint + fswthru`).  The latent term is `+Lvap*evap` because upstream's
+   !! final column energy carries the vapour at `-Lvap*evap*dt` and the energy check
+   !! closes ice plus vapour, so the STORED-state enthalpy changes by `einp +
+   !! Lvap*evap*dt` (`evap > 0` condensation; sublimation, `evap < 0`, lowers it).  `W_ext` and `H_ext` [kg, J] are the external sources the caller
    !! integrates over the step:
    !! `W_ext = dt*sum A*(fsnow*aice_init + frain*aice)` (snowfall on ice plus the
    !! rain that passes through `fresh`);
@@ -38,7 +40,7 @@ module rdb_ice_ledger
    !! is the falling-snow enthalpy and `E_frz` the bank energy spent by new ice
    !! (`frzmlt_pos`; the ocean already gave it up).  Where the plan's C.5 text
    !! differs (a second `aice_init` weight on the atmosphere terms, `flat` in
-   !! the heat line) upstream wins.
+   !! the heat line, no vapour term) upstream wins.
    !! The residual of a line is `LHS - RHS` (signed); its scale is the sum of the
    !! absolute values of every term, and `rel_residual` is `|res|/scale`.  There
    !! are no dropped-flux terms: this port conserves, so a non-zero residual is a
@@ -112,7 +114,7 @@ module rdb_ice_ledger
       real(wp) :: i_fswthru = 0.0_wp
          !! `dt*sum A*fswthru` [J].
       real(wp) :: i_atm = 0.0_wp
-         !! `dt*sum A*(fswabs + flwout + fsens)` [J].
+         !! `dt*sum A*(fswabs + flwout + fsens + Lvap*evap)` [J].
       real(wp) :: res(3) = 0.0_wp
          !! Signed residual `LHS - RHS` of each line (`ICE_LEDGER_*`).
       real(wp) :: scale(3) = 0.0_wp
@@ -221,7 +223,7 @@ contains
       call state_totals(cice, area, m1, s1, e1)
       call ice_ledger_ocean_flux_sums_impl(cice%nx, cice%ny, is, ie, js, je, area, &
                                            flux%fresh, flux%fsalt, flux%fhocn, v(1), v(2), v(3))
-      call ice_ledger_atm_flux_sums_impl(cice%nx, cice%ny, is, ie, js, je, area, &
+      call ice_ledger_atm_flux_sums_impl(cice%nx, cice%ny, is, ie, js, je, cice%p%c%Lvap, area, &
                                          flux%fswthru, flux%evap, flux%fswabs, flux%flwout, &
                                          flux%fsens, v(4), v(5), v(6))
       call ice_ledger_reduce(v)
@@ -242,7 +244,7 @@ contains
       this%scale(ICE_LEDGER_SALT) = abs(this%d_salt) + abs(this%i_fsalt)
       this%res(ICE_LEDGER_HEAT) = this%d_energy - (he + ((this%i_atm - this%i_fswthru) - this%i_fhocn))
       this%scale(ICE_LEDGER_HEAT) = abs(this%d_energy) + abs(he) + abs(this%i_atm) &
-                                    + abs(this%i_fhocn) + abs(this%i_fswthru)
+                                    + abs(this%i_fhocn) + abs(this%i_fswthru) + abs(cice%p%c%Lvap*this%i_evap)
 
       this%finite = all(ieee_is_finite([this%res, this%scale]))
       if (.not. this%finite) this%res = ieee_value(1.0_wp, ieee_quiet_nan)

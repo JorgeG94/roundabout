@@ -104,7 +104,7 @@ contains
       !$acc end data
    end subroutine ice_flux_zero_impl
 
-   pure subroutine ice_flux_merge_impl(nx, ny, ncat, is, ie, js, je, emis, flw, aicen_init, &
+   pure subroutine ice_flux_merge_impl(nx, ny, ncat, is, ie, js, je, emis, puny, flw, aicen_init, &
                                        freshn, fsaltn, fhocnn, evapn, fsensn, flatn, flwoutn, fswabsn, &
                                        melttn, meltbn, congeln, snoicen, &
                                        fresh, fsalt, fhocn, evap, fsens, flat, flwout, fswabs, &
@@ -113,11 +113,12 @@ contains
       !! twelve merged fields, over the cells `is:ie, js:je`, with ONE exception:
       !! the outgoing longwave merges the portion that is not reflected incoming
       !! longwave, `flwout += sum_n aicen_init*(flwoutn - (1 - emis)*flw)` (the
-      !! upstream merge; `flw` is the cell's incoming longwave, `emis` the surface
-      !! emissivity).  The sum is formed first (fixed category order), then added
+      !! upstream merge, which only merges categories with `aicen_init > puny`: the reflected
+      !! term is added for those only; `flw` is the cell's incoming longwave, `emis` the
+      !! surface emissivity).  The sum is formed first (fixed category order), then added
       !! to the cell value.  The result is valid on the cells `is:ie, js:je` ONLY.
       integer, intent(in) :: nx, ny, ncat, is, ie, js, je
-      real(wp), intent(in) :: emis
+      real(wp), intent(in) :: emis, puny
       real(wp), intent(in) :: flw(nx, ny), aicen_init(nx, ny, ncat)
       real(wp), intent(in) :: freshn(nx, ny, ncat), fsaltn(nx, ny, ncat), fhocnn(nx, ny, ncat)
       real(wp), intent(in) :: evapn(nx, ny, ncat), fsensn(nx, ny, ncat), flatn(nx, ny, ncat)
@@ -157,7 +158,9 @@ contains
             s4 = s4 + a*evapn(i, j, n)
             s5 = s5 + a*fsensn(i, j, n)
             s6 = s6 + a*flatn(i, j, n)
-            s7 = s7 + a*(flwoutn(i, j, n) - (1.0_wp - emis)*flw(i, j))
+            if (a > puny) then   ! the reflected incoming longwave belongs to categories the thermodynamics ran
+               s7 = s7 + a*(flwoutn(i, j, n) - (1.0_wp - emis)*flw(i, j))
+            end if
             s8 = s8 + a*fswabsn(i, j, n)
             s9 = s9 + a*melttn(i, j, n)
             s10 = s10 + a*meltbn(i, j, n)

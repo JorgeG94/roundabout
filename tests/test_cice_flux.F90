@@ -810,7 +810,8 @@ contains
             s = lcg_next(s)
             flw_c = 100.0_wp + 200.0_wp*lcg_unit(s)
             he = he + dt*st%aice(i, j)*flw_c   ! incoming longwave on the ice fraction
-            atm = (fx%fswabs(i, j) + fx%flwout(i, j)) + fx%fsens(i, j)   ! flat is not in the heat line
+            ! flat is not in the heat line; the vapour leaves with its own enthalpy: + Lvap*evap (upstream's final energy)
+            atm = ((fx%fswabs(i, j) + fx%flwout(i, j)) + fx%fsens(i, j)) + st%p%c%Lvap*fx%evap(i, j)
             fx%fsalt(i, j) = -(s1 - s0)/dt
             fx%fresh(i, j) = (we - (m1 - m0))/dt + fx%evap(i, j)
             fx%fhocn(i, j) = atm - fx%fswthru(i, j) + (he - (e1 - e0))/dt
@@ -945,7 +946,7 @@ contains
       type(ice_ledger_mirror_t) :: led
       real(wp) :: area(NX, NY)
       real(wp), parameter :: DT = 900.0_wp, TOL = 1.0e-11_wp
-      real(wp) :: inj
+      real(wp) :: inj, want_res
       integer :: kind, line
 
       call setup_ledger_case(st, fx, area, error)
@@ -962,10 +963,13 @@ contains
          end if
          if (allocated(error)) return
          do line = 1, 3
-            if (line == LINE_OF(kind)) then
+            if (line == LINE_OF(kind) .or. (kind == 5 .and. line == 3)) then
+               ! an injected `evap` (kind 5) is also vapour enthalpy: it lands on the heat line as -Lvap*d*A*dt
+               want_res = real(SGN_OF(kind), wp)*inj
+               if (kind == 5 .and. line == 3) want_res = -st%p%c%Lvap*inj
                if (.not. ieee_is_finite(led%res(line))) then
                   call test_failed(error, "injected line non-finite")
-               else if (abs(led%res(line) - real(SGN_OF(kind), wp)*inj) > 1.0e-9_wp*led%scale(line)) then
+               else if (abs(led%res(line) - want_res) > 1.0e-9_wp*led%scale(line)) then
                   call test_failed(error, "residual is not the signed injected d*A*dt")
                end if
             else
@@ -1041,7 +1045,8 @@ contains
       !! not with the ledger's own equation.  Per category and cell:
       !!   mass:   d(rhoi*hi + rhos*hs) = (fsnow + evapn - freshn)*dt   (snow takes it),
       !!           with pure sublimation (`evapn < 0`, `freshn = 0`) in a third of the cells;
-      !!   energy: dE = einp = (fsurfn - flatn + fswint - fhocnn - fsnow*Lfresh)*dt,
+      !!   energy: dE_state = einp + Lvap*evapn*dt, einp = (fsurfn - flatn + fswint - fhocnn - fsnow*Lfresh)*dt,
+      !!           (upstream's final energy carries the vapour at -Lvap*evapn*dt),
       !!           fsurfn = fswsfc + emis*flw + flwoutn + fsensn + flatn   (flwoutn < 0,
       !!           fsensn, flatn positive downward), fswabsn = fswsfc + fswint + fswthrun.
       !! The cell fluxes come from the real merge (`flw` reflected part included);
@@ -1129,7 +1134,9 @@ contains
                dm = (fsnow + evapn - freshn)*DT          ! per ice area [kg m-2]
                e_n = st%qsnon(i, j, n, 1)*vs0
                st%vsnon(i, j, n) = vs0 + aicen_n*dm/rhos
-               st%qsnon(i, j, n, 1) = (e_n + aicen_n*einp)/st%vsnon(i, j, n)
+               ! upstream: the energy check closes ice + vapour, efinal = -evap*Lvap + sum(h*q), so the STORED
+               ! enthalpy changes by einp + Lvap*evap*dt (evap = evapn*dt in kg m-2)
+               st%qsnon(i, j, n, 1) = (e_n + aicen_n*(einp + st%p%c%Lvap*evapn*DT))/st%vsnon(i, j, n)
                fx%freshn(i, j, n) = freshn
                fx%evapn(i, j, n) = evapn
                fx%fhocnn(i, j, n) = fhocnn

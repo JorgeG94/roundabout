@@ -105,17 +105,20 @@ contains
       !$acc end data
    end subroutine ice_ledger_ocean_flux_sums_impl
 
-   pure subroutine ice_ledger_atm_flux_sums_impl(nx, ny, is, ie, js, je, area, fswthru, evap, fswabs, &
+   pure subroutine ice_ledger_atm_flux_sums_impl(nx, ny, is, ie, js, je, Lvap, area, fswthru, evap, fswabs, &
                                                  flwout, fsens, s_fswthru, s_evap, s_atm)
       !! Icepack signs.  `sum A*fswthru`, `sum A*evap` (+ = condensation, mass
       !! GAIN) and the net atmosphere heat into the ice
-      !! `sum A*(fswabs + flwout + fsens)`: `flwout` and `fsens` are positive
-      !! DOWNWARD and the merged `flwout` is already net of the reflected
-      !! incoming longwave.  `flat` is deliberately absent: the latent heat
-      !! leaves with the vapour mass, so it cancels out of the ice energy
-      !! budget.  The incoming-longwave and `fswthru` terms are added by the
-      !! caller (`H_ext`) and the ledger.
+      !! `sum A*(fswabs + flwout + fsens + Lvap*evap)`: `flwout` and `fsens` are
+      !! positive DOWNWARD and the merged `flwout` is already net of the reflected
+      !! incoming longwave.  `flat` is deliberately absent: it cancels in
+      !! upstream's `fsurf - flat`.  The `+ Lvap*evap` term is there because
+      !! upstream's final column energy carries the vapour at `-Lvap*evap*dt`
+      !! and the energy check closes ice plus vapour, so the stored-state
+      !! enthalpy changes by `einp + Lvap*evap*dt`.  The incoming-longwave and
+      !! `fswthru` terms are added by the caller (`H_ext`) and the ledger.
       integer, intent(in) :: nx, ny, is, ie, js, je
+      real(wp), intent(in) :: Lvap
       real(wp), intent(in) :: area(nx, ny), fswthru(nx, ny), evap(nx, ny), fswabs(nx, ny)
       real(wp), intent(in) :: flwout(nx, ny), fsens(nx, ny)
       real(wp), intent(out) :: s_fswthru, s_evap, s_atm
@@ -129,7 +132,7 @@ contains
       do concurrent(j=js:je, i=is:ie) reduce(+:s_fswthru, s_evap, s_atm)
          s_fswthru = s_fswthru + area(i, j)*fswthru(i, j)
          s_evap = s_evap + area(i, j)*evap(i, j)
-         s_atm = s_atm + area(i, j)*((fswabs(i, j) + flwout(i, j)) + fsens(i, j))
+         s_atm = s_atm + area(i, j)*(((fswabs(i, j) + flwout(i, j)) + fsens(i, j)) + Lvap*evap(i, j))
       end do
       !$acc end data
    end subroutine ice_ledger_atm_flux_sums_impl

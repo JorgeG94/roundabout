@@ -113,6 +113,7 @@ set(RDB_TESTS
     "test_cice_state|test_cice_state|collect_cice_state_tests|cice_state|ocean"
     "test_cice_flux|test_cice_flux|collect_cice_flux_tests|cice_flux|ocean"
     "test_cice_restart_convert|test_cice_restart_convert|collect_cice_restart_convert_tests|cice_restart_convert|ocean"
+    "test_cice_therm1_ledger|test_cice_therm1_ledger|collect_cice_therm1_ledger_tests|cice_therm1_ledger|ocean"
     "test_nml_schema|test_nml_schema|collect_nml_schema_tests|nml_schema|core"
     "test_config_schema|test_config_schema|collect_config_schema_tests|config_schema|core"
     "test_ocean_knob_retirement|test_ocean_knob_retirement|collect_ocean_knob_retirement_tests|ocean_knob_retirement|ocean"
@@ -685,6 +686,7 @@ set(RDB_CICE_TESTS
     "test_cice_new_ice|test_cice_new_ice|collect_cice_new_ice_tests|cice_new_ice|ocean"
     "test_cice_itd_cleanup|test_cice_itd_cleanup|collect_cice_itd_cleanup_tests|cice_itd_cleanup|ocean"
     "test_cice_transport_pack|test_cice_transport_pack|collect_cice_transport_pack_tests|cice_transport_pack|ocean"
+    "test_cice_therm1|test_cice_therm1|collect_cice_therm1_tests|cice_therm1|ocean"
 )
 
 # Shared helpers of the ice tests (deterministic columns, ledger, golden
