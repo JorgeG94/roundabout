@@ -660,6 +660,8 @@ set(RDB_CICE_TESTS
     "test_cice_golden|test_cice_golden|collect_cice_golden_tests|cice_golden|ocean"
     "test_cice_params|test_cice_params|collect_cice_params_tests|cice_params|ocean"
     "test_cice_shortwave|test_cice_shortwave|collect_cice_shortwave_tests|cice_shortwave|ocean"
+    "test_cice_golden_thermo_shared|test_cice_golden_thermo_shared|collect_cice_golden_thermo_shared_tests|cice_golden_thermo_shared|ocean"
+    "test_cice_thermo_shared|test_cice_thermo_shared|collect_cice_thermo_shared_tests|cice_thermo_shared|ocean"
 )
 
 # Shared helpers of the ice tests (deterministic columns, ledger, golden
