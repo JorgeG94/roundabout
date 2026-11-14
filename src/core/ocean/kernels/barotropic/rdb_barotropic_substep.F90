@@ -1,5 +1,10 @@
 !! Barotropic-substep kernels for the split-explicit ocean driver.
 module rdb_barotropic_substep
+   !! **Reproducibility.**  The tidal open-boundary elevation target uses
+   !! `safe_cos` (`rdb_safe_math`) on a phase reduced with `modulo(., 2 pi)`,
+   !! never the intrinsic `cos`, so its value is independent of vector position
+   !! and of the model time at which it is evaluated.
+   !!
    !! Two kernels:
    !!
    !!   `barotropic_substep_linear`  — linearized shallow-water with closed
@@ -45,7 +50,8 @@ module rdb_barotropic_substep
    !! 15.1 + `-O3 -funroll-loops` was observed to corrupt the flux
    !! divergence when h_face was reused across `if/else` branches.
    !! See `feedback_gfortran_local_reassign.md` in claude memory.
-   use rdb_constants, only: wp, FROUDE_CAP, H_DIV_EPS
+   use rdb_constants, only: wp, FROUDE_CAP, H_DIV_EPS, TWO_PI
+   use rdb_safe_math, only: safe_cos
    use rdb_grid, only: hgrid_t
    use rdb_ocean_metrics, only: ocean_metrics_t
    use rdb_barotropic_workstate, only: barotropic_workstate_t
@@ -81,6 +87,18 @@ module rdb_barotropic_substep
       !! Chapman edge line after the cross-rank sum (host only).
 
 contains
+
+   pure function tidal_cos(phase) result(c)
+      !! `cos(phase)` for the tidal OBC target.  `phase = omega*t + ...` grows
+      !! with model time, so it is first reduced to [0, 2 pi) (`modulo`: a
+      !! deterministic host scalar, computed once per constituent per call, so
+      !! every rank gets the same value) and then passed to the position-
+      !! independent `safe_cos` (valid to 1.6e6 rad; an M2 phase reaches that in
+      !! ~120 model years).  Cody & Waite (1980), ch. 8.
+      real(wp), intent(in) :: phase
+      real(wp) :: c
+      c = safe_cos(modulo(phase, TWO_PI))
+   end function tidal_cos
 
    subroutine chapman_workspace_ensure(n)
       !! Lazy-allocate the persistent Chapman line buffers (host + device
@@ -779,41 +797,41 @@ contains
          do nc = 1, bc%west%n_tidal_constituents
             if (use_nodal_bc) then
                eta_target_w = eta_target_w + bc%west%tidal_fnodal(nc)*bc%west%tidal_amp(nc)* &
-                              cos(bc%west%tidal_omega(nc)*t_now + bc%west%tidal_arg(nc) &
-                                  - bc%west%tidal_phase(nc))
+                              tidal_cos(bc%west%tidal_omega(nc)*t_now + bc%west%tidal_arg(nc) &
+                                        - bc%west%tidal_phase(nc))
             else
                eta_target_w = eta_target_w + bc%west%tidal_amp(nc)* &
-                              cos(bc%west%tidal_omega(nc)*t_now + bc%west%tidal_phase(nc))
+                              tidal_cos(bc%west%tidal_omega(nc)*t_now + bc%west%tidal_phase(nc))
             end if
          end do
          do nc = 1, bc%east%n_tidal_constituents
             if (use_nodal_bc) then
                eta_target_e = eta_target_e + bc%east%tidal_fnodal(nc)*bc%east%tidal_amp(nc)* &
-                              cos(bc%east%tidal_omega(nc)*t_now + bc%east%tidal_arg(nc) &
-                                  - bc%east%tidal_phase(nc))
+                              tidal_cos(bc%east%tidal_omega(nc)*t_now + bc%east%tidal_arg(nc) &
+                                        - bc%east%tidal_phase(nc))
             else
                eta_target_e = eta_target_e + bc%east%tidal_amp(nc)* &
-                              cos(bc%east%tidal_omega(nc)*t_now + bc%east%tidal_phase(nc))
+                              tidal_cos(bc%east%tidal_omega(nc)*t_now + bc%east%tidal_phase(nc))
             end if
          end do
          do nc = 1, bc%south%n_tidal_constituents
             if (use_nodal_bc) then
                eta_target_s = eta_target_s + bc%south%tidal_fnodal(nc)*bc%south%tidal_amp(nc)* &
-                              cos(bc%south%tidal_omega(nc)*t_now + bc%south%tidal_arg(nc) &
-                                  - bc%south%tidal_phase(nc))
+                              tidal_cos(bc%south%tidal_omega(nc)*t_now + bc%south%tidal_arg(nc) &
+                                        - bc%south%tidal_phase(nc))
             else
                eta_target_s = eta_target_s + bc%south%tidal_amp(nc)* &
-                              cos(bc%south%tidal_omega(nc)*t_now + bc%south%tidal_phase(nc))
+                              tidal_cos(bc%south%tidal_omega(nc)*t_now + bc%south%tidal_phase(nc))
             end if
          end do
          do nc = 1, bc%north%n_tidal_constituents
             if (use_nodal_bc) then
                eta_target_n = eta_target_n + bc%north%tidal_fnodal(nc)*bc%north%tidal_amp(nc)* &
-                              cos(bc%north%tidal_omega(nc)*t_now + bc%north%tidal_arg(nc) &
-                                  - bc%north%tidal_phase(nc))
+                              tidal_cos(bc%north%tidal_omega(nc)*t_now + bc%north%tidal_arg(nc) &
+                                        - bc%north%tidal_phase(nc))
             else
                eta_target_n = eta_target_n + bc%north%tidal_amp(nc)* &
-                              cos(bc%north%tidal_omega(nc)*t_now + bc%north%tidal_phase(nc))
+                              tidal_cos(bc%north%tidal_omega(nc)*t_now + bc%north%tidal_phase(nc))
             end if
          end do
 

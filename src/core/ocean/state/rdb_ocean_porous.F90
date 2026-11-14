@@ -116,6 +116,7 @@ module rdb_ocean_porous
    !! barrier.
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    use rdb_constants, only: wp, H_VANISHED, H_DIV_EPS
+   use rdb_safe_math, only: safe_pow
    implicit none
    private
 
@@ -233,10 +234,10 @@ contains
          if (m < 0.5_wp) then
             ! a = (1-m)/m, so 1/a = m/(1-m) = (d_avg-d_min)/(d_max-d_avg).
             a = (1.0_wp - m)/m
-            w = zeta**(1.0_wp/a)
+            w = safe_pow(zeta, 1.0_wp/a)
          else if (m > 0.5_wp) then
             a = (1.0_wp - m)/m
-            w = 1.0_wp - (1.0_wp - zeta)**a
+            w = 1.0_wp - safe_pow(1.0_wp - zeta, a)
          else
             w = zeta
          end if
@@ -280,9 +281,9 @@ contains
          m = (d_avg - d_min)/drange
          zeta = (eta - d_min)/drange
          if (m < 0.5_wp) then
-            area = drange*((1.0_wp - m)*zeta**(1.0_wp/(1.0_wp - m)))
+            area = drange*((1.0_wp - m)*safe_pow(zeta, 1.0_wp/(1.0_wp - m)))
          else if (m > 0.5_wp) then
-            area = drange*(zeta - m + m*((1.0_wp - zeta)**(1.0_wp/m)))
+            area = drange*(zeta - m + m*safe_pow(1.0_wp - zeta, 1.0_wp/m))
          else
             area = drange*(0.5_wp*zeta*zeta)
          end if

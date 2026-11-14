@@ -25,6 +25,7 @@ module rdb_ice_cice_run
    use rdb_config, only: config_t
    use rdb_grid, only: hgrid_t
    use rdb_mem_report, only: arr_bytes
+   use rdb_safe_math, only: safe_cos, safe_sin
    use rdb_ocean_restart, only: restart_registry_t
    use rdb_ice_cice_state, only: ice_cice_state_t
    use rdb_ice_flux_state, only: ice_flux_t
@@ -142,8 +143,8 @@ contains
       call this%work%set_wet(wet_T > 0.5_wp)
       do j = 1, this%ny
          do i = 1, this%nx
-            this%cosA(i, j) = cos(angle_dx(i, j))   ! intrinsic-lint-ok: setup only, never inside a kernel
-            this%sinA(i, j) = sin(angle_dx(i, j))
+            this%cosA(i, j) = safe_cos(angle_dx(i, j))
+            this%sinA(i, j) = safe_sin(angle_dx(i, j))
          end do
       end do
    end subroutine run_finalize

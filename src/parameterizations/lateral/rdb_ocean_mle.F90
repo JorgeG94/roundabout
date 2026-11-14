@@ -1,5 +1,12 @@
 !! Ocean mixed-layer-eddy (Fox-Kemper) restratification slot.
 module rdb_ocean_mle
+   !! **Reproducibility.**  Every exp/log/pow/cbrt/erfc here is the
+   !! position-independent `rdb_sm_*` library (module-local include), never the
+   !! compiler intrinsic, so a column's result does not depend on its place in a
+   !! vectorised loop or on the tile width.  Quantities constant per step,
+   !! column or configuration are evaluated once, outside the loop that used to
+   !! repeat them.
+   !!
    !! Fox-Kemper, Ferrari & Hallberg (2008) submesoscale mixed-layer-eddy
    !! (MLE) restratification.  Submesoscale eddies slump lateral buoyancy
    !! fronts in the surface mixed layer via an overturning streamfunction
@@ -70,6 +77,7 @@ module rdb_ocean_mle
    use rdb_ocean_surface_stress, only: ocean_surface_stress_t
    use rdb_ocean_boundary_types, only: ocean_bc_state_t
    use, intrinsic :: iso_fortran_env, only: int64
+   use, intrinsic :: ieee_arithmetic, only: ieee_is_nan, ieee_is_finite
    use rdb_mem_report, only: arr_bytes
    implicit none
    private
@@ -173,7 +181,15 @@ module rdb_ocean_mle
       procedure, non_overridable :: bytes => ocean_mle_bytes
    end type ocean_mle_t
 
+   ! Position-independent cbrt (`rdb_sm_*`), so a decomposed run rounds
+   ! this closure exactly as one rank does.  Constants once here, bodies in
+   ! `contains`.
+#include "rdb_safe_math_consts.inc"
+
 contains
+
+#include "rdb_safe_math_core.inc"
+#include "rdb_safe_math_pow.inc"
 
    subroutine ocean_mle_init(this, grid, nz_ml)
       !! Allocate the 2D ML diagnostics + per-layer face transports.
@@ -314,7 +330,7 @@ contains
       real(wp), intent(in) :: cr, mstar, nstar, min_wstar2
       real(wp) :: ts, wstar3, wpup
       wstar3 = max(0.0_wp, -b0_face)*h_vel
-      wpup = max((mstar*ustar**3 + nstar*wstar3)**(2.0_wp/3.0_wp), min_wstar2)
+      wpup = max(rdb_sm_cbrt(mstar*ustar**3 + nstar*wstar3)**2, min_wstar2)
       ts = cr*ds*f_abs*h_vel/wpup
    end function mle_bodner_timescale
 

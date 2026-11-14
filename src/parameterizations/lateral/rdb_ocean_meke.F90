@@ -1,5 +1,12 @@
 !! Mesoscale eddy kinetic energy (MEKE) prognostic slot.
 module rdb_ocean_meke
+   !! **Reproducibility.**  Every exp/log/pow/cbrt/erfc here is the
+   !! position-independent `rdb_sm_*` library (module-local include), never the
+   !! compiler intrinsic, so a column's result does not depend on its place in a
+   !! vectorised loop or on the tile width.  Quantities constant per step,
+   !! column or configuration are evaluated once, outside the loop that used to
+   !! repeat them.
+   !!
    !! Mesoscale eddy kinetic energy parameterization.  Carries a single 2D
    !! vertically-averaged eddy-energy field `meke(nx,ny)` [m^2/s^2], sourced
    !! by the GM potential-energy release, damped by an implicit
@@ -29,6 +36,7 @@ module rdb_ocean_meke
    use rdb_ocean_varmix, only: ocean_varmix_t
    use rdb_ocean_wave_speed, only: ocean_wave_speed_t
    use, intrinsic :: iso_fortran_env, only: int64
+   use, intrinsic :: ieee_arithmetic, only: ieee_is_nan, ieee_is_finite
    use rdb_mem_report, only: arr_bytes
    implicit none
    private
@@ -237,7 +245,15 @@ module rdb_ocean_meke
       procedure, non_overridable :: bytes => ocean_meke_bytes
    end type ocean_meke_t
 
+   ! Position-independent pow (`rdb_sm_*`), so a decomposed run rounds
+   ! this closure exactly as one rank does.  Constants once here, bodies in
+   ! `contains`.
+#include "rdb_safe_math_consts.inc"
+
 contains
+
+#include "rdb_safe_math_core.inc"
+#include "rdb_safe_math_pow.inc"
 
    subroutine ocean_meke_init(this, grid, nz_ml)
       !! Allocate the prognostic field, the derived diffusivity, and the
@@ -808,7 +824,7 @@ contains
          bf2 = cd_scale*cd_scale
          if (lfrict*cb > 0.0_wp) then
             ratio = ldeform/lfrict
-            bf2 = bf2 + 1.0_wp/(1.0_wp + cb*ratio)**0.8_wp
+            bf2 = bf2 + 1.0_wp/rdb_sm_pow(1.0_wp + cb*ratio, 0.8_wp)
          end if
          bf2 = max(bf2, min_gamma2)
          bottom_fac2(i, j) = bf2
@@ -817,7 +833,7 @@ contains
          tf2 = 1.0_wp
          if (lfrict*ct > 0.0_wp) then
             ratio = ldeform/lfrict
-            tf2 = 1.0_wp/(1.0_wp + ct*ratio)**0.25_wp
+            tf2 = 1.0_wp/rdb_sm_pow(1.0_wp + ct*ratio, 0.25_wp)
          end if
          tf2 = max(tf2, min_gamma2)
          barotr_fac2(i, j) = tf2

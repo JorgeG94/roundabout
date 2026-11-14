@@ -18,6 +18,7 @@ module rdb_ocean_bipolar
    !! the join (s=0) to the self-conjugate fold line (s=1). Inverse:
    !! w = exp(mu+i*xi), Zp = A*(1+w)/(1-w), Z = Zp*exp(i*lon_pole).
    use rdb_constants, only: wp, PI, DEG2RAD, RAD2DEG
+   use rdb_safe_math, only: safe_exp, safe_log, safe_sin, safe_cos, safe_tan, safe_atan, safe_atan2
    implicit none
    private
 
@@ -42,17 +43,17 @@ contains
       real(wp) :: wr, wi, denr, deni, dnorm, zpr, zpi
       real(wp) :: lpr, zr, zi, rmag
 
-      a_focus = tan(DEG2RAD*(90.0_wp - phi_join)*0.5_wp)
+      a_focus = safe_tan(DEG2RAD*(90.0_wp - phi_join)*0.5_wp)
 
       ! mu from the join-continuity relation: lon_join = lon_pole + 2 atan(exp(mu)).
       half = DEG2RAD*(lam_deg - lon_pole)*0.5_wp
-      t = tan(half)
+      t = safe_tan(half)
       if (t > 0.0_wp) then
          sgn = 1.0_wp
-         mu = log(t)
+         mu = safe_log(t)
       else if (t < 0.0_wp) then
          sgn = -1.0_wp
-         mu = log(-t)
+         mu = safe_log(-t)
       else
          ! lam == lon_pole (mod 360): a cap pole.  mu -> -inf; clamp finite
          ! so the corner sits arbitrarily close to the pole without an Inf.
@@ -64,8 +65,8 @@ contains
       xi = sgn*(PI*0.5_wp + s*PI*0.5_wp)
 
       ! w = exp(mu) * exp(i*xi)
-      wr = exp(mu)*cos(xi)
-      wi = exp(mu)*sin(xi)
+      wr = safe_exp(mu)*safe_cos(xi)
+      wi = safe_exp(mu)*safe_sin(xi)
 
       ! Zp = A * (1 + w)/(1 - w)
       denr = 1.0_wp - wr
@@ -87,16 +88,16 @@ contains
 
       ! Z = Zp * exp(i*lon_pole)
       lpr = DEG2RAD*lon_pole
-      zr = zpr*cos(lpr) - zpi*sin(lpr)
-      zi = zpr*sin(lpr) + zpi*cos(lpr)
+      zr = zpr*safe_cos(lpr) - zpi*safe_sin(lpr)
+      zi = zpr*safe_sin(lpr) + zpi*safe_cos(lpr)
 
       ! stereographic inverse
       rmag = sqrt(zr*zr + zi*zi)
-      lat = 90.0_wp - RAD2DEG*2.0_wp*atan(rmag)
+      lat = 90.0_wp - RAD2DEG*2.0_wp*safe_atan(rmag)
       if (zr == 0.0_wp .and. zi == 0.0_wp) then
          lon = lon_pole + 180.0_wp
       else
-         lon = RAD2DEG*atan2(zi, zr)
+         lon = RAD2DEG*safe_atan2(zi, zr)
       end if
       ! wrap lon to [-180, 180)
       lon = modulo(lon + 180.0_wp, 360.0_wp) - 180.0_wp

@@ -130,7 +130,7 @@ dry below ``dry_depth`` (default 0.05 m) and re-wet above ``rewet_depth``
 from oscillating. A positive-definite outflow limiter keeps a drying cell
 from exporting more water than it contains.
 
-Wet/dry is limited to the sigma coordinate, runs on several ranks (bit-identical to one on wall and periodic edges; not with the tripolar fold or an open-type edge), and
+Wet/dry is limited to the sigma coordinate, runs on several ranks (bit-identical to one on wall, periodic, Flather-open and tidal edges; not with the tripolar fold, a clamped/chapman/sponge/nested/inflow/discharge edge, or Orlanski radiation, full Flather, nudging or tracer reservoirs on an open edge), and
 falls outside the ``pred_corr`` outer-scheme envelope — a configuration
 enabling it must also set ``&ocean_bt_nml split_scheme = "ssp_rk2"``,
 which ``validate_config`` will tell you.

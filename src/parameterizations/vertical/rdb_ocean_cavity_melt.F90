@@ -115,8 +115,16 @@
 !! a scalar through the `*_f` variants (`cavity_exchange_velocities_f`,
 !! `cavity_solve_melt_f`, `cavity_melt_point_gamma_f`) instead of through a
 !! modified copy of the exchange bundle.
+!!
+!! **Reproducibility.**  Every log/exp/pow/cbrt is the position-independent
+!! `rdb_sm_*` library (module-local include), so the melt solve does not depend
+!! on a column's place in a vectorised loop.  The Holland-Jenkins Prandtl and
+!! Schmidt `2/3` powers are configuration constants: the solve forms them once
+!! and threads them (`pr23`, `sc23`) through the bisection, and the Yung
+!! prefactors `10^A` are compile-time parameters.
 module rdb_ocean_cavity_melt
-   use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+   use, intrinsic :: ieee_arithmetic, only: ieee_is_finite, ieee_is_nan
+   use, intrinsic :: iso_fortran_env, only: int64
    use rdb_constants, only: wp
    use rdb_eos, only: eos_t, eos_freezing_point
    implicit none
@@ -396,6 +404,10 @@ module rdb_ocean_cavity_melt
       !! `Gamma_S = 10^A_S * (L+)^n_S` prefactor exponent, eq. (8) p. 5832.
    real(wp), parameter :: Y25_N_S = 0.223_wp
       !! `Gamma_S` power-law slope in `L+`, eq. (8) p. 5832.
+   real(wp), parameter :: Y25_TEN_A_T = 10.0_wp**Y25_A_T
+      !! `10^A_T`: a constant expression folded at compile time.
+   real(wp), parameter :: Y25_TEN_A_S = 10.0_wp**Y25_A_S
+      !! `10^A_S`: a constant expression folded at compile time.
    real(wp), parameter :: Y25_GAMMA_T_CC = 0.012_wp
       !! Constant-coefficient cap on `Gamma_T` (Yung et al. 2025 Table 1
       !! p. 5832) — the Vreugdenhil & Taylor (2019) passive-scalar
@@ -626,7 +638,16 @@ module rdb_ocean_cavity_melt
          !! law).
    end type ocean_cavity_solution_t
 
+   ! Position-independent log/exp/pow/cbrt (`rdb_sm_*`): the interface solve
+   ! must not depend on a column's place in a vectorised loop, or a decomposed
+   ! run rounds the melt rate differently from one rank.  Constants once here,
+   ! bodies in `contains`.
+#include "rdb_safe_math_consts.inc"
+
 contains
+
+#include "rdb_safe_math_core.inc"
+#include "rdb_safe_math_pow.inc"
 
    ! ======================================================================
    ! Namelist-string parsing.  Both mirror `parse_tfreeze_set`: an
@@ -820,7 +841,7 @@ contains
                    .or. (l_plus >= CAVITY_L_PLUS_NEUTRAL)
    end function cavity_l_plus_is_neutral
 
-   pure subroutine cavity_gamma_hj99(u_star, l_plus, f_cor, const, gamma_t, gamma_s, ierr)
+   pure subroutine cavity_gamma_hj99(u_star, l_plus, f_cor, const, pr23, sc23, gamma_t, gamma_s, ierr)
       !! Holland & Jenkins (1999) eqs. (14)-(18) p. 1792:
       !!
       !!   `gamma_{T,S} = u* / (Gamma_Turb + Gamma_Mole^{T,S})`        (14)
@@ -859,6 +880,9 @@ contains
          !! exchange bundle: see `cavity_exchange_velocities_f`.
       type(ocean_cavity_const_t), intent(in) :: const
          !! Constants bundle.
+      real(wp), intent(in) :: pr23, sc23
+         !! `Pr**(2/3)`, `Sc**(2/3)`: configuration constants, evaluated once per
+         !! solve by the caller instead of once per iteration here.
       real(wp), intent(out) :: gamma_t
          !! Heat exchange velocity (m/s).
       real(wp), intent(out) :: gamma_s
@@ -900,7 +924,7 @@ contains
                ierr = CAVITY_MELT_LAW_DOMAIN
                return
             end if
-            eta = arg**(-0.5_wp)
+            eta = 1.0_wp/sqrt(arg)
          end if
       end if
 
@@ -915,12 +939,12 @@ contains
          ierr = CAVITY_MELT_LAW_DOMAIN
          return
       end if
-      g_turb = log(arg)/const%kappa_vk + 1.0_wp/(2.0_wp*const%xi_N*eta) &
+      g_turb = rdb_sm_log(arg)/const%kappa_vk + 1.0_wp/(2.0_wp*const%xi_N*eta) &
                - 1.0_wp/const%kappa_vk
 
       ! eq. (16) + eq. (14)
-      den_t = g_turb + (HJ99_MOLE_SLOPE*const%Pr**(2.0_wp/3.0_wp) - HJ99_MOLE_OFFSET)
-      den_s = g_turb + (HJ99_MOLE_SLOPE*const%Sc**(2.0_wp/3.0_wp) - HJ99_MOLE_OFFSET)
+      den_t = g_turb + (HJ99_MOLE_SLOPE*pr23 - HJ99_MOLE_OFFSET)
+      den_s = g_turb + (HJ99_MOLE_SLOPE*sc23 - HJ99_MOLE_OFFSET)
       if (.not. (ieee_is_finite(den_t) .and. ieee_is_finite(den_s))) then
          ierr = CAVITY_MELT_NONFINITE_STATE
          return
@@ -980,8 +1004,8 @@ contains
          gamma_s = Y25_GAMMA_S_CC*u_star
          return
       end if
-      big_gamma_t = 10.0_wp**Y25_A_T*l_plus**Y25_N_T
-      big_gamma_s = 10.0_wp**Y25_A_S*l_plus**Y25_N_S
+      big_gamma_t = Y25_TEN_A_T*rdb_sm_pow(l_plus, Y25_N_T)
+      big_gamma_s = Y25_TEN_A_S*rdb_sm_pow(l_plus, Y25_N_S)
       if (.not. (ieee_is_finite(big_gamma_t) .and. ieee_is_finite(big_gamma_s))) then
          gamma_t = 0.0_wp
          gamma_s = 0.0_wp
@@ -1022,12 +1046,17 @@ contains
          !! Salt exchange velocity (m/s).  Zero on any non-OK status.
       integer, intent(out) :: ierr
          !! `CAVITY_MELT_*` status.
+      real(wp) :: pr23, sc23
 
-      call cavity_exchange_velocities_f(par, par%f_cor, const, u_star, l_plus, &
+      ! (Public entry: the H&J99 constants are formed per call; the solve
+      ! forms them once per column.)
+      pr23 = rdb_sm_cbrt(const%Pr)**2
+      sc23 = rdb_sm_cbrt(const%Sc)**2
+      call cavity_exchange_velocities_f(par, par%f_cor, const, pr23, sc23, u_star, l_plus, &
                                         T_w, S_w, T_b, S_b, gamma_t, gamma_s, ierr)
    end subroutine cavity_exchange_velocities
 
-   pure subroutine cavity_exchange_velocities_f(par, f_cor, const, u_star, l_plus, &
+   pure subroutine cavity_exchange_velocities_f(par, f_cor, const, pr23, sc23, u_star, l_plus, &
                                                 T_w, S_w, T_b, S_b, gamma_t, gamma_s, ierr)
       !! Exchange-velocity dispatch — ONE argument list for every law, so
       !! a later `do concurrent` kernel dispatches with a single
@@ -1060,6 +1089,9 @@ contains
          !! Coriolis parameter (1/s) for this column; `hj99` only.
       type(ocean_cavity_const_t), intent(in) :: const
          !! Constants bundle.
+      real(wp), intent(in) :: pr23, sc23
+         !! `Pr**(2/3)`, `Sc**(2/3)`: configuration constants, evaluated once per
+         !! solve by the caller instead of once per iteration here.
       real(wp), intent(in) :: u_star
          !! Friction velocity (m/s), strictly positive.
       real(wp), intent(in) :: l_plus
@@ -1104,7 +1136,7 @@ contains
          gamma_t = par%gamma_t_coeff*u_star
          gamma_s = par%gamma_s_coeff*u_star
       case (CAVITY_LAW_HJ99)
-         call cavity_gamma_hj99(u_star, l_plus, f_cor, const, gamma_t, gamma_s, ierr)
+         call cavity_gamma_hj99(u_star, l_plus, f_cor, const, pr23, sc23, gamma_t, gamma_s, ierr)
       case (CAVITY_LAW_YUNG25)
          call cavity_gamma_yung25(u_star, l_plus, gamma_t, gamma_s, ierr)
       case (CAVITY_LAW_JENKINS91, CAVITY_LAW_ROSEVEAR22, CAVITY_LAW_VT19, &
@@ -1759,11 +1791,11 @@ contains
       if (cavity_l_plus_is_neutral(lp_new)) then
          g = huge(1.0_wp)
       else
-         g = log(lp_new) - x
+         g = rdb_sm_log(lp_new) - x
       end if
    end function cavity_outer_residual
 
-   pure subroutine cavity_state_at_x(x, par, f_cor, ice, eos, const, u_star, T_w, S_w, p_b, &
+   pure subroutine cavity_state_at_x(x, par, f_cor, ice, eos, const, pr23, sc23, u_star, T_w, S_w, p_b, &
                                      S_i, T_b, S_b, m_mass, gamma_t, gamma_s, b_flux, &
                                      lp_new, ierr)
       !! Evaluate the whole interface at a trial `x = ln(L+)`: exchange
@@ -1785,6 +1817,9 @@ contains
          !! Shared EOS handle — the liquidus.
       type(ocean_cavity_const_t), intent(in) :: const
          !! Constants bundle.
+      real(wp), intent(in) :: pr23, sc23
+         !! `Pr**(2/3)`, `Sc**(2/3)`: configuration constants, evaluated once per
+         !! solve by the caller instead of once per iteration here.
       real(wp), intent(in) :: u_star
          !! Friction velocity (m/s).
       real(wp), intent(in) :: T_w
@@ -1818,13 +1853,13 @@ contains
       if (x >= CAVITY_LP_X_HI) then
          l_plus = CAVITY_L_PLUS_NEUTRAL
       else
-         l_plus = exp(x)
+         l_plus = rdb_sm_exp(x)
       end if
 
       ! `T_b`/`S_b` are the RESERVED-law arguments here (only MK18 reads
       ! them); the trial interface state is not known yet, so the
       ! prototype's convention of passing `(0, S_w)` is kept.
-      call cavity_exchange_velocities_f(par, f_cor, const, u_star, l_plus, T_w, S_w, &
+      call cavity_exchange_velocities_f(par, f_cor, const, pr23, sc23, u_star, l_plus, T_w, S_w, &
                                         0.0_wp, S_w, gamma_t, gamma_s, ierr)
       if (ierr /= CAVITY_MELT_OK) then
          call cavity_safe_state(eos, S_w, p_b, T_b, S_b, m_mass)
@@ -1940,6 +1975,17 @@ contains
       real(wp) :: lo, hi, mid, xstar, g_lo, g_hi, g_mid
       integer :: it
       logical :: converged, settled
+      real(wp) :: pr23, sc23
+
+      ! H&J99 molecular terms: configuration constants, once per solve
+      ! (not once per bisection iteration).  Other laws never read them.
+      if (par%law == CAVITY_LAW_HJ99) then
+         pr23 = rdb_sm_cbrt(const%Pr)**2
+         sc23 = rdb_sm_cbrt(const%Sc)**2
+      else
+         pr23 = 0.0_wp
+         sc23 = 0.0_wp
+      end if
 
       ierr = CAVITY_MELT_OK
       call cavity_solution_reset(sol)
@@ -1965,7 +2011,7 @@ contains
 
       ! The neutral evaluation is both the answer for an explicit law and
       ! the upper bracket for an implicit one.
-      call cavity_state_at_x(CAVITY_LP_X_HI, par, f_cor, ice, eos, const, u_star, T_w, S_w, &
+      call cavity_state_at_x(CAVITY_LP_X_HI, par, f_cor, ice, eos, const, pr23, sc23, u_star, T_w, S_w, &
                              p_b, S_i, T_b, S_b, m_mass, gamma_t, gamma_s, b_flux, &
                              lp_new, ierr)
       if (ierr /= CAVITY_MELT_OK) then
@@ -1980,7 +2026,7 @@ contains
          ! short-circuit and makes `g_hi = +huge >= 0`; the explicit
          ! `g_hi >= 0` test below therefore covers both accept branches.
          if (g_hi < 0.0_wp) then
-            call cavity_state_at_x(CAVITY_LP_X_LO, par, f_cor, ice, eos, const, u_star, T_w, &
+            call cavity_state_at_x(CAVITY_LP_X_LO, par, f_cor, ice, eos, const, pr23, sc23, u_star, T_w, &
                                    S_w, p_b, S_i, T_b, S_b, m_mass, gamma_t, gamma_s, &
                                    b_flux, lp_new, ierr)
             if (ierr /= CAVITY_MELT_OK) then
@@ -2003,7 +2049,7 @@ contains
                mid = 0.5_wp*(lo + hi)
                settled = (mid <= lo) .or. (mid >= hi)
                if (.not. settled) then
-                  call cavity_state_at_x(mid, par, f_cor, ice, eos, const, u_star, T_w, S_w, &
+                  call cavity_state_at_x(mid, par, f_cor, ice, eos, const, pr23, sc23, u_star, T_w, S_w, &
                                          p_b, S_i, T_b, S_b, m_mass, gamma_t, gamma_s, &
                                          b_flux, lp_new, ierr)
                   if (ierr /= CAVITY_MELT_OK) then
@@ -2035,14 +2081,14 @@ contains
             ! returned gammas and the returned interface state belong to
             ! the SAME `L+`.
             xstar = 0.5_wp*(lo + hi)
-            call cavity_state_at_x(xstar, par, f_cor, ice, eos, const, u_star, T_w, S_w, p_b, &
+            call cavity_state_at_x(xstar, par, f_cor, ice, eos, const, pr23, sc23, u_star, T_w, S_w, p_b, &
                                    S_i, T_b, S_b, m_mass, gamma_t, gamma_s, b_flux, &
                                    lp_new, ierr)
             if (ierr /= CAVITY_MELT_OK) then
                call cavity_safe_state(eos, S_w, p_b, sol%T_b, sol%S_b, sol%m_mass)
                return
             end if
-            l_plus = exp(xstar)
+            l_plus = rdb_sm_exp(xstar)
          end if
       end if
 

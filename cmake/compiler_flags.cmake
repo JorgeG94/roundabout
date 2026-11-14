@@ -150,7 +150,10 @@ elseif(CMAKE_Fortran_COMPILER_ID STREQUAL "Intel")
   # ("IntelLLVM") with STREQUAL — MATCHES would conflate the two. No OpenMP here
   # on purpose: ifort's `do concurrent` codegen is mature and the analytical
   # suite passes serially at -O3.
-  set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -free -stand f18")
+  #
+  # -assume minus0: see the ifx branch below.
+  set(CMAKE_Fortran_FLAGS
+      "${CMAKE_Fortran_FLAGS} -free -stand f18 -assume minus0")
   set(CMAKE_Fortran_FLAGS_DEBUG "-g -O0 -check all -traceback -warn all")
   set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -fp-model=precise")
   if(RDB_ENABLE_GPU)
@@ -179,7 +182,15 @@ elseif(CMAKE_Fortran_COMPILER_ID STREQUAL "IntelLLVM")
   # -xHost is intentionally omitted: Gadi login and compute nodes can have
   # different ISA, so a login-node build with -xHost may emit instructions
   # unsupported on the compute node.
-  set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -free -stand f18 -qopenmp")
+  #
+  # -assume minus0: Intel's default is `nominus0`, under which SIGN(a, -0.0)
+  # treats the negative zero as +0.0 -- not the Fortran 2003+ behaviour gfortran
+  # and nvfortran give.  rdb_safe_math relies on SIGN to carry signed zeros
+  # (atan/atan2 quadrants, pow of a -0.0 base, the sign of a flushed zero), and
+  # rdb_test_safe_math's signed-zero checks fail under nominus0.  Only results
+  # whose second SIGN argument is -0.0 change.
+  set(CMAKE_Fortran_FLAGS
+      "${CMAKE_Fortran_FLAGS} -free -stand f18 -qopenmp -assume minus0")
   set(CMAKE_Fortran_FLAGS_DEBUG "-g -O0 -check all -traceback -warn all")
   set(CMAKE_Fortran_FLAGS_RELEASE "-O3 -fp-model=precise")
   if(RDB_PARALLEL_BACKEND STREQUAL "openmp" AND RDB_ENABLE_GPU)

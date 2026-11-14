@@ -1,5 +1,12 @@
 !! Ocean vertical mixing parameterisation state.
 module rdb_ocean_vmix
+   !! **Reproducibility.**  Every exp/log/pow/cbrt/erfc/atan/acosh/sin here is the
+   !! position-independent `rdb_sm_*` library (module-local include), never the
+   !! compiler intrinsic, so a column's result does not depend on its place in a
+   !! vectorised loop or on the tile width.  Quantities constant per step,
+   !! column or configuration are evaluated once, outside the loop that used to
+   !! repeat them.
+   !!
    !! Holds the closure state for the ocean dynamical core's vertical
    !! mixing kernel.  Produces 3D `kv`, `kt` (and `ks` once the
    !! double-diffusion path lands) diffusivity fields at layer
@@ -89,6 +96,7 @@ module rdb_ocean_vmix
                                      sw_transmission, sw_transmission_nb
    use rdb_eos, only: eos_t, eos_buoyancy_coeffs
    use, intrinsic :: iso_fortran_env, only: int64
+   use, intrinsic :: ieee_arithmetic, only: ieee_is_nan, ieee_is_finite
    use rdb_mem_report, only: arr_bytes
    implicit none
    private
@@ -602,7 +610,19 @@ module rdb_ocean_vmix
       procedure, non_overridable :: seed_backgrounds => vmix_seed_backgrounds
    end type ocean_vmix_t
 
+   ! Position-independent exp/pow/cbrt/atan/acosh/sin (`rdb_sm_*`): the mixing
+   ! coefficients must not depend on a column's place in a vectorised loop, or
+   ! a decomposed run rounds them differently from one rank.  Constants once
+   ! here, bodies in `contains`.
+#include "rdb_safe_math_consts.inc"
+
 contains
+
+#include "rdb_safe_math_core.inc"
+#include "rdb_safe_math_pow.inc"
+#include "rdb_safe_math_trig.inc"
+#include "rdb_safe_math_atan.inc"
+#include "rdb_safe_math_hyp.inc"
 
    pure function vmix_interior_closure_is_implemented(code) result(ok)
       !! `.true.` for `VMIX_INTERIOR_PP81` and `VMIX_INTERIOR_NONE` — the
@@ -732,11 +752,13 @@ contains
       real(wp), intent(in) :: geolat(nx, ny)
 
       integer :: i, j, k
-      real(wp) :: kt_floor, kv_floor
+      real(wp) :: kt_floor, kv_floor, lat_fac, hden
 
-      do concurrent(j=1:ny, i=1:nx) local(kt_floor, kv_floor, k)
-         kt_floor = max(kd_min, kt_bg* &
-                        henyey_lat_factor_impl(geolat(i, j), n0_2omega, henyey_max_lat))
+      hden = henyey_norm_impl(n0_2omega)
+
+      do concurrent(j=1:ny, i=1:nx) local(kt_floor, kv_floor, k, lat_fac)
+         lat_fac = henyey_lat_factor_core(geolat(i, j), n0_2omega, henyey_max_lat, hden)
+         kt_floor = max(kd_min, kt_bg*lat_fac)
          kv_floor = kv_bg
          if (prandtl > 0.0_wp) kv_floor = prandtl*kt_floor + kv_bg
          do k = 1, nzp1
@@ -1345,7 +1367,7 @@ contains
                                          q_T_kin, q_S_kin)
          destabilizing = (B_0 < 0.0_wp)
          wstar3_lagged = max(0.0_wp, -B_0)*h_b_lagged
-         w_s_col = sqrt(u_star*u_star + wstar3_lagged**(2.0_wp/3.0_wp))
+         w_s_col = sqrt(u_star*u_star + rdb_sm_cbrt(wstar3_lagged)**2)
 
          ri_prev = 0.0_wp
          d_prev = d_centre_ref
@@ -1457,7 +1479,7 @@ contains
          this%b0(i, j) = B_0
          destabilizing = (B_0 < 0.0_wp)
          wstar3 = max(0.0_wp, -B_0)*h_b
-         w_star = wstar3**(1.0_wp/3.0_wp)
+         w_star = rdb_sm_cbrt(wstar3)
          w_s = sqrt(u_star*u_star + w_star*w_star)
          if (h_b > 0.0_wp .and. w_s > 0.0_wp) then
             d_running = 0.0_wp
@@ -1936,12 +1958,12 @@ contains
       logical, intent(in) :: use_k90
 
       integer :: i, j, k, nz
-      real(wp) :: kt_pre, adT, bdS, rrho, ddiff, kd_t, kd_s, hu, hl
+      real(wp) :: kt_pre, adT, bdS, rrho, ddiff, kd_t, kd_s, hu, hl, fing0, fing
 
       nz = nzp1 - 1
 
       do concurrent(k=1:nzp1, j=1:ny, i=1:nx) &
-         local(kt_pre, adT, bdS, rrho, ddiff, kd_t, kd_s, hu, hl)
+         local(kt_pre, adT, bdS, rrho, ddiff, kd_t, kd_s, hu, hl, fing0, fing)
          kt_pre = kt(i, j, k)
          kd_t = 0.0_wp
          kd_s = 0.0_wp
@@ -1958,8 +1980,14 @@ contains
                   ! ---- salt fingering (R_rho >= 1) ----
                   rrho = adT/bdS
                   if (rrho < strat_param_max) then
-                     ddiff = (1.0_wp - ((rrho - 1.0_wp)/ &
-                                        (strat_param_max - 1.0_wp))**exp1)**exp2
+                     fing0 = (rrho - 1.0_wp)/(strat_param_max - 1.0_wp)
+                     ! exp1 = 1 (the cubic default) is exact; other exponents use the library pow.
+                     if (exp1 == 1.0_wp) then
+                        fing = fing0
+                     else
+                        fing = rdb_sm_pow(fing0, exp1)
+                     end if
+                     ddiff = rdb_sm_pow(1.0_wp - fing, exp2)
                      kd_s = kappa_s*ddiff
                   end if
                   kd_t = 0.7_wp*kd_s
@@ -1967,10 +1995,10 @@ contains
                   ! ---- diffusive convection (0 < R_rho < 1) ----
                   rrho = adT/bdS
                   if (use_k90) then
-                     ddiff = mol_diff*8.7_wp*rrho**1.1_wp
+                     ddiff = mol_diff*8.7_wp*rdb_sm_pow(rrho, 1.1_wp)
                   else
                      ddiff = mol_diff*param1* &
-                             exp(param2*exp(param3*(1.0_wp/rrho - 1.0_wp)))
+                             rdb_sm_exp(param2*rdb_sm_exp(param3*(1.0_wp/rrho - 1.0_wp)))
                   end if
                   kd_t = ddiff
                   if (rrho < 0.5_wp) then
@@ -2056,13 +2084,13 @@ contains
       logical, intent(in) :: use_k90
 
       integer :: i, j, k, nz
-      real(wp) :: kt_pre, adT, bdS, rrho, ddiff, kd_t, kd_s, hu, hl
+      real(wp) :: kt_pre, adT, bdS, rrho, ddiff, kd_t, kd_s, hu, hl, fing0, fing
       real(wp) :: p_int, t_u, t_l, s_u, s_l, alpha_i, beta_i
 
       nz = nzp1 - 1
 
       do concurrent(j=1:ny, i=1:nx) &
-         local(k, kt_pre, adT, bdS, rrho, ddiff, kd_t, kd_s, hu, hl, &
+         local(k, kt_pre, adT, bdS, rrho, ddiff, kd_t, kd_s, hu, hl, fing0, fing, &
                p_int, t_u, t_l, s_u, s_l, alpha_i, beta_i)
          p_int = 0.0_wp
          if (p_top_in_eos) p_int = p_top(i, j)
@@ -2104,8 +2132,14 @@ contains
                      ! ---- salt fingering (R_rho >= 1) ----
                      rrho = adT/bdS
                      if (rrho < strat_param_max) then
-                        ddiff = (1.0_wp - ((rrho - 1.0_wp)/ &
-                                           (strat_param_max - 1.0_wp))**exp1)**exp2
+                        fing0 = (rrho - 1.0_wp)/(strat_param_max - 1.0_wp)
+                        ! exp1 = 1 (the cubic default) is exact; other exponents use the library pow.
+                        if (exp1 == 1.0_wp) then
+                           fing = fing0
+                        else
+                           fing = rdb_sm_pow(fing0, exp1)
+                        end if
+                        ddiff = rdb_sm_pow(1.0_wp - fing, exp2)
                         kd_s = kappa_s*ddiff
                      end if
                      kd_t = 0.7_wp*kd_s
@@ -2113,10 +2147,10 @@ contains
                      ! ---- diffusive convection (0 < R_rho < 1) ----
                      rrho = adT/bdS
                      if (use_k90) then
-                        ddiff = mol_diff*8.7_wp*rrho**1.1_wp
+                        ddiff = mol_diff*8.7_wp*rdb_sm_pow(rrho, 1.1_wp)
                      else
                         ddiff = mol_diff*param1* &
-                                exp(param2*exp(param3*(1.0_wp/rrho - 1.0_wp)))
+                                rdb_sm_exp(param2*rdb_sm_exp(param3*(1.0_wp/rrho - 1.0_wp)))
                      end if
                      kd_t = ddiff
                      if (rrho < 0.5_wp) then
@@ -2382,7 +2416,7 @@ contains
          do k = nzp1 - 1, 2, -1
             depth = depth + h_layer(i, j, k)
             kd_bg(i, j, k) = kd_sfc + (kd_deep - kd_sfc)* &
-                             (0.5_wp + atan((depth - z0)/delta)*inv_pi)
+                             (0.5_wp + rdb_sm_atan((depth - z0)/delta)*inv_pi)
          end do
       end do
    end subroutine vmix_bkgnd_fill_impl
@@ -2443,12 +2477,35 @@ contains
       ! branch is the recorded gfortran-15.1 corruption shape) — `merge`
       ! evaluates both arms, and both are finite for every input: |sin| is
       ! bounded by 1 and n0_2omega ≥ 1, so the acosh argument is always ≥ 1.
-      abs_sinlat = merge(HENYEY_MIN_SINLAT, abs(sin(lat_deg*DEG2RAD)), &
+      abs_sinlat = merge(HENYEY_MIN_SINLAT, abs(rdb_sm_sin(lat_deg*DEG2RAD)), &
                          abs(lat_deg) > max_lat)
       ! sin(30 deg) = 0.5 exactly; the denominator normalises L(30 deg) = 1.
-      fac = abs_sinlat*acosh(n0_2omega/max(HENYEY_MIN_SINLAT, abs_sinlat)) &
-            /(0.5_wp*acosh(2.0_wp*n0_2omega))
+      fac = abs_sinlat*rdb_sm_acosh(n0_2omega/max(HENYEY_MIN_SINLAT, abs_sinlat)) &
+            /henyey_norm_impl(n0_2omega)
    end function henyey_lat_factor_impl
+
+   pure function henyey_norm_impl(n0_2omega) result(den)
+      !! `0.5*acosh(2*N0/(2 Omega))`, the normaliser of `L`: depends on the
+      !! configuration alone, so the column kernels evaluate it once per
+      !! call and hand it to `henyey_lat_factor_core`.
+      !$acc routine seq
+      real(wp), intent(in) :: n0_2omega
+      real(wp) :: den
+      den = 0.5_wp*rdb_sm_acosh(2.0_wp*n0_2omega)
+   end function henyey_norm_impl
+
+   pure function henyey_lat_factor_core(lat_deg, n0_2omega, max_lat, den) result(fac)
+      !! `henyey_lat_factor_impl` with the configuration constant
+      !! `den = henyey_norm_impl(n0_2omega)` passed in (bitwise the same value).
+      !$acc routine seq
+      real(wp), intent(in) :: lat_deg, n0_2omega, max_lat, den
+      real(wp) :: fac
+      real(wp) :: abs_sinlat
+      abs_sinlat = merge(HENYEY_MIN_SINLAT, abs(rdb_sm_sin(lat_deg*DEG2RAD)), &
+                         abs(lat_deg) > max_lat)
+      fac = abs_sinlat*rdb_sm_acosh(n0_2omega/max(HENYEY_MIN_SINLAT, abs_sinlat)) &
+            /den
+   end function henyey_lat_factor_core
 
    pure function bkgnd_henyey_conflicts_profile(bkgnd_henyey, bkgnd_profile) result(conflict)
       !! `.true.` when both background schemes are selected at once.
@@ -2543,15 +2600,16 @@ contains
          !! NOT a substitute.
 
       integer :: i, j, k
-      real(wp) :: kt_floor, ks_floor
+      real(wp) :: kt_floor, ks_floor, lat_fac, hden
 
-      do concurrent(j=1:ny, i=1:nx) local(kt_floor, ks_floor, k)
+      hden = henyey_norm_impl(n0_2omega)
+
+      do concurrent(j=1:ny, i=1:nx) local(kt_floor, ks_floor, k, lat_fac)
          ! ONE write site per local (a `local()` variable reassigned across
          ! a branch is the recorded gfortran-15.1 corruption shape).
-         kt_floor = max(kd_min, kt_bg* &
-                        henyey_lat_factor_impl(geolat(i, j), n0_2omega, henyey_max_lat))
-         ks_floor = max(kd_min, ks_bg* &
-                        henyey_lat_factor_impl(geolat(i, j), n0_2omega, henyey_max_lat))
+         lat_fac = henyey_lat_factor_core(geolat(i, j), n0_2omega, henyey_max_lat, hden)
+         kt_floor = max(kd_min, kt_bg*lat_fac)
+         ks_floor = max(kd_min, ks_bg*lat_fac)
          do k = 2, nzp1 - 1
             kv(i, j, k) = min(max(kv(i, j, k), kv_bg), kv_max)
             kt(i, j, k) = min(max(kt(i, j, k), kt_floor), kd_max)
@@ -2587,13 +2645,14 @@ contains
       real(wp), intent(in) :: geolat(nx, ny)
 
       integer :: i, j, k
-      real(wp) :: kt_floor, ks_floor, kv_floor
+      real(wp) :: kt_floor, ks_floor, kv_floor, lat_fac, hden
 
-      do concurrent(j=1:ny, i=1:nx) local(kt_floor, ks_floor, kv_floor, k)
-         kt_floor = max(kd_min, kt_bg* &
-                        henyey_lat_factor_impl(geolat(i, j), n0_2omega, henyey_max_lat))
-         ks_floor = max(kd_min, ks_bg* &
-                        henyey_lat_factor_impl(geolat(i, j), n0_2omega, henyey_max_lat))
+      hden = henyey_norm_impl(n0_2omega)
+
+      do concurrent(j=1:ny, i=1:nx) local(kt_floor, ks_floor, kv_floor, k, lat_fac)
+         lat_fac = henyey_lat_factor_core(geolat(i, j), n0_2omega, henyey_max_lat, hden)
+         kt_floor = max(kd_min, kt_bg*lat_fac)
+         ks_floor = max(kd_min, ks_bg*lat_fac)
          kv_floor = prandtl*kt_floor + kv_bg
          do k = 2, nzp1 - 1
             kv(i, j, k) = min(max(kv(i, j, k), kv_floor), kv_max)
