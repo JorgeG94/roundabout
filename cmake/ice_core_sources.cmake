@@ -10,6 +10,7 @@ set(RDB_ICE_CORE_SOURCES
     ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_dims.F90
     ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_errors.F90
     ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_flux.F90
+    ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_itd_cleanup.F90
     ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_itd_linear.F90
     ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_itd_params.F90
     ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_itd_shift.F90
