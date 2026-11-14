@@ -704,7 +704,7 @@ contains
                            "(default, unchanged), cice_c = the CICE6 C-grid EVP (Lemieux et al. "// &
                            "2024) coupled to the ocean through the sea-surface tilt and the "// &
                            "ocean surface current; needs &ocean_ice_nml enable and dynamics, "// &
-                           "nghost >= 3, one rank, no tripolar fold", &
+                           "nghost >= 3, one rank (a tripolar north fold is supported on one rank)", &
                            allowed=[character(len=8) :: "sis2_c", "cice_c"]))
       pi => cfg%ocean%ice_dyn%ndte
       call gd%add(nml_int("ndte", pi, "Elastic subcycles per dynamics step; must be >= 1"))

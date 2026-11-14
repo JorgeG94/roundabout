@@ -251,6 +251,31 @@ contains
          end do
       end do
 
+      ! A face or corner of zero area (a bipole of a tripolar grid in open water) is closed for
+      ! the ice: the solver divides by `deltamin*uarea` (avg_strength), by the corner-area sum of
+      ! the shear mean and by the face areas, so a live mask on a zero area would give 0/0 or Inf.
+      do j = 1, ny
+         do i = 1, nx
+            if (this%earea(i, j) <= 0.0_wp) this%epm(i, j) = 0.0_wp
+            if (this%narea(i, j) <= 0.0_wp) this%npm(i, j) = 0.0_wp
+            if (this%uarea(i, j) <= 0.0_wp) this%uvm(i, j) = 0.0_wp
+         end do
+      end do
+      ! Configure-time assertion: no live mask sits on a zero (or negative) area.
+      do j = 1, ny
+         do i = 1, nx
+            if ((this%epm(i, j) > 0.5_wp .and. this%earea(i, j) <= 0.0_wp) .or. &
+                (this%npm(i, j) > 0.5_wp .and. this%narea(i, j) <= 0.0_wp) .or. &
+                (this%uvm(i, j) > 0.5_wp .and. this%uarea(i, j) <= 0.0_wp)) then
+               if (present(ierr)) then
+                  ierr = 2
+                  return
+               end if
+               error stop "ice_cgrid_metrics_t%init: a live face/corner mask on a zero area"
+            end if
+         end do
+      end do
+
       ! Single guarded division: a uniform grid gives exactly -1.
       this%ratiodxN = 0.0_wp
       this%ratiodxNr = 0.0_wp

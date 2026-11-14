@@ -730,7 +730,7 @@ CICE-port ice dynamics and transport knobs (upstream CICE code defaults; the EVP
 
 | Knob | Default | Units | Description |
 |------|---------|-------|-------------|
-| `dyn_scheme` | `"sis2_c"` |  | Ice dynamics core: sis2_c = the SIS2 C-grid EVP (default, unchanged), cice_c = the CICE6 C-grid EVP (Lemieux et al. 2024) coupled to the ocean through the sea-surface tilt and the ocean surface current; needs &ocean_ice_nml enable and dynamics, nghost >= 3, one rank, no tripolar fold |
+| `dyn_scheme` | `"sis2_c"` |  | Ice dynamics core: sis2_c = the SIS2 C-grid EVP (default, unchanged), cice_c = the CICE6 C-grid EVP (Lemieux et al. 2024) coupled to the ocean through the sea-surface tilt and the ocean surface current; needs &ocean_ice_nml enable and dynamics, nghost >= 3, one rank (a tripolar north fold is supported on one rank) |
 | `ndte` | `120` |  | Elastic subcycles per dynamics step; must be >= 1 |
 | `elasticDamp` | `0.3600000000E+00` |  | Damping parameter E of the classic EVP (Hunke 2001, arlx = 2 E ndte); must be > 0 |
 | `revised_evp` | `.false.` |  | Revised EVP (Bouillon et al. 2013): arlx and brlx apply |

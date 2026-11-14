@@ -37,6 +37,7 @@ module test_cice_cgrid_metrics
                                        ocean_bc_validate_periodic, ocean_bc_validate_fold
    use rdb_ocean_periodic, only: ocean_periodic_wrap_face_x_2d, ocean_periodic_wrap_face_y_2d
    use rdb_ocean_fold, only: fold_north_u_face, fold_north_v_face
+   use rdb_ice_evp_c, only: ice_evp_c_fold_faces
    use rdb_ice_evp, only: evp_wrap_corner_impl
    use rdb_ice_cgrid_metrics, only: ice_cgrid_metrics_t, ice_halo_faces
    implicit none
@@ -59,6 +60,7 @@ contains
                   new_unittest("cgrid_index_map_cartesian", test_map_cartesian), &
                   new_unittest("cgrid_index_map_spherical", test_map_spherical), &
                   new_unittest("cgrid_index_map_tripolar", test_map_tripolar), &
+                  new_unittest("cgrid_zero_area_closed", test_zero_area), &
                   new_unittest("cgrid_ratios", test_ratios), &
                   new_unittest("cgrid_masks_land", test_masks_land), &
                   new_unittest("cgrid_masks_edges", test_masks_edges), &
@@ -123,9 +125,10 @@ contains
             ! Masks follow the ocean masks strictly inside the physical
             ! domain (the pinned edge ghost band is `cgrid_masks_edges`).
             if (i >= NG + 1 .and. i <= NG + NXP - 1 .and. j >= NG + 1 .and. j <= NG + NYP - 1) then
-               if (cm%epm(i, j) /= m%wet_u(i + 1, j)) bad = .true.
-               if (cm%npm(i, j) /= m%wet_v(i, j + 1)) bad = .true.
-               if (cm%uvm(i, j) /= m%wet_q(i + 1, j + 1)) bad = .true.
+               ! (a face or corner of zero area is closed for the ice whatever the ocean mask says)
+               if (cm%epm(i, j) /= merge(m%wet_u(i + 1, j), 0.0_wp, cm%earea(i, j) > 0.0_wp)) bad = .true.
+               if (cm%npm(i, j) /= merge(m%wet_v(i, j + 1), 0.0_wp, cm%narea(i, j) > 0.0_wp)) bad = .true.
+               if (cm%uvm(i, j) /= merge(m%wet_q(i + 1, j + 1), 0.0_wp, cm%uarea(i, j) > 0.0_wp)) bad = .true.
             end if
             if (cm%earea(i, j) > 0.0_wp) then
                if (abs(cm%earear(i, j)*cm%earea(i, j) - 1.0_wp) > 1.0e-14_wp) bad = .true.
@@ -182,6 +185,57 @@ contains
       call cm%destroy()
       call destroy_cartesian_metrics(m)
    end subroutine test_map_tripolar
+
+   subroutine zero_area_case(error, lat_south, dlat_, phi_join, tag)
+      !! On a tripolar grid, count the corners / faces / cells of ZERO area and, among them,
+      !! those the ocean's own masks leave live (`wet_q`, `wet_u`, `wet_v`, `wet_T`); the
+      !! ice masks must be 0 on every zero area.
+      type(error_type), allocatable, intent(inout) :: error
+      real(wp), intent(in) :: lat_south, dlat_, phi_join
+      character(len=*), intent(in) :: tag
+      type(hgrid_t) :: grid
+      type(ocean_metrics_t) :: m
+      type(ice_cgrid_metrics_t) :: cm
+      type(ocean_bc_state_t) :: bc
+      integer :: i, j, nzq, nzq_live, nzu, nzu_live, nzv, nzv_live, nbad
+
+      call grid%init(NXP, NYP, NG, DLON, dlat_)
+      call make_tripolar_metrics(m, grid, 0.0_wp, lat_south, DLON, dlat_, REARTH, phi_join, 0.0_wp)
+      call make_bc(bc, grid, .true., .true.)
+      call cm%init(grid, m, bc)
+      nzq = 0; nzq_live = 0; nzu = 0; nzu_live = 0; nzv = 0; nzv_live = 0; nbad = 0
+      do j = 1, grid%ny_total - 1
+         do i = 1, grid%nx_total - 1
+            if (m%areaBu(i + 1, j + 1) <= 0.0_wp) then
+               nzq = nzq + 1
+               if (m%wet_q(i + 1, j + 1) > 0.5_wp) nzq_live = nzq_live + 1
+               if (cm%uvm(i, j) > 0.5_wp) nbad = nbad + 1
+            end if
+            if (m%areaCu(i + 1, j) <= 0.0_wp) then
+               nzu = nzu + 1
+               if (m%wet_u(i + 1, j) > 0.5_wp) nzu_live = nzu_live + 1
+               if (cm%epm(i, j) > 0.5_wp) nbad = nbad + 1
+            end if
+            if (m%areaCv(i, j + 1) <= 0.0_wp) then
+               nzv = nzv + 1
+               if (m%wet_v(i, j + 1) > 0.5_wp) nzv_live = nzv_live + 1
+               if (cm%npm(i, j) > 0.5_wp) nbad = nbad + 1
+            end if
+         end do
+      end do
+      write (*, '(a,a,a,3(i5,i5))') "  [cgrid] zero-area ", tag, " (corners, E, N: zero / ocean-mask live): ", &
+         nzq, nzq_live, nzu, nzu_live, nzv, nzv_live
+      call check(error, nbad == 0, tag//": a live ice mask sits on a zero area")
+      call cm%destroy()
+      call destroy_cartesian_metrics(m)
+   end subroutine zero_area_case
+
+   subroutine test_zero_area(error)
+      type(error_type), allocatable, intent(out) :: error
+      call zero_area_case(error, 50.0_wp, DLAT, 60.0_wp, "cap 50-80N")
+      if (allocated(error)) return
+      call zero_area_case(error, 80.0_wp, 1.0_wp, 80.0_wp, "polar cap 80-90N")
+   end subroutine test_zero_area
 
    subroutine test_ratios(error)
       type(error_type), allocatable, intent(out) :: error
@@ -587,7 +641,7 @@ contains
       logical, intent(in) :: periodic_x, fold
       type(hgrid_t) :: grid
       type(ocean_bc_state_t) :: bc
-      real(wp), allocatable :: u(:, :), v(:, :), u2(:, :), v2(:, :)
+      real(wp), allocatable :: u(:, :), v(:, :), u2(:, :), v2(:, :), u3(:, :), v3(:, :)
       integer :: nx, ny, i, j, im, jm
       logical :: bad
 
@@ -595,7 +649,7 @@ contains
       call make_bc(bc, grid, periodic_x, fold)
       nx = grid%nx_total
       ny = grid%ny_total
-      allocate (u(nx + 1, ny), v(nx, ny + 1), u2(nx + 1, ny), v2(nx, ny + 1))
+      allocate (u(nx + 1, ny), v(nx, ny + 1), u2(nx + 1, ny), v2(nx, ny + 1), u3(nx + 1, ny), v3(nx, ny + 1))
       call seed_faces(u, v, nx, ny)
       u2 = u
       v2 = v
@@ -604,21 +658,32 @@ contains
       if (bc%periodic_x) u2(NG + 1, :) = u2(NG + NXP + 1, :)
       if (bc%periodic_y) v2(:, NG + 1) = v2(:, NG + NYP + 1)
 
-      !$acc enter data copyin(u, v, u2, v2)
+      !$acc enter data copyin(u, v, u2, v2, u3, v3)
       call ice_halo_faces(grid, bc, u, v)
       ! The ocean's own sequence, spelled out kernel by kernel.
       call ocean_periodic_wrap_face_x_2d(u2, nx + 1, ny, NXP, NYP, NG, bc%periodic_x, bc%periodic_y)
       call ocean_periodic_wrap_face_y_2d(v2, nx, ny + 1, NXP, NYP, NG, bc%periodic_x, bc%periodic_y)
+      !$acc update self(u2, v2)
+      u3 = u2
+      v3 = v2
+      !$acc update device(u3, v3)
       if (bc%north_fold) then
          call fold_north_u_face(u2, nx + 1, ny, NXP, NYP, NG)
          call fold_north_v_face(v2, nx, ny + 1, NXP, NYP, NG)
+         ! the standalone ice library's own 1-launch fold (rdb_ice_evp_c) is the same map (all but the column u(nx+1), which it leaves alone)
+         call ice_evp_c_fold_faces(nx, ny, NG + 1, NG + NXP, NG + 1, NG + NYP, u3, v3)
       end if
-      !$acc update self(u, v, u2, v2)
-      !$acc exit data delete(u, v, u2, v2)
+      !$acc update self(u, v, u2, v2, u3, v3)
+      !$acc exit data delete(u, v, u2, v2, u3, v3)
 
       call check(error, all(u == u2) .and. all(v == v2), &
                  "ice_halo_faces differs from the duplicate-then-ocean wrap + fold")
       if (allocated(error)) return
+      if (bc%north_fold) then
+         call check(error, all(u3(1:nx, :) == u2(1:nx, :)) .and. all(v3 == v2), &
+                    "ice_evp_c_fold_faces differs from the ocean fold kernels")
+         if (allocated(error)) return
+      end if
 
       if (periodic_x) then
          bad = .false.

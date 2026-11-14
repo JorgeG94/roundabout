@@ -53,11 +53,19 @@ module rdb_ice_dyn_c
    !! The hand-off of `-strocn` to the ocean surface stress is
    !! `ice_ocean_stress_flux_c` (`rdb_ice_ocean_coupler`).
    !!
-   !! Single rank, no tripolar fold (refused at configure; D9.3 and the
-   !! multi-rank PR lift them).  The face halo of every subcycle is
-   !! `ice_halo_faces` (`rdb_ice_cgrid_metrics`), which on a periodic axis keeps
-   !! the east/north seam face the solver computes and copies it onto the
-   !! duplicate (the ocean's own wrap goes the other way and would clobber it).
+   !! Single rank (refused at configure on more than one; the multi-rank PR lifts
+   !! it); a tripolar north fold is supported (D9.3).  The face halo of every
+   !! subcycle is `ice_halo_faces` (`rdb_ice_cgrid_metrics`), which on a periodic
+   !! axis keeps the east/north seam face the solver computes and copies it onto the
+   !! duplicate (the ocean's own wrap goes the other way and would clobber it) and
+   !! then folds the pair across the north seam (vector: negate, the duplicated
+   !! fold-line `v` row projected antisymmetric).  Everything else the solver reads
+   !! beyond the owned cells is recomputed in the ghost ring, or is T state / forcing
+   !! the engine already folds (the aggregates, `h_layer`, `b`, `tau_a`, the ocean
+   !! face velocities; field-by-field table in `rdb_ice_evp_c`).  `ssh` at the north
+   !! ghost row comes from the folded `h_layer` and `b`, so the tilt at the fold-line
+   !! faces is antisymmetric by construction.  Gate: `test_cice_evp_c_fold` (ice only)
+   !! and `tripolar_fold_runs` of `test_cice_dyn_c_engine`.
    !! For the same reason the blended stress at the west/south seam face is
    !! copied from the east/north one before the ocean's seam refresh; see
    !! `ice_ocean_stress_flux_c`.

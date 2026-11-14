@@ -705,6 +705,7 @@ set(RDB_CICE_TESTS
     "test_cice_remap_geom|test_cice_remap_geom|collect_cice_remap_geom_tests|cice_remap_geom|ocean"
     "test_cice_remap_recon|test_cice_remap_recon|collect_cice_remap_recon_tests|cice_remap_recon|ocean"
     "test_cice_remap_flux|test_cice_remap_flux|collect_cice_remap_flux_tests|cice_remap_flux|ocean"
+    "test_cice_evp_c_fold|test_cice_evp_c_fold|collect_cice_evp_c_fold_tests|cice_evp_c_fold|ocean"
 )
 
 # Shared helpers of the ice tests (deterministic columns, ledger, golden

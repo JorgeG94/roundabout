@@ -59,6 +59,81 @@ module rdb_ice_evp_c
    !! subcycle path) runs once after the loop because `ice_evp_c_finish` reads
    !! its `uvelN`/`vvelE`.  Single rank periodic: `wrap_x`, `wrap_y`.
    !!
+   !! **Tripolar fold (single rank, D9.3).**  The fold line is the north edge of
+   !! T row `nj` (storage row `ng + nj`); the maps are those of `rdb_ocean_fold`
+   !! (a 180-degree rotation `(x, y) -> (ni - x, 2 nj - y)`, so both unit vectors
+   !! reverse: a vector NEGATES, a scalar and the pseudoscalars (`f`, `sigma_12`,
+   !! vorticity) COPY).  With the ice names (`E(i,j) = u(i+1,j)`, `N(i,j) =
+   !! v(i,j+1)`, `U(i,j)` the NE corner) every field the scheme carries is handled
+   !! as follows; "recomputed" means NOT exchanged: the ghost ring takes the value
+   !! the local stencil gives from the folded faces and the folded T state.
+   !!
+   !! Field -> stagger -> sign across the fold -> rule on the fold line:
+   !!
+   !!   * `u` (E faces), x-face: vector, NEGATE; `ice_evp_c_fold_faces` after EVERY wrap.
+   !!     No fold-line row (an x-face never lies on the fold).
+   !!   * `v` (N faces), y-face: vector, NEGATE, same call.  Storage row `ng+nj+1` is the N face
+   !!     of the last T row, stored twice (slots `i` and `i' = 2ng+ni+1-i`): the EAST half is
+   !!     authoritative, the WEST half is overwritten by `-v(i')` every call; the self-conjugate
+   !!     column of an odd `ni` is zeroed.
+   !!   * `aice, vice, vsno, aice0, aicen, vicen`, `hm` and the T masks, T: scalar, COPY; folded
+   !!     by the CALLER (engine: the ice halo; harness: its own fold).  No fold-line row.
+   !!   * `strength, tmass, zetax2T, etax2T, stresspT, stressmT`, T: scalar (a 180-degree rotation
+   !!     maps `sigma_11` and `sigma_22` to themselves), RECOMPUTED in the ghost ring, never
+   !!     exchanged.  No fold-line row.
+   !!   * `stress12U`, `(nx+1, ny+1)` SW-corner storage (`U(i,j) = stress12U(i+1,j+1)`): scalar
+   !!     (`sigma_12` is invariant, both axes flip), recomputed.  Mirror of storage `(c, r)`:
+   !!     `c' = 2ng+ni+2-c`, `r' = 2ng+2nj+2-r`; the fold-line row is `r = ng+nj+1` (the NE
+   !!     corners of the last T row), whose two slots `c`, `c'` are computed from mirrored data
+   !!     and agree to round-off (about 1e-16 relative, measured); not projected.
+   !!   * `shearU`, `deltaU`, `(nx, ny)` NE-corner storage (`U(i,j)` at `(i,j)`): scalar,
+   !!     recomputed.  Mirror of `(i, j)`: `i' = 2ng+ni-i`, `j' = 2ng+2nj-j`; the fold-line row
+   !!     is `j = ng+nj` (the SAME physical corners as `stress12U` row `ng+nj+1`, one index
+   !!     lower because the storage is shifted by one).  Not projected either.
+   !!   * `uvelN, vvelE, uvelU, vvelU`, N/E/U: vectors, DERIVED by interpolation of the haloed
+   !!     faces, never stored across the fold.
+   !!   * `aiE, aiN, emassdti, nmassdti, fmE, fmN`, `iceEmask, iceNmask`, E/N: scalars (the
+   !!     Coriolis parameter is a scalar function of position), built by `ice_evp_c_prep` on the
+   !!     owned faces from the folded T state; the two N slots of the fold row carry equal values.
+   !!   * `forcexE, forceyN, strairxE/yN, ss_tltxE/yN, uocnE/N, vocnE/N`, E/N: vectors supplied on
+   !!     the owned faces by the caller; the fold-row slots must be negatives of each other (a
+   !!     folded wind stress and ocean velocity are; the tilt `ssh(i,je+1) - ssh(i,je)` over a
+   !!     folded `ssh` ghost row is antisymmetric by construction).
+   !!   * metrics (`dxE ... uarea`, `ratio*`, `epm, npm, uvm`), all staggers: scalar lengths, areas
+   !!     and masks, COPY; the ocean fills their fold ghosts (`test_cice_cgrid_metrics`).
+   !!
+   !! Order of every refresh: duplicate seam face -> (exchange) -> periodic wrap of the columns ->
+   !! fold (the fold reads wrapped ghost columns).  One launch per subcycle (4 + 1 with the fold).
+   !!
+   !! **Symmetry of the solution.**  The ghost values are exact IMAGES (bitwise) after every
+   !! projection, which is what decomposition bit-identity needs.  The SOLUTION is rotation
+   !! symmetric to round-off only (about 1e-16 relative per subcycle): the two fold-row slots of
+   !! `stress12U`, `shearU` and `deltaU` are computed independently from mirrored data (a 4-point
+   !! sum in the opposite operand order) and are not projected, and the fold-row `v` east half is
+   !! authoritative.  A whole-step tripole symmetry test must therefore use a tolerance.
+   !!
+   !! **Contract for the multi-rank PR (D9.4).**
+   !!   1. A shifted one-face x exchange BEFORE packing the owner-routed fold (the ice treats
+   !!      `u(ie+1)`, `v(je+1)` as the authoritative computed faces, the opposite of the ocean).
+   !!   2. The fold-row projection takes the post-update east-half owner over EVERY storage
+   !!      column, x ghosts included.
+   !!   3. All `ng` ghost rows are filled (K1 with `avg_strength` reads `v` up to row `je+3`).
+   !!   4. Keep the order duplicate -> exchange -> wrap -> fold.
+   !!   5. Any corner projection added later must run identically at `px = 1`.
+   !!
+   !! **Sphere.**  A solid-body rotation has zero stress only with metric-consistent corner
+   !! lengths (`dxU` the `earea`-weighted mean of the two `dxE` it sits between).  With the natural
+   !! lon-lat lengths the corner shear residual is O(h^2) and the viscous-plastic stress is O(P):
+   !! `sigma = P eps / Delta` does not depend on `|eps|` above `Delta_min` (Hibler 1979; the metric
+   !! terms are those of Hunke and Dukowicz 2002).  That is a property of the discretisation, not
+   !! of this port.
+   !!
+   !! **Two copies of the fold.**  `evp_fold_faces_impl` duplicates the ocean face-fold kernels
+   !! (`rdb_ocean_fold`) and serves only `ice_evp_c_step(fold=)` and the tests; the engine path
+   !! goes through the ocean kernels (`ice_halo_faces`); `test_cice_cgrid_metrics` pins them
+   !! bitwise against each other (all columns but `u(nx+1, ghost rows)`, which the solver never
+   !! reads and this copy leaves alone).
+   !!
    !! **Errors.**  A face speed that is non-finite or above `vel_cap` raises
    !! `ICE_ERR_DYN_VEL` in the error word of the owning cell, after the loop;
    !! nothing is clamped.  Non-finite input propagates (every max/min on the
@@ -75,9 +150,10 @@ module rdb_ice_evp_c
    private
 
    public :: ice_evp_c_step, ice_evp_c_substep, ice_evp_c_average, ice_evp_c_finish
-   public :: ice_evp_c_wrap_faces, ice_evp_c_div_stress, ice_evp_c_copy_faces
+   public :: ice_evp_c_wrap_faces, ice_evp_c_div_stress, ice_evp_c_copy_faces, ice_evp_c_fold_faces
    public :: evp_strain_u_impl, evp_stress_t_impl, evp_stress_u_impl, evp_momentum_impl
-   public :: evp_average_impl, evp_copy_faces_impl, evp_finish_impl, evp_div_stress_impl, evp_wrap_u_impl, evp_wrap_v_impl
+   public :: evp_average_impl, evp_copy_faces_impl, evp_finish_impl, evp_div_stress_impl
+   public :: evp_wrap_u_impl, evp_wrap_v_impl, evp_fold_faces_impl
    public :: evp_div_x, evp_div_y, evp_visc_replpress, evp_wavg2
 
    real(wp), parameter :: EPS13 = 1.0e-13_wp
@@ -163,6 +239,21 @@ contains
       s = 0.0_wp
       if (wt /= 0.0_wp) s = (a1*w1 + a2*w2)/wt
    end function evp_wavg2
+
+   pure function evp_quot(a, b) result(q)
+      !! `a / b`, 0 for a zero-length face `b` (Adcroft convention; bit-identical to the plain
+      !! quotient everywhere else).  A face of zero length is a pole of the tripolar grid (the
+      !! ocean closes it, `epm`/`npm` = 0, and it carries no normal velocity), so its `u/dy`
+      !! or `v/dx` rate contribution is dropped instead of becoming 0/0.
+      !$acc routine seq
+      real(wp), value :: a, b
+      real(wp) :: q
+      if (b /= 0.0_wp) then
+         q = a/b
+      else
+         q = 0.0_wp
+      end if
+   end function evp_quot
 
    ! ------------------------------------------------------------------
    ! K1: corner strain rate
@@ -275,15 +366,18 @@ contains
             vN1 = v(i, j + 1)
             vN0 = v(i, j)
             divT = dyE(i, j)*uE1 - dyE(i - 1, j)*uE0 + dxN(i, j)*vN1 - dxN(i, j - 1)*vN0
-            tenT = dyT(i, j)*dyT(i, j)*(uE1/dyE(i, j) - uE0/dyE(i - 1, j)) &
-                   - dxT(i, j)*dxT(i, j)*(vN1/dxN(i, j) - vN0/dxN(i, j - 1))
+            tenT = dyT(i, j)*dyT(i, j)*(evp_quot(uE1, dyE(i, j)) - evp_quot(uE0, dyE(i - 1, j))) &
+                   - dxT(i, j)*dxT(i, j)*(evp_quot(vN1, dxN(i, j)) - evp_quot(vN0, dxN(i, j - 1)))
             w1 = uarea(i, j)
             w2 = uarea(i, j - 1)
             w3 = uarea(i - 1, j - 1)
             w4 = uarea(i - 1, j)
-            ssq = (shearU(i, j)*shearU(i, j)*w1 + shearU(i, j - 1)*shearU(i, j - 1)*w2 &
-                   + shearU(i - 1, j - 1)*shearU(i - 1, j - 1)*w3 + shearU(i - 1, j)*shearU(i - 1, j)*w4) &
-                  /(w1 + w2 + w3 + w4)
+            ssq = 0.0_wp
+            if (w1 + w2 + w3 + w4 > 0.0_wp) then      ! all four corners of zero area: no shear
+               ssq = (shearU(i, j)*shearU(i, j)*w1 + shearU(i, j - 1)*shearU(i, j - 1)*w2 &
+                      + shearU(i - 1, j - 1)*shearU(i - 1, j - 1)*w3 + shearU(i - 1, j)*shearU(i - 1, j)*w4) &
+                     /(w1 + w2 + w3 + w4)
+            end if
             delta = sqrt(divT*divT + e_factor*(tenT*tenT + ssq))
             call evp_visc_replpress(strength(i, j), deltamin*tarea(i, j), delta, cap_max, ktens, epp2i, &
                                     zeta2, eta2, rep)
@@ -321,8 +415,12 @@ contains
       do concurrent(j=js - 1:je, i=is - 1:ie) local(w1, w2, w3, w4, wt, etaU, zeta2, rep)
          if (iand(imask(i, j), EVP_BIT_U) /= 0_int8) then
             if (avg_strength) then
-               call evp_visc_replpress(strengthU(i, j), deltamin*uarea(i, j), deltaU(i, j), cap_max, ktens, &
-                                       epp2i, zeta2, etaU, rep)
+               etaU = 0.0_wp
+               ! a zero-area corner (a pole vertex) has no viscosity: P / max(0, 0) would be Inf
+               if (uarea(i, j) > 0.0_wp) then
+                  call evp_visc_replpress(strengthU(i, j), deltamin*uarea(i, j), deltaU(i, j), cap_max, ktens, &
+                                          epp2i, zeta2, etaU, rep)
+               end if
             else
                w1 = hm(i, j)*tarea(i, j)
                w2 = hm(i + 1, j)*tarea(i + 1, j)
@@ -557,17 +655,20 @@ contains
             vN1 = v(i, j + 1)
             vN0 = v(i, j)
             divT = dyE(i, j)*uE1 - dyE(i - 1, j)*uE0 + dxN(i, j)*vN1 - dxN(i, j - 1)*vN0
-            tenT = dyT(i, j)*dyT(i, j)*(uE1/dyE(i, j) - uE0/dyE(i - 1, j)) &
-                   - dxT(i, j)*dxT(i, j)*(vN1/dxN(i, j) - vN0/dxN(i, j - 1))
-            shrT = dxT(i, j)*dxT(i, j)*(uvelN(i, j)/dxN(i, j) - uvelN(i, j - 1)/dxN(i, j - 1)) &
-                   + dyT(i, j)*dyT(i, j)*(vvelE(i, j)/dyE(i, j) - vvelE(i - 1, j)/dyE(i - 1, j))
+            tenT = dyT(i, j)*dyT(i, j)*(evp_quot(uE1, dyE(i, j)) - evp_quot(uE0, dyE(i - 1, j))) &
+                   - dxT(i, j)*dxT(i, j)*(evp_quot(vN1, dxN(i, j)) - evp_quot(vN0, dxN(i, j - 1)))
+            shrT = dxT(i, j)*dxT(i, j)*(evp_quot(uvelN(i, j), dxN(i, j)) - evp_quot(uvelN(i, j - 1), dxN(i, j - 1))) &
+                   + dyT(i, j)*dyT(i, j)*(evp_quot(vvelE(i, j), dyE(i, j)) - evp_quot(vvelE(i - 1, j), dyE(i - 1, j)))
             w1 = uarea(i, j)
             w2 = uarea(i, j - 1)
             w3 = uarea(i - 1, j - 1)
             w4 = uarea(i - 1, j)
-            ssq = (shearU(i, j)*shearU(i, j)*w1 + shearU(i, j - 1)*shearU(i, j - 1)*w2 &
-                   + shearU(i - 1, j - 1)*shearU(i - 1, j - 1)*w3 + shearU(i - 1, j)*shearU(i - 1, j)*w4) &
-                  /(w1 + w2 + w3 + w4)
+            ssq = 0.0_wp
+            if (w1 + w2 + w3 + w4 > 0.0_wp) then      ! all four corners of zero area: no shear
+               ssq = (shearU(i, j)*shearU(i, j)*w1 + shearU(i, j - 1)*shearU(i, j - 1)*w2 &
+                      + shearU(i - 1, j - 1)*shearU(i - 1, j - 1)*w3 + shearU(i - 1, j)*shearU(i - 1, j)*w4) &
+                     /(w1 + w2 + w3 + w4)
+            end if
             dlt = sqrt(divT*divT + e_factor*(tenT*tenT + ssq))
             dpp2 = divT*divT + epp2i*(tenT*tenT + ssq)
             dv = divT*tarear(i, j)
@@ -663,6 +764,67 @@ contains
    end subroutine evp_wrap_v_impl
 
    ! ------------------------------------------------------------------
+   ! tripolar north fold of the face pair (single rank)
+   ! ------------------------------------------------------------------
+
+   subroutine evp_fold_faces_impl(nx, ny, ng, ni, nj, u, v)
+      !! Tripolar north fold of the face pair `(u, v)`: the
+      !! ghost rows above the fold line become the 180-degree-rotated image of
+      !! the rows below it (Murray 1996), the velocity being a true vector
+      !! (both components change sign).  Same maps as the ocean's
+      !! `fold_north_u_face` / `fold_north_v_face` (`rdb_ocean_fold`, the
+      !! contract lives there; this copy keeps the standalone ice library free
+      !! of the ocean; `test_cice_cgrid_metrics` pins it bitwise against them):
+      !!
+      !!   * `u(i, j) = -u(2 ng + ni + 2 - i, 2 ng + 2 nj + 1 - j)` for
+      !!     `j > ng + nj` (an x-face never lies on the fold line);
+      !!   * `v(i, j) = -v(2 ng + ni + 1 - i, 2 ng + 2 nj + 2 - j)` for
+      !!     `j > ng + nj + 1`;
+      !!   * the fold-line row `j = ng + nj + 1` of `v` (the NORTH face of the
+      !!     last physical T row, a face stored twice: slot `i` and slot
+      !!     `i' = 2 ng + ni + 1 - i`, seen from the two sides of the seam with
+      !!     opposite orientation) is projected: the EAST half (the slot the
+      !!     solver computed last, the source) overwrites the WEST half with its
+      !!     negative, so `v(i) = -v(i')` holds exactly after every call; the
+      !!     self-conjugate column of an odd `ni` is zeroed.
+      !!
+      !! ONE launch over `(d = 0:ng, i = 1:nx)`: `d = 0` is the fold-row projection of `v`,
+      !! `d >= 1` writes the ghost rows `u(i, je + d)` and `v(i, je + 1 + d)`, `je = ng + nj`.
+      !! The branch on `d` is uniform along `i` (no in-loop edge test of the vectoriser gotcha).
+      !! Race freedom: every halo row reads owned rows `<= je` only; the projection reads the
+      !! EAST half of the fold row and writes the WEST half (no thread writes an east slot);
+      !! the written rows (`u` rows `>= je+1`, `v` rows `>= je+2`, the west half of `v` row
+      !! `je+1`) are disjoint from everything read.  The column `u(nx+1, :)` is NOT written
+      !! (the solver never reads `u(1,:)` or `u(nx+1,:)`: its widest read is `is-2 .. ie+3`);
+      !! the source column `u(nx+1, owned rows)` of the `i = 1` thread is the wrapped ghost.
+      !! The periodic wrap of the columns MUST come first.
+      integer, value :: nx, ny, ng, ni, nj
+      real(wp), intent(inout) :: u(nx + 1, ny), v(nx, ny + 1)
+      integer :: i, d, fsum, jsum_u, isum_v, jsum_v, jfold, ilo, p, pm
+
+      fsum = 2*ng + ni + 2
+      jsum_u = 2*ng + 2*nj + 1
+      isum_v = 2*ng + ni + 1
+      jsum_v = 2*ng + 2*nj + 2
+      jfold = ng + nj + 1
+      ilo = ng + 1
+      do concurrent(d=0:ng, i=1:nx) local(p, pm)
+         if (d == 0) then
+            p = modulo(i - ilo, ni) + 1
+            pm = ni + 1 - p
+            if (p < pm) then
+               v(i, jfold) = -v(ng + pm, jfold)
+            else if (p == pm) then
+               v(i, jfold) = 0.0_wp
+            end if
+         else
+            u(i, jfold - 1 + d) = -u(fsum - i, jsum_u - (jfold - 1 + d))
+            v(i, jfold + d) = -v(isum_v - i, jsum_v - (jfold + d))
+         end if
+      end do
+   end subroutine evp_fold_faces_impl
+
+   ! ------------------------------------------------------------------
    ! host shims
    ! ------------------------------------------------------------------
 
@@ -676,6 +838,15 @@ contains
       call evp_wrap_u_impl(nx, ny, is, ie, js, je, is - 1, wrap_x, wrap_y, u)
       call evp_wrap_v_impl(nx, ny, is, ie, js, je, is - 1, wrap_x, wrap_y, v)
    end subroutine ice_evp_c_wrap_faces
+
+   subroutine ice_evp_c_fold_faces(nx, ny, is, ie, js, je, u, v)
+      !! Tripolar fold of the face pair, ONE launch (see `evp_fold_faces_impl`):
+      !! single rank holding the whole fold row, the periodic wrap of the
+      !! columns already done.  The ghost width is `nghost = is - 1`.
+      integer, intent(in) :: nx, ny, is, ie, js, je
+      real(wp), intent(inout) :: u(nx + 1, ny), v(nx, ny + 1)
+      call evp_fold_faces_impl(nx, ny, is - 1, ie - is + 1, je - js + 1, u, v)
+   end subroutine ice_evp_c_fold_faces
 
    subroutine evp_copy_faces_impl(nx, ny, us, vs, ud, vd)
       !! `(ud, vd) = (us, vs)` on the whole face pair (one launch).
@@ -793,13 +964,16 @@ contains
                              earear, narear, ratiodxN, ratiodxNr, ratiodyE, ratiodyEr, epm, npm, uvm, hm, &
                              aice, vice, vsno, aice_init, aice0, aicen, vicen, &
                              fcorE, fcorN, strairxE, strairyN, ss_tltxE, ss_tltyN, &
-                             uocnE, vocnE, uocnN, vocnN, u, v, ice_err)
+                             uocnE, vocnE, uocnN, vocnN, u, v, ice_err, fold)
       !! One dynamics step: preparation, `ndte` EVP subcycles, deformation
       !! rates and ice-ocean stress.  Single rank: the periodic wrap of the
-      !! face pair is local (`wrap_x`, `wrap_y`); the fold and the multi-rank
-      !! exchange are the caller's (`ice_evp_c_prep`, `ice_evp_c_substep`,
-      !! `ice_evp_c_average`, `ice_evp_c_finish` with `ice_halo_faces` in
-      !! between; see the module header).  The velocity, the five stresses
+      !! face pair is local (`wrap_x`, `wrap_y`) and, with `fold`, the tripolar
+      !! north fold follows each wrap (`ice_evp_c_fold_faces`; the T-cell state
+      !! `aice, vice, vsno, aice0, aicen, vicen` must carry folded ghost rows,
+      !! the caller's job); the multi-rank exchange is the caller's
+      !! (`ice_evp_c_prep`, `ice_evp_c_substep`, `ice_evp_c_average`,
+      !! `ice_evp_c_finish` with `ice_halo_faces` in between; see the module
+      !! header).  The velocity, the five stresses
       !! and the ice masks in `w` are the state carried between steps.
       !! Arguments: see `ice_evp_c_prep` for the T-cell inputs and the forcing
       !! at the faces; the metric arrays are the ice names of
@@ -824,12 +998,18 @@ contains
       real(wp), intent(in) :: uocnE(nx, ny), vocnE(nx, ny), uocnN(nx, ny), vocnN(nx, ny)
       real(wp), intent(inout) :: u(nx + 1, ny), v(nx, ny + 1)
       integer(int32), intent(inout) :: ice_err(nx, ny)
+      logical, intent(in), optional :: fold
+         !! Tripolar north fold of the face pair after every wrap (default `.false.`).
       integer :: ksub
+      logical :: do_fold
 
+      do_fold = .false.
+      if (present(fold)) do_fold = fold
       call ice_evp_c_prep(w, k, nx, ny, ncat, is, ie, js, je, rp, c, hm, aice, vice, vsno, aice_init, aice0, &
                           aicen, vicen, tarea, epm, npm, fcorE, fcorN, strairxE, strairyN, ss_tltxE, &
                           ss_tltyN, uocnE, vocnN, u, v, ice_err)
       call ice_evp_c_wrap_faces(nx, ny, is, ie, js, je, wrap_x, wrap_y, u, v)
+      if (do_fold) call ice_evp_c_fold_faces(nx, ny, is, ie, js, je, u, v)
       call ice_evp_c_copy_faces(nx, ny, u, v, w%u2, w%v2)
       do ksub = 1, k%ndte
          if (mod(ksub, 2) == 1) then          ! old pair (u, v) -> new pair (u2, v2)
@@ -837,11 +1017,13 @@ contains
                                    dxT, dyT, uarea, tarea, earea, narea, earear, narear, ratiodxN, ratiodxNr, &
                                    ratiodyE, ratiodyEr, epm, npm, uvm, hm, uocnE, vocnE, uocnN, vocnN)
             call ice_evp_c_wrap_faces(nx, ny, is, ie, js, je, wrap_x, wrap_y, w%u2, w%v2)
+            if (do_fold) call ice_evp_c_fold_faces(nx, ny, is, ie, js, je, w%u2, w%v2)
          else                                 ! old pair (u2, v2) -> new pair (u, v)
             call ice_evp_c_substep(w, k, nx, ny, is, ie, js, je, w%u2, w%v2, u, v, dxE, dyE, dxN, dyN, dxU, dyU, &
                                    dxT, dyT, uarea, tarea, earea, narea, earear, narear, ratiodxN, ratiodxNr, &
                                    ratiodyE, ratiodyEr, epm, npm, uvm, hm, uocnE, vocnE, uocnN, vocnN)
             call ice_evp_c_wrap_faces(nx, ny, is, ie, js, je, wrap_x, wrap_y, u, v)
+            if (do_fold) call ice_evp_c_fold_faces(nx, ny, is, ie, js, je, u, v)
          end if
       end do
       if (mod(k%ndte, 2) == 1) call ice_evp_c_copy_faces(nx, ny, w%u2, w%v2, u, v)

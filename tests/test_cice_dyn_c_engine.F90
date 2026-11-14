@@ -95,6 +95,7 @@ contains
                   new_unittest("exp2_uniform_steady", test_exp2), &
                   new_unittest("exp3_basin_viscosity_floor", test_exp3), &
                   new_unittest("restart_refused_across_schemes", test_restart_cross), &
+                  new_unittest("tripolar_fold_runs", test_tripolar_fold), &
                   new_unittest("step_throughput", test_throughput) &
                   ]
    end subroutine collect_cice_dyn_c_engine_tests
@@ -392,8 +393,12 @@ contains
       call refusal_text(base//"&mpi_nml px = 2, py = 1 /"//NL, t)
       call check(error, index(t, "single-rank") > 0, "cice_c is single-rank: "//t)
       if (allocated(error)) return
+      ! D9.3: the tripolar fold is accepted on one rank (and still refused on several)
       call refusal_text(replace(base, "north = 'wall'", "north = 'tripolar_fold'"), t)
-      call check(error, index(t, "tripolar") > 0, "cice_c refuses the tripolar fold: "//t)
+      call check(error, len_trim(t) == 0, "cice_c accepts the tripolar fold on one rank: "//t)
+      if (allocated(error)) return
+      call refusal_text(replace(base, "north = 'wall'", "north = 'tripolar_fold'")//"&mpi_nml px = 2, py = 1 /"//NL, t)
+      call check(error, index(t, "D9.4") > 0, "cice_c on a fold with several ranks names the multi-rank PR: "//t)
    end subroutine test_refusals
 
    ! ------------------------------------------------------------------
@@ -1158,6 +1163,93 @@ contains
       ! No `engine_teardown`: the refused setup stopped at the restart read, before the
       ! halo, the device map and the diagnostics exist, and tearing those down crashes.
    end subroutine cross_one
+
+   function tripolar_nml() result(nml)
+      !! The `basin_cice` case on a tripolar cap (periodic west/east, wall south, north fold):
+      !! 24 x 16 cells of 15 x 1 degree from 59 N, the cap above 70 N, planetary Coriolis.
+      character(len=:), allocatable :: nml
+      character(len=*), parameter :: NL = new_line("a")
+      nml = case_nml("basin_cice")
+      nml = replace(nml, "&grid_nml nx = 24, ny = 16, nghost = 3, dx = 20000.0, dy = 20000.0 /", &
+                    "&grid_nml nx = 24, ny = 16, nghost = 3, dx = 15.0, dy = 1.0 /"//NL// &
+                    "&ocean_grid_nml grid_config = 'tripolar', lon_west = 0.0, lat_south = 59.0, "// &
+                    "phi_join = 70.0, lon_pole = 0.0, coriolis_scheme = 'planetary' /")
+      nml = replace(nml, "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /", &
+                    "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', north = 'tripolar_fold' /")
+      nml = replace(nml, "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 0.1, wind_stress_y = 0.03 /", &
+                    "&physics_nml wind_stress_x = 0.05, wind_stress_y = 0.05 /")
+   end function tripolar_nml
+
+   subroutine test_tripolar_fold(error)
+      !! The production path on a tripolar cap (D9.3): the engine sets up with
+      !! `dyn_scheme = "cice_c"` across the north fold, steps stably, and the ice
+      !! velocity the solver leaves is fold-consistent: the duplicated fold-line row is
+      !! exactly antisymmetric, the north ghost rows are the rotated image of the rows
+      !! below (u, v negate), and the ice moves across the cap.
+      type(error_type), allocatable, intent(out) :: error
+      type(ocean_engine_t), target :: engine
+      type(config_t) :: cfg
+      logical :: ok
+      real(wp) :: t, dv, du, dvg, vmax, umax
+      integer :: i, j, ni, nj, ng, nx, ny, jf, ip, jp
+
+      call make_engine(engine, cfg, tripolar_nml(), ok)
+      call check(error, ok, "tripolar cice_c engine setup failed")
+      if (allocated(error)) return
+      t = 0.0_wp
+      call advance(engine, cfg, t, 12, ok)
+      call check(error, ok, "12 coupled steps on the tripolar cap failed")
+      if (allocated(error)) return
+      call pull_ice(engine)
+      associate (st => engine%state, gr => engine%grid)
+         nx = gr%nx_total
+         ny = gr%ny_total
+         ng = gr%nghost
+         ni = gr%nx_phys
+         nj = gr%ny_phys
+         jf = ng + nj + 1
+         dv = 0.0_wp
+         du = 0.0_wp
+         dvg = 0.0_wp
+         vmax = 0.0_wp
+         umax = 0.0_wp
+         do i = 1, nx
+            ip = 2*ng + ni + 1 - i
+            dv = max(dv, abs(st%ice%v_ice(i, jf) + st%ice%v_ice(ip, jf)))
+            vmax = max(vmax, abs(st%ice%v_ice(i, jf - 1)))
+         end do
+         do j = jf + 1, ny + 1
+            jp = 2*ng + 2*nj + 2 - j
+            do i = 1, nx
+               ip = 2*ng + ni + 1 - i
+               dvg = max(dvg, abs(st%ice%v_ice(i, j) + st%ice%v_ice(ip, jp)))
+            end do
+         end do
+         do j = jf, ny
+            jp = 2*ng + 2*nj + 1 - j
+            do i = 1, nx + 1
+               ip = 2*ng + ni + 2 - i
+               du = max(du, abs(st%ice%u_ice(i, j) + st%ice%u_ice(ip, jp)))
+            end do
+         end do
+         do j = ng + 1, ng + nj
+            do i = ng + 1, ng + ni
+               if (.not. ieee_is_finite(st%ice%u_ice(i, j)) .or. .not. ieee_is_finite(st%ice%v_ice(i, j))) then
+                  call check(error, .false., "non-finite ice velocity on the cap")
+                  return
+               end if
+               umax = max(umax, abs(st%ice%u_ice(i, j)))
+            end do
+         end do
+         write (*, '(a,3es10.2,a,2es10.2)') "tripolar cice_c: fold-row / v-ghost / u-ghost defects ", dv, dvg, du, &
+            "  max |u|, max |v| next to the fold ", umax, vmax
+         call check(error, dv == 0.0_wp .and. dvg == 0.0_wp .and. du == 0.0_wp, &
+                    "the ice velocity is fold-consistent (exact rotated images, antisymmetric fold row)")
+         if (allocated(error)) return
+         call check(error, umax > 1.0e-6_wp, "the wind moves the ice on the cap")
+      end associate
+      call finish_engine(engine)
+   end subroutine test_tripolar_fold
 
    subroutine test_throughput(error)
       !! Opt-in (`RDB_CICE_EVP_BENCH=1`): wall time of `ice_dyn_c_step` on a 512 x 512
