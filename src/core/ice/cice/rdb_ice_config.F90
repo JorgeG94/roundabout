@@ -26,6 +26,7 @@
 !! (layer and category counts, `hlim`) apply under `scheme="cice"`.
 !! `scheme="cice"` itself is refused until the port is runnable.
 module rdb_ice_config
+   use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    use rdb_constants, only: wp
    use rdb_config, only: config_t
    use rdb_ice_dims, only: ICE_NCAT_MAX, ICE_NILYR_MAX
@@ -143,6 +144,30 @@ contains
          if (any(cfg%ocean%ice%hlim >= 0.0_wp)) then
             call add_msg(msgs, n, "&ocean_ice_nml hlim is a scheme='sis2' knob; "// &
                          "scheme='cice' takes its category bounds from kcatbound")
+         end if
+
+         ! ---- the step sequencer's envelope (rdb_ice_step_cice) ----
+         if (cfg%nghost < 3) then
+            call add_msg(msgs, n, "&grid_nml nghost >= 3 is required by scheme='cice' "// &
+                         "(the C-grid dynamics reads three ghost rings; an earlier plan "// &
+                         "text said 2, which is superseded)")
+         end if
+         if (cfg%ocean%ice_dyn%ndtd /= 1) then
+            call add_msg(msgs, n, "&ocean_ice_dyn_nml ndtd /= 1 is not supported "// &
+                         "(one dynamics step per ice step)")
+         end if
+         if (.not. ieee_is_finite(cfg%ocean%ice%dt_ice)) then
+            call add_msg(msgs, n, "&ocean_ice_nml dt_ice must be finite (<= 0 selects the outer step)")
+         else if (cfg%ocean%ice%dt_ice > 0.0_wp) then
+            if (.not. (abs(cfg%ocean%ice%dt_ice - cfg%dt_fixed) <= 1.0e-9_wp*cfg%dt_fixed)) then
+               call add_msg(msgs, n, "&ocean_ice_nml dt_ice must equal the outer step "// &
+                            "&time_nml dt_fixed (the ice step is the outer step under "// &
+                            "scheme='cice'; leave dt_ice unset)")
+            end if
+         end if
+         if (cfg%px*cfg%py > 1) then
+            call add_msg(msgs, n, "&mpi_nml px*py > 1 is not supported by scheme='cice' "// &
+                         "yet (single rank until the multi-rank ice PRs land)")
          end if
       end if
 

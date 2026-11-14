@@ -643,6 +643,7 @@ Sea-ice model (SIS2 port) master switch + category/layer counts.
 | `nslyr` | `1` |  | scheme='cice': snow layers per category (only 1 supported) |
 | `kcatbound` | `1` |  | scheme='cice': category-bound formula 0..3 (upstream 1; OM3 0) |
 | `constants_set` | `"icepack"` |  | scheme='cice': physical-constants table: 'icepack' (upstream) or 'cesm' (CESM-coupled override set) |
+| `dt_ice` | `-0.1000000000E+01` | s | scheme='cice': ice time step; <= 0 is the outer ocean step, a positive value must equal &time_nml dt_fixed (refused otherwise) |
 
 ### &ocean_ice_thermo_nml
 
@@ -743,6 +744,7 @@ CICE-port ice dynamics and transport knobs (upstream CICE code defaults; the EVP
 | `vel_cap` | `0.1000000000E+02` | m/s | Face speed above which the velocity guard raises ICE_ERR_DYN_VEL (never clamps); must be > 0 |
 | `advection` | `"remap"` |  | Horizontal transport: remap = incremental remapping (Lipscomb and Hunke 2004; upstream default, refused until the remap PR), upwind = first-order upwind |
 | `transport_check` | `.false.` |  | Run the transport checks (non-finite entry, negative area, CFL, conservation of area and tracers, monotonicity) |
+| `ndtd` | `1` |  | Dynamics substeps per ice step; only 1 is supported (refused otherwise) |
 
 ### &ocean_ice_ic_nml
 

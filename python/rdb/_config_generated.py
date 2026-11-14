@@ -3628,6 +3628,15 @@ class OceanIce(Group):
         dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
     )
 
+    dt_ice = Real(
+        'dt_ice',
+        doc="scheme='cice': ice time step; <= 0 is the outer ocean step, a positive value must equal &time_nml dt_fixed (refused otherwise)",
+        units='s',
+        required=False,
+        default=-1.0,
+        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+    )
+
 
 class OceanIceThermo(Group):
     """`&ocean_ice_thermo_nml` -- CICE-port ice thermodynamics and thickness-distribution knobs (scheme='cice'; upstream CICE defaults)."""
@@ -4249,6 +4258,15 @@ class OceanIceDyn(Group):
         units='',
         required=False,
         default=False,
+        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+    )
+
+    ndtd = Int(
+        'ndtd',
+        doc='Dynamics substeps per ice step; only 1 is supported (refused otherwise)',
+        units='',
+        required=False,
+        default=1,
         dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
     )
 
@@ -8015,4 +8033,4 @@ GENERATED_GROUPS = {
 }
 
 N_GROUPS = 68
-N_KNOBS = 878
+N_KNOBS = 880

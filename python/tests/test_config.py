@@ -18,11 +18,11 @@ from rdb._knob import RdbDeadKnobWarning
 
 
 def test_group_and_knob_counts():
-    # 68 groups / 877 knobs total: exactly what `rdb_nml_json` +
+    # 68 groups / 879 knobs total: exactly what `rdb_nml_json` +
     # `tools/gen_python_config.py` report for the live schema (bumped by
     # each OM3-parity PR in the wave-4 stack).
     assert N_GROUPS == 68
-    assert N_KNOBS == 878
+    assert N_KNOBS == 880
     assert "ocean_bc" in ALL_GROUPS
 
 

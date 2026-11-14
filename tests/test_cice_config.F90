@@ -6,6 +6,7 @@
 !! `ice_params_from_config` round-trips each knob.  This test links the main
 !! library because the config types live there; it is still a `cice` test.
 module test_cice_config
+   use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan
    use testdrive, only: new_unittest, unittest_type, error_type, check
    use rdb_constants, only: wp
    use rdb_config, only: config_t, read_config_from_string, validate_config
@@ -62,7 +63,11 @@ contains
                   new_unittest("dyn_defaults_are_upstream", test_dyn_defaults), &
                   new_unittest("dyn_refusals", test_dyn_refusals), &
                   new_unittest("dyn_all_reasons_reported", test_dyn_all_reasons), &
-                  new_unittest("dyn_round_trip", test_dyn_round_trip) &
+                  new_unittest("dyn_round_trip", test_dyn_round_trip), &
+                  new_unittest("step_envelope_defaults", test_step_defaults), &
+                  new_unittest("step_envelope_refusals", test_step_refusals), &
+                  new_unittest("step_envelope_all_reasons", test_step_all_reasons), &
+                  new_unittest("unrepresentable_options_rejected", test_unrepresentable) &
                   ]
    end subroutine collect_cice_config_tests
 
@@ -1012,6 +1017,104 @@ contains
       if (allocated(error)) return
       call check(error, count_msgs(cfg), 2, "revised EVP: arlx and brlx both reported")
    end subroutine test_dyn_all_reasons
+
+   subroutine test_step_defaults(error)
+      !! The step-envelope knobs default to the supported values, and a plain `scheme='cice'` namelist trips none of
+      !! them (the scheme is still refused as not runnable, and nothing else).
+      type(error_type), allocatable, intent(out) :: error
+      type(config_t) :: cfg
+
+      cfg = config_t()
+      call check(error, cfg%ocean%ice_dyn%ndtd, 1, "ndtd default")
+      if (allocated(error)) return
+      call check(error, cfg%ocean%ice%dt_ice <= 0.0_wp, "dt_ice default: the outer step")
+      if (allocated(error)) return
+      call parse("&ocean_ice_nml scheme='cice' /"//new_line('a')//"&ocean_ice_dyn_nml advection='upwind' /", cfg, error)
+      if (allocated(error)) return
+      call check(error, count_msgs(cfg), 1, "only the not-runnable refusal")
+   end subroutine test_step_defaults
+
+   subroutine test_step_refusals(error)
+      type(error_type), allocatable, intent(out) :: error
+      type(config_t) :: cfg
+      character(len=*), parameter :: CICE = "&ocean_ice_nml scheme='cice' /"//new_line('a')// &
+                                     "&ocean_ice_dyn_nml advection='upwind' /"//new_line('a')
+
+      call parse(CICE, cfg, error)
+      if (allocated(error)) return
+      cfg%nghost = 2
+      call check(error, has_msg(cfg, "nghost >= 3"), "nghost = 2 refused")
+      if (allocated(error)) return
+      call check(error, has_msg(cfg, "superseded"), "and the message says the old minimum of 2 is superseded")
+      if (allocated(error)) return
+      cfg%nghost = 3
+      cfg%px = 2
+      call check(error, has_msg(cfg, "single rank"), "px*py > 1 refused")
+      if (allocated(error)) return
+      cfg%px = 1
+      call expect_refusal("&ocean_ice_nml scheme='cice' /"//new_line('a')// &
+                          "&ocean_ice_dyn_nml advection='upwind', ndtd = 2 /", "ndtd /= 1", error)
+      if (allocated(error)) return
+      call expect_refusal("&ocean_ice_nml scheme='cice', dt_ice = 450.0 /"//new_line('a')// &
+                          "&ocean_ice_dyn_nml advection='upwind' /"//new_line('a')//"&time_nml dt_fixed = 900.0 /", &
+                          "dt_ice must equal the outer step", error)
+      if (allocated(error)) return
+      ! the equal value is accepted
+      call parse("&ocean_ice_nml scheme='cice', dt_ice = 900.0 /"//new_line('a')// &
+                 "&ocean_ice_dyn_nml advection='upwind' /"//new_line('a')//"&time_nml dt_fixed = 900.0 /", cfg, error)
+      if (allocated(error)) return
+      call check(error,.not. has_msg(cfg, "dt_ice"), "dt_ice = dt_fixed accepted")
+      if (allocated(error)) return
+      ! a non-finite dt_ice is refused
+      call parse(CICE, cfg, error)
+      if (allocated(error)) return
+      cfg%ocean%ice%dt_ice = ieee_value(1.0_wp, ieee_quiet_nan)
+      call check(error, has_msg(cfg, "dt_ice must be finite"), "a NaN dt_ice is refused")
+      if (allocated(error)) return
+      ! none of the envelope refusals applies under the default scheme
+      call parse("&ocean_ice_dyn_nml ndtd = 2 /", cfg, error)
+      if (allocated(error)) return
+      cfg%nghost = 2
+      call check(error, count_msgs(cfg), 0, "scheme='sis2' untouched by the cice envelope")
+   end subroutine test_step_refusals
+
+   subroutine test_step_all_reasons(error)
+      !! Every envelope reason is reported together with the scheme refusal.
+      type(error_type), allocatable, intent(out) :: error
+      type(config_t) :: cfg
+
+      call parse("&ocean_ice_nml scheme='cice', dt_ice = 100.0 /"//new_line('a')// &
+                 "&ocean_ice_dyn_nml advection='upwind', ndtd = 3 /"//new_line('a')// &
+                 "&time_nml dt_fixed = 900.0 /", cfg, error)
+      if (allocated(error)) return
+      cfg%nghost = 2
+      cfg%px = 2
+      call check(error, count_msgs(cfg), 5, "not runnable + nghost + ndtd + dt_ice + ranks")
+      if (allocated(error)) return
+      call check(error, has_msg(cfg, "not runnable yet"), "scheme reason")
+      if (allocated(error)) return
+      call check(error, has_msg(cfg, "nghost >= 3") .and. has_msg(cfg, "ndtd /= 1") .and. has_msg(cfg, "dt_ice must equal") &
+                 .and. has_msg(cfg, "single rank"), "every envelope reason")
+   end subroutine test_step_all_reasons
+
+   subroutine test_unrepresentable(error)
+      !! The options the port excludes entirely (melt ponds, floe-size distribution, wave fracture, biogeochemistry,
+      !! aerosols, snow physics, EAP/VP rheology) have NO knob: the namelist parser rejects each one, so they cannot be
+      !! requested; those that do have a knob (mushy, delta-Eddington, `calc_Tsfc`, ...) are refused by the earlier tests.
+      type(error_type), allocatable, intent(out) :: error
+
+      call check(error, parse_fails("&ocean_ice_nml tr_pond_lvl = .true. /"), "melt ponds have no knob")
+      if (allocated(error)) return
+      call check(error, parse_fails("&ocean_ice_nml tr_fsd = .true. /"), "the floe size distribution has no knob")
+      if (allocated(error)) return
+      call check(error, parse_fails("&ocean_ice_nml wave_spec = .true. /"), "wave fracture has no knob")
+      if (allocated(error)) return
+      call check(error, parse_fails("&ocean_ice_nml tr_aero = .true. /"), "aerosols have no knob")
+      if (allocated(error)) return
+      call check(error, parse_fails("&ocean_ice_dyn_nml kdyn = 2 /"), "VP/EAP rheology has no knob")
+      if (allocated(error)) return
+      call check(error, parse_fails("&ponds_nml tr_pond_topo = .true. /"), "no ponds namelist")
+   end subroutine test_unrepresentable
 
    subroutine test_dyn_round_trip(error)
       !! Each knob reaches `ice_params_t%dyn`.

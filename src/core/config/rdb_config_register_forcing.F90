@@ -435,6 +435,11 @@ contains
                           "(upstream) or 'cesm' (CESM-coupled override set)", &
                           allowed=[character(len=8) :: "icepack", "cesm"], &
                           dead_on_ocean_path=ICE_DEAD))
+      pr => cfg%ocean%ice%dt_ice
+      call g%add(nml_real("dt_ice", pr, &
+                          "scheme='cice': ice time step; <= 0 is the outer ocean step, "// &
+                          "a positive value must equal &time_nml dt_fixed (refused otherwise)", &
+                          units="s", dead_on_ocean_path=ICE_DEAD))
       call schema%add_group(g)
    end subroutine register_ocean_ice
 
@@ -746,6 +751,10 @@ contains
                               "(non-finite entry, negative area, CFL, conservation of "// &
                               "area and tracers, monotonicity)", &
                               dead_on_ocean_path=ICE_DEAD))
+      pi => cfg%ocean%ice_dyn%ndtd
+      call gd%add(nml_int("ndtd", pi, "Dynamics substeps per ice step; only 1 is "// &
+                          "supported (refused otherwise)", &
+                          dead_on_ocean_path=ICE_DEAD))
       call schema%add_group(gd)
    end subroutine register_ocean_ice_cice
 

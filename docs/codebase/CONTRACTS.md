@@ -27,6 +27,7 @@ is the bug.
 | Joining the checkpoint | `ocean_state_build_restart_registry`, `src/core/ocean/state/ocean_state/rdb_ocean_state_restart.F90` |
 | Diagnostics are pull-only | module header of `src/core/ocean/diag/rdb_ocean_diag.F90` |
 | Order-invariant global sums | `src/framework/rdb_efp.F90` |
+| CICE-port ice step order, hook contracts, error enforcement between stage groups | module header of `src/core/ice/coupling/rdb_ice_step_cice.F90` |
 | Who reads / writes what in each slot | the `!!` docstring of each slot type, composed in `src/core/ocean/state/rdb_ocean_state.F90` |
 
 ## Conventions that apply everywhere

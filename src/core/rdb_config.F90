@@ -542,6 +542,11 @@ module rdb_config
       character(len=8) :: constants_set = "icepack"
          !! `scheme="cice"` physical-constants table: `"icepack"` (upstream
          !! code defaults) or `"cesm"` (the CESM-coupled override set).
+      real(wp) :: dt_ice = -1.0_wp
+         !! `scheme="cice"` ice time step [s]: `<= 0` (default) is the outer
+         !! ocean step; a positive value must equal `&time_nml dt_fixed`
+         !! (the ice step IS the outer step under this scheme, so any other
+         !! value is refused by `ice_config_check`).
    end type ocean_ice_config_t
 
    type :: ocean_ice_thermo_config_t
@@ -731,6 +736,11 @@ module rdb_config
          !! Run the transport checks (non-finite entry, negative area, CFL,
          !! conservation of area and of area-weighted tracers, monotonicity);
          !! costs extra reductions and, for monotonicity, scratch bounds.
+      integer :: ndtd = 1
+         !! Dynamics substeps per ice step (upstream `ndtd`).  Only 1 is
+         !! supported: the transport and ridging steps are written for a
+         !! single dynamics step per thermodynamic step; any other value is
+         !! refused by `ice_config_check`.
    end type ocean_ice_dyn_config_t
 
    type :: ocean_ice_ic_config_t
