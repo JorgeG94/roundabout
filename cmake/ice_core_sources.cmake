@@ -18,6 +18,8 @@ set(RDB_ICE_CORE_SOURCES
     ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_ledger_sums.F90
     ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_new_ice.F90
     ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_params.F90
+    ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_rad_state.F90
+    ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_radiation.F90
     ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_restart_convert.F90
     ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_ridge.F90
     ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_ridge_itd.F90
