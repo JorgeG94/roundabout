@@ -993,3 +993,30 @@ else()
     rdb_python_tests PROPERTIES LABELS "ocean;python" ENVIRONMENT
                                 "RDB_LIB=$<TARGET_FILE:${main_lib}_shared>")
 endif()
+
+# --------------------------------------------------------------------------
+# Optional: no compiler vector-math entry points in the model objects.
+#
+# `tools/check_no_vector_math.py` runs `nm -u` over this build's src/ + app/
+# objects and fails on a glibc `_ZGV*` reference that is not in
+# `tools/vector_math_allowlist.txt` (or on a listed object that has stopped
+# referencing one).  GNU only: the allow-list is seeded from a GNU build and
+# libmvec is a glibc/gfortran mechanism.  Needs the model objects, so it is a
+# ctest and NOT a pre-commit hook.
+# --------------------------------------------------------------------------
+if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU" AND NOT RDB_ENABLE_GPU)
+  find_package(
+    Python3
+    COMPONENTS Interpreter
+    QUIET)
+  if(Python3_Interpreter_FOUND)
+    add_test(
+      NAME rdb_check_no_vector_math
+      COMMAND
+        "${Python3_EXECUTABLE}"
+        "${PROJECT_SOURCE_DIR}/tools/check_no_vector_math.py" --build-dir
+        "${CMAKE_BINARY_DIR}" --allowlist
+        "${PROJECT_SOURCE_DIR}/tools/vector_math_allowlist.txt")
+    set_tests_properties(rdb_check_no_vector_math PROPERTIES LABELS "core")
+  endif()
+endif()
