@@ -32,6 +32,9 @@ set(CORE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/core/config/rdb_config_register_lateral.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/config/rdb_config_register_forcing.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/rdb_config_schema.F90
+    # CICE port: config -> ice_params_t + configure-time refusals (needs
+    # rdb_config, so it is NOT part of rdb_ice_core_objs).
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/cice/rdb_ice_config.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/rdb_grid.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/rdb_tracer.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/framework/rdb_scratch_3d.F90

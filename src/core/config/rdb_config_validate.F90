@@ -22,6 +22,7 @@ contains
       !! instead of `error stop`-ing on the first accumulated failure
       !! (every individual check still logs via `global_logger%error`
       !! unchanged); absent behaves as today.
+      use rdb_ice_config, only: ice_config_validate
       use rdb_ocean_lateral_mix, only: parse_lateral_closure, &
                                        lateral_closure_is_implemented, &
                                        lateral_closure_conflicts_smag_ah, &
@@ -3632,6 +3633,8 @@ contains
             end if
          end block
       end if
+      ! ---- CICE-port ice config (scheme / structure / thermo / albedo) ----
+      call ice_config_validate(cfg, has_error)
       ! ---- Sea-ice PR 24: analytic initial-condition envelope ----
       ! `conc_config /= "zero"` is a request to seed a live ice pack
       ! before the first step; the envelope excludes configurations the

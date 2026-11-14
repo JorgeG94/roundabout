@@ -283,6 +283,9 @@ contains
       integer, pointer :: pi
       real(wp), pointer :: pr
       real(wp), pointer :: pra(:)
+      character(len=:), pointer :: ps
+      character(len=*), parameter :: ICE_DEAD = "scheme='cice' only; inert until the CICE6 port "// &
+                                     "is runnable (wired by the PR that consumes it)"
 
       g%name = "ocean_ice"
       g%doc = "Sea-ice model (SIS2 port) master switch + category/layer counts."
@@ -399,8 +402,164 @@ contains
                              "Project ice concentration forward within the EVP "// &
                              "subcycle loop and recompute the ice strength "// &
                              "(SIS2 PROJECT_ICE_CONCENTRATION)"))
+      ! ---- CICE6/Icepack port: structure keys (inert under scheme="sis2") ----
+      ps => cfg%ocean%ice%scheme
+      call g%add(nml_enum("scheme", ps, &
+                          "Ice model: 'sis2' (default) or 'cice' (CICE6/Icepack "// &
+                          "port; refused at configure until runnable)", &
+                          allowed=[character(len=8) :: "sis2", "cice"]))
+      pi => cfg%ocean%ice%nilyr
+      call g%add(nml_int("nilyr", pi, &
+                         "scheme='cice': ice layers per category (upstream 7; OM3 4)", &
+                         min=1, &
+                         dead_on_ocean_path=ICE_DEAD))
+      pi => cfg%ocean%ice%nslyr
+      call g%add(nml_int("nslyr", pi, &
+                         "scheme='cice': snow layers per category (only 1 supported)", &
+                         min=1, &
+                         dead_on_ocean_path=ICE_DEAD))
+      pi => cfg%ocean%ice%kcatbound
+      call g%add(nml_int("kcatbound", pi, &
+                         "scheme='cice': category-bound formula 0..3 (upstream 1; OM3 0)", &
+                         dead_on_ocean_path=ICE_DEAD))
+      ps => cfg%ocean%ice%constants_set
+      call g%add(nml_enum("constants_set", ps, &
+                          "scheme='cice': physical-constants table: 'icepack' "// &
+                          "(upstream) or 'cesm' (CESM-coupled override set)", &
+                          allowed=[character(len=8) :: "icepack", "cesm"], &
+                          dead_on_ocean_path=ICE_DEAD))
       call schema%add_group(g)
    end subroutine register_ocean_ice
+
+   module subroutine register_ocean_ice_cice(cfg, schema)
+      !! `&ocean_ice_thermo_nml` and `&ocean_ice_sw_nml`: the CICE-port
+      !! thermodynamics / ITD / albedo knobs.  Defaults are the upstream CICE
+      !! code defaults.  Spellings of options the port does not carry are
+      !! accepted by the parser and refused by `validate_config` (so the
+      !! message names the option and the reason).
+      type(config_t), target, intent(in) :: cfg
+      type(nml_schema_t), intent(inout) :: schema
+      type(nml_group_t) :: g, gs
+      logical, pointer :: pl
+      integer, pointer :: pi
+      real(wp), pointer :: pr
+      character(len=:), pointer :: ps
+      character(len=*), parameter :: ICE_DEAD = "scheme='cice' only; inert until the CICE6 port "// &
+                                     "is runnable (wired by the PR that consumes it)"
+
+      g%name = "ocean_ice_thermo"
+      g%doc = "CICE-port ice thermodynamics and thickness-distribution knobs "// &
+              "(scheme='cice'; upstream CICE defaults)."
+      pi => cfg%ocean%ice_thermo%ktherm
+      call g%add(nml_int("ktherm", pi, "Thermodynamics: 1 = Bitz-Lipscomb 1999 "// &
+                         "(2 = mushy is refused)", &
+                         dead_on_ocean_path=ICE_DEAD))
+      ps => cfg%ocean%ice_thermo%conduct
+      call g%add(nml_enum("conduct", ps, "Ice conductivity: bubbly (Pringle 2007) or MU71", &
+                          allowed=[character(len=8) :: "bubbly", "MU71"], &
+                          dead_on_ocean_path=ICE_DEAD))
+      ps => cfg%ocean%ice_thermo%tfrz_option
+      call g%add(nml_enum("tfrz_option", ps, "Ice-side sea freezing point (default "// &
+                          "linear_salt is OM3's value, NOT upstream's mushy; mushy is refused)", &
+                          allowed=[character(len=16) :: "linear_salt", "constant", &
+                                   "minus1p8", "mushy"], &
+                          dead_on_ocean_path=ICE_DEAD))
+      pr => cfg%ocean%ice_thermo%ice_ref_salinity
+      call g%add(nml_real("ice_ref_salinity", pr, "Salt-flux reference salinity "// &
+                          "(OM3 5.0)", units="ppt", min=0.0_wp, &
+                          dead_on_ocean_path=ICE_DEAD))
+      ps => cfg%ocean%ice_thermo%saltflux_option
+      call g%add(nml_enum("saltflux_option", ps, "Salt flux: constant "// &
+                          "(prognostic is refused)", &
+                          allowed=[character(len=16) :: "constant", "prognostic"], &
+                          dead_on_ocean_path=ICE_DEAD))
+      ps => cfg%ocean%ice_thermo%congel_freeze
+      call g%add(nml_enum("congel_freeze", ps, "Congelation freezing: two-step or one-step", &
+                          allowed=[character(len=16) :: "two-step", "one-step"], &
+                          dead_on_ocean_path=ICE_DEAD))
+      ps => cfg%ocean%ice_thermo%cpl_frazil
+      call g%add(nml_enum("cpl_frazil", ps, "Frazil coupling "// &
+                          "(only fresh_ice_correction is supported)", &
+                          allowed=[character(len=24) :: "fresh_ice_correction", &
+                                   "internal", "external"], &
+                          dead_on_ocean_path=ICE_DEAD))
+      pl => cfg%ocean%ice_thermo%update_ocn_f
+      call g%add(nml_logical("update_ocn_f", pl, "Frazil fresh water/salt fluxes "// &
+                             "to the ocean (OM3 .true.)", &
+                             dead_on_ocean_path=ICE_DEAD))
+      pr => cfg%ocean%ice_thermo%hfrazilmin
+      call g%add(nml_real("hfrazilmin", pr, "Minimum new-frazil thickness", &
+                          units="m", min=0.0_wp, &
+                          dead_on_ocean_path=ICE_DEAD))
+      pr => cfg%ocean%ice_thermo%hi_min
+      call g%add(nml_real("hi_min", pr, "Minimum ice thickness for thermodynamics", &
+                          units="m", min=0.0_wp, &
+                          dead_on_ocean_path=ICE_DEAD))
+      pr => cfg%ocean%ice_thermo%ustar_min
+      call g%add(nml_real("ustar_min", pr, "Friction-velocity floor (OM3 5e-4)", &
+                          units="m/s", min=0.0_wp, &
+                          dead_on_ocean_path=ICE_DEAD))
+      ps => cfg%ocean%ice_thermo%fbot_xfer_type
+      call g%add(nml_enum("fbot_xfer_type", ps, "Basal heat-transfer coefficient: "// &
+                          "constant (Cdn_ocn is refused)", &
+                          allowed=[character(len=8) :: "constant", "Cdn_ocn"], &
+                          dead_on_ocean_path=ICE_DEAD))
+      pr => cfg%ocean%ice_thermo%floediam
+      call g%add(nml_real("floediam", pr, "Floe diameter for lateral melt", &
+                          units="m", min=0.0_wp, &
+                          dead_on_ocean_path=ICE_DEAD))
+      pr => cfg%ocean%ice_thermo%ksno
+      call g%add(nml_real("ksno", pr, "Snow thermal conductivity", &
+                          units="W/m/K", min=0.0_wp, &
+                          dead_on_ocean_path=ICE_DEAD))
+      pr => cfg%ocean%ice_thermo%emissivity
+      call g%add(nml_real("emissivity", pr, "Surface emissivity (OM3 0.95)", &
+                          min=0.0_wp, max=1.0_wp, &
+                          dead_on_ocean_path=ICE_DEAD))
+      pi => cfg%ocean%ice_thermo%kitd
+      call g%add(nml_int("kitd", pi, "ITD conversion: 1 = linear remap "// &
+                         "(0 = delta function is refused)", &
+                         dead_on_ocean_path=ICE_DEAD))
+      pl => cfg%ocean%ice_thermo%calc_tsfc
+      call g%add(nml_logical("calc_Tsfc", pl, "Solve for the surface temperature "// &
+                             "(.false. is refused)", &
+                             dead_on_ocean_path=ICE_DEAD))
+      pl => cfg%ocean%ice_thermo%semi_implicit_tsfc
+      call g%add(nml_logical("semi_implicit_Tsfc", pl, "Semi-implicit surface "// &
+                             "temperature coupling (.true. is refused)", &
+                             dead_on_ocean_path=ICE_DEAD))
+      call schema%add_group(g)
+
+      gs%name = "ocean_ice_sw"
+      gs%doc = "CICE-port ice shortwave albedo parameters (scheme='cice'; "// &
+               "upstream CICE defaults)."
+      pr => cfg%ocean%ice_sw%albicev
+      call gs%add(nml_real("albicev", pr, "Visible albedo of thick ice (OM3 0.86)", &
+                           min=0.0_wp, max=1.0_wp, &
+                           dead_on_ocean_path=ICE_DEAD))
+      pr => cfg%ocean%ice_sw%albicei
+      call gs%add(nml_real("albicei", pr, "Near-infrared albedo of thick ice (OM3 0.44)", &
+                           min=0.0_wp, max=1.0_wp, &
+                           dead_on_ocean_path=ICE_DEAD))
+      pr => cfg%ocean%ice_sw%albsnowv
+      call gs%add(nml_real("albsnowv", pr, "Visible albedo of cold snow", &
+                           min=0.0_wp, max=1.0_wp, &
+                           dead_on_ocean_path=ICE_DEAD))
+      pr => cfg%ocean%ice_sw%albsnowi
+      call gs%add(nml_real("albsnowi", pr, "Near-infrared albedo of cold snow", &
+                           min=0.0_wp, max=1.0_wp, &
+                           dead_on_ocean_path=ICE_DEAD))
+      pr => cfg%ocean%ice_sw%ahmax
+      call gs%add(nml_real("ahmax", pr, "Thickness above which the ice albedo is "// &
+                           "constant (OM3 0.1); must be > 0", units="m", &
+                           dead_on_ocean_path=ICE_DEAD))
+      pr => cfg%ocean%ice_sw%snowpatch
+      call gs%add(nml_real("snowpatch", pr, "Snow-cover patchiness length; negative "// &
+                           "follows constants_set (0.02 icepack, 0.005 cesm)", &
+                           units="m", &
+                           dead_on_ocean_path=ICE_DEAD))
+      call schema%add_group(gs)
+   end subroutine register_ocean_ice_cice
 
    module subroutine register_ocean_ice_ic(cfg, schema)
       !! `&ocean_ice_ic_nml`: sea-ice ANALYTIC initial-condition path (PR

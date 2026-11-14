@@ -3570,6 +3570,322 @@ class OceanIce(Group):
         default=False,
     )
 
+    scheme = Enum(
+        'scheme',
+        doc="Ice model: 'sis2' (default) or 'cice' (CICE6/Icepack port; refused at configure until runnable)",
+        units='',
+        required=False,
+        default='sis2',
+        allowed=('sis2', 'cice'),
+    )
+
+    nilyr = Int(
+        'nilyr',
+        doc="scheme='cice': ice layers per category (upstream 7; OM3 4)",
+        units='',
+        required=False,
+        default=7,
+        has_min=True,
+        vmin=1,
+        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+    )
+
+    nslyr = Int(
+        'nslyr',
+        doc="scheme='cice': snow layers per category (only 1 supported)",
+        units='',
+        required=False,
+        default=1,
+        has_min=True,
+        vmin=1,
+        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+    )
+
+    kcatbound = Int(
+        'kcatbound',
+        doc="scheme='cice': category-bound formula 0..3 (upstream 1; OM3 0)",
+        units='',
+        required=False,
+        default=1,
+        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+    )
+
+    constants_set = Enum(
+        'constants_set',
+        doc="scheme='cice': physical-constants table: 'icepack' (upstream) or 'cesm' (CESM-coupled override set)",
+        units='',
+        required=False,
+        default='icepack',
+        allowed=('icepack', 'cesm'),
+        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+    )
+
+
+class OceanIceThermo(Group):
+    """`&ocean_ice_thermo_nml` -- CICE-port ice thermodynamics and thickness-distribution knobs (scheme='cice'; upstream CICE defaults)."""
+
+    _nml_name = 'ocean_ice_thermo'
+
+    ktherm = Int(
+        'ktherm',
+        doc='Thermodynamics: 1 = Bitz-Lipscomb 1999 (2 = mushy is refused)',
+        units='',
+        required=False,
+        default=1,
+        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+    )
+
+    conduct = Enum(
+        'conduct',
+        doc='Ice conductivity: bubbly (Pringle 2007) or MU71',
+        units='',
+        required=False,
+        default='bubbly',
+        allowed=('bubbly', 'MU71'),
+        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+    )
+
+    tfrz_option = Enum(
+        'tfrz_option',
+        doc="Ice-side sea freezing point (default linear_salt is OM3's value, NOT upstream's mushy; mushy is refused)",
+        units='',
+        required=False,
+        default='linear_salt',
+        allowed=('linear_salt', 'constant', 'minus1p8', 'mushy'),
+        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+    )
+
+    ice_ref_salinity = Real(
+        'ice_ref_salinity',
+        doc='Salt-flux reference salinity (OM3 5.0)',
+        units='ppt',
+        required=False,
+        default=4.0,
+        has_min=True,
+        vmin=0.0,
+        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+    )
+
+    saltflux_option = Enum(
+        'saltflux_option',
+        doc='Salt flux: constant (prognostic is refused)',
+        units='',
+        required=False,
+        default='constant',
+        allowed=('constant', 'prognostic'),
+        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+    )
+
+    congel_freeze = Enum(
+        'congel_freeze',
+        doc='Congelation freezing: two-step or one-step',
+        units='',
+        required=False,
+        default='two-step',
+        allowed=('two-step', 'one-step'),
+        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+    )
+
+    cpl_frazil = Enum(
+        'cpl_frazil',
+        doc='Frazil coupling (only fresh_ice_correction is supported)',
+        units='',
+        required=False,
+        default='fresh_ice_correction',
+        allowed=('fresh_ice_correction', 'internal', 'external'),
+        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+    )
+
+    update_ocn_f = Bool(
+        'update_ocn_f',
+        doc='Frazil fresh water/salt fluxes to the ocean (OM3 .true.)',
+        units='',
+        required=False,
+        default=False,
+        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+    )
+
+    hfrazilmin = Real(
+        'hfrazilmin',
+        doc='Minimum new-frazil thickness',
+        units='m',
+        required=False,
+        default=0.05,
+        has_min=True,
+        vmin=0.0,
+        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+    )
+
+    hi_min = Real(
+        'hi_min',
+        doc='Minimum ice thickness for thermodynamics',
+        units='m',
+        required=False,
+        default=0.01,
+        has_min=True,
+        vmin=0.0,
+        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+    )
+
+    ustar_min = Real(
+        'ustar_min',
+        doc='Friction-velocity floor (OM3 5e-4)',
+        units='m/s',
+        required=False,
+        default=0.005,
+        has_min=True,
+        vmin=0.0,
+        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+    )
+
+    fbot_xfer_type = Enum(
+        'fbot_xfer_type',
+        doc='Basal heat-transfer coefficient: constant (Cdn_ocn is refused)',
+        units='',
+        required=False,
+        default='constant',
+        allowed=('constant', 'Cdn_ocn'),
+        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+    )
+
+    floediam = Real(
+        'floediam',
+        doc='Floe diameter for lateral melt',
+        units='m',
+        required=False,
+        default=300.0,
+        has_min=True,
+        vmin=0.0,
+        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+    )
+
+    ksno = Real(
+        'ksno',
+        doc='Snow thermal conductivity',
+        units='W/m/K',
+        required=False,
+        default=0.3,
+        has_min=True,
+        vmin=0.0,
+        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+    )
+
+    emissivity = Real(
+        'emissivity',
+        doc='Surface emissivity (OM3 0.95)',
+        units='',
+        required=False,
+        default=0.985,
+        has_min=True,
+        vmin=0.0,
+        has_max=True,
+        vmax=1.0,
+        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+    )
+
+    kitd = Int(
+        'kitd',
+        doc='ITD conversion: 1 = linear remap (0 = delta function is refused)',
+        units='',
+        required=False,
+        default=1,
+        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+    )
+
+    calc_Tsfc = Bool(
+        'calc_Tsfc',
+        doc='Solve for the surface temperature (.false. is refused)',
+        units='',
+        required=False,
+        default=True,
+        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+    )
+
+    semi_implicit_Tsfc = Bool(
+        'semi_implicit_Tsfc',
+        doc='Semi-implicit surface temperature coupling (.true. is refused)',
+        units='',
+        required=False,
+        default=False,
+        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+    )
+
+
+class OceanIceSw(Group):
+    """`&ocean_ice_sw_nml` -- CICE-port ice shortwave albedo parameters (scheme='cice'; upstream CICE defaults)."""
+
+    _nml_name = 'ocean_ice_sw'
+
+    albicev = Real(
+        'albicev',
+        doc='Visible albedo of thick ice (OM3 0.86)',
+        units='',
+        required=False,
+        default=0.78,
+        has_min=True,
+        vmin=0.0,
+        has_max=True,
+        vmax=1.0,
+        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+    )
+
+    albicei = Real(
+        'albicei',
+        doc='Near-infrared albedo of thick ice (OM3 0.44)',
+        units='',
+        required=False,
+        default=0.36,
+        has_min=True,
+        vmin=0.0,
+        has_max=True,
+        vmax=1.0,
+        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+    )
+
+    albsnowv = Real(
+        'albsnowv',
+        doc='Visible albedo of cold snow',
+        units='',
+        required=False,
+        default=0.98,
+        has_min=True,
+        vmin=0.0,
+        has_max=True,
+        vmax=1.0,
+        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+    )
+
+    albsnowi = Real(
+        'albsnowi',
+        doc='Near-infrared albedo of cold snow',
+        units='',
+        required=False,
+        default=0.7,
+        has_min=True,
+        vmin=0.0,
+        has_max=True,
+        vmax=1.0,
+        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+    )
+
+    ahmax = Real(
+        'ahmax',
+        doc='Thickness above which the ice albedo is constant (OM3 0.1); must be > 0',
+        units='m',
+        required=False,
+        default=0.3,
+        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+    )
+
+    snowpatch = Real(
+        'snowpatch',
+        doc='Snow-cover patchiness length; negative follows constants_set (0.02 icepack, 0.005 cesm)',
+        units='m',
+        required=False,
+        default=-1.0,
+        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+    )
+
 
 class OceanIceIc(Group):
     """`&ocean_ice_ic_nml` -- Sea-ice analytic initial-condition path (PR 24)."""
@@ -7297,6 +7613,8 @@ GENERATED_GROUPS = {
     'ocean_thermo': OceanThermo,
     'ocean_forcing': OceanForcing,
     'ocean_ice': OceanIce,
+    'ocean_ice_thermo': OceanIceThermo,
+    'ocean_ice_sw': OceanIceSw,
     'ocean_ice_ic': OceanIceIc,
     'ocean_restore': OceanRestore,
     'ocean_geothermal': OceanGeothermal,
@@ -7327,5 +7645,5 @@ GENERATED_GROUPS = {
     'ocean_bc': OceanBc,
 }
 
-N_GROUPS = 63
-N_KNOBS = 807
+N_GROUPS = 65
+N_KNOBS = 836

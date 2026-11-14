@@ -31,6 +31,10 @@ module rdb_ice_params
    !! ...).  Which of the two a given OM3 configuration actually runs is an
    !! open maintainer item: the default is the upstream set (interim choice).
    !!
+   !! **Kernels take constants from `p%c`** (the params bundle), never from
+   !! `ice_constants(set)`: configuration writes `ksno` and `snowpatch` into
+   !! `p%c`, so a fresh table lookup would silently drop those overrides.
+   !!
    !! **Tracer index model.**  The packed column is
    !! `Tsfc | qice(1:nilyr) | qsno(1:nslyr) | sice(1:nilyr)`, top-down in the
    !! ice (`k = 1` top).  Indices are pure functions of the layer counts (no
@@ -52,6 +56,7 @@ module rdb_ice_params
    public :: ICE_TFRZ_LINEAR_SALT, ICE_TFRZ_CONSTANT, ICE_TFRZ_MINUS1P8
    public :: ICE_CONDUCT_BUBBLY, ICE_CONDUCT_MU71
    public :: ice_constants_t, ice_thermo_params_t, ice_itd_params_t, ice_params_t
+   public :: ice_sw_params_t
    public :: ice_constants, ice_params_default
    public :: ice_nt_Tsfc, ice_nt_qice, ice_nt_qsno, ice_nt_sice, ice_ntrcr
    public :: ice_trcr_depend, ice_trcr_base, ice_intensive
@@ -133,6 +138,7 @@ module rdb_ice_params
       logical :: calc_Tsfc            !! solve for the surface temperature
       logical :: l_brine              !! brine pockets active (saltmax > min_salin)
       real(wp) :: floeshape           !! floe shape factor for lateral melt (Steele 1992)
+      logical :: congel_one_step      !! congelation freezing in one step (default two-step)
    end type ice_thermo_params_t
 
    type :: ice_itd_params_t
@@ -140,6 +146,18 @@ module rdb_ice_params
       integer :: kitd                 !! 1 = linear ITD remap
       integer :: kcatbound            !! category-bound formula (upstream default 1)
    end type ice_itd_params_t
+
+   type :: ice_sw_params_t
+      !! Shortwave albedo parameters (CCSM3 albedo; upstream code defaults).
+      !! D1.3 owns this type and the `&ocean_ice_sw_nml` group; the shortwave
+      !! driver PR (D7.1) EXTENDS both and adds the refusals for unsupported
+      !! shortwave options.  Do not create a second type.
+      real(wp) :: albicev             !! visible albedo of thick ice
+      real(wp) :: albicei             !! near-infrared albedo of thick ice
+      real(wp) :: albsnowv            !! visible albedo of cold snow
+      real(wp) :: albsnowi            !! near-infrared albedo of cold snow
+      real(wp) :: ahmax               !! thickness above which the ice albedo is constant [m]
+   end type ice_sw_params_t
 
    type :: ice_params_t
       !! All sea-ice parameters: scalars only, no allocatables, no strings.
@@ -152,6 +170,7 @@ module rdb_ice_params
       type(ice_constants_t) :: c
       type(ice_thermo_params_t) :: thermo
       type(ice_itd_params_t) :: itd
+      type(ice_sw_params_t) :: sw
    end type ice_params_t
 
 contains
@@ -262,9 +281,16 @@ contains
       p%thermo%update_ocn_f = .false.
       p%thermo%calc_Tsfc = .true.
       p%thermo%l_brine = p%c%saltmax > p%c%min_salin
+      p%thermo%congel_one_step = .false.
 
       p%itd%kitd = 1
       p%itd%kcatbound = 1
+
+      p%sw%albicev = 0.78_wp
+      p%sw%albicei = 0.36_wp
+      p%sw%albsnowv = 0.98_wp
+      p%sw%albsnowi = 0.70_wp
+      p%sw%ahmax = 0.3_wp
    end function ice_params_default
 
    ! ------------------------------------------------------------------
