@@ -185,6 +185,10 @@ set(CORE_SOURCES
     # face/centre ghost-wrap helpers, declared earlier in this file at the
     # ocean/boundary entry).
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/dynamics/rdb_ice_evp.F90
+    # CICE6 port D9.0: C-grid ice metrics name map + face-pair halo wrapper;
+    # depends on rdb_ocean_metrics, rdb_ocean_halo, rdb_ocean_periodic,
+    # rdb_ocean_fold_apply (all declared earlier in this file).
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/cice/rdb_ice_cgrid_metrics.F90
     # Sea-ice PR 1: ocean-side frazil accumulator (freezing-point clamp), called
     # from the driver after each ocean outer step.
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/thermo/rdb_ice_frazil.F90
