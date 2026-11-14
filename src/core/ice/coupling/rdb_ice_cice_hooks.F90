@@ -473,8 +473,16 @@ contains
                                  cm%epm, cm%npm, cm%hm, w%Tf, c%hin_max, c%aice0, c%aicen, c%vicen, &
                                  c%vsnon, c%Tsfcn, c%qicen, c%sicen, c%qsnon, c%aice, c%vice, c%vsno, &
                                  w%Tsfc_c, w%qice_c, w%sice_c, w%qsno_c, f%fresh, f%fsalt, f%fhocn, &
-                                 c%ice_err, tres)
+                                 c%ice_err, tres, dxU=cm%dxU, dyU=cm%dyU, earea=cm%earea, narea=cm%narea, uvm=cm%uvm)
       end associate
+      ! the step's clip/drop ledger of the remap update, kept for the conservation ledger (module slot)
+      S%icec%tres = tres
+      S%icec%ledger_cum%n_clip = S%icec%ledger_cum%n_clip + tres%ledger%n_clip
+      S%icec%ledger_cum%clip_area = S%icec%ledger_cum%clip_area + tres%ledger%clip_area
+      S%icec%ledger_cum%drop_vice = S%icec%ledger_cum%drop_vice + tres%ledger%drop_vice
+      S%icec%ledger_cum%drop_vsno = S%icec%ledger_cum%drop_vsno + tres%ledger%drop_vsno
+      S%icec%ledger_cum%drop_eice = S%icec%ledger_cum%drop_eice + tres%ledger%drop_eice
+      S%icec%ledger_cum%drop_esno = S%icec%ledger_cum%drop_esno + tres%ledger%drop_esno
       ! A refused step (cell error bits) is reported by the sequencer's post-transport enforcement
       ! with the first offender; only a configuration refusal is a hook failure.
       if (tres%cfg /= TRANSPORT_CFG_OK) status = tres%cfg

@@ -141,7 +141,10 @@ module rdb_ice_remap_flux
    public :: remap_flux_bytes_per_index, remap_default_nbatch
    public :: REMAP_CFG_OK, REMAP_CFG_WORKSPACE, REMAP_CFG_TABLE, REMAP_CFG_RANGE, REMAP_CFG_MASK
    public :: REMAP_QUAD_W0, REMAP_QUAD_W1, REMAP_QUAD_FRAC
-   public :: remap_ledger_t, remap_ledger_impl
+   public :: remap_ledger_t, remap_ledger_impl, REMAP_TGROUP
+
+   integer, parameter :: REMAP_TGROUP = 9
+      !! Tracers accumulated together in registers by the face flux kernel.
 
    integer, parameter :: REMAP_CFG_OK = 0
       !! Configuration accepted.
@@ -311,6 +314,43 @@ contains
    ! face kernel
    ! ------------------------------------------------------------------
 
+   pure subroutine remap_slot_moments(x1, x2, x3, y1, y2, y3, mcv, mxv, myv, m1s, mxs, mys, mxx, mxy, myy)
+      !! The six mass moments `<m>, <m x>, <m y>, <m x^2>, <m x y>, <m y^2>` of the triangle `(x, y)` for the
+      !! mass profile `mcv + mxv x + myv y` by the four-point rule (weights `-9/16`, `25/48` x 3 at the centroid
+      !! and 2/5 of the way to the vertices), as MEANS over the triangle.
+      !$acc routine seq
+      real(wp), intent(in) :: x1, x2, x3, y1, y2, y3, mcv, mxv, myv
+      real(wp), intent(out) :: m1s, mxs, mys, mxx, mxy, myy
+      real(wp) :: cx, cy, qx1, qx2, qx3, qy1, qy2, qy3, m0, m1, m2, m3, w0, w1, w2, w3
+
+      cx = (x1 + x2 + x3)/3.0_wp
+      cy = (y1 + y2 + y3)/3.0_wp
+      qx1 = REMAP_QUAD_FRAC*x1 + (1.0_wp - REMAP_QUAD_FRAC)*cx
+      qx2 = REMAP_QUAD_FRAC*x2 + (1.0_wp - REMAP_QUAD_FRAC)*cx
+      qx3 = REMAP_QUAD_FRAC*x3 + (1.0_wp - REMAP_QUAD_FRAC)*cx
+      qy1 = REMAP_QUAD_FRAC*y1 + (1.0_wp - REMAP_QUAD_FRAC)*cy
+      qy2 = REMAP_QUAD_FRAC*y2 + (1.0_wp - REMAP_QUAD_FRAC)*cy
+      qy3 = REMAP_QUAD_FRAC*y3 + (1.0_wp - REMAP_QUAD_FRAC)*cy
+      m0 = REMAP_QUAD_W0*(mcv + cx*mxv + cy*myv)
+      m1 = REMAP_QUAD_W1*(mcv + qx1*mxv + qy1*myv)
+      m2 = REMAP_QUAD_W1*(mcv + qx2*mxv + qy2*myv)
+      m3 = REMAP_QUAD_W1*(mcv + qx3*mxv + qy3*myv)
+      m1s = ((m0 + m1) + m2) + m3
+      w0 = m0*cx
+      w1 = m1*qx1
+      w2 = m2*qx2
+      w3 = m3*qx3
+      mxs = ((w0 + w1) + w2) + w3
+      mxx = ((w0*cx + w1*qx1) + w2*qx2) + w3*qx3
+      mxy = ((w0*cy + w1*qy1) + w2*qy2) + w3*qy3
+      w0 = m0*cy
+      w1 = m1*qy1
+      w2 = m2*qy2
+      w3 = m3*qy3
+      mys = ((w0 + w1) + w2) + w3
+      myy = ((w0*cy + w1*qy1) + w2*qy2) + w3*qy3
+   end subroutine remap_slot_moments
+
    pure subroutine remap_face_flux(i, j, n, b, nx, ny, ncat, ntrace, nb, puny, tracer_type, depend, src, xp, yp, area, &
                                    aim, mx, my, tc, tx, ty, mflx, mtflx)
       !! Flux of category `n` (batch slot `b`) through the edge `(i, j)` of ONE
@@ -328,91 +368,74 @@ contains
       real(wp), intent(in) :: aim(nx, ny, 0:ncat), mx(nx, ny, nb), my(nx, ny, nb)
       real(wp), intent(in) :: tc(nx, ny, ntrace, nb), tx(nx, ny, ntrace, nb), ty(nx, ny, ntrace, nb)
       real(wp), intent(inout) :: mflx(nx, ny, nb), mtflx(nx, ny, ntrace, nb)
-      integer :: s, nt, p, i2, j2
-      real(wp) :: ar, m1s, mxs, mys, mxx, mxy, myy
-      real(wp) :: x1, x2, x3, y1, y2, y3, cx, cy, qx1, qx2, qx3, qy1, qy2, qy3
-      real(wp) :: mcv, mxv, myv, m0, m1, m2, m3, w0, w1, w2, w3
+      integer :: s, nt, p, i2, j2, ig, ngrp, nt0, g
+      real(wp) :: ar, m1s, mxs, mys, mxx, mxy, myy, mcv, mxv, myv
       real(wp) :: tcv, txv, tyv, tcp, txp, typ, mtp, mtxp, mtyp, mt, fm
+      real(wp) :: acc(REMAP_TGROUP)
 
-      ! SLOT OUTER: the six mass moments of a slot live only inside its pass, each tracer's flux
-      ! accumulates in the global array from 0 in slot order 1..6 (the same sum order as a tracer-outer loop)
+      ! TRACER GROUPS of `REMAP_TGROUP`: inside a group the slots are the outer loop (the six mass moments of a
+      ! slot live only inside its pass, the group's fluxes accumulate in `REMAP_TGROUP` scalars-in-registers
+      ! from 0 in slot order 1..6, the same sum order as a tracer-outer loop), and the group is stored once.
+      ! The mass flux is formed in the first group.  (A slot-outer loop over ALL tracers read-modified-wrote
+      ! `mtflx` per slot and per tracer and was 45 % slower; a tracer-outer loop needs the moments of all
+      ! slots at once, 255 registers.)
       fm = 0.0_wp
-      if (n >= 1) then
-         !$acc loop seq
-         do nt = 1, ntrace
-            mtflx(i, j, nt, b) = 0.0_wp
-         end do
-      end if
+      ngrp = 1
+      if (n >= 1) ngrp = (ntrace + REMAP_TGROUP - 1)/REMAP_TGROUP
       !$acc loop seq
-      do s = 1, REMAP_NSLOT
-         if (src(i, j, s) == 0_int8) cycle
-         i2 = i + remap_src_di(src(i, j, s))
-         j2 = j + remap_src_dj(src(i, j, s))
-         ar = area(i, j, s)
-         x1 = xp(i, j, 1, s)
-         x2 = xp(i, j, 2, s)
-         x3 = xp(i, j, 3, s)
-         y1 = yp(i, j, 1, s)
-         y2 = yp(i, j, 2, s)
-         y3 = yp(i, j, 3, s)
-         cx = (x1 + x2 + x3)/3.0_wp
-         cy = (y1 + y2 + y3)/3.0_wp
-         qx1 = REMAP_QUAD_FRAC*x1 + (1.0_wp - REMAP_QUAD_FRAC)*cx
-         qx2 = REMAP_QUAD_FRAC*x2 + (1.0_wp - REMAP_QUAD_FRAC)*cx
-         qx3 = REMAP_QUAD_FRAC*x3 + (1.0_wp - REMAP_QUAD_FRAC)*cx
-         qy1 = REMAP_QUAD_FRAC*y1 + (1.0_wp - REMAP_QUAD_FRAC)*cy
-         qy2 = REMAP_QUAD_FRAC*y2 + (1.0_wp - REMAP_QUAD_FRAC)*cy
-         qy3 = REMAP_QUAD_FRAC*y3 + (1.0_wp - REMAP_QUAD_FRAC)*cy
-         ! the centre value is the area where it exceeds `puny` and 0 otherwise (`mc`), and the gradients are
-         ! read through it: a cell with `mc = 0` has none.  The reconstruction buffers hold the batch's
-         ! categories only: batch slot `b`
-         mcv = aim(i2, j2, n)
-         mxv = mx(i2, j2, b)
-         myv = my(i2, j2, b)
-         if (.not. (mcv > puny)) then
-            mcv = 0.0_wp
-            mxv = 0.0_wp
-            myv = 0.0_wp
-         end if
-         ! mass at the four points, weights folded in
-         m0 = REMAP_QUAD_W0*(mcv + cx*mxv + cy*myv)
-         m1 = REMAP_QUAD_W1*(mcv + qx1*mxv + qy1*myv)
-         m2 = REMAP_QUAD_W1*(mcv + qx2*mxv + qy2*myv)
-         m3 = REMAP_QUAD_W1*(mcv + qx3*mxv + qy3*myv)
-         m1s = ((m0 + m1) + m2) + m3
-         w0 = m0*cx
-         w1 = m1*qx1
-         w2 = m2*qx2
-         w3 = m3*qx3
-         mxs = ((w0 + w1) + w2) + w3
-         mxx = ((w0*cx + w1*qx1) + w2*qx2) + w3*qx3
-         mxy = ((w0*cy + w1*qy1) + w2*qy2) + w3*qy3
-         w0 = m0*cy
-         w1 = m1*qy1
-         w2 = m2*qy2
-         w3 = m3*qy3
-         mys = ((w0 + w1) + w2) + w3
-         myy = ((w0*cy + w1*qy1) + w2*qy2) + w3*qy3
-         fm = fm + ar*m1s
+      do ig = 1, ngrp
+         nt0 = (ig - 1)*REMAP_TGROUP
+         acc = 0.0_wp
+         !$acc loop seq
+         do s = 1, REMAP_NSLOT
+            if (src(i, j, s) == 0_int8) cycle
+            i2 = i + remap_src_di(src(i, j, s))
+            j2 = j + remap_src_dj(src(i, j, s))
+            ar = area(i, j, s)
+            mcv = aim(i2, j2, n)
+            mxv = mx(i2, j2, b)
+            myv = my(i2, j2, b)
+            ! the centre value is the area where it exceeds `puny` and 0 otherwise (`mc`), and the gradients are
+            ! read through it: a cell with `mc = 0` has none.  The reconstruction buffers hold the batch's
+            ! categories only: batch slot `b`
+            if (.not. (mcv > puny)) then
+               mcv = 0.0_wp
+               mxv = 0.0_wp
+               myv = 0.0_wp
+            end if
+            call remap_slot_moments(xp(i, j, 1, s), xp(i, j, 2, s), xp(i, j, 3, s), yp(i, j, 1, s), yp(i, j, 2, s), &
+                                    yp(i, j, 3, s), mcv, mxv, myv, m1s, mxs, mys, mxx, mxy, myy)
+            if (ig == 1) fm = fm + ar*m1s
+            if (n >= 1) then
+               !$acc loop seq
+               do g = 1, REMAP_TGROUP
+                  nt = nt0 + g
+                  if (nt > ntrace) exit
+                  tcv = tc(i2, j2, nt, b)
+                  txv = tx(i2, j2, nt, b)
+                  tyv = ty(i2, j2, nt, b)
+                  if (tracer_type(nt) == 1) then
+                     mt = m1s*tcv + mxs*txv + mys*tyv
+                  else
+                     p = depend(nt)
+                     tcp = tc(i2, j2, p, b)
+                     txp = tx(i2, j2, p, b)
+                     typ = ty(i2, j2, p, b)
+                     mtp = m1s*tcp + mxs*txp + mys*typ
+                     mtxp = mxs*tcp + mxx*txp + mxy*typ
+                     mtyp = mys*tcp + mxy*txp + myy*typ
+                     mt = mtp*tcv + mtxp*txv + mtyp*tyv
+                  end if
+                  acc(g) = acc(g) + ar*mt
+               end do
+            end if
+         end do
          if (n >= 1) then
             !$acc loop seq
-            do nt = 1, ntrace
-               tcv = tc(i2, j2, nt, b)
-               txv = tx(i2, j2, nt, b)
-               tyv = ty(i2, j2, nt, b)
-               if (tracer_type(nt) == 1) then
-                  mt = m1s*tcv + mxs*txv + mys*tyv
-               else
-                  p = depend(nt)
-                  tcp = tc(i2, j2, p, b)
-                  txp = tx(i2, j2, p, b)
-                  typ = ty(i2, j2, p, b)
-                  mtp = m1s*tcp + mxs*txp + mys*typ
-                  mtxp = mxs*tcp + mxx*txp + mxy*typ
-                  mtyp = mys*tcp + mxy*txp + myy*typ
-                  mt = mtp*tcv + mtxp*txv + mtyp*tyv
-               end if
-               mtflx(i, j, nt, b) = mtflx(i, j, nt, b) + ar*mt
+            do g = 1, REMAP_TGROUP
+               nt = nt0 + g
+               if (nt > ntrace) exit
+               mtflx(i, j, nt, b) = acc(g)
             end do
          end if
       end do

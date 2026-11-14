@@ -33,7 +33,9 @@ module rdb_ice_cice_run
    use rdb_ice_step_cice, only: ice_step_work_t, ICE_STEP_INIT_OK
    use rdb_ice_flux_avg, only: ice_flux_avg_t
    use rdb_ice_import_ocean, only: ice_ocean_in_t
-   use rdb_ice_transport_cice, only: transport_cice_ws_t
+   use rdb_ice_transport_cice, only: transport_cice_ws_t, transport_result_t
+   use rdb_ice_remap_flux, only: remap_ledger_t
+   use rdb_ice_params, only: ICE_ADVECT_REMAP
    implicit none
    private
 
@@ -59,6 +61,12 @@ module rdb_ice_cice_run
       type(ice_flux_avg_t) :: avg
       type(ice_ocean_in_t) :: oin
       type(transport_cice_ws_t) :: tws
+      type(transport_result_t) :: tres
+         !! The result of the LAST transport call (host scalars, not restart state): `tres%ledger` is
+         !! what the remap update's guards created or dropped that step (clipped cells and area,
+         !! dropped volume and enthalpy content), for the conservation ledger to book.
+      type(remap_ledger_t) :: ledger_cum
+         !! The same, summed over the run (not restart state).
       real(wp), allocatable :: cosA(:, :), sinA(:, :)
          !! Cosine and sine of the grid angle at T (static, set by `finalize`).
       real(wp), allocatable :: u_tas(:, :), u_huss(:, :), u_uas(:, :), u_vas(:, :), u_psl(:, :)
@@ -112,7 +120,9 @@ contains
       end if
       call this%avg%init(grid)
       call this%oin%init(grid)
-      call this%tws%init(nx, ny, cice%ncat, cice%nilyr, cice%nslyr, .false., e)
+      call this%tws%init(nx, ny, cice%ncat, cice%nilyr, cice%nslyr, .false., e, &
+                         remap=(cice%p%transport%advection == ICE_ADVECT_REMAP), &
+                         remap_flux_bytes_max=int(cfg%ocean%ice_dyn%transport_buffer_mib, int64)*1048576_int64)
       if (e /= 0) then
          ierr = 4
          return

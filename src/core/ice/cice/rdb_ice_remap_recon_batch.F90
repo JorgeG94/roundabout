@@ -241,10 +241,11 @@ contains
       real(wp) :: mm, mcv, gx, gy, mxav, myav, tm, tgx, tgy, tcv, mtx, mty, w2, w3, w7
       real(wp) :: pc, pnw, pn, pne, pw, pe, psw, ps, pse
       logical :: tpar
+      integer :: nbits, pbits, pcur
 
       !$acc data present(tracer_type, depend, hm, aim, trm, mx, my, tc, tx, ty)
       do concurrent(b=1:nhi - nlo + 1, j=js:je, i=is:ie) local(n, mm, mcv, gx, gy, mxav, myav, tm, tgx, tgy, tcv, mtx, mty, &
-                                                               w2, w3, w7, pc, pnw, pn, pne, pw, pe, psw, ps, pse, nt, p, tpar)
+                                                w2, w3, w7, pc, pnw, pn, pne, pw, pe, psw, ps, pse, nt, p, tpar, nbits, pbits, pcur)
          n = nlo + b - 1
          mm = aim(i, j, n)
          ! mass: validity mask = land mask
@@ -273,6 +274,20 @@ contains
                mxav = gx*RECON_XXAV/mm
                myav = gy*RECON_XXAV/mm
             end if
+            ! the eight neighbours whose area exceeds puny (the stored mask `mmask`), one bit each, formed once
+            nbits = 0
+            if (mm > puny) then
+               if (aim(i - 1, j + 1, n) > puny) nbits = ibset(nbits, 0)
+               if (aim(i, j + 1, n) > puny) nbits = ibset(nbits, 1)
+               if (aim(i + 1, j + 1, n) > puny) nbits = ibset(nbits, 2)
+               if (aim(i - 1, j, n) > puny) nbits = ibset(nbits, 3)
+               if (aim(i + 1, j, n) > puny) nbits = ibset(nbits, 4)
+               if (aim(i - 1, j - 1, n) > puny) nbits = ibset(nbits, 5)
+               if (aim(i, j - 1, n) > puny) nbits = ibset(nbits, 6)
+               if (aim(i + 1, j - 1, n) > puny) nbits = ibset(nbits, 7)
+            end if
+            pcur = 0
+            pbits = 0
             !$acc loop seq
             do nt = 1, ntrace
                tm = trm(i, j, nt, n)
@@ -281,16 +296,15 @@ contains
                tcv = 0.0_wp
                if (mm > puny) then
                   if (tracer_type(nt) == 1) then
-                     ! neighbours with area above puny count (the stored mask `mmask`)
                      pc = tm
-                     pnw = merge(trm(i - 1, j + 1, nt, n), pc, aim(i - 1, j + 1, n) > puny)
-                     pn = merge(trm(i, j + 1, nt, n), pc, aim(i, j + 1, n) > puny)
-                     pne = merge(trm(i + 1, j + 1, nt, n), pc, aim(i + 1, j + 1, n) > puny)
-                     pw = merge(trm(i - 1, j, nt, n), pc, aim(i - 1, j, n) > puny)
-                     pe = merge(trm(i + 1, j, nt, n), pc, aim(i + 1, j, n) > puny)
-                     psw = merge(trm(i - 1, j - 1, nt, n), pc, aim(i - 1, j - 1, n) > puny)
-                     ps = merge(trm(i, j - 1, nt, n), pc, aim(i, j - 1, n) > puny)
-                     pse = merge(trm(i + 1, j - 1, nt, n), pc, aim(i + 1, j - 1, n) > puny)
+                     pnw = merge(trm(i - 1, j + 1, nt, n), pc, btest(nbits, 0))
+                     pn = merge(trm(i, j + 1, nt, n), pc, btest(nbits, 1))
+                     pne = merge(trm(i + 1, j + 1, nt, n), pc, btest(nbits, 2))
+                     pw = merge(trm(i - 1, j, nt, n), pc, btest(nbits, 3))
+                     pe = merge(trm(i + 1, j, nt, n), pc, btest(nbits, 4))
+                     psw = merge(trm(i - 1, j - 1, nt, n), pc, btest(nbits, 5))
+                     ps = merge(trm(i, j - 1, nt, n), pc, btest(nbits, 6))
+                     pse = merge(trm(i + 1, j - 1, nt, n), pc, btest(nbits, 7))
                      call recon_limited_gradient(pc, pnw, pn, pne, pw, pe, psw, ps, pse, mxav, myav, tgx, tgy)
                      tcv = tm - tgx*mxav - tgy*myav
                   else
@@ -306,15 +320,28 @@ contains
                         mtx = w2*RECON_XXAV*w7
                         mty = w3*RECON_XXAV*w7
                         pc = tm
-                        ! neighbours whose parent tracer is present (the stored mask `tmask(parent)`)
-                    pnw = merge(trm(i - 1, j + 1, nt, n), pc, aim(i - 1, j + 1, n) > puny .and. abs(trm(i - 1, j + 1, p, n)) > puny)
-                        pn = merge(trm(i, j + 1, nt, n), pc, aim(i, j + 1, n) > puny .and. abs(trm(i, j + 1, p, n)) > puny)
-                    pne = merge(trm(i + 1, j + 1, nt, n), pc, aim(i + 1, j + 1, n) > puny .and. abs(trm(i + 1, j + 1, p, n)) > puny)
-                        pw = merge(trm(i - 1, j, nt, n), pc, aim(i - 1, j, n) > puny .and. abs(trm(i - 1, j, p, n)) > puny)
-                        pe = merge(trm(i + 1, j, nt, n), pc, aim(i + 1, j, n) > puny .and. abs(trm(i + 1, j, p, n)) > puny)
-                    psw = merge(trm(i - 1, j - 1, nt, n), pc, aim(i - 1, j - 1, n) > puny .and. abs(trm(i - 1, j - 1, p, n)) > puny)
-                        ps = merge(trm(i, j - 1, nt, n), pc, aim(i, j - 1, n) > puny .and. abs(trm(i, j - 1, p, n)) > puny)
-                    pse = merge(trm(i + 1, j - 1, nt, n), pc, aim(i + 1, j - 1, n) > puny .and. abs(trm(i + 1, j - 1, p, n)) > puny)
+                        ! neighbours whose parent tracer is present too (the stored mask `tmask(parent)`),
+                        ! formed once per run of children of the same parent
+                        if (p /= pcur) then
+                           pbits = nbits
+                           if (abs(trm(i - 1, j + 1, p, n)) <= puny) pbits = ibclr(pbits, 0)
+                           if (abs(trm(i, j + 1, p, n)) <= puny) pbits = ibclr(pbits, 1)
+                           if (abs(trm(i + 1, j + 1, p, n)) <= puny) pbits = ibclr(pbits, 2)
+                           if (abs(trm(i - 1, j, p, n)) <= puny) pbits = ibclr(pbits, 3)
+                           if (abs(trm(i + 1, j, p, n)) <= puny) pbits = ibclr(pbits, 4)
+                           if (abs(trm(i - 1, j - 1, p, n)) <= puny) pbits = ibclr(pbits, 5)
+                           if (abs(trm(i, j - 1, p, n)) <= puny) pbits = ibclr(pbits, 6)
+                           if (abs(trm(i + 1, j - 1, p, n)) <= puny) pbits = ibclr(pbits, 7)
+                           pcur = p
+                        end if
+                        pnw = merge(trm(i - 1, j + 1, nt, n), pc, btest(pbits, 0))
+                        pn = merge(trm(i, j + 1, nt, n), pc, btest(pbits, 1))
+                        pne = merge(trm(i + 1, j + 1, nt, n), pc, btest(pbits, 2))
+                        pw = merge(trm(i - 1, j, nt, n), pc, btest(pbits, 3))
+                        pe = merge(trm(i + 1, j, nt, n), pc, btest(pbits, 4))
+                        psw = merge(trm(i - 1, j - 1, nt, n), pc, btest(pbits, 5))
+                        ps = merge(trm(i, j - 1, nt, n), pc, btest(pbits, 6))
+                        pse = merge(trm(i + 1, j - 1, nt, n), pc, btest(pbits, 7))
                         call recon_limited_gradient(pc, pnw, pn, pne, pw, pe, psw, ps, pse, mtx, mty, tgx, tgy)
                      end if
                      tcv = tm - tgx*mtx - tgy*mty

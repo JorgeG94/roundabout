@@ -4323,6 +4323,15 @@ class OceanIceDyn(Group):
         dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
     )
 
+    transport_buffer_mib = Int(
+        'transport_buffer_mib',
+        doc="advection='remap': memory budget [MiB] of the flux and reconstruction buffers of one category batch (bigger = fewer launches); must be >= 1",
+        units='',
+        required=False,
+        default=1024,
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
+    )
+
     ndtd = Int(
         'ndtd',
         doc='Dynamics substeps per ice step; only 1 is supported (refused otherwise)',
@@ -8095,4 +8104,4 @@ GENERATED_GROUPS = {
 }
 
 N_GROUPS = 68
-N_KNOBS = 886
+N_KNOBS = 887

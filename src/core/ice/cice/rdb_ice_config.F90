@@ -171,8 +171,8 @@ contains
          if (.not. cfg%ocean%ice%enable) then
             call add_msg(msgs, n, "&ocean_ice_nml scheme='cice' needs enable=.true. (the ice slot)")
          end if
-         if (trim(adjustl(cfg%ocean%ice_dyn%advection)) /= "upwind") then
-            call add_msg(msgs, n, "&ocean_ice_dyn_nml scheme='cice' supports advection='upwind' only")
+         if (cfg%ocean%ice_dyn%transport_buffer_mib < 1) then
+            call add_msg(msgs, n, "&ocean_ice_dyn_nml transport_buffer_mib must be >= 1")
          end if
          if (trim(adjustl(cfg%ocean%bc%north)) == "tripolar_fold") then
             call add_msg(msgs, n, "&ocean_bc_nml scheme='cice' with a tripolar north fold is not "// &

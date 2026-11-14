@@ -75,6 +75,10 @@ contains
                   new_unittest("column_melt_closure", test_column_melt), &
                   new_unittest("ratio3_closure", test_ratio3), &
                   new_unittest("smoke_2d", test_smoke_2d), &
+                  new_unittest("remap_accepted_and_ledger_exposed", test_remap_config), &
+                  new_unittest("remap_smoke_2d_closure", test_remap_smoke), &
+                  new_unittest("remap_vs_upwind", test_remap_vs_upwind), &
+                  new_unittest("remap_restart_round_trip", test_remap_restart), &
                   new_unittest("restart_round_trip", test_restart), &
                   new_unittest("consumers_follow", test_consumers), &
                   new_unittest("melt_cap_pending_ratio3", test_melt_cap_pending), &
@@ -398,7 +402,7 @@ contains
       integer :: n, ierr, k
       character(len=*), parameter :: NL = new_line("a")
       character(len=64), parameter :: what(15) = [character(len=64) :: &
-                                                  "advection", "ndtd", "nghost", "tripolar", "wetdry", "cavity", &
+                                                  "transport_buffer_mib", "ndtd", "nghost", "tripolar", "wetdry", "cavity", &
                                          "open edge", "thermodynamics", "components", "hfreeze", "px*py", "dynamics", "transport", &
                                                   "atm forcing + uniform", "dataovr wind"]
       character(len=:), allocatable :: nml
@@ -416,14 +420,14 @@ contains
       do k = 1, n
          if (index(msgs(k), "not runnable") > 0) call check(error, .false., "the 'not runnable' refusal is gone")
       end do
-      key = [character(len=80) :: "advection='upwind'", "ndtd /= 1", "nghost >= 3", "tripolar north fold", &
+      key = [character(len=80) :: "transport_buffer_mib", "ndtd /= 1", "nghost >= 3", "tripolar north fold", &
              "wetdry", "cavity_dyn", "'wall' or 'periodic'", "enable_thermodynamics", "enable_components", &
              "hfreeze > 0", "px*py > 1", "needs dynamics=.true.", "needs transport=.true.", &
              "is ambiguous", "tau_x/tau_y files"]
       do k = 1, 15
          select case (k)
          case (1)
-            nml = replace(case_nml("column"), "advection = 'upwind'", "advection = 'remap'")
+    nml = replace(case_nml("column"), "advection = 'upwind', ndte = 40", "advection = 'remap', transport_buffer_mib = 0, ndte = 40")
          case (2)
             nml = replace(case_nml("column"), "ndte = 40", "ndte = 40, ndtd = 2")
          case (3)
@@ -607,6 +611,121 @@ contains
       if (.not. allocated(error)) call check(error, cl%ocean_salt < 1.0e-9_wp, "ocean salt = virtual-salt hand-off")
       call finish_engine(engine)
    end subroutine test_smoke_2d
+
+   subroutine test_remap_config(error)
+      !! `advection = 'remap'` is accepted under `scheme = 'cice'`; the engine builds the remap workspace and
+      !! the transport result carries the ledger.
+      type(error_type), allocatable, intent(out) :: error
+      type(ocean_engine_t), target :: engine
+      type(config_t) :: cfg
+      character(len=ICE_CONFIG_MSG_LEN) :: msgs(ICE_CONFIG_MAX_MSGS)
+      real(wp) :: t
+      integer :: n, ierr
+      logical :: ok
+
+      call ensure_comm()
+      call read_config_from_string(replace(case_nml("basin"), "advection = 'upwind'", "advection = 'remap'"), cfg, ierr=ierr)
+      call check(error, ierr == OCEAN_STATUS_OK, "the remap configuration parses")
+      if (allocated(error)) return
+      call ice_config_check(cfg, msgs, n)
+      call check(error, n == 0, "advection = 'remap' has no refusal under scheme = 'cice'")
+      if (allocated(error)) return
+      call make_engine(engine, cfg, replace(case_nml("basin"), "advection = 'upwind'", "advection = 'remap'"), ok)
+      call check(error, ok, "engine setup with remap")
+      if (allocated(error)) return
+      call check(error, engine%state%icec%tws%remap, "the transport workspace holds the remap buffers")
+      if (.not. allocated(error)) write (*, '(a,i0,a,i0,a)') "  engine ice slot bytes ", engine%state%icec%bytes(), &
+         " (transport workspace ", engine%state%icec%tws%bytes(), ")"
+      t = 0.0_wp
+      if (.not. allocated(error)) call advance(engine, cfg, t, 6, ok)
+      if (.not. allocated(error)) call check(error, ok, "6 coupled steps with remap")
+      if (.not. allocated(error)) call check(error, engine%state%icec%tres%stepped, "the transport stepped")
+      if (.not. allocated(error)) call check(error, engine%state%icec%tres%ierr == 0, "no transport error bit")
+      if (.not. allocated(error)) then
+         call check(error, ieee_is_finite(engine%state%icec%ledger_cum%clip_area + engine%state%icec%ledger_cum%drop_vice), &
+                    "the clip ledger is finite")
+         write (*, '(a,i0,5(1x,es10.2))') "  transport ledger, 6 steps: clipped cells, area, vice, vsno, eice, esno:", &
+            engine%state%icec%ledger_cum%n_clip, engine%state%icec%ledger_cum%clip_area, &
+            engine%state%icec%ledger_cum%drop_vice, engine%state%icec%ledger_cum%drop_vsno, &
+            engine%state%icec%ledger_cum%drop_eice, engine%state%icec%ledger_cum%drop_esno
+      end if
+      call finish_engine(engine)
+   end subroutine test_remap_config
+
+   subroutine test_remap_smoke(error)
+      !! The closed basin of `test_smoke_2d` with remap: dynamics, ridging, the same closure bounds.
+      type(error_type), allocatable, intent(out) :: error
+      type(ocean_engine_t), target :: engine
+      type(config_t) :: cfg
+      type(closure_t) :: cl
+      real(wp) :: t
+      logical :: ok
+
+      call make_engine(engine, cfg, replace(case_nml("basin"), "advection = 'upwind'", "advection = 'remap'"), ok)
+      call check(error, ok, "engine setup failed")
+      if (allocated(error)) return
+      t = 0.0_wp
+      call run_closed(engine, cfg, t, 300, ok, cl, 180.0_wp, 2)
+      call check(error, ok, "300 steps of the closed basin ran with remap")
+      if (.not. allocated(error)) call report_closure("basin remap (water salt heat | ocean heat salt)", cl)
+      if (.not. allocated(error)) write (*, '(a,i0,5(1x,es10.2))') "  remap ledger over the run (n_clip, area, vice, vsno, eice, esno): ", &
+         engine%state%icec%ledger_cum%n_clip, engine%state%icec%ledger_cum%clip_area, engine%state%icec%ledger_cum%drop_vice, &
+         engine%state%icec%ledger_cum%drop_vsno, engine%state%icec%ledger_cum%drop_eice, engine%state%icec%ledger_cum%drop_esno
+      if (.not. allocated(error)) call check(error, cl%finite, "finite, no error bit in any cell")
+      if (.not. allocated(error)) call check(error, cl%aice_max <= 1.0_wp + 1.0e-9_wp, "ice area <= 1 after every step")
+     if (.not. allocated(error)) call check(error, cl%water < 1.0e-9_wp, "water conserved against the fluxes (transport + ridging)")
+      if (.not. allocated(error)) call check(error, cl%salt < 1.0e-9_wp, "salt conserved against the fluxes")
+      if (.not. allocated(error)) call check(error, cl%heat < 1.0e-6_wp, "ice heat against the fluxes (upwind: 2.3e-7, the line's own bookkeeping level)")
+      if (.not. allocated(error)) call check(error, cl%ridge_max > 0.0_wp, "ridging happens under convergence")
+      if (.not. allocated(error)) call check(error, cl%ocean_heat < 1.0e-8_wp, "ocean heat = what the ice handed over")
+      if (.not. allocated(error)) call check(error, cl%ocean_salt < 1.0e-9_wp, "ocean salt = virtual-salt hand-off")
+      call finish_engine(engine)
+   end subroutine test_remap_smoke
+
+   subroutine test_remap_vs_upwind(error)
+      !! The same closed basin under both schemes: the same ice volume to a few per cent (transport conserves;
+      !! the schemes differ in the ridging and thermodynamics they feed), and remap keeps the sharper field:
+      !! a larger spatial variance of the ice volume.
+      type(error_type), allocatable, intent(out) :: error
+      type(ocean_engine_t), target :: eu, er
+      type(config_t) :: cu, cr
+      real(wp) :: tu, tr, vu, vr, varu, varr, mu, mr
+      integer :: ng, is, ie, js, je
+      logical :: ok
+
+      call make_engine(eu, cu, case_nml("basin"), ok)
+      call check(error, ok, "upwind engine setup")
+      if (allocated(error)) return
+      call make_engine(er, cr, replace(case_nml("basin"), "advection = 'upwind'", "advection = 'remap'"), ok)
+      call check(error, ok, "remap engine setup")
+      if (allocated(error)) then
+         call finish_engine(eu)
+         return
+      end if
+      tu = 0.0_wp
+      tr = 0.0_wp
+      call advance(eu, cu, tu, 200, ok)
+      call check(error, ok, "upwind run")
+      if (.not. allocated(error)) call advance(er, cr, tr, 200, ok)
+      if (.not. allocated(error)) call check(error, ok, "remap run")
+      if (.not. allocated(error)) then
+         call pull_cice(eu)
+         call pull_cice(er)
+         ng = eu%grid%nghost
+         is = ng + 1; ie = ng + eu%grid%nx_phys; js = ng + 1; je = ng + eu%grid%ny_phys
+         vu = sum(eu%state%ice%cice%vice(is:ie, js:je))
+         vr = sum(er%state%ice%cice%vice(is:ie, js:je))
+         mu = vu/real((ie - is + 1)*(je - js + 1), wp)
+         mr = vr/real((ie - is + 1)*(je - js + 1), wp)
+         varu = sum((eu%state%ice%cice%vice(is:ie, js:je) - mu)**2)/real((ie - is + 1)*(je - js + 1), wp)
+         varr = sum((er%state%ice%cice%vice(is:ie, js:je) - mr)**2)/real((ie - is + 1)*(je - js + 1), wp)
+write (*, '(a,2es12.4,a,2es12.4)') "  basin 200 steps: total ice volume upwind/remap", vu, vr, "; variance upwind/remap", varu, varr
+         call check(error, abs(vr - vu) <= 0.05_wp*abs(vu), "the same total ice volume to 5 %")
+         if (.not. allocated(error)) call check(error, varr >= varu, "remap keeps the sharper ice-volume field")
+      end if
+      call finish_engine(eu)
+      call finish_engine(er)
+   end subroutine test_remap_vs_upwind
 
    subroutine test_melt_cap_pending(error)
       !! Ratio 3, a warm ocean offering a small melt potential (`hfreeze` tiny): the ice draws about half
@@ -984,6 +1103,17 @@ contains
 
    subroutine test_restart(error)
       type(error_type), allocatable, intent(out) :: error
+      call restart_case(error, case_nml("channel"))
+   end subroutine test_restart
+
+   subroutine test_remap_restart(error)
+      type(error_type), allocatable, intent(out) :: error
+      call restart_case(error, replace(case_nml("channel"), "advection = 'upwind'", "advection = 'remap'"))
+   end subroutine test_remap_restart
+
+   subroutine restart_case(error, nml)
+      type(error_type), allocatable, intent(out) :: error
+      character(len=*), intent(in) :: nml
       type(ocean_engine_t), target :: ea, eb
       type(config_t) :: cfg_a, cfg_b
       type(snapshot_t) :: sa, sb, sa0, sb0
@@ -993,7 +1123,7 @@ contains
 
       nw = 5          ! odd: the checkpoint falls inside a thermodynamics window (ratio 2)
       na = 4
-      call make_engine(ea, cfg_a, case_nml("channel"), ok)
+      call make_engine(ea, cfg_a, nml, ok)
       call check(error, ok, "engine A setup failed")
       if (allocated(error)) return
       t_a = 0.0_wp
@@ -1014,7 +1144,7 @@ contains
       call check(error, umax > 1.0e-7_wp, "the ice moves in the restart case")
       if (allocated(error)) return
 
-      call make_engine(eb, cfg_b, case_nml("channel"), ok, restart_file=FN, t0=t_b, step0=step_b)
+      call make_engine(eb, cfg_b, nml, ok, restart_file=FN, t0=t_b, step0=step_b)
       call check(error, ok, "engine B (warm restart) setup failed")
       if (allocated(error)) return
       call check(error, step_b == nw .and. eb%warm_restart, "warm restart taken at the written step")
@@ -1034,7 +1164,7 @@ contains
       call finish_engine(eb)
       call delete_file(FN)
       call compare(error, sa, sb, "after the resumed steps", n_new)
-   end subroutine test_restart
+   end subroutine restart_case
 
    subroutine test_consumers(error)
       type(error_type), allocatable, intent(out) :: error

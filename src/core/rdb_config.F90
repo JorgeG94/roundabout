@@ -751,6 +751,11 @@ module rdb_config
          !! Run the transport checks (non-finite entry, negative area, CFL,
          !! conservation of area and of area-weighted tracers, monotonicity);
          !! costs extra reductions and, for monotonicity, scratch bounds.
+      integer :: transport_buffer_mib = 1024
+         !! `advection = "remap"`: budget [MiB] of the flux and reconstruction buffers of ONE category
+         !! batch (the largest batch of category indices that fits is used, at least one).  Bigger
+         !! is faster (fewer launches), smaller is leaner; the packed fields and the departure
+         !! geometry are extra.  Inert under `"upwind"`.
       integer :: ndtd = 1
          !! Dynamics substeps per ice step (upstream `ndtd`).  Only 1 is
          !! supported: the transport and ridging steps are written for a

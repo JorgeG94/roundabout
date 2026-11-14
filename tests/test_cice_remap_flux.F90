@@ -41,7 +41,9 @@ module test_cice_remap_flux
    use rdb_ice_errors, only: ICE_ERR_NONE, ICE_ERR_NONFINITE, ICE_ERR_TRANSPORT_CFL, ICE_ERR_TRANSPORT_CONSERV
    use rdb_ice_params, only: ice_params_t, ice_params_default, ICE_CONSTANTS_ICEPACK, ICE_ADVECT_UPWIND, ICE_ADVECT_REMAP
    use rdb_ice_itd_params, only: itd_category_bounds
-   use rdb_ice_remap_geom, only: remap_src_di, remap_src_dj, REMAP_NSLOT, remap_locate_east, remap_locate_edge
+   use rdb_ice_remap_geom, only: remap_src_di, remap_src_dj, REMAP_NSLOT, remap_locate_east, remap_locate_edge, remap_geometry
+   use rdb_ice_remap_recon_batch, only: remap_recon_batch, remap_input_check
+   use rdb_ice_remap_flux, only: remap_flux_integrals, remap_update
    use rdb_ice_transport_cice, only: transport_cice_ws_t, transport_result_t, ice_step_transport, &
                                      ICE_TRANSPORT_POST_NONE, TRANSPORT_CFG_OK, TRANSPORT_CFG_PARAMS, TRANSPORT_CFG_RANGE, &
                                      TRANSPORT_CFG_REMAP
@@ -2463,6 +2465,60 @@ write (error_unit, "(a,es10.3)") "  [remap] non-uniform metrics, constant tracer
       call sim_destroy(s)
    end subroutine test_throughput
 
+   subroutine stage_breakdown(s)
+      !! Time of each stage of the remap on the device (category 2 for the per-category stages; one
+      !! step costs the geometry once and the per-category stages six times), `!$acc wait` around each.
+      type(sim_t), intent(inout) :: s
+      integer, parameter :: NREP = 5
+      integer :: rep, cfg, nbad, nneg
+      integer(int64) :: t0, t1, rate
+      real(wp) :: tg, tc, tf, tu, ti
+      integer(int32), allocatable :: ierr(:, :)
+
+      allocate (ierr(s%nx, s%ny))
+      ierr = 0_int32
+      !$acc enter data copyin(ierr)
+      call system_clock(t0, rate)
+      do rep = 1, NREP
+         call remap_geometry(s%w%gw, s%is, s%ie, s%js, s%je, 1000.0_wp, 1, PUNY, s%u, s%v, s%dxU, s%dyU, s%HTE, s%HTN, s%earea, &
+                             s%narea, s%epm, s%npm, s%uvm, ierr)
+         !$acc wait
+      end do
+      call system_clock(t1)
+      tg = real(t1 - t0, wp)/real(NREP*rate, wp)*1000.0_wp
+      call system_clock(t0)
+      do rep = 1, NREP
+         call remap_input_check(s%w%a, s%is, s%ie, s%js, s%je, s%hm, nbad, cfg)
+         !$acc wait
+      end do
+      call system_clock(t1)
+      ti = real(t1 - t0, wp)/real(NREP*rate, wp)*1000.0_wp
+      call system_clock(t0)
+      do rep = 1, NREP
+         call remap_recon_batch(s%w%a, s%w%rb, s%is - 1, s%ie + 1, s%js - 1, s%je + 1, 2, 2, PUNY, s%hm, cfg)
+         !$acc wait
+      end do
+      call system_clock(t1)
+      tc = real(t1 - t0, wp)/real(NREP*rate, wp)*1000.0_wp
+      call system_clock(t0)
+      do rep = 1, NREP
+         call remap_flux_integrals(s%w%a, s%w%gw, s%w%rb, s%w%fw, s%is, s%ie, s%js, s%je, 2, 2, PUNY)
+         !$acc wait
+      end do
+      call system_clock(t1)
+      tf = real(t1 - t0, wp)/real(NREP*rate, wp)*1000.0_wp
+      call system_clock(t0)
+      do rep = 1, NREP
+         call remap_update(s%w%a, s%w%b, s%w%fw, s%is, s%ie, s%js, s%je, 2, 2, PUNY, s%tarea, nbad, nneg)
+         !$acc wait
+      end do
+      call system_clock(t1)
+      tu = real(t1 - t0, wp)/real(NREP*rate, wp)*1000.0_wp
+      !$acc exit data delete(ierr)
+      write (error_unit, "(a,5(a,f8.2))") "  [remap] stage times [ms]:", " geometry ", tg, ", input check ", ti, &
+         ", reconstruction (1 category) ", tc, ", fluxes e+n (1 category) ", tf, ", update (1 category) ", tu
+   end subroutine stage_breakdown
+
    subroutine throughput_body(error, s)
       type(error_type), allocatable, intent(out) :: error
       type(sim_t), intent(inout) :: s
@@ -2472,6 +2528,8 @@ write (error_unit, "(a,es10.3)") "  [remap] non-uniform metrics, constant tracer
       integer(int64) :: t0, t1, rate
       real(wp) :: tstep, cells, bpc, full_cells, dt
       real(wp) :: gb
+      character(len=32) :: envv
+      integer :: ist, mib
 
 #ifdef RDB_GPU_OFFLOAD
       nxp = 1440; nyp = 1152
@@ -2479,7 +2537,11 @@ write (error_unit, "(a,es10.3)") "  [remap] non-uniform metrics, constant tracer
       nxp = 384; nyp = 384
 #endif
       dt = 1000.0_wp
-      call sim_init(s, nxp, nyp, 5, 7, .true., .true., .false., .false., 1.0e4_wp)
+      ! RDB_REMAP_TEST_MIB: the flux + reconstruction budget [MiB] of one category batch (default 1024)
+      call get_environment_variable("RDB_REMAP_TEST_MIB", envv, status=ist)
+      mib = 1024
+      if (ist == 0) read (envv, *, iostat=ist) mib
+      call sim_init(s, nxp, nyp, 5, 7, .true., .true., .false., .false., 1.0e4_wp, bytes_max=int(mib, int64)*1048576_int64)
       do n = 1, 5
          do j = 1, s%ny
             do i = 1, s%nx
@@ -2522,6 +2584,7 @@ write (error_unit, "(a,es10.3)") "  [remap] non-uniform metrics, constant tracer
       write (error_unit, "(a,i0,a,i0,a,i0,a,i0,a,i0)") "  [remap] of which geometry ", s%w%gw%bytes(), ", reconstruction ", s%w%rb%bytes(), &
          ", flux ", s%w%fw%bytes(), ", packed 2x ", s%w%a%bytes() + s%w%b%bytes(), ", flux batch (category indices) ", s%w%fw%nbatch
       call check(error, ieee_is_finite(cells/tstep), "finite throughput")
+      call stage_breakdown(s)
    contains
       subroutine run_one(sim, r)
          type(sim_t), intent(inout) :: sim
