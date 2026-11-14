@@ -283,6 +283,7 @@ contains
 
    pure function ice_nt_qsno(nilyr) result(it)
       !! Index of the first snow-enthalpy layer.
+      !$acc routine seq
       integer, intent(in) :: nilyr
       integer :: it
       it = 2 + nilyr
@@ -290,6 +291,7 @@ contains
 
    pure function ice_nt_sice(nilyr, nslyr) result(it)
       !! Index of the first ice-salinity layer.
+      !$acc routine seq
       integer, intent(in) :: nilyr, nslyr
       integer :: it
       it = 2 + nilyr + nslyr
@@ -297,6 +299,7 @@ contains
 
    pure function ice_ntrcr(nilyr, nslyr) result(n)
       !! Length of the packed tracer column.
+      !$acc routine seq
       integer, intent(in) :: nilyr, nslyr
       integer :: n
       n = 1 + 2*nilyr + nslyr
@@ -305,6 +308,7 @@ contains
    pure function ice_trcr_depend(it, nilyr, nslyr) result(d)
       !! Weighting of tracer `it`: 0 area (Tsfc), 1 ice volume (qice, sice),
       !! 2 snow volume (qsno); -1 for an index outside the packed column.
+      !$acc routine seq
       integer, intent(in) :: it, nilyr, nslyr
       integer :: d
 
