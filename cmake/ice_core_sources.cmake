@@ -3,6 +3,7 @@
 # `use` the ocean state, engine, config or halo.  One path per line,
 # alphabetical.
 set(RDB_ICE_CORE_SOURCES
+    ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_bl99.F90
     ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_dims.F90
     ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_errors.F90
     ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_itd_params.F90
@@ -10,4 +11,5 @@ set(RDB_ICE_CORE_SOURCES
     ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_lateral_melt.F90
     ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_params.F90
     ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_shortwave.F90
-    ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_thermo_shared.F90)
+    ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_thermo_shared.F90
+    ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_vprofile.F90)
