@@ -26,7 +26,7 @@ module rdb_ice_cice_state
    !!
    !! **Coexistence with the SIS2 ice.**  The slot is composed into
    !! `ocean_sea_ice_t%cice` but is never initialised unless
-   !! `scheme = "cice"` is selected (which cannot yet be done at run time), so
+   !! `scheme = "cice"` is selected, so
    !! under the default `scheme = "sis2"` nothing here is allocated, mapped or
    !! registered.
    !!

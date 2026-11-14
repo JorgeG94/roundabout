@@ -528,8 +528,8 @@ module rdb_config
       ! ---- CICE port (CICE6/Icepack) structure keys ----
       character(len=8) :: scheme = "sis2"
          !! Ice model: `"sis2"` (default, the shipped SIS2-derived model,
-         !! byte-identical) or `"cice"` (the CICE6/Icepack port; accepted by
-         !! the parser, refused at configure until the port is runnable).
+         !! byte-identical) or `"cice"` (the CICE6/Icepack port, runnable
+         !! single-rank: see `docs/CAPABILITIES_AND_LIMITATIONS.md`).
       integer :: nilyr = 7
          !! `scheme="cice"` ice layers per category (upstream default 7;
          !! OM3 4).  `scheme="sis2"` keeps `nk_ice`.  `1 < nilyr <=
@@ -682,6 +682,21 @@ module rdb_config
          !! Form drag: only `.false.` is supported.
       logical :: calc_strair = .true.
          !! Compute the wind stress in the ice model: only `.true.` is supported.
+      real(wp) :: uni_tas = 263.15_wp
+         !! Uniform-atmosphere air temperature [K].  The `uni_*` knobs build the ice's
+         !! atmosphere when `&ocean_atm_forcing_nml enable = .false.` (no prescribed
+         !! atmospheric-state files): one value everywhere, with `&ocean_ice_nml sw_down`
+         !! (downward shortwave) and `snowfall` (snow flux) completing it; rain is zero.
+      real(wp) :: uni_uas = 0.0_wp
+         !! Uniform-atmosphere eastward 10 m wind [m/s] (earth-relative).
+      real(wp) :: uni_vas = 0.0_wp
+         !! Uniform-atmosphere northward 10 m wind [m/s].
+      real(wp) :: uni_psl = 101325.0_wp
+         !! Uniform-atmosphere sea-level pressure [Pa]; must be > 0.
+      real(wp) :: uni_huss = 1.0e-3_wp
+         !! Uniform-atmosphere specific humidity [kg/kg]; must be >= 0.
+      real(wp) :: uni_rlds = 200.0_wp
+         !! Uniform-atmosphere downward longwave [W/m2]; must be >= 0.
    end type ocean_ice_atm_config_t
 
    type :: ocean_ice_dyn_config_t

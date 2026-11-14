@@ -24,7 +24,7 @@
 !! `./rdb --validate-only`.  Value-level checks (an unsupported thermodynamics
 !! option, a non-positive `ahmax`) apply under either scheme; structure checks
 !! (layer and category counts, `hlim`) apply under `scheme="cice"`.
-!! `scheme="cice"` itself is refused until the port is runnable.
+!! `scheme="cice"` is runnable single-rank on the envelope the checks above spell out.
 module rdb_ice_config
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    use rdb_constants, only: wp
@@ -104,8 +104,6 @@ contains
 
       ! ---- structure: scheme and the not-yet-runnable refusal ----
       if (ice_scheme_is_cice(cfg)) then
-         call add_msg(msgs, n, "&ocean_ice_nml scheme='cice' is not runnable yet "// &
-                      "(CICE6/Icepack port in progress); use scheme='sis2'")
          nilyr = cfg%ocean%ice%nilyr
          nslyr = cfg%ocean%ice%nslyr
          ncat = cfg%ocean%ice%ncat
@@ -168,6 +166,65 @@ contains
          if (cfg%px*cfg%py > 1) then
             call add_msg(msgs, n, "&mpi_nml px*py > 1 is not supported by scheme='cice' "// &
                          "yet (single rank until the multi-rank ice PRs land)")
+         end if
+
+         ! ---- the engine envelope of the first runnable version ----
+         if (.not. cfg%ocean%ice%enable) then
+            call add_msg(msgs, n, "&ocean_ice_nml scheme='cice' needs enable=.true. (the ice slot)")
+         end if
+         if (trim(adjustl(cfg%ocean%ice_dyn%advection)) /= "upwind") then
+            call add_msg(msgs, n, "&ocean_ice_dyn_nml scheme='cice' supports advection='upwind' only")
+         end if
+         if (trim(adjustl(cfg%ocean%bc%north)) == "tripolar_fold") then
+            call add_msg(msgs, n, "&ocean_bc_nml scheme='cice' with a tripolar north fold is not "// &
+                         "supported yet (the fold of the new state arrays is not wired)")
+         end if
+         if (cfg%ocean%wetdry%enable) then
+            call add_msg(msgs, n, "&ocean_wetdry_nml enable=.true. is not supported by scheme='cice' "// &
+                         "(the ice masks are static)")
+         end if
+         if (cfg%ocean%cavity_dyn%enable) then
+            call add_msg(msgs, n, "&ocean_cavity_dyn_nml enable=.true. is not supported by "// &
+                         "scheme='cice' (no ice under an ice shelf)")
+         end if
+         if (.not. (edge_is_closed(cfg%ocean%bc%west) .and. edge_is_closed(cfg%ocean%bc%east) .and. &
+                    edge_is_closed(cfg%ocean%bc%south) .and. edge_is_closed(cfg%ocean%bc%north))) then
+            call add_msg(msgs, n, "&ocean_bc_nml scheme='cice' supports 'wall' or 'periodic' edges "// &
+                         "only (an open ocean boundary is land for the ice dynamics)")
+         end if
+         if (.not. cfg%ocean%thermo%enable_thermodynamics) then
+            call add_msg(msgs, n, "&ocean_thermo_nml scheme='cice' needs enable_thermodynamics=.true. "// &
+                         "(the ice fluxes reach the ocean at the thermo step)")
+         end if
+         if (.not. cfg%ocean%forcing%enable_components) then
+            call add_msg(msgs, n, "&ocean_forcing_nml scheme='cice' needs enable_components=.true. "// &
+                         "(the ice fluxes are separate surface-flux components)")
+         end if
+         if (.not. (cfg%ocean%ice%hfreeze > 0.0_wp)) then
+            call add_msg(msgs, n, "&ocean_ice_nml scheme='cice' needs hfreeze > 0 (the melt-potential "// &
+                         "provider that makes the signed freezing/melt potential)")
+         end if
+         if (.not. cfg%ocean%ice%dynamics) then
+            call add_msg(msgs, n, "&ocean_ice_nml scheme='cice' needs dynamics=.true. (the ice always moves "// &
+                         "under this scheme; a frozen pack is not implemented)")
+         end if
+         if (.not. cfg%ocean%ice%transport) then
+            call add_msg(msgs, n, "&ocean_ice_nml scheme='cice' needs transport=.true. (the ice is always "// &
+                         "advected under this scheme)")
+         end if
+         if (cfg%ocean%atm_forcing%enable .or. cfg%ocean%bulk_flux%enable) then
+            call add_msg(msgs, n, "&ocean_atm_forcing_nml / &ocean_bulk_flux_nml enable are not supported by "// &
+                         "scheme='cice' yet: the ocean-side blend needs this step's UNWEIGHTED wind stress, "// &
+                         "which the bulk forcing only publishes open-water weighted (use the uniform "// &
+                         "&ocean_ice_atm_nml uni_* atmosphere)")
+         end if
+         if (len_trim(cfg%ocean%dataovr%tau_x%file) > 0 .or. len_trim(cfg%ocean%dataovr%tau_y%file) > 0) then
+            call add_msg(msgs, n, "&ocean_dataovr_nml tau_x/tau_y files are not supported by scheme='cice' "// &
+                         "yet (a time-varying wind stress would be frozen at its configure-time value by "// &
+                         "the ice-ocean stress blend)")
+         end if
+         if (.not. (cfg%ocean%ice_atm%uni_psl > 0.0_wp .and. cfg%ocean%ice_atm%uni_tas > 0.0_wp)) then
+            call add_msg(msgs, n, "&ocean_ice_atm_nml uni_psl and uni_tas must be > 0")
          end if
       end if
 
@@ -300,7 +357,7 @@ contains
             call add_msg(msgs, n, "&ocean_ice_dyn_nml dyn_scheme='cice_c' with a tripolar north fold "// &
                          "is not wired yet (fold tests: PR D9.3); use dyn_scheme='sis2_c'")
          end if
-         if (cfg%ocean%ice_ridge%kstrength /= 0) then
+         if (cfg%ocean%ice_ridge%kstrength /= 0 .and. .not. ice_scheme_is_cice(cfg)) then
             call add_msg(msgs, n, "&ocean_ice_dyn_nml dyn_scheme='cice_c' needs &ocean_ice_ridge_nml "// &
                          "kstrength = 0 (Hibler strength of the aggregates, from Pstar/Cstar): the "// &
                          "category (Rothrock) strength arrives with the full scheme")
@@ -422,6 +479,13 @@ contains
                       "(the near-IR band is 1 - sw_vis_frac, so the two sum to 1)")
       end if
    end subroutine ice_config_check
+
+   pure function edge_is_closed(tag) result(ok)
+      !! A boundary tag the ice dynamics can live with: a wall or a periodic seam.
+      character(len=*), intent(in) :: tag
+      logical :: ok
+      ok = trim(adjustl(tag)) == "wall" .or. trim(adjustl(tag)) == "periodic"
+   end function edge_is_closed
 
    pure function unit_closed(x) result(ok)
       !! `x` in [0, 1]; `.false.` for NaN.

@@ -165,6 +165,8 @@ module rdb_ocean_engine
                                     ice_ocean_brine_flux, ice_ocean_heat_flux, &
                                     ice_ocean_sw_flux, ice_ocean_stress_flux, ice_ocean_stress_flux_c
    use rdb_ice_dyn_c, only: ice_dyn_c_step, ice_dyn_c_metrics_build
+   use rdb_ice_sw_wiring, only: ice_sw_wiring_cleanup
+   use rdb_ice_cice_hooks, only: ice_cice_bind, ice_cice_step, ice_cice_ic_apply, ice_cice_post_enter
    use rdb_ice_frazil, only: ice_frazil_accumulate, ice_frazil_accumulate_column
    use rdb_ice_melt_potential, only: ice_melt_potential
    use rdb_ice_frazil_uptake, only: ice_frazil_uptake
@@ -561,6 +563,16 @@ contains
                       ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
+         ! The CICE-port ice (`scheme = "cice"`) is single-rank: its halo hooks are the local
+         ! periodic refresh, its dynamics halo is the single-rank one.  Keyed on the ACTUAL
+         ! rank count.
+         if (cfg%ocean%ice%enable .and. trim(adjustl(cfg%ocean%ice%scheme)) == "cice") then
+            call fail("&ocean_ice_nml scheme = 'cice' is single-rank for now ("// &
+                      to_string(csize)//" ranks requested): the multi-rank halo of the "// &
+                      "category state arrives in a later PR.  Use scheme = 'sis2' or 1 rank.", &
+                      ierr, OCEAN_STATUS_ERR_SETUP)
+            return
+         end if
          ! In-memory geometry injection (the API's staged bathymetry /
          ! supergrid arrays) hands over WHOLE-grid arrays.
          if (allocated(engine%staged_bathymetry) .or. allocated(engine%staged_metrics_x)) then
@@ -714,6 +726,9 @@ contains
       ! never restored.
       call engine%state%surface_flux%set_components(engine%grid, &
                                                     cfg%ocean%forcing%enable_components)
+      ! The three ice-owned components of the CICE-port ice (`scheme = "cice"` only; nothing
+      ! under "sis2"): allocated here for the same reason, before the restart read.
+      call engine%state%surface_flux%set_ice_components(engine%grid, engine%state%ice%cice%is_init)
 
       ! c069 restart fix: the kappa-shear VERTEX corner carrier
       ! (`kshear%kd_corner`) MUST be allocated before the restart read too,
@@ -1020,7 +1035,7 @@ contains
       ! feels (D7). MANDATED ORDER: the tau_a snapshot must read the
       ! pristine wind BEFORE the resume apply overwrites
       ! surface_stress%tau_x/y with the restart-carried blend.
-      if (engine%state%ice%enable .and. engine%state%ice%dynamics) then
+      if (engine%state%ice%enable .and. (engine%state%ice%dynamics .or. engine%state%ice%cice%is_init)) then
          engine%evp_params = ice_evp_params_from_config(cfg%ocean%ice%p0, cfg%ocean%ice%c0, &
                                                         cfg%ocean%ice%ec, cfg%ocean%ice%cdw, &
                                                         cfg%ocean%ice%rho_ocean, &
@@ -1334,6 +1349,11 @@ contains
             return
          end if
       end if
+      ! CICE-port run slots: the wet mask (the C-grid metrics' pinned T mask) and the grid
+      ! rotation, host values the device map then copies.
+      if (engine%state%icec%is_init) then
+         call engine%state%icec%finalize(engine%state%ice_cgrid%hm, engine%state%metrics%angle_dx)
+      end if
 
       ! Configure-time stability audit (viscous CFL / kappa_h diffusive
       ! number / Munk-layer resolution / ah_max-clamps-nu_h): MUST run
@@ -1439,7 +1459,31 @@ contains
       ! Sea-ice PR 24: analytic IC path. Host-side, run once, AFTER
       ! wet_mask/geolatT/wet_T are valid, BEFORE enter_data. Skips on a
       ! warm restart (the restart read already replaced the IC).
-      if (engine%state%ice%enable) then
+      if (engine%state%ice%enable .and. engine%state%ice%cice%is_init) then
+         ! CICE-port ice: seed the category state (a warm restart already resumed it, in the
+         ! restart read: v2 / converted SIS2 / cold-empty).
+         if (.not. did_restart .or. engine%state%icec%resume_cold) then
+            engine%ic_par = ice_ic_params_from_config(cfg%ocean%ice_ic%conc_config, &
+                                                      cfg%ocean%ice_ic%conc, &
+                                                      cfg%ocean%ice_ic%h_ice, cfg%ocean%ice_ic%h_snow, &
+                                                      cfg%ocean%ice_ic%t_ice, cfg%ocean%ice_ic%s_ice, &
+                                                      cfg%ocean%ice_ic%arctic_edge, &
+                                                      cfg%ocean%ice_ic%antarctic_edge)
+            call ice_cice_ic_apply(engine%state, engine%ic_par, engine%state%ice_cgrid%hm, &
+                                   engine%state%metrics%geolatT, ierr_dync)
+            if (ierr_dync /= 0) then
+               call fail("&ocean_ice_ic_nml: the CICE-port ice IC could not be seeded (code "// &
+                         to_string(ierr_dync)//")", ierr, OCEAN_STATUS_ERR_SETUP)
+               return
+            end if
+            if (rank == 0 .and. engine%ic_par%conc_config /= ICE_IC_CONC_ZERO) then
+               call logger%info("Sea-ice IC (CICE-port): conc_config='"// &
+                                trim(cfg%ocean%ice_ic%conc_config)// &
+                                "', h_ice = "//to_string(cfg%ocean%ice_ic%h_ice)// &
+                                " m, conc = "//to_string(cfg%ocean%ice_ic%conc))
+            end if
+         end if
+      else if (engine%state%ice%enable) then
          if (.not. did_restart) then
             engine%ic_par = ice_ic_params_from_config(cfg%ocean%ice_ic%conc_config, &
                                                       cfg%ocean%ice_ic%conc, &
@@ -1726,6 +1770,8 @@ contains
       type(config_t), intent(in) :: cfg
 
       call ocean_state_enter_data(engine%state)
+      ! CICE-port ice: the aggregates are not restart state; rebuild them on the device.
+      call ice_cice_post_enter(engine%state)
       engine%state%dyn%bt_halo = cfg%ocean%bt%bt_halo
       if (cfg%ocean%bt%bt_halo > 0) then
          call ocean_dyn_enable_bt_wide(engine%state%dyn, engine%grid, &
@@ -1978,7 +2024,7 @@ contains
       !! straight from `&ocean_ice_nml` in the driver too, not cached
       !! at setup (unlike `evp_params`/`ic_par`, which the config
       !! builds once, up front).
-      type(ocean_engine_t), intent(inout) :: engine
+      type(ocean_engine_t), intent(inout), target :: engine
       type(config_t), intent(in) :: cfg
       real(wp), intent(in) :: dt
       real(wp), intent(in) :: t
@@ -1998,6 +2044,33 @@ contains
 
       if (present(ierr)) ierr = OCEAN_STATUS_OK
       if (.not. engine%state%ice%enable) return
+
+      ! Scheme select.  The CICE-port ice steps EVERY outer step (the ice step is the outer
+      ! step) and owns its own frazil spend, melt potential, dynamics, transport and hand-off:
+      ! the SIS2 branch below (thermo-cadence provider call, frazil uptake, SIS2 EVP and
+      ! transport) never runs with it.  Only the ocean-side frazil bank fill is shared.
+      if (engine%state%ice%cice%is_init) then
+         call profiler_start("ice_frazil")
+         if (cfg%ocean%ice%frazil_column) then
+            call ice_frazil_accumulate_column(engine%grid, engine%state%eos, &
+                                              engine%state%multilayer, &
+                                              engine%state%ice%frazil_heat, &
+                                              engine%state%ice%heat_budget_frazil, &
+                                              cfg%ocean%ice%pressure_dependent_frazil, &
+                                              cfg%ocean%ice%reclaim_frazil)
+         else
+            call ice_frazil_accumulate(engine%grid, engine%state%eos, &
+                                       engine%state%multilayer, &
+                                       engine%state%ice%frazil_heat, &
+                                       engine%state%ice%heat_budget_frazil)
+         end if
+         call profiler_stop("ice_frazil")
+         call profiler_start("ice_cice")
+         call ice_cice_bind(engine%state, engine%grid)
+         call ice_cice_step(dt, engine%state%dyn%is_thermo_step(), engine%state%dyn%outer_step_count)
+         call profiler_stop("ice_cice")
+         return
+      end if
 
       ! Sea-ice PR 1/3b/3c: ocean-side frazil accumulation, then (at thermo
       ! cadence) the atmospheric-forcing seam + basal flux + column
@@ -2358,6 +2431,9 @@ contains
 
       call ocean_state_exit_data(engine%state)
       call ice_ocean_stress_cleanup()
+      ! The shortwave wiring's zero snow-absorption workspace (module-level, device-mapped lazily by the
+      ! first CICE-port step): released with the other ice workspaces.
+      call ice_sw_wiring_cleanup()
       engine%device_mapped = .false.
    end subroutine engine_exit_data
 

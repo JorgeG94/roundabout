@@ -3580,7 +3580,7 @@ class OceanIce(Group):
 
     scheme = Enum(
         'scheme',
-        doc="Ice model: 'sis2' (default) or 'cice' (CICE6/Icepack port; refused at configure until runnable)",
+        doc="Ice model: 'sis2' (default) or 'cice' (CICE6/Icepack port, single rank; see docs/CAPABILITIES_AND_LIMITATIONS.md)",
         units='',
         required=False,
         default='sis2',
@@ -3595,7 +3595,7 @@ class OceanIce(Group):
         default=7,
         has_min=True,
         vmin=1,
-        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
     )
 
     nslyr = Int(
@@ -3606,7 +3606,7 @@ class OceanIce(Group):
         default=1,
         has_min=True,
         vmin=1,
-        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
     )
 
     kcatbound = Int(
@@ -3615,7 +3615,7 @@ class OceanIce(Group):
         units='',
         required=False,
         default=1,
-        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
     )
 
     constants_set = Enum(
@@ -3625,7 +3625,7 @@ class OceanIce(Group):
         required=False,
         default='icepack',
         allowed=('icepack', 'cesm'),
-        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
     )
 
     dt_ice = Real(
@@ -3634,7 +3634,7 @@ class OceanIce(Group):
         units='s',
         required=False,
         default=-1.0,
-        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
     )
 
 
@@ -3649,7 +3649,7 @@ class OceanIceThermo(Group):
         units='',
         required=False,
         default=1,
-        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
     )
 
     conduct = Enum(
@@ -3659,7 +3659,7 @@ class OceanIceThermo(Group):
         required=False,
         default='bubbly',
         allowed=('bubbly', 'MU71'),
-        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
     )
 
     tfrz_option = Enum(
@@ -3669,7 +3669,7 @@ class OceanIceThermo(Group):
         required=False,
         default='linear_salt',
         allowed=('linear_salt', 'constant', 'minus1p8', 'mushy'),
-        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
     )
 
     ice_ref_salinity = Real(
@@ -3680,7 +3680,7 @@ class OceanIceThermo(Group):
         default=4.0,
         has_min=True,
         vmin=0.0,
-        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
     )
 
     saltflux_option = Enum(
@@ -3690,7 +3690,7 @@ class OceanIceThermo(Group):
         required=False,
         default='constant',
         allowed=('constant', 'prognostic'),
-        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
     )
 
     congel_freeze = Enum(
@@ -3700,7 +3700,7 @@ class OceanIceThermo(Group):
         required=False,
         default='two-step',
         allowed=('two-step', 'one-step'),
-        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
     )
 
     cpl_frazil = Enum(
@@ -3710,7 +3710,7 @@ class OceanIceThermo(Group):
         required=False,
         default='fresh_ice_correction',
         allowed=('fresh_ice_correction', 'internal', 'external'),
-        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
     )
 
     update_ocn_f = Bool(
@@ -3719,7 +3719,7 @@ class OceanIceThermo(Group):
         units='',
         required=False,
         default=False,
-        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
     )
 
     hfrazilmin = Real(
@@ -3730,7 +3730,7 @@ class OceanIceThermo(Group):
         default=0.05,
         has_min=True,
         vmin=0.0,
-        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
     )
 
     hi_min = Real(
@@ -3741,7 +3741,7 @@ class OceanIceThermo(Group):
         default=0.01,
         has_min=True,
         vmin=0.0,
-        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
     )
 
     ustar_min = Real(
@@ -3752,7 +3752,7 @@ class OceanIceThermo(Group):
         default=0.005,
         has_min=True,
         vmin=0.0,
-        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
     )
 
     fbot_xfer_type = Enum(
@@ -3762,7 +3762,7 @@ class OceanIceThermo(Group):
         required=False,
         default='constant',
         allowed=('constant', 'Cdn_ocn'),
-        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
     )
 
     floediam = Real(
@@ -3773,7 +3773,7 @@ class OceanIceThermo(Group):
         default=300.0,
         has_min=True,
         vmin=0.0,
-        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
     )
 
     floeshape = Real(
@@ -3782,7 +3782,7 @@ class OceanIceThermo(Group):
         units='',
         required=False,
         default=0.66,
-        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
     )
 
     ksno = Real(
@@ -3793,7 +3793,7 @@ class OceanIceThermo(Group):
         default=0.3,
         has_min=True,
         vmin=0.0,
-        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
     )
 
     emissivity = Real(
@@ -3806,7 +3806,7 @@ class OceanIceThermo(Group):
         vmin=0.0,
         has_max=True,
         vmax=1.0,
-        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
     )
 
     kitd = Int(
@@ -3815,7 +3815,7 @@ class OceanIceThermo(Group):
         units='',
         required=False,
         default=1,
-        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
     )
 
     calc_Tsfc = Bool(
@@ -3824,7 +3824,7 @@ class OceanIceThermo(Group):
         units='',
         required=False,
         default=True,
-        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
     )
 
     semi_implicit_Tsfc = Bool(
@@ -3833,7 +3833,7 @@ class OceanIceThermo(Group):
         units='',
         required=False,
         default=False,
-        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
     )
 
 
@@ -3849,7 +3849,7 @@ class OceanIceSw(Group):
         required=False,
         default='ccsm3',
         allowed=('ccsm3', 'dEdd', 'dEdd_snicar_ad'),
-        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
     )
 
     albedo_type = Enum(
@@ -3859,7 +3859,7 @@ class OceanIceSw(Group):
         required=False,
         default='ccsm3',
         allowed=('ccsm3', 'constant'),
-        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
     )
 
     albicev = Real(
@@ -3868,7 +3868,7 @@ class OceanIceSw(Group):
         units='',
         required=False,
         default=0.78,
-        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
     )
 
     albicei = Real(
@@ -3877,7 +3877,7 @@ class OceanIceSw(Group):
         units='',
         required=False,
         default=0.36,
-        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
     )
 
     albsnowv = Real(
@@ -3886,7 +3886,7 @@ class OceanIceSw(Group):
         units='',
         required=False,
         default=0.98,
-        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
     )
 
     albsnowi = Real(
@@ -3895,7 +3895,7 @@ class OceanIceSw(Group):
         units='',
         required=False,
         default=0.7,
-        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
     )
 
     ahmax = Real(
@@ -3904,7 +3904,7 @@ class OceanIceSw(Group):
         units='m',
         required=False,
         default=0.3,
-        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
     )
 
     snowpatch = Real(
@@ -3913,7 +3913,7 @@ class OceanIceSw(Group):
         units='m',
         required=False,
         default=-1.0,
-        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
     )
 
     sw_redist = Bool(
@@ -3922,7 +3922,7 @@ class OceanIceSw(Group):
         units='',
         required=False,
         default=False,
-        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
     )
 
     sw_frac = Real(
@@ -3931,7 +3931,7 @@ class OceanIceSw(Group):
         units='',
         required=False,
         default=0.9,
-        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
     )
 
     sw_dtemp = Real(
@@ -3940,7 +3940,7 @@ class OceanIceSw(Group):
         units='K',
         required=False,
         default=0.02,
-        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
     )
 
     sw_vis_frac = Real(
@@ -3949,7 +3949,7 @@ class OceanIceSw(Group):
         units='',
         required=False,
         default=0.52,
-        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
     )
 
 
@@ -3964,7 +3964,7 @@ class OceanIceRidge(Group):
         units='',
         required=False,
         default=1,
-        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
     )
 
     krdg_partic = Int(
@@ -3973,7 +3973,7 @@ class OceanIceRidge(Group):
         units='',
         required=False,
         default=1,
-        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
     )
 
     krdg_redist = Int(
@@ -3982,7 +3982,7 @@ class OceanIceRidge(Group):
         units='',
         required=False,
         default=1,
-        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
     )
 
     mu_rdg = Real(
@@ -3991,7 +3991,7 @@ class OceanIceRidge(Group):
         units='m^0.5',
         required=False,
         default=3.0,
-        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
     )
 
     Cf = Real(
@@ -4000,7 +4000,7 @@ class OceanIceRidge(Group):
         units='',
         required=False,
         default=17.0,
-        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
     )
 
     Pstar = Real(
@@ -4031,7 +4031,7 @@ class OceanIceAtm(Group):
         units='',
         required=False,
         default=False,
-        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
     )
 
     natmiter = Int(
@@ -4040,7 +4040,7 @@ class OceanIceAtm(Group):
         units='',
         required=False,
         default=5,
-        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
     )
 
     atmiter_conv = Real(
@@ -4049,7 +4049,7 @@ class OceanIceAtm(Group):
         units='',
         required=False,
         default=0.0,
-        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
     )
 
     iceruf = Real(
@@ -4058,7 +4058,7 @@ class OceanIceAtm(Group):
         units='m',
         required=False,
         default=0.0005,
-        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
     )
 
     atmbndy = Enum(
@@ -4068,7 +4068,7 @@ class OceanIceAtm(Group):
         required=False,
         default='similarity',
         allowed=('similarity', 'constant', 'mixed'),
-        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
     )
 
     formdrag = Bool(
@@ -4077,7 +4077,7 @@ class OceanIceAtm(Group):
         units='',
         required=False,
         default=False,
-        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
     )
 
     calc_strair = Bool(
@@ -4086,7 +4086,69 @@ class OceanIceAtm(Group):
         units='',
         required=False,
         default=True,
-        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
+    )
+
+    uni_tas = Real(
+        'uni_tas',
+        doc='Uniform-atmosphere air temperature, used when &ocean_atm_forcing_nml enable is off',
+        units='K',
+        required=False,
+        default=263.15,
+        has_min=True,
+        vmin=1.0,
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
+    )
+
+    uni_uas = Real(
+        'uni_uas',
+        doc='Uniform-atmosphere eastward wind (earth-relative)',
+        units='m/s',
+        required=False,
+        default=0.0,
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
+    )
+
+    uni_vas = Real(
+        'uni_vas',
+        doc='Uniform-atmosphere northward wind',
+        units='m/s',
+        required=False,
+        default=0.0,
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
+    )
+
+    uni_psl = Real(
+        'uni_psl',
+        doc='Uniform-atmosphere sea-level pressure; must be > 0',
+        units='Pa',
+        required=False,
+        default=101325.0,
+        has_min=True,
+        vmin=1.0,
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
+    )
+
+    uni_huss = Real(
+        'uni_huss',
+        doc='Uniform-atmosphere specific humidity',
+        units='kg/kg',
+        required=False,
+        default=0.001,
+        has_min=True,
+        vmin=0.0,
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
+    )
+
+    uni_rlds = Real(
+        'uni_rlds',
+        doc='Uniform-atmosphere downward longwave',
+        units='W/m2',
+        required=False,
+        default=200.0,
+        has_min=True,
+        vmin=0.0,
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
     )
 
 
@@ -4249,7 +4311,7 @@ class OceanIceDyn(Group):
         required=False,
         default='remap',
         allowed=('remap', 'upwind'),
-        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
     )
 
     transport_check = Bool(
@@ -4258,7 +4320,7 @@ class OceanIceDyn(Group):
         units='',
         required=False,
         default=False,
-        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
     )
 
     ndtd = Int(
@@ -4267,7 +4329,7 @@ class OceanIceDyn(Group):
         units='',
         required=False,
         default=1,
-        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
     )
 
 
@@ -8033,4 +8095,4 @@ GENERATED_GROUPS = {
 }
 
 N_GROUPS = 68
-N_KNOBS = 880
+N_KNOBS = 886

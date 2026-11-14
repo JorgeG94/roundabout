@@ -83,8 +83,19 @@ module rdb_ice_dyn_c
    implicit none
    private
 
-   public :: ice_dyn_c_metrics_build, ice_dyn_c_step
+   public :: ice_dyn_c_metrics_build, ice_dyn_c_step, ice_dyn_c_cat_t
    public :: dync_ssh_impl, dync_inputs_impl, dync_post_impl, dync_strocnt_impl
+
+   type :: ice_dyn_c_cat_t
+      !! Category-state hand-over of `ice_dyn_c_step` under `scheme = "cice"` (pointers to
+      !! the CICE-port state's arrays, valid ghost ring; no copies).
+      integer :: ncat = 1
+      logical :: wind_on_faces = .false.
+         !! `dync%strairxE/yN` already hold the wind stress on the faces.
+      real(wp), pointer, contiguous :: aice_init(:, :) => null()
+      real(wp), pointer, contiguous :: aicen(:, :, :) => null()
+      real(wp), pointer, contiguous :: vicen(:, :, :) => null()
+   end type ice_dyn_c_cat_t
 
 contains
 
@@ -113,7 +124,7 @@ contains
       call cm%init(grid, metrics, bc, ierr)
    end subroutine ice_dyn_c_metrics_build
 
-   subroutine ice_dyn_c_step(grid, metrics, f_corner, b, cm, ice, ms, bc, dt, err_summary)
+   subroutine ice_dyn_c_step(grid, metrics, f_corner, b, cm, ice, ms, bc, dt, err_summary, cat)
       !! One outer dynamics step (see the module note).  Aborts on a fatal
       !! error bit.
       type(hgrid_t), intent(in) :: grid
@@ -133,11 +144,18 @@ contains
          !! When present the reduced error words are returned and NOTHING aborts
          !! (the test seam of the velocity guard); absent: a fatal bit stops the
          !! run through `ice_err_enforce`.
+      type(ice_dyn_c_cat_t), intent(in), optional :: cat
+         !! The category-state hand-over of `scheme = "cice"` (additive; absent =
+         !! the SIS2-derived state, bitwise the previous behaviour): the category areas
+         !! and volumes the strength is computed from (`ice_compute_strength`, per
+         !! `kstrength`), the start-of-step concentration, and the flag that the wind
+         !! stress on the faces (`dync%strairxE/yN`) was already filled by
+         !! `ice_atm_stress_to_faces` and must not be rebuilt from the snapshot.
 
       type(ice_evp_c_const_t) :: k
       type(ice_err_summary_t) :: summ
       integer :: nx, ny, nz, ng, is, ie, js, je, ksub
-      logical :: odd
+      logical :: odd, keep_air
 
       nx = grid%nx_total
       ny = grid%ny_total
@@ -155,19 +173,30 @@ contains
 
       call ice_err_clear(ice%dync%ice_err, nx, ny)
       call dync_ssh_impl(nx, ny, nz, ms%h_layer, b, metrics%wet_T, ice%dync%ssh)
+      keep_air = .false.
+      if (present(cat)) keep_air = cat%wind_on_faces
       call dync_inputs_impl(nx, ny, nz, is, ie, js, je, ms%h_layer, ms%u_face_x_layer, ms%v_face_y_layer, &
                             ms%k_top_u, ms%k_top_v, f_corner, ice%dync%ssh, metrics%idxCu, metrics%idyCv, &
                             cm%hm, cm%tarea, cm%earea, cm%narea, &
                             cm%epm, cm%npm, ice%aice, ice%tau_a_x, ice%tau_a_y, &
                             ice%dync%fcorE, ice%dync%fcorN, ice%dync%strairxE, ice%dync%strairyN, &
                             ice%dync%ss_tltxE, ice%dync%ss_tltyN, ice%dync%uocnE, ice%dync%vocnE, &
-                            ice%dync%uocnN, ice%dync%vocnN)
-      call ice_evp_c_prep(ice%dync%w, k, nx, ny, 1, is, ie, js, je, ice%dync%p%ridge, ice%dync%p%c, &
-                          cm%hm, ice%aice, ice%vice, ice%vsno, ice%aice, ice%aice0, ice%aice, &
-                          ice%vice, cm%tarea, cm%epm, cm%npm, ice%dync%fcorE, &
-                          ice%dync%fcorN, ice%dync%strairxE, ice%dync%strairyN, ice%dync%ss_tltxE, &
-                          ice%dync%ss_tltyN, ice%dync%uocnE, ice%dync%vocnN, ice%u_ice, ice%v_ice, &
-                          ice%dync%ice_err)
+                            ice%dync%uocnN, ice%dync%vocnN, keep_air)
+      if (present(cat)) then
+         call ice_evp_c_prep(ice%dync%w, k, nx, ny, cat%ncat, is, ie, js, je, ice%dync%p%ridge, ice%dync%p%c, &
+                             cm%hm, ice%aice, ice%vice, ice%vsno, cat%aice_init, ice%aice0, cat%aicen, &
+                             cat%vicen, cm%tarea, cm%epm, cm%npm, ice%dync%fcorE, &
+                             ice%dync%fcorN, ice%dync%strairxE, ice%dync%strairyN, ice%dync%ss_tltxE, &
+                             ice%dync%ss_tltyN, ice%dync%uocnE, ice%dync%vocnN, ice%u_ice, ice%v_ice, &
+                             ice%dync%ice_err)
+      else
+         call ice_evp_c_prep(ice%dync%w, k, nx, ny, 1, is, ie, js, je, ice%dync%p%ridge, ice%dync%p%c, &
+                             cm%hm, ice%aice, ice%vice, ice%vsno, ice%aice, ice%aice0, ice%aice, &
+                             ice%vice, cm%tarea, cm%epm, cm%npm, ice%dync%fcorE, &
+                             ice%dync%fcorN, ice%dync%strairxE, ice%dync%strairyN, ice%dync%ss_tltxE, &
+                             ice%dync%ss_tltyN, ice%dync%uocnE, ice%dync%vocnN, ice%u_ice, ice%v_ice, &
+                             ice%dync%ice_err)
+      end if
       call ice_halo_faces(grid, bc, ice%u_ice, ice%v_ice)
       call ice_evp_c_copy_faces(nx, ny, ice%u_ice, ice%v_ice, ice%dync%w%u2, ice%dync%w%v2)
       do ksub = 1, k%ndte
@@ -296,7 +325,8 @@ contains
 
    subroutine dync_inputs_impl(nx, ny, nz, is, ie, js, je, h_layer, u_x, v_y, k_top_u, k_top_v, f_corner, &
                                ssh, idxCu, idyCv, hm, tarea, earea, narea, epm, npm, aice, tau_a_x, tau_a_y, &
-                               fcorE, fcorN, strairxE, strairyN, ss_tltxE, ss_tltyN, uocnE, vocnE, uocnN, vocnN)
+                               fcorE, fcorN, strairxE, strairyN, ss_tltxE, ss_tltyN, uocnE, vocnE, uocnN, vocnN, &
+                               keep_strair)
       !! The forcing of the solver at the owned faces `E(is:ie, js:je)` and
       !! `N(is:ie, js:je)`, one launch.  `E(i,j)` is the x-face `i+1`, `N(i,j)`
       !! the y-face `j+1`.
@@ -321,10 +351,15 @@ contains
       real(wp), intent(inout) :: fcorE(nx, ny), fcorN(nx, ny), strairxE(nx, ny), strairyN(nx, ny)
       real(wp), intent(inout) :: ss_tltxE(nx, ny), ss_tltyN(nx, ny)
       real(wp), intent(inout) :: uocnE(nx, ny), vocnE(nx, ny), uocnN(nx, ny), vocnN(nx, ny)
+      logical, intent(in), optional :: keep_strair
+         !! `.true.`: `strairxE/strairyN` are already filled (CICE-port wind stress on the faces) and left alone.
       integer :: i, j
       integer :: kA, kB, kC, kD
       real(wp) :: w1, w2, wt, a
+      logical :: keep
 
+      keep = .false.
+      if (present(keep_strair)) keep = keep_strair
       do concurrent(j=js:je, i=is:ie) local(kA, kB, kC, kD, w1, w2, wt, a)
          ! ---- Coriolis and sea-surface slope ----
          fcorE(i, j) = 0.5_wp*(f_corner(i + 1, j) + f_corner(i + 1, j + 1))
@@ -337,12 +372,12 @@ contains
          wt = w1 + w2
          a = 0.0_wp
          if (wt /= 0.0_wp) a = (w1*aice(i, j) + w2*aice(i + 1, j))/wt
-         strairxE(i, j) = a*tau_a_x(i + 1, j)
+         if (.not. keep) strairxE(i, j) = a*tau_a_x(i + 1, j)
          w2 = hm(i, j + 1)*tarea(i, j + 1)
          wt = w1 + w2
          a = 0.0_wp
          if (wt /= 0.0_wp) a = (w1*aice(i, j) + w2*aice(i, j + 1))/wt
-         strairyN(i, j) = a*tau_a_y(i, j + 1)
+         if (.not. keep) strairyN(i, j) = a*tau_a_y(i, j + 1)
          ! ---- ocean velocity at E: u along, v from the four surrounding y-faces ----
          kA = live_u(nx, ny, nz, h_layer, i + 1, j, k_top_u(i + 1, j))
          uocnE(i, j) = u_x(i + 1, j, kA)*epm(i, j)

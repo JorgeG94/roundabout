@@ -284,8 +284,7 @@ contains
       real(wp), pointer :: pr
       real(wp), pointer :: pra(:)
       character(len=:), pointer :: ps
-      character(len=*), parameter :: ICE_DEAD = "scheme='cice' only; inert until the CICE6 port "// &
-                                     "is runnable (wired by the PR that consumes it)"
+      character(len=*), parameter :: ICE_DEAD = "scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)"
 
       g%name = "ocean_ice"
       g%doc = "Sea-ice model (SIS2 port) master switch + category/layer counts."
@@ -413,7 +412,7 @@ contains
       ps => cfg%ocean%ice%scheme
       call g%add(nml_enum("scheme", ps, &
                           "Ice model: 'sis2' (default) or 'cice' (CICE6/Icepack "// &
-                          "port; refused at configure until runnable)", &
+                          "port, single rank; see docs/CAPABILITIES_AND_LIMITATIONS.md)", &
                           allowed=[character(len=8) :: "sis2", "cice"]))
       pi => cfg%ocean%ice%nilyr
       call g%add(nml_int("nilyr", pi, &
@@ -457,8 +456,7 @@ contains
       integer, pointer :: pi
       real(wp), pointer :: pr
       character(len=:), pointer :: ps
-      character(len=*), parameter :: ICE_DEAD = "scheme='cice' only; inert until the CICE6 port "// &
-                                     "is runnable (wired by the PR that consumes it)"
+      character(len=*), parameter :: ICE_DEAD = "scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)"
 
       g%name = "ocean_ice_thermo"
       g%doc = "CICE-port ice thermodynamics and thickness-distribution knobs "// &
@@ -673,6 +671,27 @@ contains
       call ga%add(nml_logical("calc_strair", pl, "Compute the wind stress in the "// &
                               "ice model (.false. is refused)", &
                               dead_on_ocean_path=ICE_DEAD))
+      pr => cfg%ocean%ice_atm%uni_tas
+      call ga%add(nml_real("uni_tas", pr, "Uniform-atmosphere air temperature, used when "// &
+                           "&ocean_atm_forcing_nml enable is off", units="K", min=1.0_wp, &
+                           dead_on_ocean_path=ICE_DEAD))
+      pr => cfg%ocean%ice_atm%uni_uas
+      call ga%add(nml_real("uni_uas", pr, "Uniform-atmosphere eastward wind (earth-relative)", &
+                           units="m/s", dead_on_ocean_path=ICE_DEAD))
+      pr => cfg%ocean%ice_atm%uni_vas
+      call ga%add(nml_real("uni_vas", pr, "Uniform-atmosphere northward wind", units="m/s", dead_on_ocean_path=ICE_DEAD))
+      pr => cfg%ocean%ice_atm%uni_psl
+      call ga%add(nml_real("uni_psl", pr, "Uniform-atmosphere sea-level pressure; must be > 0", &
+                           units="Pa", min=1.0_wp, &
+                           dead_on_ocean_path=ICE_DEAD))
+      pr => cfg%ocean%ice_atm%uni_huss
+      call ga%add(nml_real("uni_huss", pr, "Uniform-atmosphere specific humidity", &
+                           units="kg/kg", min=0.0_wp, &
+                           dead_on_ocean_path=ICE_DEAD))
+      pr => cfg%ocean%ice_atm%uni_rlds
+      call ga%add(nml_real("uni_rlds", pr, "Uniform-atmosphere downward longwave", &
+                           units="W/m2", min=0.0_wp, &
+                           dead_on_ocean_path=ICE_DEAD))
       call schema%add_group(ga)
 
       gd%name = "ocean_ice_dyn"

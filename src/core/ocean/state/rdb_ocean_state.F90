@@ -50,7 +50,8 @@ module rdb_ocean_state
    use rdb_ocean_tides, only: ocean_tides_t
    use rdb_ocean_p_surf, only: ocean_p_surf_t
    use rdb_ice_state, only: ocean_sea_ice_t
-   use rdb_ice_config, only: ice_params_from_config
+   use rdb_ice_config, only: ice_params_from_config, ice_scheme_is_cice
+   use rdb_ice_cice_run, only: ice_cice_run_t
    use rdb_ice_cgrid_metrics, only: ice_cgrid_metrics_t
    use rdb_ocean_obc, only: ocean_obc_t
    use rdb_ocean_boundary_types, only: ocean_bc_state_t, ocean_bc_state_init, &
@@ -307,6 +308,12 @@ module rdb_ocean_state
          !! scaffold: knobs + lifecycle only, no arrays and no physics.
          !! `&ocean_ice_nml enable` default off ⇒ never initialised /
          !! mapped / stepped ⇒ byte-identical.
+
+      type(ice_cice_run_t) :: icec
+         !! Slots of the CICE-port ice step (flux, radiation, work, averager, imports,
+         !! transport workspace, grid rotation, uniform atmosphere).  Initialised ONLY under
+         !! `&ocean_ice_nml scheme = "cice"`; under the default `"sis2"` nothing is allocated,
+         !! mapped, registered or counted.
 
       type(ice_cgrid_metrics_t) :: ice_cgrid
          !! C-grid metric set of the CICE EVP dynamics under the SIS2-derived
@@ -806,8 +813,10 @@ contains
       ! D9.2: the CICE C-grid EVP under the SIS2-derived state latches here too
       ! (it gates the slot's allocation); the default "sis2_c" leaves the slot
       ! inert, so nothing is allocated, mapped or registered.
-      this%ice%dync%enable = cfg%ocean%ice%enable .and. cfg%ocean%ice%dynamics .and. &
-                             trim(adjustl(cfg%ocean%ice_dyn%dyn_scheme)) == "cice_c"
+      this%ice%dync%enable = cfg%ocean%ice%enable .and. &
+                             ((cfg%ocean%ice%dynamics .and. &
+                               trim(adjustl(cfg%ocean%ice_dyn%dyn_scheme)) == "cice_c") .or. &
+                              ice_scheme_is_cice(cfg))
       if (this%ice%dync%enable) this%ice%dync%p = ice_params_from_config(cfg)
       ! PR-23: enable gates the sponge's (potentially large, 4-D
       ! nx*ny*nz*n_tracers) reference-state allocation, so it latches
@@ -835,6 +844,18 @@ contains
       this%ice%snow_ice = cfg%ocean%ice%snow_ice
 
       call this%init(grid)
+      ! CICE-port ice (`scheme = "cice"`): the category state and the run slots.  The
+      ! parameter bundle is the one `dync%p` carries.
+      if (cfg%ocean%ice%enable .and. ice_scheme_is_cice(cfg)) then
+         block
+            integer :: ierr_c
+            call this%ice%cice%init(grid, ice_params_from_config(cfg), ierr_c)
+            if (ierr_c /= 0) error stop "ocean_state_init_from_config: CICE-port ice state refused (code "// &
+               "from ice_cice_state_t%init); validate_config should have caught it"
+            call this%icec%init(grid, cfg, this%ice%cice, ierr_c)
+            if (ierr_c /= 0) error stop "ocean_state_init_from_config: CICE-port run slots refused"
+         end block
+      end if
 #ifndef RDB_NO_NETCDF
       ! `this%init(grid)` above already built a default-sized (16 slot,
       ! quiet) reader — safe to re-run with the real config now, since
@@ -997,6 +1018,7 @@ contains
                + this%varmix%bytes() &
                + this%meke%bytes() &
                + this%ice%bytes() &
+               + this%icec%bytes() &
                + this%ice_cgrid%bytes() &
                + this%tides%bytes() &
                + this%p_surf%bytes() &
@@ -1121,6 +1143,7 @@ contains
       call profiler_start("ed_ice", nvtx_only=.true.)
       if (state%ice_cgrid%is_init) call state%ice_cgrid%enter_data()
       if (state%ice%enable) call state%ice%enter_data()
+      if (state%icec%is_init) call state%icec%enter_data()
       call profiler_stop("ed_ice")
       call profiler_start("ed_bc", nvtx_only=.true.)
       call ocean_bc_state_enter_data(state%bc)
@@ -1167,6 +1190,7 @@ contains
       call ocean_bc_state_exit_data(state%bc)
       call profiler_stop("xd_bc")
       call profiler_start("xd_ice", nvtx_only=.true.)
+      if (state%icec%is_init) call state%icec%exit_data()
       if (state%ice%enable) call state%ice%exit_data()
       if (state%ice_cgrid%mapped) call state%ice_cgrid%exit_data()
       call profiler_stop("xd_ice")
@@ -1280,6 +1304,7 @@ contains
       call this%sponge%destroy()
       call ocean_bc_state_destroy(this%bc)
       call this%obc%destroy()
+      call this%icec%destroy()
       call this%ice%destroy()
       call this%ice_cgrid%destroy()
       call this%p_surf%destroy()

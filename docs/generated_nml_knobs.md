@@ -638,7 +638,7 @@ Sea-ice model (SIS2 port) master switch + category/layer counts.
 | `cfl_trunc` | `0.0000000000E+00` |  | Transport-CFL ceiling on the final ice velocity (SIS2 CFL_TRUNCATE, default 0.5 there); 0 disables |
 | `cfl_trunc_dyn_its` | `.false.` |  | Also clip the ice velocity every EVP subcycle (SIS2 CFL_TRUNC_DYN_ITS) |
 | `project_ci` | `.false.` |  | Project ice concentration forward within the EVP subcycle loop and recompute the ice strength (SIS2 PROJECT_ICE_CONCENTRATION) |
-| `scheme` | `"sis2"` |  | Ice model: 'sis2' (default) or 'cice' (CICE6/Icepack port; refused at configure until runnable) |
+| `scheme` | `"sis2"` |  | Ice model: 'sis2' (default) or 'cice' (CICE6/Icepack port, single rank; see docs/CAPABILITIES_AND_LIMITATIONS.md) |
 | `nilyr` | `7` |  | scheme='cice': ice layers per category (upstream 7; OM3 4) |
 | `nslyr` | `1` |  | scheme='cice': snow layers per category (only 1 supported) |
 | `kcatbound` | `1` |  | scheme='cice': category-bound formula 0..3 (upstream 1; OM3 0) |
@@ -717,6 +717,12 @@ CICE-port atmosphere-ice boundary-layer knobs (scheme='cice'; upstream CICE defa
 | `atmbndy` | `"similarity"` |  | Boundary-layer form: similarity (constant and mixed are refused) |
 | `formdrag` | `.false.` |  | Form drag (.true. is refused) |
 | `calc_strair` | `.true.` |  | Compute the wind stress in the ice model (.false. is refused) |
+| `uni_tas` | `0.2631500000E+03` | K | Uniform-atmosphere air temperature, used when &ocean_atm_forcing_nml enable is off |
+| `uni_uas` | `0.0000000000E+00` | m/s | Uniform-atmosphere eastward wind (earth-relative) |
+| `uni_vas` | `0.0000000000E+00` | m/s | Uniform-atmosphere northward wind |
+| `uni_psl` | `0.1013250000E+06` | Pa | Uniform-atmosphere sea-level pressure; must be > 0 |
+| `uni_huss` | `0.1000000000E-02` | kg/kg | Uniform-atmosphere specific humidity |
+| `uni_rlds` | `0.2000000000E+03` | W/m2 | Uniform-atmosphere downward longwave |
 
 ### &ocean_ice_dyn_nml
 

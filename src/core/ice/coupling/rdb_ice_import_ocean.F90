@@ -210,7 +210,7 @@ contains
                + 0_int64
    end function in_bytes
 
-   subroutine ice_import_ocean(grid, eos, ms, frzmlt_src, cice, oin, ierr, avg, dt)
+   subroutine ice_import_ocean(grid, eos, ms, frzmlt_src, cice, oin, ierr, avg, dt, pend_applied)
       !! Outer shim: dereference the tracer registry on the host and forward bare
       !! explicit-shape arrays to `ice_import_ocean_impl`.  `frzmlt_src(nx, ny)` is
       !! the provider's signed field (`ocean_sea_ice_t%frzmlt`, see the dt
@@ -229,10 +229,14 @@ contains
          !! The OPEN averaging window: enables the melt cap (module docstring).
       real(wp), intent(in), optional :: dt
          !! The ice step [s] the provider divided by; required with `avg`.
+      logical, intent(in), optional :: pend_applied
+         !! The ocean has ALREADY debited the pending hand-over (this is the ocean thermo step, whose
+         !! surface-flux apply ran before the ice step): the pending part of the cap is dropped.  Absent:
+         !! the pending hand-over (if any) counts.
 
       integer :: idx_T, idx_S
       logical :: use_cap
-      real(wp) :: t_acc, dt_c
+      real(wp) :: t_acc, dt_c, t_pend
 
       ierr = ICE_IMPORT_OK
       idx_T = ms%idx_temperature
@@ -255,6 +259,10 @@ contains
          end if
          t_acc = avg%t_acc
          dt_c = dt
+         t_pend = avg%t_pend
+         if (present(pend_applied)) then
+            if (pend_applied) t_pend = 0.0_wp
+         end if
       end if
       if (use_cap) then
          call ice_import_ocean_impl(ms%tracers(idx_T)%c, ms%tracers(idx_S)%c, ms%h_layer, &
@@ -263,7 +271,7 @@ contains
                                     ieee_value(1.0_wp, ieee_quiet_nan), grid%nghost, ms%nz_ml, &
                                     grid%nx_total, grid%ny_total, &
                                     oin%sst, oin%sss, oin%sss_ocn, oin%Tf, oin%frzmlt, cice%ice_err, &
-                                    .true., avg%acc_fhocn, t_acc, dt_c)
+                                    .true., avg%acc_fhocn, t_acc, dt_c, avg%pend_fhocn, t_pend)
          return
       end if
       call ice_import_ocean_impl(ms%tracers(idx_T)%c, ms%tracers(idx_S)%c, ms%h_layer, &
@@ -272,13 +280,13 @@ contains
                                  ieee_value(1.0_wp, ieee_quiet_nan), grid%nghost, ms%nz_ml, &
                                  grid%nx_total, grid%ny_total, &
                                  oin%sst, oin%sss, oin%sss_ocn, oin%Tf, oin%frzmlt, cice%ice_err, &
-                                 .false., frzmlt_src, 0.0_wp, 1.0_wp)
+                                 .false., frzmlt_src, 0.0_wp, 1.0_wp, frzmlt_src, 0.0_wp)
    end subroutine ice_import_ocean
 
    pure subroutine ice_import_ocean_impl(c_T, c_S, h_layer, wet_mask, k_top, frzmlt_src, cons, &
                                          depressT, Tocnfrz, tfrz_option, nan, nghost, nz, nx, ny, &
                                          sst, sss, sss_ocn, Tf, frzmlt, ice_err, &
-                                         use_cap, acc_fhocn, t_acc, dt)
+                                         use_cap, acc_fhocn, t_acc, dt, pend_fhocn, t_pend)
       !! Device kernel over the OWNED cells, one thread per column, ONE launch;
       !! ghosts untouched.  Every output of a cell is written (the five arrays
       !! need no prior zeroing).
@@ -298,6 +306,10 @@ contains
          !! Apply `ice_melt_cap` with the open window `(acc_fhocn, t_acc)` and step `dt`.
       real(wp), intent(in) :: acc_fhocn(nx, ny)
       real(wp), intent(in) :: t_acc, dt
+      real(wp), intent(in) :: pend_fhocn(nx, ny)
+      real(wp), intent(in) :: t_pend
+         !! The pending (not yet debited) hand-over of the previous window: `t_pend*min(pend_fhocn, 0)` joins
+         !! the heat already taken in the cap.
 
       integer :: i, j, kt, k, i_lo, i_hi, j_lo, j_hi
       real(wp) :: h, t_k, s_k, t_ice, s_ice, tf_k
@@ -369,19 +381,22 @@ contains
                sss_ocn(i, j) = s_k
                Tf(i, j) = tf_k
                frzmlt(i, j) = frzmlt_src(i, j)
-               if (use_cap) frzmlt(i, j) = ice_melt_cap(frzmlt_src(i, j), acc_fhocn(i, j), t_acc, dt, nan)
+               if (use_cap) frzmlt(i, j) = ice_melt_cap(frzmlt_src(i, j), acc_fhocn(i, j), t_acc, dt, nan, &
+                                                        pend_fhocn(i, j), t_pend)
             end if
          end if
       end do
    end subroutine ice_import_ocean_impl
 
-   pure function ice_melt_cap(frzmlt, acc_fhocn, t_acc, dt, nan) result(eff)
+   pure function ice_melt_cap(frzmlt, acc_fhocn, t_acc, dt, nan, pend_fhocn, t_pend) result(eff)
       !! `frzmlt_eff = -max(0, MP + t_acc*min(acc_fhocn, 0))/dt` with `MP = -frzmlt*dt`
       !! on the melt side (`frzmlt < 0`); the freezing side and a window that has taken
       !! no heat (`t_acc*min(acc_fhocn, 0) == 0`, in particular the first step) return
       !! `frzmlt` itself, bit for bit.  A non-finite `acc_fhocn` returns `nan`.
       !$acc routine seq
       real(wp), intent(in) :: frzmlt, acc_fhocn, t_acc, dt, nan
+      real(wp), intent(in) :: pend_fhocn, t_pend
+         !! The pending hand-over (see `ice_flux_avg_t%t_pend`); `t_pend = 0` makes it inert (bitwise).
       real(wp) :: eff
       real(wp) :: used, mp
 
@@ -390,7 +405,11 @@ contains
          eff = nan
          return
       end if
-      used = t_acc*min(acc_fhocn, 0.0_wp)
+      if (.not. ieee_is_finite(pend_fhocn)) then
+         eff = nan
+         return
+      end if
+      used = t_acc*min(acc_fhocn, 0.0_wp) + t_pend*min(pend_fhocn, 0.0_wp)
       if (frzmlt < 0.0_wp .and. used /= 0.0_wp) then
          mp = -frzmlt*dt
          eff = -max(0.0_wp, mp + used)/dt

@@ -5,8 +5,8 @@ module rdb_ice_step_cice
    !! call to an existing driver, or, for a stage whose implementation another PR
    !! delivers, a PROCEDURE HOOK that defaults to "stage missing".  It lives in the
    !! MAIN library (not `rdb_ice_core_objs`) because it takes the state slots
-   !! (`ice_cice_state_t` composes the ocean grid and restart registry).  Nothing in
-   !! the engine calls it yet; `scheme = "cice"` stays refused at configure.
+   !! (`ice_cice_state_t` composes the ocean grid and restart registry).  The engine
+   !! calls it once per outer step (`ice_cice_step`, `rdb_ice_cice_hooks`).
    !!
    !! **The stage MANIFEST** (`ice_step_plan_t` lists it as data; the test asserts it
    !! against a literal list and checks `res%executed` against it; the step itself is

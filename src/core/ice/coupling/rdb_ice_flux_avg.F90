@@ -52,7 +52,7 @@ module rdb_ice_flux_avg
    implicit none
    private
 
-   public :: ice_flux_avg_t, ice_flux_avg_accumulate, ice_flux_avg_reset
+   public :: ice_flux_avg_t, ice_flux_avg_accumulate, ice_flux_avg_reset, ice_flux_avg_stash_pending
    public :: ICE_AVG_OK, ICE_AVG_ERR_SHAPE, ICE_AVG_ERR_DT
 
    integer, parameter :: ICE_AVG_OK = 0
@@ -92,6 +92,12 @@ module rdb_ice_flux_avg
          !! [W m-2] window mean of `fswthru`, + down.
       real(wp), allocatable :: acc_fswthru_vis(:, :)
          !! [W m-2] window mean of `fswthru_vis`, + down (visible part).
+      real(wp) :: t_pend = 0.0_wp
+         !! Seconds of the PENDING hand-over: the last window's mean `fhocn` that the ocean has not
+         !! debited yet (it applies the hand-over of window k at the END of window k+1).  The melt cap
+         !! subtracts it too.  0: nothing pending.
+      real(wp), allocatable :: pend_fhocn(:, :)
+         !! [W m-2] mean `fhocn` of the pending window (see `t_pend`).
    contains
       procedure, non_overridable :: init => avg_init
       procedure, non_overridable :: destroy => avg_destroy
@@ -121,6 +127,8 @@ contains
       allocate (this%acc_fhocn(this%nx, this%ny), source=0.0_wp)
       allocate (this%acc_fswthru(this%nx, this%ny), source=0.0_wp)
       allocate (this%acc_fswthru_vis(this%nx, this%ny), source=0.0_wp)
+      allocate (this%pend_fhocn(this%nx, this%ny), source=0.0_wp)
+      this%t_pend = 0.0_wp
       this%is_init = .true.
       this%mapped = .false.
    end subroutine avg_init
@@ -136,6 +144,7 @@ contains
       if (allocated(this%acc_fhocn)) deallocate (this%acc_fhocn)
       if (allocated(this%acc_fswthru)) deallocate (this%acc_fswthru)
       if (allocated(this%acc_fswthru_vis)) deallocate (this%acc_fswthru_vis)
+      if (allocated(this%pend_fhocn)) deallocate (this%pend_fhocn)
       this%nx = 0
       this%ny = 0
       this%nghost = 0
@@ -159,6 +168,7 @@ contains
       type(ice_flux_avg_t), intent(inout) :: this
       if (.not. this%is_init .or. this%mapped) return
       !$acc enter data copyin(this%acc_fresh, this%acc_fsalt, this%acc_fhocn, this%acc_fswthru, this%acc_fswthru_vis)
+      !$acc enter data copyin(this%pend_fhocn)
       this%mapped = .true.
    end subroutine avg_enter_data_impl
 
@@ -176,6 +186,7 @@ contains
       type(ice_flux_avg_t), intent(inout) :: this
       if (.not. this%is_init .or. .not. this%mapped) return
       !$acc exit data delete(this%acc_fresh, this%acc_fsalt, this%acc_fhocn, this%acc_fswthru, this%acc_fswthru_vis)
+      !$acc exit data delete(this%pend_fhocn)
       this%mapped = .false.
    end subroutine avg_exit_data_impl
 
@@ -192,6 +203,7 @@ contains
                + arr_bytes(this%acc_fhocn) &
                + arr_bytes(this%acc_fswthru) &
                + arr_bytes(this%acc_fswthru_vis) &
+               + arr_bytes(this%pend_fhocn) &
                + 0_int64
    end function avg_bytes
 
@@ -203,7 +215,7 @@ contains
       !! every entry NON-optional, so a checkpoint that lost part of a window fails to read
       !! instead of silently resuming with an empty one; default `.false.` (a file from the
       !! SIS2 scheme, converted, legitimately has no window).
-      class(ice_flux_avg_t), intent(inout) :: this
+      class(ice_flux_avg_t), intent(in), target :: this
       type(restart_registry_t), intent(inout) :: reg
       logical, intent(in), optional :: required
       logical :: opt
@@ -218,6 +230,9 @@ contains
                            optional=opt)
       call reg%register_2d("ice_avg_fswthru_vis", this%acc_fswthru_vis, this%nghost, this%nx_phys, &
                            this%ny_phys, optional=opt)
+      call reg%register_2d("ice_avg_pend_fhocn", this%pend_fhocn, this%nghost, this%nx_phys, this%ny_phys, &
+                           optional=.true.)
+      call reg%register_scalar("ice_avg_pend_t", this%t_pend, optional=.true.)
       call reg%register_scalar("ice_avg_n", this%n_acc, optional=opt)
       call reg%register_scalar("ice_avg_t", this%t_acc, optional=opt)
    end subroutine avg_register_restart
@@ -281,6 +296,29 @@ contains
          a_fswthru_vis(i, j) = a_fswthru_vis(i, j) + (fswthru_vis(i, j) - a_fswthru_vis(i, j))*w
       end do
    end subroutine ice_flux_avg_accumulate_impl
+
+   subroutine ice_flux_avg_stash_pending(avg)
+      !! At the ocean thermo step, BEFORE the window is applied and reset: keep the window's mean
+      !! `fhocn` and its length as the PENDING hand-over (the ocean debits it only at the end of the
+      !! NEXT window), which the melt cap of the next window's imports subtracts.  Owned cells; one
+      !! launch.
+      type(ice_flux_avg_t), intent(inout) :: avg
+
+      if (.not. avg%is_init) return
+      call ice_flux_avg_copy_impl(avg%nx, avg%ny, avg%acc_fhocn, avg%pend_fhocn)
+      avg%t_pend = avg%t_acc
+   end subroutine ice_flux_avg_stash_pending
+
+   subroutine ice_flux_avg_copy_impl(nx, ny, src, dst)
+      integer, intent(in) :: nx, ny
+      real(wp), intent(in) :: src(nx, ny)
+      real(wp), intent(inout) :: dst(nx, ny)
+      integer :: i, j
+
+      do concurrent(j=1:ny, i=1:nx)
+         dst(i, j) = src(i, j)
+      end do
+   end subroutine ice_flux_avg_copy_impl
 
    subroutine ice_flux_avg_reset(avg)
       !! Open a new window: zero the five means (ghosts included, ONE launch) and

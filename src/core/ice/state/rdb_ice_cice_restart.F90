@@ -32,10 +32,9 @@ module rdb_ice_cice_restart
    !! later checkpoint would carry stale SIS2 tags); `enter_data`; and
    !! `ice_update_state(.true.)` (the aggregates are not restart state).
    !!
-   !! NOT WIRED into the engine: `scheme = "cice"` is still refused at
-   !! configure.  Left for the PR that makes the scheme runnable: the SIS2
-   !! category/layer counts (`legacy%init` needs `ncat_o`, `nk_o`; a knob or the
-   !! file's dimension), the call sites above, and the freezing point `Tf`.
+   !! Wired into the engine's restart read (`resume_cice_ice`): the SIS2 counts are
+   !! `&ocean_ice_nml ncat` / `nk_ice` (a SIS2 file must have been written with the
+   !! same ones), and `Tf = -depressT*S_ref` of the EOS reference salinity.
    use rdb_constants, only: wp
    use pic_logger, only: logger => global_logger
    use pic_strings, only: to_string

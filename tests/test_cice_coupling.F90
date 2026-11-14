@@ -211,14 +211,15 @@ contains
       call av%init(g)
       call oin%init(g)
       b0 = 5_int64*int(NX*NY, int64)*storage_size(1.0_wp)/8
-      call check(error, av%bytes() == b0 .and. oin%bytes() == b0, "bytes() counts the five arrays of each slot")
+      call check(error, av%bytes() == b0 + int(NX*NY, int64)*storage_size(1.0_wp)/8 .and. oin%bytes() == b0, &
+                 "bytes() counts the arrays of each slot (averager: five means + the pending hand-over)")
       call av%enter_data()
       call oin%enter_data()
       call check(error, av%mapped .and. oin%mapped, "mapped")
       call av%register_restart(reg)
-      call check(error, reg%n == 7, "five arrays + two window scalars registered")
+      call check(error, reg%n == 9, "five arrays + the pending hand-over (array + length) + two window scalars registered")
       call check(error, all(reg%entries(1:7)%optional), "every averager tag is optional")
-      call check(error, trim(reg%entries(1)%tag) == "ice_avg_fresh" .and. trim(reg%entries(7)%tag) == "ice_avg_t", &
+      call check(error, trim(reg%entries(1)%tag) == "ice_avg_fresh" .and. trim(reg%entries(9)%tag) == "ice_avg_t", &
                  "tags")
       call av%destroy()
       call oin%destroy()
@@ -1365,13 +1366,13 @@ contains
       real(wp) :: worst, mp, nan
 
       nan = ieee_value(1.0_wp, ieee_quiet_nan)
-      call check(error, abs(ice_melt_cap(-100.0_wp, -20.0_wp, 1800.0_wp, 900.0_wp, nan) + 60.0_wp) <= 1.0e-12_wp, &
+      call check(error, abs(ice_melt_cap(-100.0_wp, -20.0_wp, 1800.0_wp, 900.0_wp, nan, 0.0_wp, 0.0_wp) + 60.0_wp) <= 1.0e-12_wp, &
                  "cap closed form: 90000 J offered, 36000 taken, 54000 left over 900 s")
-      call check(error, ice_melt_cap(-100.0_wp, -60.0_wp, 1800.0_wp, 900.0_wp, nan) == 0.0_wp, "exhausted: nothing offered")
-      call check(error, ice_melt_cap(40.0_wp, -60.0_wp, 1800.0_wp, 900.0_wp, nan) == 40.0_wp, "freezing side untouched")
-      call check(error, ice_melt_cap(-100.0_wp, 5.0_wp, 1800.0_wp, 900.0_wp, nan) == -100.0_wp, &
+      call check(error, ice_melt_cap(-100.0_wp, -60.0_wp, 1800.0_wp, 900.0_wp, nan, 0.0_wp, 0.0_wp) == 0.0_wp, "exhausted: nothing offered")
+  call check(error, ice_melt_cap(40.0_wp, -60.0_wp, 1800.0_wp, 900.0_wp, nan, 0.0_wp, 0.0_wp) == 40.0_wp, "freezing side untouched")
+      call check(error, ice_melt_cap(-100.0_wp, 5.0_wp, 1800.0_wp, 900.0_wp, nan, 0.0_wp, 0.0_wp) == -100.0_wp, &
                  "heat given back to the ocean does not raise the offer")
-      call check(error,.not. ieee_is_finite(ice_melt_cap(-100.0_wp, nan, 1800.0_wp, 900.0_wp, nan)), "NaN window poisons")
+call check(error,.not. ieee_is_finite(ice_melt_cap(-100.0_wp, nan, 1800.0_wp, 900.0_wp, nan, 0.0_wp, 0.0_wp)), "NaN window poisons")
       if (allocated(error)) return
       call import_setup(grid, ms, eos, cice, oin, frz, 3)
       ms%tracers(ms%idx_temperature)%c = 3.0_wp
@@ -1488,8 +1489,8 @@ contains
       call av%init(g)
       call av%register_restart(r1)
       call av%register_restart(r2, required=.true.)
-      call check(error, all(r1%entries(1:r1%n)%optional) .and. .not. any(r2%entries(1:r2%n)%optional) .and. &
-                 r1%n == 7 .and. r2%n == 7, "required=.true. makes all seven tags non-optional")
+      call check(error, all(r1%entries(1:r1%n)%optional) .and. count(.not. r2%entries(1:r2%n)%optional) == 7 .and. &
+            r1%n == 9 .and. r2%n == 9, "required=.true. makes the seven window tags non-optional (the pending pair stays optional)")
       call make_halo(g, bc, .false.)
       call sf%init(g)
       call sf%set_components(g, .true.)

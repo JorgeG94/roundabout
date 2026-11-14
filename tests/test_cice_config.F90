@@ -220,14 +220,14 @@ contains
       integer :: ierr
 
       call expect_refusal("&ocean_ice_nml enable = .true., scheme = 'cice' /", &
-                          "not runnable yet", error)
+                          "scheme='cice' needs enable_components", error)
       if (allocated(error)) return
       call parse("&ocean_ice_nml enable = .true., scheme = 'cice' /", cfg, error)
       if (allocated(error)) return
       ierr = -999
       call validate_config(cfg, ierr=ierr)
       call check(error, ierr, OCEAN_STATUS_ERR_CONFIG_VALIDATE, &
-                 "validate_config refuses scheme='cice'")
+                 "validate_config refuses a scheme='cice' namelist outside the envelope")
       if (allocated(error)) return
       call check(error, parse_fails("&ocean_ice_nml scheme = 'bogus' /"), &
                  "an unknown scheme is a parse error")
@@ -276,7 +276,7 @@ contains
       call parse("&ocean_ice_nml scheme='cice', nilyr="//trim(s1)//", ncat="//trim(s2)//" /"// &
                  new_line('a')//"&ocean_ice_dyn_nml advection='upwind' /", cfg, error)
       if (allocated(error)) return
-      call check(error, count_msgs(cfg), 1, "only the not-runnable reason at the maxima")
+ call check(error, count_msgs(cfg), 5, "only the envelope reasons (enable, components, hfreeze, dynamics, transport) at the maxima")
       if (allocated(error)) return
       ! Under scheme='sis2' the structure keys are inert.
       call parse("&ocean_ice_nml nilyr=1, nslyr=3, kcatbound=9 /", cfg, error)
@@ -336,9 +336,9 @@ contains
                  "&ocean_ice_sw_nml ahmax=0.0 /"//new_line('a')// &
                  "&ocean_ice_dyn_nml advection='upwind' /", cfg, error)
       if (allocated(error)) return
-      call check(error, count_msgs(cfg), 6, "scheme + nilyr + nslyr + ktherm + kitd + ahmax")
+      call check(error, count_msgs(cfg), 10, "envelope x5 + nilyr + nslyr + ktherm + kitd + ahmax")
       if (allocated(error)) return
-      call check(error, has_msg(cfg, "not runnable yet"), "scheme reason")
+      call check(error, has_msg(cfg, "needs enable=.true."), "envelope reason")
       if (allocated(error)) return
       call check(error, has_msg(cfg, "nilyr >= 2"), "nilyr reason")
       if (allocated(error)) return
@@ -1020,7 +1020,7 @@ contains
 
    subroutine test_step_defaults(error)
       !! The step-envelope knobs default to the supported values, and a plain `scheme='cice'` namelist trips none of
-      !! them (the scheme is still refused as not runnable, and nothing else).
+      !! them (only the three envelope reasons a bare namelist lacks).
       type(error_type), allocatable, intent(out) :: error
       type(config_t) :: cfg
 
@@ -1031,7 +1031,7 @@ contains
       if (allocated(error)) return
       call parse("&ocean_ice_nml scheme='cice' /"//new_line('a')//"&ocean_ice_dyn_nml advection='upwind' /", cfg, error)
       if (allocated(error)) return
-      call check(error, count_msgs(cfg), 1, "only the not-runnable refusal")
+      call check(error, count_msgs(cfg), 5, "only the envelope refusals (enable, components, hfreeze, dynamics, transport)")
    end subroutine test_step_defaults
 
    subroutine test_step_refusals(error)
@@ -1089,9 +1089,9 @@ contains
       if (allocated(error)) return
       cfg%nghost = 2
       cfg%px = 2
-      call check(error, count_msgs(cfg), 5, "not runnable + nghost + ndtd + dt_ice + ranks")
+      call check(error, count_msgs(cfg), 9, "envelope x5 + nghost + ndtd + dt_ice + ranks")
       if (allocated(error)) return
-      call check(error, has_msg(cfg, "not runnable yet"), "scheme reason")
+      call check(error, has_msg(cfg, "needs enable=.true."), "envelope reason")
       if (allocated(error)) return
       call check(error, has_msg(cfg, "nghost >= 3") .and. has_msg(cfg, "ndtd /= 1") .and. has_msg(cfg, "dt_ice must equal") &
                  .and. has_msg(cfg, "single rank"), "every envelope reason")

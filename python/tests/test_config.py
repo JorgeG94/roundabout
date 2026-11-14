@@ -22,7 +22,7 @@ def test_group_and_knob_counts():
     # `tools/gen_python_config.py` report for the live schema (bumped by
     # each OM3-parity PR in the wave-4 stack).
     assert N_GROUPS == 68
-    assert N_KNOBS == 880
+    assert N_KNOBS == 886
     assert "ocean_bc" in ALL_GROUPS
 
 

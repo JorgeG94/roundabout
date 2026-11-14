@@ -237,6 +237,9 @@ set(CORE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/coupling/rdb_ice_import_ocean.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/coupling/rdb_ice_flux_avg.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/coupling/rdb_ice_cice_adapters.F90
+    # CICE-port run slots (D11.4): flux/radiation/work/averager/import/transport
+    # workspace, composed into ocean_state_t.
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/coupling/rdb_ice_cice_run.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/state/rdb_ocean_state.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/state/ocean_state/rdb_ocean_state_seed.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/state/ocean_state/rdb_ocean_state_topo.F90
@@ -358,8 +361,11 @@ endif()
 # rdb_ice_ocean_coupler, rdb_ocean_diag*, rdb_ocean_sponge, rdb_ocean_geothermal
 # (declared above in CORE_SOURCES) plus rdb_ocean_halo/rdb_ocean_boundary_data/
 # rdb_ocean_periodic/rdb_ocean_fold_apply/rdb_ocean_dyn (KERNEL_SOURCES/
-# COMM_SOURCES, declared above too).
-set(ENGINE_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/rdb_ocean_engine.F90)
+# COMM_SOURCES, declared above too). CICE-port ice step hooks bound to the
+# engine's state (D11.4): used by the engine.
+set(ENGINE_SOURCES
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/coupling/rdb_ice_cice_hooks.F90
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/rdb_ocean_engine.F90)
 
 # C ABI (Python runtime API plan, P1) — compiles INTO core_objs, never linked
 # against it: RDC cannot cross a shared-library boundary (see the core_objs

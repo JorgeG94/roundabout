@@ -3,6 +3,12 @@ submodule(rdb_ocean_state) rdb_ocean_state_restart
    !! moved verbatim from rdb_ocean_state.F90 (restart WRITE stays in
    !! the parent -- it is the D->H pull side; see
    !! src/core/ocean/state/rdb_ocean_state.F90 for the public interface).
+   use rdb_ice_cice_restart, only: ice_legacy_t, ice_cice_restart_resume, ICE_RESUME_V2, ICE_RESUME_FAILED, ICE_RESUME_COLD
+   use rdb_ice_restart_convert, only: ice_convert_report_t
+#ifndef RDB_NO_NETCDF
+   use netcdf, only: nf90_open, nf90_close, nf90_inq_varid, nf90_inquire_variable, nf90_inquire_dimension, &
+                     nf90_nowrite, nf90_noerr
+#endif
    implicit none
 
 contains
@@ -592,22 +598,22 @@ contains
       !     checkpoint warns-and-seeds the init values (part_size all
       !     open water, m_ice/m_snow/enth_* = 0, sal_ice =
       !     ICE_BULK_SALINITY) rather than failing. ---
-      if (allocated(state%ice%part_size)) then
+      if (allocated(state%ice%part_size) .and. .not. state%ice%cice%is_init) then
          call reg%register_3d("ice_part_size", state%ice%part_size, 0, &
                               size(state%ice%part_size, 1), &
                               size(state%ice%part_size, 2), optional=.true.)
       end if
-      if (allocated(state%ice%m_ice)) then
+      if (allocated(state%ice%m_ice) .and. .not. state%ice%cice%is_init) then
          call reg%register_3d("ice_m_ice", state%ice%m_ice, 0, &
                               size(state%ice%m_ice, 1), &
                               size(state%ice%m_ice, 2), optional=.true.)
       end if
-      if (allocated(state%ice%m_snow)) then
+      if (allocated(state%ice%m_snow) .and. .not. state%ice%cice%is_init) then
          call reg%register_3d("ice_m_snow", state%ice%m_snow, 0, &
                               size(state%ice%m_snow, 1), &
                               size(state%ice%m_snow, 2), optional=.true.)
       end if
-      if (allocated(state%ice%enth_ice)) then
+      if (allocated(state%ice%enth_ice) .and. .not. state%ice%cice%is_init) then
          do it = 1, size(state%ice%enth_ice, 4)
             call reg%register_3d("ice_enth_ice_k"//to_string(it), &
                                  state%ice%enth_ice(:, :, :, it), 0, &
@@ -615,7 +621,7 @@ contains
                                  size(state%ice%enth_ice, 2), optional=.true.)
          end do
       end if
-      if (allocated(state%ice%sal_ice)) then
+      if (allocated(state%ice%sal_ice) .and. .not. state%ice%cice%is_init) then
          do it = 1, size(state%ice%sal_ice, 4)
             call reg%register_3d("ice_sal_ice_k"//to_string(it), &
                                  state%ice%sal_ice(:, :, :, it), 0, &
@@ -623,7 +629,7 @@ contains
                                  size(state%ice%sal_ice, 2), optional=.true.)
          end do
       end if
-      if (allocated(state%ice%enth_snow)) then
+      if (allocated(state%ice%enth_snow) .and. .not. state%ice%cice%is_init) then
          do it = 1, size(state%ice%enth_snow, 4)
             call reg%register_3d("ice_enth_snow_k"//to_string(it), &
                                  state%ice%enth_snow(:, :, :, it), 0, &
@@ -635,6 +641,9 @@ contains
       ! --- CICE-port ice state (v2 tags, `ice_state_version`): only when the
       !     slot is live, i.e. `scheme = "cice"`; never under "sis2". ---
       if (state%ice%cice%is_init) call state%ice%cice%register_restart(reg)
+      ! The run slots of the same scheme: the persistent centre ice-ocean stress and the
+      ! mid-window flux averager.
+      if (state%icec%is_init) call state%icec%register_restart(reg)
 
       ! --- C-grid EVP dynamics under the SIS2-derived state
       !     (`dyn_scheme = "cice_c"`, D9.2): the T and corner stresses (whole
@@ -662,12 +671,16 @@ contains
          call reg%register_2d("ice_dync_nmask", state%ice%dync%nmask_r, 0, &
                               size(state%ice%dync%nmask_r, 1), &
                               size(state%ice%dync%nmask_r, 2), optional=.true.)
-         call reg%register_2d("ice_dync_strocnT_x", state%ice%dync%strocnT_x, 0, &
-                              size(state%ice%dync%strocnT_x, 1), &
-                              size(state%ice%dync%strocnT_x, 2), optional=.true.)
-         call reg%register_2d("ice_dync_strocnT_y", state%ice%dync%strocnT_y, 0, &
-                              size(state%ice%dync%strocnT_y, 1), &
-                              size(state%ice%dync%strocnT_y, 2), optional=.true.)
+         ! Under `scheme = "cice"` the centre stress is owned by the step work slot
+         ! (`ice_strocnTx/y`); the dynamics slot's copy is a per-step scratch.
+         if (.not. state%ice%cice%is_init) then
+            call reg%register_2d("ice_dync_strocnT_x", state%ice%dync%strocnT_x, 0, &
+                                 size(state%ice%dync%strocnT_x, 1), &
+                                 size(state%ice%dync%strocnT_x, 2), optional=.true.)
+            call reg%register_2d("ice_dync_strocnT_y", state%ice%dync%strocnT_y, 0, &
+                                 size(state%ice%dync%strocnT_y, 1), &
+                                 size(state%ice%dync%strocnT_y, 2), optional=.true.)
+         end if
       end if
 
       ! --- Tidal-mixing + law-of-the-wall BBL kd_int (merged every stage).
@@ -844,7 +857,18 @@ contains
       call ocean_state_fill_restart_metadata(state, grid, meta)
       call ocean_restart_read_local(filename, reg, decomp, meta, t, step, osc, &
                                     ierr=local_ierr)
-      if (local_ierr == 0 .and. state%ice%enable .and. state%ice%dynamics) then
+      if (local_ierr == 0 .and. state%ice%cice%is_init) then
+         call resume_cice_ice(state, grid, decomp, filename, reg, meta, local_ierr)
+         if (local_ierr /= 0) then
+            if (present(ierr)) then
+               ierr = OCEAN_STATUS_ERR_RESTART_GRID
+               return
+            end if
+            call fail("ice restart: the sea-ice state of "//trim(filename)//" cannot be resumed under "// &
+                      "scheme = 'cice' (see the log above); refusing.", code=OCEAN_STATUS_ERR_RESTART_GRID)
+         end if
+      end if
+      if (local_ierr == 0 .and. state%ice%enable .and. state%ice%dynamics .and. .not. state%ice%cice%is_init) then
          if (reg%entry_found("ice_dyn_scheme_id")) then
             file_id = merge(1, 0, state%ice%dync%scheme_id > 0.5_wp)
          else
@@ -897,6 +921,84 @@ contains
       return
 #endif
    end subroutine ocean_state_restart_read
+
+   subroutine resume_cice_ice(state, grid, decomp, filename, reg, meta, ierr)
+      !! Start path of the CICE-port ice state after the run registry was read: v2 tags (read
+      !! already), a SIS2 checkpoint (read into a short-lived legacy registry, converted ONCE,
+      !! logged), or no ice state (cold, empty).  A v2 file must also carry the flux averager's
+      !! window counters (a checkpoint that lost part of a window is refused, never resumed
+      !! with an empty window).  Host, before `enter_data`.  `ierr /= 0`: refused.
+      type(ocean_state_t), intent(inout), target :: state
+      type(hgrid_t), intent(in) :: grid
+      type(decomp_t), intent(in) :: decomp
+      character(len=*), intent(in) :: filename
+      type(restart_registry_t), intent(in) :: reg
+      type(ocean_restart_metadata_t), intent(in) :: meta
+      integer, intent(out) :: ierr
+      type(ice_legacy_t), target :: legacy
+      type(restart_registry_t) :: reg_legacy
+      type(ice_convert_report_t) :: rep
+      real(wp) :: t2, tf
+      integer :: step2, osc2, e2, status
+
+      ierr = 0
+#ifndef RDB_NO_NETCDF
+      ! Probe the file's SIS2 category dimension BEFORE the legacy read: a file written with another
+      ! category count would abort the reader on a shape mismatch instead of being refused.
+      block
+         integer, parameter :: MAXDIM = 8
+         integer :: ncid, varid, ndims, len3, st
+         integer :: dimids(MAXDIM)
+         st = nf90_open(trim(filename), nf90_nowrite, ncid)
+         if (st == nf90_noerr) then
+            if (nf90_inq_varid(ncid, "ice_part_size", varid) == nf90_noerr) then
+               st = nf90_inquire_variable(ncid, varid, ndims=ndims, dimids=dimids)
+               if (st == nf90_noerr .and. ndims == 3) then
+                  st = nf90_inquire_dimension(ncid, dimids(3), len=len3)
+                  if (st == nf90_noerr .and. len3 /= state%ice%ncat + 1) then
+                     call logger%error("ice restart: the SIS2 checkpoint has "//to_string(len3 - 1)// &
+                                       " ice categories, this run's &ocean_ice_nml ncat is "// &
+                                       to_string(state%ice%ncat)//"; refusing to convert")
+                     ierr = 14
+                  end if
+               end if
+            end if
+            st = nf90_close(ncid)
+         end if
+      end block
+      if (ierr /= 0) return
+#endif
+      call legacy%init(grid%nx_total, grid%ny_total, state%ice%ncat, state%ice%nk_ice, grid%nghost)
+      call legacy%register_restart(reg_legacy)
+      call ocean_restart_read_local(filename, reg_legacy, decomp, meta, t2, step2, osc2, ierr=e2)
+      if (e2 /= 0) then
+         call logger%error("ice restart: the SIS2 tags of "//trim(filename)//" could not be read into the "// &
+                           "legacy registry (a different category count or extents than this run's namelist?)")
+         ierr = 11
+         call legacy%destroy()
+         return
+      end if
+      tf = -state%ice%cice%p%c%depressT*state%eos%S_ref
+      call ice_cice_restart_resume(state%ice%cice, legacy, reg, reg_legacy, tf, status, rep)
+      call legacy%destroy()
+      if (status == ICE_RESUME_FAILED) then
+         ierr = 12
+         return
+      end if
+      if (status == ICE_RESUME_COLD) then
+         state%icec%resume_cold = .true.
+         call logger%info("ice restart: the checkpoint holds no ice state (ocean-only file): the CICE-port "// &
+                          "ice cold-starts from &ocean_ice_ic_nml")
+      end if
+      if (status == ICE_RESUME_V2 .and. state%icec%is_init) then
+         if (.not. (reg%entry_found("ice_avg_n") .and. reg%entry_found("ice_avg_t") .and. &
+                    reg%entry_found("ice_avg_fresh") .and. reg%entry_found("ice_avg_fhocn"))) then
+            call logger%error("ice restart: a CICE-port checkpoint without the flux averager's window "// &
+                              "state (ice_avg_*); refusing to resume with an empty window")
+            ierr = 13
+         end if
+      end if
+   end subroutine resume_cice_ice
 
    subroutine convert_legacy_tracer_content(state, reg)
       !! One-time conversion of a pre-concentration restart: every tracer
