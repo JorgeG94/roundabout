@@ -40,7 +40,13 @@ contains
                   new_unittest("ahmax_nonpositive_refused", test_ahmax), &
                   new_unittest("all_reasons_reported", test_all_reasons), &
                   new_unittest("constants_sets_select", test_constants_sets), &
-                  new_unittest("params_round_trip", test_round_trip) &
+                  new_unittest("params_round_trip", test_round_trip), &
+                  new_unittest("ridge_atm_floe_defaults_are_upstream", test_ridge_atm_defaults), &
+                  new_unittest("ridge_refusals", test_ridge_refusals), &
+                  new_unittest("atm_floe_refusals", test_atm_floe_refusals), &
+                  new_unittest("atm_cesm_constants", test_atm_cesm_constants), &
+                  new_unittest("ridge_atm_all_reasons_reported", test_ridge_atm_all_reasons), &
+                  new_unittest("ridge_atm_round_trip_om3", test_ridge_atm_round_trip) &
                   ]
    end subroutine collect_cice_config_tests
 
@@ -428,5 +434,241 @@ contains
       p = ice_params_from_config(cfg)
       call check(error, p%thermo%tfrz_option, ICE_TFRZ_MINUS1P8)
    end subroutine test_round_trip
+
+   subroutine test_ridge_atm_defaults(error)
+      !! Upstream CICE code defaults, transcribed from its parameter table.
+      type(error_type), allocatable, intent(out) :: error
+      type(config_t) :: cfg
+      type(ice_params_t) :: p
+      real(wp), parameter :: tol = 1.0e-15_wp
+
+      cfg = config_t()
+      p = ice_params_from_config(cfg)
+      call check(error, p%ridge%kstrength, 1)
+      if (allocated(error)) return
+      call check(error, p%ridge%krdg_partic, 1)
+      if (allocated(error)) return
+      call check(error, p%ridge%krdg_redist, 1)
+      if (allocated(error)) return
+      call check(error, abs(p%ridge%mu_rdg - 3.0_wp) < tol, "mu_rdg 3")
+      if (allocated(error)) return
+      call check(error, abs(p%ridge%Cf - 17.0_wp) < tol, "Cf 17")
+      if (allocated(error)) return
+      call check(error, abs(p%ridge%Pstar - 2.75e4_wp) < tol*1.0e4_wp, "Pstar 2.75e4")
+      if (allocated(error)) return
+      call check(error, abs(p%ridge%Cstar - 20.0_wp) < tol, "Cstar 20")
+      if (allocated(error)) return
+      call check(error, p%atm%highfreq, .false.)
+      if (allocated(error)) return
+      call check(error, p%atm%natmiter, 5)
+      if (allocated(error)) return
+      call check(error, abs(p%atm%atmiter_conv) < tol, "atmiter_conv 0")
+      if (allocated(error)) return
+      call check(error, abs(p%atm%iceruf - 5.0e-4_wp) < tol, "iceruf 5e-4")
+      if (allocated(error)) return
+      ! rdn = kappa/ln(zref/iceruf) = 0.4/ln(20000) written out from the closed form.
+      call check(error, abs(p%atm%rdn - 0.4_wp/log(10.0_wp/5.0e-4_wp)) < 1.0e-12_wp, &
+                 "neutral drag finalised at the default roughness")
+      if (allocated(error)) return
+      call check(error, abs(p%thermo%floeshape - 0.66_wp) < tol, "floeshape 0.66")
+      if (allocated(error)) return
+      call check(error, abs(p%thermo%floediam - 300.0_wp) < tol, "floediam 300")
+      if (allocated(error)) return
+      call check(error, count_msgs(cfg), 0, "defaults need no refusal")
+   end subroutine test_ridge_atm_defaults
+
+   subroutine test_ridge_refusals(error)
+      type(error_type), allocatable, intent(out) :: error
+      type(config_t) :: cfg
+
+      call expect_refusal("&ocean_ice_ridge_nml kstrength=2 /", "kstrength must be 0", error)
+      if (allocated(error)) return
+      call expect_refusal("&ocean_ice_ridge_nml kstrength=-1 /", "kstrength must be 0", error)
+      if (allocated(error)) return
+      call expect_refusal("&ocean_ice_ridge_nml krdg_partic=2 /", "krdg_partic must be 0", error)
+      if (allocated(error)) return
+      call expect_refusal("&ocean_ice_ridge_nml krdg_redist=3 /", "krdg_redist must be 0", error)
+      if (allocated(error)) return
+      call expect_refusal("&ocean_ice_ridge_nml mu_rdg=0.0 /", "mu_rdg must be > 0", error)
+      if (allocated(error)) return
+      call expect_refusal("&ocean_ice_ridge_nml mu_rdg=-1.0 /", "mu_rdg must be > 0", error)
+      if (allocated(error)) return
+      call expect_refusal("&ocean_ice_ridge_nml Cf=0.0 /", "Cf must be > 0", error)
+      if (allocated(error)) return
+      call expect_refusal("&ocean_ice_ridge_nml Cf=-17.0 /", "Cf must be > 0", error)
+      if (allocated(error)) return
+      call expect_refusal("&ocean_ice_ridge_nml Pstar=-2.75e4 /", "Pstar must be > 0", error)
+      if (allocated(error)) return
+      call expect_refusal("&ocean_ice_ridge_nml Pstar=0.0 /", "Pstar must be > 0", error)
+      if (allocated(error)) return
+      call expect_refusal("&ocean_ice_ridge_nml Cstar=-20.0 /", "Cstar must be > 0", error)
+      if (allocated(error)) return
+      ! Every legal option combination is accepted (upstream documents no
+      ! discouraged pairing, so there is no warning either).
+      call parse("&ocean_ice_ridge_nml kstrength=1, krdg_partic=0, krdg_redist=0 /", cfg, error)
+      if (allocated(error)) return
+      call check(error, count_msgs(cfg), 0, "legal option combination accepted")
+   end subroutine test_ridge_refusals
+
+   subroutine test_atm_floe_refusals(error)
+      type(error_type), allocatable, intent(out) :: error
+      type(config_t) :: cfg
+
+      call expect_refusal("&ocean_ice_atm_nml natmiter=-1 /", "natmiter must be >= 0", error)
+      if (allocated(error)) return
+      call expect_refusal("&ocean_ice_atm_nml atmiter_conv=-1.0e-3 /", "atmiter_conv must be >= 0", &
+                          error)
+      if (allocated(error)) return
+      call expect_refusal("&ocean_ice_atm_nml iceruf=0.0 /", "iceruf must be > 0 and below", error)
+      if (allocated(error)) return
+      call expect_refusal("&ocean_ice_atm_nml iceruf=-1.0e-3 /", "iceruf must be > 0 and below", &
+                          error)
+      if (allocated(error)) return
+      call expect_refusal("&ocean_ice_atm_nml iceruf=10.0 /", "iceruf must be > 0 and below", error)
+      if (allocated(error)) return
+      call expect_refusal("&ocean_ice_atm_nml iceruf=12.5 /", "iceruf must be > 0 and below", error)
+      if (allocated(error)) return
+      call expect_refusal("&ocean_ice_atm_nml iceruf=12.5 /", "zref=10", error)
+      if (allocated(error)) return
+      call expect_refusal("&ocean_ice_atm_nml atmbndy='constant' /", "atmbndy /= 'similarity'", &
+                          error)
+      if (allocated(error)) return
+      call expect_refusal("&ocean_ice_atm_nml atmbndy='mixed' /", "atmbndy /= 'similarity'", error)
+      if (allocated(error)) return
+      call expect_refusal("&ocean_ice_atm_nml formdrag=.true. /", "formdrag=.true.", error)
+      if (allocated(error)) return
+      call expect_refusal("&ocean_ice_atm_nml calc_strair=.false. /", "calc_strair=.false.", error)
+      if (allocated(error)) return
+      call expect_refusal("&ocean_ice_thermo_nml floeshape=0.0 /", "floeshape must be > 0", error)
+      if (allocated(error)) return
+      call expect_refusal("&ocean_ice_thermo_nml floeshape=-0.66 /", "floeshape must be > 0", error)
+      if (allocated(error)) return
+      call check(error, parse_fails("&ocean_ice_thermo_nml floediam=-5.0 /"), "negative floediam is a parse error (schema minimum)")
+      if (allocated(error)) return
+      ! natmiter = 0 (neutral drag only) and a roughness just below zref are legal.
+      call parse("&ocean_ice_atm_nml natmiter=0, iceruf=9.99 /", cfg, error)
+      if (allocated(error)) return
+      call check(error, count_msgs(cfg), 0, "natmiter=0 and iceruf<zref accepted")
+   end subroutine test_atm_floe_refusals
+
+   subroutine test_atm_cesm_constants(error)
+      !! The iceruf bound and the neutral drag follow the selected constants set
+      !! (zref is 10 m in both sets; rdn is the closed form for the set's kappa).
+      type(error_type), allocatable, intent(out) :: error
+      type(config_t) :: cfg
+      type(ice_params_t) :: p
+
+      call parse("&ocean_ice_nml constants_set='cesm' /"//new_line('a')// &
+                 "&ocean_ice_atm_nml iceruf=2.0e-3 /", cfg, error)
+      if (allocated(error)) return
+      call check(error, count_msgs(cfg), 0, "cesm set with iceruf=2e-3 accepted")
+      if (allocated(error)) return
+      p = ice_params_from_config(cfg)
+      call check(error, p%constants_set, ICE_CONSTANTS_CESM)
+      if (allocated(error)) return
+      call check(error, abs(p%atm%rdn - p%c%vonkar/log(p%c%zref/2.0e-3_wp)) < 1.0e-12_wp, &
+                 "rdn = kappa/ln(zref/iceruf) with the cesm set's constants")
+      if (allocated(error)) return
+      call expect_refusal("&ocean_ice_nml constants_set='cesm' /"//new_line('a')// &
+                          "&ocean_ice_atm_nml iceruf=11.0 /", "iceruf must be > 0 and below", error)
+   end subroutine test_atm_cesm_constants
+
+   subroutine test_ridge_atm_all_reasons(error)
+      !! Every new refusal is reported together, not just the first.
+      type(error_type), allocatable, intent(out) :: error
+      type(config_t) :: cfg
+
+      call parse("&ocean_ice_ridge_nml kstrength=2, krdg_partic=5, krdg_redist=-1, "// &
+                 "mu_rdg=0.0, Cf=0.0, Pstar=0.0, Cstar=0.0 /"//new_line('a')// &
+                 "&ocean_ice_atm_nml natmiter=-2, atmiter_conv=-1.0, iceruf=20.0, "// &
+                 "atmbndy='mixed', formdrag=.true., calc_strair=.false. /"//new_line('a')// &
+                 "&ocean_ice_thermo_nml floediam=0.0, floeshape=0.0 /", cfg, error)
+      if (allocated(error)) return
+      call check(error, count_msgs(cfg), 15, "7 ridge + 6 atm + 2 floe reasons")
+      if (allocated(error)) return
+      call check(error, has_msg(cfg, "kstrength must be 0"), "kstrength reason")
+      if (allocated(error)) return
+      call check(error, has_msg(cfg, "krdg_partic must be 0"), "krdg_partic reason")
+      if (allocated(error)) return
+      call check(error, has_msg(cfg, "krdg_redist must be 0"), "krdg_redist reason")
+      if (allocated(error)) return
+      call check(error, has_msg(cfg, "mu_rdg must be > 0"), "mu_rdg reason")
+      if (allocated(error)) return
+      call check(error, has_msg(cfg, "Cf must be > 0"), "Cf reason")
+      if (allocated(error)) return
+      call check(error, has_msg(cfg, "Pstar must be > 0"), "Pstar reason")
+      if (allocated(error)) return
+      call check(error, has_msg(cfg, "Cstar must be > 0"), "Cstar reason")
+      if (allocated(error)) return
+      call check(error, has_msg(cfg, "natmiter must be >= 0"), "natmiter reason")
+      if (allocated(error)) return
+      call check(error, has_msg(cfg, "atmiter_conv must be >= 0"), "atmiter_conv reason")
+      if (allocated(error)) return
+      call check(error, has_msg(cfg, "iceruf must be > 0 and below"), "iceruf reason")
+      if (allocated(error)) return
+      call check(error, has_msg(cfg, "atmbndy /= 'similarity'"), "atmbndy reason")
+      if (allocated(error)) return
+      call check(error, has_msg(cfg, "formdrag=.true."), "formdrag reason")
+      if (allocated(error)) return
+      call check(error, has_msg(cfg, "calc_strair=.false."), "calc_strair reason")
+      if (allocated(error)) return
+      call check(error, has_msg(cfg, "floediam must be > 0"), "floediam reason")
+      if (allocated(error)) return
+      call check(error, has_msg(cfg, "floeshape must be > 0"), "floeshape reason")
+   end subroutine test_ridge_atm_all_reasons
+
+   subroutine test_ridge_atm_round_trip(error)
+      !! OM3 sets highfreq=.true. and no ridge key; the rest are non-default
+      !! values chosen to be distinguishable.  `atm%rdn` follows `iceruf`.
+      type(error_type), allocatable, intent(out) :: error
+      type(config_t) :: cfg
+      type(ice_params_t) :: p
+      real(wp), parameter :: tol = 1.0e-15_wp
+
+      call parse("&ocean_ice_atm_nml highfreq=.true. /", cfg, error)
+      if (allocated(error)) return
+      call check(error, count_msgs(cfg), 0, "OM3 atmosphere settings accepted")
+      if (allocated(error)) return
+      p = ice_params_from_config(cfg)
+      call check(error, p%atm%highfreq, .true.)
+      if (allocated(error)) return
+
+      call parse("&ocean_ice_ridge_nml kstrength=0, krdg_partic=0, krdg_redist=0, "// &
+                 "mu_rdg=4.5, Cf=12.0, Pstar=3.0e4, Cstar=15.0 /"//new_line('a')// &
+                 "&ocean_ice_atm_nml highfreq=.true., natmiter=3, atmiter_conv=1.0e-3, "// &
+                 "iceruf=1.0e-3, atmbndy='similarity', formdrag=.false., "// &
+                 "calc_strair=.true. /"//new_line('a')// &
+                 "&ocean_ice_thermo_nml floediam=250.0, floeshape=0.5 /", cfg, error)
+      if (allocated(error)) return
+      call check(error, count_msgs(cfg), 0, "non-default legal values accepted")
+      if (allocated(error)) return
+      p = ice_params_from_config(cfg)
+      call check(error, p%ridge%kstrength, 0)
+      if (allocated(error)) return
+      call check(error, p%ridge%krdg_partic, 0)
+      if (allocated(error)) return
+      call check(error, p%ridge%krdg_redist, 0)
+      if (allocated(error)) return
+      call check(error, abs(p%ridge%mu_rdg - 4.5_wp) < tol, "mu_rdg")
+      if (allocated(error)) return
+      call check(error, abs(p%ridge%Cf - 12.0_wp) < tol, "Cf")
+      if (allocated(error)) return
+      call check(error, abs(p%ridge%Pstar - 3.0e4_wp) < tol*1.0e4_wp, "Pstar")
+      if (allocated(error)) return
+      call check(error, abs(p%ridge%Cstar - 15.0_wp) < tol, "Cstar")
+      if (allocated(error)) return
+      call check(error, p%atm%natmiter, 3)
+      if (allocated(error)) return
+      call check(error, abs(p%atm%atmiter_conv - 1.0e-3_wp) < tol, "atmiter_conv")
+      if (allocated(error)) return
+      call check(error, abs(p%atm%iceruf - 1.0e-3_wp) < tol, "iceruf")
+      if (allocated(error)) return
+      ! rdn finalised from the configured roughness: kappa/ln(zref/iceruf).
+      call check(error, abs(p%atm%rdn - 0.4_wp/log(10.0_wp/1.0e-3_wp)) < 1.0e-12_wp, "rdn")
+      if (allocated(error)) return
+      call check(error, abs(p%thermo%floeshape - 0.5_wp) < tol, "floeshape")
+      if (allocated(error)) return
+      call check(error, abs(p%thermo%floediam - 250.0_wp) < tol, "floediam")
+   end subroutine test_ridge_atm_round_trip
 
 end module test_cice_config

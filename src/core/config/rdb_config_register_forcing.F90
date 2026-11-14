@@ -432,14 +432,15 @@ contains
    end subroutine register_ocean_ice
 
    module subroutine register_ocean_ice_cice(cfg, schema)
-      !! `&ocean_ice_thermo_nml` and `&ocean_ice_sw_nml`: the CICE-port
+      !! `&ocean_ice_thermo_nml`, `&ocean_ice_sw_nml`, `&ocean_ice_ridge_nml` and
+      !! `&ocean_ice_atm_nml`: the CICE-port
       !! thermodynamics / ITD / albedo knobs.  Defaults are the upstream CICE
       !! code defaults.  Spellings of options the port does not carry are
       !! accepted by the parser and refused by `validate_config` (so the
       !! message names the option and the reason).
       type(config_t), target, intent(in) :: cfg
       type(nml_schema_t), intent(inout) :: schema
-      type(nml_group_t) :: g, gs
+      type(nml_group_t) :: g, gs, gr, ga
       logical, pointer :: pl
       integer, pointer :: pi
       real(wp), pointer :: pr
@@ -505,8 +506,13 @@ contains
                           allowed=[character(len=8) :: "constant", "Cdn_ocn"], &
                           dead_on_ocean_path=ICE_DEAD))
       pr => cfg%ocean%ice_thermo%floediam
-      call g%add(nml_real("floediam", pr, "Floe diameter for lateral melt", &
+      call g%add(nml_real("floediam", pr, "Floe diameter for lateral melt "// &
+                          "(Steele 1992); must be > 0", &
                           units="m", min=0.0_wp, &
+                          dead_on_ocean_path=ICE_DEAD))
+      pr => cfg%ocean%ice_thermo%floeshape
+      call g%add(nml_real("floeshape", pr, "Floe shape factor for lateral melt "// &
+                          "(Steele 1992); must be > 0", &
                           dead_on_ocean_path=ICE_DEAD))
       pr => cfg%ocean%ice_thermo%ksno
       call g%add(nml_real("ksno", pr, "Snow thermal conductivity", &
@@ -559,6 +565,78 @@ contains
                            units="m", &
                            dead_on_ocean_path=ICE_DEAD))
       call schema%add_group(gs)
+
+      gr%name = "ocean_ice_ridge"
+      gr%doc = "CICE-port ridging and ice-strength knobs (scheme='cice'; upstream "// &
+               "CICE defaults, which OM3 also uses)."
+      pi => cfg%ocean%ice_ridge%kstrength
+      call gr%add(nml_int("kstrength", pi, "Ice strength: 1 = Rothrock (1975), "// &
+                          "0 = Hibler (1979); other values are refused", &
+                          dead_on_ocean_path=ICE_DEAD))
+      pi => cfg%ocean%ice_ridge%krdg_partic
+      call gr%add(nml_int("krdg_partic", pi, "Ridge participation: 1 = Lipscomb et "// &
+                          "al. (2007), 0 = Thorndike et al. (1975); other values are refused", &
+                          dead_on_ocean_path=ICE_DEAD))
+      pi => cfg%ocean%ice_ridge%krdg_redist
+      call gr%add(nml_int("krdg_redist", pi, "Ridge redistribution: 1 = exponential "// &
+                          "(Lipscomb et al. 2007), 0 = Hibler (1980); other values are refused", &
+                          dead_on_ocean_path=ICE_DEAD))
+      pr => cfg%ocean%ice_ridge%mu_rdg
+      call gr%add(nml_real("mu_rdg", pr, "E-folding scale of ridged ice for "// &
+                           "krdg_redist=1 (Lipscomb et al. 2007); must be > 0", &
+                           units="m^0.5", &
+                           dead_on_ocean_path=ICE_DEAD))
+      pr => cfg%ocean%ice_ridge%cf
+      call gr%add(nml_real("Cf", pr, "Ratio of ridging work to potential-energy "// &
+                           "change (Flato and Hibler 1995); must be > 0", &
+                           dead_on_ocean_path=ICE_DEAD))
+      pr => cfg%ocean%ice_ridge%pstar
+      call gr%add(nml_real("Pstar", pr, "Hibler (1979) strength constant, "// &
+                           "kstrength=0; must be > 0", &
+                           units="N/m", &
+                           dead_on_ocean_path=ICE_DEAD))
+      pr => cfg%ocean%ice_ridge%cstar
+      call gr%add(nml_real("Cstar", pr, "Hibler (1979) concentration constant, "// &
+                           "kstrength=0; must be > 0", &
+                           dead_on_ocean_path=ICE_DEAD))
+      call schema%add_group(gr)
+
+      ga%name = "ocean_ice_atm"
+      ga%doc = "CICE-port atmosphere-ice boundary-layer knobs (scheme='cice'; "// &
+               "upstream CICE defaults)."
+      pl => cfg%ocean%ice_atm%highfreq
+      call ga%add(nml_logical("highfreq", pl, "Relative-wind (ice-velocity) stress with "// &
+                              "a 0.5 m/s floor (OM3 .true.)", &
+                              dead_on_ocean_path=ICE_DEAD))
+      pi => cfg%ocean%ice_atm%natmiter
+      call ga%add(nml_int("natmiter", pi, "Monin-Obukhov iterations (Jordan et al. "// &
+                          "1999); must be >= 0", &
+                          dead_on_ocean_path=ICE_DEAD))
+      pr => cfg%ocean%ice_atm%atmiter_conv
+      call ga%add(nml_real("atmiter_conv", pr, "Relative change in ustar that stops "// &
+                           "the iteration; must be >= 0", &
+                           dead_on_ocean_path=ICE_DEAD))
+      pr => cfg%ocean%ice_atm%iceruf
+      call ga%add(nml_real("iceruf", pr, "Ice surface roughness for the neutral "// &
+                           "drag; must be > 0 and below zref = 10 m (checked at configure); "// &
+                           "the forcing reference heights must also exceed it "// &
+                           "(checked at run time by the forcing input PR, not at configure)", &
+                           units="m", &
+                           dead_on_ocean_path=ICE_DEAD))
+      ps => cfg%ocean%ice_atm%atmbndy
+      call ga%add(nml_enum("atmbndy", ps, "Boundary-layer form: similarity "// &
+                           "(constant and mixed are refused)", &
+                           allowed=[character(len=16) :: "similarity", "constant", &
+                                    "mixed"], &
+                           dead_on_ocean_path=ICE_DEAD))
+      pl => cfg%ocean%ice_atm%formdrag
+      call ga%add(nml_logical("formdrag", pl, "Form drag (.true. is refused)", &
+                              dead_on_ocean_path=ICE_DEAD))
+      pl => cfg%ocean%ice_atm%calc_strair
+      call ga%add(nml_logical("calc_strair", pl, "Compute the wind stress in the "// &
+                              "ice model (.false. is refused)", &
+                              dead_on_ocean_path=ICE_DEAD))
+      call schema%add_group(ga)
    end subroutine register_ocean_ice_cice
 
    module subroutine register_ocean_ice_ic(cfg, schema)

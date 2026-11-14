@@ -58,6 +58,7 @@ module rdb_config
              ocean_coriolis_config_t, ocean_thermo_config_t, &
              ocean_ice_config_t, ocean_ice_ic_config_t, &
              ocean_ice_thermo_config_t, ocean_ice_sw_config_t, &
+             ocean_ice_ridge_config_t, ocean_ice_atm_config_t, &
              ocean_restore_config_t, &
              ocean_geothermal_config_t, &
              ocean_sponge_config_t, &
@@ -571,7 +572,9 @@ module rdb_config
          !! Basal heat-transfer coefficient: `"constant"` only;
          !! `"Cdn_ocn"` is refused.
       real(wp) :: floediam = 300.0_wp
-         !! Floe diameter for lateral melt [m].
+         !! Floe diameter for lateral melt [m] (Steele 1992); must be > 0.
+      real(wp) :: floeshape = 0.66_wp
+         !! Floe shape factor for lateral melt (Steele 1992); must be > 0.
       real(wp) :: ksno = 0.3_wp
          !! Snow thermal conductivity [W/m/K].
       real(wp) :: emissivity = 0.985_wp
@@ -604,6 +607,50 @@ module rdb_config
          !! Snow-cover patchiness length [m]; negative (default) follows
          !! `constants_set` (0.02 icepack, 0.005 cesm).
    end type ocean_ice_sw_config_t
+
+   type :: ocean_ice_ridge_config_t
+      !! `&ocean_ice_ridge_nml`: CICE-port ridging and ice-strength knobs
+      !! (Thorndike et al. 1975; Rothrock 1975; Hibler 1979, 1980; Flato and
+      !! Hibler 1995; Lipscomb et al. 2007).  `scheme="cice"` only.  Upstream
+      !! code defaults, which OM3 also uses (it sets none of them).
+      integer :: kstrength = 1
+         !! Ice strength: 1 = Rothrock (1975), 0 = Hibler (1979).
+      integer :: krdg_partic = 1
+         !! Ridge participation: 1 = Lipscomb et al. (2007), 0 = Thorndike et al. (1975).
+      integer :: krdg_redist = 1
+         !! Ridge redistribution: 1 = exponential (Lipscomb et al. 2007),
+         !! 0 = Hibler (1980).
+      real(wp) :: mu_rdg = 3.0_wp
+         !! E-folding scale of ridged ice for `krdg_redist = 1` [m^0.5]; > 0.
+      real(wp) :: cf = 17.0_wp
+         !! Ratio of ridging work to potential-energy change (Flato and
+         !! Hibler 1995); > 0.
+      real(wp) :: pstar = 2.75e4_wp
+         !! Hibler strength constant [N/m] (`kstrength = 0`); > 0.
+      real(wp) :: cstar = 20.0_wp
+         !! Hibler concentration constant (`kstrength = 0`); > 0.
+   end type ocean_ice_ridge_config_t
+
+   type :: ocean_ice_atm_config_t
+      !! `&ocean_ice_atm_nml`: CICE-port atmosphere-ice boundary-layer knobs
+      !! (Monin-Obukhov similarity, Jordan et al. 1999 bulk transfer).
+      !! `scheme="cice"` only.  Upstream code defaults (OM3: `highfreq = .true.`).
+      logical :: highfreq = .false.
+         !! Relative-wind (ice-velocity) stress with a 0.5 m/s floor (OM3 `.true.`).
+      integer :: natmiter = 5
+         !! Monin-Obukhov iterations; >= 0.
+      real(wp) :: atmiter_conv = 0.0_wp
+         !! Relative change in ustar that stops the iteration; >= 0.
+      real(wp) :: iceruf = 5.0e-4_wp
+         !! Ice surface roughness [m]; in (0, 10 m) and below both forcing
+         !! reference heights.
+      character(len=16) :: atmbndy = "similarity"
+         !! Boundary-layer form: only `"similarity"` is supported.
+      logical :: formdrag = .false.
+         !! Form drag: only `.false.` is supported.
+      logical :: calc_strair = .true.
+         !! Compute the wind stress in the ice model: only `.true.` is supported.
+   end type ocean_ice_atm_config_t
 
    type :: ocean_ice_ic_config_t
       !! `&ocean_ice_ic_nml`: sea-ice ANALYTIC initial-condition path (PR
@@ -3999,6 +4046,10 @@ module rdb_config
          !! CICE-port thermo/ITD knobs (`&ocean_ice_thermo_nml`).
       type(ocean_ice_sw_config_t)     :: ice_sw
          !! CICE-port albedo knobs (`&ocean_ice_sw_nml`).
+      type(ocean_ice_ridge_config_t)  :: ice_ridge
+         !! CICE-port ridging/strength knobs (`&ocean_ice_ridge_nml`).
+      type(ocean_ice_atm_config_t)    :: ice_atm
+         !! CICE-port atmosphere boundary-layer knobs (`&ocean_ice_atm_nml`).
       type(ocean_ice_ic_config_t)     :: ice_ic
          !! Sea-ice initial-condition config (`&ocean_ice_ic_nml`, PR 24).
          !! Default `conc_config="zero"` ⇒ byte-identical.

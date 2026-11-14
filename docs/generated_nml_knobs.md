@@ -661,7 +661,8 @@ CICE-port ice thermodynamics and thickness-distribution knobs (scheme='cice'; up
 | `hi_min` | `0.1000000000E-01` | m | Minimum ice thickness for thermodynamics |
 | `ustar_min` | `0.5000000000E-02` | m/s | Friction-velocity floor (OM3 5e-4) |
 | `fbot_xfer_type` | `"constant"` |  | Basal heat-transfer coefficient: constant (Cdn_ocn is refused) |
-| `floediam` | `0.3000000000E+03` | m | Floe diameter for lateral melt |
+| `floediam` | `0.3000000000E+03` | m | Floe diameter for lateral melt (Steele 1992); must be > 0 |
+| `floeshape` | `0.6600000000E+00` |  | Floe shape factor for lateral melt (Steele 1992); must be > 0 |
 | `ksno` | `0.3000000000E+00` | W/m/K | Snow thermal conductivity |
 | `emissivity` | `0.9850000000E+00` |  | Surface emissivity (OM3 0.95) |
 | `kitd` | `1` |  | ITD conversion: 1 = linear remap (0 = delta function is refused) |
@@ -680,6 +681,34 @@ CICE-port ice shortwave albedo parameters (scheme='cice'; upstream CICE defaults
 | `albsnowi` | `0.7000000000E+00` |  | Near-infrared albedo of cold snow |
 | `ahmax` | `0.3000000000E+00` | m | Thickness above which the ice albedo is constant (OM3 0.1); must be > 0 |
 | `snowpatch` | `-0.1000000000E+01` | m | Snow-cover patchiness length; negative follows constants_set (0.02 icepack, 0.005 cesm) |
+
+### &ocean_ice_ridge_nml
+
+CICE-port ridging and ice-strength knobs (scheme='cice'; upstream CICE defaults, which OM3 also uses).
+
+| Knob | Default | Units | Description |
+|------|---------|-------|-------------|
+| `kstrength` | `1` |  | Ice strength: 1 = Rothrock (1975), 0 = Hibler (1979); other values are refused |
+| `krdg_partic` | `1` |  | Ridge participation: 1 = Lipscomb et al. (2007), 0 = Thorndike et al. (1975); other values are refused |
+| `krdg_redist` | `1` |  | Ridge redistribution: 1 = exponential (Lipscomb et al. 2007), 0 = Hibler (1980); other values are refused |
+| `mu_rdg` | `0.3000000000E+01` | m^0.5 | E-folding scale of ridged ice for krdg_redist=1 (Lipscomb et al. 2007); must be > 0 |
+| `Cf` | `0.1700000000E+02` |  | Ratio of ridging work to potential-energy change (Flato and Hibler 1995); must be > 0 |
+| `Pstar` | `0.2750000000E+05` | N/m | Hibler (1979) strength constant, kstrength=0; must be > 0 |
+| `Cstar` | `0.2000000000E+02` |  | Hibler (1979) concentration constant, kstrength=0; must be > 0 |
+
+### &ocean_ice_atm_nml
+
+CICE-port atmosphere-ice boundary-layer knobs (scheme='cice'; upstream CICE defaults).
+
+| Knob | Default | Units | Description |
+|------|---------|-------|-------------|
+| `highfreq` | `.false.` |  | Relative-wind (ice-velocity) stress with a 0.5 m/s floor (OM3 .true.) |
+| `natmiter` | `5` |  | Monin-Obukhov iterations (Jordan et al. 1999); must be >= 0 |
+| `atmiter_conv` | `0.0000000000E+00` |  | Relative change in ustar that stops the iteration; must be >= 0 |
+| `iceruf` | `0.5000000000E-03` | m | Ice surface roughness for the neutral drag; must be > 0 and below zref = 10 m (checked at configure); the forcing reference heights must also exceed it (checked at run time by the forcing input PR, not at configure) |
+| `atmbndy` | `"similarity"` |  | Boundary-layer form: similarity (constant and mixed are refused) |
+| `formdrag` | `.false.` |  | Form drag (.true. is refused) |
+| `calc_strair` | `.true.` |  | Compute the wind stress in the ice model (.false. is refused) |
 
 ### &ocean_ice_ic_nml
 

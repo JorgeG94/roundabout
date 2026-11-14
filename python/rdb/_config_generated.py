@@ -3750,12 +3750,21 @@ class OceanIceThermo(Group):
 
     floediam = Real(
         'floediam',
-        doc='Floe diameter for lateral melt',
+        doc='Floe diameter for lateral melt (Steele 1992); must be > 0',
         units='m',
         required=False,
         default=300.0,
         has_min=True,
         vmin=0.0,
+        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+    )
+
+    floeshape = Real(
+        'floeshape',
+        doc='Floe shape factor for lateral melt (Steele 1992); must be > 0',
+        units='',
+        required=False,
+        default=0.66,
         dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
     )
 
@@ -3883,6 +3892,145 @@ class OceanIceSw(Group):
         units='m',
         required=False,
         default=-1.0,
+        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+    )
+
+
+class OceanIceRidge(Group):
+    """`&ocean_ice_ridge_nml` -- CICE-port ridging and ice-strength knobs (scheme='cice'; upstream CICE defaults, which OM3 also uses)."""
+
+    _nml_name = 'ocean_ice_ridge'
+
+    kstrength = Int(
+        'kstrength',
+        doc='Ice strength: 1 = Rothrock (1975), 0 = Hibler (1979); other values are refused',
+        units='',
+        required=False,
+        default=1,
+        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+    )
+
+    krdg_partic = Int(
+        'krdg_partic',
+        doc='Ridge participation: 1 = Lipscomb et al. (2007), 0 = Thorndike et al. (1975); other values are refused',
+        units='',
+        required=False,
+        default=1,
+        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+    )
+
+    krdg_redist = Int(
+        'krdg_redist',
+        doc='Ridge redistribution: 1 = exponential (Lipscomb et al. 2007), 0 = Hibler (1980); other values are refused',
+        units='',
+        required=False,
+        default=1,
+        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+    )
+
+    mu_rdg = Real(
+        'mu_rdg',
+        doc='E-folding scale of ridged ice for krdg_redist=1 (Lipscomb et al. 2007); must be > 0',
+        units='m^0.5',
+        required=False,
+        default=3.0,
+        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+    )
+
+    Cf = Real(
+        'Cf',
+        doc='Ratio of ridging work to potential-energy change (Flato and Hibler 1995); must be > 0',
+        units='',
+        required=False,
+        default=17.0,
+        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+    )
+
+    Pstar = Real(
+        'Pstar',
+        doc='Hibler (1979) strength constant, kstrength=0; must be > 0',
+        units='N/m',
+        required=False,
+        default=27500.0,
+        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+    )
+
+    Cstar = Real(
+        'Cstar',
+        doc='Hibler (1979) concentration constant, kstrength=0; must be > 0',
+        units='',
+        required=False,
+        default=20.0,
+        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+    )
+
+
+class OceanIceAtm(Group):
+    """`&ocean_ice_atm_nml` -- CICE-port atmosphere-ice boundary-layer knobs (scheme='cice'; upstream CICE defaults)."""
+
+    _nml_name = 'ocean_ice_atm'
+
+    highfreq = Bool(
+        'highfreq',
+        doc='Relative-wind (ice-velocity) stress with a 0.5 m/s floor (OM3 .true.)',
+        units='',
+        required=False,
+        default=False,
+        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+    )
+
+    natmiter = Int(
+        'natmiter',
+        doc='Monin-Obukhov iterations (Jordan et al. 1999); must be >= 0',
+        units='',
+        required=False,
+        default=5,
+        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+    )
+
+    atmiter_conv = Real(
+        'atmiter_conv',
+        doc='Relative change in ustar that stops the iteration; must be >= 0',
+        units='',
+        required=False,
+        default=0.0,
+        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+    )
+
+    iceruf = Real(
+        'iceruf',
+        doc='Ice surface roughness for the neutral drag; must be > 0 and below zref = 10 m (checked at configure); the forcing reference heights must also exceed it (checked at run time by the forcing input PR, not at configure)',
+        units='m',
+        required=False,
+        default=0.0005,
+        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+    )
+
+    atmbndy = Enum(
+        'atmbndy',
+        doc='Boundary-layer form: similarity (constant and mixed are refused)',
+        units='',
+        required=False,
+        default='similarity',
+        allowed=('similarity', 'constant', 'mixed'),
+        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+    )
+
+    formdrag = Bool(
+        'formdrag',
+        doc='Form drag (.true. is refused)',
+        units='',
+        required=False,
+        default=False,
+        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+    )
+
+    calc_strair = Bool(
+        'calc_strair',
+        doc='Compute the wind stress in the ice model (.false. is refused)',
+        units='',
+        required=False,
+        default=True,
         dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
     )
 
@@ -7615,6 +7763,8 @@ GENERATED_GROUPS = {
     'ocean_ice': OceanIce,
     'ocean_ice_thermo': OceanIceThermo,
     'ocean_ice_sw': OceanIceSw,
+    'ocean_ice_ridge': OceanIceRidge,
+    'ocean_ice_atm': OceanIceAtm,
     'ocean_ice_ic': OceanIceIc,
     'ocean_restore': OceanRestore,
     'ocean_geothermal': OceanGeothermal,
@@ -7645,5 +7795,5 @@ GENERATED_GROUPS = {
     'ocean_bc': OceanBc,
 }
 
-N_GROUPS = 65
-N_KNOBS = 836
+N_GROUPS = 67
+N_KNOBS = 851
