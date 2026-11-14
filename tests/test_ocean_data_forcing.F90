@@ -86,7 +86,8 @@ module test_ocean_data_forcing
    use rdb_grid, only: hgrid_t
    use rdb_config, only: ocean_dataovr_config_t, dataovr_entry_config_t, &
                          dataovr_entry_is_valid, dataovr_time_is_valid, &
-                         dataovr_freshwater_needs_components, dataovr_any_tag_set
+                         dataovr_freshwater_needs_components, dataovr_any_tag_set, &
+                         dataovr_heat_salt_clobbers_ice
    use rdb_ocean_data_input, only: ocean_data_input_t, ocean_data_input_update_all
    use rdb_ocean_data_forcing, only: ocean_data_forcing_t, &
                                      ocean_data_forcing_configure, &
@@ -1186,6 +1187,24 @@ contains
       cfg%cycle_period = 31536000.0_wp
       call check(error, dataovr_time_is_valid(cfg), "T9: cyclic with a period is valid")
       if (allocated(error)) return
+
+      ! --- dataovr_heat_salt_clobbers_ice: heat/salt file + sea ice, components off ---
+      cfg%heat%file = "heat.nc"
+      call check(error, dataovr_heat_salt_clobbers_ice(cfg, .false., .true.), &
+                 "heat file + ice + components off must be refused")
+      if (allocated(error)) return
+      call check(error,.not. dataovr_heat_salt_clobbers_ice(cfg, .true., .true.), &
+                 "components on resolves it")
+      if (allocated(error)) return
+      call check(error,.not. dataovr_heat_salt_clobbers_ice(cfg, .false., .false.), &
+                 "no ice: nothing to clobber")
+      if (allocated(error)) return
+      cfg%heat%file = ""
+      cfg%salt%file = "salt.nc"
+      call check(error, dataovr_heat_salt_clobbers_ice(cfg, .false., .true.), &
+                 "salt file + ice + components off must be refused")
+      if (allocated(error)) return
+      cfg%salt%file = ""
 
       ! --- dataovr_freshwater_needs_components (reports the PROBLEM) ---
       cfg%evap%file = ""

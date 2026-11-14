@@ -117,7 +117,8 @@ module rdb_ocean_engine
    use rdb_eos, only: parse_ts_convention, TS_CONS_ABS
    use rdb_ocean_dyn, only: ocean_dyn_step, ocean_dyn_step_split, ocean_porous_refresh, &
                             ocean_dyn_enable_bt_wide, isopycnal_vanish_tol
-   use rdb_ocean_surface_flux, only: ocean_surface_flux_assemble
+   use rdb_ocean_surface_flux, only: ocean_surface_flux_assemble, &
+                                     ocean_surface_flux_refresh_sw_net
    use rdb_ocean_surface_stress, only: ocean_surface_stress_set_shelf_from_ustar
    use rdb_ocean_cavity_flux, only: ocean_cavity_flux_step
    use rdb_ocean_cavity_melt, only: parse_cavity_freshwater, CAVITY_FW_MASS
@@ -2011,6 +2012,11 @@ contains
                               engine%state%bulk_forcing, engine%state%surface_stress, &
                               engine%state%surface_flux)
 #endif
+
+      ! `sw_source="q_sw"` consumers (penetration, KPP, EPBL) read the TOTAL
+      ! shortwave: this step's open-water `q_sw` plus the ice-transmitted
+      ! `sw_ice` (carried from the last thermo window).  No-op otherwise.
+      call ocean_surface_flux_refresh_sw_net(engine%state%surface_flux)
 
       call engine%bc_source%update(t, engine%state%bc)
 

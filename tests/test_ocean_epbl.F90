@@ -442,6 +442,7 @@ contains
          ! posting into d_forcing / d_mixing / d_cdecay.
          call sf%set_components(grid, .true.)
          sf%q_sw = 250.0_wp
+         sf%sw_net = 250.0_wp
          call sf%set_sw_penetration(1.0_wp, 0.58_wp, 0.35_wp, 23.0_wp, sw_source="q_sw")
          epbl%epbl_sw_ctke = .true.
          call vd%init(grid, nz_ml=NZ)
