@@ -463,6 +463,10 @@ module rdb_ocean_surface_flux
          !! the follow-up PGF fold needs no further plumbing.
 
       ! ---- CICE-port sea-ice components — allocated iff `use_ice_components` ----
+      logical :: ice_mapped = .false.
+         !! True between `enter_data` and `exit_data` for the three ice arrays; `destroy`
+         !! and a re-allocating `set_ice_components` unmap first, so a freed host array is
+         !! never left present on the device.
       logical :: use_ice_components = .false.
          !! `.true.` only under the CICE-port ice (`set_ice_components`), and only
          !! with `use_components`.  `.false.` (default): the three arrays below
@@ -524,6 +528,10 @@ contains
       if (allocated(this%sw_kappa)) deallocate (this%sw_kappa)
       if (allocated(this%sw_chl_field)) deallocate (this%sw_chl_field)
       call ocean_surfflux_dealloc_components(this)
+      if (this%ice_mapped) then
+         !$acc exit data delete(this%ice_heat, this%ice_sw, this%ice_salt)
+         this%ice_mapped = .false.
+      end if
       this%use_ice_components = .false.
       if (allocated(this%ice_heat)) deallocate (this%ice_heat)
       if (allocated(this%ice_sw)) deallocate (this%ice_sw)
@@ -608,6 +616,7 @@ contains
       if (this%use_ice_components) then
          !$acc enter data copyin(this%ice_heat, this%ice_sw, this%ice_salt)
          !$acc update device(this%ice_heat, this%ice_sw, this%ice_salt)
+         this%ice_mapped = .true.
       end if
    end subroutine ocean_surfflux_enter_data_impl
 
@@ -621,8 +630,9 @@ contains
 
    subroutine ocean_surfflux_exit_data_impl(this)
       type(ocean_surface_flux_t), intent(inout) :: this
-      if (this%use_ice_components) then
+      if (this%use_ice_components .and. this%ice_mapped) then
          !$acc exit data delete(this%ice_heat, this%ice_sw, this%ice_salt)
+         this%ice_mapped = .false.
       end if
       if (this%use_components) then
          !$acc exit data delete(this%q_sw, this%q_lw, this%q_lat, this%q_sens, &
@@ -850,6 +860,10 @@ contains
       class(ocean_surface_flux_t), intent(inout) :: this
       type(hgrid_t), intent(in) :: grid
       logical, intent(in) :: enable
+      if (this%ice_mapped) then
+         !$acc exit data delete(this%ice_heat, this%ice_sw, this%ice_salt)
+         this%ice_mapped = .false.
+      end if
       if (allocated(this%ice_heat)) deallocate (this%ice_heat)
       if (allocated(this%ice_sw)) deallocate (this%ice_sw)
       if (allocated(this%ice_salt)) deallocate (this%ice_salt)

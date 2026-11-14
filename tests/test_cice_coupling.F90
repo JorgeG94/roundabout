@@ -12,6 +12,9 @@
 module test_cice_coupling
    use, intrinsic :: iso_fortran_env, only: int32, int64, error_unit
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite, ieee_value, ieee_quiet_nan
+#ifdef RDB_GPU_OFFLOAD
+   use openacc, only: acc_present_dump
+#endif
    use testdrive, only: new_unittest, unittest_type, error_type, check
    use rdb_constants, only: wp, RHO_WATER
    use lcg_deterministic, only: lcg_next, lcg_unit
@@ -89,7 +92,8 @@ contains
                   new_unittest("seam_ghosts_equal_owners_periodic", test_ghosts), &
                   new_unittest("melt_cap_window_bound", test_melt_cap), &
                   new_unittest("melt_cap_ratio1_bitwise", test_melt_cap_ratio1), &
-                  new_unittest("avg_required_tags_and_window_check", test_required_and_window) &
+                  new_unittest("avg_required_tags_and_window_check", test_required_and_window), &
+                  new_unittest("nothing_left_mapped", test_nothing_left) &
                   ]
    end subroutine collect_cice_coupling_tests
 
@@ -105,7 +109,7 @@ contains
 
    subroutine make_flux(g, fx, ierr)
       type(hgrid_t), intent(out) :: g
-      type(ice_flux_t), intent(out) :: fx
+      type(ice_flux_t), intent(inout) :: fx
       integer, intent(out) :: ierr
       call g%init(NXP, NYP, NG, 1000.0_wp, 1000.0_wp)
       call fx%init(g, NCAT, ierr)
@@ -376,7 +380,7 @@ contains
             call emit(fx, base, step)
             call ice_flux_avg_accumulate(av, fx, dt, ierr)
             call check(error, ierr, ICE_AVG_OK, "accumulate")
-            if (allocated(error)) return
+            if (allocated(error)) goto 900
             win = win + dt
             i_h = i_h + (fx%fhocn + fx%fswthru)*dt
             i_s = i_s + (PSU_PER_MASS_FRACTION*fx%fsalt - sss*fx%fresh)*dt
@@ -387,7 +391,7 @@ contains
          end do
          call ice_cice_apply_window(g, bc, av, sf, sss, ierr, fresh_mass_out=fw, window_expected=win)
          call check(error, ierr, ICE_ADAPT_OK, "apply_window")
-         if (allocated(error)) return
+         if (allocated(error)) goto 900
          call check(error, av%n_acc == 0.0_wp .and. av%t_acc == 0.0_wp .and. owned_max(av%acc_fhocn) == 0.0_wp, &
                     "the window is reset after the hand-off")
          if (comps) then
@@ -409,11 +413,12 @@ contains
       tolr = 5.0e-15_wp
       call check(error, ieee_is_finite(r_h) .and. ieee_is_finite(r_s) .and. ieee_is_finite(r_w), &
                  "closure residuals are finite")
-      if (allocated(error)) return
+      if (allocated(error)) goto 900
       call check(error, r_h <= tolr, "closure B heat: ocean-applied == ice-emitted")
       call check(error, r_s <= tolr, "closure B salt (virtual form): ocean-applied == ice-emitted")
       call check(error, r_w <= tolr, "closure B water: mass flux handed on == ice-emitted")
-      if (allocated(error)) return
+      if (allocated(error)) goto 900
+900   continue
       call sf%exit_data()
       call av%exit_data()
       call fx%exit_data()
@@ -458,15 +463,16 @@ contains
          call ice_flux_avg_accumulate(av, fx, dt, ierr)
          call ice_cice_apply_window(g, bc, av, sb, sss, ierr, fresh_mass_out=fw)
          call check(error, ierr, ICE_ADAPT_OK, "averaged")
-         if (allocated(error)) return
+         if (allocated(error)) goto 900
          !$acc update self(sa%Q_heat, sa%Q_salt, sb%Q_heat, sb%Q_salt, fw)
          call check(error, all(sa%Q_heat(IS:IE, JS:JE) == sb%Q_heat(IS:IE, JS:JE)), &
                     "Q_heat bitwise identical to the direct hand-off")
          call check(error, all(sa%Q_salt(IS:IE, JS:JE) == sb%Q_salt(IS:IE, JS:JE)), &
                     "Q_salt bitwise identical to the direct hand-off")
          call check(error, all(fw(IS:IE, JS:JE) == fx%fresh(IS:IE, JS:JE)), "fresh bitwise identical")
-         if (allocated(error)) return
+         if (allocated(error)) goto 900
       end do
+900   continue
       call sb%exit_data()
       call sa%exit_data()
       call av%exit_data()
@@ -518,10 +524,10 @@ contains
       call check(error, ierr, 0, "read ok")
       open (newunit=lun, file=FN, status="old")
       close (lun, status="delete")
-      if (allocated(error)) return
+      if (allocated(error)) goto 900
       call check(error, all(rb%entries(1:7)%found), "every averager entry found in the file")
       call check(error, b%n_acc == 2.0_wp .and. b%t_acc == dts(1) + dts(2), "window counters restored")
-      if (allocated(error)) return
+      if (allocated(error)) goto 900
       call b%enter_data()
       call emit(fx, base, 3)
       call ice_flux_avg_accumulate(a, fx, dts(3), ierr)
@@ -532,6 +538,7 @@ contains
                  all(a%acc_fhocn == b%acc_fhocn) .and. all(a%acc_fswthru == b%acc_fswthru) .and. &
                  all(a%acc_fswthru_vis == b%acc_fswthru_vis), "resumed window mean is bitwise the uninterrupted one")
       call check(error, a%n_acc == b%n_acc .and. a%t_acc == b%t_acc, "counters equal after the resume")
+900   continue
       call a%exit_data()
       call b%exit_data()
       call fx%exit_data()
@@ -660,6 +667,7 @@ contains
       !$acc update self(sf%Q_heat)
       call check(error, all(sf%Q_heat == 11.0_wp), "and the ocean field is untouched")
       !$acc exit data delete(sss)
+      call av%exit_data()
       call sf%exit_data()
    end subroutine test_empty_window
 
@@ -1141,7 +1149,7 @@ contains
       call check(error, ierr, 0, "read")
       open (newunit=lun, file=FN, status="old")
       close (lun, status="delete")
-      if (allocated(error)) return
+      if (allocated(error)) goto 900
       call s2%init(g, nz_ml=1)
       call s2%set_wind_stress_const(0.7_wp, 0.0_wp)
       call ice_cice_stress_resume_apply(s2, m2)
@@ -1153,6 +1161,7 @@ contains
       call mirror%init(g)
       call ice_cice_stress_resume_apply(s3, mirror)
       call check(error, all(s3%tau_x == 0.7_wp), "a fresh run keeps the wind")
+900   continue
       !$acc exit data delete(ta, ti, tay, tiy)
       call stress%exit_data()
       call cice%exit_data()
@@ -1268,11 +1277,12 @@ contains
          write (error_unit, "(a,i0,a,2es10.2)") "ocean content closure ratio=", ratio, " rel residual heat/salt =", &
             worst_h, worst_s
          call check(error, ieee_is_finite(worst_h) .and. ieee_is_finite(worst_s), "content changes are finite")
-         if (allocated(error)) return
+         if (allocated(error)) goto 800
          call check(error, tot > 0.0_wp .and. all(es(IS:IE, JS:JE) > 0.0_wp), "growing ice salinifies the ocean (sum(h*S) rises)")
          call check(error, worst_h <= 3.0e-12_wp, "ocean heat = open-water SW + reader heat + ice heat + under-ice SW")
          call check(error, worst_s <= 1.0e-12_wp, "ocean salt change = what the ice emitted (virtual-salt form)")
-         if (allocated(error)) return
+         if (allocated(error)) goto 800
+800      continue
          call sf%exit_data()
          call av%exit_data()
          call fx%exit_data()
@@ -1283,6 +1293,7 @@ contains
          call ms%destroy()
          call sf%destroy()
          call av%destroy()
+         if (allocated(error)) return
       end do
    end subroutine test_ice_components_end_to_end
 
@@ -1420,8 +1431,9 @@ contains
             call check(error, minval(taken_nocap(IS:IE, JS:JE)/ice%melt_potential(IS:IE, JS:JE)) > 2.99_wp, &
                        "uncapped: the same upper-ocean heat is drawn three times")
          end if
-         if (allocated(error)) return
+         if (allocated(error)) goto 900
       end do
+900   continue
       call av%exit_data()
       call fx%exit_data()
       call ice%exit_data()
@@ -1507,5 +1519,20 @@ contains
       call fx%exit_data()
       !$acc exit data delete(sss)
    end subroutine test_required_and_window
+
+   subroutine test_nothing_left(error)
+      !! Last test of the file: with RDB_ACC_PRESENT_DUMP set the OpenACC present table is dumped
+      !! (offload build); every earlier test unmaps what it mapped, so nothing of this file's
+      !! slots may appear in it.  Always passes (the dump is read by eye / by the repeat-run gate).
+      type(error_type), allocatable, intent(out) :: error
+      character(len=8) :: v
+      integer :: st
+
+      call get_environment_variable("RDB_ACC_PRESENT_DUMP", v, status=st)
+#ifdef RDB_GPU_OFFLOAD
+      if (st == 0) call acc_present_dump()
+#endif
+      call check(error, .true., "present table dumped on request")
+   end subroutine test_nothing_left
 
 end module test_cice_coupling
