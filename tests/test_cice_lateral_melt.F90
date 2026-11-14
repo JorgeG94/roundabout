@@ -498,7 +498,8 @@ contains
                   new_unittest("new_ice_only_cell", test_new_ice_only), &
                   new_unittest("oracle_lateral_melt", test_oracle_melt), &
                   new_unittest("shapes_and_snow_only", test_shapes), &
-                  new_unittest("driver_closed_form_tolerance", test_driver_device) &
+                  new_unittest("driver_closed_form_tolerance", test_driver_device), &
+                  new_unittest("driver_every_cell_vs_host_kernel", test_driver_every_cell) &
                   ]
    end subroutine collect_cice_lateral_melt_tests
 
@@ -1117,5 +1118,95 @@ contains
          if (.not. (x <= worst)) worst = x
       end subroutine acc
    end subroutine test_driver_device
+
+   subroutine test_driver_every_cell(error)
+      !! Guards the index passing of the in-place kernel: a random state in which
+      !! EVERY cell differs (own `rside`, own areas, volumes and enthalpies) goes
+      !! through the device driver, and every cell of every output and of the
+      !! melted state is compared with a host run of the SAME cell kernel
+      !! (`ice_lateral_melt_cell`, indices as literal loop variables).  A kernel
+      !! that read the wrong cells (indices passed by reference to a device
+      !! routine) would differ almost everywhere.  Tolerance 1e-13 relative
+      !! (FMA on the GPU build); bitwise on CPU builds.  Non-finite results fail
+      !! explicitly.
+      type(error_type), allocatable, intent(out) :: error
+      integer, parameter :: NX = 33, NY = 21
+      type(ice_params_t) :: p
+      real(wp) :: a(NX, NY, NC), v(NX, NY, NC), vs(NX, NY, NC), qi(NX, NY, NC, NIL), qs(NX, NY, NC, NSL)
+      real(wp) :: ah(NX, NY, NC), vh(NX, NY, NC), vsh(NX, NY, NC), rside(NX, NY), dt, tol, worst, x
+      real(wp) :: fr(NX, NY), fs(NX, NY), fh(NX, NY), ml(NX, NY)
+      real(wp) :: frh(NX, NY), fsh(NX, NY), fhh(NX, NY), mlh(NX, NY)
+      integer(int32) :: ie(NX, NY), ieh(NX, NY)
+      integer :: i, j, nchg
+
+#ifdef RDB_GPU_OFFLOAD
+      tol = 1.0e-13_wp
+#else
+      tol = 0.0_wp
+#endif
+      call build_state(ICE_CONSTANTS_ICEPACK, NX*NY, 271828_int64, NX, NY, p, a, v, vs, qi, qs, rside)
+      do j = 1, NY
+         do i = 1, NX
+            rside(i, j) = 0.002_wp + 0.5_wp*real(mod(7*i + 13*j, 29), wp)/29.0_wp   ! every cell differs
+         end do
+      end do
+      dt = 900.0_wp
+      ah = a; vh = v; vsh = vs
+      fr = 0.1_wp; fs = 0.2_wp; fh = -0.3_wp; ml = 0.4_wp; ie = 0_int32
+      frh = fr; fsh = fs; fhh = fh; mlh = ml; ieh = 0_int32
+      do j = 1, NY
+         do i = 1, NX
+            call ice_lateral_melt_cell(i, j, NX, NY, NC, NIL, NSL, rside(i, j), dt, p%c%rhoi, p%c%rhos, &
+                                       p%thermo%ice_ref_salinity, p%c%puny, ah, vh, vsh, qi, qs, frh, fsh, fhh, mlh, ieh)
+         end do
+      end do
+      !$acc enter data copyin(a, v, vs, qi, qs, rside, fr, fs, fh, ml, ie)
+      call ice_lateral_melt_step(NX, NY, NC, NIL, NSL, 1, NX, 1, NY, dt, p, rside, &
+                                 a, v, vs, qi, qs, fr, fs, fh, ml, ie)
+      !$acc update self(a, v, vs, fr, fs, fh, ml, ie)
+      !$acc exit data delete(a, v, vs, qi, qs, rside, fr, fs, fh, ml, ie)
+      worst = 0.0_wp
+      nchg = 0
+      do j = 1, NY
+         do i = 1, NX
+            call chk(fr(i, j), frh(i, j))
+            call chk(fs(i, j), fsh(i, j))
+            call chk(fh(i, j), fhh(i, j))
+            call chk(ml(i, j), mlh(i, j))
+            if (fr(i, j) /= 0.1_wp) nchg = nchg + 1
+         end do
+      end do
+      call chk_all(a, ah)
+      call chk_all(v, vh)
+      call chk_all(vs, vsh)
+      if (.not. (worst <= tol)) then
+         call test_failed(error, "device driver differs from the host kernel in some cell (or is non-finite)")
+         return
+      end if
+      call check(error, nchg == NX*NY, "every cell received a flux (no cell skipped)")
+      if (allocated(error)) return
+      call check(error, all(ie == ieh) .and. all(ie == 0_int32), "error words agree and are clean")
+   contains
+      subroutine chk(d, h)
+         real(wp), intent(in) :: d, h
+         if (.not. (ieee_is_finite(d) .and. ieee_is_finite(h))) then
+            worst = huge(1.0_wp)
+            return
+         end if
+         x = abs(d - h)/max(abs(h), tiny(1.0_wp))
+         if (x > worst) worst = x
+      end subroutine chk
+      subroutine chk_all(d, h)
+         real(wp), intent(in) :: d(:, :, :), h(:, :, :)
+         integer :: ii, jj, nn
+         do nn = 1, NC
+            do jj = 1, NY
+               do ii = 1, NX
+                  call chk(d(ii, jj, nn), h(ii, jj, nn))
+               end do
+            end do
+         end do
+      end subroutine chk_all
+   end subroutine test_driver_every_cell
 
 end module test_cice_lateral_melt

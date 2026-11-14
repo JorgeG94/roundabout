@@ -46,12 +46,22 @@ module rdb_ice_params
    !! melting temperature `Tmlt = -depressT*S` (Bitz and Lipscomb 1999 eqs.
    !! 1-3, with the `cp_ocn*Tmlt` offset of the reference state).
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+   use, intrinsic :: iso_fortran_env, only: int32, int64
    use rdb_constants, only: wp
    use rdb_ice_dims, only: ICE_NCAT_MAX, ICE_NILYR_MAX, ICE_NSLYR_MAX
    use rdb_safe_math, only: safe_cos, safe_pow
    use rdb_safe_math, only: safe_cos, safe_log, safe_pow
    implicit none
    private
+
+#ifdef RDB_DOUBLE_PRECISION
+   real(wp), parameter :: ICE_QNAN = transfer(int(z'7FF8000000000000', int64), 1.0_wp)
+#else
+   real(wp), parameter :: ICE_QNAN = transfer(int(z'7FC00000', int32), 1.0_wp)
+#endif
+      !! Quiet NaN as a constant, for device routines: `ieee_value` inside the ITD aggregate kernels
+      !! broke nvfortran's device compile (see the MRE under tmp_local_artifacts), a `parameter` does not.
+      !! The bit pattern follows the working precision.
 
    public :: ICE_CONSTANTS_ICEPACK, ICE_CONSTANTS_CESM
    public :: ICE_TFRZ_LINEAR_SALT, ICE_TFRZ_CONSTANT, ICE_TFRZ_MINUS1P8
@@ -62,6 +72,7 @@ module rdb_ice_params
    public :: ice_atm_params_t, ice_atm_params_finalize
    public :: ice_constants, ice_params_default
    public :: ice_nt_Tsfc, ice_nt_qice, ice_nt_qsno, ice_nt_sice, ice_ntrcr
+   public :: ice_trcr_get, ice_trcr_set, ice_trcr_set_mean, ICE_QNAN
    public :: ice_trcr_depend, ice_trcr_base, ice_intensive
    public :: ice_salinity_at, ice_salinity_profile, ice_sea_freezing_temperature
    public :: ice_q_from_T, ice_qsno_from_T, ice_qsno_init_from_T, ice_T_from_q, ice_Tsno_from_q
@@ -376,12 +387,14 @@ contains
 
    pure function ice_nt_Tsfc() result(it)
       !! Index of the surface temperature in the packed column.
+      !$acc routine seq
       integer :: it
       it = 1
    end function ice_nt_Tsfc
 
    pure function ice_nt_qice() result(it)
       !! Index of the first ice-enthalpy layer (layers `it .. it+nilyr-1`).
+      !$acc routine seq
       integer :: it
       it = 2
    end function ice_nt_qice
@@ -410,6 +423,77 @@ contains
       n = 1 + 2*nilyr + nslyr
    end function ice_ntrcr
 
+   pure function ice_trcr_get(it, i, j, n, nx, ny, ncat, nilyr, nslyr, Tsfcn, qicen, sicen, qsnon) result(v)
+      !! Tracer `it` (packed index model: `Tsfc | qice | qsno | sice`) of
+      !! category `n` in cell `(i, j)`, read straight from the SoA state arrays,
+      !! so no packed `(ntrcr, ncat)` column is ever gathered.  An index outside
+      !! `1:ice_ntrcr(nilyr, nslyr)` returns NaN (never a silent 0).
+      !$acc routine seq
+      integer, value :: it, i, j, n
+      integer, intent(in) :: nx, ny, ncat, nilyr, nslyr
+      real(wp), intent(in) :: Tsfcn(nx, ny, ncat), qicen(nx, ny, ncat, nilyr)
+      real(wp), intent(in) :: sicen(nx, ny, ncat, nilyr), qsnon(nx, ny, ncat, nslyr)
+      real(wp) :: v
+
+      if (it < 1 .or. it > ice_ntrcr(nilyr, nslyr)) then
+         v = ICE_QNAN
+      else if (it == ice_nt_Tsfc()) then
+         v = Tsfcn(i, j, n)
+      else if (it < ice_nt_qsno(nilyr)) then
+         v = qicen(i, j, n, it - ice_nt_qice() + 1)
+      else if (it < ice_nt_sice(nilyr, nslyr)) then
+         v = qsnon(i, j, n, it - ice_nt_qsno(nilyr) + 1)
+      else
+         v = sicen(i, j, n, it - ice_nt_sice(nilyr, nslyr) + 1)
+      end if
+   end function ice_trcr_get
+
+   pure subroutine ice_trcr_set(it, i, j, n, nx, ny, ncat, nilyr, nslyr, v, Tsfcn, qicen, sicen, qsnon)
+      !! Store `v` as tracer `it` of category `n` in cell `(i, j)` (inverse of
+      !! `ice_trcr_get`).  An index outside `1:ice_ntrcr(nilyr, nslyr)` is ignored
+      !! BY DESIGN (writes nothing, no error): callers loop `1..ice_ntrcr`.
+      !$acc routine seq
+      integer, value :: it, i, j, n
+      integer, intent(in) :: nx, ny, ncat, nilyr, nslyr
+      real(wp), intent(in) :: v
+      real(wp), intent(inout) :: Tsfcn(nx, ny, ncat), qicen(nx, ny, ncat, nilyr)
+      real(wp), intent(inout) :: sicen(nx, ny, ncat, nilyr), qsnon(nx, ny, ncat, nslyr)
+
+      if (it < 1 .or. it > ice_ntrcr(nilyr, nslyr)) return
+      if (it == ice_nt_Tsfc()) then
+         Tsfcn(i, j, n) = v
+      else if (it < ice_nt_qsno(nilyr)) then
+         qicen(i, j, n, it - ice_nt_qice() + 1) = v
+      else if (it < ice_nt_sice(nilyr, nslyr)) then
+         qsnon(i, j, n, it - ice_nt_qsno(nilyr) + 1) = v
+      else
+         sicen(i, j, n, it - ice_nt_sice(nilyr, nslyr) + 1) = v
+      end if
+   end subroutine ice_trcr_set
+
+   pure subroutine ice_trcr_set_mean(it, i, j, nx, ny, nilyr, nslyr, v, Tsfc, qice, qsno, sice)
+      !! Store `v` as tracer `it` of the CELL-MEAN tracer set of cell `(i, j)`:
+      !! `Tsfc(nx,ny)`, `qice(nx,ny,nilyr)`, `qsno(nx,ny,nslyr)`, `sice(nx,ny,nilyr)`
+      !! (the packed order of `ice_trcr_set`, no category axis).  An index outside
+      !! `1:ice_ntrcr(nilyr, nslyr)` is ignored by design.
+      !$acc routine seq
+      integer, value :: it, i, j
+      integer, intent(in) :: nx, ny, nilyr, nslyr
+      real(wp), intent(in) :: v
+      real(wp), intent(inout) :: Tsfc(nx, ny), qice(nx, ny, nilyr), qsno(nx, ny, nslyr), sice(nx, ny, nilyr)
+
+      if (it < 1 .or. it > ice_ntrcr(nilyr, nslyr)) return
+      if (it == ice_nt_Tsfc()) then
+         Tsfc(i, j) = v
+      else if (it < ice_nt_qsno(nilyr)) then
+         qice(i, j, it - ice_nt_qice() + 1) = v
+      else if (it < ice_nt_sice(nilyr, nslyr)) then
+         qsno(i, j, it - ice_nt_qsno(nilyr) + 1) = v
+      else
+         sice(i, j, it - ice_nt_sice(nilyr, nslyr) + 1) = v
+      end if
+   end subroutine ice_trcr_set_mean
+
    pure function ice_trcr_depend(it, nilyr, nslyr) result(d)
       !! Weighting of tracer `it`: 0 area (Tsfc), 1 ice volume (qice, sice),
       !! 2 snow volume (qsno); -1 for an index outside the packed column.
@@ -432,6 +516,7 @@ contains
 
    pure function ice_trcr_base(depend) result(base)
       !! One-hot weights (area, ice volume, snow volume) for a `depend` code.
+      !$acc routine seq
       integer, intent(in) :: depend
       real(wp) :: base(3)
 

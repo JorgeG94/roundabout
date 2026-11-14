@@ -36,3 +36,18 @@ add_test(
 set_tests_properties(
   rdb_bench_ocean_smoke PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=1" TIMEOUT 300
                                    LABELS ocean)
+
+# Ice-only kernel benchmark: links ONLY the ice core and the shared
+# infrastructure (no ocean).  Not registered as a test of numerics; the smoke
+# test below runs it on a tiny grid because the benchmark verifies every loop
+# against a host evaluation of the same cell kernel (a fast wrong answer is
+# worthless).
+add_executable(bench_ice_kernels bench_ice_kernels.F90)
+target_include_directories(
+  bench_ice_kernels PRIVATE "${CMAKE_BINARY_DIR}/modules"
+                            "${RDB_SHARED_INCLUDE_DIR}")
+target_link_libraries(bench_ice_kernels PRIVATE rdb_ice_core_objs rdb_core_objs)
+add_test(NAME rdb_test_cice_bench_smoke COMMAND bench_ice_kernels 48 32 1 3 32)
+set_tests_properties(
+  rdb_test_cice_bench_smoke PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=1" TIMEOUT
+                                       300 LABELS ocean)

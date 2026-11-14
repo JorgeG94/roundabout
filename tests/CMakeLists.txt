@@ -675,6 +675,7 @@ set(RDB_CICE_TESTS
     "test_cice_golden_thickness_pieces|test_cice_golden_thickness_pieces|collect_cice_golden_thickness_pieces_tests|cice_golden_thickness_pieces|ocean"
     "test_cice_bl99_solver|test_cice_bl99_solver|collect_cice_bl99_solver_tests|cice_bl99_solver|ocean"
     "test_cice_golden_bl99_solver|test_cice_golden_bl99_solver|collect_cice_golden_bl99_solver_tests|cice_golden_bl99_solver|ocean"
+    "test_cice_agg_cell|test_cice_agg_cell|collect_cice_agg_cell_tests|cice_agg_cell|ocean"
 )
 
 # Shared helpers of the ice tests (deterministic columns, ledger, golden

@@ -52,15 +52,25 @@ module rdb_ice_itd_shift
    !! tracer count `ice_ntrcr(nilyr, nslyr) <= ldt` is derived inside.  Callers
    !! on `(nx,ny,ncat)` state gather the column into per-thread locals; no array
    !! section is passed.
-   use, intrinsic :: ieee_arithmetic, only: ieee_is_finite, ieee_value, ieee_quiet_nan
+   !!
+   !! **In-place form.**  `itd_aggregate_cell` is the same aggregate for cell
+   !! `(i, j)` of the full SoA state arrays (`aicen(nx,ny,ncat)`, `Tsfcn`,
+   !! `qicen(nx,ny,ncat,nilyr)`, `sicen`, `qsnon(nx,ny,ncat,nslyr)`), reading
+   !! tracers through `ice_trcr_get` so no `(ntrcr, ncat)` block is gathered
+   !! (the packed form costs ~1.5 KB of per-thread stack at `ICE_NTRCR_MAX`).
+   !! It runs the same additions in the same order, so its results are
+   !! BITWISE equal to the packed form.  The cell-mean tracers are written to
+   !! `(nx,ny[,nlyr])` arrays through `ice_trcr_set_mean`.  Cell-coupled passes (ITD shift,
+   !! ridging) should use this form.
+   use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    use rdb_constants, only: wp
    use, intrinsic :: iso_fortran_env, only: int32
    use rdb_ice_errors, only: ICE_ERR_NONFINITE
-   use rdb_ice_params, only: ice_trcr_depend, ice_intensive, ice_ntrcr
+   use rdb_ice_params, only: ice_trcr_depend, ice_intensive, ice_ntrcr, ice_trcr_get, ice_trcr_set_mean, ICE_QNAN
    implicit none
    private
 
-   public :: itd_fit_line, itd_aggregate_area, itd_aggregate
+   public :: itd_fit_line, itd_aggregate_area, itd_aggregate, itd_aggregate_cell
 
    real(wp), parameter :: THIRD = 1.0_wp/3.0_wp
       !! One third, multiplied exactly as upstream does (never divided by 3).
@@ -163,8 +173,8 @@ contains
       real(wp) :: atr, w, empty, poison
 
       ntr = ice_ntrcr(nilyr, nslyr)
-      if (ntr > ldt .or. ntr < 1 .or. ncat < 1) then
-         poison = ieee_value(1.0_wp, ieee_quiet_nan)
+      if (ntr > ldt .or. ntr < 1 .or. ncat < 1 .or. nilyr < 1 .or. nslyr < 1) then
+         poison = ICE_QNAN
          aice = poison
          vice = poison
          vsno = poison
@@ -196,7 +206,7 @@ contains
             else if (d == 2) then
                w = vsnon(n)
             else
-               w = ieee_value(1.0_wp, ieee_quiet_nan)   ! unreachable for it <= ice_ntrcr
+               w = ICE_QNAN   ! unreachable for it <= ice_ntrcr
             end if
             atr = atr + trcrn(it, n)*w
          end do
@@ -213,5 +223,93 @@ contains
       end do
       if (.not. ieee_is_finite(aice0)) ierr = ior(ierr, ICE_ERR_NONFINITE)
    end subroutine itd_aggregate
+
+   pure subroutine itd_aggregate_cell(i, j, nx, ny, ncat, nilyr, nslyr, aicen, vicen, vsnon, &
+                                      Tsfcn, qicen, sicen, qsnon, Tf, puny, &
+                                      aice, vice, vsno, aice0, Tsfc_c, qice_c, sice_c, qsno_c, ierr)
+      !! In-place twin of `itd_aggregate` for cell `(i, j)` of full SoA state
+      !! arrays (see the module note).  Scalars `aice`, `vice`, `vsno`, `aice0`
+      !! are returned; the intensive cell-mean tracers are written to
+      !! `Tsfc_c(i,j)`, `qice_c(i,j,1:nilyr)`, `sice_c(i,j,1:nilyr)` and
+      !! `qsno_c(i,j,1:nslyr)` (the packed order `Tsfc | qice | qsno | sice`).
+      !! Same error semantics as the packed form: any non-finite input or output
+      !! ORs `ICE_ERR_NONFINITE` into `ierr(i,j)`.  Invalid counts (`ncat`, `nilyr` or
+      !! `nslyr` < 1) poison only the four scalars `aice, vice, vsno, aice0` and set the
+      !! error bit: the tracer arrays are NOT written, because with `nilyr < 1` or
+      !! `nslyr < 1` the packed tracer indices (and the array extents) do not exist.
+      !! Outputs are written directly (no
+      !! double buffering): after `ierr /= 0` they are unspecified.
+      !$acc routine seq
+      integer, value :: i, j
+      integer, intent(in) :: nx, ny, ncat, nilyr, nslyr
+      real(wp), intent(in) :: aicen(nx, ny, ncat), vicen(nx, ny, ncat), vsnon(nx, ny, ncat)
+      real(wp), intent(in) :: Tsfcn(nx, ny, ncat), qicen(nx, ny, ncat, nilyr)
+      real(wp), intent(in) :: sicen(nx, ny, ncat, nilyr), qsnon(nx, ny, ncat, nslyr)
+      real(wp), intent(in) :: Tf, puny
+      real(wp), intent(out) :: aice, vice, vsno, aice0
+      real(wp), intent(inout) :: Tsfc_c(nx, ny), qice_c(nx, ny, nilyr)
+      real(wp), intent(inout) :: sice_c(nx, ny, nilyr), qsno_c(nx, ny, nslyr)
+      integer(int32), intent(inout) :: ierr(nx, ny)
+
+      integer :: n, it, d, ntr
+      real(wp) :: atr, w, empty, poison, tv
+
+      ntr = ice_ntrcr(nilyr, nslyr)
+      if (ntr < 1 .or. ncat < 1 .or. nilyr < 1 .or. nslyr < 1) then
+         poison = ICE_QNAN
+         aice = poison
+         vice = poison
+         vsno = poison
+         aice0 = poison
+         ierr(i, j) = ior(ierr(i, j), ICE_ERR_NONFINITE)
+         return
+      end if
+
+      aice = 0.0_wp
+      vice = 0.0_wp
+      vsno = 0.0_wp
+      do n = 1, ncat
+         aice = aice + aicen(i, j, n)
+      end do
+      if (ieee_is_finite(aice)) then
+         aice0 = max(1.0_wp - aice, 0.0_wp)
+      else
+         aice0 = aice
+      end if
+      do n = 1, ncat
+         vice = vice + vicen(i, j, n)
+         vsno = vsno + vsnon(i, j, n)
+      end do
+
+      poison = aice + vice + vsno
+      do it = 1, ntr
+         d = ice_trcr_depend(it, nilyr, nslyr)
+         atr = 0.0_wp
+         do n = 1, ncat
+            if (d == 0) then
+               w = aicen(i, j, n)
+            else if (d == 1) then
+               w = vicen(i, j, n)
+            else if (d == 2) then
+               w = vsnon(i, j, n)
+            else
+               w = ICE_QNAN   ! unreachable for it <= ice_ntrcr
+            end if
+            atr = atr + ice_trcr_get(it, i, j, n, nx, ny, ncat, nilyr, nslyr, Tsfcn, qicen, sicen, qsnon)*w
+         end do
+         empty = 0.0_wp
+         if (it == 1) empty = Tf
+         if (.not. ieee_is_finite(poison)) then
+            tv = poison
+         else if (.not. ieee_is_finite(atr)) then
+            tv = atr
+         else
+            tv = ice_intensive(atr, d, aice, vice, vsno, puny, empty)
+         end if
+         if (.not. ieee_is_finite(tv)) ierr(i, j) = ior(ierr(i, j), ICE_ERR_NONFINITE)
+         call ice_trcr_set_mean(it, i, j, nx, ny, nilyr, nslyr, tv, Tsfc_c, qice_c, qsno_c, sice_c)
+      end do
+      if (.not. ieee_is_finite(aice0)) ierr(i, j) = ior(ierr(i, j), ICE_ERR_NONFINITE)
+   end subroutine itd_aggregate_cell
 
 end module rdb_ice_itd_shift

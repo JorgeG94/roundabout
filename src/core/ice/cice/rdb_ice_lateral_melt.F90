@@ -133,7 +133,8 @@ contains
       !! the enthalpy arrays are read only (intensive, unchanged).  Category
       !! `n` is visited in order and the fluxes are added in upstream's order.
       !$acc routine seq
-      integer, intent(in) :: i, j, nx, ny, ncat, nilyr, nslyr
+      integer, value :: i, j
+      integer, intent(in) :: nx, ny, ncat, nilyr, nslyr
       real(wp), intent(in) :: rside, dt, rhoi, rhos, ice_ref_salinity, puny
       real(wp), intent(inout) :: aicen(nx, ny, ncat), vicen(nx, ny, ncat), vsnon(nx, ny, ncat)
       real(wp), intent(in) :: qicen(nx, ny, ncat, nilyr), qsnon(nx, ny, ncat, nslyr)
