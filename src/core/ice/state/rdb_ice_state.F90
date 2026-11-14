@@ -134,7 +134,7 @@ module rdb_ice_state
    use rdb_constants, only: wp
    use rdb_grid, only: hgrid_t
    use rdb_mem_report, only: arr_bytes
-   use rdb_ice_column, only: ICE_BULK_SALINITY, ICE_NK_MAX, ICE_RHO_ICE
+   use rdb_ice_column, only: ICE_BULK_SALINITY, ICE_NK_MAX, ICE_RHO_ICE, ICE_RHO_SNOW
    use rdb_ice_enthalpy, only: ICE_CP_BRINE, ICE_CP_ICE
    use rdb_ice_cice_state, only: ice_cice_state_t
    use, intrinsic :: iso_fortran_env, only: int64
@@ -145,6 +145,7 @@ module rdb_ice_state
    public :: evp_workspace_t
    public :: ice_itd_category_bounds
    public :: ice_cell_concentration_impl
+   public :: ice_aggregates_fill
 
    type :: evp_workspace_t
       !! Persistent EVP-rheology scratch (SIS2 C-grid dynamics), hung off
@@ -675,6 +676,36 @@ module rdb_ice_state
          !! every thermo step, only when `has_snowfall`) — zero-init, NOT
          !! restart-carried, same lifecycle as `fb_part_sum`.
 
+      ! ---- Scheme-neutral cell aggregates (D1.6) ----
+      real(wp), allocatable :: aice(:, :)
+         !! Cell ice concentration (nx_total, ny_total), 1: `ncat > 1` ->
+         !! `min(1, sum_c part_size(c))`; `ncat == 1` -> 1 where `m_ice(1) > 0`,
+         !! else 0.  DERIVED (not restart state): filled by
+         !! `ice_aggregates_fill`.  The one concentration the ocean-side
+         !! consumers read (diag `aice`/`ice_conc`, console ice line); NOT
+         !! wet-masked (consumers apply `wet_T`).
+      real(wp), allocatable :: vice(:, :)
+         !! Ice volume per cell area, m (nx_total, ny_total): the
+         !! `sum_c part_size(c)*m_ice(c)/ICE_RHO_ICE` of the SIS2 gather
+         !! (`ncat == 1`: `m_ice(1)/ICE_RHO_ICE` where `m_ice(1) > 0`, else 0).
+         !! Derived, not restart state; the diag `hi`/`ice_thick` and the
+         !! console thickness sum read it.
+      real(wp), allocatable :: vsno(:, :)
+         !! Snow volume per cell area, m (nx_total, ny_total):
+         !! `sum_c w_c*m_snow(c)/ICE_RHO_SNOW` with `w_c = part_size(c)`
+         !! (`ncat > 1`) or 1 (`ncat == 1`).  Derived, not restart state.
+      real(wp), allocatable :: aice0(:, :)
+         !! Open-water fraction (nx_total, ny_total) = `part_size(:,:,0)`
+         !! verbatim: a copy of the STORED open-water category, NOT `1 - aice`
+         !! (the two agree only to round-off, and the bulk-forcing open-water
+         !! weight has always been category 0).  **Lumped-mode exception:**
+         !! at `ncat == 1` `part_size` is not maintained (`part_size(:,:,0)`
+         !! stays 1), so `aice0 = 1` even where `aice = 1`; lumped ice
+         !! therefore never reduces the bulk-forcing open-water weight (the
+         !! inherited behaviour, unchanged by D1.6; pinned by
+         !! `test_ocean_ice_aggregates`).  Derived, not restart state; read by
+         !! `rdb_ocean_bulk_forcing`.
+
       ! ---- Cached extents ----
       integer :: nx_total = 0
       integer :: ny_total = 0
@@ -722,6 +753,10 @@ contains
 
       allocate (this%part_size(this%nx_total, this%ny_total, 0:this%ncat), source=0.0_wp)
       this%part_size(:, :, 0) = 1.0_wp
+      allocate (this%aice(this%nx_total, this%ny_total), source=0.0_wp)
+      allocate (this%vice(this%nx_total, this%ny_total), source=0.0_wp)
+      allocate (this%vsno(this%nx_total, this%ny_total), source=0.0_wp)
+      allocate (this%aice0(this%nx_total, this%ny_total), source=1.0_wp)
       allocate (this%m_ice(this%nx_total, this%ny_total, this%ncat), source=0.0_wp)
       allocate (this%m_snow(this%nx_total, this%ny_total, this%ncat), source=0.0_wp)
       allocate (this%enth_ice(this%nx_total, this%ny_total, this%ncat, this%nk_ice), &
@@ -833,6 +868,10 @@ contains
       if (allocated(this%frazil_heat)) deallocate (this%frazil_heat)
       if (allocated(this%heat_budget_frazil)) deallocate (this%heat_budget_frazil)
       if (allocated(this%part_size)) deallocate (this%part_size)
+      if (allocated(this%aice)) deallocate (this%aice)
+      if (allocated(this%vice)) deallocate (this%vice)
+      if (allocated(this%vsno)) deallocate (this%vsno)
+      if (allocated(this%aice0)) deallocate (this%aice0)
       if (allocated(this%m_ice)) deallocate (this%m_ice)
       if (allocated(this%m_snow)) deallocate (this%m_snow)
       if (allocated(this%enth_ice)) deallocate (this%enth_ice)
@@ -945,6 +984,7 @@ contains
       if (this%cice%is_init) call this%cice%enter_data()
       !$acc enter data copyin(this%frazil_heat, this%heat_budget_frazil)
       !$acc enter data copyin(this%part_size, this%m_ice, this%m_snow)
+      !$acc enter data copyin(this%aice, this%vice, this%vsno, this%aice0)
       !$acc enter data copyin(this%enth_ice, this%enth_snow, this%sal_ice)
       !$acc enter data copyin(this%m_frozen_diag, this%salt_flux_diag)
       !$acc enter data copyin(this%atm_sf0, this%atm_dsfdt, this%atm_sw_dn, this%atm_fprec)
@@ -964,6 +1004,10 @@ contains
       !$acc enter data copyin(this%tau_ocn_x, this%tau_ocn_y)
       ! tau_ocn_valid: NEVER mapped (host-only, register_scalar contract).
       if (this%dynamics) call this%evp_ws%enter_data()
+      ! Derived aggregates: (re)built on the device from the state just
+      ! mapped, so a cold start, a warm restart read and a test that seeds
+      ! the host arrays before mapping all start with consistent aggregates.
+      call ice_aggregates_fill(this)
       if (this%transport) then
          !$acc enter data create(this%mca_ice, this%mca_snow)
          !$acc enter data create(this%uh_ice, this%vh_ice, this%uh_snow, this%vh_snow)
@@ -983,7 +1027,10 @@ contains
    end subroutine ocean_sea_ice_exit_data
 
    subroutine ocean_sea_ice_exit_data_impl(this)
-      !! Reverse of `enter_data_impl` — all six PR-3a fields are
+      !! Reverse of `enter_data_impl`.  The D1.6 aggregates (`aice`, `vice`,
+      !! `vsno`, `aice0`) are DERIVED scratch: `delete`, so the host copies
+      !! are STALE after exit (rebuilt by `ice_aggregates_fill` at the next
+      !! `enter_data`; nothing reads them host-side).  All six PR-3a fields are
       !! prognostic state (post-run host inspection + restart write),
       !! same as the persistent frazil bank; the drain-and-zero budget
       !! scratch is dropped. PR 3b's `m_frozen_diag`/`salt_flux_diag`
@@ -1017,6 +1064,7 @@ contains
       if (this%cice%is_init) call this%cice%exit_data()
       !$acc exit data copyout(this%frazil_heat)
       !$acc exit data delete(this%heat_budget_frazil)
+      !$acc exit data delete(this%aice, this%vice, this%vsno, this%aice0)
       !$acc exit data copyout(this%part_size, this%m_ice, this%m_snow)
       !$acc exit data copyout(this%enth_ice, this%enth_snow, this%sal_ice)
       !$acc exit data copyout(this%m_frozen_diag, this%salt_flux_diag)
@@ -1056,6 +1104,10 @@ contains
       nbytes = arr_bytes(this%frazil_heat) &
                + arr_bytes(this%heat_budget_frazil) &
                + arr_bytes(this%part_size) &
+               + arr_bytes(this%aice) &
+               + arr_bytes(this%vice) &
+               + arr_bytes(this%vsno) &
+               + arr_bytes(this%aice0) &
                + arr_bytes(this%m_ice) &
                + arr_bytes(this%m_snow) &
                + arr_bytes(this%enth_ice) &
@@ -1380,6 +1432,87 @@ contains
          mh_lim(k) = ICE_RHO_ICE*h_lim(k)
       end do
    end subroutine ice_itd_category_bounds
+
+   subroutine ice_aggregates_fill(this)
+      !! Rebuild the scheme-neutral cell aggregates `aice`, `vice`, `vsno`,
+      !! `aice0` from the category state, on the device, over the FULL
+      !! (ghost-inclusive) arrays.  Thin host shim: unpacks the slot into
+      !! scalars + explicit-shape arrays for `ice_aggregates_fill_impl`.
+      !!
+      !! Called (i) at the end of `enter_data` (cold start, warm restart,
+      !! tests that seed the host arrays) and (ii) by the engine after the
+      !! end-of-thermo-window halo exchange, the only place the category
+      !! state changes -- so the ghosts hold the neighbour's aggregates.  No
+      !! per-step transfer; the aggregates are not restart state.
+      !!
+      !! **CICE hook (D1.6, not wired):** under `scheme = "cice"` the same
+      !! four arrays are to be filled from `this%cice%aice/vice/vsno/aice0`
+      !! (a straight copy kernel, same shape) instead of from the SIS2
+      !! category state; every consumer already reads these slot arrays.
+      !! Swapping the SOURCE of the fill is not enough: a later scheme must
+      !! also call this fill after EVERY change to its own state (including
+      !! transport or any step running on a different cadence than the
+      !! thermo window), because the engine calls it only after the SIS2
+      !! thermo-window exchange and a stale aggregate is read silently.
+      type(ocean_sea_ice_t), intent(inout) :: this
+      if (.not. this%is_init) return
+      if (.not. allocated(this%aice)) return
+      ! HOOK (scheme = "cice"): if (this%cice%is_init) then <copy cice aggregates>; return.
+      call ice_aggregates_fill_impl(this%ncat, this%nx_total, this%ny_total, &
+                                    this%part_size, this%m_ice, this%m_snow, &
+                                    this%aice, this%vice, this%vsno, this%aice0)
+   end subroutine ice_aggregates_fill
+
+   pure subroutine ice_aggregates_fill_impl(ncat, nx, ny, part_size, m_ice, m_snow, &
+                                            aice, vice, vsno, aice0)
+      !! One explicit-shape `do concurrent` over (i, j); the category sums
+      !! are written with the SAME operands and order as the inline gathers
+      !! the diag fills and console statistics used before D1.6
+      !! (`sum + part_size*m`, ascending `c`, `min(1, .)` clamp, `/ICE_RHO_*`
+      !! applied to the finished sum), so the aggregates are bit-identical to
+      !! them.  Not wet-masked.
+      integer, intent(in) :: ncat, nx, ny
+      real(wp), intent(in) :: part_size(nx, ny, 0:ncat)
+      real(wp), intent(in) :: m_ice(nx, ny, ncat)
+      real(wp), intent(in) :: m_snow(nx, ny, ncat)
+      real(wp), intent(inout) :: aice(nx, ny), vice(nx, ny), vsno(nx, ny), aice0(nx, ny)
+      integer :: i, j, c
+      real(wp) :: mice_val, ci_sum, hs_val, w
+
+      if (ncat == 1) then
+         do concurrent(j=1:ny, i=1:nx) local(mice_val, ci_sum, hs_val)
+            if (m_ice(i, j, 1) > 0.0_wp) then
+               mice_val = m_ice(i, j, 1)
+               ci_sum = 1.0_wp
+            else
+               mice_val = 0.0_wp
+               ci_sum = 0.0_wp
+            end if
+            hs_val = 0.0_wp
+            hs_val = hs_val + 1.0_wp*m_snow(i, j, 1)
+            aice(i, j) = ci_sum
+            vice(i, j) = mice_val/ICE_RHO_ICE
+            vsno(i, j) = hs_val/ICE_RHO_SNOW
+            aice0(i, j) = part_size(i, j, 0)
+         end do
+      else
+         do concurrent(j=1:ny, i=1:nx) local(c, mice_val, ci_sum, hs_val, w)
+            mice_val = 0.0_wp
+            ci_sum = 0.0_wp
+            hs_val = 0.0_wp
+            do c = 1, ncat
+               w = part_size(i, j, c)
+               mice_val = mice_val + w*m_ice(i, j, c)
+               ci_sum = ci_sum + w
+               hs_val = hs_val + w*m_snow(i, j, c)
+            end do
+            aice(i, j) = min(1.0_wp, ci_sum)
+            vice(i, j) = mice_val/ICE_RHO_ICE
+            vsno(i, j) = hs_val/ICE_RHO_SNOW
+            aice0(i, j) = part_size(i, j, 0)
+         end do
+      end if
+   end subroutine ice_aggregates_fill_impl
 
    pure subroutine ice_cell_concentration_impl(wet_T, part_size, m_ice, m_snow, &
                                                mis, mice, ci, ncat, nx, ny)

@@ -15,7 +15,7 @@ module rdb_ocean_bulk_forcing
    !! **No ice seam here.**  The atmosphere -> sea-ice forcing
    !! dispatcher (`ice_atm_forcing_from_atm`) is a separate chunk
    !! (C2c-3b); this module only READS the sea-ice state's already-live
-   !! `part_size` category array to scale the ocean's own open-water
+   !! `aice0` open-water aggregate to scale the ocean's own open-water
    !! fraction -- it never writes into `ocean_sea_ice_t`.
    !!
    !! **Why the bespoke per-cell kernel instead of calling
@@ -62,14 +62,17 @@ module rdb_ocean_bulk_forcing
    !! pair's own vector exchange + periodic wrap + fold and the
    !! `stress_mag` refresh KPP/EPBL read for u_*.
    !!
-   !! **Open-water weighting.**  `ocean_sea_ice_t%part_size(:,:,0)` IS
-   !! the open-water fraction already -- the category partition sums
+   !! **Open-water weighting.**  `ocean_sea_ice_t%aice0` (the scheme-neutral
+   !! aggregate, D1.6; under SIS2 a verbatim copy of `part_size(:,:,0)`) IS
+   !! the open-water fraction already (in the lumped `ncat == 1` mode
+   !! `part_size` is not maintained, so `aice0 = 1` even under full cover:
+   !! lumped ice never reduces this weight, as before D1.6) -- the category partition sums
    !! to 1 by construction (`part_size(:,:,0) = 1 - conc` at the ITD
    !! seed, `rdb_ice_init`), so `1 - Sum_{c=1}^{ncat} part_size(c)`
    !! and `part_size(0)` are the same number; this module reads the
-   !! field directly rather than re-summing it. `this%open_water` is
+   !! aggregate directly rather than re-summing it. `this%open_water` is
    !! seeded to 1 at configure and is the array `bulk_forcing_core_impl`
-   !! always multiplies by; it is refreshed from `ice%part_size(:,:,0)`
+   !! always multiplies by; it is refreshed from `ice%aice0`
    !! only when `ice%enable`, so a run with no sea-ice component never
    !! touches an `ocean_sea_ice_t` array (CLAUDE.md's "a host-gated call
    !! that hands a state array to an external subroutine still costs" --
@@ -147,7 +150,7 @@ module rdb_ocean_bulk_forcing
          !! `(nx_total, ny_total)`.
       real(wp), allocatable :: open_water(:, :)
          !! Open-water fraction, `(nx_total, ny_total)`. Seeded to 1 at
-         !! configure; refreshed from `ice%part_size(:,:,0)` once per
+         !! configure; refreshed from `ice%aice0` once per
          !! step only when `ice%enable` -- otherwise stays 1 forever,
          !! so a run without sea ice never reads an ice array.
    contains
@@ -288,8 +291,8 @@ contains
       ! actually enabled (module docstring) -- `this%open_water` stays
       ! at its configure-time 1.0 seed otherwise.
       if (ice%enable) then
-         call bulk_forcing_open_water_impl(nx, ny, ng, nxp, nyp, ice%ncat, &
-                                           ice%part_size, this%open_water)
+         call bulk_forcing_open_water_impl(nx, ny, ng, nxp, nyp, &
+                                           ice%aice0, this%open_water)
       end if
 
       call bulk_forcing_core_impl(nx, ny, ng, nxp, nyp, nz, this%cfg_bulk%n_iter, &
@@ -334,19 +337,21 @@ contains
       call ocean_seam_refresh_surface_stress(ss, grid, bc)
    end subroutine bulk_forcing_apply
 
-   pure subroutine bulk_forcing_open_water_impl(nx, ny, ng, nxp, nyp, ncat, part_size, open_water)
-      !! `open_water(i,j) = part_size(i,j,0)` over the physical
-      !! interior -- the open-water fraction IS category 0 by
-      !! construction (module docstring); no re-summation needed.
-      !! Explicit-shape, integer dims first (decl-order).
-      integer, intent(in) :: nx, ny, ng, nxp, nyp, ncat
-      real(wp), intent(in) :: part_size(nx, ny, 0:ncat)
+   pure subroutine bulk_forcing_open_water_impl(nx, ny, ng, nxp, nyp, aice0, open_water)
+      !! `open_water(i,j) = aice0(i,j)` over the physical interior -- the
+      !! scheme-neutral open-water fraction aggregate (`ocean_sea_ice_t%aice0`;
+      !! category 0 of the SIS2 `part_size`, copied verbatim by
+      !! `ice_aggregates_fill`, so the weight is bit-identical to the former
+      !! direct read; module docstring).  Explicit-shape, integer dims first
+      !! (decl-order).
+      integer, intent(in) :: nx, ny, ng, nxp, nyp
+      real(wp), intent(in) :: aice0(nx, ny)
       real(wp), intent(inout) :: open_water(nx, ny)
       integer :: i, j, ii, jj
       do concurrent(j=1:nyp, i=1:nxp) local(ii, jj)
          ii = ng + i
          jj = ng + j
-         open_water(ii, jj) = part_size(ii, jj, 0)
+         open_water(ii, jj) = aice0(ii, jj)
       end do
    end subroutine bulk_forcing_open_water_impl
 

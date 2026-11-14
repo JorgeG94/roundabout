@@ -172,6 +172,7 @@ module rdb_ocean_engine
 #endif
    use rdb_ice_basal_flux, only: ice_compute_basal_flux
    use rdb_ice_thermo_driver, only: ice_thermo_driver_step
+   use rdb_ice_state, only: ice_aggregates_fill
    use rdb_ice_snow, only: ice_snowfall_ocean_share
    use rdb_ice_itd, only: ice_adjust_categories
    use rdb_ice_transport, only: ice_transport_step
@@ -2158,6 +2159,12 @@ contains
          ! stress blend read equal to the neighbour's (or, on one rank, to
          ! the periodic partner's) owned cells.
          call ocean_halo_exchange_ice_state(engine%state%ice, engine%grid, engine%state%bc)
+         ! D1.6: rebuild the scheme-neutral aggregates (aice/vice/vsno/aice0)
+         ! the diag fills, console statistics and bulk forcing read -- the
+         ! category state changes only inside this block, and the exchange
+         ! above has just made the ghosts the owners', so one device kernel
+         ! per thermo window keeps every consumer exact.
+         call ice_aggregates_fill(engine%state%ice)
       end if
    end subroutine engine_step_ice
 

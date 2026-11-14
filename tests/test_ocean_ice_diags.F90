@@ -344,7 +344,8 @@ contains
       !! Anti-divergence gate: a non-uniform part_size/m_ice pattern run
       !! through the diag-manager fills must match the host-side
       !! `ice_cell_concentration_impl` (the canonical two-mode gather) to
-      !! FP round-off, so the fill copy cannot silently diverge from the
+      !! FP round-off, so the aggregates the fills now read
+      !! (`ice_aggregates_fill`, D1.6) cannot silently diverge from the
       !! EVP/coupler view.
       type(error_type), allocatable, intent(out) :: error
       type(hgrid_t) :: grid
@@ -394,10 +395,11 @@ contains
    end subroutine test_ice_fill_matches_concentration_impl
 
    subroutine test_console_ice_totals_reference(error)
-      !! Pins the THIRD gather copy — the console-side `compute_ice_totals`
-      !! (`rdb_ocean_console_stats`) — against a hand-computed reference, so
-      !! it cannot silently drift from the fills / `ice_cell_concentration_impl`
-      !! convention (the anti-divergence fill test only covers the fills copy).
+      !! Pins the console-side `compute_ice_totals` (`rdb_ocean_console_stats`,
+      !! which since D1.6 reads the `aice`/`vice` aggregates like the fills do)
+      !! against a hand-computed reference, so it cannot silently drift from
+      !! the fills / `ice_cell_concentration_impl` convention (the
+      !! anti-divergence fill test covers the fills' view).
       !! Reuses the supersaturated column (Σ part_size = 1.3 ⇒ ci clamps to 1)
       !! with a known mice.  `compute_ice_totals` reads its inputs on-DEVICE
       !! (!$acc reductions), so bracket the call with enter/exit_data; the out
@@ -425,7 +427,7 @@ contains
 
          call ocean_state_enter_data(state)
          call compute_ice_totals(state%metrics%wet_T, state%metrics%areaT, &
-                                 state%ice%part_size, state%ice%m_ice, 3, grid%nghost, &
+                                 state%ice%aice, state%ice%vice, grid%nghost, &
                                  wet_area, ci_area, hi_area)
          call ocean_state_exit_data(state)
 

@@ -344,9 +344,8 @@ contains
                                             t_current, cfg%dt_fixed, n_steps, &
                                             cfl_vanish_tol=cfl_vtol, &
                                             heat_budget_frazil=ocean_state%ice%heat_budget_frazil, &
-                                            ice_part_size=ocean_state%ice%part_size, &
-                                            ice_m_ice=ocean_state%ice%m_ice, &
-                                            ice_ncat=ocean_state%ice%ncat, &
+                                            ice_aice=ocean_state%ice%aice, &
+                                            ice_vice=ocean_state%ice%vice, &
                                             compute_rank=compute_rank, &
                                             budget_stage_weight= &
                                             ocean_budget_stage_weight( &
@@ -358,9 +357,8 @@ contains
                                             ocean_state%multilayer, &
                                             t_current, cfg%dt_fixed, n_steps, &
                                             heat_budget_frazil=ocean_state%ice%heat_budget_frazil, &
-                                            ice_part_size=ocean_state%ice%part_size, &
-                                            ice_m_ice=ocean_state%ice%m_ice, &
-                                            ice_ncat=ocean_state%ice%ncat, &
+                                            ice_aice=ocean_state%ice%aice, &
+                                            ice_vice=ocean_state%ice%vice, &
                                             compute_rank=compute_rank, &
                                             budget_stage_weight= &
                                             ocean_budget_stage_weight( &
@@ -443,9 +441,8 @@ contains
                                                   t_current, dt, n_steps, &
                                                   cfl_vanish_tol=cfl_vtol, &
                                                   heat_budget_frazil=ocean_state%ice%heat_budget_frazil, &
-                                                  ice_part_size=ocean_state%ice%part_size, &
-                                                  ice_m_ice=ocean_state%ice%m_ice, &
-                                                  ice_ncat=ocean_state%ice%ncat, &
+                                                  ice_aice=ocean_state%ice%aice, &
+                                                  ice_vice=ocean_state%ice%vice, &
                                                   compute_rank=compute_rank, &
                                                   budget_stage_weight= &
                                                   ocean_budget_stage_weight( &
@@ -457,9 +454,8 @@ contains
                                                   ocean_state%multilayer, &
                                                   t_current, dt, n_steps, &
                                                   heat_budget_frazil=ocean_state%ice%heat_budget_frazil, &
-                                                  ice_part_size=ocean_state%ice%part_size, &
-                                                  ice_m_ice=ocean_state%ice%m_ice, &
-                                                  ice_ncat=ocean_state%ice%ncat, &
+                                                  ice_aice=ocean_state%ice%aice, &
+                                                  ice_vice=ocean_state%ice%vice, &
                                                   compute_rank=compute_rank, &
                                                   budget_stage_weight= &
                                                   ocean_budget_stage_weight( &
@@ -517,9 +513,8 @@ contains
                                                   t_current, dt, n_steps, &
                                                   cfl_vanish_tol=cfl_vtol, &
                                                   heat_budget_frazil=ocean_state%ice%heat_budget_frazil, &
-                                                  ice_part_size=ocean_state%ice%part_size, &
-                                                  ice_m_ice=ocean_state%ice%m_ice, &
-                                                  ice_ncat=ocean_state%ice%ncat, &
+                                                  ice_aice=ocean_state%ice%aice, &
+                                                  ice_vice=ocean_state%ice%vice, &
                                                   compute_rank=compute_rank, &
                                                   budget_stage_weight= &
                                                   ocean_budget_stage_weight( &
@@ -531,9 +526,8 @@ contains
                                                   ocean_state%multilayer, &
                                                   t_current, dt, n_steps, &
                                                   heat_budget_frazil=ocean_state%ice%heat_budget_frazil, &
-                                                  ice_part_size=ocean_state%ice%part_size, &
-                                                  ice_m_ice=ocean_state%ice%m_ice, &
-                                                  ice_ncat=ocean_state%ice%ncat, &
+                                                  ice_aice=ocean_state%ice%aice, &
+                                                  ice_vice=ocean_state%ice%vice, &
                                                   compute_rank=compute_rank, &
                                                   budget_stage_weight= &
                                                   ocean_budget_stage_weight( &

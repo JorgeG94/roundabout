@@ -30,7 +30,7 @@ module rdb_ocean_diag_fills
    use rdb_eos, only: eos_t, eos_density_point, TS_CONS_ABS
    use rdb_ocean_vcoord, only: invert_density_targets
    use rdb_remap_column, only: remap_column
-   use rdb_ice_column, only: ICE_RHO_ICE, ICE_RHO_SNOW
+   use rdb_ice_column, only: ICE_RHO_ICE
    use rdb_ocean_pseudo_salt, only: ocean_pseudo_salt_deviation
    implicit none
    private
@@ -351,9 +351,8 @@ contains
    end subroutine fill_tracer_impl
 
    subroutine fill_ice_conc(state_handle, buf)
-      !! Total sea-ice concentration (0..1) at T-centres — the two-mode
-      !! per-cell gather of `ice_cell_concentration_impl` (rdb_ice_state),
-      !! inlined (see fill_ice_conc_thick_impl).  Registered by
+      !! Total sea-ice concentration (0..1) at T-centres — the scheme-neutral
+      !! aggregate `ice%aice` (see fill_ice_conc_thick_impl).  Registered by
       !! `register_default_diags` only when `&ocean_ice_nml enable`.
       !! Public only for the unit-test suite.
       class(*), intent(in) :: state_handle
@@ -364,19 +363,17 @@ contains
             call fill_zero_impl(buf)
             return
          end if
-         call fill_ice_conc_thick_impl(state%ice%ncat, &
-                                       size(state%ice%m_ice, 1), &
-                                       size(state%ice%m_ice, 2), &
-                                       state%metrics%wet_T, state%ice%part_size, &
-                                       state%ice%m_ice, .false., buf)
+         call fill_ice_conc_thick_impl(size(state%ice%aice, 1), &
+                                       size(state%ice%aice, 2), &
+                                       state%metrics%wet_T, state%ice%aice, &
+                                       state%ice%vice, .false., buf)
       end select
    end subroutine fill_ice_conc
 
    subroutine fill_ice_thick(state_handle, buf)
       !! Grid-mean sea-ice thickness (m) at T-centres: mice/ICE_RHO_ICE
-      !! (MOM6 effective-thickness convention) — the two-mode per-cell
-      !! gather of `ice_cell_concentration_impl`, inlined (see
-      !! fill_ice_conc_thick_impl).  Registered by `register_default_diags`
+      !! (MOM6 effective-thickness convention) — the scheme-neutral
+      !! aggregate `ice%vice` (see fill_ice_conc_thick_impl).  Registered by `register_default_diags`
       !! only when `&ocean_ice_nml enable`.  Public only for the unit-test
       !! suite.
       class(*), intent(in) :: state_handle
@@ -387,18 +384,16 @@ contains
             call fill_zero_impl(buf)
             return
          end if
-         call fill_ice_conc_thick_impl(state%ice%ncat, &
-                                       size(state%ice%m_ice, 1), &
-                                       size(state%ice%m_ice, 2), &
-                                       state%metrics%wet_T, state%ice%part_size, &
-                                       state%ice%m_ice, .true., buf)
+         call fill_ice_conc_thick_impl(size(state%ice%aice, 1), &
+                                       size(state%ice%aice, 2), &
+                                       state%metrics%wet_T, state%ice%aice, &
+                                       state%ice%vice, .true., buf)
       end select
    end subroutine fill_ice_thick
 
    subroutine fill_ice_hs(state_handle, buf)
       !! CICE `hs`: grid-cell mean snow thickness (m) at T-centres,
-      !! sum over categories of part_size*m_snow/ICE_RHO_SNOW (ncat>1; at
-      !! ncat==1 the lumped per-cell m_snow/ICE_RHO_SNOW). Land/ghost = NaN.
+      !! the scheme-neutral snow aggregate `ice%vsno`. Land/ghost = NaN.
       class(*), intent(in) :: state_handle
       real(wp), intent(inout) :: buf(:, :, :)
       select type (state => state_handle)
@@ -407,9 +402,8 @@ contains
             call fill_zero_impl(buf)
             return
          end if
-         call fill_ice_hs_impl(state%ice%ncat, size(state%ice%m_snow, 1), &
-                               size(state%ice%m_snow, 2), state%metrics%wet_T, &
-                               state%ice%part_size, state%ice%m_snow, buf)
+         call fill_ice_hs_impl(size(state%ice%vsno, 1), size(state%ice%vsno, 2), &
+                               state%metrics%wet_T, state%ice%vsno, buf)
       end select
    end subroutine fill_ice_hs
 
@@ -792,69 +786,41 @@ contains
       end do
    end subroutine fill_atm_field_impl
 
-   pure subroutine fill_ice_conc_thick_impl(ncat, nx, ny, wet_T, part_size, &
-                                            m_ice, emit_thick, buf)
-      !! Shared conc/thick device kernel.  Inlines the two-mode gather of
-      !! `ice_cell_concentration_impl` (`rdb_ice_state` — convention of
-      !! record; `test_ocean_ice_diags` pins the copies equal): ncat==1
-      !! legacy lumped (per-CELL m_ice, ci = 0/1), ncat>1 SIS2 ITD
-      !! (ci = min(1, Σ part_size), mice = Σ part_size·m_ice).
-      !! `emit_thick=.false.` ⇒ buf = ci; `.true.` ⇒ buf = mice/ICE_RHO_ICE
-      !! (grid-mean thickness, m).  Scalar flag branch is constant-folded on
-      !! the device — one kernel, no scratch companion.
+   pure subroutine fill_ice_conc_thick_impl(nx, ny, wet_T, aice, vice, emit_thick, buf)
+      !! Shared conc/thick device kernel: a wet-masked copy of the
+      !! scheme-neutral cell aggregates (`ocean_sea_ice_t%aice` / `%vice`,
+      !! filled by `ice_aggregates_fill` -- the two-mode category gather
+      !! lives there, once).  `emit_thick=.false.` => buf = aice;
+      !! `.true.` => buf = vice (grid-mean thickness, m).  Scalar flag
+      !! branch is constant-folded on the device -- one kernel, no scratch.
       !!
       !! Land AND ghost cells (`wet_T <= 0.5`) write the IEEE NaN
-      !! missing-data sentinel, matching `fill_tracer_impl`'s convention —
+      !! missing-data sentinel, matching `fill_tracer_impl`'s convention --
       !! this used to write a plain 0.0, which is a LEGAL concentration/
       !! thickness value, so `diag_field_stats`'s finite-cell mean counted
       !! the whole ghost ring as "0% ice" ocean and diluted the mean (e.g.
       !! 1200/1496 = 0.802139 on a 40x30/nghost=2 domain that is 100%
       !! ice-covered everywhere wet). `test_fill_ice_conc_thick_nan_ghost`
       !! pins the fix.
-      integer, intent(in) :: ncat, nx, ny
+      integer, intent(in) :: nx, ny
       real(wp), intent(in) :: wet_T(nx, ny)
-      real(wp), intent(in) :: part_size(nx, ny, 0:ncat)
-      real(wp), intent(in) :: m_ice(nx, ny, ncat)
+      real(wp), intent(in) :: aice(nx, ny)
+      real(wp), intent(in) :: vice(nx, ny)
       logical, intent(in) :: emit_thick
       real(wp), intent(inout) :: buf(:, :, :)  ! assumed-shape-ok: diag fill — cadence-bounded
-      integer :: i, j, c, nxl, nyl
-      real(wp) :: mice_val, ci_val, ci_sum, qnan
+      integer :: i, j, nxl, nyl
+      real(wp) :: qnan
 
       nxl = min(nx, size(buf, 1))
       nyl = min(ny, size(buf, 2))
       qnan = ieee_value(0.0_wp, ieee_quiet_nan)
-
-      if (ncat == 1) then
-         do concurrent(j=1:nyl, i=1:nxl) local(mice_val, ci_val)
-            if (wet_T(i, j) > 0.5_wp) then
-               if (m_ice(i, j, 1) > 0.0_wp) then
-                  mice_val = m_ice(i, j, 1)
-                  ci_val = 1.0_wp
-               else
-                  mice_val = 0.0_wp
-                  ci_val = 0.0_wp
-               end if
-               buf(i, j, 1) = merge(mice_val/ICE_RHO_ICE, ci_val, emit_thick)
-            else
-               buf(i, j, 1) = qnan
-            end if
-         end do
-      else
-         do concurrent(j=1:nyl, i=1:nxl) local(c, mice_val, ci_val, ci_sum)
-            if (wet_T(i, j) > 0.5_wp) then
-               mice_val = 0.0_wp
-               ci_sum = 0.0_wp
-               do c = 1, ncat
-                  mice_val = mice_val + part_size(i, j, c)*m_ice(i, j, c)
-                  ci_sum = ci_sum + part_size(i, j, c)
-               end do
-               ci_val = min(1.0_wp, ci_sum)
-               buf(i, j, 1) = merge(mice_val/ICE_RHO_ICE, ci_val, emit_thick)
-            else
-               buf(i, j, 1) = qnan
-            end if
-         end do
-      end if
+      do concurrent(j=1:nyl, i=1:nxl)
+         if (wet_T(i, j) > 0.5_wp) then
+            buf(i, j, 1) = merge(vice(i, j), aice(i, j), emit_thick)
+         else
+            buf(i, j, 1) = qnan
+         end if
+      end do
    end subroutine fill_ice_conc_thick_impl
 
    pure subroutine fill_ice_rate_impl(nx, ny, wet_T, src, scale, buf)
@@ -907,32 +873,22 @@ contains
       end do
    end subroutine fill_ice_dvidtt_impl
 
-   pure subroutine fill_ice_hs_impl(ncat, nx, ny, wet_T, part_size, m_snow, buf)
-      !! Grid-mean snow thickness: sum_c w_c*m_snow_c/ICE_RHO_SNOW with
-      !! w_c = part_size (ncat>1) or 1 (ncat==1). NaN on land/ghost.
-      integer, intent(in) :: ncat, nx, ny
+   pure subroutine fill_ice_hs_impl(nx, ny, wet_T, vsno, buf)
+      !! Grid-mean snow thickness: a wet-masked copy of the cell aggregate
+      !! `vsno` (m).  NaN on land/ghost.
+      integer, intent(in) :: nx, ny
       real(wp), intent(in) :: wet_T(nx, ny)
-      real(wp), intent(in) :: part_size(nx, ny, 0:ncat)
-      real(wp), intent(in) :: m_snow(nx, ny, ncat)
+      real(wp), intent(in) :: vsno(nx, ny)
       real(wp), intent(inout) :: buf(:, :, :)  ! assumed-shape-ok: diag fill — cadence-bounded
-      integer :: i, j, c, nxl, nyl
-      real(wp) :: hs_val, w, qnan
+      integer :: i, j, nxl, nyl
+      real(wp) :: qnan
 
       nxl = min(nx, size(buf, 1))
       nyl = min(ny, size(buf, 2))
       qnan = ieee_value(0.0_wp, ieee_quiet_nan)
-      do concurrent(j=1:nyl, i=1:nxl) local(c, hs_val, w)
+      do concurrent(j=1:nyl, i=1:nxl)
          if (wet_T(i, j) > 0.5_wp) then
-            hs_val = 0.0_wp
-            do c = 1, ncat
-               if (ncat == 1) then
-                  w = 1.0_wp
-               else
-                  w = part_size(i, j, c)
-               end if
-               hs_val = hs_val + w*m_snow(i, j, c)
-            end do
-            buf(i, j, 1) = hs_val/ICE_RHO_SNOW
+            buf(i, j, 1) = vsno(i, j)
          else
             buf(i, j, 1) = qnan
          end if

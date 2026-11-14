@@ -24,7 +24,6 @@ module rdb_ocean_console_stats
                                 conservation_budget_t
    use rdb_halo, only: halo_allreduce_sum, halo_allreduce_max, halo_allreduce_efp_list
    use rdb_ocean_halo_counters, only: oh_counters_format
-   use rdb_ice_column, only: ICE_RHO_ICE
    use rdb_efp, only: efp_t, EFP_DIGITS, EFP_PREC_WIDTH, EFP_MAX_SUMMANDS, &
                       efp_carry, efp_to_real, efp_from_real
    use pic_logger, only: logger => global_logger
@@ -269,7 +268,7 @@ contains
    subroutine ocean_console_stats_report(this, grid, metrics, ms, t, dt, step, &
                                          horiz_adv_budget_valid, &
                                          cfl_vanish_tol, heat_budget_frazil, &
-                                         ice_part_size, ice_m_ice, ice_ncat, &
+                                         ice_aice, ice_vice, &
                                          compute_rank, reproducing_sums, &
                                          budget_stage_weight, budget_out)
       !! Compute current totals + means + max-CFL and emit a MOM6-style
@@ -314,16 +313,13 @@ contains
          !! budget still closes with ice on.  Absent (ice off — the
          !! driver passes the slot's unallocated array, which an optional
          !! dummy sees as absent) ⇒ bit-identical.
-      real(wp), intent(in), optional :: ice_part_size(:, :, 0:)
-         !! Sea-ice category area fractions (`ocean_sea_ice_t%part_size`,
-         !! category 0 = open water).  Absent (ice off — the driver passes
-         !! the slot's unallocated array, seen as absent) ⇒ no ice line ⇒
-         !! bit-identical.  Lower bound 0 declared so category indexing
-         !! matches the state array.
-      real(wp), intent(in), optional :: ice_m_ice(:, :, :)
-         !! Sea-ice mass per category (two-mode convention, `rdb_ice_state`).
-      integer, intent(in), optional :: ice_ncat
-         !! Category count (selects the lumped vs ITD gather mode).
+      real(wp), intent(in), optional :: ice_aice(:, :)
+         !! Cell ice concentration aggregate (`ocean_sea_ice_t%aice`,
+         !! scheme-neutral, D1.6).  Absent (ice off -- the driver passes the
+         !! slot's unallocated array, seen as absent) => no ice line =>
+         !! bit-identical.
+      real(wp), intent(in), optional :: ice_vice(:, :)
+         !! Ice volume per cell area aggregate, m (`ocean_sea_ice_t%vice`).
       integer, intent(in) :: compute_rank
          !! Caller's compute-communicator rank (0 = print, others silent).
       logical, intent(in), optional :: reproducing_sums
@@ -421,7 +417,7 @@ contains
       g_wet_area = 0.0_wp
       g_ci_area = 0.0_wp
       g_hi_area = 0.0_wp
-      ice_on = present(ice_part_size) .and. present(ice_m_ice) .and. present(ice_ncat)
+      ice_on = present(ice_aice) .and. present(ice_vice)
 
       if (use_efp) then
          ! ---- EFP path: k-slab-blocked fixed-point reductions, ONE combined
@@ -445,8 +441,8 @@ contains
                                                          metrics%areaT, grid%nghost)
          end if
          if (ice_on) then
-            call compute_ice_totals_efp(metrics%wet_T, metrics%areaT, ice_part_size, ice_m_ice, &
-                                        ice_ncat, grid%nghost, &
+            call compute_ice_totals_efp(metrics%wet_T, metrics%areaT, ice_aice, ice_vice, &
+                                        grid%nghost, &
                                         efp_local(IX_WET), efp_local(IX_CI), efp_local(IX_HI))
          end if
          if (ms%mass_out_efp_on) then
@@ -502,8 +498,8 @@ contains
             raw_age = 0.0_wp
          end if
          if (ice_on) then
-            call compute_ice_totals(metrics%wet_T, metrics%areaT, ice_part_size, ice_m_ice, &
-                                    ice_ncat, grid%nghost, l_wet_area, l_ci_area, l_hi_area)
+            call compute_ice_totals(metrics%wet_T, metrics%areaT, ice_aice, ice_vice, &
+                                    grid%nghost, l_wet_area, l_ci_area, l_hi_area)
          end if
 
          ! ---- (b) global allreduce — COLLECTIVE (all compute ranks) -------
@@ -837,23 +833,23 @@ contains
       total = acc
    end function compute_total_content
 
-   subroutine compute_ice_totals(wet_T, areaT, part_size, m_ice, ncat, nghost, &
+   subroutine compute_ice_totals(wet_T, areaT, aice, vice, nghost, &
                                  wet_area, ci_area, hi_area)
-      !! Σ wet_T·areaT, Σ ci·areaT and Σ (mice/ICE_RHO_ICE)·areaT over
-      !! PHYSICAL cells (ghosts excluded) — ci/mice from the two-mode
-      !! per-cell gather (`ice_cell_concentration_impl` convention,
-      !! inlined; `test_ocean_ice_diags` pins the fills' copy of the same
-      !! math).  One pass, three `reduction(+:)` accumulators.
+      !! Σ wet_T·areaT, Σ aice·areaT and Σ vice·areaT over PHYSICAL cells
+      !! (ghosts excluded) on WET cells -- `aice`/`vice` are the
+      !! scheme-neutral cell aggregates (`ice_aggregates_fill`, which owns
+      !! the category gather; `test_ocean_ice_aggregates` pins them equal to
+      !! the inline gather this routine used before).  One pass, three
+      !! `reduction(+:)` accumulators.
       real(wp), intent(in) :: wet_T(:, :), areaT(:, :)
-      real(wp), intent(in) :: part_size(:, :, 0:)
-      real(wp), intent(in) :: m_ice(:, :, :)
-      integer, intent(in) :: ncat, nghost
+      real(wp), intent(in) :: aice(:, :), vice(:, :)
+      integer, intent(in) :: nghost
       real(wp), intent(out) :: wet_area, ci_area, hi_area
-      real(wp) :: acc_w, acc_c, acc_h, ci, mice
-      integer :: i, j, c, nx, ny, i_lo, i_hi, j_lo, j_hi
+      real(wp) :: acc_w, acc_c, acc_h
+      integer :: i, j, nx, ny, i_lo, i_hi, j_lo, j_hi
 
-      nx = min(size(wet_T, 1), size(areaT, 1), size(m_ice, 1))
-      ny = min(size(wet_T, 2), size(areaT, 2), size(m_ice, 2))
+      nx = min(size(wet_T, 1), size(areaT, 1), size(aice, 1))
+      ny = min(size(wet_T, 2), size(areaT, 2), size(aice, 2))
       i_lo = nghost + 1
       i_hi = nx - nghost
       j_lo = nghost + 1
@@ -862,42 +858,18 @@ contains
       acc_w = 0.0_wp
       acc_c = 0.0_wp
       acc_h = 0.0_wp
-      if (ncat == 1) then
-         ! acc-kept: assumed-shape dummy wet_T/areaT/m_ice (dc-assumed-shape)
-         !$acc parallel loop collapse(2) reduction(+:acc_w, acc_c, acc_h) &
-         !$acc&         private(ci, mice) present(wet_T, areaT, m_ice)
-         do j = j_lo, j_hi
-            do i = i_lo, i_hi
-               acc_w = acc_w + wet_T(i, j)*areaT(i, j)
-               if (wet_T(i, j) > 0.5_wp .and. m_ice(i, j, 1) > 0.0_wp) then
-                  mice = m_ice(i, j, 1)
-                  ci = 1.0_wp
-                  acc_c = acc_c + ci*areaT(i, j)
-                  acc_h = acc_h + (mice/ICE_RHO_ICE)*areaT(i, j)
-               end if
-            end do
+      ! acc-kept: assumed-shape dummy wet_T/areaT/aice/vice (dc-assumed-shape)
+      !$acc parallel loop collapse(2) reduction(+:acc_w, acc_c, acc_h) &
+      !$acc&         present(wet_T, areaT, aice, vice)
+      do j = j_lo, j_hi
+         do i = i_lo, i_hi
+            acc_w = acc_w + wet_T(i, j)*areaT(i, j)
+            if (wet_T(i, j) > 0.5_wp) then
+               acc_c = acc_c + aice(i, j)*areaT(i, j)
+               acc_h = acc_h + vice(i, j)*areaT(i, j)
+            end if
          end do
-      else
-         ! acc-kept: assumed-shape dummy wet_T/areaT/part_size/m_ice (dc-assumed-shape)
-         !$acc parallel loop collapse(2) reduction(+:acc_w, acc_c, acc_h) &
-         !$acc&         private(ci, mice, c) present(wet_T, areaT, part_size, m_ice)
-         do j = j_lo, j_hi
-            do i = i_lo, i_hi
-               acc_w = acc_w + wet_T(i, j)*areaT(i, j)
-               if (wet_T(i, j) > 0.5_wp) then
-                  mice = 0.0_wp
-                  ci = 0.0_wp
-                  do c = 1, ncat
-                     mice = mice + part_size(i, j, c)*m_ice(i, j, c)
-                     ci = ci + part_size(i, j, c)
-                  end do
-                  ci = min(1.0_wp, ci)
-                  acc_c = acc_c + ci*areaT(i, j)
-                  acc_h = acc_h + (mice/ICE_RHO_ICE)*areaT(i, j)
-               end if
-            end do
-         end do
-      end if
+      end do
       wet_area = acc_w
       ci_area = acc_c
       hi_area = acc_h
@@ -1295,7 +1267,7 @@ contains
       end do
    end function compute_total_ke_efp
 
-   subroutine compute_ice_totals_efp(wet_T, areaT, part_size, m_ice, ncat, nghost, &
+   subroutine compute_ice_totals_efp(wet_T, areaT, aice, vice, nghost, &
                                      wet_area_efp, ci_area_efp, hi_area_efp)
       !! EFP twin of `compute_ice_totals`.  2D-only (no k-slab blocking
       !! needed -- one "slab" per accumulator), so a single
@@ -1336,14 +1308,14 @@ contains
       !! `test_ice_totals_efp_many_accumulators` for the regression gate
       !! (CPU-portable: the defect is GPU-codegen-specific, but the test
       !! pins the VALUES, which must match `compute_ice_totals` on every
-      !! backend).  Gather logic + extent clamping copied verbatim from
-      !! `compute_ice_totals`.
+      !! backend).  Since D1.6 the category gather is gone from these passes
+      !! (the per-cell `aice`/`vice` aggregates are built once by
+      !! `ice_aggregates_fill`); the three-pass shape is kept as proven.
       real(wp), intent(in) :: wet_T(:, :), areaT(:, :)
-      real(wp), intent(in) :: part_size(:, :, 0:)
-      real(wp), intent(in) :: m_ice(:, :, :)
-      integer, intent(in) :: ncat, nghost
+      real(wp), intent(in) :: aice(:, :), vice(:, :)
+      integer, intent(in) :: nghost
       type(efp_t), intent(out) :: wet_area_efp, ci_area_efp, hi_area_efp
-      integer :: i, j, c, nx, ny, i_lo, i_hi, j_lo, j_hi
+      integer :: i, j, nx, ny, i_lo, i_hi, j_lo, j_hi
       integer(int64) :: ew1, ew2, ew3, ew4, ew5, ew6, ewp
       integer(int64) :: ec1, ec2, ec3, ec4, ec5, ec6, ecp
       integer(int64) :: eh1, eh2, eh3, eh4, eh5, eh6, ehp
@@ -1351,8 +1323,8 @@ contains
       real(real64) :: val_w
       real(wp) :: ci, mice
 
-      nx = min(size(wet_T, 1), size(areaT, 1), size(m_ice, 1))
-      ny = min(size(wet_T, 2), size(areaT, 2), size(m_ice, 2))
+      nx = min(size(wet_T, 1), size(areaT, 1), size(aice, 1))
+      ny = min(size(wet_T, 2), size(areaT, 2), size(aice, 2))
       i_lo = nghost + 1
       i_hi = nx - nghost
       j_lo = nghost + 1
@@ -1398,57 +1370,30 @@ contains
       ec5 = 0_int64
       ec6 = 0_int64
       ecp = 0_int64
-      if (ncat == 1) then
-         ! acc-kept: EFP reproducing-sum path, left exactly as-is + assumed-shape dummy
-         !$acc parallel loop collapse(2) reduction(+:ec1,ec2,ec3,ec4,ec5,ec6,ecp) &
-         !$acc&    private(ci, val_w, dw1, dw2, dw3, dw4, dw5, dw6, dwp) present(wet_T, areaT, m_ice)
-         do j = j_lo, j_hi
-            do i = i_lo, i_hi
-               ci = 0.0_wp
-               if (wet_T(i, j) > 0.5_wp .and. m_ice(i, j, 1) > 0.0_wp) ci = 1.0_wp
-               val_w = real(ci*areaT(i, j), real64)
-               call efp_decompose_impl(val_w, dw1, dw2, dw3, dw4, dw5, dw6, dwp)
-               ec1 = ec1 + dw1
-               ec2 = ec2 + dw2
-               ec3 = ec3 + dw3
-               ec4 = ec4 + dw4
-               ec5 = ec5 + dw5
-               ec6 = ec6 + dw6
-               ecp = ecp + dwp
-            end do
+      ! acc-kept: EFP reproducing-sum path, left exactly as-is + assumed-shape dummy
+      !$acc parallel loop collapse(2) reduction(+:ec1,ec2,ec3,ec4,ec5,ec6,ecp) &
+      !$acc&    private(ci, val_w, dw1, dw2, dw3, dw4, dw5, dw6, dwp) &
+      !$acc&    present(wet_T, areaT, aice)
+      do j = j_lo, j_hi
+         do i = i_lo, i_hi
+            ci = 0.0_wp
+            if (wet_T(i, j) > 0.5_wp) ci = aice(i, j)
+            val_w = real(ci*areaT(i, j), real64)
+            call efp_decompose_impl(val_w, dw1, dw2, dw3, dw4, dw5, dw6, dwp)
+            ec1 = ec1 + dw1
+            ec2 = ec2 + dw2
+            ec3 = ec3 + dw3
+            ec4 = ec4 + dw4
+            ec5 = ec5 + dw5
+            ec6 = ec6 + dw6
+            ecp = ecp + dwp
          end do
-      else
-         ! acc-kept: EFP reproducing-sum path, left exactly as-is + assumed-shape dummy
-         !$acc parallel loop collapse(2) reduction(+:ec1,ec2,ec3,ec4,ec5,ec6,ecp) &
-         !$acc&    private(c, ci, val_w, dw1, dw2, dw3, dw4, dw5, dw6, dwp) &
-         !$acc&    present(wet_T, areaT, part_size)
-         do j = j_lo, j_hi
-            do i = i_lo, i_hi
-               ci = 0.0_wp
-               if (wet_T(i, j) > 0.5_wp) then
-                  !$acc loop seq
-                  do c = 1, ncat
-                     ci = ci + part_size(i, j, c)
-                  end do
-                  ci = min(1.0_wp, ci)
-               end if
-               val_w = real(ci*areaT(i, j), real64)
-               call efp_decompose_impl(val_w, dw1, dw2, dw3, dw4, dw5, dw6, dwp)
-               ec1 = ec1 + dw1
-               ec2 = ec2 + dw2
-               ec3 = ec3 + dw3
-               ec4 = ec4 + dw4
-               ec5 = ec5 + dw5
-               ec6 = ec6 + dw6
-               ecp = ecp + dwp
-            end do
-         end do
-      end if
+      end do
       ci_area_efp%v = [ec1, ec2, ec3, ec4, ec5, ec6]
       ci_area_efp%poison = ecp
       call efp_carry(ci_area_efp%v)
 
-      ! ---- Pass 3: ice volume (as area) -- Sigma (mice/ICE_RHO_ICE)*areaT.
+      ! ---- Pass 3: ice volume (as area) -- Sigma vice*areaT.
       eh1 = 0_int64
       eh2 = 0_int64
       eh3 = 0_int64
@@ -1456,51 +1401,25 @@ contains
       eh5 = 0_int64
       eh6 = 0_int64
       ehp = 0_int64
-      if (ncat == 1) then
-         ! acc-kept: EFP reproducing-sum path, left exactly as-is + assumed-shape dummy
-         !$acc parallel loop collapse(2) reduction(+:eh1,eh2,eh3,eh4,eh5,eh6,ehp) &
-         !$acc&    private(mice, val_w, dw1, dw2, dw3, dw4, dw5, dw6, dwp) present(wet_T, areaT, m_ice)
-         do j = j_lo, j_hi
-            do i = i_lo, i_hi
-               mice = 0.0_wp
-               if (wet_T(i, j) > 0.5_wp .and. m_ice(i, j, 1) > 0.0_wp) mice = m_ice(i, j, 1)
-               val_w = real((mice/ICE_RHO_ICE)*areaT(i, j), real64)
-               call efp_decompose_impl(val_w, dw1, dw2, dw3, dw4, dw5, dw6, dwp)
-               eh1 = eh1 + dw1
-               eh2 = eh2 + dw2
-               eh3 = eh3 + dw3
-               eh4 = eh4 + dw4
-               eh5 = eh5 + dw5
-               eh6 = eh6 + dw6
-               ehp = ehp + dwp
-            end do
+      ! acc-kept: EFP reproducing-sum path, left exactly as-is + assumed-shape dummy
+      !$acc parallel loop collapse(2) reduction(+:eh1,eh2,eh3,eh4,eh5,eh6,ehp) &
+      !$acc&    private(mice, val_w, dw1, dw2, dw3, dw4, dw5, dw6, dwp) &
+      !$acc&    present(wet_T, areaT, vice)
+      do j = j_lo, j_hi
+         do i = i_lo, i_hi
+            mice = 0.0_wp
+            if (wet_T(i, j) > 0.5_wp) mice = vice(i, j)
+            val_w = real(mice*areaT(i, j), real64)
+            call efp_decompose_impl(val_w, dw1, dw2, dw3, dw4, dw5, dw6, dwp)
+            eh1 = eh1 + dw1
+            eh2 = eh2 + dw2
+            eh3 = eh3 + dw3
+            eh4 = eh4 + dw4
+            eh5 = eh5 + dw5
+            eh6 = eh6 + dw6
+            ehp = ehp + dwp
          end do
-      else
-         ! acc-kept: EFP reproducing-sum path, left exactly as-is + assumed-shape dummy
-         !$acc parallel loop collapse(2) reduction(+:eh1,eh2,eh3,eh4,eh5,eh6,ehp) &
-         !$acc&    private(c, mice, val_w, dw1, dw2, dw3, dw4, dw5, dw6, dwp) &
-         !$acc&    present(wet_T, areaT, part_size, m_ice)
-         do j = j_lo, j_hi
-            do i = i_lo, i_hi
-               mice = 0.0_wp
-               if (wet_T(i, j) > 0.5_wp) then
-                  !$acc loop seq
-                  do c = 1, ncat
-                     mice = mice + part_size(i, j, c)*m_ice(i, j, c)
-                  end do
-               end if
-               val_w = real((mice/ICE_RHO_ICE)*areaT(i, j), real64)
-               call efp_decompose_impl(val_w, dw1, dw2, dw3, dw4, dw5, dw6, dwp)
-               eh1 = eh1 + dw1
-               eh2 = eh2 + dw2
-               eh3 = eh3 + dw3
-               eh4 = eh4 + dw4
-               eh5 = eh5 + dw5
-               eh6 = eh6 + dw6
-               ehp = ehp + dwp
-            end do
-         end do
-      end if
+      end do
       hi_area_efp%v = [eh1, eh2, eh3, eh4, eh5, eh6]
       hi_area_efp%poison = ehp
       call efp_carry(hi_area_efp%v)
