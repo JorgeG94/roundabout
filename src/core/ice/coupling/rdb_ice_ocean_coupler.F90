@@ -265,9 +265,9 @@ contains
    end subroutine ice_ocean_sw_flux
 
    pure subroutine ice_ocean_sw_flux_components_impl(sw_ice, sw_thru_diag, nx, ny)
-      !! Components-on branch: full-array overwrite of the `q_sw` COMPONENT
+      !! Components-on branch: full-array overwrite of the `sw_ice` COMPONENT
       !! (including ghosts — they get `0`).  No `_const` term.
-      !! Explicit-shape + decl-order.  Runs on the device-resident `q_sw`
+      !! Explicit-shape + decl-order.  Runs on the device-resident `sw_ice`
       !! (mapped by `sf%enter_data`) and `sw_thru_diag` (mapped by
       !! `ice%enter_data`).
       integer, intent(in) :: nx, ny

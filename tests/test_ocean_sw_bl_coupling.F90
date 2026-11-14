@@ -29,6 +29,7 @@ module test_ocean_sw_bl_coupling
    use rdb_ocean_surface_stress, only: ocean_surface_stress_t
    use rdb_ocean_surface_flux, only: ocean_surface_flux_t, &
                                      ocean_surface_flux_apply_tracers, &
+                                     ocean_surface_flux_refresh_sw_net, &
                                      sw_transmission, sw_pe_cost_shape, SEAWATER_CP
    use rdb_ocean_vmix, only: ocean_vmix_t, vmix_compute_pp81, &
                              vmix_apply_kpp_overlay, &
@@ -57,6 +58,8 @@ contains
                   new_unittest("epbl_ctke_ledger_partitions_i0", test_ledger_partitions), &
                   new_unittest("epbl_midday_mld_deepens", test_mld_deepens), &
                   new_unittest("kpp_mxl_sw_deepens_under_sunny_cooling", test_kpp_mxl_sw), &
+                  new_unittest("kpp_epbl_see_open_plus_ice_shortwave", test_total_sw), &
+                  new_unittest("kpp_epbl_see_open_plus_ice_shortwave", test_total_sw), &
                   new_unittest("sw_bl_gpu_resident", test_gpu_resident) &
                   ]
    end subroutine collect_ocean_sw_bl_coupling_tests
@@ -391,6 +394,7 @@ contains
          ! q_sw source: I0 = frac*q_sw > 0 while Q_heat < 0 (the regime).
          call sf%set_sw_penetration(1.0_wp, R, ZETA1, ZETA2, sw_source="q_sw")
          sf%q_sw = QSW
+         sf%sw_net = QSW
 
          i = grid%nx_total/2
          j = grid%ny_total/2
@@ -459,6 +463,75 @@ contains
       call kpp_heating_noop(error)
    end subroutine test_kpp_mxl_sw
 
+   subroutine sw_total_run(qsw, swice, kv, ctke)
+      !! KPP (MXL shortwave coupling) then EPBL (shortwave TKE) on fresh
+      !! state with the `q_sw` source; returns `kv` at the probe column and
+      !! the EPBL `ctke_sw` column.
+      real(wp), intent(in) :: qsw, swice
+      real(wp), allocatable, intent(out) :: kv(:), ctke(:)
+      integer, parameter :: NZ = 10
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      type(ocean_vmix_t) :: vmix
+      type(ocean_epbl_t) :: epbl
+      type(ocean_surface_stress_t) :: ss
+      type(ocean_surface_flux_t) :: sf
+      integer :: i, j
+
+      call make_grid(grid, 8, 6)
+      ms%nz_ml = NZ
+      call ms%init(grid)
+      call ss%init(grid)
+      call ss%set_wind_stress_const(0.05_wp, 0.0_wp)
+      call sf%init(grid)
+      call sf%set_components(grid, .true.)
+      call sf%set_surface_flux_const(-250.0_wp, 0.0_wp)
+      call sf%set_sw_penetration(1.0_wp, R, ZETA1, ZETA2, sw_source="q_sw")
+      sf%q_sw = qsw
+      sf%sw_ice = swice
+      i = grid%nx_total/2
+      j = grid%ny_total/2
+
+      call setup_unstrat_ms(ms, NZ)
+      call vmix%init(grid, nz_ml=NZ)
+      vmix%kpp_sw_method = KPP_SW_MXL
+      call setup_eos_vmix(vmix)
+      call run_kpp(grid, ms, vmix, ss, sf)
+      kv = vmix%kv(i, j, :)
+      call cleanup_vmix(vmix)
+
+      call setup_strat_ms(ms, NZ)
+      call setup_epbl(epbl, grid, NZ)
+      epbl%epbl_sw_ctke = .true.
+      call run_epbl(grid, ms, epbl, ss, sf)
+      ctke = epbl%ctke_sw%data(i, j, :)
+      call cleanup_epbl(epbl)
+      call ss%destroy(); call sf%destroy(); call ms%destroy()
+   end subroutine sw_total_run
+
+   subroutine test_total_sw(error)
+      !! `sw_source="q_sw"`: the KPP surface-buoyancy shortwave coupling and
+      !! the EPBL shortwave TKE term must see `q_sw + sw_ice`.  Splitting a
+      !! total into an open-water and an ice-transmitted share gives
+      !! BIT-IDENTICAL `kv` / `ctke_sw` to carrying it all in `q_sw`, and the
+      !! ice share alone moves them (negative control).
+      type(error_type), allocatable, intent(out) :: error
+      real(wp), allocatable :: kv_s(:), ct_s(:), kv_t(:), ct_t(:), kv_o(:), ct_o(:)
+
+      call sw_total_run(250.0_wp, 150.0_wp, kv_s, ct_s)
+      call sw_total_run(400.0_wp, 0.0_wp, kv_t, ct_t)
+      call sw_total_run(250.0_wp, 0.0_wp, kv_o, ct_o)
+      call check(error, maxval(abs(kv_s - kv_t)) == 0.0_wp, &
+                 "KPP sees q_sw + sw_ice (kv identical to the single-field total)")
+      if (allocated(error)) return
+      call check(error, maxval(abs(ct_s - ct_t)) == 0.0_wp, &
+                 "EPBL sees q_sw + sw_ice (ctke_sw identical to the single-field total)")
+      if (allocated(error)) return
+      call check(error, maxval(abs(kv_s - kv_o)) > 0.0_wp .and. &
+                 maxval(abs(ct_s - ct_o)) > 0.0_wp, &
+                 "the ice-transmitted share must move kv and ctke_sw")
+   end subroutine test_total_sw
+
    subroutine kpp_heating_noop(error)
       !! Under net heating (Q_heat > 0), B_0 > 0 ⇒ w_* = 0, so the SW
       !! method cannot move kv: mxl_sw and all_sw are bit-identical.
@@ -483,6 +556,7 @@ contains
          call sf%set_surface_flux_const(200.0_wp, 0.0_wp)   ! heating
          call sf%set_sw_penetration(1.0_wp, R, ZETA1, ZETA2, sw_source="q_sw")
          sf%q_sw = 300.0_wp
+         sf%sw_net = 300.0_wp
 
          ! Unstratified + wind: h_b = full depth, u_star > 0 ⇒ kv non-zero;
          ! under heating B_0 > 0 ⇒ w_* = 0 ⇒ mxl_sw and all_sw coincide.
@@ -631,6 +705,7 @@ contains
       call ms%enter_data()
       call vmix%enter_data()
       call sf%enter_data()
+      call ocean_surface_flux_refresh_sw_net(sf)
       call vmix_compute_pp81(grid, vmix, ms)
       call vmix_apply_kpp_overlay(grid, vmix, ms, ss, sf)
       !$acc update self(vmix%kv, vmix%kt, vmix%bl_depth, vmix%gamma_t, vmix%gamma_s)
@@ -650,6 +725,7 @@ contains
       call ms%enter_data()
       call sf%enter_data()
       call epbl%enter_data()
+      call ocean_surface_flux_refresh_sw_net(sf)
       call epbl_compute(grid, epbl, ms, ss, 1800.0_wp, sf=sf)
       !$acc update self(epbl%mld, epbl%kd_int)
       !$acc update self(epbl%ctke_sw%data, epbl%dcolht_t%data)

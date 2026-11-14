@@ -3983,6 +3983,23 @@ contains
             has_error = .true.
          end if
 
+         ! D3b: components OFF, a heat/salt file AND sea ice.  The reader
+         ! writes `Q_heat`/`Q_salt` directly every step and the ice couplers
+         ! full-overwrite the same arrays on thermo steps, so one of the two
+         ! is silently lost (the reader's next write erases the ice's heat,
+         ! brine and transmitted shortwave before the apply reads them).
+         ! With components on, each has its own slot.
+         if (dataovr_heat_salt_clobbers_ice(cfg%ocean%dataovr, &
+                                            cfg%ocean%forcing%enable_components, &
+                                            cfg%ocean%ice%enable)) then
+            call logger%error("&ocean_dataovr_nml heat/salt file forcing with "// &
+                              "&ocean_ice_nml enable=.true. requires "// &
+                              "&ocean_forcing_nml enable_components=.true. (without it the "// &
+                              "reader and the ice coupler overwrite the same Q_heat/Q_salt "// &
+                              "and the ice's heat, brine and shortwave never reach the ocean)")
+            has_error = .true.
+         end if
+
          ! D4: a named file that does not exist.  A typo'd path is the
          ! single most common way to get this group wrong, and without
          ! this check it surfaces only once registration opens the file
@@ -4208,6 +4225,17 @@ contains
       bad = (len_trim(cfg%evap%file) > 0 .or. len_trim(cfg%lprec%file) > 0) &
             .and. (.not. use_components)
    end function dataovr_freshwater_needs_components
+
+   pure module function dataovr_heat_salt_clobbers_ice(cfg, use_components, ice_enable) result(bad)
+      !! `.true.` when a heat/salt data file, sea ice and the component set
+      !! OFF coincide: the reader and the ice coupler then write the same
+      !! `Q_heat`/`Q_salt`.  Reports the PROBLEM (like its freshwater twin).
+      type(ocean_dataovr_config_t), intent(in) :: cfg
+      logical, intent(in) :: use_components, ice_enable
+      logical :: bad
+      bad = ice_enable .and. (.not. use_components) .and. &
+            (len_trim(cfg%heat%file) > 0 .or. len_trim(cfg%salt%file) > 0)
+   end function dataovr_heat_salt_clobbers_ice
 
    pure module function atm_forcing_prereq_code(cfg) result(code)
       !! First failing prerequisite of `&ocean_atm_forcing_nml enable` as an

@@ -136,6 +136,7 @@ module rdb_ocean_surface_flux
    public :: ocean_surface_flux_apply_tracers
    public :: bound_salinity_top_impl
    public :: ocean_surface_flux_apply_sw_penetration
+   public :: ocean_surface_flux_refresh_sw_net
    public :: ocean_surface_restore_apply_tracers
    public :: ocean_surface_flux_assemble
    public :: ocean_surface_flux_apply_cover_const
@@ -355,6 +356,15 @@ module rdb_ocean_surface_flux
          !! either sign; MOM6 `heat_added`).  The v1 ice coupler's
          !! `heat_flux_diag` lands here (§5.4 of the PR-12 plan) —
          !! it is already a net W/m^2, not further decomposable.
+      real(wp), allocatable :: sw_net(:, :)
+         !! **Total shortwave the `sw_source="q_sw"` consumers read**
+         !! (W/m^2, >= 0): `q_sw + sw_ice`, the open-water share plus the
+         !! ice-transmitted share.  Filled by
+         !! `ocean_surface_flux_refresh_sw_net` (engine, once per step after
+         !! the bulk consumer) ONLY when `sw_from_qsw`; the two-band/N-band
+         !! penetration, the KPP surface-buoyancy shortwave coupling and the
+         !! EPBL penetrating-SW TKE term all read it, so they see the same
+         !! total.  Not restart state (re-derived every step).
       real(wp), allocatable :: heat_ice(:, :)
          !! **Sea-ice heat component** (W/m^2, positive DOWN, either sign):
          !! the ice column's net grow/melt heat (`heat_flux_diag`).  OWNED by
@@ -376,10 +386,8 @@ module rdb_ocean_surface_flux
          !! `heat_ice` (`ice_ocean_sw_flux`), separate from `q_sw` so the
          !! bulk consumer's open-water shortwave (`ow*(1-albedo)*rsds`,
          !! rewritten every step) and the ice's transmitted share add in the
-         !! assembler -- together one cell's worth.  NOT seen by the
-         !! `sw_source="q_sw"` penetration irradiance, which reads `q_sw`
-         !! only; the default `net_heat` source reads the assembled `Q_heat`
-         !! and so includes it.
+         !! assembler -- together one cell's worth.  The `sw_source="q_sw"`
+         !! consumers read `sw_net = q_sw + sw_ice`.
       real(wp), allocatable :: heat_cavity(:, :)
          !! **Ice-shelf cavity basal-melt heat component** (W/m^2, same
          !! positive-DOWN-into-the-ocean convention as every other heat
@@ -553,6 +561,7 @@ contains
       if (allocated(this%q_sens)) deallocate (this%q_sens)
       if (allocated(this%heat_added)) deallocate (this%heat_added)
       if (allocated(this%heat_ice)) deallocate (this%heat_ice)
+      if (allocated(this%sw_net)) deallocate (this%sw_net)
       if (allocated(this%salt_ice)) deallocate (this%salt_ice)
       if (allocated(this%sw_ice)) deallocate (this%sw_ice)
       if (allocated(this%heat_cavity)) deallocate (this%heat_cavity)
@@ -601,7 +610,7 @@ contains
       if (this%use_components) then
          !$acc enter data copyin(this%q_sw, this%q_lw, this%q_lat, this%q_sens, &
          !$acc&                  this%heat_added, this%heat_cavity, this%evap, &
-         !$acc&                  this%heat_ice, this%salt_ice, this%sw_ice, &
+         !$acc&                  this%heat_ice, this%salt_ice, this%sw_ice, this%sw_net, &
          !$acc&                  this%lprec, this%fprec, &
          !$acc&                  this%vprec, this%lrunoff, this%frunoff, this%seaice_melt, &
          !$acc&                  this%heat_content_lprec, this%heat_content_fprec, &
@@ -612,7 +621,7 @@ contains
          !$acc&                  this%p_surf_atm, this%p_surf)
          !$acc update device(this%q_sw, this%q_lw, this%q_lat, this%q_sens, &
          !$acc&               this%heat_added, this%heat_cavity, this%evap, &
-         !$acc&               this%heat_ice, this%salt_ice, this%sw_ice, &
+         !$acc&               this%heat_ice, this%salt_ice, this%sw_ice, this%sw_net, &
          !$acc&               this%lprec, this%fprec, &
          !$acc&               this%vprec, this%lrunoff, this%frunoff, this%seaice_melt, &
          !$acc&               this%heat_content_lprec, this%heat_content_fprec, &
@@ -637,7 +646,7 @@ contains
       if (this%use_components) then
          !$acc exit data delete(this%q_sw, this%q_lw, this%q_lat, this%q_sens, &
          !$acc&                 this%heat_added, this%heat_cavity, this%evap, &
-         !$acc&                 this%heat_ice, this%salt_ice, this%sw_ice, &
+         !$acc&                 this%heat_ice, this%salt_ice, this%sw_ice, this%sw_net, &
          !$acc&                 this%lprec, this%fprec, &
          !$acc&                 this%vprec, this%lrunoff, this%frunoff, this%seaice_melt, &
          !$acc&                 this%heat_content_lprec, this%heat_content_fprec, &
@@ -890,6 +899,7 @@ contains
       allocate (this%heat_ice(nx, ny), source=0.0_wp)
       allocate (this%salt_ice(nx, ny), source=0.0_wp)
       allocate (this%sw_ice(nx, ny), source=0.0_wp)
+      allocate (this%sw_net(nx, ny), source=0.0_wp)
       allocate (this%heat_cavity(nx, ny), source=0.0_wp)
       allocate (this%evap(nx, ny), source=0.0_wp)
       allocate (this%lprec(nx, ny), source=0.0_wp)
@@ -1180,6 +1190,35 @@ contains
       end do
    end subroutine apply_surface_src_2d_dyn_nobudget_impl
 
+   subroutine ocean_surface_flux_refresh_sw_net(sf)
+      !! Form `sw_net = q_sw + sw_ice` for the `sw_source="q_sw"` consumers
+      !! (penetration, KPP shortwave coupling, EPBL shortwave TKE): the
+      !! open-water share the bulk consumer rewrites every step plus the
+      !! ice-transmitted share the ice coupler refreshes every thermo step.
+      !! Call once per outer step AFTER the bulk consumer.  No-op (no launch)
+      !! unless components are on AND `sw_from_qsw`, so every other
+      !! configuration is untouched.  In an ice-only run `q_sw == 0`, so
+      !! `sw_net == sw_ice` exactly -- what `q_sw` itself held before the
+      !! ice moved to its own component.
+      type(ocean_surface_flux_t), intent(inout) :: sf
+
+      if (.not. sf%use_components) return
+      if (.not. sf%sw_from_qsw) return
+      call ocean_surfflux_sw_net_impl(sf%sw_net, sf%q_sw, sf%sw_ice, &
+                                      size(sf%sw_net, 1), size(sf%sw_net, 2))
+   end subroutine ocean_surface_flux_refresh_sw_net
+
+   pure subroutine ocean_surfflux_sw_net_impl(sw_net, q_sw, sw_ice, nx, ny)
+      integer, intent(in) :: nx, ny
+      real(wp), intent(inout) :: sw_net(nx, ny)
+      real(wp), intent(in) :: q_sw(nx, ny), sw_ice(nx, ny)
+      integer :: i, j
+
+      do concurrent(j=1:ny, i=1:nx)
+         sw_net(i, j) = q_sw(i, j) + sw_ice(i, j)
+      end do
+   end subroutine ocean_surfflux_sw_net_impl
+
    subroutine ocean_surface_flux_apply_sw_penetration(grid, sf, ms, dt, active, cover_frac)
       !! Additive correction that redistributes the penetrating
       !! shortwave fraction of `Q_heat` through the upper water column
@@ -1267,7 +1306,7 @@ contains
             if (sf%sw_from_qsw) then
                call apply_sw_penetration_nb_cover_impl(ms%tracers(idx_T)%c, &
                                                        ms%heat_budget_surface, ms%h_layer, ms%k_bot, ms%k_top, &
-                                                       ms%wet_mask, cover_frac, sf%q_sw, dt/(sf%rho0*sf%cp), &
+                                                       ms%wet_mask, cover_frac, sf%sw_net, dt/(sf%rho0*sf%cp), &
                                                        sf%sw_nb, sf%sw_frac, sf%sw_kappa, nz, nx, ny)
             else
                call apply_sw_penetration_nb_cover_impl(ms%tracers(idx_T)%c, &
@@ -1279,7 +1318,7 @@ contains
             if (sf%sw_from_qsw) then
                call apply_sw_penetration_nb_impl(ms%tracers(idx_T)%c, &
                                                  ms%heat_budget_surface, ms%h_layer, ms%k_bot, ms%k_top, &
-                                                 ms%wet_mask, sf%q_sw, dt/(sf%rho0*sf%cp), &
+                                                 ms%wet_mask, sf%sw_net, dt/(sf%rho0*sf%cp), &
                                                  sf%sw_nb, sf%sw_frac, sf%sw_kappa, nz, nx, ny)
             else
                call apply_sw_penetration_nb_impl(ms%tracers(idx_T)%c, &
@@ -1294,7 +1333,7 @@ contains
          if (sf%sw_from_qsw) then
             call apply_sw_penetration_cover_impl(ms%tracers(idx_T)%c, &
                                                  ms%heat_budget_surface, &
-                                                 ms%h_layer, ms%k_bot, ms%k_top, ms%wet_mask, cover_frac, sf%q_sw, &
+                                                 ms%h_layer, ms%k_bot, ms%k_top, ms%wet_mask, cover_frac, sf%sw_net, &
                                                  dt/(sf%rho0*sf%cp), sf%sw_pen_frac, &
                                                  sf%sw_band_ratio, sf%sw_zeta1, sf%sw_zeta2, &
                                                  nz, nx, ny)
@@ -1311,7 +1350,7 @@ contains
       if (sf%sw_from_qsw) then
          call apply_sw_penetration_impl(ms%tracers(idx_T)%c, &
                                         ms%heat_budget_surface, &
-                                        ms%h_layer, ms%k_bot, ms%k_top, ms%wet_mask, sf%q_sw, &
+                                        ms%h_layer, ms%k_bot, ms%k_top, ms%wet_mask, sf%sw_net, &
                                         dt/(sf%rho0*sf%cp), sf%sw_pen_frac, &
                                         sf%sw_band_ratio, sf%sw_zeta1, sf%sw_zeta2, &
                                         nz, nx, ny)
@@ -1863,7 +1902,7 @@ contains
                + arr_bytes(this%q_lat) + arr_bytes(this%q_sens) &
                + arr_bytes(this%heat_added) &
                + arr_bytes(this%heat_ice) + arr_bytes(this%salt_ice) &
-               + arr_bytes(this%sw_ice) &
+               + arr_bytes(this%sw_ice) + arr_bytes(this%sw_net) &
                + arr_bytes(this%heat_cavity) &
                + arr_bytes(this%evap) + arr_bytes(this%lprec) &
                + arr_bytes(this%fprec) + arr_bytes(this%vprec) &
