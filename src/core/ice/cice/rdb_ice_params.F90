@@ -132,6 +132,7 @@ module rdb_ice_params
       logical :: update_ocn_f         !! frazil fresh/salt fluxes to the ocean
       logical :: calc_Tsfc            !! solve for the surface temperature
       logical :: l_brine              !! brine pockets active (saltmax > min_salin)
+      real(wp) :: floeshape           !! floe shape factor for lateral melt (Steele 1992)
    end type ice_thermo_params_t
 
    type :: ice_itd_params_t
@@ -256,6 +257,7 @@ contains
       p%thermo%hi_min = 0.01_wp
       p%thermo%ustar_min = 0.005_wp
       p%thermo%floediam = 300.0_wp
+      p%thermo%floeshape = 0.66_wp
       p%thermo%emissivity = 0.985_wp
       p%thermo%update_ocn_f = .false.
       p%thermo%calc_Tsfc = .true.
