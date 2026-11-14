@@ -26,6 +26,7 @@ set(RDB_ICE_CORE_SOURCES
     ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_seed.F90
     ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_shortwave.F90
     ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_therm1.F90
+    ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_therm2.F90
     ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_thermo_shared.F90
     ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_thickness.F90
     ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_transport_checks.F90

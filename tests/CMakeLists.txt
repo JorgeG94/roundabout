@@ -688,6 +688,7 @@ set(RDB_CICE_TESTS
     "test_cice_transport_pack|test_cice_transport_pack|collect_cice_transport_pack_tests|cice_transport_pack|ocean"
     "test_cice_therm1|test_cice_therm1|collect_cice_therm1_tests|cice_therm1|ocean"
     "test_cice_radiation|test_cice_radiation|collect_cice_radiation_tests|cice_radiation|ocean"
+    "test_cice_therm2|test_cice_therm2|collect_cice_therm2_tests|cice_therm2|ocean"
 )
 
 # Shared helpers of the ice tests (deterministic columns, ledger, golden
