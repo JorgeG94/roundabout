@@ -110,6 +110,7 @@ set(RDB_TESTS
     "test_ocean_console_stats_efp|test_ocean_console_stats_efp|collect_ocean_console_stats_efp_tests|ocean_console_stats_efp|ocean"
     "test_config|test_config|collect_config_tests|config|ocean+core"
     "test_cice_config|test_cice_config|collect_cice_config_tests|cice_config|ocean"
+    "test_cice_state|test_cice_state|collect_cice_state_tests|cice_state|ocean"
     "test_nml_schema|test_nml_schema|collect_nml_schema_tests|nml_schema|core"
     "test_config_schema|test_config_schema|collect_config_schema_tests|config_schema|core"
     "test_ocean_knob_retirement|test_ocean_knob_retirement|collect_ocean_knob_retirement_tests|ocean_knob_retirement|ocean"

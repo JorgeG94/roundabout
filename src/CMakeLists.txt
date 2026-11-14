@@ -165,6 +165,10 @@ set(CORE_SOURCES
     # Sea-ice slot scaffold (SIS2 port, PR 0) — composed by rdb_ocean_state, so
     # it must precede it in the list. PR 3a: now depends on rdb_ice_column for
     # ICE_BULK_SALINITY/ICE_NK_MAX (the Winton column prognostics' init values).
+    # CICE-port ice state slot (D1.4): composed into ocean_sea_ice_t, so it
+    # precedes rdb_ice_state.
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/state/rdb_ice_cice_state.F90
+    # (rdb_ice_state, the SIS2 slot, continues the comment above.)
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/state/rdb_ice_state.F90
     # Sea-ice PR 24: analytic initial-condition path (uniform/latitudes
     # concentration seeding). Host-side setup code, no device kernel; depends on

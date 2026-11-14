@@ -632,6 +632,10 @@ contains
          end do
       end if
 
+      ! --- CICE-port ice state (v2 tags, `ice_state_version`): only when the
+      !     slot is live, i.e. `scheme = "cice"`; never under "sis2". ---
+      if (state%ice%cice%is_init) call state%ice%cice%register_restart(reg)
+
       ! --- Tidal-mixing + law-of-the-wall BBL kd_int (merged every stage).
       !     Their column solves refresh once per thermo interval, so a
       !     resume between refreshes (always the case under

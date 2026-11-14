@@ -136,6 +136,7 @@ module rdb_ice_state
    use rdb_mem_report, only: arr_bytes
    use rdb_ice_column, only: ICE_BULK_SALINITY, ICE_NK_MAX, ICE_RHO_ICE
    use rdb_ice_enthalpy, only: ICE_CP_BRINE, ICE_CP_ICE
+   use rdb_ice_cice_state, only: ice_cice_state_t
    use, intrinsic :: iso_fortran_env, only: int64
    implicit none
    private
@@ -253,6 +254,9 @@ module rdb_ice_state
          !! `query_initialized('stress_mag')` idiom
          !! (`ice_model.F90:2410`), one host scalar instead of a
          !! per-field registry query.
+      type(ice_cice_state_t) :: cice
+         !! CICE-port state (`scheme = "cice"`, D1.4).  Never initialised under the
+         !! default `scheme = "sis2"`: nothing allocated, mapped or registered.
       logical :: snow_ice = .false.
          !! Archimedes freeboard snow-ice flood master switch
          !! (`&ocean_ice_nml snow_ice`, PR 27), latched from config
@@ -825,6 +829,7 @@ contains
       !! guard), then releases allocations.
       class(ocean_sea_ice_t), intent(inout) :: this
       this%is_init = .false.
+      if (this%cice%is_init) call this%cice%destroy()
       if (allocated(this%frazil_heat)) deallocate (this%frazil_heat)
       if (allocated(this%heat_budget_frazil)) deallocate (this%heat_budget_frazil)
       if (allocated(this%part_size)) deallocate (this%part_size)
@@ -937,6 +942,7 @@ contains
       !! host-side allocation).
       type(ocean_sea_ice_t), intent(inout) :: this
       if (.not. this%is_init) return
+      if (this%cice%is_init) call this%cice%enter_data()
       !$acc enter data copyin(this%frazil_heat, this%heat_budget_frazil)
       !$acc enter data copyin(this%part_size, this%m_ice, this%m_snow)
       !$acc enter data copyin(this%enth_ice, this%enth_snow, this%sal_ice)
@@ -1008,6 +1014,7 @@ contains
       !! there is nothing to unmap.
       type(ocean_sea_ice_t), intent(inout) :: this
       if (.not. this%is_init) return
+      if (this%cice%is_init) call this%cice%exit_data()
       !$acc exit data copyout(this%frazil_heat)
       !$acc exit data delete(this%heat_budget_frazil)
       !$acc exit data copyout(this%part_size, this%m_ice, this%m_snow)
@@ -1114,6 +1121,7 @@ contains
       ! EVP rheology scratch — allocated + device-mapped only when
       ! `dynamics` is on, so the term self-zeroes on the EVP-off path.
       nbytes = nbytes + this%evp_ws%bytes()
+      nbytes = nbytes + this%cice%bytes()
    end function ocean_sea_ice_bytes
 
    ! =====================================================================
