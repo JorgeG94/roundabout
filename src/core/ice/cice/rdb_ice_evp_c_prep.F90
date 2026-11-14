@@ -43,7 +43,7 @@ module rdb_ice_evp_c_prep
    private
 
    public :: ice_evp_c_const_t, ice_evp_c_work_t
-   public :: ice_evp_c_constants, ice_evp_c_prep, ice_evp_c_ghost_ok
+   public :: ice_evp_c_constants, ice_evp_c_prep, ice_evp_c_ghost_ok, ice_evp_c_face_fraction
    public :: EVP_BIT_T, EVP_BIT_U, EVP_BIT_E, EVP_BIT_N
 
    integer(int8), parameter :: EVP_BIT_T = 1_int8
@@ -443,6 +443,90 @@ contains
       call prep_pack_impl(nx, ny, is, ie, js, je, w%iceTmask, w%iceUmask, w%iceEmask, w%iceNmask, w%imask)
    end subroutine ice_evp_c_prep
 
+   pure function prep_cell_mass(hm, vice, vsno, rhoi, rhos) result(m)
+      !! Ice + snow mass of a T cell (0 on land).  ONE text for `prep_tmass_impl` and the face fraction.
+      !$acc routine seq
+      real(wp), intent(in) :: hm, vice, vsno, rhoi, rhos
+      real(wp) :: m
+
+      if (hm > 0.5_wp) then
+         m = rhoi*vice + rhos*vsno
+      else
+         m = 0.0_wp
+      end if
+   end function prep_cell_mass
+
+   pure function prep_face_mean(w1, w2, q1, q2) result(q)
+      !! The two-point masked, area-weighted mean of the T cells either side of a face (0 when both
+      !! weights are 0).  ONE text for the dynamics' face preparation and the face fraction.
+      !$acc routine seq
+      real(wp), intent(in) :: w1, w2, q1, q2
+      real(wp) :: q, wt
+
+      wt = w1 + w2
+      q = 0.0_wp
+      if (wt /= 0.0_wp) q = (w1*q1 + w2*q2)/wt
+   end function prep_face_mean
+
+   pure function prep_face_has_ice(open_mask, a, m, amin, mmin) result(ice)
+      !! The face carries ice: open face, concentration above `amin`, mass above `mmin`.
+      !$acc routine seq
+      real(wp), intent(in) :: open_mask, a, m, amin, mmin
+      logical :: ice
+
+      ice = open_mask > 0.5_wp .and. a > amin .and. m > mmin
+   end function prep_face_has_ice
+
+   subroutine ice_evp_c_face_fraction(w, k, nx, ny, is, ie, js, je, hm, aice, vice, vsno, tarea, epm, npm)
+      !! Refresh the face concentrations `w%aiE`, `w%aiN` from the CURRENT concentration, with the
+      !! face mean and the ice-face rule of `prep_face_impl` (the same helpers).  Used at the top of an
+      !! outer step so the ocean-side stress weight is built from the same concentration as the
+      !! open-water weight of the other fluxes (`aice0 = 1 - aice`); the dynamics recomputes both at
+      !! its own start.  One launch over the owned faces; the state arrays need a valid ghost ring.
+      type(ice_evp_c_work_t), intent(inout) :: w
+      type(ice_evp_c_const_t), intent(in) :: k
+      integer, intent(in) :: nx, ny, is, ie, js, je
+      real(wp), intent(in) :: hm(nx, ny), aice(nx, ny), vice(nx, ny), vsno(nx, ny), tarea(nx, ny)
+      real(wp), intent(in) :: epm(nx, ny), npm(nx, ny)
+
+      call face_fraction_impl(nx, ny, is, ie, js, je, k%amin, k%mmin, k%rhoi, k%rhos, hm, aice, vice, vsno, &
+                              tarea, epm, npm, w%aiE, w%aiN)
+   end subroutine ice_evp_c_face_fraction
+
+   subroutine face_fraction_impl(nx, ny, is, ie, js, je, amin, mmin, rhoi, rhos, hm, aice, vice, vsno, tarea, &
+                                 epm, npm, aiE, aiN)
+      integer, intent(in) :: nx, ny, is, ie, js, je
+      real(wp), intent(in) :: amin, mmin, rhoi, rhos
+      real(wp), intent(in) :: hm(nx, ny), aice(nx, ny), vice(nx, ny), vsno(nx, ny), tarea(nx, ny)
+      real(wp), intent(in) :: epm(nx, ny), npm(nx, ny)
+      real(wp), intent(inout) :: aiE(nx, ny), aiN(nx, ny)
+      integer :: i, j
+      real(wp) :: w1, w2, m0, m1, m2, a
+
+      do concurrent(j=js:je, i=is:ie) local(w1, w2, m0, m1, m2, a)
+         m0 = prep_cell_mass(hm(i, j), vice(i, j), vsno(i, j), rhoi, rhos)
+         w1 = hm(i, j)*tarea(i, j)
+         ! E(i,j): between T(i,j) and T(i+1,j)
+         w2 = hm(i + 1, j)*tarea(i + 1, j)
+         m1 = prep_cell_mass(hm(i + 1, j), vice(i + 1, j), vsno(i + 1, j), rhoi, rhos)
+         a = prep_face_mean(w1, w2, aice(i, j), aice(i + 1, j))
+         if (prep_face_has_ice(epm(i, j), a, prep_face_mean(w1, w2, m0, m1), amin, mmin)) then
+            aiE(i, j) = a
+         else
+            aiE(i, j) = 0.0_wp
+         end if
+         ! N(i,j): between T(i,j) and T(i,j+1)
+         w2 = hm(i, j + 1)*tarea(i, j + 1)
+         m2 = prep_cell_mass(hm(i, j + 1), vice(i, j + 1), vsno(i, j + 1), rhoi, rhos)
+         a = prep_face_mean(w1, w2, aice(i, j), aice(i, j + 1))
+         if (prep_face_has_ice(npm(i, j), a, prep_face_mean(w1, w2, m0, m2), amin, mmin)) then
+            aiN(i, j) = a
+         else
+            aiN(i, j) = 0.0_wp
+         end if
+      end do
+   end subroutine face_fraction_impl
+
    subroutine prep_tmass_impl(nx, ny, is, ie, js, je, hm, vice, vsno, aice, rhoi, rhos, amin, mmin, &
                               tmass, tmphm)
       !! `tmass = rhoi*vice + rhos*vsno` (0 on land) and the threshold mask,
@@ -456,11 +540,7 @@ contains
       real(wp) :: m
 
       do concurrent(j=js - 2:je + 2, i=is - 2:ie + 2) local(m)
-         if (hm(i, j) > 0.5_wp) then
-            m = rhoi*vice(i, j) + rhos*vsno(i, j)
-         else
-            m = 0.0_wp
-         end if
+         m = prep_cell_mass(hm(i, j), vice(i, j), vsno(i, j), rhoi, rhos)
          tmass(i, j) = m
          tmphm(i, j) = hm(i, j) > 0.5_wp .and. aice(i, j) > amin .and. m > mmin
       end do
@@ -513,21 +593,16 @@ contains
       real(wp), intent(inout) :: fmE(nx, ny), fmN(nx, ny), forcexE(nx, ny), forceyN(nx, ny)
       real(wp), intent(inout) :: uinit(nx, ny), vinit(nx, ny)
       integer :: i, j
-      real(wp) :: w1, w2, wt, m, a
+      real(wp) :: w1, w2, m, a
       logical :: ice, old
 
-      do concurrent(j=js:je, i=is:ie) local(w1, w2, wt, m, a, ice, old)
+      do concurrent(j=js:je, i=is:ie) local(w1, w2, m, a, ice, old)
          ! ---- E(i,j): between T(i,j) and T(i+1,j) ----
          w1 = hm(i, j)*tarea(i, j)
          w2 = hm(i + 1, j)*tarea(i + 1, j)
-         wt = w1 + w2
-         m = 0.0_wp
-         a = 0.0_wp
-         if (wt /= 0.0_wp) then
-            m = (w1*tmass(i, j) + w2*tmass(i + 1, j))/wt
-            a = (w1*aice_init(i, j) + w2*aice_init(i + 1, j))/wt
-         end if
-         ice = epm(i, j) > 0.5_wp .and. a > amin .and. m > mmin
+         m = prep_face_mean(w1, w2, tmass(i, j), tmass(i + 1, j))
+         a = prep_face_mean(w1, w2, aice_init(i, j), aice_init(i + 1, j))
+         ice = prep_face_has_ice(epm(i, j), a, m, amin, mmin)
          old = iceEmask(i, j)
          iceEmask(i, j) = ice
          if (ice) then
@@ -548,14 +623,9 @@ contains
          ! ---- N(i,j): between T(i,j) and T(i,j+1) ----
          w1 = hm(i, j)*tarea(i, j)
          w2 = hm(i, j + 1)*tarea(i, j + 1)
-         wt = w1 + w2
-         m = 0.0_wp
-         a = 0.0_wp
-         if (wt /= 0.0_wp) then
-            m = (w1*tmass(i, j) + w2*tmass(i, j + 1))/wt
-            a = (w1*aice_init(i, j) + w2*aice_init(i, j + 1))/wt
-         end if
-         ice = npm(i, j) > 0.5_wp .and. a > amin .and. m > mmin
+         m = prep_face_mean(w1, w2, tmass(i, j), tmass(i, j + 1))
+         a = prep_face_mean(w1, w2, aice_init(i, j), aice_init(i, j + 1))
+         ice = prep_face_has_ice(npm(i, j), a, m, amin, mmin)
          old = iceNmask(i, j)
          iceNmask(i, j) = ice
          if (ice) then

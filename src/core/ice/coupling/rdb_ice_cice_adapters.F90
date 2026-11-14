@@ -74,6 +74,21 @@ module rdb_ice_cice_adapters
    !! `ocean_sea_ice_t%cice` is initialised (the open-fraction hook, inert under
    !! `scheme = "sis2"`).
    !!
+   !! **Precipitation through the ice (limits, stated plainly).**  `fresh` contains the rain that falls on
+   !! the ice-covered fraction (`frain*aice`, booked by the ice step so its own water ledger closes).  The
+   !! ocean's own precipitation on the open fraction (`lprec`, `fprec`: weight `aice0`) is enthalpy-only
+   !! today (no mass, no salt term), so under a prescribed atmosphere the engine hook removes the
+   !! rain-through term from the window mean of `fresh` before the hand-over: RAIN is then treated alike on
+   !! both shares (no dilution).  It is NOT alike for SNOW: snow on open water never freshens the ocean,
+   !! while snow that falls on ice is stored and freshens the ocean when it melts (through `fresh`).  That
+   !! asymmetry is a limit of the virtual-salt configuration (no real mass flux) and goes away with the
+   !! real-mass PR.  The enthalpy of rain on the ice-covered fraction (`~cp*SST*frain*aice`, below 1 W m-2
+   !! near freezing) is not delivered, whereas the open-water share's `heat_content_lprec` is.  No coupled
+   !! ocean+ice closure test exists yet (owed in D11.5); `test_cice_forcing` closes the ice ledger and
+   !! the ocean against the fluxes it was handed.  The `tau` the ocean diagnoses / mirrors after the ice step
+   !! is the HAND-OFF blend (the ice state of the step just finished), not the top-of-step blend the ocean
+   !! dynamics consumed.
+   !!
    !! **Stress.**  `ice_cice_stress_blend` is the retarget point of the face stress
    !! blend: the same `(1 - a)*tau_atm + a*tau_ice` as the SIS2 coupler with
    !! `a` the face mean of the CICE aggregate `cice%aice` and `tau_ice` the

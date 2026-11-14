@@ -2064,7 +2064,7 @@ contains
          ms%tracers(idx_T)%c, ms%h_layer, ms%wet_mask, &
          sf%Q_heat_const, sf%Q_salt_const, sf%cp, sf%h_min, ms%k_top, nz, nx, ny)
       sf%q_assembled = 1.0_wp
-      ! CICE-port ice components (never allocated under the runnable scheme):
+      ! CICE-port ice components (allocated only under `scheme = "cice"`):
       ! summed AFTER the shared components, so no other writer can erase them.
       if (sf%use_ice_components) call ocean_surfflux_add_ice_impl(sf%Q_heat, sf%Q_salt, sf%ice_heat, &
                                                                   sf%ice_sw, sf%ice_salt, ms%wet_mask, nx, ny)

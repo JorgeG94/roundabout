@@ -155,7 +155,7 @@ module rdb_ocean_engine
                                      ocean_data_forcing_register_sss
    use rdb_ocean_sw_chl, only: sw_chl_configure, sw_chl_apply
    use rdb_atm_state, only: atm_state_configure, atm_state_update
-   use rdb_ocean_bulk_forcing, only: bulk_forcing_configure, bulk_forcing_apply
+   use rdb_ocean_bulk_forcing, only: bulk_forcing_configure, bulk_forcing_apply, bulk_forcing_wants_cice_wind
    use rdb_io_netcdf, only: output_rank_filename, ensure_directory_exists
 #endif
    use rdb_ice_evp, only: ice_evp_params_t, ice_evp_params_from_config, ice_evp_step
@@ -777,6 +777,9 @@ contains
       ! The three ice-owned components of the CICE-port ice (`scheme = "cice"` only; nothing
       ! under "sis2"): allocated here for the same reason, before the restart read.
       call engine%state%surface_flux%set_ice_components(engine%grid, engine%state%ice%cice%is_init)
+      ! The restart registry makes the ice-ocean stress tags REQUIRED under the prescribed atmosphere
+      ! under this scheme: latch the flag before the read (`bulk_forcing_configure` sets it again).
+      engine%state%bulk_forcing%cice_wind = bulk_forcing_wants_cice_wind(cfg)
 
       ! c069 restart fix: the kappa-shear VERTEX corner carrier
       ! (`kshear%kd_corner`) MUST be allocated before the restart read too,
@@ -1396,6 +1399,13 @@ contains
                       "be built (nghost >= 3 is required)", ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
+      end if
+      if (engine%state%bulk_forcing%cice_wind .and. .not. (engine%state%ice%dync%is_init .and. &
+                                                           engine%state%icec%is_init)) then
+         call fail("&ocean_ice_nml scheme = 'cice' with the prescribed atmosphere needs the C-grid ice "// &
+                   "dynamics and the CICE run slots (the unweighted wind stress is blended there)", &
+                   ierr, OCEAN_STATUS_ERR_SETUP)
+         return
       end if
       ! CICE-port run slots: the wet mask (the C-grid metrics' pinned T mask) and the grid
       ! rotation, host values the device map then copies.
@@ -2083,7 +2093,7 @@ contains
       call bulk_forcing_apply(engine%grid, engine%state%metrics, engine%state%bc, &
                               engine%state%atm, engine%state%multilayer, engine%state%ice, &
                               engine%state%bulk_forcing, engine%state%surface_stress, &
-                              engine%state%surface_flux)
+                              engine%state%surface_flux, cgrid=engine%state%ice_cgrid)
 #endif
 
       call engine%bc_source%update(t, engine%state%bc)

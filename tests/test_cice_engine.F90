@@ -400,7 +400,7 @@ contains
       character(len=64), parameter :: what(15) = [character(len=64) :: &
                                                   "advection", "ndtd", "nghost", "tripolar", "wetdry", "cavity", &
                                          "open edge", "thermodynamics", "components", "hfreeze", "px*py", "dynamics", "transport", &
-                                                  "atm forcing", "dataovr wind"]
+                                                  "atm forcing + uniform", "dataovr wind"]
       character(len=:), allocatable :: nml
       character(len=80) :: key(15)
       logical :: hit
@@ -419,7 +419,7 @@ contains
       key = [character(len=80) :: "advection='upwind'", "ndtd /= 1", "nghost >= 3", "tripolar north fold", &
              "wetdry", "cavity_dyn", "'wall' or 'periodic'", "enable_thermodynamics", "enable_components", &
              "hfreeze > 0", "px*py > 1", "needs dynamics=.true.", "needs transport=.true.", &
-             "atm_forcing_nml", "tau_x/tau_y files"]
+             "is ambiguous", "tau_x/tau_y files"]
       do k = 1, 15
          select case (k)
          case (1)
@@ -450,7 +450,7 @@ contains
          case (13)
             nml = replace(case_nml("column"), "transport = .true.", "transport = .false.")
          case (14)
-            nml = case_nml("column", "&ocean_atm_forcing_nml enable = .true. /"//NL)
+            nml = case_nml("column", "&ocean_atm_forcing_nml enable = .true. /"//NL)   ! with the uniform knobs set: ambiguous
          case (15)
             nml = case_nml("column", "&ocean_dataovr_nml tau_x_file = 'wind.nc' /"//NL)
          end select

@@ -79,6 +79,20 @@ module rdb_ocean_bulk_forcing
    !! here the guard is at the CALL SITE, so the array is never even
    !! named when ice is off).
    !!
+   !! **Unweighted stress under the CICE-port sea ice (`scheme = "cice"`).**  The new
+   !! scheme's ocean-side stress is `tau = (1 - a) tau_wind - strocn` per face with the UNWEIGHTED
+   !! wind stress of the CURRENT step, so a run of that scheme (`this%cice_wind`, latched at
+   !! configure; nothing below exists otherwise) sends `bulk_flux_column`'s stress to the cell
+   !! centres WITHOUT the open-water weight, runs the SAME halo / fold / face-average / seam-refresh
+   !! chain as every other stress (the one T-to-face average), publishes the face pair as `ice%tau_a_x/y`
+   !! (the field the blend `ice_ocean_stress_flux_c` reads), and the blend writes the surface stress.  The
+   !! open-water fraction is therefore applied exactly ONCE, as the `(1 - a)` of the blend, at the
+   !! faces, with the concentration and the ice-ocean stress the ice step left at the end of the
+   !! previous outer step (the one-step lag of every ice coupler).  The turbulent heat, longwave,
+   !! shortwave, evaporation and precipitation keep their `aice0` weight (every flux below).
+   !! Under `scheme = "sis2"` none of this runs or exists: the kernel arguments keep their
+   !! value and the weighted stress is written as before, bit for bit.
+   !!
    !! **Component ownership.**  Every field this module writes is a
    !! PR-12 component (`q_sens`, `q_lat`, `q_sw`, `q_lw`, `evap`,
    !! `lprec`, `fprec`, `p_surf_atm`) -- never `Q_heat`/`Q_salt`
@@ -99,6 +113,9 @@ module rdb_ocean_bulk_forcing
    use rdb_ocean_boundary_types, only: ocean_bc_state_t
    use rdb_multilayer_state, only: multilayer_state_t
    use rdb_ice_state, only: ocean_sea_ice_t
+   use rdb_ice_ocean_coupler, only: ice_ocean_stress_flux_c
+   use rdb_ice_dyn_c, only: ice_dyn_c_face_fraction
+   use rdb_ice_cgrid_metrics, only: ice_cgrid_metrics_t
    use rdb_atm_state, only: atm_state_t
    use rdb_teos10_convert, only: pt_from_ct
    use rdb_ocean_bulk_flux, only: bulk_flux_config_t, bulk_flux_column, &
@@ -115,6 +132,7 @@ module rdb_ocean_bulk_forcing
    public :: bulk_forcing_t
    public :: bulk_forcing_configure
    public :: bulk_forcing_apply
+   public :: bulk_forcing_wants_cice_wind
 
    type :: bulk_forcing_t
       !! Persistent per-step scratch for the ocean bulk-flux consumer.
@@ -154,6 +172,10 @@ module rdb_ocean_bulk_forcing
          !! configure; refreshed from `ice%aice0` once per
          !! step only when `ice%enable` -- otherwise stays 1 forever,
          !! so a run without sea ice never reads an ice array.
+      logical :: cice_wind = .false.
+         !! `.true.` only under `&ocean_ice_nml enable` with `scheme = "cice"`: the stress is
+         !! sent to the ice-ocean blend UNWEIGHTED, and exposed each step as `ice%tau_a_x/y`
+         !! (module docstring).
    contains
       procedure, non_overridable :: enter_data => bulk_forcing_enter_data
       procedure, non_overridable :: exit_data => bulk_forcing_exit_data
@@ -170,6 +192,16 @@ contains
    ! ======================================================================
    ! Lifecycle
    ! ======================================================================
+
+   pure function bulk_forcing_wants_cice_wind(cfg) result(yes)
+      !! The unweighted-stress path is on: bulk forcing under the CICE-port ice.  Also evaluated by the
+      !! engine BEFORE the restart read, so the registry knows which tags are required.
+      type(config_t), intent(in) :: cfg
+      logical :: yes
+
+      yes = cfg%ocean%bulk_flux%enable .and. cfg%ocean%ice%enable .and. &
+            trim(adjustl(cfg%ocean%ice%scheme)) == "cice"
+   end function bulk_forcing_wants_cice_wind
 
    subroutine bulk_forcing_enter_data(this)
       class(bulk_forcing_t), intent(inout) :: this
@@ -199,6 +231,7 @@ contains
       if (allocated(this%taux_c)) deallocate (this%taux_c)
       if (allocated(this%tauy_c)) deallocate (this%tauy_c)
       if (allocated(this%open_water)) deallocate (this%open_water)
+      this%cice_wind = .false.
       this%enable = .false.
       this%nx_total = 0
       this%ny_total = 0
@@ -240,6 +273,7 @@ contains
       allocate (this%taux_c(this%nx_total, this%ny_total), source=0.0_wp)
       allocate (this%tauy_c(this%nx_total, this%ny_total), source=0.0_wp)
       allocate (this%open_water(this%nx_total, this%ny_total), source=1.0_wp)
+      this%cice_wind = bulk_forcing_wants_cice_wind(cfg)
 
       sf%has_heat = .true.
       sf%has_mass_flux = .true.
@@ -250,7 +284,7 @@ contains
    ! Per-step apply (immediately after atm_state_update)
    ! ======================================================================
 
-   subroutine bulk_forcing_apply(grid, metrics, bc, atm, ms, ice, this, ss, sf)
+   subroutine bulk_forcing_apply(grid, metrics, bc, atm, ms, ice, this, ss, sf, cgrid)
       !! No-op unless both `this%enable` (the bulk-flux consumer) and
       !! `atm%enable` (the atmospheric-state provider) hold -- the
       !! second check is paranoia, since `validate_config` already
@@ -264,10 +298,15 @@ contains
       type(ocean_bc_state_t), intent(in) :: bc
       type(atm_state_t), intent(in) :: atm
       type(multilayer_state_t), intent(in) :: ms
-      type(ocean_sea_ice_t), intent(in) :: ice
+      type(ocean_sea_ice_t), intent(inout) :: ice
+         !! Read-only except under `this%cice_wind`, where the blend writes the surface stress and
+         !! the `tau_a_x/y` it reads.
       type(bulk_forcing_t), intent(inout) :: this
       type(ocean_surface_stress_t), intent(inout) :: ss
       type(ocean_surface_flux_t), intent(inout) :: sf
+      type(ice_cgrid_metrics_t), intent(in), optional :: cgrid
+         !! The ice C-grid metric set; REQUIRED under `this%cice_wind` (the face concentrations of the blend
+         !! are rebuilt from it).
 
       integer :: nx, ny, ng, nxp, nyp, nz, idx_T, idx_Sarg
       logical :: cons_abs
@@ -308,7 +347,7 @@ contains
                                   atm%rlds, atm%rsds, atm%prra, atm%prsn, &
                                   ms%u_face_x_layer, ms%v_face_y_layer, &
                                   ms%tracers(idx_T)%c, ms%tracers(idx_Sarg)%c, ms%h_layer, ms%k_top, &
-                                  cons_abs, this%open_water, &
+                                  cons_abs, this%open_water,.not. this%cice_wind, &
                                   this%taux_c, this%tauy_c, &
                                   sf%q_sens, sf%q_lat, sf%evap, sf%q_sw, sf%q_lw, &
                                   sf%lprec, sf%fprec, sf%p_surf_atm, &
@@ -340,7 +379,36 @@ contains
       ! the `stress_mag` refresh KPP/EPBL read for u_* -- overwrites
       ! whatever sign the scalar halo above left at a fold row.
       call ocean_seam_refresh_surface_stress(ss, grid, bc)
+
+      ! CICE-port sea ice: `ss` now holds the UNWEIGHTED wind stress.  Publish it as the field the blend
+      ! reads (`ice%tau_a_x/y`), rebuild the face concentrations of the blend from the CURRENT aggregate
+      ! (the one `aice0`, the open-water weight above, is the complement of), and let the blend write the
+      ! surface stress `(1 - a) tau_wind - strocn` with the ice-ocean stress of the last ice step -- the
+      ! one place the open-water fraction multiplies the wind stress (module docstring).
+      if (this%cice_wind) then
+         if (.not. (ice%dync%is_init .and. present(cgrid))) then
+            error stop "bulk_forcing_apply: scheme='cice' needs the C-grid ice dynamics slot and its metrics"
+         end if
+         call bulk_forcing_copy_face_impl(nx, ny, ss%tau_x, ss%tau_y, ice%tau_a_x, ice%tau_a_y)
+         call ice_dyn_c_face_fraction(grid, cgrid, ice)
+         call ice_ocean_stress_flux_c(metrics, ss, ice, grid, bc)
+      end if
    end subroutine bulk_forcing_apply
+
+   pure subroutine bulk_forcing_copy_face_impl(nx, ny, src_x, src_y, dst_x, dst_y)
+      !! `dst = src` on the two face arrays, every face (ghosts included).
+      integer, intent(in) :: nx, ny
+      real(wp), intent(in) :: src_x(nx + 1, ny), src_y(nx, ny + 1)
+      real(wp), intent(inout) :: dst_x(nx + 1, ny), dst_y(nx, ny + 1)
+      integer :: i, j
+
+      do concurrent(j=1:ny, i=1:nx + 1)
+         dst_x(i, j) = src_x(i, j)
+      end do
+      do concurrent(j=1:ny + 1, i=1:nx)
+         dst_y(i, j) = src_y(i, j)
+      end do
+   end subroutine bulk_forcing_copy_face_impl
 
    pure subroutine bulk_forcing_open_water_impl(nx, ny, ng, nxp, nyp, aice0, open_water)
       !! `open_water(i,j) = aice0(i,j)` over the physical interior -- the
@@ -365,7 +433,7 @@ contains
                                           wet_T, angle_dx, uas, vas, tas, huss, psl, &
                                           rlds, rsds, prra, prsn, &
                                           u_face_x_layer, v_face_y_layer, c_T, c_S, h_layer, k_top, &
-                                          cons_abs, open_water, &
+                                          cons_abs, open_water, weight_stress, &
                                           taux_c, tauy_c, q_sens, q_lat, evap, q_sw, q_lw, &
                                           lprec, fprec, p_surf_atm, &
                                           heat_content_lprec, heat_content_fprec, cp)
@@ -387,6 +455,10 @@ contains
          !! `ms%k_top`.  The surface layer (u, v, SST) is the first LIVE
          !! layer at or below it (`rdb_vl_first_live`), not a literal `nz`.
       real(wp), intent(in) :: open_water(nx, ny)
+      logical, intent(in) :: weight_stress
+         !! `.true.` (default scheme): the stress is multiplied by the open-water fraction.
+         !! `.false.` (`scheme = "cice"`): the UNWEIGHTED stress; the blend applies `(1 - a)`.
+         !! Every other output is weighted either way.
       real(wp), intent(inout) :: taux_c(nx, ny), tauy_c(nx, ny)
       real(wp), intent(inout) :: q_sens(nx, ny), q_lat(nx, ny), evap(nx, ny)
       real(wp), intent(inout) :: q_sw(nx, ny), q_lw(nx, ny)
@@ -444,8 +516,13 @@ contains
             sst_k = sst_f + BULK_T0_KELVIN
             lw_up = bulk_flux_longwave_up(sst_k, emissivity)
 
-            taux_c(ii, jj) = ow*taux
-            tauy_c(ii, jj) = ow*tauy
+            if (weight_stress) then
+               taux_c(ii, jj) = ow*taux
+               tauy_c(ii, jj) = ow*tauy
+            else
+               taux_c(ii, jj) = taux
+               tauy_c(ii, jj) = tauy
+            end if
             q_sens(ii, jj) = ow*sens
             q_lat(ii, jj) = ow*lat
             evap(ii, jj) = -ow*evp

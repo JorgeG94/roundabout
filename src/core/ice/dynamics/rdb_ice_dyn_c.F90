@@ -77,13 +77,14 @@ module rdb_ice_dyn_c
    use rdb_ice_state, only: ocean_sea_ice_t
    use rdb_ice_errors, only: ICE_ERR_FATAL_MASK, ice_err_summary_t, ice_err_clear, ice_err_reduce, &
                              ice_err_enforce
-   use rdb_ice_evp_c_prep, only: ice_evp_c_const_t, ice_evp_c_constants, ice_evp_c_prep, ice_evp_c_ghost_ok
+   use rdb_ice_evp_c_prep, only: ice_evp_c_const_t, ice_evp_c_constants, ice_evp_c_prep, ice_evp_c_ghost_ok, &
+                                 ice_evp_c_face_fraction
    use rdb_ice_evp_c, only: ice_evp_c_substep, ice_evp_c_average, ice_evp_c_finish, ice_evp_c_copy_faces
    use rdb_ice_cgrid_metrics, only: ice_cgrid_metrics_t, ice_halo_faces
    implicit none
    private
 
-   public :: ice_dyn_c_metrics_build, ice_dyn_c_step, ice_dyn_c_cat_t
+   public :: ice_dyn_c_metrics_build, ice_dyn_c_step, ice_dyn_c_cat_t, ice_dyn_c_face_fraction
    public :: dync_ssh_impl, dync_inputs_impl, dync_post_impl, dync_strocnt_impl
 
    type :: ice_dyn_c_cat_t
@@ -98,6 +99,25 @@ module rdb_ice_dyn_c
    end type ice_dyn_c_cat_t
 
 contains
+
+   subroutine ice_dyn_c_face_fraction(grid, cm, ice)
+      !! Rebuild the face concentrations `dync%w%aiE/aiN` from the CURRENT aggregate (module procedure
+      !! of `rdb_ice_evp_c_prep`, the dynamics' own face rule); see `ice_evp_c_face_fraction`.  Host shim,
+      !! one launch, no allocation.
+      type(hgrid_t), intent(in) :: grid
+      type(ice_cgrid_metrics_t), intent(in) :: cm
+      type(ocean_sea_ice_t), intent(inout) :: ice
+      type(ice_evp_c_const_t) :: k
+      integer :: ng
+
+      k = ice_evp_c_constants(ice%dync%p, 1.0_wp)
+      k%rhoi = ICE_RHO_ICE
+      k%rhos = ICE_RHO_SNOW
+      ng = grid%nghost
+      call ice_evp_c_face_fraction(ice%dync%w, k, grid%nx_total, grid%ny_total, ng + 1, ng + grid%nx_phys, &
+                                   ng + 1, ng + grid%ny_phys, cm%hm, ice%aice, ice%vice, ice%vsno, cm%tarea, &
+                                   cm%epm, cm%npm)
+   end subroutine ice_dyn_c_face_fraction
 
    subroutine ice_dyn_c_metrics_build(grid, metrics, bc, ice, cm, ierr)
       !! Build the C-grid metric set `cm` (`ocean_state_t%ice_cgrid`) from the

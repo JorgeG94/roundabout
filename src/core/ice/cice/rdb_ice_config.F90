@@ -28,7 +28,7 @@
 module rdb_ice_config
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    use rdb_constants, only: wp
-   use rdb_config, only: config_t
+   use rdb_config, only: config_t, ocean_ice_atm_config_t
    use rdb_ice_dims, only: ICE_NCAT_MAX, ICE_NILYR_MAX
    use rdb_ice_params, only: ICE_ADVECT_UPWIND, ICE_ADVECT_REMAP, &
              ice_transport_params_t, ice_transport_params_valid, ice_params_t, ice_params_default, ice_constants, ice_constants_t, &
@@ -212,11 +212,13 @@ contains
             call add_msg(msgs, n, "&ocean_ice_nml scheme='cice' needs transport=.true. (the ice is always "// &
                          "advected under this scheme)")
          end if
-         if (cfg%ocean%atm_forcing%enable .or. cfg%ocean%bulk_flux%enable) then
-            call add_msg(msgs, n, "&ocean_atm_forcing_nml / &ocean_bulk_flux_nml enable are not supported by "// &
-                         "scheme='cice' yet: the ocean-side blend needs this step's UNWEIGHTED wind stress, "// &
-                         "which the bulk forcing only publishes open-water weighted (use the uniform "// &
-                         "&ocean_ice_atm_nml uni_* atmosphere)")
+         if (cfg%ocean%atm_forcing%enable) then
+            ! One atmosphere: the prescribed state of the bulk forcing, or the uniform one.
+            if (uniform_atmosphere_set(cfg)) then
+               call add_msg(msgs, n, "&ocean_atm_forcing_nml enable together with the uniform atmosphere "// &
+                            "(&ocean_ice_atm_nml uni_*, &ocean_ice_nml sw_down / snowfall) is ambiguous: "// &
+                            "set one atmosphere, not both")
+            end if
          end if
          if (len_trim(cfg%ocean%dataovr%tau_x%file) > 0 .or. len_trim(cfg%ocean%dataovr%tau_y%file) > 0) then
             call add_msg(msgs, n, "&ocean_dataovr_nml tau_x/tau_y files are not supported by scheme='cice' "// &
@@ -479,6 +481,20 @@ contains
                       "(the near-IR band is 1 - sw_vis_frac, so the two sum to 1)")
       end if
    end subroutine ice_config_check
+
+   pure function uniform_atmosphere_set(cfg) result(set)
+      !! Any knob of the uniform atmosphere away from its default: the five `uni_*` fields the
+      !! prescribed atmosphere would silently override, plus `sw_down` and `snowfall`.
+      type(config_t), intent(in) :: cfg
+      logical :: set
+      type(ocean_ice_atm_config_t) :: d
+
+      associate (a => cfg%ocean%ice_atm)
+         set = a%uni_tas /= d%uni_tas .or. a%uni_uas /= d%uni_uas .or. a%uni_vas /= d%uni_vas .or. &
+               a%uni_psl /= d%uni_psl .or. a%uni_huss /= d%uni_huss .or. a%uni_rlds /= d%uni_rlds
+      end associate
+      set = set .or. cfg%ocean%ice%sw_down /= 0.0_wp .or. cfg%ocean%ice%snowfall /= 0.0_wp
+   end function uniform_atmosphere_set
 
    pure function edge_is_closed(tag) result(ok)
       !! A boundary tag the ice dynamics can live with: a wall or a periodic seam.

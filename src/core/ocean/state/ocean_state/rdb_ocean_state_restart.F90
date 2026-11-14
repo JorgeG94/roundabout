@@ -680,6 +680,17 @@ contains
             call reg%register_2d("ice_dync_strocnT_y", state%ice%dync%strocnT_y, 0, &
                                  size(state%ice%dync%strocnT_y, 1), &
                                  size(state%ice%dync%strocnT_y, 2), optional=.true.)
+         else
+            ! The ice-ocean stress the ocean blend (`tau = (1 - a) tau_wind - strocn`) reads at the TOP of
+            ! the next outer step.  The face concentration is rebuilt from the restart-carried aggregate
+            ! there, so only the stress is state.  REQUIRED under the prescribed atmosphere (a missing
+            ! tag would hand the ocean the bare wind under ice); optional otherwise.
+            call reg%register_2d("ice_dync_strocnxE", state%ice%dync%w%strocnxE, 0, &
+                                 size(state%ice%dync%w%strocnxE, 1), size(state%ice%dync%w%strocnxE, 2), &
+                                 optional=.not. state%bulk_forcing%cice_wind)
+            call reg%register_2d("ice_dync_strocnyN", state%ice%dync%w%strocnyN, 0, &
+                                 size(state%ice%dync%w%strocnyN, 1), size(state%ice%dync%w%strocnyN, 2), &
+                                 optional=.not. state%bulk_forcing%cice_wind)
          end if
       end if
 
