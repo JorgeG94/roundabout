@@ -5,6 +5,7 @@
 set(RDB_ICE_CORE_SOURCES
     ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_aggregate.F90
     ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_atmo.F90
+    ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_basal_heat.F90
     ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_bl99.F90
     ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_dims.F90
     ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_errors.F90
