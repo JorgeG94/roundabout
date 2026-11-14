@@ -1,5 +1,10 @@
 !! Ocean tidal forcing state.
 module rdb_ocean_tides
+   !! **Reproducibility.**  Every sin/cos here is `safe_sin`/`safe_cos`
+   !! (`rdb_safe_math`), and the time-growing constituent phase is reduced
+   !! with `modulo(., 2 pi)` first, so `eta_eq` does not depend on a cell's
+   !! vector position, the tile width or the model time.
+   !!
    !! Equilibrium (astronomical) body-force tidal forcing state for the
    !! ocean dyn-core (capability C1).  Fills a GPU-resident equilibrium
    !! tide elevation `eta_eq(x,y)` from a small set of harmonic
@@ -29,7 +34,8 @@ module rdb_ocean_tides
    !! (`cos_struct`, `sin_struct`, built once at init from lat/lon), so
    !! the device kernel does NO per-cell trigonometry and NO reduction —
    !! 2 mul + 1 add per constituent per cell.
-   use rdb_constants, only: wp
+   use rdb_constants, only: wp, TWO_PI
+   use rdb_safe_math, only: safe_sin, safe_cos
    use rdb_grid, only: hgrid_t
    use rdb_ocean_tide_astro, only: TIDE_SPECIES, TIDE_AMP, TIDE_LOVE, &
                                    TIDE_OMEGA, TIDES_CATALOG_SIZE, &
@@ -204,16 +210,16 @@ contains
          do i = 1, nx
             phi = geolat(i, j)*TIDE_DEG2RAD
             lam = geolon(i, j)*TIDE_DEG2RAD
-            s2phi = sin(2.0_wp*phi)
-            c2phi = cos(phi)**2
+            s2phi = safe_sin(2.0_wp*phi)
+            c2phi = safe_cos(phi)**2
             ! slice 1 diurnal (n=1)
-            this%cos_struct(i, j, 1) = s2phi*cos(lam)
-            this%sin_struct(i, j, 1) = -s2phi*sin(lam)
+            this%cos_struct(i, j, 1) = s2phi*safe_cos(lam)
+            this%sin_struct(i, j, 1) = -s2phi*safe_sin(lam)
             ! slice 2 semidiurnal (n=2)
-            this%cos_struct(i, j, 2) = c2phi*cos(2.0_wp*lam)
-            this%sin_struct(i, j, 2) = -c2phi*sin(2.0_wp*lam)
+            this%cos_struct(i, j, 2) = c2phi*safe_cos(2.0_wp*lam)
+            this%sin_struct(i, j, 2) = -c2phi*safe_sin(2.0_wp*lam)
             ! slice 3 long-period (n=0)
-            this%cos_struct(i, j, 3) = 0.5_wp - 1.5_wp*sin(phi)**2
+            this%cos_struct(i, j, 3) = 0.5_wp - 1.5_wp*safe_sin(phi)**2
             this%sin_struct(i, j, 3) = 0.0_wp
          end do
       end do
@@ -234,8 +240,14 @@ contains
       do c = 1, this%nconst
          ang = this%omega_c(c)*now + this%phase0(c) + this%u_nodal(c)
          pre = this%amp_c(c)*this%love_c(c)*this%f_nodal(c)
-         this%amp_cos(c) = pre*cos(ang)
-         this%amp_sin(c) = pre*sin(ang)
+         ! `ang` grows with model time: reduce to [0, 2 pi) before the
+         ! position-independent trig (valid to 1.6e6 rad; M2 reaches that in
+         ! ~120 model years).  `modulo` of a deterministic host
+         ! scalar, computed once per constituent per call, so every rank
+         ! gets the same value.
+         ang = modulo(ang, TWO_PI)
+         this%amp_cos(c) = pre*safe_cos(ang)
+         this%amp_sin(c) = pre*safe_sin(ang)
       end do
       !$acc update device(this%amp_cos, this%amp_sin)
 
