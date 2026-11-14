@@ -671,6 +671,8 @@ set(RDB_CICE_TESTS
     "test_cice_ridge_itd|test_cice_ridge_itd|collect_cice_ridge_itd_tests|cice_ridge_itd|ocean"
     "test_cice_atmo|test_cice_atmo|collect_cice_atmo_tests|cice_atmo|ocean"
     "test_cice_golden_atmo|test_cice_golden_atmo|collect_cice_golden_atmo_tests|cice_golden_atmo|ocean"
+    "test_cice_thickness_pieces|test_cice_thickness_pieces|collect_cice_thickness_pieces_tests|cice_thickness_pieces|ocean"
+    "test_cice_golden_thickness_pieces|test_cice_golden_thickness_pieces|collect_cice_golden_thickness_pieces_tests|cice_golden_thickness_pieces|ocean"
 )
 
 # Shared helpers of the ice tests (deterministic columns, ledger, golden
