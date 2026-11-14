@@ -166,6 +166,9 @@ set(CORE_SOURCES
     # CICE-port ice state slot (D1.4): composed into ocean_sea_ice_t, so it
     # precedes rdb_ice_state.
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/state/rdb_ice_cice_state.F90
+    # CICE-port C-grid EVP dynamics slot under the SIS2-derived state (D9.2);
+    # composed into ocean_sea_ice_t; uses rdb_ice_cgrid_metrics.
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/state/rdb_ice_dyn_c_state.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/state/rdb_ice_flux_state.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/coupling/rdb_ice_ledger.F90
     # SIS2 -> CICE start-up read path (D1.5): v2 read / convert / cold start.
@@ -198,6 +201,9 @@ set(CORE_SOURCES
     # depends on rdb_ocean_metrics, rdb_ocean_halo, rdb_ocean_periodic,
     # rdb_ocean_fold_apply (all declared earlier in this file).
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/cice/rdb_ice_cgrid_metrics.F90
+    # CICE6 port D9.2: C-grid EVP driver on the SIS2-derived state (coupling
+    # kernels, subcycle loop with the face halo, strocnT).
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/dynamics/rdb_ice_dyn_c.F90
     # Sea-ice PR 1: ocean-side frazil accumulator (freezing-point clamp), called
     # from the driver after each ocean outer step.
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/thermo/rdb_ice_frazil.F90

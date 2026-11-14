@@ -258,6 +258,8 @@ set(RDB_TESTS
     "test_ocean_ice_fold|test_ocean_ice_fold|collect_ocean_ice_fold_tests|ocean_ice_fold|ocean"
     "test_ocean_ice_evp|test_ocean_ice_evp|collect_ocean_ice_evp_tests|ocean_ice_evp|ocean"
     "test_cice_cgrid_metrics|test_cice_cgrid_metrics|collect_cice_cgrid_metrics_tests|cice_cgrid_metrics|ocean"
+    "test_cice_dyn_c_kernels|test_cice_dyn_c_kernels|collect_cice_dyn_c_kernels_tests|cice_dyn_c_kernels|ocean"
+    "test_cice_dyn_c_engine|test_cice_dyn_c_engine|collect_cice_dyn_c_engine_tests|cice_dyn_c_engine|ocean"
     "test_ocean_ice_evp_fold|test_ocean_ice_evp_fold|collect_ocean_ice_evp_fold_tests|ocean_ice_evp_fold|ocean"
     "test_ocean_ice_restart|test_ocean_ice_restart|collect_ocean_ice_restart_tests|ocean_ice_restart|ocean"
     "test_ocean_ice_diags|test_ocean_ice_diags|collect_ocean_ice_diags_tests|ocean_ice_diags|ocean"

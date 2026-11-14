@@ -3476,7 +3476,7 @@ class OceanIce(Group):
 
     p0 = Real(
         'p0',
-        doc='Ice-strength pressure constant (SIS2 ICE_STRENGTH_PSTAR)',
+        doc='Ice-strength pressure constant (SIS2 ICE_STRENGTH_PSTAR); read by dyn_scheme=sis2_c only (dyn_scheme=cice_c reads Pstar of &ocean_ice_ridge_nml)',
         units='Pa',
         required=False,
         default=27500.0,
@@ -3486,7 +3486,7 @@ class OceanIce(Group):
 
     c0 = Real(
         'c0',
-        doc='Ice-strength exponent constant (SIS2 ICE_STRENGTH_CSTAR)',
+        doc='Ice-strength exponent constant (SIS2 ICE_STRENGTH_CSTAR); read by dyn_scheme=sis2_c only (dyn_scheme=cice_c reads Cstar of &ocean_ice_ridge_nml)',
         units='',
         required=False,
         default=20.0,
@@ -3996,20 +3996,18 @@ class OceanIceRidge(Group):
 
     Pstar = Real(
         'Pstar',
-        doc='Hibler (1979) strength constant, kstrength=0; must be > 0',
+        doc='Hibler (1979) strength constant, kstrength=0; must be > 0.  Read by &ocean_ice_dyn_nml dyn_scheme=cice_c (the sis2_c core reads p0 of &ocean_ice_nml)',
         units='N/m',
         required=False,
         default=27500.0,
-        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
     )
 
     Cstar = Real(
         'Cstar',
-        doc='Hibler (1979) concentration constant, kstrength=0; must be > 0',
+        doc='Hibler (1979) concentration constant, kstrength=0; must be > 0.  Read by &ocean_ice_dyn_nml dyn_scheme=cice_c (the sis2_c core reads c0 of &ocean_ice_nml)',
         units='',
         required=False,
         default=20.0,
-        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
     )
 
 
@@ -4084,9 +4082,18 @@ class OceanIceAtm(Group):
 
 
 class OceanIceDyn(Group):
-    """`&ocean_ice_dyn_nml` -- CICE-port ice dynamics and transport knobs (scheme='cice'; upstream CICE code defaults; illegal EVP values are collected by the configure-time check, not rejected by the parser)."""
+    """`&ocean_ice_dyn_nml` -- CICE-port ice dynamics and transport knobs (upstream CICE code defaults; the EVP keys act under dyn_scheme='cice_c' (the C-grid EVP core on the SIS2-derived ice state); illegal EVP values are collected by the configure-time check, not rejected by the parser)."""
 
     _nml_name = 'ocean_ice_dyn'
+
+    dyn_scheme = Enum(
+        'dyn_scheme',
+        doc='Ice dynamics core: sis2_c = the SIS2 C-grid EVP (default, unchanged), cice_c = the CICE6 C-grid EVP (Lemieux et al. 2024) coupled to the ocean through the sea-surface tilt and the ocean surface current; needs &ocean_ice_nml enable and dynamics, nghost >= 3, one rank, no tripolar fold',
+        units='',
+        required=False,
+        default='sis2_c',
+        allowed=('sis2_c', 'cice_c'),
+    )
 
     ndte = Int(
         'ndte',
@@ -4094,7 +4101,6 @@ class OceanIceDyn(Group):
         units='',
         required=False,
         default=120,
-        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
     )
 
     elasticDamp = Real(
@@ -4103,7 +4109,6 @@ class OceanIceDyn(Group):
         units='',
         required=False,
         default=0.36,
-        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
     )
 
     revised_evp = Bool(
@@ -4112,7 +4117,6 @@ class OceanIceDyn(Group):
         units='',
         required=False,
         default=False,
-        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
     )
 
     arlx = Real(
@@ -4121,7 +4125,6 @@ class OceanIceDyn(Group):
         units='',
         required=False,
         default=300.0,
-        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
     )
 
     brlx = Real(
@@ -4130,7 +4133,6 @@ class OceanIceDyn(Group):
         units='',
         required=False,
         default=300.0,
-        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
     )
 
     e_yieldcurve = Real(
@@ -4139,7 +4141,6 @@ class OceanIceDyn(Group):
         units='',
         required=False,
         default=2.0,
-        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
     )
 
     e_plasticpot = Real(
@@ -4148,7 +4149,6 @@ class OceanIceDyn(Group):
         units='',
         required=False,
         default=2.0,
-        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
     )
 
     Ktens = Real(
@@ -4157,7 +4157,6 @@ class OceanIceDyn(Group):
         units='',
         required=False,
         default=0.0,
-        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
     )
 
     deltaminEVP = Real(
@@ -4166,7 +4165,6 @@ class OceanIceDyn(Group):
         units='1/s',
         required=False,
         default=1e-11,
-        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
     )
 
     capping_method = Str(
@@ -4176,7 +4174,6 @@ class OceanIceDyn(Group):
         required=False,
         default='max',
         max_len=8,
-        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
     )
 
     dyn_area_min = Real(
@@ -4185,7 +4182,6 @@ class OceanIceDyn(Group):
         units='',
         required=False,
         default=1e-11,
-        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
     )
 
     dyn_mass_min = Real(
@@ -4194,7 +4190,6 @@ class OceanIceDyn(Group):
         units='kg/m^2',
         required=False,
         default=1e-10,
-        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
     )
 
     rheo_area_min = Real(
@@ -4203,7 +4198,6 @@ class OceanIceDyn(Group):
         units='',
         required=False,
         default=0.001,
-        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
     )
 
     free_drift_approx = Bool(
@@ -4212,7 +4206,6 @@ class OceanIceDyn(Group):
         units='',
         required=False,
         default=True,
-        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
     )
 
     visc_method = Str(
@@ -4222,7 +4215,6 @@ class OceanIceDyn(Group):
         required=False,
         default='avg_zeta',
         max_len=16,
-        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
     )
 
     cdn_ocn = Real(
@@ -4231,7 +4223,6 @@ class OceanIceDyn(Group):
         units='',
         required=False,
         default=0.00536,
-        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
     )
 
     vel_cap = Real(
@@ -4240,7 +4231,6 @@ class OceanIceDyn(Group):
         units='m/s',
         required=False,
         default=10.0,
-        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
     )
 
     advection = Enum(
@@ -8025,4 +8015,4 @@ GENERATED_GROUPS = {
 }
 
 N_GROUPS = 68
-N_KNOBS = 877
+N_KNOBS = 878

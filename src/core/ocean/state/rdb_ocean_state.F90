@@ -50,6 +50,8 @@ module rdb_ocean_state
    use rdb_ocean_tides, only: ocean_tides_t
    use rdb_ocean_p_surf, only: ocean_p_surf_t
    use rdb_ice_state, only: ocean_sea_ice_t
+   use rdb_ice_config, only: ice_params_from_config
+   use rdb_ice_cgrid_metrics, only: ice_cgrid_metrics_t
    use rdb_ocean_obc, only: ocean_obc_t
    use rdb_ocean_boundary_types, only: ocean_bc_state_t, ocean_bc_state_init, &
                                        ocean_bc_state_destroy, &
@@ -305,6 +307,14 @@ module rdb_ocean_state
          !! scaffold: knobs + lifecycle only, no arrays and no physics.
          !! `&ocean_ice_nml enable` default off ⇒ never initialised /
          !! mapped / stepped ⇒ byte-identical.
+
+      type(ice_cgrid_metrics_t) :: ice_cgrid
+         !! C-grid metric set of the CICE EVP dynamics under the SIS2-derived
+         !! ice state (`&ocean_ice_dyn_nml dyn_scheme = "cice_c"`, D9.2).  It
+         !! lives here, not in `ocean_sea_ice_t`, because its module reaches
+         !! the ocean halo and so the configuration.  Built by the engine from
+         !! the final metrics, mapped by `ocean_state_enter_data`; never
+         !! initialised under the default `"sis2_c"`.
 
       ! ---- Boundary ----
       type(ocean_obc_t) :: obc
@@ -793,6 +803,12 @@ contains
       ! str_d/str_t/str_s/tau_a_*/fxoc/fyoc are unconditional whenever the
       ! ice slot is live, same contract as u_ice/v_ice).
       this%ice%dynamics = cfg%ocean%ice%dynamics
+      ! D9.2: the CICE C-grid EVP under the SIS2-derived state latches here too
+      ! (it gates the slot's allocation); the default "sis2_c" leaves the slot
+      ! inert, so nothing is allocated, mapped or registered.
+      this%ice%dync%enable = cfg%ocean%ice%enable .and. cfg%ocean%ice%dynamics .and. &
+                             trim(adjustl(cfg%ocean%ice_dyn%dyn_scheme)) == "cice_c"
+      if (this%ice%dync%enable) this%ice%dync%p = ice_params_from_config(cfg)
       ! PR-23: enable gates the sponge's (potentially large, 4-D
       ! nx*ny*nz*n_tracers) reference-state allocation, so it latches
       ! before init like the closures above (`ocean_sponge_init` is only
@@ -981,6 +997,7 @@ contains
                + this%varmix%bytes() &
                + this%meke%bytes() &
                + this%ice%bytes() &
+               + this%ice_cgrid%bytes() &
                + this%tides%bytes() &
                + this%p_surf%bytes() &
                + this%obc%bytes() &
@@ -1102,6 +1119,7 @@ contains
       call state%p_surf%enter_data()
       call profiler_stop("ed_psurf")
       call profiler_start("ed_ice", nvtx_only=.true.)
+      if (state%ice_cgrid%is_init) call state%ice_cgrid%enter_data()
       if (state%ice%enable) call state%ice%enter_data()
       call profiler_stop("ed_ice")
       call profiler_start("ed_bc", nvtx_only=.true.)
@@ -1150,6 +1168,7 @@ contains
       call profiler_stop("xd_bc")
       call profiler_start("xd_ice", nvtx_only=.true.)
       if (state%ice%enable) call state%ice%exit_data()
+      if (state%ice_cgrid%mapped) call state%ice_cgrid%exit_data()
       call profiler_stop("xd_ice")
       call profiler_start("xd_psurf", nvtx_only=.true.)
       call state%p_surf%exit_data()
@@ -1262,6 +1281,7 @@ contains
       call ocean_bc_state_destroy(this%bc)
       call this%obc%destroy()
       call this%ice%destroy()
+      call this%ice_cgrid%destroy()
       call this%p_surf%destroy()
       call this%tides%destroy()
       call this%vcoord%destroy()

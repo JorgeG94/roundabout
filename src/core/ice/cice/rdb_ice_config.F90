@@ -7,7 +7,8 @@
 !! `nslyr`, `kcatbound`, `constants_set`), `&ocean_ice_thermo_nml` (thermo,
 !! ITD and floe-geometry knobs), `&ocean_ice_sw_nml` (albedo parameters),
 !! `&ocean_ice_ridge_nml` (ridging and strength), `&ocean_ice_dyn_nml` (C-grid
-!! EVP dynamics keys, and the transport keys `advection`, `transport_check`;
+!! EVP dynamics keys, `dyn_scheme` ("sis2_c" | "cice_c": which C-grid core runs under
+!! `scheme="sis2"`), and the transport keys `advection`, `transport_check`;
 !! `advection="remap"` is refused under `scheme="cice"` until the remap PR) and
 !! `&ocean_ice_atm_nml`
 !! (atmosphere-ice boundary layer; the option keys the port supports one value
@@ -250,6 +251,42 @@ contains
          call add_msg(msgs, n, "&ocean_ice_atm_nml calc_strair=.false. is not "// &
                       "supported (the wind stress is always computed in the ice model)")
       end if
+
+      ! ---- dynamics core under the SIS2-derived ice state ----
+      select case (trim(adjustl(cfg%ocean%ice_dyn%dyn_scheme)))
+      case ("sis2_c")
+         continue
+      case ("cice_c")
+         if (.not. (cfg%ocean%ice%enable .and. cfg%ocean%ice%dynamics)) then
+            call add_msg(msgs, n, "&ocean_ice_dyn_nml dyn_scheme='cice_c' needs &ocean_ice_nml "// &
+                         "enable=.true. and dynamics=.true. (the C-grid EVP replaces the SIS2 "// &
+                         "dynamics call)")
+         end if
+         if (cfg%nghost < 3) then
+            call add_msg(msgs, n, "&ocean_ice_dyn_nml dyn_scheme='cice_c' needs nghost >= 3 (the "// &
+                         "corner stress reaches three cells into the halo)")
+         end if
+         if (cfg%px*cfg%py > 1) then
+            call add_msg(msgs, n, "&ocean_ice_dyn_nml dyn_scheme='cice_c' is single-rank for now "// &
+                         "(the multi-rank halo of the C-grid EVP arrives in a later PR); use "// &
+                         "dyn_scheme='sis2_c' or one rank")
+         end if
+         if (trim(adjustl(cfg%ocean%bc%north)) == "tripolar_fold") then
+            call add_msg(msgs, n, "&ocean_ice_dyn_nml dyn_scheme='cice_c' with a tripolar north fold "// &
+                         "is not wired yet (fold tests: PR D9.3); use dyn_scheme='sis2_c'")
+         end if
+         if (cfg%ocean%ice_ridge%kstrength /= 0) then
+            call add_msg(msgs, n, "&ocean_ice_dyn_nml dyn_scheme='cice_c' needs &ocean_ice_ridge_nml "// &
+                         "kstrength = 0 (Hibler strength of the aggregates, from Pstar/Cstar): the "// &
+                         "category (Rothrock) strength arrives with the full scheme")
+         end if
+         if (cfg%ocean%wetdry%enable) then
+            call add_msg(msgs, n, "&ocean_ice_dyn_nml dyn_scheme='cice_c' with &ocean_wetdry_nml "// &
+                         "enable=.true. is not supported (the ice masks are static)")
+         end if
+      case default
+         call add_msg(msgs, n, "&ocean_ice_dyn_nml dyn_scheme must be 'sis2_c' or 'cice_c'")
+      end select
 
       ! ---- C-grid EVP dynamics ----
       dyp = ice_dyn_params_from_config(cfg)

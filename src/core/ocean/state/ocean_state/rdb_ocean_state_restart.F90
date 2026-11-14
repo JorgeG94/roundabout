@@ -636,6 +636,40 @@ contains
       !     slot is live, i.e. `scheme = "cice"`; never under "sis2". ---
       if (state%ice%cice%is_init) call state%ice%cice%register_restart(reg)
 
+      ! --- C-grid EVP dynamics under the SIS2-derived state
+      !     (`dyn_scheme = "cice_c"`, D9.2): the T and corner stresses (whole
+      !     arrays, ghost rings included, so no exchange is needed after the
+      !     read), the 0/1 mirrors of the two face ice masks (they decide the
+      !     start velocity of a newly covered face) and the ice-ocean stress
+      !     per ice area at T (read one step late by the basal heat).  The ice
+      !     velocity itself is `ice_u_ice`/`ice_v_ice` above.  Optional: a
+      !     checkpoint from a run without the C-grid core resumes with the
+      !     zero state.  Never registered under the default "sis2_c". ---
+      if (state%ice%dync%is_init) then
+         call reg%register_scalar("ice_dyn_scheme_id", state%ice%dync%scheme_id, optional=.true.)
+         call reg%register_2d("ice_dync_stresspT", state%ice%dync%w%stresspT, 0, &
+                              size(state%ice%dync%w%stresspT, 1), &
+                              size(state%ice%dync%w%stresspT, 2), optional=.true.)
+         call reg%register_2d("ice_dync_stressmT", state%ice%dync%w%stressmT, 0, &
+                              size(state%ice%dync%w%stressmT, 1), &
+                              size(state%ice%dync%w%stressmT, 2), optional=.true.)
+         call reg%register_2d("ice_dync_stress12U", state%ice%dync%w%stress12U, 0, &
+                              size(state%ice%dync%w%stress12U, 1), &
+                              size(state%ice%dync%w%stress12U, 2), optional=.true.)
+         call reg%register_2d("ice_dync_emask", state%ice%dync%emask_r, 0, &
+                              size(state%ice%dync%emask_r, 1), &
+                              size(state%ice%dync%emask_r, 2), optional=.true.)
+         call reg%register_2d("ice_dync_nmask", state%ice%dync%nmask_r, 0, &
+                              size(state%ice%dync%nmask_r, 1), &
+                              size(state%ice%dync%nmask_r, 2), optional=.true.)
+         call reg%register_2d("ice_dync_strocnT_x", state%ice%dync%strocnT_x, 0, &
+                              size(state%ice%dync%strocnT_x, 1), &
+                              size(state%ice%dync%strocnT_x, 2), optional=.true.)
+         call reg%register_2d("ice_dync_strocnT_y", state%ice%dync%strocnT_y, 0, &
+                              size(state%ice%dync%strocnT_y, 1), &
+                              size(state%ice%dync%strocnT_y, 2), optional=.true.)
+      end if
+
       ! --- Tidal-mixing + law-of-the-wall BBL kd_int (merged every stage).
       !     Their column solves refresh once per thermo interval, so a
       !     resume between refreshes (always the case under
@@ -796,12 +830,37 @@ contains
 #ifndef RDB_NO_NETCDF
       type(restart_registry_t) :: reg
       type(ocean_restart_metadata_t) :: meta
-      integer :: osc, local_ierr
+      integer :: osc, local_ierr, file_id, cfg_id
 
       call ocean_state_build_restart_registry(state, grid, reg)
+      ! The dynamics-scheme id is registered (and so written) only under
+      ! dyn_scheme = "cice_c"; the READ side probes it under "sis2_c" too, so a
+      ! file written by the other core is refused rather than resumed half-mixed.
+      if (.not. state%ice%dync%is_init) then
+         ! (the slot's own scalar is the target: a local would be a dangling pointer)
+         state%ice%dync%scheme_id = 0.0_wp
+         call reg%register_scalar("ice_dyn_scheme_id", state%ice%dync%scheme_id, optional=.true.)
+      end if
       call ocean_state_fill_restart_metadata(state, grid, meta)
       call ocean_restart_read_local(filename, reg, decomp, meta, t, step, osc, &
                                     ierr=local_ierr)
+      if (local_ierr == 0 .and. state%ice%enable .and. state%ice%dynamics) then
+         if (reg%entry_found("ice_dyn_scheme_id")) then
+            file_id = merge(1, 0, state%ice%dync%scheme_id > 0.5_wp)
+         else
+            file_id = 0
+         end if
+         cfg_id = merge(1, 0, state%ice%dync%is_init)
+         if (file_id /= cfg_id) then
+            call fail("Ocean restart "//trim(filename)//" was written with &ocean_ice_dyn_nml "// &
+                      "dyn_scheme = '"//merge("cice_c", "sis2_c", file_id == 1)// &
+                      "' (a file without the scheme id is the existing 'sis2_c'), but this run is "// &
+                      "configured with dyn_scheme = '"//merge("cice_c", "sis2_c", cfg_id == 1)// &
+                      "': the ice stresses and velocities of the two cores are not interchangeable; "// &
+                      "refusing to resume.", ierr, restart_mismatch_status_code(3))
+            return
+         end if
+      end if
       if (present(ierr)) then
          ! Translate the INTERNAL 1/2/3 restart_mismatch_kind convention
          ! (private to `ocean_restart_check_decomp`/`ocean_restart_read_local`)

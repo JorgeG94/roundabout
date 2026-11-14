@@ -684,7 +684,11 @@ module rdb_config
       !! owners).  EVP keys: Hunke and Dukowicz 1997; Hunke 2001; Bouillon et al. 2013; Konig
       !! Beatty and Holland 2010; Lemieux et al. 2024 (upstream CICE code defaults for the
       !! C-grid dynamics; OM3 itself runs the B-grid dynamics).  Transport keys: `advection`,
-      !! `transport_check`.  `scheme="cice"` only.
+      !! `transport_check`.  The EVP keys act under `dyn_scheme="cice_c"`.
+      character(len=8) :: dyn_scheme = "sis2_c"
+         !! Dynamics core under the SIS2-derived ice state: `"sis2_c"` (the SIS2 C-grid
+         !! EVP, default, unchanged) or `"cice_c"` (the CICE6 C-grid EVP coupled to the
+         !! ocean through the sea-surface tilt and the ocean surface current).
       integer :: ndte = 120
          !! Elastic subcycles per dynamics step; >= 1.
       real(wp) :: elasticdamp = 0.36_wp

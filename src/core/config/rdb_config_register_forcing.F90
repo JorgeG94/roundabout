@@ -367,11 +367,13 @@ contains
                              "concentration (momentum-conserving; default off => byte-identical)"))
       pr => cfg%ocean%ice%p0
       call g%add(nml_real("p0", pr, &
-                          "Ice-strength pressure constant (SIS2 ICE_STRENGTH_PSTAR)", &
+                          "Ice-strength pressure constant (SIS2 ICE_STRENGTH_PSTAR); read by "// &
+                          "dyn_scheme=sis2_c only (dyn_scheme=cice_c reads Pstar of &ocean_ice_ridge_nml)", &
                           units="Pa", min=0.0_wp))
       pr => cfg%ocean%ice%c0
       call g%add(nml_real("c0", pr, &
-                          "Ice-strength exponent constant (SIS2 ICE_STRENGTH_CSTAR)", &
+                          "Ice-strength exponent constant (SIS2 ICE_STRENGTH_CSTAR); read by "// &
+                          "dyn_scheme=sis2_c only (dyn_scheme=cice_c reads Cstar of &ocean_ice_ridge_nml)", &
                           min=0.0_wp))
       pr => cfg%ocean%ice%ec
       call g%add(nml_real("ec", pr, &
@@ -622,13 +624,13 @@ contains
                            dead_on_ocean_path=ICE_DEAD))
       pr => cfg%ocean%ice_ridge%pstar
       call gr%add(nml_real("Pstar", pr, "Hibler (1979) strength constant, "// &
-                           "kstrength=0; must be > 0", &
-                           units="N/m", &
-                           dead_on_ocean_path=ICE_DEAD))
+                           "kstrength=0; must be > 0.  Read by &ocean_ice_dyn_nml "// &
+                           "dyn_scheme=cice_c (the sis2_c core reads p0 of &ocean_ice_nml)", &
+                           units="N/m"))
       pr => cfg%ocean%ice_ridge%cstar
       call gr%add(nml_real("Cstar", pr, "Hibler (1979) concentration constant, "// &
-                           "kstrength=0; must be > 0", &
-                           dead_on_ocean_path=ICE_DEAD))
+                           "kstrength=0; must be > 0.  Read by &ocean_ice_dyn_nml "// &
+                           "dyn_scheme=cice_c (the sis2_c core reads c0 of &ocean_ice_nml)"))
       call schema%add_group(gr)
 
       ga%name = "ocean_ice_atm"
@@ -669,76 +671,70 @@ contains
       call schema%add_group(ga)
 
       gd%name = "ocean_ice_dyn"
-      gd%doc = "CICE-port ice dynamics and transport knobs (scheme='cice'; upstream "// &
-               "CICE code defaults; illegal EVP values are collected by the configure-time "// &
-               "check, not rejected by the parser)."
+      gd%doc = "CICE-port ice dynamics and transport knobs (upstream CICE code defaults; "// &
+               "the EVP keys act under dyn_scheme='cice_c' (the C-grid EVP core on the "// &
+               "SIS2-derived ice state); illegal EVP values are collected by the "// &
+               "configure-time check, not rejected by the parser)."
+      ps => cfg%ocean%ice_dyn%dyn_scheme
+      call gd%add(nml_enum("dyn_scheme", ps, "Ice dynamics core: sis2_c = the SIS2 C-grid EVP "// &
+                           "(default, unchanged), cice_c = the CICE6 C-grid EVP (Lemieux et al. "// &
+                           "2024) coupled to the ocean through the sea-surface tilt and the "// &
+                           "ocean surface current; needs &ocean_ice_nml enable and dynamics, "// &
+                           "nghost >= 3, one rank, no tripolar fold", &
+                           allowed=[character(len=8) :: "sis2_c", "cice_c"]))
       pi => cfg%ocean%ice_dyn%ndte
-      call gd%add(nml_int("ndte", pi, "Elastic subcycles per dynamics step; must be >= 1", &
-                          dead_on_ocean_path=ICE_DEAD))
+      call gd%add(nml_int("ndte", pi, "Elastic subcycles per dynamics step; must be >= 1"))
       pr => cfg%ocean%ice_dyn%elasticdamp
       call gd%add(nml_real("elasticDamp", pr, "Damping parameter E of the classic EVP "// &
-                           "(Hunke 2001, arlx = 2 E ndte); must be > 0", &
-                           dead_on_ocean_path=ICE_DEAD))
+                           "(Hunke 2001, arlx = 2 E ndte); must be > 0"))
       pl => cfg%ocean%ice_dyn%revised_evp
       call gd%add(nml_logical("revised_evp", pl, "Revised EVP (Bouillon et al. 2013): "// &
-                              "arlx and brlx apply", &
-                              dead_on_ocean_path=ICE_DEAD))
+                              "arlx and brlx apply"))
       pr => cfg%ocean%ice_dyn%arlx
       call gd%add(nml_real("arlx", pr, "Revised EVP stress relaxation parameter alpha; "// &
-                           "must be > 0 when revised_evp", &
-                           dead_on_ocean_path=ICE_DEAD))
+                           "must be > 0 when revised_evp"))
       pr => cfg%ocean%ice_dyn%brlx
       call gd%add(nml_real("brlx", pr, "Revised EVP momentum relaxation parameter beta; "// &
-                           "must be > 0 when revised_evp", &
-                           dead_on_ocean_path=ICE_DEAD))
+                           "must be > 0 when revised_evp"))
       pr => cfg%ocean%ice_dyn%e_yieldcurve
       call gd%add(nml_real("e_yieldcurve", pr, "Aspect ratio of the elliptical yield "// &
-                           "curve; must be > 0", &
-                           dead_on_ocean_path=ICE_DEAD))
+                           "curve; must be > 0"))
       pr => cfg%ocean%ice_dyn%e_plasticpot
       call gd%add(nml_real("e_plasticpot", pr, "Aspect ratio of the elliptical plastic "// &
-                           "potential; must be > 0", &
-                           dead_on_ocean_path=ICE_DEAD))
+                           "potential; must be > 0"))
       pr => cfg%ocean%ice_dyn%ktens
       call gd%add(nml_real("Ktens", pr, "Tensile strength fraction, T = Ktens P (Konig "// &
-                           "Beatty and Holland 2010); must be in [0, 1)", &
-                           dead_on_ocean_path=ICE_DEAD))
+                           "Beatty and Holland 2010); must be in [0, 1)"))
       pr => cfg%ocean%ice_dyn%deltaminevp
       call gd%add(nml_real("deltaminEVP", pr, "Minimum Delta of the viscosities (Hunke "// &
                            "2001); must be > 0", &
-                           units="1/s", dead_on_ocean_path=ICE_DEAD))
+                           units="1/s"))
       ps => cfg%ocean%ice_dyn%capping_method
       call gd%add(nml_string("capping_method", ps, "Viscosity capping: max (Hibler 1979) "// &
-                             "or sum (Kreyscher et al. 2000); other values are refused", &
-                             dead_on_ocean_path=ICE_DEAD))
+                             "or sum (Kreyscher et al. 2000); other values are refused"))
       pr => cfg%ocean%ice_dyn%dyn_area_min
       call gd%add(nml_real("dyn_area_min", pr, "Minimum concentration for the dynamics; "// &
-                           "must be >= 0", &
-                           dead_on_ocean_path=ICE_DEAD))
+                           "must be >= 0"))
       pr => cfg%ocean%ice_dyn%dyn_mass_min
       call gd%add(nml_real("dyn_mass_min", pr, "Minimum mass for the dynamics; must be >= 0", &
-                           units="kg/m^2", dead_on_ocean_path=ICE_DEAD))
+                           units="kg/m^2"))
       pr => cfg%ocean%ice_dyn%rheo_area_min
       call gd%add(nml_real("rheo_area_min", pr, "Concentration below which the internal "// &
-                           "stress is dropped (free_drift_approx); must be >= 0", &
-                           dead_on_ocean_path=ICE_DEAD))
+                           "stress is dropped (free_drift_approx); must be >= 0"))
       pl => cfg%ocean%ice_dyn%free_drift_approx
       call gd%add(nml_logical("free_drift_approx", pl, "Drop the internal stress below "// &
-                              "rheo_area_min", &
-                              dead_on_ocean_path=ICE_DEAD))
+                              "rheo_area_min"))
       ps => cfg%ocean%ice_dyn%visc_method
       call gd%add(nml_string("visc_method", ps, "Corner shear viscosity: avg_zeta (mean of "// &
                              "the T viscosities) or avg_strength (rebuilt from the mean "// &
-                             "strength); other values are refused", &
-                             dead_on_ocean_path=ICE_DEAD))
+                             "strength); other values are refused"))
       pr => cfg%ocean%ice_dyn%cdn_ocn
       call gd%add(nml_real("cdn_ocn", pr, "Ice-ocean drag coefficient (upstream dragio); "// &
-                           "must be >= 0", &
-                           dead_on_ocean_path=ICE_DEAD))
+                           "must be >= 0"))
       pr => cfg%ocean%ice_dyn%vel_cap
       call gd%add(nml_real("vel_cap", pr, "Face speed above which the velocity guard "// &
                            "raises ICE_ERR_DYN_VEL (never clamps); must be > 0", &
-                           units="m/s", dead_on_ocean_path=ICE_DEAD))
+                           units="m/s"))
       ps => cfg%ocean%ice_dyn%advection
       call gd%add(nml_enum("advection", ps, "Horizontal transport: remap = incremental "// &
                            "remapping (Lipscomb and Hunke 2004; upstream default, refused "// &

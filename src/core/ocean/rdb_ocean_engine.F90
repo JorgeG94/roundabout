@@ -163,7 +163,8 @@ module rdb_ocean_engine
                            ICE_IC_CONC_ZERO
    use rdb_ice_ocean_coupler, only: ice_ocean_stress_resume_apply, ice_ocean_stress_cleanup, &
                                     ice_ocean_brine_flux, ice_ocean_heat_flux, &
-                                    ice_ocean_sw_flux, ice_ocean_stress_flux
+                                    ice_ocean_sw_flux, ice_ocean_stress_flux, ice_ocean_stress_flux_c
+   use rdb_ice_dyn_c, only: ice_dyn_c_step, ice_dyn_c_metrics_build
    use rdb_ice_frazil, only: ice_frazil_accumulate, ice_frazil_accumulate_column
    use rdb_ice_melt_potential, only: ice_melt_potential
    use rdb_ice_frazil_uptake, only: ice_frazil_uptake
@@ -362,6 +363,7 @@ contains
       character(len=:), allocatable :: bt_excl_reason
       integer :: bt_halo_req, bt_halo_res
       logical :: dist_fold
+      integer :: ierr_dync
 
       rank = 0
       if (present(compute_rank)) rank = compute_rank
@@ -548,6 +550,17 @@ contains
          ! Ice + fold on `px > 1` is covered by the `sea_ice_fold*` cases of
          ! `test_ocean_decomp_bitid_mpi` (A7, #143); the fold-exchange
          ! reserve is sized for the widest ice group below.
+         ! The CICE C-grid EVP under the SIS2-derived state is single-rank for
+         ! now: keyed on the ACTUAL rank count (an unset process grid does not
+         ! trip the `validate_config` check).
+         if (cfg%ocean%ice%enable .and. cfg%ocean%ice%dynamics .and. &
+             trim(adjustl(cfg%ocean%ice_dyn%dyn_scheme)) == "cice_c") then
+            call fail("&ocean_ice_dyn_nml dyn_scheme = 'cice_c' is single-rank for now ("// &
+                      to_string(csize)//" ranks requested): its halo exchange arrives in a "// &
+                      "later PR.  Use dyn_scheme = 'sis2_c' or 1 rank.", &
+                      ierr, OCEAN_STATUS_ERR_SETUP)
+            return
+         end if
          ! In-memory geometry injection (the API's staged bathymetry /
          ! supergrid arrays) hands over WHOLE-grid arrays.
          if (allocated(engine%staged_bathymetry) .or. allocated(engine%staged_metrics_x)) then
@@ -1309,6 +1322,19 @@ contains
       call configure_ocean_land_mask(cfg, engine%state, engine%grid, rank, &
                                      warm_restart=did_restart)
 
+      ! D9.2: the C-grid metric set of the CICE EVP slot needs the FINAL
+      ! metrics (land mask applied) and the edge flags, and must exist before
+      ! `enter_data` maps it.  No-op unless `dyn_scheme = "cice_c"`.
+      if (engine%state%ice%dync%is_init) then
+         call ice_dyn_c_metrics_build(engine%grid, engine%state%metrics, engine%state%bc, &
+                                      engine%state%ice, engine%state%ice_cgrid, ierr_dync)
+         if (ierr_dync /= 0) then
+            call fail("&ocean_ice_dyn_nml dyn_scheme = 'cice_c': the C-grid ice metrics could not "// &
+                      "be built (nghost >= 3 is required)", ierr, OCEAN_STATUS_ERR_SETUP)
+            return
+         end if
+      end if
+
       ! Configure-time stability audit (viscous CFL / kappa_h diffusive
       ! number / Munk-layer resolution / ah_max-clamps-nu_h): MUST run
       ! after configure_ocean_metrics + configure_ocean_land_mask (needs
@@ -2006,7 +2032,21 @@ contains
       ! mediates the resulting drag into the ocean's surface-stress field so
       ! the NEXT ocean momentum step feels it (one-step-lagged, same
       ! convention as the frazil/heat couplers).
-      if (engine%state%ice%dynamics) then
+      ! D9.2: the CICE C-grid EVP under the SIS2-derived state
+      ! (`&ocean_ice_dyn_nml dyn_scheme = "cice_c"`) replaces the SIS2 call
+      ! and its stress blend; the default "sis2_c" takes the branch below,
+      ! untouched.  The transport that follows reads the same `u_ice/v_ice`.
+      if (engine%state%ice%dynamics .and. engine%state%ice%dync%enable) then
+         call profiler_start("ice_evp_c")
+         call ice_dyn_c_step(engine%grid, engine%state%metrics, &
+                             engine%state%coriolis_adv%f_corner, engine%state%barotropic%b, &
+                             engine%state%ice_cgrid, engine%state%ice, engine%state%multilayer, &
+                             engine%state%bc, dt)
+         call ice_ocean_stress_flux_c(engine%state%metrics, engine%state%surface_stress, engine%state%ice, &
+                                      engine%grid, engine%state%bc)
+         call profiler_stop("ice_evp_c")
+      end if
+      if (engine%state%ice%dynamics .and. .not. engine%state%ice%dync%enable) then
          call profiler_start("ice_evp")
          ! PR 36: the CFL bound must use the dt TRANSPORT will actually
          ! consume, not this call's outer `dt` -- EVP runs every outer

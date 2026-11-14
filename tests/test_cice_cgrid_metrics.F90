@@ -66,6 +66,7 @@ contains
                   new_unittest("cgrid_fold_ghost_metrics", test_fold_ghost_metrics), &
                   new_unittest("corner_wrap_periodic", test_corner_wrap), &
                   new_unittest("halo_faces_equals_ocean_periodic", test_halo_periodic), &
+                  new_unittest("halo_faces_keep_computed_seam", test_halo_seam), &
                   new_unittest("halo_faces_equals_ocean_wall", test_halo_wall), &
                   new_unittest("halo_faces_equals_ocean_fold", test_halo_fold), &
                   new_unittest("cgrid_device_kernel", test_device_kernel) &
@@ -598,6 +599,10 @@ contains
       call seed_faces(u, v, nx, ny)
       u2 = u
       v2 = v
+      ! The ice solver computes the east face `u(ie+1)`; the duplicate `u(is)` takes
+      ! its value before the ocean's own sequence (which copies the other way).
+      if (bc%periodic_x) u2(NG + 1, :) = u2(NG + NXP + 1, :)
+      if (bc%periodic_y) v2(:, NG + 1) = v2(:, NG + NYP + 1)
 
       !$acc enter data copyin(u, v, u2, v2)
       call ice_halo_faces(grid, bc, u, v)
@@ -612,7 +617,7 @@ contains
       !$acc exit data delete(u, v, u2, v2)
 
       call check(error, all(u == u2) .and. all(v == v2), &
-                 "ice_halo_faces differs from the ocean's wrap + fold")
+                 "ice_halo_faces differs from the duplicate-then-ocean wrap + fold")
       if (allocated(error)) return
 
       if (periodic_x) then
@@ -673,6 +678,52 @@ contains
       type(error_type), allocatable, intent(out) :: error
       call run_halo_case(error, periodic_x=.true., fold=.false.)
    end subroutine test_halo_periodic
+
+   subroutine test_halo_seam(error)
+      !! A doubly periodic field with a distinct value on every face: the faces the
+      !! solver computes (`u(is+1:ie+1,:)`, `v(:,js+1:je+1)`) survive the helper
+      !! untouched, and the duplicates `u(is,:)`, `v(:,js)` equal them.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(ocean_bc_state_t) :: bc
+      real(wp), allocatable :: u(:, :), v(:, :), u0(:, :), v0(:, :)
+      integer :: nx, ny, is, ie, js, je
+      logical :: ok
+
+      call grid%init(NXP, NYP, NG, DLON, DLAT)
+      call make_bc(bc, grid, .true., .false.)
+      call ocean_bc_state_init_periodic_y(bc)
+      nx = grid%nx_total
+      ny = grid%ny_total
+      is = NG + 1
+      ie = NG + NXP
+      js = NG + 1
+      je = NG + NYP
+      allocate (u(nx + 1, ny), v(nx, ny + 1), u0(nx + 1, ny), v0(nx, ny + 1))
+      call seed_faces(u, v, nx, ny)
+      u0 = u
+      v0 = v
+      !$acc enter data copyin(u, v)
+      call ice_halo_faces(grid, bc, u, v)
+      !$acc update self(u, v)
+      !$acc exit data delete(u, v)
+      ok = all(u(is + 1:ie + 1, js:je) == u0(is + 1:ie + 1, js:je))
+      call check(error, ok, "the computed east faces u(is+1:ie+1) changed")
+      if (allocated(error)) return
+      ok = all(v(is:ie, js + 1:je + 1) == v0(is:ie, js + 1:je + 1))
+      call check(error, ok, "the computed north faces v(js+1:je+1) changed")
+      if (allocated(error)) return
+      call check(error, all(u(is, js:je) == u(ie + 1, js:je)), "u(is) is not a copy of the computed u(ie+1)")
+      if (allocated(error)) return
+      call check(error, all(v(is:ie, js) == v(is:ie, je + 1)), "v(js) is not a copy of the computed v(je+1)")
+   end subroutine test_halo_seam
+
+   subroutine ocean_bc_state_init_periodic_y(bc)
+      type(ocean_bc_state_t), intent(inout) :: bc
+      bc%south%bc_type = OBC_PERIODIC
+      bc%north%bc_type = OBC_PERIODIC
+      call ocean_bc_validate_periodic(bc)
+   end subroutine ocean_bc_state_init_periodic_y
 
    subroutine test_halo_wall(error)
       type(error_type), allocatable, intent(out) :: error

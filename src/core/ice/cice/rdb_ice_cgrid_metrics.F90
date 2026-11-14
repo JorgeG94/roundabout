@@ -40,18 +40,22 @@ module rdb_ice_cgrid_metrics
    !! `ratiodxN(i,j) = -dxN(i+1,j)/dxN(i,j)` and
    !! `ratiodyE(i,j) = -dyE(i,j+1)/dyE(i,j)` (and their reciprocals
    !! `ratiodxNr`, `ratiodyEr`; one guarded division each, so a uniform grid
-   !! gives exactly -1) carry the free-slip lateral boundary
-   !! condition of the C-grid strain rates.  They are defined for
+   !! gives exactly -1) carry the lateral boundary condition of the
+   !! C-grid strain rates (no-slip: the mirrored tangential velocity makes the
+   !! wall-parallel flow vanish at a straight wall).  They are defined for
    !! `i <= nx_total-1` (resp. `j <= ny_total-1`); the last column/row is
    !! 0, as is any entry with a zero denominator (Adcroft convention) --
    !! with `nghost >= 2` every entry a ghost-ring-1 stencil reads is valid.
    !!
-   !! **Halo and fold.**  `ice_halo_faces` runs the seam sequence of the
-   !! CLAUDE.md MPI rule on `(u_ice, v_ice)`: halo exchange only on an axis
-   !! split across ranks, then the local periodic wrap only on an axis the
-   !! halo does not own, then the tripolar fold (true vector: negate, v
-   !! fold row projected antisymmetric) which is a no-op off the north rank
-   !! row (`bc%north_fold` already carries `has_north`).  The corner-staggered
+   !! **Halo and fold.**  `ice_halo_faces` refreshes `(u_ice, v_ice)`: on a
+   !! locally wrapped periodic axis the DUPLICATE seam face (`u(is,:)`,
+   !! `v(:,js)`) is first copied from the face the solver computes (`u(ie+1,:)`,
+   !! `v(:,je+1)`; the ocean's wrap goes the other way), then the ocean's local
+   !! periodic wrap fills the ghost faces, then the tripolar fold (true
+   !! vector: negate, v fold row projected antisymmetric) runs, a no-op off the
+   !! north rank row (`bc%north_fold` already carries `has_north`).  A
+   !! decomposed axis stops (`error stop`) until the multi-rank PR adds the
+   !! shifted one-face exchange.  The corner-staggered
    !! persistent stress is wrapped with the public `evp_wrap_corner_impl`
    !! of `rdb_ice_evp`.
    use, intrinsic :: iso_fortran_env, only: int64
@@ -353,9 +357,24 @@ contains
 
    subroutine ice_halo_faces(grid, bc, u, v, device_resident)
       !! One seam refresh of the ice face velocity pair `(u, v)` =
-      !! `(u_ice, v_ice)`: exchange (split axes only) -> periodic wrap
-      !! (non-split axes only) -> tripolar fold (true vector).  Exactly the
-      !! sequence the ocean runs at every seam site; see the module header.
+      !! `(u_ice, v_ice)`: duplicate -> periodic wrap -> tripolar fold (true
+      !! vector).  The ocean's own sequence (exchange -> wrap -> fold) is
+      !! reused, with ONE difference forced by the ice solver.
+      !!
+      !! **Which face is authoritative.**  The ice solver computes the faces
+      !! `is+1 .. ie+1` (the east face of each owned cell, `E(is:ie)`) and the
+      !! north ones `js+1 .. je+1`; the face `u(is, :)` (`v(:, js)`) is the
+      !! DUPLICATE of the east (north) seam face.  The ocean's periodic wrap
+      !! takes the opposite view (`u(ie+1) := u(is)`), so applied as is it
+      !! would overwrite the freshly computed seam face with a value nothing
+      !! updates.  On a locally wrapped axis this helper therefore first copies
+      !! the computed face onto its duplicate (`u(is,:) = u(ie+1,:)`,
+      !! `v(:,js) = v(:,je+1)`), after which the ocean's wrap is a no-op on the
+      !! seam and fills the ghost faces.
+      !!
+      !! A DECOMPOSED axis needs the shifted one-face exchange of the
+      !! multi-rank PR (the ocean exchange duplicates the other way too) and
+      !! stops here until then.
       type(hgrid_t), intent(in) :: grid
       type(ocean_bc_state_t), intent(in) :: bc
       real(wp), intent(inout) :: u(grid%nx_total + 1, grid%ny_total)
@@ -366,18 +385,32 @@ contains
          !! `.false.` for host-side calls (default: device-resident).
 
       logical :: halo_x, halo_y, wrap_x, wrap_y
-      integer :: nx, ny
+      integer :: nx, ny, i, j, is, ie, js, je
 
       nx = grid%nx_total
       ny = grid%ny_total
+      is = grid%nghost + 1
+      ie = grid%nghost + grid%nx_phys
+      js = grid%nghost + 1
+      je = grid%nghost + grid%ny_phys
       halo_x = ocean_halo_is_decomposed_x()
       halo_y = ocean_halo_is_decomposed_y()
       if (halo_x .or. halo_y) then
-         call ocean_halo_face_x(u, device_resident)
-         call ocean_halo_face_y(v, device_resident)
+         error stop "ice_halo_faces: a decomposed axis needs the shifted one-face exchange "// &
+            "of the multi-rank PR (not available yet)"
       end if
-      wrap_x = bc%periodic_x .and. .not. halo_x
-      wrap_y = bc%periodic_y .and. .not. halo_y
+      wrap_x = bc%periodic_x
+      wrap_y = bc%periodic_y
+      if (wrap_x) then
+         do concurrent(j=1:ny)
+            u(is, j) = u(ie + 1, j)
+         end do
+      end if
+      if (wrap_y) then
+         do concurrent(i=1:nx)
+            v(i, js) = v(i, je + 1)
+         end do
+      end if
       call ocean_periodic_wrap_face_x_2d(u, nx + 1, ny, grid%nx_phys, grid%ny_phys, &
                                          grid%nghost, wrap_x, wrap_y)
       call ocean_periodic_wrap_face_y_2d(v, nx, ny + 1, grid%nx_phys, grid%ny_phys, &

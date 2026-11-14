@@ -74,6 +74,8 @@ module rdb_ice_ocean_coupler
    public :: ice_ocean_heat_flux
    public :: ice_ocean_sw_flux
    public :: ice_ocean_stress_flux
+   public :: ice_ocean_stress_flux_c
+   public :: ice_ocean_stress_face_impl
    public :: ice_ocean_stress_resume_apply
    public :: ice_ocean_stress_flux_impl
    public :: ice_ocean_stress_cleanup
@@ -379,6 +381,20 @@ contains
                                        ice%nx_total, ice%ny_total)
       call ice_ocean_stress_flux_impl(stress%tau_x, stress%tau_y, ice%tau_a_x, ice%tau_a_y, &
                                       ice%fxoc, ice%fyoc, ci_scratch, ice%nx_total, ice%ny_total)
+      call ice_ocean_stress_publish(stress, ice, grid, bc)
+   end subroutine ice_ocean_stress_flux
+
+   subroutine ice_ocean_stress_publish(stress, ice, grid, bc)
+      !! The part of the stress hand-off that follows the blend, shared by the
+      !! SIS2 blend (`ice_ocean_stress_flux`) and the C-grid EVP one
+      !! (`ice_ocean_stress_flux_c`): the seam refresh of the blended pair with
+      !! the re-derived `stress_mag`, then the restart mirror.  Text moved
+      !! verbatim from `ice_ocean_stress_flux`.
+      type(ocean_surface_stress_t), intent(inout) :: stress
+      type(ocean_sea_ice_t), intent(inout) :: ice
+      type(hgrid_t), intent(in), optional :: grid
+      type(ocean_bc_state_t), intent(in), optional :: bc
+
       ! The blend above OVERWROTE `tau_x`/`tau_y`, so the cell-centred
       ! `|tau|` the boundary-layer schemes take `u_* = sqrt(|tau|/rho0)`
       ! from is stale until it is re-derived from the new pair.  KPP
@@ -409,7 +425,98 @@ contains
       call ice_tau_mirror_impl(ice%tau_ocn_x, ice%tau_ocn_y, stress%tau_x, stress%tau_y, &
                                ice%nx_total, ice%ny_total)
       ice%tau_ocn_valid = 1.0_wp
-   end subroutine ice_ocean_stress_flux
+   end subroutine ice_ocean_stress_publish
+
+   subroutine ice_ocean_stress_flux_c(metrics, stress, ice, grid, bc)
+      !! Ice -> ocean momentum hand-off of the C-grid EVP dynamics
+      !! (`dyn_scheme = "cice_c"`), the retarget of the blend of
+      !! `ice_ocean_stress_flux`: at every face
+      !!   `tau = (1 - ai) tau_a - strocn`
+      !! with `ai` the face concentration of the solver (`aiE`, `aiN`) and
+      !! `strocn` the force on the ice per cell area (`strocnxE`, `strocnyN`),
+      !! so the ocean receives exactly the stress the ice gave up and the wind
+      !! stress the ice did not intercept: `sum(area * tau_from_ice) =
+      !! -sum(area * strocn)` and, with the ice weighting its wind by the same
+      !! `ai`, the momentum of the pair is conserved at every fractional cover.
+      !! Faces outside the owned range carry `ai = 0` and take the pure wind;
+      !! the blended stress is then multiplied by the face wet mask (`wet_u`,
+      !! `wet_v`), so a closed face (wall, land) carries none: without it the
+      !! ghost concentration 0 would hand a wall-adjacent face the FULL wind
+      !! under a compact pack, and the cell-centred `stress_mag` the
+      !! boundary-layer schemes read would see it.  The seam refresh then wraps
+      !! the periodic seam face.  The refresh and the restart mirror are those of
+      !! the SIS2 blend.
+      type(ocean_metrics_t), intent(in) :: metrics
+      type(ocean_surface_stress_t), intent(inout) :: stress
+      type(ocean_sea_ice_t), intent(inout) :: ice
+      type(hgrid_t), intent(in), optional :: grid
+      type(ocean_bc_state_t), intent(in), optional :: bc
+
+      call ice_ocean_stress_face_impl(ice%nx_total, ice%ny_total, stress%tau_x, stress%tau_y, &
+                                      ice%tau_a_x, ice%tau_a_y, ice%dync%w%strocnxE, &
+                                      ice%dync%w%strocnyN, ice%dync%w%aiE, ice%dync%w%aiN, &
+                                      metrics%wet_u, metrics%wet_v)
+      ! The ocean's periodic seam refresh copies the WEST face onto the east one
+      ! (`tau(ie+1) := tau(is)`), while the face stress is computed at the east
+      ! one, so the west seam face takes the computed value first.
+      if (present(grid) .and. present(bc)) then
+         call ice_ocean_stress_seam_impl(ice%nx_total, ice%ny_total, grid%nghost + 1, &
+                                         grid%nghost + grid%nx_phys, grid%nghost + 1, &
+                                         grid%nghost + grid%ny_phys, bc%periodic_x, bc%periodic_y, &
+                                         stress%tau_x, stress%tau_y)
+      end if
+      call ice_ocean_stress_publish(stress, ice, grid, bc)
+   end subroutine ice_ocean_stress_flux_c
+
+   pure subroutine ice_ocean_stress_seam_impl(nx, ny, is, ie, js, je, wrap_x, wrap_y, tau_x, tau_y)
+      !! Periodic seam of the face blend: the west (south) seam face takes the
+      !! value computed at its east (north) duplicate.
+      integer, intent(in) :: nx, ny, is, ie, js, je
+      logical, intent(in) :: wrap_x, wrap_y
+      real(wp), intent(inout) :: tau_x(nx + 1, ny), tau_y(nx, ny + 1)
+      integer :: i, j
+
+      if (wrap_x) then
+         do concurrent(j=1:ny)
+            tau_x(is, j) = tau_x(ie + 1, j)
+         end do
+      end if
+      if (wrap_y) then
+         do concurrent(i=1:nx)
+            tau_y(i, js) = tau_y(i, je + 1)
+         end do
+      end if
+   end subroutine ice_ocean_stress_seam_impl
+
+   pure subroutine ice_ocean_stress_face_impl(nx, ny, tau_x, tau_y, tau_a_x, tau_a_y, strocnxE, strocnyN, &
+                                              aiE, aiN, wet_u, wet_v)
+      !! Face blend kernel of `ice_ocean_stress_flux_c`.  `E(i,j)` is the
+      !! x-face `i+1` (ice names, see `rdb_ice_cgrid_metrics`), `N(i,j)` the
+      !! y-face `j+1`; the first x face and the first y face have no `E`/`N`
+      !! entry and take the wind.
+      integer, intent(in) :: nx, ny
+      real(wp), intent(inout) :: tau_x(nx + 1, ny), tau_y(nx, ny + 1)
+      real(wp), intent(in) :: tau_a_x(nx + 1, ny), tau_a_y(nx, ny + 1)
+      real(wp), intent(in) :: strocnxE(nx, ny), strocnyN(nx, ny), aiE(nx, ny), aiN(nx, ny)
+      real(wp), intent(in) :: wet_u(nx + 1, ny), wet_v(nx, ny + 1)
+         !! Face wet masks (0/1): the blended stress is multiplied by them.
+      integer :: i, j
+
+      ! The first x face and the first y face have no `E`/`N` entry: the wind.  Edges by
+      ! loop range, never by an in-loop guard (nvfortran vectoriser, see CLAUDE.md).
+      do concurrent(j=1:ny)
+         tau_x(1, j) = tau_a_x(1, j)*wet_u(1, j)
+      end do
+      do concurrent(j=1:ny, i=2:nx + 1)
+         tau_x(i, j) = ((1.0_wp - aiE(i - 1, j))*tau_a_x(i, j) - strocnxE(i - 1, j))*wet_u(i, j)
+      end do
+      do concurrent(i=1:nx)
+         tau_y(i, 1) = tau_a_y(i, 1)*wet_v(i, 1)
+      end do
+      do concurrent(j=2:ny + 1, i=1:nx)
+         tau_y(i, j) = ((1.0_wp - aiN(i, j - 1))*tau_a_y(i, j) - strocnyN(i, j - 1))*wet_v(i, j)
+      end do
+   end subroutine ice_ocean_stress_face_impl
 
    pure subroutine ice_ocean_stress_flux_impl(tau_x, tau_y, tau_a_x, tau_a_y, fxoc, fyoc, ci, &
                                               nx, ny)

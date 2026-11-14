@@ -137,6 +137,7 @@ module rdb_ice_state
    use rdb_ice_column, only: ICE_BULK_SALINITY, ICE_NK_MAX, ICE_RHO_ICE, ICE_RHO_SNOW
    use rdb_ice_enthalpy, only: ICE_CP_BRINE, ICE_CP_ICE
    use rdb_ice_cice_state, only: ice_cice_state_t
+   use rdb_ice_dyn_c_state, only: ice_dyn_c_t
    use, intrinsic :: iso_fortran_env, only: int64
    implicit none
    private
@@ -262,6 +263,11 @@ module rdb_ice_state
       type(ice_cice_state_t) :: cice
          !! CICE-port state (`scheme = "cice"`, D1.4).  Never initialised under the
          !! default `scheme = "sis2"`: nothing allocated, mapped or registered.
+      type(ice_dyn_c_t) :: dync
+         !! C-grid EVP state under `&ocean_ice_dyn_nml dyn_scheme = "cice_c"`
+         !! (D9.2).  Never initialised under the default `"sis2_c"`: nothing
+         !! allocated, mapped, counted or registered for restart.  When it is
+         !! live the SIS2 EVP workspace `evp_ws` below is not allocated.
       logical :: snow_ice = .false.
          !! Archimedes freeboard snow-ice flood master switch
          !! (`&ocean_ice_nml snow_ice`, PR 27), latched from config
@@ -849,9 +855,12 @@ contains
       ! PR 5: EVP subcycle scratch, gated on `this%dynamics` (the workspace
       ! is dynamics-only — same as the retired module `evp_workspace_ensure`
       ! gating).  Rides `ocean_state_enter_data` via this%evp_ws%enter_data.
-      if (this%dynamics) then
+      if (this%dynamics .and. .not. this%dync%enable) then
          call this%evp_ws%init(this%nx_total, this%ny_total)
       end if
+      ! D9.2: the C-grid EVP slot (`dyn_scheme = "cice_c"`), latched with its
+      ! parameter bundle by the caller before `init`.
+      if (this%dync%enable) call this%dync%init(this%nx_total, this%ny_total)
 
       ! PR 4b: transport workspace, gated on `this%transport` (memory
       ! Rule 2 — do not pay the per-category face-flux footprint by
@@ -940,7 +949,8 @@ contains
       if (allocated(this%tau_ocn_x)) deallocate (this%tau_ocn_x)
       if (allocated(this%tau_ocn_y)) deallocate (this%tau_ocn_y)
       this%tau_ocn_valid = 0.0_wp
-      if (this%dynamics) call this%evp_ws%destroy()
+      if (this%dynamics .and. .not. this%dync%enable) call this%evp_ws%destroy()
+      call this%dync%destroy()
       if (allocated(this%mca_ice)) deallocate (this%mca_ice)
       if (allocated(this%mca_snow)) deallocate (this%mca_snow)
       if (allocated(this%uh_ice)) deallocate (this%uh_ice)
@@ -1026,7 +1036,8 @@ contains
       !$acc enter data copyin(this%fxoc, this%fyoc)
       !$acc enter data copyin(this%tau_ocn_x, this%tau_ocn_y)
       ! tau_ocn_valid: NEVER mapped (host-only, register_scalar contract).
-      if (this%dynamics) call this%evp_ws%enter_data()
+      if (this%dynamics .and. .not. this%dync%enable) call this%evp_ws%enter_data()
+      if (this%dync%enable) call this%dync%enter_data()
       ! Derived aggregates: (re)built on the device from the state just
       ! mapped, so a cold start, a warm restart read and a test that seeds
       ! the host arrays before mapping all start with consistent aggregates.
@@ -1109,7 +1120,8 @@ contains
       !$acc exit data delete(this%tau_a_x, this%tau_a_y)
       !$acc exit data copyout(this%fxoc, this%fyoc)
       !$acc exit data copyout(this%tau_ocn_x, this%tau_ocn_y)
-      if (this%dynamics) call this%evp_ws%exit_data()
+      if (this%dynamics .and. .not. this%dync%enable) call this%evp_ws%exit_data()
+      if (this%dync%enable) call this%dync%exit_data()
       if (this%transport) then
          !$acc exit data delete(this%mca_ice, this%mca_snow)
          !$acc exit data delete(this%uh_ice, this%vh_ice, this%uh_snow, this%vh_snow)
@@ -1202,6 +1214,7 @@ contains
       ! `dynamics` is on, so the term self-zeroes on the EVP-off path.
       nbytes = nbytes + this%evp_ws%bytes()
       nbytes = nbytes + this%cice%bytes()
+      nbytes = nbytes + this%dync%bytes()
    end function ocean_sea_ice_bytes
 
    ! =====================================================================

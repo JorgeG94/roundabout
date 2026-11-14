@@ -627,8 +627,8 @@ Sea-ice model (SIS2 port) master switch + category/layer counts.
 | `roll_factor` | `0.1000000000E+01` |  | Thin-ice rolling floor factor (SIS2 SEA_ICE_ROLL_FACTOR); 0 disables rolling |
 | `dynamics` | `.false.` |  | Enable C-grid EVP ice dynamics (default off => byte-identical) |
 | `a_face_stress` | `.false.` |  | Weight EVP wind stress + ice-ocean drag by face ice concentration (momentum-conserving; default off => byte-identical) |
-| `p0` | `0.2750000000E+05` | Pa | Ice-strength pressure constant (SIS2 ICE_STRENGTH_PSTAR) |
-| `c0` | `0.2000000000E+02` |  | Ice-strength exponent constant (SIS2 ICE_STRENGTH_CSTAR) |
+| `p0` | `0.2750000000E+05` | Pa | Ice-strength pressure constant (SIS2 ICE_STRENGTH_PSTAR); read by dyn_scheme=sis2_c only (dyn_scheme=cice_c reads Pstar of &ocean_ice_ridge_nml) |
+| `c0` | `0.2000000000E+02` |  | Ice-strength exponent constant (SIS2 ICE_STRENGTH_CSTAR); read by dyn_scheme=sis2_c only (dyn_scheme=cice_c reads Cstar of &ocean_ice_ridge_nml) |
 | `ec` | `0.2000000000E+01` |  | Yield-curve axis ratio (SIS2 ICE_YIELD_ELLIPTICITY); 0 = cavitating fluid |
 | `cdw` | `0.3240000000E-02` |  | Ice-ocean drag coefficient (SIS2 ICE_CDRAG_WATER) |
 | `rho_ocean` | `0.1030000000E+04` | kg/m^3 | Ice-drag reference density (SIS2 RHO_OCEAN) |
@@ -700,8 +700,8 @@ CICE-port ridging and ice-strength knobs (scheme='cice'; upstream CICE defaults,
 | `krdg_redist` | `1` |  | Ridge redistribution: 1 = exponential (Lipscomb et al. 2007), 0 = Hibler (1980); other values are refused |
 | `mu_rdg` | `0.3000000000E+01` | m^0.5 | E-folding scale of ridged ice for krdg_redist=1 (Lipscomb et al. 2007); must be > 0 |
 | `Cf` | `0.1700000000E+02` |  | Ratio of ridging work to potential-energy change (Flato and Hibler 1995); must be > 0 |
-| `Pstar` | `0.2750000000E+05` | N/m | Hibler (1979) strength constant, kstrength=0; must be > 0 |
-| `Cstar` | `0.2000000000E+02` |  | Hibler (1979) concentration constant, kstrength=0; must be > 0 |
+| `Pstar` | `0.2750000000E+05` | N/m | Hibler (1979) strength constant, kstrength=0; must be > 0.  Read by &ocean_ice_dyn_nml dyn_scheme=cice_c (the sis2_c core reads p0 of &ocean_ice_nml) |
+| `Cstar` | `0.2000000000E+02` |  | Hibler (1979) concentration constant, kstrength=0; must be > 0.  Read by &ocean_ice_dyn_nml dyn_scheme=cice_c (the sis2_c core reads c0 of &ocean_ice_nml) |
 
 ### &ocean_ice_atm_nml
 
@@ -719,10 +719,11 @@ CICE-port atmosphere-ice boundary-layer knobs (scheme='cice'; upstream CICE defa
 
 ### &ocean_ice_dyn_nml
 
-CICE-port ice dynamics and transport knobs (scheme='cice'; upstream CICE code defaults; illegal EVP values are collected by the configure-time check, not rejected by the parser).
+CICE-port ice dynamics and transport knobs (upstream CICE code defaults; the EVP keys act under dyn_scheme='cice_c' (the C-grid EVP core on the SIS2-derived ice state); illegal EVP values are collected by the configure-time check, not rejected by the parser).
 
 | Knob | Default | Units | Description |
 |------|---------|-------|-------------|
+| `dyn_scheme` | `"sis2_c"` |  | Ice dynamics core: sis2_c = the SIS2 C-grid EVP (default, unchanged), cice_c = the CICE6 C-grid EVP (Lemieux et al. 2024) coupled to the ocean through the sea-surface tilt and the ocean surface current; needs &ocean_ice_nml enable and dynamics, nghost >= 3, one rank, no tripolar fold |
 | `ndte` | `120` |  | Elastic subcycles per dynamics step; must be >= 1 |
 | `elasticDamp` | `0.3600000000E+00` |  | Damping parameter E of the classic EVP (Hunke 2001, arlx = 2 E ndte); must be > 0 |
 | `revised_evp` | `.false.` |  | Revised EVP (Bouillon et al. 2013): arlx and brlx apply |
