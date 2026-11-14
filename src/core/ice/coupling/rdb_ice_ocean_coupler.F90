@@ -22,11 +22,17 @@ module rdb_ice_ocean_coupler
    !! any future field-fill path (Area-A3 data-override) composing with
    !! sea ice must add into `salt_flux_diag` or fold in here, not
    !! bypass this call. **With `enable_components = .true.` (PR-12), the
-   !! coupler instead OWNS the `salt_flux` / `heat_added` COMPONENTS** —
+   !! coupler instead OWNS the `salt_ice` / `heat_ice` / `sw_ice` COMPONENTS** —
+   !! full overwrites, never `salt_flux` / `heat_added` / `q_sw`, which belong
+   !! to the data-forcing reader and the bulk consumer (writing them from
+   !! here silently discarded those writers' values, and a shortwave-free
+   !! ice-free cell received NO shortwave at all).
    !! `ocean_surface_flux_assemble` derives the net `Q_salt`/`Q_heat`
-   !! from `Q_salt_const + salt_flux` / `Q_heat_const + heat_added` at
-   !! the same point in the step, so the two modes produce identical
-   !! numbers (the components-on ice bit-identity gate,
+   !! from `Q_salt_const + (salt_flux + salt_ice)` / `Q_heat_const +
+   !! (heat_added + heat_ice) + (q_sw + sw_ice)` at the same point in the
+   !! step (the coupler and the assembler share the thermo-cadence gate, so
+   !! the slots are re-assigned before every read and nothing accumulates),
+   !! so the two modes produce identical numbers (the components-on ice bit-identity gate,
    !! `tests/test_ocean_surface_forcing_type.F90:ice_components_bitident`).
    !!
    !! Q_heat was NOT written by the PR-3b coupler: the frazil latent heat
@@ -37,8 +43,9 @@ module rdb_ice_ocean_coupler
    !! `rdb_ice_thermo_driver` — the column's grow/melt exchange, NOT the
    !! frazil bank) — a disjoint energy pathway from the frazil clamp, so
    !! no double-count.  Under `enable_components`, `heat_flux_diag`
-   !! lands in `heat_added` instead — MOM6's slot for a net, already-
-   !! summed heat term that isn't further decomposable (PR-12 plan §5.4).
+   !! lands in `heat_ice` instead -- a net, already-summed heat term that is
+   !! not further decomposable (PR-12 plan §5.4), kept apart from
+   !! `heat_added` so the data-forcing reader's value is not clobbered.
    !!
    !! PR 31 adds `ice_ocean_sw_flux`, which OWNS the shortwave the ice
    !! transmits to the ocean (`ocean_sea_ice_t%sw_thru_diag`, W/m^2,
@@ -46,8 +53,9 @@ module rdb_ice_ocean_coupler
    !! (Q_heat CONTAINS q_sw, it is not Q_heat + q_sw), the delivery is
    !! component-mode-dependent and the coupler owns exactly ONE path in
    !! each mode so the energy reaches `Q_heat` once, never twice:
-   !!   * components ON  — writes the `q_sw` COMPONENT; the assembler
-   !!     sums it into `Q_heat`.  `heat_flux_diag` (-> `heat_added`)
+   !!   * components ON  — writes the `sw_ice` COMPONENT; the assembler
+   !!     sums it with `q_sw` (the open-water share) into `Q_heat`.
+   !!     `heat_flux_diag` (-> `heat_ice`)
    !!     carries only the NON-shortwave heat, so there is no overlap.
    !!   * components OFF — `q_sw` is unallocated and there is no
    !!     assembler, so the shortwave is ADDED directly into the
@@ -106,7 +114,7 @@ contains
       !! dry/land/vanished — see `ice_frazil_uptake_impl`'s unconditional
       !! diag zeroing).
       !! **Components on** (`sf%use_components`, PR-12): write the ice's
-      !! own COMPONENT instead — `sf%salt_flux(i,j) = salt_flux_diag(i,j)`
+      !! own COMPONENT instead — `sf%salt_ice(i,j) = salt_flux_diag(i,j)`
       !! (no `Q_salt_const` term: `ocean_surface_flux_assemble` adds it).
       !! Sets `has_salt` either way (§13 item 6 of the PR-12 plan: any
       !! filler that can produce non-zero net salt must set the latch).
@@ -115,7 +123,7 @@ contains
 
       sf%has_salt = .true.
       if (sf%use_components) then
-         call ice_ocean_brine_flux_components_impl(sf%salt_flux, ice%salt_flux_diag, &
+         call ice_ocean_brine_flux_components_impl(sf%salt_ice, ice%salt_flux_diag, &
                                                    ice%nx_total, ice%ny_total)
       else
          call ice_ocean_brine_flux_impl(sf%Q_salt, ice%salt_flux_diag, &
@@ -123,17 +131,17 @@ contains
       end if
    end subroutine ice_ocean_brine_flux
 
-   pure subroutine ice_ocean_brine_flux_components_impl(salt_flux, salt_flux_diag, nx, ny)
-      !! Components-on branch: full-array overwrite of the `salt_flux`
+   pure subroutine ice_ocean_brine_flux_components_impl(salt_ice, salt_flux_diag, nx, ny)
+      !! Components-on branch: full-array overwrite of the `salt_ice`
       !! COMPONENT (not `Q_salt`) — same sign convention, no `_const`
       !! term (the assembler adds it).  Explicit-shape + decl-order.
       integer, intent(in) :: nx, ny
-      real(wp), intent(inout) :: salt_flux(nx, ny)
+      real(wp), intent(inout) :: salt_ice(nx, ny)
       real(wp), intent(in) :: salt_flux_diag(nx, ny)
       integer :: i, j
 
       do concurrent(j=1:ny, i=1:nx)
-         salt_flux(i, j) = salt_flux_diag(i, j)
+         salt_ice(i, j) = salt_flux_diag(i, j)
       end do
    end subroutine ice_ocean_brine_flux_components_impl
 
@@ -164,7 +172,7 @@ contains
       !! d(hT) = Q_heat*dt/(rho0*cp)). Full overwrite from the const + last
       !! window's rate — a window with no ice exchange resets to background.
       !! **Components on** (`sf%use_components`, PR-12): write
-      !! `sf%heat_added(i,j) = heat_flux_diag(i,j)` instead — MOM6's slot
+      !! `sf%heat_ice(i,j) = heat_flux_diag(i,j)` instead — the ice slot
       !! for a net, already-summed heat term (no `_const` term: the
       !! assembler adds it).  Sets `has_heat` either way.
       type(ocean_surface_flux_t), intent(inout) :: sf
@@ -172,7 +180,7 @@ contains
 
       sf%has_heat = .true.
       if (sf%use_components) then
-         call ice_ocean_heat_flux_components_impl(sf%heat_added, ice%heat_flux_diag, &
+         call ice_ocean_heat_flux_components_impl(sf%heat_ice, ice%heat_flux_diag, &
                                                   ice%nx_total, ice%ny_total)
       else
          call ice_ocean_heat_flux_impl(sf%Q_heat, ice%heat_flux_diag, &
@@ -180,17 +188,17 @@ contains
       end if
    end subroutine ice_ocean_heat_flux
 
-   pure subroutine ice_ocean_heat_flux_components_impl(heat_added, heat_flux_diag, nx, ny)
-      !! Components-on branch: full-array overwrite of the `heat_added`
+   pure subroutine ice_ocean_heat_flux_components_impl(heat_ice, heat_flux_diag, nx, ny)
+      !! Components-on branch: full-array overwrite of the `heat_ice`
       !! COMPONENT (not `Q_heat`) — no `_const` term (the assembler adds
       !! it).  Explicit-shape + decl-order.
       integer, intent(in) :: nx, ny
-      real(wp), intent(inout) :: heat_added(nx, ny)
+      real(wp), intent(inout) :: heat_ice(nx, ny)
       real(wp), intent(in) :: heat_flux_diag(nx, ny)
       integer :: i, j
 
       do concurrent(j=1:ny, i=1:nx)
-         heat_added(i, j) = heat_flux_diag(i, j)
+         heat_ice(i, j) = heat_flux_diag(i, j)
       end do
    end subroutine ice_ocean_heat_flux_components_impl
 
@@ -221,10 +229,12 @@ contains
       !! path in each mode — the energy reaches `Q_heat` once, never twice:
       !!
       !! **Components on** (`sf%use_components`, PR-12): full-array
-      !! overwrite of the `q_sw` COMPONENT (no `_const` term — the
-      !! assembler adds none for shortwave; `q_sw` IS the whole shortwave
-      !! summand it folds into `Q_heat`).  `heat_flux_diag` (which the
-      !! heat coupler routed to `heat_added`) carries only the non-SW
+      !! overwrite of the `sw_ice` COMPONENT (no `_const` term).  It is NOT
+      !! `q_sw`: that slot holds the open-water shortwave the bulk consumer
+      !! rewrites every step (already weighted by the open fraction), and the
+      !! ice's per-cell-area transmitted shortwave adds to it in the
+      !! assembler -- one cell's worth together, no double weighting.
+      !! `heat_flux_diag` (routed to `heat_ice`) carries only the non-SW
       !! heat, so there is no overlap.  Sets `has_q_sw`.
       !!
       !! **Components off** (default): `q_sw` is unallocated and no
@@ -246,7 +256,7 @@ contains
 
       if (sf%use_components) then
          sf%has_q_sw = .true.
-         call ice_ocean_sw_flux_components_impl(sf%q_sw, ice%sw_thru_diag, &
+         call ice_ocean_sw_flux_components_impl(sf%sw_ice, ice%sw_thru_diag, &
                                                 ice%nx_total, ice%ny_total)
       else
          call ice_ocean_sw_flux_add_impl(sf%Q_heat, ice%sw_thru_diag, &
@@ -254,19 +264,19 @@ contains
       end if
    end subroutine ice_ocean_sw_flux
 
-   pure subroutine ice_ocean_sw_flux_components_impl(q_sw, sw_thru_diag, nx, ny)
+   pure subroutine ice_ocean_sw_flux_components_impl(sw_ice, sw_thru_diag, nx, ny)
       !! Components-on branch: full-array overwrite of the `q_sw` COMPONENT
       !! (including ghosts — they get `0`).  No `_const` term.
       !! Explicit-shape + decl-order.  Runs on the device-resident `q_sw`
       !! (mapped by `sf%enter_data`) and `sw_thru_diag` (mapped by
       !! `ice%enter_data`).
       integer, intent(in) :: nx, ny
-      real(wp), intent(inout) :: q_sw(nx, ny)
+      real(wp), intent(inout) :: sw_ice(nx, ny)
       real(wp), intent(in) :: sw_thru_diag(nx, ny)
       integer :: i, j
 
       do concurrent(j=1:ny, i=1:nx)
-         q_sw(i, j) = sw_thru_diag(i, j)
+         sw_ice(i, j) = sw_thru_diag(i, j)
       end do
    end subroutine ice_ocean_sw_flux_components_impl
 

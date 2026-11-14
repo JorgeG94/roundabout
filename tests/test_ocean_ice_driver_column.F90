@@ -245,7 +245,7 @@ contains
       !$acc update self(ice%m_congel_win, ice%m_meltt_win, ice%m_meltb_win)
       !$acc update self(ice%m_snoice_win, ice%melt_top_ice, ice%melt_bot_ice)
       if (comps) then
-         !$acc update self(sf%q_sw)
+         !$acc update self(sf%q_sw, sf%sw_ice)
       end if
 
       call sf%exit_data()
@@ -1206,12 +1206,12 @@ contains
       !! The components-ON no-double-count gate. Same thin-cap / fb = 0 /
       !! passive-SEB / sw_down = 400 setup as `sw_thru_reaches_ocean`, but
       !! with the PR-12 component surface-flux path ON, so the shortwave
-      !! travels the OTHER branch: the coupler fills the `q_sw` component
+      !! travels the OTHER branch: the coupler fills the `sw_ice` component
       !! and `ocean_surface_flux_assemble` sums it into `Q_heat`. Asserts:
-      !!   * q_sw(ip,jp) == sw_thru_diag(ip,jp)  exactly (the coupler fill);
+      !!   * sw_ice(ip,jp) == sw_thru_diag(ip,jp)  exactly (the coupler fill);
       !!   * Q_heat(ip,jp) == heat_flux_diag + sw_thru_diag exactly — the
       !!     shortwave is in Q_heat EXACTLY ONCE (heat_flux_diag went to
-      !!     `heat_added`, q_sw is the SW summand; a double-count would
+      !!     `heat_ice`, sw_ice is the SW summand; a double-count would
       !!     make this fail by +sw_thru_diag);
       !!   * the same closure identity as the components-off arbiter, so
       !!     the energy lands in the ocean exactly once in THIS mode too.
@@ -1242,8 +1242,11 @@ contains
          if (allocated(error)) exit checks
          call check(error, sf%has_q_sw, "has_q_sw must be latched true (components on)")
          if (allocated(error)) exit checks
-         call check(error, sf%q_sw(ip, jp) == ice%sw_thru_diag(ip, jp), &
-                    "q_sw must equal sw_thru_diag exactly (the coupler component fill)")
+         call check(error, sf%sw_ice(ip, jp) == ice%sw_thru_diag(ip, jp), &
+                    "sw_ice must equal sw_thru_diag exactly (the coupler component fill)")
+         if (allocated(error)) exit checks
+         call check(error, sf%q_sw(ip, jp) == 0.0_wp, &
+                    "the coupler must NOT write q_sw (the bulk/reader-owned slot)")
          if (allocated(error)) exit checks
          ! Q_heat_const = 0, only q_sw + heat_added nonzero => Q_heat is
          ! their sum: the shortwave appears EXACTLY ONCE.
