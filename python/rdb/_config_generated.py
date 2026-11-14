@@ -3404,6 +3404,14 @@ class OceanIce(Group):
         default=True,
     )
 
+    hfreeze = Real(
+        'hfreeze',
+        doc='Depth cap of the melt-potential (frzmlt) integral, capped by the boundary-layer depth where KPP/EPBL provide one; -1 = off (OM3 HFREEZE = 10)',
+        units='m',
+        required=False,
+        default=-1.0,
+    )
+
     bound_salinity = Bool(
         'bound_salinity',
         doc='Floor top-layer salinity at min_salinity after the ice salt exchange (OM3 BOUND_SALINITY; non-conservative; default off)',
@@ -8017,4 +8025,4 @@ GENERATED_GROUPS = {
 }
 
 N_GROUPS = 68
-N_KNOBS = 876
+N_KNOBS = 877

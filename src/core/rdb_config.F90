@@ -440,6 +440,12 @@ module rdb_config
          !! OM3 `RECLAIM_FRAZIL`: spend the standing frazil bank on a warm
          !! surface layer before the sweep.  Default `.true.` (the OM3
          !! value) but USED ONLY with `frazil_column`; inert otherwise.
+      real(wp) :: hfreeze = -1.0_wp
+         !! Depth cap [m] of the melt-potential integral
+         !! (`rdb_ice_melt_potential`; OM3 `HFREEZE` = 10): the sea ice's
+         !! `frzmlt` integrates ocean heat above freezing over
+         !! `min(hfreeze, boundary-layer depth)`.  -1 (default) = OFF, the
+         !! provider is never called => byte-identical; otherwise > 0.
       logical :: bound_salinity = .false.
          !! OM3 `BOUND_SALINITY`: after the surface salt flux (and so the
          !! ice-ocean salt exchange) is applied each thermo step, set

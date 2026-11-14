@@ -262,6 +262,7 @@ set(RDB_TESTS
     "test_ocean_ice_restart|test_ocean_ice_restart|collect_ocean_ice_restart_tests|ocean_ice_restart|ocean"
     "test_ocean_ice_diags|test_ocean_ice_diags|collect_ocean_ice_diags_tests|ocean_ice_diags|ocean"
     "test_ocean_ice_aggregates|test_ocean_ice_aggregates|collect_ocean_ice_aggregates_tests|ocean_ice_aggregates|ocean"
+    "test_ocean_ice_melt_potential|test_ocean_ice_melt_potential|collect_ocean_ice_melt_potential_tests|ocean_ice_melt_potential|ocean"
     "test_ocean_ice_init|test_ocean_ice_init|collect_ocean_ice_init_tests|ocean_ice_init|ocean"
     "test_ocean_ice_stress_mag|test_ocean_ice_stress_mag|collect_ocean_ice_stress_mag_tests|ocean_ice_stress_mag|ocean"
     "test_ocean_sw_penetration|test_ocean_sw_penetration|collect_ocean_sw_penetration_tests|ocean_sw_penetration|ocean"

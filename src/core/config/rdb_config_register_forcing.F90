@@ -334,6 +334,11 @@ contains
       call g%add(nml_logical("reclaim_frazil", pl, &
                              "Spend the standing frazil bank on a warm surface layer "// &
                              "(OM3 RECLAIM_FRAZIL; default true, used only with frazil_column)"))
+      pr => cfg%ocean%ice%hfreeze
+      call g%add(nml_real("hfreeze", pr, &
+                          "Depth cap of the melt-potential (frzmlt) integral, capped by the "// &
+                          "boundary-layer depth where KPP/EPBL provide one; -1 = off "// &
+                          "(OM3 HFREEZE = 10)", units="m"))
       pl => cfg%ocean%ice%bound_salinity
       call g%add(nml_logical("bound_salinity", pl, &
                              "Floor top-layer salinity at min_salinity after the ice salt "// &

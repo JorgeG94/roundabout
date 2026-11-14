@@ -619,6 +619,7 @@ Sea-ice model (SIS2 port) master switch + category/layer counts.
 | `frazil_column` | `.false.` |  | Full-column frazil sweep with rising carry instead of the surface-only clamp (OM3 FRAZIL; default off => byte-identical) |
 | `pressure_dependent_frazil` | `.false.` |  | Freezing point at layer-centre hydrostatic pressure (OM3 PRESSURE_DEPENDENT_FRAZIL; needs frazil_column) |
 | `reclaim_frazil` | `.true.` |  | Spend the standing frazil bank on a warm surface layer (OM3 RECLAIM_FRAZIL; default true, used only with frazil_column) |
+| `hfreeze` | `-0.1000000000E+01` | m | Depth cap of the melt-potential (frzmlt) integral, capped by the boundary-layer depth where KPP/EPBL provide one; -1 = off (OM3 HFREEZE = 10) |
 | `bound_salinity` | `.false.` |  | Floor top-layer salinity at min_salinity after the ice salt exchange (OM3 BOUND_SALINITY; non-conservative; default off) |
 | `min_salinity` | `0.0000000000E+00` | g/kg | Salinity floor for bound_salinity (OM3 MIN_SALINITY) |
 | `transport` | `.false.` |  | Enable horizontal category ice/snow transport (default off => byte-identical) |

@@ -165,6 +165,7 @@ module rdb_ocean_engine
                                     ice_ocean_brine_flux, ice_ocean_heat_flux, &
                                     ice_ocean_sw_flux, ice_ocean_stress_flux
    use rdb_ice_frazil, only: ice_frazil_accumulate, ice_frazil_accumulate_column
+   use rdb_ice_melt_potential, only: ice_melt_potential
    use rdb_ice_frazil_uptake, only: ice_frazil_uptake
    use rdb_ice_atm_forcing, only: ice_atm_forcing_restoring
 #ifndef RDB_NO_NETCDF
@@ -2134,6 +2135,33 @@ contains
          call ice_compute_basal_flux(engine%grid, engine%state%eos, &
                                      engine%state%multilayer, engine%state%ice, &
                                      engine%state%dyn%therm_dt(dt))
+         ! Melt-potential provider (`frzmlt`, O.1): at thermo cadence, with
+         ! the thermo-window step, BEFORE the frazil uptake zeroes the bank
+         ! (the bank accumulated over exactly this window, so `bank/dt` is a
+         ! rate over the window it was filled in).  Writes only
+         ! `ice%melt_potential` / `ice%frzmlt`, debits nothing.  OFF
+         ! (hfreeze = -1) => never called.  h_bl: EPBL `mld`, else KPP
+         ! `bl_depth`, else none (PP81 only: the fixed hfreeze).
+         if (cfg%ocean%ice%hfreeze > 0.0_wp) then
+            if (engine%state%epbl%enable .and. allocated(engine%state%epbl%mld)) then
+               call ice_melt_potential(engine%grid, engine%state%eos, engine%state%multilayer, &
+                                       engine%state%ice%frazil_heat, cfg%ocean%ice%hfreeze, &
+                                       engine%state%dyn%therm_dt(dt), &
+                                       engine%state%ice%melt_potential, engine%state%ice%frzmlt, &
+                                       h_bl=engine%state%epbl%mld)
+            else if (engine%state%vmix%use_kpp .and. allocated(engine%state%vmix%bl_depth)) then
+               call ice_melt_potential(engine%grid, engine%state%eos, engine%state%multilayer, &
+                                       engine%state%ice%frazil_heat, cfg%ocean%ice%hfreeze, &
+                                       engine%state%dyn%therm_dt(dt), &
+                                       engine%state%ice%melt_potential, engine%state%ice%frzmlt, &
+                                       h_bl=engine%state%vmix%bl_depth)
+            else
+               call ice_melt_potential(engine%grid, engine%state%eos, engine%state%multilayer, &
+                                       engine%state%ice%frazil_heat, cfg%ocean%ice%hfreeze, &
+                                       engine%state%dyn%therm_dt(dt), &
+                                       engine%state%ice%melt_potential, engine%state%ice%frzmlt)
+            end if
+         end if
          call ice_frazil_uptake(engine%grid, engine%state%eos, engine%state%multilayer, &
                                 engine%state%ice, engine%state%dyn%therm_dt(dt))
          call ice_thermo_driver_step(engine%grid, engine%state%eos, &

@@ -201,6 +201,7 @@ set(CORE_SOURCES
     # Sea-ice PR 1: ocean-side frazil accumulator (freezing-point clamp), called
     # from the driver after each ocean outer step.
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/thermo/rdb_ice_frazil.F90
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/thermo/rdb_ice_melt_potential.F90
     # Sea-ice PR 3c: coupleable atmospheric-forcing seam filler (v1 scalar
     # restoring); depends only on rdb_ice_state (already declared above).
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/thermo/rdb_ice_atm_forcing.F90

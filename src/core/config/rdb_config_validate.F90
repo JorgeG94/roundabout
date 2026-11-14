@@ -3279,6 +3279,22 @@ contains
                            "construction)")
          has_error = .true.
       end if
+      if (cfg%ocean%ice%hfreeze /= -1.0_wp) then
+         if (.not. (cfg%ocean%ice%hfreeze > 0.0_wp)) then
+            call logger%error("&ocean_ice_nml hfreeze must be > 0 (m) or exactly -1 (off)")
+            has_error = .true.
+         else if (.not. cfg%ocean%ice%enable) then
+            call logger%error("&ocean_ice_nml hfreeze > 0 requires enable=.true. "// &
+                              "(the melt potential is handed to the ice model)")
+            has_error = .true.
+         else if (cfg%ocean%cavity_dyn%enable) then
+            call logger%error("&ocean_ice_nml hfreeze > 0 is refused with "// &
+                              "&ocean_cavity_dyn_nml enable=.true.: the melt potential "// &
+                              "of the water under an ice shelf must not be offered to "// &
+                              "sea ice")
+            has_error = .true.
+         end if
+      end if
       if (cfg%ocean%ice%frazil_column .and. .not. cfg%ocean%ice%enable) then
          call logger%error("&ocean_ice_nml frazil_column=.true. requires enable=.true. "// &
                            "(frazil is handed to the ice model)")

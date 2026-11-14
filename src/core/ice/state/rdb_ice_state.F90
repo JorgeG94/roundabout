@@ -225,6 +225,10 @@ module rdb_ice_state
          !! are unconditional (allocated whenever the slot is live) since
          !! PR 5's EVP dynamics will need them regardless of whether
          !! category transport is on.
+      logical :: melt_potential_enable = .false.
+         !! Latched before `init` from `&ocean_ice_nml hfreeze > 0`: allocate,
+         !! map and count `melt_potential` / `frzmlt` only then (knob off =>
+         !! the slot is byte-for-byte what it was).
       logical :: dynamics = .false.
          !! EVP rheology master switch (`&ocean_ice_nml dynamics`), set
          !! from config BEFORE `init` (same convention as `enable`/
@@ -418,6 +422,16 @@ module rdb_ice_state
          !! (PR 3) will SPEND it as new-ice formation.  Persistent state
          !! (accumulates across steps, restart-carried) — distinct from
          !! the drain-and-zero budget accumulator below.
+      real(wp), allocatable :: melt_potential(:, :)
+         !! Raw upper-ocean melt potential `rho*Cp*sum dh (T - T_f(S,0))`
+         !! over `min(hfreeze, h_bl)` [J/m2] (`rdb_ice_melt_potential`).
+         !! Derived each call, not restart state; zero unless
+         !! `&ocean_ice_nml hfreeze > 0`.
+      real(wp), allocatable :: frzmlt(:, :)
+         !! Signed ocean-to-ice heat potential [W/m2]: `+bank/dt` where the
+         !! frazil bank is positive, else `-max(melt_potential,0)/dt`.
+         !! Derived each call, not restart state; zero unless
+         !! `&ocean_ice_nml hfreeze > 0`.
       real(wp), allocatable :: heat_budget_frazil(:, :, :)
          !! Content `h*c` (K·m) change per cell per outer step attributed to the
          !! frazil clamp — the `budgets` HEAT contributor mirroring the
@@ -750,6 +764,10 @@ contains
       this%ny_total = grid%ny_total
       allocate (this%frazil_heat(this%nx_total, this%ny_total), source=0.0_wp)
       allocate (this%heat_budget_frazil(this%nx_total, this%ny_total, 1), source=0.0_wp)
+      if (this%melt_potential_enable) then
+         allocate (this%melt_potential(this%nx_total, this%ny_total), source=0.0_wp)
+         allocate (this%frzmlt(this%nx_total, this%ny_total), source=0.0_wp)
+      end if
 
       allocate (this%part_size(this%nx_total, this%ny_total, 0:this%ncat), source=0.0_wp)
       this%part_size(:, :, 0) = 1.0_wp
@@ -867,6 +885,8 @@ contains
       if (this%cice%is_init) call this%cice%destroy()
       if (allocated(this%frazil_heat)) deallocate (this%frazil_heat)
       if (allocated(this%heat_budget_frazil)) deallocate (this%heat_budget_frazil)
+      if (allocated(this%melt_potential)) deallocate (this%melt_potential)
+      if (allocated(this%frzmlt)) deallocate (this%frzmlt)
       if (allocated(this%part_size)) deallocate (this%part_size)
       if (allocated(this%aice)) deallocate (this%aice)
       if (allocated(this%vice)) deallocate (this%vice)
@@ -983,6 +1003,9 @@ contains
       if (.not. this%is_init) return
       if (this%cice%is_init) call this%cice%enter_data()
       !$acc enter data copyin(this%frazil_heat, this%heat_budget_frazil)
+      if (allocated(this%melt_potential)) then
+         !$acc enter data copyin(this%melt_potential, this%frzmlt)
+      end if
       !$acc enter data copyin(this%part_size, this%m_ice, this%m_snow)
       !$acc enter data copyin(this%aice, this%vice, this%vsno, this%aice0)
       !$acc enter data copyin(this%enth_ice, this%enth_snow, this%sal_ice)
@@ -1065,6 +1088,9 @@ contains
       !$acc exit data copyout(this%frazil_heat)
       !$acc exit data delete(this%heat_budget_frazil)
       !$acc exit data delete(this%aice, this%vice, this%vsno, this%aice0)
+      if (allocated(this%melt_potential)) then
+         !$acc exit data delete(this%melt_potential, this%frzmlt)
+      end if
       !$acc exit data copyout(this%part_size, this%m_ice, this%m_snow)
       !$acc exit data copyout(this%enth_ice, this%enth_snow, this%sal_ice)
       !$acc exit data copyout(this%m_frozen_diag, this%salt_flux_diag)
@@ -1103,6 +1129,8 @@ contains
       if (.not. this%is_init) return
       nbytes = arr_bytes(this%frazil_heat) &
                + arr_bytes(this%heat_budget_frazil) &
+               + arr_bytes(this%melt_potential) &
+               + arr_bytes(this%frzmlt) &
                + arr_bytes(this%part_size) &
                + arr_bytes(this%aice) &
                + arr_bytes(this%vice) &

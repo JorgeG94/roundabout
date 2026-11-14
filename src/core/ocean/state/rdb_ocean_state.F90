@@ -778,6 +778,8 @@ contains
       ! once PR 3+ allocates them, so all three latch before init like
       ! the closures above.
       this%ice%enable = cfg%ocean%ice%enable
+      this%ice%melt_potential_enable = cfg%ocean%ice%enable .and. &
+                                       cfg%ocean%ice%hfreeze > 0.0_wp
       ! OM3 BOUND_SALINITY: host scalars read by the surface-flux apply.
       this%surface_flux%bound_salinity = cfg%ocean%ice%bound_salinity
       this%surface_flux%min_salinity = cfg%ocean%ice%min_salinity
