@@ -6,7 +6,8 @@
 !! `apply_bt_correction` (bt time-mean → per-layer correction + h rescale).
 module rdb_barotropic_coupling
    use rdb_constants, only: wp, GRAVITY, H_DIV_EPS, H_VANISHED, FRHAT_HYBRID, FRHAT_ARITHMETIC
-   use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+   use, intrinsic :: ieee_arithmetic, only: ieee_is_finite, ieee_is_nan
+   use, intrinsic :: iso_fortran_env, only: int64
    use rdb_grid, only: hgrid_t
    use rdb_ocean_metrics, only: ocean_metrics_t
    use rdb_barotropic_workstate, only: barotropic_workstate_t
@@ -60,6 +61,12 @@ module rdb_barotropic_coupling
    ! MOM6 `wt_u`'s round-off guard (its barotropic solver module parameter
    ! `subroundoff`) — only ever used inside the `wt_u` floor below.
    real(wp), parameter :: VISC_REM_SUBROUNDOFF = 1.0e-30_wp
+
+   ! Position-independent exp/log/pow (`rdb_sm_*`): the per-face
+   ! `bt_rem = av_rem**(1/n_inner)` below must not depend on a face's place
+   ! in a vectorised loop, or a decomposed run rounds it differently from
+   ! one rank.  Constants once here, bodies in `contains`.
+#include "rdb_safe_math_consts.inc"
 
 contains
 
@@ -2579,13 +2586,13 @@ contains
          do concurrent(j=1:ny_u, i=1:nu)
             bt_work%bt_rem_u(i, j) = 0.0_wp
             if (bt_work%av_rem_u(i, j) > 0.0_wp .and. ieee_is_finite(bt_work%av_rem_u(i, j))) then
-               bt_work%bt_rem_u(i, j) = bt_work%av_rem_u(i, j)**instep
+               bt_work%bt_rem_u(i, j) = rdb_sm_pow(bt_work%av_rem_u(i, j), instep)
             end if
          end do
          do concurrent(j=1:nv, i=1:nx_v)
             bt_work%bt_rem_v(i, j) = 0.0_wp
             if (bt_work%av_rem_v(i, j) > 0.0_wp .and. ieee_is_finite(bt_work%av_rem_v(i, j))) then
-               bt_work%bt_rem_v(i, j) = bt_work%av_rem_v(i, j)**instep
+               bt_work%bt_rem_v(i, j) = rdb_sm_pow(bt_work%av_rem_v(i, j), instep)
             end if
          end do
       end if
@@ -2867,5 +2874,9 @@ contains
    end subroutine set_local_BT_cont_types
 
 #include "rdb_frhat_face.inc"
+
+#include "rdb_safe_math_core.inc"
+
+#include "rdb_safe_math_pow.inc"
 
 end module rdb_barotropic_coupling

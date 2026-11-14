@@ -117,6 +117,11 @@
 !!     (distributed fold exchange for px > 1);
 !!   * tracer_ppm_h3 - re-entrant channel (periodic x) with
 !!     `tracer_advection_scheme = 'ppm_h3'` on the per-step path;
+!!   * body_tide_nodal — the spherical spoon basin with the equilibrium body tide
+!!     (M2, S2, K1, O1, nodal correction on) and a tidal west edge on the same four
+!!     constituents with `obc_tidal_nodal`: the per-cell structure sin/cos
+!!     (`tides_build_struct`), the per-step amplitudes and the OBC target all run
+!!     through `rdb_safe_math`;
 !!   * the OM3-parity feature cases, each the spherical spoon basin plus ONE
 !!     feature: `gm_ebt_struct` (EBT vertical structure of KhTh), `gm_fgnv`
 !!     (FGNV streamfunction), `meke_gm_work` (MEKE source from the GM work),
@@ -301,7 +306,7 @@ program test_ocean_decomp_bitid_mpi
       !! `RDB_BITID_CASES`: run only the cases whose name contains this substring.
    type(comm_t) :: comm
    character(len=16), parameter :: SCHEMES(2) = [character(len=16) :: "pred_corr", "ssp_rk2"]
-   character(len=24), parameter :: CASES(68) = [character(len=24) :: &
+   character(len=24), parameter :: CASES(69) = [character(len=24) :: &
                                                 "island_basin", "weno7_pv", &
                                                 "periodic_channel_zstar", &
                                                 "visc_rem_zstar", &
@@ -316,7 +321,7 @@ program test_ocean_decomp_bitid_mpi
                                                 "gm_ebt_struct", "gm_fgnv", "meke_gm_work", &
                                                 "hvisc_om3_floors", "vmix_no_interior", &
                                                 "redi_cfl_fold", "tidal_files", &
-                                                "tidal_polzin", "bbl_lotw", "tracer_ppm_h3", &
+                                                "tidal_polzin", "bbl_lotw", "tracer_ppm_h3", "body_tide_nodal", &
                                                 "hvisc_kh_points", "diabatic_end", &
                                                 "hvisc_thin_layer", "hvisc_biharm_stress", &
                                                 "balanced_vortex_t0", "balanced_vortex", &
@@ -401,7 +406,7 @@ contains
       character(len=:), allocatable :: nml
       character(len=*), parameter :: NL = new_line("a")
       character(len=16) :: spx, spy, snx, sny, sng, snz
-      character(len=:), allocatable :: common, bt_extra, bt_head, ice_dyn, hv_extra, drain_extra
+      character(len=:), allocatable :: common, bt_extra, bt_head, ice_dyn, hv_extra, drain_extra, sph_bc
       character(len=16) :: rad_earth_s, wind_s, wind_y_s
       character(len=40) :: vortex_balance
       character(len=8) :: sponge_w, sponge_e
@@ -904,7 +909,7 @@ contains
       case ("spherical", "closures", "gm_ebt_struct", "gm_fgnv", "meke_gm_work", &
             "hvisc_om3_floors", "vmix_no_interior", "tidal_files", "tidal_polzin", &
             "bbl_lotw", "hvisc_kh_points", "diabatic_end", "hvisc_thin_layer", &
-            "hvisc_biharm_stress", "eulz_epbl_mle")
+            "hvisc_biharm_stress", "eulz_epbl_mle", "body_tide_nodal")
          ! Lon-lat sector, spoon basin, Wright EOS.  "closures" adds the
          ! lateral and vertical parameterisation set on top (EPBL instead of
          ! KPP, Fox-Kemper MLE, GM + MEKE, Redi, kappa-shear, tidal mixing,
@@ -923,8 +928,25 @@ contains
                "&ocean_eos_nml eos = 'wright' /"//NL// &
                "&ocean_topo_nml topo_config = 'spoon', max_depth = 3000.0, "// &
                "edge_depth = 300.0, slope_scale = 300000.0, wind_config = '2gyre', "// &
-               "taux_magnitude = 0.1 /"//NL// &
-               "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
+               "taux_magnitude = 0.1 /"//NL
+         ! `body_tide_nodal`: the equilibrium body tide (four constituents, with the
+         ! nodal correction, per-cell `tides_build_struct` sin/cos on the lon-lat
+         ! tile) plus a tidal west edge on the same four constituents with
+         ! `obc_tidal_nodal` (host phase reduction + `safe_cos`).  Every other
+         ! label keeps four walls.
+         if (label == "body_tide_nodal") then
+            sph_bc = "&ocean_bc_nml west = 'tidal', east = 'wall', south = 'wall', "// &
+                     "north = 'wall', west_n_tidal = 4, "// &
+                     "west_tidal_amp = 0.4, 0.2, 0.1, 0.08, "// &
+                     "west_tidal_phase = 0.3, 1.1, 2.0, 4.0, "// &
+                     "west_tidal_omega = 1.4051890e-4, 1.4544410e-4, 0.7292117e-4, 0.6759774e-4, "// &
+                     "obc_tidal_nodal = .true. /"//NL// &
+                     "&ocean_tides_nml enable = .true., constituents = 'M2,S2,K1,O1', "// &
+                     "ref_date = '2020-03-15', add_nodal = .true. /"//NL
+         else
+            sph_bc = "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
+         end if
+         nml = nml//sph_bc
          if (label == "closures") then
             nml = nml// &
                   "&ocean_vmix_nml use_kpp = .false. /"//NL// &
