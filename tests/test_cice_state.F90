@@ -641,7 +641,7 @@ contains
       call check(error, ierr, 0, "init")
       if (allocated(error)) return
       call st%register_restart(reg)
-      call check(error, reg%n, 1 + 4 + 2*NILYR + 1, "entry count: version + 4 + qicen/sicen per layer + qsnon")
+ call check(error, reg%n, 1 + 4 + 2*NILYR + 1 + 3, "entry count: version + 4 + qicen/sicen per layer + qsnon + 3 structure scalars")
       call check(error, trim(reg%entries(1)%tag) == "ice_state_version" .and. reg%entries(1)%rank == 0, &
                  "version scalar first")
       call same(error, st%state_version, ICE_STATE_VERSION, "state_version = 2")
@@ -663,7 +663,8 @@ contains
          write (want, "(a,i0)") "ice_sicen_k", k
          call check(error, trim(reg%entries(5 + 2*k)%tag) == trim(want), trim(want))
       end do
-      call check(error, trim(reg%entries(reg%n)%tag) == "ice_qsnon_k1", "snow layer tag")
+      call check(error, trim(reg%entries(reg%n - 3)%tag) == "ice_qsnon_k1" .and. trim(reg%entries(reg%n)%tag) == "ice_nslyr", &
+                 "snow layer tag, then the structure scalars")
       call st%destroy()
    end subroutine test_restart_registration
 

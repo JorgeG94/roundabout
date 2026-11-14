@@ -65,9 +65,12 @@ module rdb_ice_cice_state
    !! Every entry is `optional`, so a SIS2 file (no `ice_state_version`) read
    !! under `scheme = "cice"` would silently cold-start: the PR that makes the
    !! scheme runnable MUST refuse or convert when `ice_state_version` is not
-   !! found (`reg%entry_found`).  This slot adds 1 + 4 + 2*nilyr + nslyr entries
-   !! (20 at nilyr = 7, 22 at the maximum nilyr = 8, version scalar
-   !! included) against `MAX_RESTART_ENTRIES = 256` in `rdb_ocean_restart`.
+   !! found (`reg%entry_found`): `rdb_ice_cice_restart` (`ice_cice_restart_resume`)
+   !! makes that decision (v2 read / SIS2 convert / cold start / refuse), not yet
+   !! called by the engine.  The structure scalars `ice_ncat`, `ice_nilyr`,
+   !! `ice_nslyr` are written with the v2 tags and compared on read.  This slot
+   !! adds 1 + 4 + 2*nilyr + nslyr + 3 entries (23 at nilyr = 7, 25 at the
+   !! maximum nilyr = 8, scalars included) against `MAX_RESTART_ENTRIES = 256` in `rdb_ocean_restart`.
    use, intrinsic :: iso_fortran_env, only: int32, int64
    use rdb_constants, only: wp
    use rdb_grid, only: hgrid_t
@@ -128,6 +131,12 @@ module rdb_ice_cice_state
          !! Parameter bundle the kernels read; mapped once by `enter_data`.
       real(wp) :: state_version = ICE_STATE_VERSION
          !! Host scalar written to the restart file as `ice_state_version`.
+      real(wp) :: ncat_tag = 0.0_wp
+         !! Host scalar `ice_ncat` (set by `init`), compared on read.
+      real(wp) :: nilyr_tag = 0.0_wp
+         !! Host scalar `ice_nilyr` (set by `init`), compared on read.
+      real(wp) :: nslyr_tag = 0.0_wp
+         !! Host scalar `ice_nslyr` (set by `init`), compared on read.
 
       real(wp), allocatable :: aicen(:, :, :)
          !! Category area fraction (nx,ny,ncat); no category 0.  Restart.
@@ -236,6 +245,10 @@ contains
       allocate (this%hin_max(0:nc), source=0.0_wp)
       this%hin_max(0:nc) = hb(0:nc)
       allocate (this%ice_err(nx, ny), source=0_int32)
+      this%ncat_tag = real(nc, wp)
+      this%nilyr_tag = real(nl, wp)
+      this%nslyr_tag = real(ns, wp)
+      this%state_version = ICE_STATE_VERSION
       this%is_init = .true.
       this%mapped = .false.
    end subroutine cice_state_init
@@ -441,6 +454,9 @@ contains
          call reg%register_3d("ice_qsnon_k"//to_string(k), this%qsnon(:, :, :, k), 0, &
                               this%nx, this%ny, optional=.true.)
       end do
+      call reg%register_scalar("ice_ncat", this%ncat_tag, optional=.true.)
+      call reg%register_scalar("ice_nilyr", this%nilyr_tag, optional=.true.)
+      call reg%register_scalar("ice_nslyr", this%nslyr_tag, optional=.true.)
    end subroutine cice_state_register_restart
 
 end module rdb_ice_cice_state

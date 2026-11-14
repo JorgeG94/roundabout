@@ -57,8 +57,8 @@ module rdb_ice_seed
 
 contains
 
-   subroutine ice_seed_uniform_impl(nx, ny, ncat, nilyr, nslyr, p, hin_max, aice_in, hi, hs, Tsfc, Tf, &
-                                    aicen, vicen, vsnon, Tsfcn, qicen, sicen, qsnon, ierr)
+   pure subroutine ice_seed_uniform_impl(nx, ny, ncat, nilyr, nslyr, p, hin_max, aice_in, hi, hs, Tsfc, Tf, &
+                                         aicen, vicen, vsnon, Tsfcn, qicen, sicen, qsnon, ierr)
       !! Fill the state arrays with the uniform slab described in the module
       !! header.  `ierr` is `ICE_SEED_*`; on a non-zero value nothing is written.
       integer, intent(in) :: nx, ny, ncat, nilyr, nslyr

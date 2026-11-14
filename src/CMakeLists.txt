@@ -150,9 +150,8 @@ set(CORE_SOURCES
     # scanning orders the actual compilation, not this list.
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/state/rdb_ocean_halo_width.F90
     # Sea-ice PR 2: pure device-callable enthalpy library (T<->E inversions);
-    # leaf module. Precedes rdb_ice_optics/_mass/_column (PR 3a), which all
-    # depend on it.
-    ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/thermo/rdb_ice_enthalpy.F90
+    # leaf module, now built in rdb_ice_core_objs (cmake/ice_core_sources.cmake)
+    # because the SIS2 -> Icepack restart converter (D1.5) needs it there.
     # Sea-ice PR 3a: shortwave optics (CSIM4 branch) + column mass bookkeeping
     # (bottom-freeze, melt peel, rebalance) — both leaf modules `rdb_ice_column`
     # depends on.
@@ -170,6 +169,8 @@ set(CORE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/state/rdb_ice_cice_state.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/state/rdb_ice_flux_state.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/coupling/rdb_ice_ledger.F90
+    # SIS2 -> CICE start-up read path (D1.5): v2 read / convert / cold start.
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/state/rdb_ice_cice_restart.F90
     # (rdb_ice_state, the SIS2 slot, continues the comment above.)
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/state/rdb_ice_state.F90
     # Sea-ice PR 24: analytic initial-condition path (uniform/latitudes
