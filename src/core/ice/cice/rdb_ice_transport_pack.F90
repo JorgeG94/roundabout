@@ -72,7 +72,12 @@ module rdb_ice_transport_pack
    !! MUST run that cleanup before the pack; under `transport_check` it is
    !! verified by `rdb_ice_transport_checks::transport_check_slivers` (run on
    !! the state before the pack: a conservation sum taken after the pack cannot
-   !! see the loss).  Only `nslyr = 1` is supported (one snow-enthalpy tracer).
+   !! see the loss).  A scheme that carries the volumes as extensive fields
+   !! lifts the precondition by passing `thick_floor` to `transport_pack` (see
+   !! there): the thicknesses and volume tracers of a category are then packed
+   !! down to that area, and only the area tracers (the surface temperature)
+   !! still need `aim > puny`.  Only `nslyr = 1` is supported (one snow-enthalpy
+   !! tracer).
    !!
    !! **Unpack** (same shape): where `aim > 0`: `aicen = aim`,
    !! `vicen = aim*hi`, `vsnon = aim*hs`, `trcrn = trm` (snow enthalpy shifted
@@ -394,11 +399,20 @@ contains
    ! ------------------------------------------------------------------
 
    subroutine transport_pack(ws, c, nilyr, nslyr, is, ie, js, je, aice0, aicen, vicen, vsnon, &
-                             Tsfcn, qicen, sicen, qsnon, ierr)
+                             Tsfcn, qicen, sicen, qsnon, ierr, thick_floor)
       !! Pack the state into `ws%aim`, `ws%trm` over `is:ie, js:je` (one
       !! launch).  `c` supplies `puny`, `rhos`, `Lfresh`.  `ierr` is
       !! `ICE_ERR_NONFINITE` when any read value was non-finite.  All arrays
       !! must be device-present on an offload build.
+      !!
+      !! `thick_floor` (optional, default `puny`; must not exceed `puny`) is the
+      !! area above which the THICKNESS fields `hi`, `hs` and the tracers that
+      !! are densities of a volume (`depend /= 0`) are packed; the area
+      !! tracers (`depend = 0`: the surface temperature) always need
+      !! `aim > puny`.  Absent, the packing is the reference one, bit for bit.
+      !! A scheme that carries the volumes as extensive fields (the upwind
+      !! advection) passes a tiny floor so the volume of a category of
+      !! negligible area survives the pack.
       type(transport_workspace_t), intent(inout) :: ws
       type(ice_constants_t), intent(in) :: c
       integer, intent(in) :: nilyr, nslyr, is, ie, js, je
@@ -407,13 +421,16 @@ contains
       real(wp), intent(in) :: qicen(ws%nx, ws%ny, ws%ncat, nilyr), sicen(ws%nx, ws%ny, ws%ncat, nilyr)
       real(wp), intent(in) :: qsnon(ws%nx, ws%ny, ws%ncat, nslyr)
       integer(int32), intent(out) :: ierr
+      real(wp), intent(in), optional :: thick_floor
       integer :: nbad
-      real(wp) :: puny, qshift
+      real(wp) :: puny, qshift, athr
 
       puny = c%puny
+      athr = puny
+      if (present(thick_floor)) athr = min(thick_floor, puny)
       qshift = c%rhos*c%Lfresh
       call transport_pack_impl(ws%nx, ws%ny, ws%ncat, nilyr, nslyr, ws%tab%ntrcr, ws%tab%nt_qsno, &
-                               is, ie, js, je, puny, qshift, aice0, aicen, vicen, vsnon, &
+                               is, ie, js, je, puny, athr, qshift, aice0, aicen, vicen, vsnon, &
                                Tsfcn, qicen, sicen, qsnon, ws%aim, ws%trm, nbad)
       ierr = ICE_ERR_NONE
       if (nbad > 0) ierr = ICE_ERR_NONFINITE
@@ -443,7 +460,7 @@ contains
    end subroutine transport_unpack
 
    pure subroutine transport_pack_impl(nx, ny, ncat, nilyr, nslyr, ntrcr, nt_qsno, is, ie, js, je, &
-                                       puny, qshift, aice0, aicen, vicen, vsnon, Tsfcn, qicen, sicen, &
+                                       puny, athr, qshift, aice0, aicen, vicen, vsnon, Tsfcn, qicen, sicen, &
                                        qsnon, aim, trm, nbad)
       !! Flat kernel behind `transport_pack`: ONE `do concurrent` over
       !! `(n = 0:ncat, j, i)`; `n = 0` copies the open-water area.  The
@@ -451,8 +468,11 @@ contains
       !! so no divergence); the state tracers are read through the shared
       !! accessor `ice_trcr_get`, so the packed order has one source of truth.
       !! `qshift = rhos*Lfresh`.  `nbad` counts non-finite values read.
+      !! `athr <= puny` is the area above which thicknesses and volume
+      !! tracers are packed (`athr = puny`: the reference packing); area
+      !! tracers need `a > puny`.
       integer, intent(in) :: nx, ny, ncat, nilyr, nslyr, ntrcr, nt_qsno, is, ie, js, je
-      real(wp), intent(in) :: puny, qshift
+      real(wp), intent(in) :: puny, athr, qshift
       real(wp), intent(in) :: aice0(nx, ny), aicen(nx, ny, ncat), vicen(nx, ny, ncat), vsnon(nx, ny, ncat)
       real(wp), intent(in) :: Tsfcn(nx, ny, ncat), qicen(nx, ny, ncat, nilyr), sicen(nx, ny, ncat, nilyr)
       real(wp), intent(in) :: qsnon(nx, ny, ncat, nslyr)
@@ -473,7 +493,7 @@ contains
             if (.not. ieee_is_finite(a)) nbad = nbad + 1
             if (.not. ieee_is_finite(vicen(i, j, n))) nbad = nbad + 1
             if (.not. ieee_is_finite(vsnon(i, j, n))) nbad = nbad + 1
-            if (a > puny) then
+            if (a > athr) then
                w1 = 1.0_wp/a
                trm(i, j, 1, n) = vicen(i, j, n)*w1
                trm(i, j, 2, n) = vsnon(i, j, n)*w1
@@ -482,6 +502,7 @@ contains
                   tv = ice_trcr_get(it, i, j, n, nx, ny, ncat, nilyr, nslyr, Tsfcn, qicen, sicen, qsnon)
                   if (.not. ieee_is_finite(tv)) nbad = nbad + 1
                   if (it >= nt_qsno .and. it < nt_qsno + nslyr) tv = tv + qshift
+                  if (a <= puny .and. ice_trcr_depend(it, nilyr, nslyr) == 0) tv = 0.0_wp
                   trm(i, j, 2 + it, n) = tv
                end do
             else
