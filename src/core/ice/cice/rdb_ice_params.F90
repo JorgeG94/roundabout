@@ -72,6 +72,8 @@ module rdb_ice_params
    public :: ICE_ADVECT_UPWIND, ICE_ADVECT_REMAP
    public :: ice_ridge_params_t, ice_ridge_params_default, ice_ridge_params_valid
    public :: ice_atm_params_t, ice_atm_params_finalize
+   public :: ice_dyn_params_t, ice_dyn_params_default, ice_dyn_params_check
+   public :: ICE_VISC_AVG_ZETA, ICE_VISC_AVG_STRENGTH, ICE_DYN_NMSG
    public :: ice_constants, ice_params_default
    public :: ice_nt_Tsfc, ice_nt_qice, ice_nt_qsno, ice_nt_sice, ice_ntrcr
    public :: ice_trcr_get, ice_trcr_set, ice_trcr_set_mean, ICE_QNAN
@@ -205,6 +207,41 @@ module rdb_ice_params
       real(wp) :: rdn                 !! neutral drag sqrt(Cd) = kappa/ln(zref/iceruf); set by `ice_atm_params_finalize`
    end type ice_atm_params_t
 
+   integer, parameter :: ICE_VISC_AVG_ZETA = 1
+      !! `visc_method = "avg_zeta"`: the corner shear viscosity is the area-weighted average of the T viscosities.
+   integer, parameter :: ICE_VISC_AVG_STRENGTH = 2
+      !! `visc_method = "avg_strength"`: the corner viscosity is rebuilt from the averaged strength and the corner Delta.
+   integer, parameter :: ICE_DYN_NMSG = 16
+      !! Capacity of the `ice_dyn_params_check` code list.
+
+   type :: ice_dyn_params_t
+      !! C-grid EVP dynamics knobs (Hunke and Dukowicz 1997; Hunke 2001;
+      !! Bouillon et al. 2013; Konig Beatty and Holland 2010; Lemieux et al.
+      !! 2024).  Scalars only, no default initialisers.  Upstream code
+      !! defaults.  The ice-ocean turning angle (`cosw`, `sinw`) is not a
+      !! namelist knob (upstream fixes it at zero); it is carried here so
+      !! the drag law is exercised with a rotation by the tests.
+      integer :: ndte                 !! elastic subcycles per dynamics step
+      real(wp) :: elasticDamp         !! damping parameter E of the classic EVP (arlx = 2 E ndte)
+      logical :: revised_evp          !! Bouillon et al. (2013) revised EVP
+      real(wp) :: arlx                !! revised EVP stress relaxation (alpha)
+      real(wp) :: brlx                !! revised EVP momentum relaxation (beta)
+      real(wp) :: e_yieldcurve        !! aspect ratio of the elliptical yield curve
+      real(wp) :: e_plasticpot        !! aspect ratio of the plastic potential
+      real(wp) :: Ktens               !! tensile strength fraction (Konig Beatty and Holland 2010)
+      real(wp) :: deltaminEVP         !! minimum Delta of the viscosities [1/s]
+      logical :: capping_max          !! .true.: Hibler (1979) cap max(Delta, Dmin); .false.: Kreyscher et al. (2000) sum
+      real(wp) :: dyn_area_min        !! minimum concentration to activate the dynamics
+      real(wp) :: dyn_mass_min        !! minimum mass to activate the dynamics [kg/m2]
+      real(wp) :: rheo_area_min       !! concentration below which the internal stress is dropped (free drift)
+      logical :: free_drift_approx    !! drop the internal stress where the concentration is below `rheo_area_min`
+      integer :: visc_method          !! ICE_VISC_*
+      real(wp) :: cdn_ocn             !! ice-ocean neutral drag coefficient
+      real(wp) :: vel_cap             !! face-speed ceiling [m/s]; exceeding it raises ICE_ERR_DYN_VEL (never clamps)
+      real(wp) :: cosw                !! cos of the ice-ocean turning angle
+      real(wp) :: sinw                !! sin of the ice-ocean turning angle
+   end type ice_dyn_params_t
+
    integer, parameter :: ICE_ADVECT_UPWIND = 1
       !! `&ocean_ice_dyn_nml advection = "upwind"` (first-order upwind, Dukowicz and Baumgardner 2000 context).
    integer, parameter :: ICE_ADVECT_REMAP = 2
@@ -230,6 +267,7 @@ module rdb_ice_params
       type(ice_sw_params_t) :: sw
       type(ice_ridge_params_t) :: ridge
       type(ice_atm_params_t) :: atm
+      type(ice_dyn_params_t) :: dyn
       type(ice_transport_params_t) :: transport
    end type ice_params_t
 
@@ -361,8 +399,80 @@ contains
       p%atm%atmiter_conv = 0.0_wp
       p%atm%iceruf = 5.0e-4_wp
       call ice_atm_params_finalize(p%c, p%atm)
+      p%dyn = ice_dyn_params_default()
       p%transport = ice_transport_params_default()
    end function ice_params_default
+
+   pure function ice_dyn_params_default() result(dp)
+      !! Dynamics knobs at the upstream code defaults (`ndte = 120`,
+      !! `elasticDamp = 0.36`, classic EVP, `arlx = brlx = 300` for the
+      !! revised one, `e_yieldcurve = e_plasticpot = 2`, `Ktens = 0`,
+      !! `deltaminEVP = 1e-11`, Hibler capping, `dyn_area_min = 1e-11`,
+      !! `dyn_mass_min = 1e-10`, `rheo_area_min = 1e-3`, free drift on,
+      !! `visc_method = "avg_zeta"`, `cdn_ocn = 0.00536`) plus a 10 m/s
+      !! velocity ceiling (roundabout's guard, not an upstream knob).
+      type(ice_dyn_params_t) :: dp
+
+      dp%ndte = 120
+      dp%elasticDamp = 0.36_wp
+      dp%revised_evp = .false.
+      dp%arlx = 300.0_wp
+      dp%brlx = 300.0_wp
+      dp%e_yieldcurve = 2.0_wp
+      dp%e_plasticpot = 2.0_wp
+      dp%Ktens = 0.0_wp
+      dp%deltaminEVP = 1.0e-11_wp
+      dp%capping_max = .true.
+      dp%dyn_area_min = 1.0e-11_wp
+      dp%dyn_mass_min = 1.0e-10_wp
+      dp%rheo_area_min = 1.0e-3_wp
+      dp%free_drift_approx = .true.
+      dp%visc_method = ICE_VISC_AVG_ZETA
+      dp%cdn_ocn = 0.00536_wp
+      dp%vel_cap = 10.0_wp
+      dp%cosw = 1.0_wp
+      dp%sinw = 0.0_wp
+   end function ice_dyn_params_default
+
+   pure subroutine ice_dyn_params_check(dp, codes, n)
+      !! Every refusal of `dp`, as codes `codes(1:n)` (the caller words them):
+      !! 1 `ndte < 1`, 2 `elasticDamp <= 0` (classic), 3 `arlx <= 0`
+      !! (revised), 4 `brlx <= 0` (revised), 5 `e_yieldcurve <= 0`, 6
+      !! `e_plasticpot <= 0`, 7 `Ktens` outside `[0, 1)`, 8 `deltaminEVP <= 0`,
+      !! 9 `dyn_area_min < 0`, 10 `dyn_mass_min < 0`, 11 `rheo_area_min < 0`,
+      !! 12 `visc_method` unknown, 13 `cdn_ocn < 0`, 14 `vel_cap <= 0`.
+      !! A NaN fails every comparison, so it is refused too.
+      type(ice_dyn_params_t), intent(in) :: dp
+      integer, intent(out) :: codes(ICE_DYN_NMSG)
+      integer, intent(out) :: n
+
+      logical :: bad(ICE_DYN_NMSG)
+      integer :: k
+
+      bad = .false.
+      bad(1) = .not. (dp%ndte >= 1)
+      bad(2) = .not. dp%revised_evp .and. .not. (dp%elasticDamp > 0.0_wp)
+      bad(3) = dp%revised_evp .and. .not. (dp%arlx > 0.0_wp)
+      bad(4) = dp%revised_evp .and. .not. (dp%brlx > 0.0_wp)
+      bad(5) = .not. (dp%e_yieldcurve > 0.0_wp)
+      bad(6) = .not. (dp%e_plasticpot > 0.0_wp)
+      bad(7) = .not. (dp%Ktens >= 0.0_wp .and. dp%Ktens < 1.0_wp)
+      bad(8) = .not. (dp%deltaminEVP > 0.0_wp)
+      bad(9) = .not. (dp%dyn_area_min >= 0.0_wp)
+      bad(10) = .not. (dp%dyn_mass_min >= 0.0_wp)
+      bad(11) = .not. (dp%rheo_area_min >= 0.0_wp)
+      bad(12) = dp%visc_method /= ICE_VISC_AVG_ZETA .and. dp%visc_method /= ICE_VISC_AVG_STRENGTH
+      bad(13) = .not. (dp%cdn_ocn >= 0.0_wp)
+      bad(14) = .not. (dp%vel_cap > 0.0_wp)
+      codes = 0
+      n = 0
+      do k = 1, ICE_DYN_NMSG
+         if (bad(k)) then
+            n = n + 1
+            codes(n) = k
+         end if
+      end do
+   end subroutine ice_dyn_params_check
 
    pure function ice_transport_params_default() result(tp)
       !! Transport knobs at the upstream code defaults: `advection = 'remap'`

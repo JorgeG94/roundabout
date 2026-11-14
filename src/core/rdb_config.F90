@@ -58,8 +58,7 @@ module rdb_config
              ocean_coriolis_config_t, ocean_thermo_config_t, &
              ocean_ice_config_t, ocean_ice_ic_config_t, &
              ocean_ice_thermo_config_t, ocean_ice_sw_config_t, &
-             ocean_ice_ridge_config_t, ocean_ice_atm_config_t, &
-             ocean_ice_dyn_config_t, &
+             ocean_ice_ridge_config_t, ocean_ice_atm_config_t, ocean_ice_dyn_config_t, &
              ocean_restore_config_t, &
              ocean_geothermal_config_t, &
              ocean_sponge_config_t, &
@@ -675,10 +674,45 @@ module rdb_config
    end type ocean_ice_atm_config_t
 
    type :: ocean_ice_dyn_config_t
-      !! `&ocean_ice_dyn_nml`: CICE-port ice dynamics / transport knobs.  This
-      !! group is owned by the dynamics PRs; the transport PR adds `advection`
-      !! and `transport_check` (appended; the dynamics keys are theirs).
-      !! `scheme="cice"` only.
+      !! `&ocean_ice_dyn_nml`: CICE-port ice dynamics and transport knobs (one group, two
+      !! owners).  EVP keys: Hunke and Dukowicz 1997; Hunke 2001; Bouillon et al. 2013; Konig
+      !! Beatty and Holland 2010; Lemieux et al. 2024 (upstream CICE code defaults for the
+      !! C-grid dynamics; OM3 itself runs the B-grid dynamics).  Transport keys: `advection`,
+      !! `transport_check`.  `scheme="cice"` only.
+      integer :: ndte = 120
+         !! Elastic subcycles per dynamics step; >= 1.
+      real(wp) :: elasticdamp = 0.36_wp
+         !! Damping parameter E of the classic EVP (`arlx = 2 E ndte`); > 0.
+      logical :: revised_evp = .false.
+         !! Revised EVP (Bouillon et al. 2013): `arlx`/`brlx` apply.
+      real(wp) :: arlx = 300.0_wp
+         !! Revised EVP stress relaxation parameter alpha; > 0 when `revised_evp`.
+      real(wp) :: brlx = 300.0_wp
+         !! Revised EVP momentum relaxation parameter beta; > 0 when `revised_evp`.
+      real(wp) :: e_yieldcurve = 2.0_wp
+         !! Aspect ratio of the elliptical yield curve; > 0.
+      real(wp) :: e_plasticpot = 2.0_wp
+         !! Aspect ratio of the elliptical plastic potential; > 0.
+      real(wp) :: ktens = 0.0_wp
+         !! Tensile strength fraction (T = Ktens P); in [0, 1).
+      real(wp) :: deltaminevp = 1.0e-11_wp
+         !! Minimum Delta of the viscosities [1/s]; > 0.
+      character(len=8) :: capping_method = "max"
+         !! `"max"` (Hibler 1979) or `"sum"` (Kreyscher et al. 2000).
+      real(wp) :: dyn_area_min = 1.0e-11_wp
+         !! Minimum concentration for the dynamics; >= 0.
+      real(wp) :: dyn_mass_min = 1.0e-10_wp
+         !! Minimum mass for the dynamics [kg/m2]; >= 0.
+      real(wp) :: rheo_area_min = 1.0e-3_wp
+         !! Concentration below which the internal stress is dropped; >= 0.
+      logical :: free_drift_approx = .true.
+         !! Drop the internal stress below `rheo_area_min`.
+      character(len=16) :: visc_method = "avg_zeta"
+         !! Corner viscosity: `"avg_zeta"` or `"avg_strength"`.
+      real(wp) :: cdn_ocn = 0.00536_wp
+         !! Ice-ocean drag coefficient (upstream `dragio`); >= 0.
+      real(wp) :: vel_cap = 10.0_wp
+         !! Face speed above which `ICE_ERR_DYN_VEL` is raised [m/s]; > 0.
       character(len=8) :: advection = "remap"
          !! Horizontal transport of the ice state: `"remap"` (incremental
          !! remapping, Lipscomb and Hunke 2004; upstream default, REFUSED until

@@ -13,7 +13,7 @@ module test_cice_config
    use rdb_ice_dims, only: ICE_NCAT_MAX, ICE_NILYR_MAX
    use rdb_ice_params, only: ICE_ADVECT_UPWIND, ICE_ADVECT_REMAP, ice_params_t, ICE_CONSTANTS_ICEPACK, ICE_CONSTANTS_CESM, &
                              ICE_TFRZ_LINEAR_SALT, ICE_TFRZ_CONSTANT, ICE_TFRZ_MINUS1P8, &
-                             ICE_CONDUCT_BUBBLY, ICE_CONDUCT_MU71
+                             ICE_CONDUCT_BUBBLY, ICE_CONDUCT_MU71, ICE_VISC_AVG_ZETA, ICE_VISC_AVG_STRENGTH
    use rdb_ice_shortwave, only: ice_albedo_fhtan, ice_albedos_ccsm3, ice_absorbed_ccsm3, &
                                 ICE_ALBICEV_DEFAULT, ICE_ALBICEI_DEFAULT, ICE_ALBSNOWV_DEFAULT, &
                                 ICE_ALBSNOWI_DEFAULT, ICE_AHMAX_DEFAULT, ICE_SNOWPATCH_DEFAULT
@@ -58,7 +58,11 @@ contains
                   new_unittest("sw_kernel_default_params_bitwise", test_sw_kernel_defaults), &
                   new_unittest("transport_defaults_are_upstream", test_transport_defaults), &
                   new_unittest("transport_refusals", test_transport_refusals), &
-                  new_unittest("transport_round_trip", test_transport_round_trip) &
+                  new_unittest("transport_round_trip", test_transport_round_trip), &
+                  new_unittest("dyn_defaults_are_upstream", test_dyn_defaults), &
+                  new_unittest("dyn_refusals", test_dyn_refusals), &
+                  new_unittest("dyn_all_reasons_reported", test_dyn_all_reasons), &
+                  new_unittest("dyn_round_trip", test_dyn_round_trip) &
                   ]
    end subroutine collect_cice_config_tests
 
@@ -891,5 +895,164 @@ contains
       if (allocated(error)) return
       call check(error, p%transport%check, .true., "transport_check round trip")
    end subroutine test_transport_round_trip
+
+   subroutine test_dyn_defaults(error)
+      !! `&ocean_ice_dyn_nml` defaults are the upstream CICE code defaults
+      !! (written out from its parameter table).
+      type(error_type), allocatable, intent(out) :: error
+      type(config_t) :: cfg
+      type(ice_params_t) :: p
+      real(wp), parameter :: tol = 1.0e-15_wp
+
+      cfg = config_t()
+      p = ice_params_from_config(cfg)
+      call check(error, p%dyn%ndte, 120)
+      if (allocated(error)) return
+      call check(error, abs(p%dyn%elasticDamp - 0.36_wp) < tol, "elasticDamp 0.36")
+      if (allocated(error)) return
+      call check(error, p%dyn%revised_evp, .false.)
+      if (allocated(error)) return
+      call check(error, abs(p%dyn%arlx - 300.0_wp) < tol .and. abs(p%dyn%brlx - 300.0_wp) < tol, "arlx = brlx = 300")
+      if (allocated(error)) return
+      call check(error, abs(p%dyn%e_yieldcurve - 2.0_wp) < tol .and. abs(p%dyn%e_plasticpot - 2.0_wp) < tol, "e = 2")
+      if (allocated(error)) return
+      call check(error, abs(p%dyn%Ktens) < tol, "Ktens 0")
+      if (allocated(error)) return
+      call check(error, abs(p%dyn%deltaminEVP - 1.0e-11_wp) < 1.0e-26_wp, "deltaminEVP 1e-11")
+      if (allocated(error)) return
+      call check(error, p%dyn%capping_max, .true., "capping max")
+      if (allocated(error)) return
+      call check(error, abs(p%dyn%dyn_area_min - 1.0e-11_wp) < 1.0e-26_wp, "dyn_area_min 1e-11")
+      if (allocated(error)) return
+      call check(error, abs(p%dyn%dyn_mass_min - 1.0e-10_wp) < 1.0e-25_wp, "dyn_mass_min 1e-10")
+      if (allocated(error)) return
+      call check(error, abs(p%dyn%rheo_area_min - 1.0e-3_wp) < 1.0e-18_wp, "rheo_area_min 1e-3")
+      if (allocated(error)) return
+      call check(error, p%dyn%free_drift_approx, .true., "free_drift_approx")
+      if (allocated(error)) return
+      call check(error, p%dyn%visc_method, ICE_VISC_AVG_ZETA)
+      if (allocated(error)) return
+      call check(error, abs(p%dyn%cdn_ocn - 0.00536_wp) < tol, "cdn_ocn 0.00536")
+      if (allocated(error)) return
+      call check(error, abs(p%dyn%vel_cap - 10.0_wp) < tol, "vel_cap 10")
+      if (allocated(error)) return
+      call check(error, abs(p%dyn%cosw - 1.0_wp) < tol .and. abs(p%dyn%sinw) < tol, "no turning angle")
+   end subroutine test_dyn_defaults
+
+   subroutine test_dyn_refusals(error)
+      !! Every illegal value is accepted by the parser and refused by the check
+      !! with a message naming the knob.
+      type(error_type), allocatable, intent(out) :: error
+      type(config_t) :: cfg
+
+      call expect_refusal("&ocean_ice_dyn_nml ndte=0 /", "ndte must be >= 1", error)
+      if (allocated(error)) return
+      call expect_refusal("&ocean_ice_dyn_nml ndte=-5 /", "ndte must be >= 1", error)
+      if (allocated(error)) return
+      call expect_refusal("&ocean_ice_dyn_nml elasticDamp=0.0 /", "elasticDamp must be > 0", error)
+      if (allocated(error)) return
+      call expect_refusal("&ocean_ice_dyn_nml revised_evp=.true., arlx=0.0 /", "arlx must be > 0", error)
+      if (allocated(error)) return
+      call expect_refusal("&ocean_ice_dyn_nml revised_evp=.true., brlx=-1.0 /", "brlx must be > 0", error)
+      if (allocated(error)) return
+      call expect_refusal("&ocean_ice_dyn_nml e_yieldcurve=0.0 /", "e_yieldcurve must be > 0", error)
+      if (allocated(error)) return
+      call expect_refusal("&ocean_ice_dyn_nml e_plasticpot=-2.0 /", "e_plasticpot must be > 0", error)
+      if (allocated(error)) return
+      call expect_refusal("&ocean_ice_dyn_nml Ktens=1.0 /", "Ktens must be in [0, 1)", error)
+      if (allocated(error)) return
+      call expect_refusal("&ocean_ice_dyn_nml Ktens=-0.1 /", "Ktens must be in [0, 1)", error)
+      if (allocated(error)) return
+      call expect_refusal("&ocean_ice_dyn_nml deltaminEVP=0.0 /", "deltaminEVP must be > 0", error)
+      if (allocated(error)) return
+      call expect_refusal("&ocean_ice_dyn_nml capping_method='min' /", "capping_method must be", error)
+      if (allocated(error)) return
+      call expect_refusal("&ocean_ice_dyn_nml dyn_area_min=-1.0e-3 /", "dyn_area_min must be >= 0", error)
+      if (allocated(error)) return
+      call expect_refusal("&ocean_ice_dyn_nml dyn_mass_min=-1.0 /", "dyn_mass_min must be >= 0", error)
+      if (allocated(error)) return
+      call expect_refusal("&ocean_ice_dyn_nml rheo_area_min=-1.0 /", "rheo_area_min must be >= 0", error)
+      if (allocated(error)) return
+      call expect_refusal("&ocean_ice_dyn_nml visc_method='avg_viscosity' /", "visc_method must be", error)
+      if (allocated(error)) return
+      call expect_refusal("&ocean_ice_dyn_nml cdn_ocn=-0.1 /", "cdn_ocn must be >= 0", error)
+      if (allocated(error)) return
+      call expect_refusal("&ocean_ice_dyn_nml vel_cap=0.0 /", "vel_cap must be > 0", error)
+      if (allocated(error)) return
+      ! legal alternatives are accepted
+      call parse("&ocean_ice_dyn_nml revised_evp=.true., capping_method='sum', visc_method='avg_strength', "// &
+                 "Ktens=0.2, ndte=240 /", cfg, error)
+      if (allocated(error)) return
+      call check(error, count_msgs(cfg), 0, "legal alternatives accepted")
+      if (allocated(error)) return
+      ! revised-only relaxation parameters are not checked under the classic EVP
+      call parse("&ocean_ice_dyn_nml arlx=-3.0, brlx=0.0 /", cfg, error)
+      if (allocated(error)) return
+      call check(error, count_msgs(cfg), 0, "arlx/brlx unused (classic EVP) are not refused")
+   end subroutine test_dyn_refusals
+
+   subroutine test_dyn_all_reasons(error)
+      !! Every dynamics refusal is reported together (and with the other groups').
+      type(error_type), allocatable, intent(out) :: error
+      type(config_t) :: cfg
+
+      call parse("&ocean_ice_dyn_nml ndte=0, elasticDamp=-1.0, e_yieldcurve=0.0, e_plasticpot=0.0, Ktens=2.0, "// &
+                 "deltaminEVP=0.0, capping_method='x', dyn_area_min=-1.0, dyn_mass_min=-1.0, "// &
+                 "rheo_area_min=-1.0, visc_method='x', cdn_ocn=-1.0, vel_cap=-1.0 /"//new_line('a')// &
+                 "&ocean_ice_ridge_nml Cf=0.0 /", cfg, error)
+      if (allocated(error)) return
+      call check(error, count_msgs(cfg), 14, "13 dynamics reasons + 1 ridge reason")
+      if (allocated(error)) return
+      call check(error, has_msg(cfg, "ndte must be >= 1") .and. has_msg(cfg, "elasticDamp must be > 0") .and. &
+                 has_msg(cfg, "Ktens must be in") .and. has_msg(cfg, "capping_method must be") .and. &
+                 has_msg(cfg, "visc_method must be") .and. has_msg(cfg, "vel_cap must be > 0") .and. &
+                 has_msg(cfg, "Cf must be > 0"), "reasons present")
+      if (allocated(error)) return
+      call parse("&ocean_ice_dyn_nml revised_evp=.true., arlx=0.0, brlx=0.0 /", cfg, error)
+      if (allocated(error)) return
+      call check(error, count_msgs(cfg), 2, "revised EVP: arlx and brlx both reported")
+   end subroutine test_dyn_all_reasons
+
+   subroutine test_dyn_round_trip(error)
+      !! Each knob reaches `ice_params_t%dyn`.
+      type(error_type), allocatable, intent(out) :: error
+      type(config_t) :: cfg
+      type(ice_params_t) :: p
+      real(wp), parameter :: tol = 1.0e-15_wp
+
+      call parse("&ocean_ice_dyn_nml ndte=240, elasticDamp=0.5, revised_evp=.true., arlx=150.0, brlx=250.0, "// &
+                 "e_yieldcurve=1.5, e_plasticpot=2.5, Ktens=0.2, deltaminEVP=2.0e-9, capping_method='sum', "// &
+                 "dyn_area_min=1.0e-6, dyn_mass_min=1.0e-4, rheo_area_min=5.0e-3, free_drift_approx=.false., "// &
+                 "visc_method='avg_strength', cdn_ocn=0.0045, vel_cap=3.0 /", cfg, error)
+      if (allocated(error)) return
+      p = ice_params_from_config(cfg)
+      call check(error, p%dyn%ndte, 240)
+      if (allocated(error)) return
+      call check(error, abs(p%dyn%elasticDamp - 0.5_wp) < tol, "elasticDamp")
+      if (allocated(error)) return
+      call check(error, p%dyn%revised_evp, .true., "revised_evp")
+      if (allocated(error)) return
+      call check(error, abs(p%dyn%arlx - 150.0_wp) < tol .and. abs(p%dyn%brlx - 250.0_wp) < tol, "arlx brlx")
+      if (allocated(error)) return
+      call check(error, abs(p%dyn%e_yieldcurve - 1.5_wp) < tol .and. abs(p%dyn%e_plasticpot - 2.5_wp) < tol, "e")
+      if (allocated(error)) return
+      call check(error, abs(p%dyn%Ktens - 0.2_wp) < tol, "Ktens")
+      if (allocated(error)) return
+      call check(error, abs(p%dyn%deltaminEVP - 2.0e-9_wp) < 1.0e-24_wp, "deltaminEVP")
+      if (allocated(error)) return
+      call check(error, p%dyn%capping_max, .false., "capping sum")
+      if (allocated(error)) return
+      call check(error, abs(p%dyn%dyn_area_min - 1.0e-6_wp) < 1.0e-21_wp, "dyn_area_min")
+      if (allocated(error)) return
+      call check(error, abs(p%dyn%dyn_mass_min - 1.0e-4_wp) < 1.0e-19_wp, "dyn_mass_min")
+      if (allocated(error)) return
+      call check(error, abs(p%dyn%rheo_area_min - 5.0e-3_wp) < 1.0e-18_wp, "rheo_area_min")
+      if (allocated(error)) return
+      call check(error, p%dyn%free_drift_approx, .false., "free_drift_approx")
+      if (allocated(error)) return
+      call check(error, p%dyn%visc_method, ICE_VISC_AVG_STRENGTH)
+      if (allocated(error)) return
+      call check(error, abs(p%dyn%cdn_ocn - 0.0045_wp) < tol .and. abs(p%dyn%vel_cap - 3.0_wp) < tol, "cdn_ocn vel_cap")
+   end subroutine test_dyn_round_trip
 
 end module test_cice_config

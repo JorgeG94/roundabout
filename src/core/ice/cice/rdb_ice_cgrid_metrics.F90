@@ -6,7 +6,8 @@ module rdb_ice_cgrid_metrics
    !! the `epm`/`npm`/`uvm` masks, and the ONE-exchange-per-subcycle halo
    !! wrapper `ice_halo_faces` for the face velocity pair.
    !!
-   !! Roundabout-original; no physics lives here.  It needs the ocean's
+   !! Roundabout-original; no physics lives here (D9.1 added the T-cell names
+   !! `dxT, dyT, tarea, tarear, hm` the EVP needs).  It needs the ocean's
    !! grid metrics, halo and fold, so it is part of the MAIN library (not
    !! the standalone `rdb_cice_objs`).
    !!
@@ -26,6 +27,9 @@ module rdb_ice_cgrid_metrics
    !! | `dxE`, `dyE`       | `dxCu`, `dyCu` at (i+1,j)             |
    !! | `dxN`, `dyN`       | `dxCv`, `dyCv` at (i,j+1)             |
    !! | `dxU`, `dyU`       | `dxBu`, `dyBu` at (i+1,j+1)           |
+   !! | `dxT`, `dyT`        | `dxT`, `dyT` at (i,j)                 |
+   !! | `tarea`, `tarear`  | `areaT` at (i,j) and its reciprocal   |
+   !! | `hm`               | pinned T mask (real 0/1)              |
    !! | `uarea`            | `areaBu` at (i+1,j+1) (weight only)   |
    !! | `earea`, `narea`   | `areaCu` (i+1,j), `areaCv` (i,j+1)    |
    !! | `HTE`, `HTN`       | `dyCu` (i+1,j), `dxCv` (i,j+1)        |
@@ -78,6 +82,12 @@ module rdb_ice_cgrid_metrics
          !! N-face lengths (m).
       real(wp), allocatable :: dxU(:, :), dyU(:, :)
          !! U-corner lengths (m).
+      real(wp), allocatable :: dxT(:, :), dyT(:, :)
+         !! T-cell widths through the middle (m).
+      real(wp), allocatable :: tarea(:, :), tarear(:, :)
+         !! T-cell area (m^2) and its Adcroft reciprocal.
+      real(wp), allocatable :: hm(:, :)
+         !! T open mask (real 0/1; the ghost band of a wall edge pinned to land).
       real(wp), allocatable :: uarea(:, :)
          !! U-corner area (m^2).
       real(wp), allocatable :: earea(:, :), narea(:, :)
@@ -165,6 +175,7 @@ contains
       nj = grid%ny_phys
       allocate (this%dxE(nx, ny), this%dyE(nx, ny), this%dxN(nx, ny), this%dyN(nx, ny))
       allocate (this%dxU(nx, ny), this%dyU(nx, ny), this%uarea(nx, ny))
+      allocate (this%dxT(nx, ny), this%dyT(nx, ny), this%tarea(nx, ny), this%tarear(nx, ny), this%hm(nx, ny))
       allocate (this%earea(nx, ny), this%narea(nx, ny))
       allocate (this%earear(nx, ny), this%narear(nx, ny))
       allocate (this%HTE(nx, ny), this%HTN(nx, ny))
@@ -204,6 +215,11 @@ contains
             this%dxU(i, j) = metrics%dxBu(i + 1, j + 1)
             this%dyU(i, j) = metrics%dyBu(i + 1, j + 1)
             this%uarea(i, j) = metrics%areaBu(i + 1, j + 1)
+            this%dxT(i, j) = metrics%dxT(i, j)
+            this%dyT(i, j) = metrics%dyT(i, j)
+            this%tarea(i, j) = metrics%areaT(i, j)
+            this%tarear(i, j) = safe_recip(this%tarea(i, j))
+            this%hm(i, j) = tm(i, j)
             this%earea(i, j) = metrics%areaCu(i + 1, j)
             this%narea(i, j) = metrics%areaCv(i, j + 1)
             this%earear(i, j) = safe_recip(this%earea(i, j))
@@ -264,6 +280,7 @@ contains
       if (this%mapped) error stop "ice_cgrid_metrics_t%destroy: exit_data first"
       if (allocated(this%dxE)) deallocate (this%dxE, this%dyE, this%dxN, this%dyN)
       if (allocated(this%dxU)) deallocate (this%dxU, this%dyU, this%uarea)
+      if (allocated(this%dxT)) deallocate (this%dxT, this%dyT, this%tarea, this%tarear, this%hm)
       if (allocated(this%earea)) deallocate (this%earea, this%narea, this%earear, this%narear)
       if (allocated(this%HTE)) deallocate (this%HTE, this%HTN)
       if (allocated(this%ratiodxN)) deallocate (this%ratiodxN, this%ratiodxNr, &
@@ -291,6 +308,11 @@ contains
                + arr_bytes(this%dxU) &
                + arr_bytes(this%dyU) &
                + arr_bytes(this%uarea) &
+               + arr_bytes(this%dxT) &
+               + arr_bytes(this%dyT) &
+               + arr_bytes(this%tarea) &
+               + arr_bytes(this%tarear) &
+               + arr_bytes(this%hm) &
                + arr_bytes(this%earea) &
                + arr_bytes(this%narea) &
                + arr_bytes(this%earear) &
@@ -312,6 +334,7 @@ contains
       !$acc enter data copyin(this%dxE, this%dyE, this%dxN, this%dyN, this%dxU, this%dyU)
       !$acc enter data copyin(this%uarea, this%earea, this%narea, this%earear, this%narear)
       !$acc enter data copyin(this%HTE, this%HTN)
+      !$acc enter data copyin(this%dxT, this%dyT, this%tarea, this%tarear, this%hm)
       !$acc enter data copyin(this%ratiodxN, this%ratiodxNr, this%ratiodyE, this%ratiodyEr)
       !$acc enter data copyin(this%epm, this%npm, this%uvm)
       this%mapped = .true.
@@ -322,6 +345,7 @@ contains
       !$acc exit data delete(this%dxE, this%dyE, this%dxN, this%dyN, this%dxU, this%dyU)
       !$acc exit data delete(this%uarea, this%earea, this%narea, this%earear, this%narear)
       !$acc exit data delete(this%HTE, this%HTN)
+      !$acc exit data delete(this%dxT, this%dyT, this%tarea, this%tarear, this%hm)
       !$acc exit data delete(this%ratiodxN, this%ratiodxNr, this%ratiodyE, this%ratiodyEr)
       !$acc exit data delete(this%epm, this%npm, this%uvm)
       this%mapped = .false.

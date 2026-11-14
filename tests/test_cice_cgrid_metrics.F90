@@ -114,6 +114,11 @@ contains
             if (cm%narea(i, j) /= m%areaCv(i, j + 1)) bad = .true.
             if (cm%HTE(i, j) /= m%dyCu(i + 1, j)) bad = .true.
             if (cm%HTN(i, j) /= m%dxCv(i, j + 1)) bad = .true.
+            if (cm%dxT(i, j) /= m%dxT(i, j) .or. cm%dyT(i, j) /= m%dyT(i, j)) bad = .true.
+            if (cm%tarea(i, j) /= m%areaT(i, j)) bad = .true.
+            if (cm%tarea(i, j) > 0.0_wp) then
+               if (abs(cm%tarear(i, j)*cm%tarea(i, j) - 1.0_wp) > 1.0e-14_wp) bad = .true.
+            end if
             ! Masks follow the ocean masks strictly inside the physical
             ! domain (the pinned edge ghost band is `cgrid_masks_edges`).
             if (i >= NG + 1 .and. i <= NG + NXP - 1 .and. j >= NG + 1 .and. j <= NG + NYP - 1) then
@@ -721,7 +726,7 @@ contains
       ! Sum of products: GPU builds contract FMA, so compare to a tolerance.
       call check(error, maxval(abs(out - ref)) < 1.0e-13_wp, "device kernel disagrees with host")
       if (allocated(error)) return
-      call check(error, cm%bytes() == int(20*nx*ny*8, kind(cm%bytes())), "bytes() count")
+      call check(error, cm%bytes() == int(25*nx*ny*8, kind(cm%bytes())), "bytes() count")
       call cm%destroy()
       call destroy_cartesian_metrics(m)
    end subroutine test_device_kernel

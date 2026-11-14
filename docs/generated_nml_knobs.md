@@ -718,10 +718,27 @@ CICE-port atmosphere-ice boundary-layer knobs (scheme='cice'; upstream CICE defa
 
 ### &ocean_ice_dyn_nml
 
-CICE-port ice dynamics and transport knobs (scheme='cice'; upstream CICE defaults).
+CICE-port ice dynamics and transport knobs (scheme='cice'; upstream CICE code defaults; illegal EVP values are collected by the configure-time check, not rejected by the parser).
 
 | Knob | Default | Units | Description |
 |------|---------|-------|-------------|
+| `ndte` | `120` |  | Elastic subcycles per dynamics step; must be >= 1 |
+| `elasticDamp` | `0.3600000000E+00` |  | Damping parameter E of the classic EVP (Hunke 2001, arlx = 2 E ndte); must be > 0 |
+| `revised_evp` | `.false.` |  | Revised EVP (Bouillon et al. 2013): arlx and brlx apply |
+| `arlx` | `0.3000000000E+03` |  | Revised EVP stress relaxation parameter alpha; must be > 0 when revised_evp |
+| `brlx` | `0.3000000000E+03` |  | Revised EVP momentum relaxation parameter beta; must be > 0 when revised_evp |
+| `e_yieldcurve` | `0.2000000000E+01` |  | Aspect ratio of the elliptical yield curve; must be > 0 |
+| `e_plasticpot` | `0.2000000000E+01` |  | Aspect ratio of the elliptical plastic potential; must be > 0 |
+| `Ktens` | `0.0000000000E+00` |  | Tensile strength fraction, T = Ktens P (Konig Beatty and Holland 2010); must be in [0, 1) |
+| `deltaminEVP` | `0.1000000000E-10` | 1/s | Minimum Delta of the viscosities (Hunke 2001); must be > 0 |
+| `capping_method` | `"max"` |  | Viscosity capping: max (Hibler 1979) or sum (Kreyscher et al. 2000); other values are refused |
+| `dyn_area_min` | `0.1000000000E-10` |  | Minimum concentration for the dynamics; must be >= 0 |
+| `dyn_mass_min` | `0.1000000000E-09` | kg/m^2 | Minimum mass for the dynamics; must be >= 0 |
+| `rheo_area_min` | `0.1000000000E-02` |  | Concentration below which the internal stress is dropped (free_drift_approx); must be >= 0 |
+| `free_drift_approx` | `.true.` |  | Drop the internal stress below rheo_area_min |
+| `visc_method` | `"avg_zeta"` |  | Corner shear viscosity: avg_zeta (mean of the T viscosities) or avg_strength (rebuilt from the mean strength); other values are refused |
+| `cdn_ocn` | `0.5360000000E-02` |  | Ice-ocean drag coefficient (upstream dragio); must be >= 0 |
+| `vel_cap` | `0.1000000000E+02` | m/s | Face speed above which the velocity guard raises ICE_ERR_DYN_VEL (never clamps); must be > 0 |
 | `advection` | `"remap"` |  | Horizontal transport: remap = incremental remapping (Lipscomb and Hunke 2004; upstream default, refused until the remap PR), upwind = first-order upwind |
 | `transport_check` | `.false.` |  | Run the transport checks (non-finite entry, negative area, CFL, conservation of area and tracers, monotonicity) |
 

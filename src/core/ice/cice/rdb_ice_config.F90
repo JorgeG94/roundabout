@@ -6,9 +6,10 @@
 !! The namelist groups are `&ocean_ice_nml` (structure: `scheme`, `nilyr`,
 !! `nslyr`, `kcatbound`, `constants_set`), `&ocean_ice_thermo_nml` (thermo,
 !! ITD and floe-geometry knobs), `&ocean_ice_sw_nml` (albedo parameters),
-!! `&ocean_ice_ridge_nml` (ridging and strength), `&ocean_ice_dyn_nml`
-!! (transport keys `advection`, `transport_check`; `advection="remap"` is refused
-!! under `scheme="cice"` until the remap PR) and `&ocean_ice_atm_nml`
+!! `&ocean_ice_ridge_nml` (ridging and strength), `&ocean_ice_dyn_nml` (C-grid
+!! EVP dynamics keys, and the transport keys `advection`, `transport_check`;
+!! `advection="remap"` is refused under `scheme="cice"` until the remap PR) and
+!! `&ocean_ice_atm_nml`
 !! (atmosphere-ice boundary layer; the option keys the port supports one value
 !! of are refused here with a message naming the value); every default is the
 !! upstream CICE code default EXCEPT `tfrz_option = "linear_salt"` (upstream's
@@ -30,7 +31,8 @@ module rdb_ice_config
    use rdb_ice_params, only: ICE_ADVECT_UPWIND, ICE_ADVECT_REMAP, &
              ice_transport_params_t, ice_transport_params_valid, ice_params_t, ice_params_default, ice_constants, ice_constants_t, &
                              ice_atm_params_finalize, ice_ridge_params_t, ice_ridge_params_default, &
-                             ice_ridge_params_valid, &
+                             ice_ridge_params_valid, ice_dyn_params_t, ice_dyn_params_default, &
+                             ice_dyn_params_check, ICE_DYN_NMSG, ICE_VISC_AVG_ZETA, ICE_VISC_AVG_STRENGTH, &
                              ICE_CONSTANTS_ICEPACK, ICE_CONSTANTS_CESM, &
                              ICE_TFRZ_LINEAR_SALT, ICE_TFRZ_CONSTANT, ICE_TFRZ_MINUS1P8, &
                              ICE_CONDUCT_BUBBLY, ICE_CONDUCT_MU71
@@ -38,13 +40,13 @@ module rdb_ice_config
    implicit none
    private
 
-   public :: ice_params_from_config, ice_config_check, ice_config_validate
+   public :: ice_params_from_config, ice_config_check, ice_config_validate, ice_dyn_params_from_config
    public :: ice_scheme_is_cice, ice_constants_set_from_name
    public :: ICE_CONFIG_MSG_LEN, ICE_CONFIG_MAX_MSGS
 
    integer, parameter :: ICE_CONFIG_MSG_LEN = 240
       !! Length of one refusal message.
-   integer, parameter :: ICE_CONFIG_MAX_MSGS = 48
+   integer, parameter :: ICE_CONFIG_MAX_MSGS = 72
       !! Capacity of the refusal list (more than every check can raise).
 
 contains
@@ -90,6 +92,9 @@ contains
       type(ice_ridge_params_t) :: rp
       character(len=24) :: szref
       type(ice_constants_t) :: cst
+      type(ice_dyn_params_t) :: dyp
+      integer :: dcodes(ICE_DYN_NMSG)
+      integer :: ndc, k
       type(ice_transport_params_t) :: tp
 
       msgs = ""
@@ -246,6 +251,59 @@ contains
                       "supported (the wind stress is always computed in the ice model)")
       end if
 
+      ! ---- C-grid EVP dynamics ----
+      dyp = ice_dyn_params_from_config(cfg)
+      call ice_dyn_params_check(dyp, dcodes, ndc)
+      do k = 1, ndc
+         select case (dcodes(k))
+         case (1)
+            call add_msg(msgs, n, "&ocean_ice_dyn_nml ndte must be >= 1 (elastic subcycles)")
+         case (2)
+            call add_msg(msgs, n, "&ocean_ice_dyn_nml elasticDamp must be > 0 (classic EVP: "// &
+                         "arlx = 2 elasticDamp ndte)")
+         case (3)
+            call add_msg(msgs, n, "&ocean_ice_dyn_nml arlx must be > 0 (revised_evp: stress "// &
+                         "relaxation, divides)")
+         case (4)
+            call add_msg(msgs, n, "&ocean_ice_dyn_nml brlx must be > 0 (revised_evp: momentum "// &
+                         "relaxation)")
+         case (5)
+            call add_msg(msgs, n, "&ocean_ice_dyn_nml e_yieldcurve must be > 0 (aspect ratio "// &
+                         "of the yield curve)")
+         case (6)
+            call add_msg(msgs, n, "&ocean_ice_dyn_nml e_plasticpot must be > 0 (aspect ratio "// &
+                         "of the plastic potential, divides)")
+         case (7)
+            call add_msg(msgs, n, "&ocean_ice_dyn_nml Ktens must be in [0, 1) (tensile "// &
+                         "strength fraction)")
+         case (8)
+            call add_msg(msgs, n, "&ocean_ice_dyn_nml deltaminEVP must be > 0 (it regularises "// &
+                         "the viscosities)")
+         case (9)
+            call add_msg(msgs, n, "&ocean_ice_dyn_nml dyn_area_min must be >= 0")
+         case (10)
+            call add_msg(msgs, n, "&ocean_ice_dyn_nml dyn_mass_min must be >= 0")
+         case (11)
+            call add_msg(msgs, n, "&ocean_ice_dyn_nml rheo_area_min must be >= 0")
+         case (12)
+            call add_msg(msgs, n, "&ocean_ice_dyn_nml visc_method must be 'avg_zeta' or "// &
+                         "'avg_strength'")
+         case (13)
+            call add_msg(msgs, n, "&ocean_ice_dyn_nml cdn_ocn must be >= 0 (drag coefficient)")
+         case (14)
+            call add_msg(msgs, n, "&ocean_ice_dyn_nml vel_cap must be > 0 (face-speed ceiling "// &
+                         "of the velocity guard)")
+         case default
+            call add_msg(msgs, n, "&ocean_ice_dyn_nml: unknown refusal code")
+         end select
+      end do
+      select case (trim(adjustl(cfg%ocean%ice_dyn%capping_method)))
+      case ("max", "sum")
+      case default
+         call add_msg(msgs, n, "&ocean_ice_dyn_nml capping_method must be 'max' (Hibler 1979) "// &
+                      "or 'sum' (Kreyscher et al. 2000)")
+      end select
+
       ! ---- horizontal transport ----
       select case (trim(adjustl(cfg%ocean%ice_dyn%advection)))
       case ("upwind")
@@ -324,6 +382,40 @@ contains
       if (n > 0) has_error = .true.
    end subroutine ice_config_validate
 
+   pure function ice_dyn_params_from_config(cfg) result(dp)
+      !! The dynamics bundle for `cfg` (an unknown `visc_method` becomes the
+      !! refused code 0; an unknown `capping_method` keeps the Hibler cap, the
+      !! check reports it).
+      type(config_t), intent(in) :: cfg
+      type(ice_dyn_params_t) :: dp
+
+      dp = ice_dyn_params_default()
+      dp%ndte = cfg%ocean%ice_dyn%ndte
+      dp%elasticDamp = cfg%ocean%ice_dyn%elasticdamp
+      dp%revised_evp = cfg%ocean%ice_dyn%revised_evp
+      dp%arlx = cfg%ocean%ice_dyn%arlx
+      dp%brlx = cfg%ocean%ice_dyn%brlx
+      dp%e_yieldcurve = cfg%ocean%ice_dyn%e_yieldcurve
+      dp%e_plasticpot = cfg%ocean%ice_dyn%e_plasticpot
+      dp%Ktens = cfg%ocean%ice_dyn%ktens
+      dp%deltaminEVP = cfg%ocean%ice_dyn%deltaminevp
+      dp%capping_max = trim(adjustl(cfg%ocean%ice_dyn%capping_method)) /= "sum"
+      dp%dyn_area_min = cfg%ocean%ice_dyn%dyn_area_min
+      dp%dyn_mass_min = cfg%ocean%ice_dyn%dyn_mass_min
+      dp%rheo_area_min = cfg%ocean%ice_dyn%rheo_area_min
+      dp%free_drift_approx = cfg%ocean%ice_dyn%free_drift_approx
+      select case (trim(adjustl(cfg%ocean%ice_dyn%visc_method)))
+      case ("avg_zeta")
+         dp%visc_method = ICE_VISC_AVG_ZETA
+      case ("avg_strength")
+         dp%visc_method = ICE_VISC_AVG_STRENGTH
+      case default
+         dp%visc_method = 0
+      end select
+      dp%cdn_ocn = cfg%ocean%ice_dyn%cdn_ocn
+      dp%vel_cap = cfg%ocean%ice_dyn%vel_cap
+   end function ice_dyn_params_from_config
+
    pure function ice_params_from_config(cfg) result(p)
       !! The ice parameter bundle for `cfg`.  Does not validate: call
       !! `ice_config_check` first.  Unrecognised enum spellings fall back to the
@@ -374,6 +466,8 @@ contains
       p%ridge%Cf = cfg%ocean%ice_ridge%cf
       p%ridge%Pstar = cfg%ocean%ice_ridge%pstar
       p%ridge%Cstar = cfg%ocean%ice_ridge%cstar
+
+      p%dyn = ice_dyn_params_from_config(cfg)
 
       p%atm%highfreq = cfg%ocean%ice_atm%highfreq
       p%atm%natmiter = cfg%ocean%ice_atm%natmiter

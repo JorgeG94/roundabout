@@ -4076,9 +4076,164 @@ class OceanIceAtm(Group):
 
 
 class OceanIceDyn(Group):
-    """`&ocean_ice_dyn_nml` -- CICE-port ice dynamics and transport knobs (scheme='cice'; upstream CICE defaults)."""
+    """`&ocean_ice_dyn_nml` -- CICE-port ice dynamics and transport knobs (scheme='cice'; upstream CICE code defaults; illegal EVP values are collected by the configure-time check, not rejected by the parser)."""
 
     _nml_name = 'ocean_ice_dyn'
+
+    ndte = Int(
+        'ndte',
+        doc='Elastic subcycles per dynamics step; must be >= 1',
+        units='',
+        required=False,
+        default=120,
+        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+    )
+
+    elasticDamp = Real(
+        'elasticDamp',
+        doc='Damping parameter E of the classic EVP (Hunke 2001, arlx = 2 E ndte); must be > 0',
+        units='',
+        required=False,
+        default=0.36,
+        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+    )
+
+    revised_evp = Bool(
+        'revised_evp',
+        doc='Revised EVP (Bouillon et al. 2013): arlx and brlx apply',
+        units='',
+        required=False,
+        default=False,
+        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+    )
+
+    arlx = Real(
+        'arlx',
+        doc='Revised EVP stress relaxation parameter alpha; must be > 0 when revised_evp',
+        units='',
+        required=False,
+        default=300.0,
+        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+    )
+
+    brlx = Real(
+        'brlx',
+        doc='Revised EVP momentum relaxation parameter beta; must be > 0 when revised_evp',
+        units='',
+        required=False,
+        default=300.0,
+        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+    )
+
+    e_yieldcurve = Real(
+        'e_yieldcurve',
+        doc='Aspect ratio of the elliptical yield curve; must be > 0',
+        units='',
+        required=False,
+        default=2.0,
+        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+    )
+
+    e_plasticpot = Real(
+        'e_plasticpot',
+        doc='Aspect ratio of the elliptical plastic potential; must be > 0',
+        units='',
+        required=False,
+        default=2.0,
+        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+    )
+
+    Ktens = Real(
+        'Ktens',
+        doc='Tensile strength fraction, T = Ktens P (Konig Beatty and Holland 2010); must be in [0, 1)',
+        units='',
+        required=False,
+        default=0.0,
+        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+    )
+
+    deltaminEVP = Real(
+        'deltaminEVP',
+        doc='Minimum Delta of the viscosities (Hunke 2001); must be > 0',
+        units='1/s',
+        required=False,
+        default=1e-11,
+        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+    )
+
+    capping_method = Str(
+        'capping_method',
+        doc='Viscosity capping: max (Hibler 1979) or sum (Kreyscher et al. 2000); other values are refused',
+        units='',
+        required=False,
+        default='max',
+        max_len=8,
+        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+    )
+
+    dyn_area_min = Real(
+        'dyn_area_min',
+        doc='Minimum concentration for the dynamics; must be >= 0',
+        units='',
+        required=False,
+        default=1e-11,
+        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+    )
+
+    dyn_mass_min = Real(
+        'dyn_mass_min',
+        doc='Minimum mass for the dynamics; must be >= 0',
+        units='kg/m^2',
+        required=False,
+        default=1e-10,
+        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+    )
+
+    rheo_area_min = Real(
+        'rheo_area_min',
+        doc='Concentration below which the internal stress is dropped (free_drift_approx); must be >= 0',
+        units='',
+        required=False,
+        default=0.001,
+        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+    )
+
+    free_drift_approx = Bool(
+        'free_drift_approx',
+        doc='Drop the internal stress below rheo_area_min',
+        units='',
+        required=False,
+        default=True,
+        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+    )
+
+    visc_method = Str(
+        'visc_method',
+        doc='Corner shear viscosity: avg_zeta (mean of the T viscosities) or avg_strength (rebuilt from the mean strength); other values are refused',
+        units='',
+        required=False,
+        default='avg_zeta',
+        max_len=16,
+        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+    )
+
+    cdn_ocn = Real(
+        'cdn_ocn',
+        doc='Ice-ocean drag coefficient (upstream dragio); must be >= 0',
+        units='',
+        required=False,
+        default=0.00536,
+        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+    )
+
+    vel_cap = Real(
+        'vel_cap',
+        doc='Face speed above which the velocity guard raises ICE_ERR_DYN_VEL (never clamps); must be > 0',
+        units='m/s',
+        required=False,
+        default=10.0,
+        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+    )
 
     advection = Enum(
         'advection',
@@ -7862,4 +8017,4 @@ GENERATED_GROUPS = {
 }
 
 N_GROUPS = 68
-N_KNOBS = 859
+N_KNOBS = 876
