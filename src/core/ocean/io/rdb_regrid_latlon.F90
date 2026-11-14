@@ -15,6 +15,7 @@ module rdb_regrid_latlon
    !! Ocean Models", Journal of Computational Physics, 126, 251-273.
    use, intrinsic :: iso_fortran_env, only: int64
    use rdb_constants, only: wp, PI, TWO_PI, DEG2RAD
+   use rdb_safe_math, only: safe_sin
    implicit none
    private
 
@@ -540,9 +541,9 @@ contains
 
       lat_flip = lat_e_rad(1) > lat_e_rad(nlat + 1)
       if (lat_flip) then
-         mu_e_inc = sin(lat_e_rad(nlat + 1:1:-1))
+         mu_e_inc = safe_sin(lat_e_rad(nlat + 1:1:-1))
       else
-         mu_e_inc = sin(lat_e_rad)
+         mu_e_inc = safe_sin(lat_e_rad)
       end if
 
       wts%nx = nx_phys
@@ -588,7 +589,7 @@ contains
             end do
             do k = 1, 4
                lam(k) = c_lon0(k)*DEG2RAD
-               mu(k) = sin(c_lat0(k)*DEG2RAD)
+               mu(k) = safe_sin(c_lat0(k)*DEG2RAD)
             end do
             span = maxval(c_lon0, mask=.not. at_pole) - minval(c_lon0, mask=.not. at_pole)
             is_cap = span > 180.0_wp

@@ -30,6 +30,7 @@ module rdb_vcoord
                             VCOORD_Z_FIXED, VCOORD_RHO, VCOORD_HYCOM, &
                             REMAP_PCM, REMAP_PLM, REMAP_PPM, REMAP_PPM_H4, REMAP_PQM
 #endif
+   use rdb_safe_math, only: safe_tanh
    use pic_logger, only: logger => global_logger
    use pic_strings, only: to_string
    implicit none
@@ -890,10 +891,10 @@ contains
          end if
          c = 1.0_wp + center*real(nz - 1, wp)
          w = width*real(nz - 1, wp)
-         t1 = tanh((1.0_wp - c)/w)
-         tn = tanh((real(nz, wp) - c)/w)
+         t1 = safe_tanh((1.0_wp - c)/w)
+         tn = safe_tanh((real(nz, wp) - c)/w)
          do n = 1, nz
-            s(n) = (tanh((real(n, wp) - c)/w) - t1)/(tn - t1)
+            s(n) = (safe_tanh((real(n, wp) - c)/w) - t1)/(tn - t1)
          end do
          s(1) = 0.0_wp
          s_sum = sum(s)
