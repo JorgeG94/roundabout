@@ -49,6 +49,7 @@ module rdb_ice_params
    use rdb_constants, only: wp
    use rdb_ice_dims, only: ICE_NCAT_MAX, ICE_NILYR_MAX, ICE_NSLYR_MAX
    use rdb_safe_math, only: safe_cos, safe_pow
+   use rdb_safe_math, only: safe_cos, safe_log, safe_pow
    implicit none
    private
 
@@ -58,6 +59,7 @@ module rdb_ice_params
    public :: ice_constants_t, ice_thermo_params_t, ice_itd_params_t, ice_params_t
    public :: ice_sw_params_t
    public :: ice_ridge_params_t, ice_ridge_params_default, ice_ridge_params_valid
+   public :: ice_atm_params_t, ice_atm_params_finalize
    public :: ice_constants, ice_params_default
    public :: ice_nt_Tsfc, ice_nt_qice, ice_nt_qsno, ice_nt_sice, ice_ntrcr
    public :: ice_trcr_depend, ice_trcr_base, ice_intensive
@@ -176,6 +178,14 @@ module rdb_ice_params
       real(wp) :: Pstar               !! Hibler strength constant [N/m]
       real(wp) :: Cstar               !! Hibler concentration constant
    end type ice_ridge_params_t
+   type :: ice_atm_params_t
+      !! Atmosphere-ice boundary-layer options (upstream code defaults).
+      logical :: highfreq             !! relative-wind (ice-velocity) stress and 0.5 m/s floor
+      integer :: natmiter             !! Monin-Obukhov iterations (upstream 5)
+      real(wp) :: atmiter_conv        !! relative ustar change that stops the iteration (0)
+      real(wp) :: iceruf              !! ice surface roughness [m]
+      real(wp) :: rdn                 !! neutral drag sqrt(Cd) = kappa/ln(zref/iceruf); set by `ice_atm_params_finalize`
+   end type ice_atm_params_t
 
    type :: ice_params_t
       !! All sea-ice parameters: scalars only, no allocatables, no strings.
@@ -190,6 +200,7 @@ module rdb_ice_params
       type(ice_itd_params_t) :: itd
       type(ice_sw_params_t) :: sw
       type(ice_ridge_params_t) :: ridge
+      type(ice_atm_params_t) :: atm
    end type ice_params_t
 
 contains
@@ -311,6 +322,11 @@ contains
       p%sw%albsnowi = 0.70_wp
       p%sw%ahmax = 0.3_wp
       p%ridge = ice_ridge_params_default()
+      p%atm%highfreq = .false.
+      p%atm%natmiter = 5
+      p%atm%atmiter_conv = 0.0_wp
+      p%atm%iceruf = 5.0e-4_wp
+      call ice_atm_params_finalize(p%c, p%atm)
    end function ice_params_default
 
    pure function ice_ridge_params_default() result(rp)
@@ -338,6 +354,21 @@ contains
       ok = (rp%kstrength == 0 .or. rp%kstrength == 1) .and. (rp%krdg_partic == 0 .or. rp%krdg_partic == 1) &
            .and. (rp%krdg_redist == 0 .or. rp%krdg_redist == 1)
    end function ice_ridge_params_valid
+
+   pure subroutine ice_atm_params_finalize(c, atm)
+      !! Setup step: derive `atm%rdn = kappa/ln(zref/iceruf)` once per
+      !! configuration (call again after changing `iceruf`).  `iceruf` must lie
+      !! in `(0, zref)` and below both reference heights (configure-time check
+      !! of the caller); otherwise `rdn` is set to zero and the kernel flags it.
+      type(ice_constants_t), intent(in) :: c
+      type(ice_atm_params_t), intent(inout) :: atm
+
+      if (atm%iceruf > 0.0_wp .and. atm%iceruf < c%zref) then
+         atm%rdn = c%vonkar/safe_log(c%zref/atm%iceruf)
+      else
+         atm%rdn = 0.0_wp
+      end if
+   end subroutine ice_atm_params_finalize
 
    ! ------------------------------------------------------------------
    ! Tracer index model (packed column: Tsfc | qice | qsno | sice)
