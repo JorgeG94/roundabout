@@ -419,6 +419,16 @@ call global_logger%error("&ocean_bc_nml: CHAPMAN edges are single-rank")
   gfortran and nvfortran don't, which is how a reader silently discarded
   every in-memory namelist on ifx. Blank-fill through a section: `lines(:) = ""`.
 
+### Transcendentals Go Through rdb_safe_math
+
+Do not call the intrinsic `exp log log10 sin cos tan asin acos atan atan2 sinh cosh tanh asinh acosh atanh erf erfc gamma log_gamma`, and do not raise to a real power (`x**0.5_wp`, `x**(1.0_wp/3.0_wp)`), in `src/` or `app/`. The compiler may evaluate the same call through a vector math library (glibc `libmvec`, NVHPC `libpgmath`) in a loop's vector body and through scalar libm in its remainder, so one cell rounds differently on a different tile width or rank count and a decomposed run stops being bitwise the one-rank run. `rdb_safe_math` (`src/framework/rdb_safe_math.F90`, bodies in `src/shared_module_utilities/rdb_safe_math_*.inc`) is written in IEEE `+ - * /` and `sqrt` only, so its value is a function of the argument alone.
+
+- Host, setup and test code: `use rdb_safe_math, only: safe_exp, ...`. Kernel modules `#include` the body so each gets a module-local copy.
+- Integer powers (`x**2`, `x**n`) and `sqrt` are fine. `parameter` initialisers (`PI = 4*atan(1.0_wp)`) are constant folded and are not flagged.
+- Enforced by the `safe-math-intrinsics` pre-commit hook (`tools/check_safe_math.py`), **diff-aware**: only new or changed lines against the merge base are errors. `python3 tools/check_safe_math.py --all` prints the whole-tree inventory (per function, directory, file and procedure) that the adoption PRs burn down; `--all --strict` exits 1 while any site remains.
+- A genuine exception carries a reason on the same line: `y = exp(x)  ! safe-math-ok: <reason>`. A waiver without a reason is an error.
+- The compiled-object backstop is `tools/check_no_vector_math.py` (ctest `rdb_check_no_vector_math`, GNU builds): `nm -u` over the model objects against `tools/vector_math_allowlist.txt`. A new object referencing a vector entry fails, and so does a listed object that no longer does (delete the line).
+
 ## Recommended Practices
 
 ### Use pic and pic-mpi

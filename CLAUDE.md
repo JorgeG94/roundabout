@@ -444,6 +444,7 @@ Per-rank diag + restart files (`<prefix>_rank_NNNNNN.nc`) — no gather. Optiona
 - No `print *` — use `pic_logger` (`global_logger`).
 - **Default new procedures to `pure`** — make a new function/subroutine `pure` unless it genuinely needs a side effect (I/O, logging, MPI, mutating module state, lazy `allocate`). Pure is the norm here; non-pure is the justified exception. See `FORTRAN_STYLE.md` §Pure by Default.
 - Working precision: `wp` from `rdb_constants` (currently `real64`).
+- **No bare transcendentals.** `exp log sin cos tan atan atan2 tanh cosh acosh erfc ...` and real-exponent `**` go through `rdb_safe_math` (position-independent, so decomposed == one rank bitwise); the `safe-math-intrinsics` hook flags new ones (diff-aware; `tools/check_safe_math.py --all` lists the rest), waive with `! safe-math-ok: <reason>`. See `FORTRAN_STYLE.md`.
 - MPI portability: `#ifdef USE_LEGACY_MPI` selects `use mpi` vs `use mpi_f08`.
 - Dependencies: `pic` (types, strings, timers, logger), `pic-mpi`, `test-drive`, NetCDF-Fortran.
 
