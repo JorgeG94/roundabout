@@ -716,6 +716,15 @@ CICE-port atmosphere-ice boundary-layer knobs (scheme='cice'; upstream CICE defa
 | `formdrag` | `.false.` |  | Form drag (.true. is refused) |
 | `calc_strair` | `.true.` |  | Compute the wind stress in the ice model (.false. is refused) |
 
+### &ocean_ice_dyn_nml
+
+CICE-port ice dynamics and transport knobs (scheme='cice'; upstream CICE defaults).
+
+| Knob | Default | Units | Description |
+|------|---------|-------|-------------|
+| `advection` | `"remap"` |  | Horizontal transport: remap = incremental remapping (Lipscomb and Hunke 2004; upstream default, refused until the remap PR), upwind = first-order upwind |
+| `transport_check` | `.false.` |  | Run the transport checks (non-finite entry, negative area, CFL, conservation of area and tracers, monotonicity) |
+
 ### &ocean_ice_ic_nml
 
 Sea-ice analytic initial-condition path (PR 24).

@@ -6,7 +6,9 @@
 !! The namelist groups are `&ocean_ice_nml` (structure: `scheme`, `nilyr`,
 !! `nslyr`, `kcatbound`, `constants_set`), `&ocean_ice_thermo_nml` (thermo,
 !! ITD and floe-geometry knobs), `&ocean_ice_sw_nml` (albedo parameters),
-!! `&ocean_ice_ridge_nml` (ridging and strength) and `&ocean_ice_atm_nml`
+!! `&ocean_ice_ridge_nml` (ridging and strength), `&ocean_ice_dyn_nml`
+!! (transport keys `advection`, `transport_check`; `advection="remap"` is refused
+!! under `scheme="cice"` until the remap PR) and `&ocean_ice_atm_nml`
 !! (atmosphere-ice boundary layer; the option keys the port supports one value
 !! of are refused here with a message naming the value); every default is the
 !! upstream CICE code default EXCEPT `tfrz_option = "linear_salt"` (upstream's
@@ -25,7 +27,8 @@ module rdb_ice_config
    use rdb_constants, only: wp
    use rdb_config, only: config_t
    use rdb_ice_dims, only: ICE_NCAT_MAX, ICE_NILYR_MAX
-   use rdb_ice_params, only: ice_params_t, ice_params_default, ice_constants, ice_constants_t, &
+   use rdb_ice_params, only: ICE_ADVECT_UPWIND, ICE_ADVECT_REMAP, &
+             ice_transport_params_t, ice_transport_params_valid, ice_params_t, ice_params_default, ice_constants, ice_constants_t, &
                              ice_atm_params_finalize, ice_ridge_params_t, ice_ridge_params_default, &
                              ice_ridge_params_valid, &
                              ICE_CONSTANTS_ICEPACK, ICE_CONSTANTS_CESM, &
@@ -87,6 +90,7 @@ contains
       type(ice_ridge_params_t) :: rp
       character(len=24) :: szref
       type(ice_constants_t) :: cst
+      type(ice_transport_params_t) :: tp
 
       msgs = ""
       n = 0
@@ -242,6 +246,22 @@ contains
                       "supported (the wind stress is always computed in the ice model)")
       end if
 
+      ! ---- horizontal transport ----
+      select case (trim(adjustl(cfg%ocean%ice_dyn%advection)))
+      case ("upwind")
+         continue
+      case ("remap")
+         tp%advection = ICE_ADVECT_REMAP
+         tp%check = .false.
+         if (ice_scheme_is_cice(cfg) .and. .not. ice_transport_params_valid(tp)) then
+            call add_msg(msgs, n, "&ocean_ice_dyn_nml advection='remap' is not runnable "// &
+                         "yet (incremental remapping arrives with the remap PR); "// &
+                         "use advection='upwind'")
+         end if
+      case default
+         call add_msg(msgs, n, "&ocean_ice_dyn_nml advection must be 'remap' or 'upwind'")
+      end select
+
       ! ---- shortwave albedo parameters ----
       if (.not. (cfg%ocean%ice_sw%ahmax > 0.0_wp)) then
          call add_msg(msgs, n, "&ocean_ice_sw_nml ahmax must be > 0 (it divides "// &
@@ -360,6 +380,14 @@ contains
       p%atm%atmiter_conv = cfg%ocean%ice_atm%atmiter_conv
       p%atm%iceruf = cfg%ocean%ice_atm%iceruf
       call ice_atm_params_finalize(p%c, p%atm)
+
+      select case (trim(adjustl(cfg%ocean%ice_dyn%advection)))
+      case ("upwind")
+         p%transport%advection = ICE_ADVECT_UPWIND
+      case default
+         p%transport%advection = ICE_ADVECT_REMAP
+      end select
+      p%transport%check = cfg%ocean%ice_dyn%transport_check
 
       p%sw%albicev = cfg%ocean%ice_sw%albicev
       p%sw%albicei = cfg%ocean%ice_sw%albicei

@@ -1,6 +1,6 @@
 # Core infrastructure sources
 set(CORE_SOURCES
-    # rdb_constants and rdb_safe_math compile in `rdb_core_objs` (root
+    # rdb_constants, rdb_safe_math and rdb_efp compile in `rdb_core_objs` (root
     # CMakeLists.txt); core_rdb archives those objects.
     # Leaf module (only dep: rdb_constants): proleptic-Gregorian calendar
     # arithmetic (date<->seconds-since-epoch, CF time-units parsing, RYF
@@ -38,7 +38,6 @@ set(CORE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/core/rdb_grid.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/rdb_tracer.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/framework/rdb_scratch_3d.F90
-    ${CMAKE_CURRENT_SOURCE_DIR}/framework/rdb_efp.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/framework/rdb_mem_report.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/rdb_barotropic_state.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/rdb_barotropic_workstate.F90

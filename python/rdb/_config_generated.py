@@ -4075,6 +4075,31 @@ class OceanIceAtm(Group):
     )
 
 
+class OceanIceDyn(Group):
+    """`&ocean_ice_dyn_nml` -- CICE-port ice dynamics and transport knobs (scheme='cice'; upstream CICE defaults)."""
+
+    _nml_name = 'ocean_ice_dyn'
+
+    advection = Enum(
+        'advection',
+        doc='Horizontal transport: remap = incremental remapping (Lipscomb and Hunke 2004; upstream default, refused until the remap PR), upwind = first-order upwind',
+        units='',
+        required=False,
+        default='remap',
+        allowed=('remap', 'upwind'),
+        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+    )
+
+    transport_check = Bool(
+        'transport_check',
+        doc='Run the transport checks (non-finite entry, negative area, CFL, conservation of area and tracers, monotonicity)',
+        units='',
+        required=False,
+        default=False,
+        dead_on_ocean_path="scheme='cice' only; inert until the CICE6 port is runnable (wired by the PR that consumes it)",
+    )
+
+
 class OceanIceIc(Group):
     """`&ocean_ice_ic_nml` -- Sea-ice analytic initial-condition path (PR 24)."""
 
@@ -7805,6 +7830,7 @@ GENERATED_GROUPS = {
     'ocean_ice_sw': OceanIceSw,
     'ocean_ice_ridge': OceanIceRidge,
     'ocean_ice_atm': OceanIceAtm,
+    'ocean_ice_dyn': OceanIceDyn,
     'ocean_ice_ic': OceanIceIc,
     'ocean_restore': OceanRestore,
     'ocean_geothermal': OceanGeothermal,
@@ -7835,5 +7861,5 @@ GENERATED_GROUPS = {
     'ocean_bc': OceanBc,
 }
 
-N_GROUPS = 67
-N_KNOBS = 857
+N_GROUPS = 68
+N_KNOBS = 859

@@ -100,15 +100,16 @@ set(RDB_SHARED_INCLUDE_DIR
 target_include_directories(${core_objs} PUBLIC ${RDB_SHARED_INCLUDE_DIR})
 
 # Three object-library layers, each compiled ONCE: rdb_core_objs      shared
-# infrastructure (rdb_constants, rdb_safe_math) rdb_ocean_core_objs the ocean
-# (${core_objs}, above; legacy sea-ice sources under src/core/ice stay here:
-# they use ocean types) rdb_ice_core_objs  the CICE-port ice core
+# infrastructure (rdb_constants, rdb_safe_math, rdb_efp) rdb_ocean_core_objs the
+# ocean (${core_objs}, above; legacy sea-ice sources under src/core/ice stay
+# here: they use ocean types) rdb_ice_core_objs  the CICE-port ice core
 # (cmake/ice_core_sources.cmake); depends only on rdb_core_objs + pic All three
 # end up in the same final libraries (below); the `rdb_test_cice_*` tests link
 # only the ice and core layers, so they build without the ocean.
 add_library(
   rdb_core_objs OBJECT
   ${CMAKE_CURRENT_SOURCE_DIR}/src/core/rdb_constants.F90
+  ${CMAKE_CURRENT_SOURCE_DIR}/src/framework/rdb_efp.F90
   ${CMAKE_CURRENT_SOURCE_DIR}/src/framework/rdb_safe_math.F90)
 set_target_properties(
   rdb_core_objs PROPERTIES POSITION_INDEPENDENT_CODE ON

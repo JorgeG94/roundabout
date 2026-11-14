@@ -68,6 +68,8 @@ module rdb_ice_params
    public :: ICE_CONDUCT_BUBBLY, ICE_CONDUCT_MU71
    public :: ice_constants_t, ice_thermo_params_t, ice_itd_params_t, ice_params_t
    public :: ice_sw_params_t
+   public :: ice_transport_params_t, ice_transport_params_default, ice_transport_params_valid
+   public :: ICE_ADVECT_UPWIND, ICE_ADVECT_REMAP
    public :: ice_ridge_params_t, ice_ridge_params_default, ice_ridge_params_valid
    public :: ice_atm_params_t, ice_atm_params_finalize
    public :: ice_constants, ice_params_default
@@ -203,6 +205,17 @@ module rdb_ice_params
       real(wp) :: rdn                 !! neutral drag sqrt(Cd) = kappa/ln(zref/iceruf); set by `ice_atm_params_finalize`
    end type ice_atm_params_t
 
+   integer, parameter :: ICE_ADVECT_UPWIND = 1
+      !! `&ocean_ice_dyn_nml advection = "upwind"` (first-order upwind, Dukowicz and Baumgardner 2000 context).
+   integer, parameter :: ICE_ADVECT_REMAP = 2
+      !! `advection = "remap"`: incremental remapping (Lipscomb and Hunke 2004); parsed, not yet runnable.
+
+   type :: ice_transport_params_t
+      !! Horizontal-transport knobs (scalars only, no default initialisers).
+      integer :: advection            !! ICE_ADVECT_*
+      logical :: check                !! `transport_check`: conservation / monotonicity / guard checks
+   end type ice_transport_params_t
+
    type :: ice_params_t
       !! All sea-ice parameters: scalars only, no allocatables, no strings.
       !! Later PRs add their own sub-types in their own files.
@@ -217,6 +230,7 @@ module rdb_ice_params
       type(ice_sw_params_t) :: sw
       type(ice_ridge_params_t) :: ridge
       type(ice_atm_params_t) :: atm
+      type(ice_transport_params_t) :: transport
    end type ice_params_t
 
 contains
@@ -347,7 +361,28 @@ contains
       p%atm%atmiter_conv = 0.0_wp
       p%atm%iceruf = 5.0e-4_wp
       call ice_atm_params_finalize(p%c, p%atm)
+      p%transport = ice_transport_params_default()
    end function ice_params_default
+
+   pure function ice_transport_params_default() result(tp)
+      !! Transport knobs at the upstream code defaults: `advection = 'remap'`
+      !! (not runnable yet: `ice_transport_params_valid` refuses it, and the
+      !! configure-time check applies that refusal under `scheme = 'cice'`
+      !! only) and `check` off (upstream `conserv_check = .false.`).
+      type(ice_transport_params_t) :: tp
+
+      tp%advection = ICE_ADVECT_REMAP
+      tp%check = .false.
+   end function ice_transport_params_default
+
+   pure function ice_transport_params_valid(tp) result(ok)
+      !! `.true.` when `advection` is one the transport implements today
+      !! (`ICE_ADVECT_UPWIND`; `ICE_ADVECT_REMAP` is refused until the remap PR).
+      type(ice_transport_params_t), intent(in) :: tp
+      logical :: ok
+
+      ok = tp%advection == ICE_ADVECT_UPWIND
+   end function ice_transport_params_valid
 
    pure function ice_ridge_params_default() result(rp)
       !! Ridging knobs at the upstream code defaults (`kstrength = 1`,

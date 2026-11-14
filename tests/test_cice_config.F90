@@ -11,7 +11,7 @@ module test_cice_config
    use rdb_config, only: config_t, read_config_from_string, validate_config
    use rdb_ocean_status, only: OCEAN_STATUS_OK, OCEAN_STATUS_ERR_CONFIG_VALIDATE
    use rdb_ice_dims, only: ICE_NCAT_MAX, ICE_NILYR_MAX
-   use rdb_ice_params, only: ice_params_t, ICE_CONSTANTS_ICEPACK, ICE_CONSTANTS_CESM, &
+   use rdb_ice_params, only: ICE_ADVECT_UPWIND, ICE_ADVECT_REMAP, ice_params_t, ICE_CONSTANTS_ICEPACK, ICE_CONSTANTS_CESM, &
                              ICE_TFRZ_LINEAR_SALT, ICE_TFRZ_CONSTANT, ICE_TFRZ_MINUS1P8, &
                              ICE_CONDUCT_BUBBLY, ICE_CONDUCT_MU71
    use rdb_ice_shortwave, only: ice_albedo_fhtan, ice_albedos_ccsm3, ice_absorbed_ccsm3, &
@@ -55,7 +55,10 @@ contains
                   new_unittest("sw_edge_values_accepted", test_sw_edges), &
                   new_unittest("sw_all_reasons_reported", test_sw_all_reasons), &
                   new_unittest("sw_round_trip_om3", test_sw_round_trip), &
-                  new_unittest("sw_kernel_default_params_bitwise", test_sw_kernel_defaults) &
+                  new_unittest("sw_kernel_default_params_bitwise", test_sw_kernel_defaults), &
+                  new_unittest("transport_defaults_are_upstream", test_transport_defaults), &
+                  new_unittest("transport_refusals", test_transport_refusals), &
+                  new_unittest("transport_round_trip", test_transport_round_trip) &
                   ]
    end subroutine collect_cice_config_tests
 
@@ -261,8 +264,8 @@ contains
       ! The maxima themselves are legal: only the 'not runnable' reason remains.
       write (s1, "(i0)") ICE_NILYR_MAX
       write (s2, "(i0)") ICE_NCAT_MAX
-      call parse("&ocean_ice_nml scheme='cice', nilyr="//trim(s1)//", ncat="//trim(s2)//" /", &
-                 cfg, error)
+      call parse("&ocean_ice_nml scheme='cice', nilyr="//trim(s1)//", ncat="//trim(s2)//" /"// &
+                 new_line('a')//"&ocean_ice_dyn_nml advection='upwind' /", cfg, error)
       if (allocated(error)) return
       call check(error, count_msgs(cfg), 1, "only the not-runnable reason at the maxima")
       if (allocated(error)) return
@@ -321,7 +324,8 @@ contains
 
       call parse("&ocean_ice_nml scheme='cice', nilyr=1, nslyr=2 /"//new_line('a')// &
                  "&ocean_ice_thermo_nml ktherm=2, kitd=0 /"//new_line('a')// &
-                 "&ocean_ice_sw_nml ahmax=0.0 /", cfg, error)
+                 "&ocean_ice_sw_nml ahmax=0.0 /"//new_line('a')// &
+                 "&ocean_ice_dyn_nml advection='upwind' /", cfg, error)
       if (allocated(error)) return
       call check(error, count_msgs(cfg), 6, "scheme + nilyr + nslyr + ktherm + kitd + ahmax")
       if (allocated(error)) return
@@ -833,5 +837,59 @@ contains
          if (allocated(error)) return
       end do
    end subroutine test_sw_kernel_defaults
+
+   subroutine test_transport_defaults(error)
+      !! `advection = 'remap'` (upstream default) and `transport_check = .false.`;
+      !! the default configuration (scheme sis2) needs no refusal.
+      type(error_type), allocatable, intent(out) :: error
+      type(config_t) :: cfg
+      type(ice_params_t) :: p
+
+      cfg = config_t()
+      p = ice_params_from_config(cfg)
+      call check(error, p%transport%advection, ICE_ADVECT_REMAP, "advection default is remap")
+      if (allocated(error)) return
+      call check(error, p%transport%check, .false., "transport_check default off")
+      if (allocated(error)) return
+      call check(error, count_msgs(cfg), 0, "defaults need no refusal under sis2")
+   end subroutine test_transport_defaults
+
+   subroutine test_transport_refusals(error)
+      !! Every refusal of the transport keys, with its message.
+      type(error_type), allocatable, intent(out) :: error
+      type(config_t) :: cfg
+
+      ! remap is parsed and accepted under sis2 (inert), refused under cice
+      call parse("&ocean_ice_dyn_nml advection='remap' /", cfg, error)
+      if (allocated(error)) return
+      call check(error, has_msg(cfg, "advection='remap' is not runnable"), .false., "remap inert under sis2")
+      if (allocated(error)) return
+      call expect_refusal("&ocean_ice_nml scheme='cice' /"//new_line('a')// &
+                          "&ocean_ice_dyn_nml advection='remap' /", "advection='remap' is not runnable", error)
+      if (allocated(error)) return
+      ! upwind is accepted under cice (the scheme itself is still refused: not runnable)
+      call parse("&ocean_ice_nml scheme='cice' /"//new_line('a')// &
+                 "&ocean_ice_dyn_nml advection='upwind' /", cfg, error)
+      if (allocated(error)) return
+      call check(error, has_msg(cfg, "advection="), .false., "upwind accepted under cice")
+      if (allocated(error)) return
+      ! an unknown spelling fails the strict schema
+      call check(error, parse_fails("&ocean_ice_dyn_nml advection='ppm' /"), "unknown advection spelling rejected")
+      if (allocated(error)) return
+      call check(error, parse_fails("&ocean_ice_dyn_nml transport_check = 3 /"), "transport_check is a logical")
+   end subroutine test_transport_refusals
+
+   subroutine test_transport_round_trip(error)
+      type(error_type), allocatable, intent(out) :: error
+      type(config_t) :: cfg
+      type(ice_params_t) :: p
+
+      call parse("&ocean_ice_dyn_nml advection='upwind', transport_check=.true. /", cfg, error)
+      if (allocated(error)) return
+      p = ice_params_from_config(cfg)
+      call check(error, p%transport%advection, ICE_ADVECT_UPWIND, "advection round trip")
+      if (allocated(error)) return
+      call check(error, p%transport%check, .true., "transport_check round trip")
+   end subroutine test_transport_round_trip
 
 end module test_cice_config

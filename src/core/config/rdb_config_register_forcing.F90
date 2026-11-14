@@ -433,14 +433,14 @@ contains
 
    module subroutine register_ocean_ice_cice(cfg, schema)
       !! `&ocean_ice_thermo_nml`, `&ocean_ice_sw_nml`, `&ocean_ice_ridge_nml` and
-      !! `&ocean_ice_atm_nml`: the CICE-port
+      !! `&ocean_ice_atm_nml` and `&ocean_ice_dyn_nml` (transport keys): the CICE-port
       !! thermodynamics / ITD / albedo knobs.  Defaults are the upstream CICE
       !! code defaults.  Spellings of options the port does not carry are
       !! accepted by the parser and refused by `validate_config` (so the
       !! message names the option and the reason).
       type(config_t), target, intent(in) :: cfg
       type(nml_schema_t), intent(inout) :: schema
-      type(nml_group_t) :: g, gs, gr, ga
+      type(nml_group_t) :: g, gs, gr, ga, gd
       logical, pointer :: pl
       integer, pointer :: pi
       real(wp), pointer :: pr
@@ -662,6 +662,22 @@ contains
                               "ice model (.false. is refused)", &
                               dead_on_ocean_path=ICE_DEAD))
       call schema%add_group(ga)
+
+      gd%name = "ocean_ice_dyn"
+      gd%doc = "CICE-port ice dynamics and transport knobs (scheme='cice'; upstream "// &
+               "CICE defaults)."
+      ps => cfg%ocean%ice_dyn%advection
+      call gd%add(nml_enum("advection", ps, "Horizontal transport: remap = incremental "// &
+                           "remapping (Lipscomb and Hunke 2004; upstream default, refused "// &
+                           "until the remap PR), upwind = first-order upwind", &
+                           allowed=[character(len=8) :: "remap", "upwind"], &
+                           dead_on_ocean_path=ICE_DEAD))
+      pl => cfg%ocean%ice_dyn%transport_check
+      call gd%add(nml_logical("transport_check", pl, "Run the transport checks "// &
+                              "(non-finite entry, negative area, CFL, conservation of "// &
+                              "area and tracers, monotonicity)", &
+                              dead_on_ocean_path=ICE_DEAD))
+      call schema%add_group(gd)
    end subroutine register_ocean_ice_cice
 
    module subroutine register_ocean_ice_ic(cfg, schema)

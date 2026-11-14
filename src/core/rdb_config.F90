@@ -59,6 +59,7 @@ module rdb_config
              ocean_ice_config_t, ocean_ice_ic_config_t, &
              ocean_ice_thermo_config_t, ocean_ice_sw_config_t, &
              ocean_ice_ridge_config_t, ocean_ice_atm_config_t, &
+             ocean_ice_dyn_config_t, &
              ocean_restore_config_t, &
              ocean_geothermal_config_t, &
              ocean_sponge_config_t, &
@@ -672,6 +673,21 @@ module rdb_config
       logical :: calc_strair = .true.
          !! Compute the wind stress in the ice model: only `.true.` is supported.
    end type ocean_ice_atm_config_t
+
+   type :: ocean_ice_dyn_config_t
+      !! `&ocean_ice_dyn_nml`: CICE-port ice dynamics / transport knobs.  This
+      !! group is owned by the dynamics PRs; the transport PR adds `advection`
+      !! and `transport_check` (appended; the dynamics keys are theirs).
+      !! `scheme="cice"` only.
+      character(len=8) :: advection = "remap"
+         !! Horizontal transport of the ice state: `"remap"` (incremental
+         !! remapping, Lipscomb and Hunke 2004; upstream default, REFUSED until
+         !! the remap PR) or `"upwind"` (first-order upwind).
+      logical :: transport_check = .false.
+         !! Run the transport checks (non-finite entry, negative area, CFL,
+         !! conservation of area and of area-weighted tracers, monotonicity);
+         !! costs extra reductions and, for monotonicity, scratch bounds.
+   end type ocean_ice_dyn_config_t
 
    type :: ocean_ice_ic_config_t
       !! `&ocean_ice_ic_nml`: sea-ice ANALYTIC initial-condition path (PR
@@ -4071,6 +4087,8 @@ module rdb_config
          !! CICE-port ridging/strength knobs (`&ocean_ice_ridge_nml`).
       type(ocean_ice_atm_config_t)    :: ice_atm
          !! CICE-port atmosphere boundary-layer knobs (`&ocean_ice_atm_nml`).
+      type(ocean_ice_dyn_config_t)    :: ice_dyn
+         !! CICE-port ice dynamics/transport knobs (`&ocean_ice_dyn_nml`).
       type(ocean_ice_ic_config_t)     :: ice_ic
          !! Sea-ice initial-condition config (`&ocean_ice_ic_nml`, PR 24).
          !! Default `conc_config="zero"` ⇒ byte-identical.
