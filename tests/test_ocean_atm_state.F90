@@ -65,6 +65,13 @@
 !!   atm_sw_record_alignment          -- a record that is non-zero in
 !!                                       exactly ONE bucket deposits its
 !!                                       energy in that bucket only.
+!!   atm_sw_axis_checks               -- configure refuses `sw_offset_s = -5400`
+!!                                       and a spacing/offset mismatch;
+!!                                       6-hourly records run exactly.
+!!   atm_sw_shape                     -- step-mean `cosz` against an
+!!                                       independent 1e4-node quadrature
+!!                                       (sunset step, lon -280, a short
+!!                                       night, polar night/day).
 !!   atm_sw_coszen_analytic           -- §5 test 3d: equinox, lat=lon=0
 !!                                       -- local noon gives `cosz`
 !!                                       within 1e-3 of 1.0, midnight
@@ -90,7 +97,7 @@ module test_ocean_atm_state
    use rdb_ocean_metrics, only: ocean_metrics_t
    use ocean_test_metrics, only: make_spherical_metrics, destroy_cartesian_metrics
    use rdb_ocean_data_input, only: ocean_data_input_t, ocean_data_input_update_all
-   use rdb_atm_state, only: atm_state_t, atm_state_configure, atm_state_update
+   use rdb_atm_state, only: atm_state_t, atm_state_configure, atm_state_update, atm_sw_window
    use rdb_ocean_status, only: OCEAN_STATUS_OK
    use rdb_io_netcdf, only: nc_create_file, nc_close, nc_def_dim, nc_def_var_3d, &
                             nc_def_var_2d, rdb_def_var_1d, nc_enddef, rdb_put_var_1d, &
@@ -132,6 +139,8 @@ contains
                   new_unittest("atm_sw_failing_geometry", test_sw_failing_geometry), &
                   new_unittest("atm_sw_polar", test_sw_polar), &
                   new_unittest("atm_sw_record_alignment", test_sw_record_alignment), &
+                  new_unittest("atm_sw_axis_checks", test_sw_axis_checks), &
+                  new_unittest("atm_sw_shape", test_sw_shape), &
                   new_unittest("atm_sw_coszen_analytic", test_sw_coszen_analytic) &
                   ]
    end subroutine collect_ocean_atm_state_tests
@@ -861,7 +870,7 @@ contains
       do k = 1, size(TQ_SAMPLES)
          tq = TQ_SAMPLES(k)
          call ocean_data_input_update_all(reader, tq)
-         call atm_state_update(atm, reader, metrics, tq, TEST_DT)
+         call atm_state_update(atm, reader, metrics, tq, 1.0_wp)   ! 1 s window: every sample time is on its grid
          call sync_atm(atm)
          rsds_rec_val = atm%rsds_rec(1 + NGHOST, 1 + NGHOST)
          call check(error, abs(rsds_rec_val - EXPECTED(k)) < TOL_EXACT, &
@@ -888,18 +897,27 @@ contains
    ! hold, regrid, kernel) on ONE physical cell at a chosen lon/lat.
    ! =====================================================================
 
-   subroutine sw_run(lon, lat, start_date, rec, dt, nsteps, rsds_t, cosz_t, mean_t, ierr)
+   subroutine sw_run(lon, lat, start_date, rec, dt, nsteps, rsds_t, cosz_t, mean_t, wlen_t, &
+                     used, ierr, bucket, ratio, dfirst, offset)
       !! Run `nsteps` model steps of length `dt` from t = 0 (UTC 00:00 of
       !! `start_date`) on a 1x1 grid centred at (`lon`, `lat`) whose `rsds`
-      !! file holds `size(rec)` records stamped at the 3-hour bucket
-      !! CENTRES, record `k` = `rec(k)` uniformly in space.  Returns the
-      !! per-step `rsds`, window-mean `cosz` and bucket-mean `cosz_mean`.
-      !! Maps every device array the kernel touches (`map_atm`).
+      !! file holds `size(rec)` records stamped at the averaging-interval
+      !! CENTRES (`bucket`, default 3 h), record `k` = `rec(k)` uniformly in
+      !! space.  `ratio`/`dfirst` emulate `dt_therm_ratio`/`diabatic_first`:
+      !! each step's window comes from `atm_sw_window` exactly as the engine
+      !! calls it.  Returns the per-step `rsds`, window-mean `cosz`,
+      !! interval-mean `cosz_mean`, window length and whether the step is a
+      !! thermo step (the only ones whose flux is applied).  Maps every
+      !! device array the kernel touches (`map_atm`).
       real(wp), intent(in) :: lon, lat, rec(:), dt
       character(len=*), intent(in) :: start_date
       integer, intent(in) :: nsteps
-      real(wp), intent(out) :: rsds_t(nsteps), cosz_t(nsteps), mean_t(nsteps)
+      real(wp), intent(out) :: rsds_t(nsteps), cosz_t(nsteps), mean_t(nsteps), wlen_t(nsteps)
+      logical, intent(out) :: used(nsteps)
       integer, intent(out) :: ierr
+      real(wp), intent(in), optional :: bucket, offset
+      integer, intent(in), optional :: ratio
+      logical, intent(in), optional :: dfirst
 
       character(len=*), parameter :: OTHER8(8) = &
                                      [character(len=4) :: "tas", "huss", "uas", "vas", "psl", &
@@ -913,17 +931,25 @@ contains
       real(wp) :: lon_c(NLON_SRC), lat_c(NLAT_SRC)
       real(wp) :: lon_bnds(2, NLON_SRC), lat_bnds(2, NLAT_SRC)
       real(wp) :: t_axis_other(2), coefs_other(4, 8), coefs_rsds(4, 1), tq
+      real(wp) :: bk, shift, wl
       real(wp), allocatable :: t_axis_rsds(:)
       character(len=64) :: units
-      integer :: v, k, nrec
+      integer :: v, k, nrec, nr
+      logical :: df, thermo
 
+      bk = BUCKET_S
+      if (present(bucket)) bk = bucket
+      nr = 1
+      if (present(ratio)) nr = ratio
+      df = .true.
+      if (present(dfirst)) df = dfirst
       nrec = size(rec)
       allocate (t_axis_rsds(nrec))
       call uniform_axis(NLON_SRC, 0.0_wp, 360.0_wp, lon_c, lon_bnds)
       call uniform_axis(NLAT_SRC, -90.0_wp, 90.0_wp, lat_c, lat_bnds)
       units = "seconds since "//start_date//" 00:00:00"
       do k = 1, nrec
-         t_axis_rsds(k) = (real(k, wp) - 0.5_wp)*BUCKET_S
+         t_axis_rsds(k) = (real(k, wp) - 0.5_wp)*bk
       end do
       do v = 1, 8
          coefs_other(:, v) = [1.0_wp, 0.0_wp, 0.0_wp, 0.0_wp]
@@ -949,20 +975,35 @@ contains
       call base_cfg(cfg, start_date, "tmp_local_artifacts/atm_sw_other_filelist.txt")
       cfg%ocean%atm_forcing%filelist_rsds = "tmp_local_artifacts/atm_sw_rsds_filelist.txt"
       cfg%ocean%atm_forcing%sw_interp = "coszen"
-      cfg%ocean%atm_forcing%sw_offset_s = 5400.0_wp
+      cfg%ocean%atm_forcing%sw_offset_s = 0.5_wp*bk
+      if (present(offset)) cfg%ocean%atm_forcing%sw_offset_s = offset
 
       call reader%init()
       call atm_state_configure(cfg, reader, grid, metrics, atm, ierr=ierr)
-      if (ierr /= OCEAN_STATUS_OK) return
+      if (ierr /= OCEAN_STATUS_OK) then
+         call destroy_cartesian_metrics(metrics)
+         call reader%destroy()
+         return
+      end if
       call map_atm(reader, atm)
       do k = 1, nsteps
          tq = real(k - 1, wp)*dt
+         if (nr <= 1) then
+            thermo = .true.
+         else if (df) then
+            thermo = (mod(k - 1, nr) == 0)
+         else
+            thermo = (mod(k, nr) == 0)
+         end if
+         call atm_sw_window(dt, nr, df, thermo, shift, wl)
          call ocean_data_input_update_all(reader, tq)
-         call atm_state_update(atm, reader, metrics, tq, dt)
+         call atm_state_update(atm, reader, metrics, tq, dt, shift, wl)
          call sync_atm(atm)
          rsds_t(k) = atm%rsds(1 + NGHOST, 1 + NGHOST)
          cosz_t(k) = atm%cosz(1 + NGHOST, 1 + NGHOST)
          mean_t(k) = atm%cosz_mean(1 + NGHOST, 1 + NGHOST)
+         wlen_t(k) = wl
+         used(k) = thermo
       end do
       call unmap_atm(reader, atm)
       call destroy_cartesian_metrics(metrics)
@@ -970,81 +1011,112 @@ contains
       call reader%destroy()
    end subroutine sw_run
 
-   subroutine bucket_audit(rsds_t, mean_t, rec, dt, nsteps, energy_err, max_ratio, n_partial)
-      !! Per-bucket energy error `|Sum rsds*dt - e_b| / (rec_b*3h)` (max over
-      !! buckets; `e_b = rec_b*3h` where the bucket's mean cosine is
-      !! >= 1e-9 and 0 where the Sun never rises in it), the largest
-      !! `rsds/rec` over all steps, and the number of PARTLY lit buckets
-      !! (a sunrise/sunset bucket: 0 < mean < 0.3 x the day's largest).
+   subroutine bucket_audit(rsds_t, mean_t, wlen_t, used, rec, bucket, dt, nsteps, &
+                           energy_err, max_ratio, max_frac, n_partial)
+      !! Per-bucket energy error `|Sum rsds*wlen - e_b| / (rec_b*bucket)` over
+      !! the steps whose flux is applied (`used`; max over buckets;
+      !! `e_b = rec_b*bucket` where the bucket's mean cosine is >= 1e-9 and 0
+      !! where the Sun never rises in it), the largest `rsds/rec`, the
+      !! largest single-window energy fraction `rsds*wlen/(rec*bucket)` (the
+      !! bound: <= 1), and the number of PARTLY lit buckets (a
+      !! sunrise/sunset bucket: 0 < mean < 0.3 x the day's largest).
       integer, intent(in) :: nsteps
-      real(wp), intent(in) :: rsds_t(nsteps), mean_t(nsteps), rec(:), dt
-      real(wp), intent(out) :: energy_err, max_ratio
+      real(wp), intent(in) :: rsds_t(nsteps), mean_t(nsteps), wlen_t(nsteps), rec(:)
+      real(wp), intent(in) :: bucket, dt
+      logical, intent(in) :: used(nsteps)
+      real(wp), intent(out) :: energy_err, max_ratio, max_frac
       integer, intent(out) :: n_partial
 
-      integer :: k, b, nb, spb
-      real(wp) :: e, expect, mmax
-      real(wp) :: bmean
+      integer :: k, b, nb
+      real(wp) :: expect, mmax
+      real(wp) :: e(size(rec)), bmean(size(rec))
 
-      spb = nint(BUCKET_S/dt)
-      nb = nsteps/spb
+      nb = size(rec)
+      e = 0.0_wp
+      bmean = 0.0_wp
       energy_err = 0.0_wp
       max_ratio = 0.0_wp
+      max_frac = 0.0_wp
       n_partial = 0
-      mmax = 0.0_wp
-      do b = 1, nb
-         mmax = max(mmax, mean_t((b - 1)*spb + 1))
+      do k = 1, nsteps
+         b = int(real(k - 1, wp)*dt/bucket) + 1
+         if (b > nb) exit
+         bmean(b) = max(bmean(b), mean_t(k))
+         if (.not. used(k)) cycle
+         e(b) = e(b) + rsds_t(k)*wlen_t(k)
+         if (rec(b) > 0.0_wp) then
+            max_ratio = max(max_ratio, rsds_t(k)/rec(b))
+            max_frac = max(max_frac, rsds_t(k)*wlen_t(k)/(rec(b)*bucket))
+         end if
       end do
+      mmax = maxval(bmean)
       do b = 1, nb
-         e = 0.0_wp
-         do k = (b - 1)*spb + 1, b*spb
-            e = e + rsds_t(k)*dt
-            if (rec(b) > 0.0_wp) max_ratio = max(max_ratio, rsds_t(k)/rec(b))
-         end do
-         bmean = mean_t((b - 1)*spb + 1)
          expect = 0.0_wp
-         if (bmean >= 1.0e-9_wp) expect = rec(b)*BUCKET_S
-         if (rec(b) > 0.0_wp) energy_err = max(energy_err, abs(e - expect)/(rec(b)*BUCKET_S))
-         if (bmean > 1.0e-9_wp .and. bmean < 0.3_wp*mmax) n_partial = n_partial + 1
+         if (bmean(b) >= 1.0e-9_wp) expect = rec(b)*bucket
+         if (rec(b) > 0.0_wp) energy_err = max(energy_err, abs(e(b) - expect)/(rec(b)*bucket))
+         if (bmean(b) > 1.0e-9_wp .and. bmean(b) < 0.3_wp*mmax) n_partial = n_partial + 1
       end do
    end subroutine bucket_audit
 
    subroutine test_sw_energy_identity(error)
       !! One UTC day at a mid-latitude cell (34.7 S, 74.5 W, Jan 3: the
       !! day contains a sunset bucket and a sunrise bucket), uniform
-      !! record 250 W/m2, stepped at dt = 600, 1800 and 3600 s: for EVERY
-      !! 3-hour bucket `Sum rsds*dt = rsds_rec*3h` (to round-off -- the
-      !! step and bucket means are differences of one closed-form
-      !! antiderivative) and `rsds <= rsds_rec*3h/dt` at every step.
+      !! record 250 W/m2: for EVERY 3-hour bucket `Sum rsds*window = rsds_rec*3h`
+      !! (to round-off -- the window and bucket means are differences of
+      !! one closed-form antiderivative) and no window carries more than the
+      !! bucket's energy.  Swept over dt = 600/1800/3600 s, and over
+      !! `dt_therm_ratio` = 2 and 3 for BOTH `diabatic_first` settings (the
+      !! flux sampled on a thermo step is applied over `N*dt`; only thermo
+      !! steps count).
       type(error_type), allocatable, intent(out) :: error
 
       real(wp), parameter :: REC_VAL = 250.0_wp
-      real(wp), parameter :: DTS(3) = [600.0_wp, 1800.0_wp, 3600.0_wp]
-      real(wp) :: rec(8), eerr, mratio, dt
-      real(wp), allocatable :: r(:), c(:), m(:)
-      integer :: id, ns, ierr, npart
+      real(wp), parameter :: DTS(6) = [600.0_wp, 1800.0_wp, 3600.0_wp, 900.0_wp, 900.0_wp, 900.0_wp]
+      integer, parameter :: RATIOS(6) = [1, 1, 1, 2, 3, 3]
+      logical, parameter :: DFIRST(6) = [.true., .true., .true., .true., .true., .false.]
+      real(wp) :: rec(8), eerr, mratio, mfrac, dt
+      real(wp), allocatable :: r(:), c(:), m(:), w(:)
+      logical, allocatable :: u(:)
+      integer :: id, ns, ierr, npart, pass, nr
+      logical :: df
 
       rec = REC_VAL
-      do id = 1, size(DTS)
-         dt = DTS(id)
+      do pass = 1, 8
+         ! passes 1-6: the table; 7: ratio 2 not diabatic_first; 8: ratio 2 N=2 dt 1800
+         if (pass <= 6) then
+            id = pass
+            dt = DTS(id)
+            nr = RATIOS(id)
+            df = DFIRST(id)
+         else if (pass == 7) then
+            dt = 900.0_wp
+            nr = 2
+            df = .false.
+         else
+            dt = 1800.0_wp
+            nr = 2
+            df = .true.
+         end if
          ns = nint(86400.0_wp/dt)
-         allocate (r(ns), c(ns), m(ns))
-         call sw_run(285.5_wp, -34.7_wp, "2000-01-03", rec, dt, ns, r, c, m, ierr)
+         allocate (r(ns), c(ns), m(ns), w(ns), u(ns))
+         call sw_run(285.5_wp, -34.7_wp, "2000-01-03", rec, dt, ns, r, c, m, w, u, ierr, &
+                     ratio=nr, dfirst=df)
          call check(error, ierr == OCEAN_STATUS_OK, "atm_state_configure failed")
          if (allocated(error)) return
-         call bucket_audit(r, m, rec, dt, ns, eerr, mratio, npart)
+         call bucket_audit(r, m, w, u, rec, BUCKET_S, dt, ns, eerr, mratio, mfrac, npart)
          call check(error, eerr <= 1.0e-9_wp, &
-                    "energy identity: per-bucket Sum rsds*dt must equal rsds_rec*3h "// &
-                    "(relative error <= 1e-9) at every dt")
+                    "energy identity: per-bucket Sum rsds*window must equal rsds_rec*3h "// &
+                    "(relative error <= 1e-9) at every dt / dt_therm_ratio / diabatic_first")
          if (allocated(error)) return
-         call check(error, mratio <= BUCKET_S/dt*(1.0_wp + 1.0e-9_wp), &
-                    "bound: rsds must never exceed rsds_rec*3h/dt")
+         call check(error, mfrac <= 1.0_wp + 1.0e-9_wp, &
+                    "bound: one window may never carry more than the bucket's energy")
          if (allocated(error)) return
          call check(error, npart >= 2, &
                     "test geometry must contain both a sunrise and a sunset bucket")
          if (allocated(error)) return
          call check(error, minval(r) >= 0.0_wp, "rsds must be non-negative")
          if (allocated(error)) return
-         deallocate (r, c, m)
+         deallocate (r, c, m, w, u)
       end do
    end subroutine test_sw_energy_identity
 
@@ -1059,12 +1131,13 @@ contains
       type(error_type), allocatable, intent(out) :: error
 
       real(wp), parameter :: DT = 1800.0_wp
-      real(wp) :: rec(8), r(6), c(6), m(6), e
+      real(wp) :: rec(8), r(6), c(6), m(6), w(6), e
+      logical :: u(6)
       integer :: ierr
 
       rec = 0.0_wp
       rec(1) = 249.28_wp
-      call sw_run(285.5_wp, -34.7_wp, "1958-01-03", rec, DT, 6, r, c, m, ierr)
+      call sw_run(285.5_wp, -34.7_wp, "1958-01-03", rec, DT, 6, r, c, m, w, u, ierr)
       call check(error, ierr == OCEAN_STATUS_OK, "atm_state_configure failed")
       if (allocated(error)) return
       call check(error, m(1) > 1.0e-9_wp .and. m(1) < 1.0e-2_wp, &
@@ -1089,21 +1162,22 @@ contains
       type(error_type), allocatable, intent(out) :: error
 
       real(wp), parameter :: DT = 1800.0_wp
-      real(wp) :: rec(8), r(48), c(48), m(48), eerr, mratio, jump
+      real(wp) :: rec(8), r(48), c(48), m(48), w(48), eerr, mratio, mfrac, jump
+      logical :: u(48)
       integer :: ierr, npart, k
 
       rec = 300.0_wp
-      call sw_run(10.0_wp, 80.0_wp, "2000-01-03", rec, DT, 48, r, c, m, ierr)
+      call sw_run(10.0_wp, 80.0_wp, "2000-01-03", rec, DT, 48, r, c, m, w, u, ierr)
       call check(error, ierr == OCEAN_STATUS_OK, "atm_state_configure failed")
       if (allocated(error)) return
-      call check(error, all(r == 0.0_wp) .and. all(m == 0.0_wp), &
-                 "polar night: rsds and the bucket mean cosine must be exactly 0")
+      call check(error, all(r == 0.0_wp) .and. all(m == 0.0_wp) .and. all(c == 0.0_wp), &
+                 "polar night: rsds, cosz and the bucket mean cosine must be exactly 0")
       if (allocated(error)) return
 
-      call sw_run(10.0_wp, 80.0_wp, "2000-07-01", rec, DT, 48, r, c, m, ierr)
+      call sw_run(10.0_wp, 80.0_wp, "2000-07-01", rec, DT, 48, r, c, m, w, u, ierr)
       call check(error, ierr == OCEAN_STATUS_OK, "atm_state_configure failed")
       if (allocated(error)) return
-      call bucket_audit(r, m, rec, DT, 48, eerr, mratio, npart)
+      call bucket_audit(r, m, w, u, rec, BUCKET_S, DT, 48, eerr, mratio, mfrac, npart)
       call check(error, eerr <= 1.0e-9_wp, "polar day: per-bucket energy must be exact")
       if (allocated(error)) return
       call check(error, minval(m) > 0.0_wp .and. minval(r) > 0.0_wp, &
@@ -1124,20 +1198,20 @@ contains
    subroutine test_sw_record_alignment(error)
       !! Record 3 (the [06:00,09:00) UTC mean) is non-zero, every other
       !! record 0, at a cell (60 E, 20 N, Jan 3) whose Sun is up through
-      !! the whole 03-12 UTC window: ALL of the energy
-      !! `rec*3h` must land in bucket 3 and none in buckets 2 or 4.  (A
-      !! one-bucket-late record -- the old `sw_offset_s = -5400` -- put it
-      !! in bucket 4.)
+      !! the whole 03-12 UTC window: ALL of the energy `rec*3h` must land in
+      !! bucket 3 and none in the others.  (A one-bucket-late record -- the
+      !! old `sw_offset_s = -5400` -- put it in bucket 4.)
       type(error_type), allocatable, intent(out) :: error
 
       real(wp), parameter :: DT = 1800.0_wp
       real(wp), parameter :: X = 400.0_wp
-      real(wp) :: rec(8), r(48), c(48), m(48), eb(8)
+      real(wp) :: rec(8), r(48), c(48), m(48), w(48), eb(8)
+      logical :: u(48)
       integer :: ierr, b, k
 
       rec = 0.0_wp
       rec(3) = X
-      call sw_run(60.0_wp, 20.0_wp, "2000-01-03", rec, DT, 48, r, c, m, ierr)
+      call sw_run(60.0_wp, 20.0_wp, "2000-01-03", rec, DT, 48, r, c, m, w, u, ierr)
       call check(error, ierr == OCEAN_STATUS_OK, "atm_state_configure failed")
       if (allocated(error)) return
       call check(error, m(13) > 0.1_wp .and. m(19) > 0.1_wp .and. m(7) > 0.1_wp, &
@@ -1155,6 +1229,131 @@ contains
       call check(error, maxval(abs(eb([1, 2, 4, 5, 6, 7, 8]))) == 0.0_wp, &
                  "alignment: no energy may land in any other bucket")
    end subroutine test_sw_record_alignment
+
+   subroutine test_sw_axis_checks(error)
+      !! Configure-time checks against the `rsds` file: (a) a namelist still
+      !! carrying `sw_offset_s = -5400` is REFUSED (it would silently
+      !! reproduce the one-bucket-late record); (b) the averaging interval
+      !! is derived from the file -- 6-hourly records with `sw_offset_s =
+      !! 10800` run and conserve energy per 6 h interval; (c) 6-hourly
+      !! records with the 3-hourly offset 5400 are refused.
+      type(error_type), allocatable, intent(out) :: error
+
+      real(wp), parameter :: DT = 1800.0_wp
+      real(wp) :: rec(8), r(48), c(48), m(48), w(48), eerr, mratio, mfrac
+      logical :: u(48)
+      integer :: ierr, npart
+
+      rec = 250.0_wp
+      call sw_run(285.5_wp, -34.7_wp, "2000-01-03", rec, DT, 48, r, c, m, w, u, ierr, &
+                  offset=-5400.0_wp)
+      call check(error, ierr /= OCEAN_STATUS_OK, &
+                 "sw_offset_s = -5400 with centre-stamped 3-hourly records must be refused")
+      if (allocated(error)) return
+
+      call sw_run(285.5_wp, -34.7_wp, "2000-01-03", rec, DT, 48, r, c, m, w, u, ierr, &
+                  bucket=21600.0_wp, offset=5400.0_wp)
+      call check(error, ierr /= OCEAN_STATUS_OK, &
+                 "6-hourly records with sw_offset_s = 5400 must be refused")
+      if (allocated(error)) return
+
+      rec = 250.0_wp
+      call sw_run(285.5_wp, -34.7_wp, "2000-01-03", rec, DT, 48, r, c, m, w, u, ierr, &
+                  bucket=21600.0_wp)
+      call check(error, ierr == OCEAN_STATUS_OK, "6-hourly records with offset 10800 must run")
+      if (allocated(error)) return
+      call bucket_audit(r, m, w, u, rec(1:4), 21600.0_wp, DT, 48, eerr, mratio, mfrac, npart)
+      call check(error, eerr <= 1.0e-9_wp .and. mfrac <= 1.0_wp + 1.0e-9_wp, &
+                 "6-hourly records: per-interval energy must be exact and bounded")
+   end subroutine test_sw_axis_checks
+
+   pure function ref_step_mean(lon, lat, doy, t0, t1, bucket) result(cz)
+      !! Independent reference: mean of max(0, sin(phi) sin(dec) + cos(phi)
+      !! cos(dec) cos(omega)) over [t0, t1) seconds after UTC midnight by
+      !! 10^4-node midpoint quadrature.  Spencer (1971) declination and
+      !! equation of time at the midpoint of the `bucket` holding `t0`
+      !! (written out here, not taken from the kernel); omega from the UTC
+      !! hour, the equation of time and the longitude.
+      real(wp), intent(in) :: lon, lat, t0, t1, bucket
+      integer, intent(in) :: doy
+      real(wp) :: cz
+
+      real(wp), parameter :: PI = 3.14159265358979323846_wp
+      integer, parameter :: NQ = 10000
+      real(wp) :: tmid, hf, g, dec, eq, tau, om, c, acc
+      integer :: i
+
+      tmid = (floor(t0/bucket) + 0.5_wp)*bucket
+      hf = tmid/3600.0_wp
+      g = 2.0_wp*PI*(real(doy - 1, wp) + (hf - 12.0_wp)/24.0_wp)/365.0_wp
+      dec = 0.006918_wp - 0.399912_wp*cos(g) + 0.070257_wp*sin(g) - 0.006758_wp*cos(2*g) &
+            + 0.000907_wp*sin(2*g) - 0.002697_wp*cos(3*g) + 0.001480_wp*sin(3*g)
+      eq = 229.18_wp*(0.000075_wp + 0.001868_wp*cos(g) - 0.032077_wp*sin(g) &
+                      - 0.014615_wp*cos(2*g) - 0.040849_wp*sin(2*g))
+      acc = 0.0_wp
+      do i = 1, NQ
+         tau = t0 + (real(i, wp) - 0.5_wp)/real(NQ, wp)*(t1 - t0)
+         om = (15.0_wp*tau/3600.0_wp + eq/4.0_wp + lon - 180.0_wp)*PI/180.0_wp
+         c = sin(lat*PI/180.0_wp)*sin(dec) + cos(lat*PI/180.0_wp)*cos(dec)*cos(om)
+         acc = acc + max(0.0_wp, c)
+      end do
+      cz = acc/real(NQ, wp)
+   end function ref_step_mean
+
+   subroutine test_sw_shape(error)
+      !! The energy identity telescopes for ANY monotone antiderivative, so
+      !! it cannot see the SHAPE.  Compare the kernel's step-mean `cosz`
+      !! (48 half-hour steps of a day) with `ref_step_mean` at: a mid-latitude
+      !! cell with sunset + sunrise steps, longitude -280 (an unwrapped
+      !! longitude), 65 N in late June (a short night: a bucket holding both
+      !! a sunset and the next sunrise), polar night, polar day.  Every
+      !! step the reference calls dark must be EXACTLY 0 (covers a night
+      !! step across local midnight).
+      type(error_type), allocatable, intent(out) :: error
+
+      real(wp), parameter :: DT = 1800.0_wp
+      real(wp), parameter :: LONS(5) = [285.5_wp, -280.0_wp, 337.5_wp, 10.0_wp, 10.0_wp]
+      real(wp), parameter :: LATS(5) = [-34.7_wp, 40.0_wp, 65.0_wp, 80.0_wp, 80.0_wp]
+      integer, parameter :: DOYS(5) = [3, 3, 177, 3, 183]
+      character(len=10), parameter :: DATES(5) = [character(len=10) :: "2000-01-03", &
+                                                                                         "2000-01-03", "2000-06-25", "2000-01-03", &
+                                                                                                                   "2000-07-01"]
+      real(wp) :: rec(8), r(48), c(48), m(48), w(48), ref, worst, t0
+      logical :: u(48)
+      integer :: ic, k, ierr, ndark_ok
+
+      rec = 250.0_wp
+      do ic = 1, 5
+         call sw_run(LONS(ic), LATS(ic), DATES(ic), rec, DT, 48, r, c, m, w, u, ierr)
+         call check(error, ierr == OCEAN_STATUS_OK, "atm_state_configure failed")
+         if (allocated(error)) return
+         worst = 0.0_wp
+         ndark_ok = 0
+         do k = 1, 48
+            t0 = real(k - 1, wp)*DT
+            ref = ref_step_mean(LONS(ic), LATS(ic), DOYS(ic), t0, t0 + DT, BUCKET_S)
+            worst = max(worst, abs(c(k) - ref))
+            if (ref == 0.0_wp) then
+               call check(error, c(k) == 0.0_wp, &
+                          "shape: a step the reference calls dark must be exactly 0")
+               if (allocated(error)) return
+               ndark_ok = ndark_ok + 1
+            end if
+         end do
+         call check(error, worst <= 2.0e-6_wp, &
+                    "shape: step-mean cosz must match the independent 1e4-node quadrature")
+         if (allocated(error)) return
+         if (ic == 4) then
+            call check(error, ndark_ok == 48, "polar night: every step dark")
+            if (allocated(error)) return
+         end if
+         if (ic == 3) then
+            call check(error, ndark_ok >= 1 .and. ndark_ok < 12, &
+                       "65 N late June: a short night must be present")
+            if (allocated(error)) return
+         end if
+      end do
+   end subroutine test_sw_shape
 
    ! =====================================================================
    ! §5 test 3d: coszen vs the analytic equinox/noon/midnight case.
@@ -1181,19 +1380,19 @@ contains
       type(atm_state_t) :: atm
       real(wp) :: lon_c(NLON_SRC), lat_c(NLAT_SRC)
       real(wp) :: lon_bnds(2, NLON_SRC), lat_bnds(2, NLAT_SRC)
-      real(wp) :: t_axis(2), coefs(4, 9)
+      real(wp) :: t_axis(3), coefs(4, 9)
       real(wp) :: tq, cosz_val
       integer :: v, ierr
 
       call uniform_axis(NLON_SRC, 0.0_wp, 360.0_wp, lon_c, lon_bnds)
       call uniform_axis(NLAT_SRC, -90.0_wp, 90.0_wp, lat_c, lat_bnds)
-      t_axis = [0.0_wp, 1.0_wp]
+      t_axis = [-0.5_wp, 0.5_wp, 1.5_wp]   ! daily means stamped at the interval centre
       do v = 1, 9
          coefs(:, v) = [1.0_wp, 0.0_wp, 0.0_wp, 0.0_wp]
       end do
 
       call write_atm_grid_file("tmp_local_artifacts/atm_coszen.nc", NLON_SRC, NLAT_SRC, &
-                               lon_c, lat_c, lon_bnds, lat_bnds, 2, t_axis, &
+                               lon_c, lat_c, lon_bnds, lat_bnds, 3, t_axis, &
                                "days since 2000-03-20 00:00:00", VARNAMES, coefs)
       call write_filelist_txt("tmp_local_artifacts/atm_coszen_filelist.txt", &
                               ["tmp_local_artifacts/atm_coszen.nc"])
@@ -1204,6 +1403,7 @@ contains
       call make_spherical_metrics(metrics, grid, -1.0_wp, -1.0_wp, 2.0_wp, 2.0_wp, RAD_EARTH)
       call base_cfg(cfg, "2000-03-20", "tmp_local_artifacts/atm_coszen_filelist.txt")
       cfg%ocean%atm_forcing%sw_interp = "coszen"
+      cfg%ocean%atm_forcing%sw_offset_s = 43200.0_wp   ! half the daily interval
 
       call reader%init()
       call atm_state_configure(cfg, reader, grid, metrics, atm, ierr=ierr)
