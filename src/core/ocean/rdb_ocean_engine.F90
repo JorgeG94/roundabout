@@ -145,7 +145,7 @@ module rdb_ocean_engine
    use rdb_ocean_sponge, only: ocean_sponge_snapshot_reference, ocean_sponge_refresh_target
    use rdb_ocean_geothermal, only: ocean_geothermal_t
    use rdb_ocean_diag_fills, only: set_diag_remap_method, parse_diag_remap_scheme, &
-                                   set_diag_mask_vanished
+                                   set_diag_mask_vanished, diag_remap_workspace_cleanup
    use rdb_ocean_diag_derived, only: apply_diag_selection
    use rdb_ocean_diag, only: DIAG_VGRID_LAYER, DIAG_VGRID_Z_FIXED, &
                              DIAG_VGRID_SIGMA, DIAG_VGRID_ZSTAR, DIAG_VGRID_DENSITY
@@ -2603,6 +2603,7 @@ contains
       ! The shortwave wiring's zero snow-absorption workspace (module-level, device-mapped lazily by the
       ! first CICE-port step): released with the other ice workspaces.
       call ice_sw_wiring_cleanup()
+      call diag_remap_workspace_cleanup()
       engine%device_mapped = .false.
    end subroutine engine_exit_data
 
