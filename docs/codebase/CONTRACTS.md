@@ -28,6 +28,7 @@ is the bug.
 | Diagnostics are pull-only | module header of `src/core/ocean/diag/rdb_ocean_diag.F90` |
 | Order-invariant global sums | `src/framework/rdb_efp.F90` |
 | CICE-port ice step order, hook contracts, error enforcement between stage groups | module header of `src/core/ice/coupling/rdb_ice_step_cice.F90` |
+| CICE-port transport on several ranks and across the tripolar fold (rank-uniform decisions, paired fold-row fluxes, the category-state halo, the seam binding) | module headers of `src/core/ice/cice/rdb_ice_transport_seam.F90`, `rdb_ice_transport_seam_comm.F90`, `rdb_ice_transport_cice.F90`; the `row_shift` option of `src/comm/rdb_ocean_fold_exchange.F90` |
 | CICE-port engine wiring (hook adapters bound to the engine state, run slots, start path, scheme select in `engine_step_ice`) | module headers of `src/core/ice/coupling/rdb_ice_cice_hooks.F90`, `rdb_ice_cice_run.F90` |
 | CICE-port ocean-ice flux hand-off (import, window-mean averager + restart tags, `Q_*` adapters, virtual-salt form, own `ice_heat`/`ice_sw`/`ice_salt` surface-flux components, stress blend + restart mirror, melt-potential cap) | module headers of `src/core/ice/coupling/rdb_ice_import_ocean.F90`, `rdb_ice_flux_avg.F90`, `rdb_ice_cice_adapters.F90` |
 | CICE-port conservation ledger (stages as named terms, signs, EFP sums, restart scalars, the new-ice energy sign) | module headers of `src/core/ice/coupling/rdb_ice_ledger_terms.F90` (per-stage) and `rdb_ice_ledger.F90` (whole-step mirror); read [how to read it](../howto/read_ice_ledger.md) |

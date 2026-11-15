@@ -101,12 +101,31 @@ module rdb_ice_transport_cice
    !! allowed: their volume is carried (the reference removes them in the
    !! ridging step's clean-up).  **On exit** the state is advanced on the OWNED
    !! cells only; its ghost ring is the old one and MUST be refreshed (halo
-   !! exchange, periodic wrap, fold) before anything reads it.  Multi-rank
-   !! exchange points, for the multi-rank PR: (a) state ring before the call,
-   !! (b) face velocities (already needed by the dynamics), (c) the EFP sums
-   !! `before`/`after` need a bin-wise `MPI_SUM` before the comparison
-   !! (`efp_to_transport`), (d) the counts in `res` need a sum/max over ranks,
-   !! (e) the state ring after the call.
+   !! exchange, periodic wrap, fold) before anything reads it.
+   !!
+   !! **Several ranks and the tripolar fold (D10.6).**  The input arrives with valid
+   !! rings (the caller's halos: `ice_halo_category_state` for the category state and
+   !! `aice0`, `ice_halo_faces` for the face velocities, the metrics from the ocean's
+   !! own halo; two state rings and three metric rings for the remap) and `w%seam`
+   !! (`rdb_ice_transport_seam`, bound by `ice_transport_seam_bind`) says what else the
+   !! step needs.  (a) EVERY decision is rank-uniform: the counts and the error word
+   !! of the CFL check, the pack, the entry checks, the geometry, the reconstruction
+   !! input, the result checks and the unpack are summed (OR-ed) over the ranks before
+   !! the step goes on or stops, so `res%ierr`, `res%n_*` and `res%cfg` are the same
+   !! on every rank (`res%ledger` stays this rank's owned sum; the ledger reduces it);
+   !! (b) the EFP sums "before"/"after" are combined bin-wise over the ranks, so the
+   !! conservation comparison and `res%worst_rel` are the global ones, bitwise the
+   !! same for every layout; (c) at the fold the north fluxes of the fold row are
+   !! PAIRED before the update (what leaves a cell enters its mirror cell in the same
+   !! bits), locally at `px = 1` and by the ocean's owner-routed fold exchange at
+   !! `px > 1`.  Each face flux is otherwise computed by both cells it joins from the
+   !! same (halo-exchanged) inputs, so the cross-rank face needs no exchange of fluxes.
+   !! Pinned by `test_cice_remap_decomp_mpi` (every px x py layout of 1, 2 and 4 ranks
+   !! against the serial run, owned cells bitwise, the fold with `px = 1` and `px > 1`).
+   !! Not gated: the `upwind` advection's fold seam (it computes each face flux from
+   !! one donor and passed the same decomposition cases, but its fold row is not
+   !! paired), and the configuration refusals (range, table) are assumed uniform: a
+   !! tile too small for the ring is refused on that rank only.
    !!
    !! **Conservation** is to round-off (one division by the cell area, the
    !! packed-frame re-multiply, possible FMA asymmetry of a face flux on the
@@ -137,6 +156,7 @@ module rdb_ice_transport_cice
                                        transport_check_finite, transport_check_neg_area, transport_check_cfl, &
                                        transport_conserved_sums, transport_bounds, transport_check_monotone
    use rdb_ice_remap_geom, only: remap_geom_workspace_t
+   use rdb_ice_transport_seam, only: transport_seam_t, seam_sum_int, seam_sum_one, seam_or_bits, seam_sum_efp
    use rdb_ice_remap_recon, only: recon_table_ok
    use rdb_ice_remap_recon_batch, only: remap_recon_batch_t
    use pic_logger, only: logger => global_logger
@@ -199,6 +219,9 @@ module rdb_ice_transport_cice
       type(efp_t), allocatable :: before(:), after(:)
       real(wp), allocatable :: uE(:, :), vN(:, :)
          !! Face velocities shifted to the T-cell index (`uE(i,j) = u(i+1,j)`) for the CFL check.
+      type(transport_seam_t) :: seam
+         !! The decomposition: rank-uniform decisions and the fold seam (module `rdb_ice_transport_seam`).
+         !! Default one rank, no fold; the owner binds it once at setup, not per call.
    contains
       procedure :: init => tcw_init
       procedure :: enter_data => tcw_enter_data
@@ -433,7 +456,7 @@ contains
       integer :: nxg, nyg, ncatg, nilg, nslg, ntrg
       integer :: ni, nviol, nbad, nneg, cfg, nbadv
       integer :: nrecon, nlaunch, pi0, pi1, pj0, pj1
-      integer :: ngeo(3)
+      integer :: ngeo(3), gi2(2)
       integer(int32) :: ierr_pack, ierr_cmp
       logical :: check, ok, okb, remap
       real(wp) :: puny
@@ -499,6 +522,10 @@ contains
       ! 1. velocities: finite and within the CFL displacement (always)
       call shift_faces(nxg, nyg, is - 1, ie, js - 1, je, u, v, w%uE, w%vN, nbadv)
       call transport_check_cfl(nxg, nyg, is - 1, ie, js - 1, je, dt, w%uE, w%vN, dxT, dyT, ice_err, nviol)
+      gi2 = [nbadv, nviol]
+      call seam_sum_int(w%seam, 2, gi2)
+      nbadv = gi2(1)
+      nviol = gi2(2)
       res%n_cfl = nviol
       res%n_launch = res%n_launch + 2
       if (nbadv > 0) res%ierr = ior(res%ierr, ICE_ERR_NONFINITE)
@@ -510,17 +537,20 @@ contains
       call transport_pack(w%a, p%c, nilg, nslg, pi0, pi1, pj0, pj1, aice0, aicen, vicen, vsnon, &
                           Tsfcn, qicen, sicen, qsnon, ierr_pack, thick_floor=UPWIND_THICK_FLOOR)
       res%n_launch = res%n_launch + 1
+      call seam_or_bits(w%seam, ierr_pack)
       res%ierr = ior(res%ierr, ierr_pack)
 
       ! 3. entry checks on the packed fields (per cell: always when the pack saw a non-finite value)
       if (check .or. ierr_pack /= ICE_ERR_NONE) then
          call transport_check_finite(nxg, nyg, ncatg, ntrg, pi0, pi1, pj0, pj1, w%a%aim, w%a%trm, ice_err, nviol)
+         call seam_sum_one(w%seam, nviol)
          if (nviol > 0) res%ierr = ior(res%ierr, ICE_ERR_NONFINITE)
          res%n_nonfinite = res%n_nonfinite + nviol
          res%n_launch = res%n_launch + 1
       end if
       if (check) then
          call transport_check_neg_area(nxg, nyg, ncatg, pi0, pi1, pj0, pj1, puny, w%a%aim, ice_err, nviol)
+         call seam_sum_one(w%seam, nviol)
          if (nviol > 0) res%ierr = ior(res%ierr, ICE_ERR_TRANSPORT_NEG_AREA)
          res%n_neg = res%n_neg + nviol
          res%n_launch = res%n_launch + 1
@@ -530,6 +560,7 @@ contains
       if (check) then
          call transport_conserved_sums(w%chk, nxg, nyg, ncatg, ntrg, is, ie, js, je, w%a%tab%depend(1:ntrg), tarea, &
                                        w%a%aim, w%a%trm, w%before, ok)
+         call seam_sum_efp(w%seam, w%nq, w%before)
          res%n_launch = res%n_launch + 2
          res%conserv_done = ok
          if (w%chk%has_bounds) then
@@ -542,7 +573,7 @@ contains
       ! 5. advection: upwind (one launch) or incremental remapping (geometry, reconstruction, fluxes, update)
       if (remap) then
          call remap_advect(w%a, w%b, w%gw, w%rb, w%fw, is, ie, js, je, dt, puny, u, v, dxU, dyU, HTE, HTN, tarea, earea, &
-                           narea, epm, npm, uvm, hm, ice_err, nbad, nneg, ngeo, nrecon, nlaunch, res%ledger, cfg)
+                           narea, epm, npm, uvm, hm, ice_err, nbad, nneg, ngeo, nrecon, nlaunch, res%ledger, cfg, w%seam)
          if (cfg /= REMAP_CFG_OK) then
             if (cfg == REMAP_CFG_TABLE) then
                res%cfg = TRANSPORT_CFG_TABLE
@@ -571,6 +602,10 @@ contains
             return
          end if
          res%n_launch = res%n_launch + 1
+         gi2 = [nbad, nneg]
+         call seam_sum_int(w%seam, 2, gi2)
+         nbad = gi2(1)
+         nneg = gi2(2)
       end if
       res%n_nonfinite = res%n_nonfinite + nbad
       res%n_neg = res%n_neg + nneg
@@ -580,14 +615,17 @@ contains
       ! 6. per-cell bits on the result (always when the advection counted something) and the sums
       if (check .or. nbad > 0 .or. nneg > 0) then
          call transport_check_finite(nxg, nyg, ncatg, ntrg, is, ie, js, je, w%b%aim, w%b%trm, ice_err, nviol)
+         call seam_sum_one(w%seam, nviol)
          if (nviol > 0) res%ierr = ior(res%ierr, ICE_ERR_NONFINITE)
          call transport_check_neg_area(nxg, nyg, ncatg, is, ie, js, je, puny, w%b%aim, ice_err, nviol)
+         call seam_sum_one(w%seam, nviol)
          if (nviol > 0) res%ierr = ior(res%ierr, ICE_ERR_TRANSPORT_NEG_AREA)
          res%n_launch = res%n_launch + 2
       end if
       if (check .and. res%conserv_done .and. res%ierr == ICE_ERR_NONE) then
          call transport_conserved_sums(w%chk, nxg, nyg, ncatg, ntrg, is, ie, js, je, w%b%tab%depend(1:ntrg), tarea, &
                                        w%b%aim, w%b%trm, w%after, ok)
+         call seam_sum_efp(w%seam, w%nq, w%after)
          res%n_launch = res%n_launch + 2
          call transport_conservation_compare_floor(ncatg, ntrg, w%before, w%after, puny, ierr_cmp, res%worst_rel, &
                                                    res%worst_q)
@@ -598,6 +636,7 @@ contains
          call transport_check_monotone(w%chk, nxg, nyg, ncatg, ntrg, is + 1, ie - 1, js + 1, je - 1, puny, &
                                        w%b%tab%tracer_type(1:ntrg), w%b%tab%depend(1:ntrg), w%b%aim, w%b%trm, &
                                        ice_err, ni, ok)
+         call seam_sum_one(w%seam, ni)
          res%n_mono = ni
          res%n_launch = res%n_launch + 1
          if (ni > 0) res%ierr = ior(res%ierr, ICE_ERR_TRANSPORT_CONSERV)
@@ -609,6 +648,7 @@ contains
                             Tsfcn, qicen, sicen, qsnon, ierr_pack)
       call upwind_empty_tsfc(nxg, nyg, ncatg, is, ie, js, je, puny, Tf, hm, aicen, Tsfcn)
       res%n_launch = res%n_launch + 2
+      call seam_or_bits(w%seam, ierr_pack)
       res%ierr = ior(res%ierr, ierr_pack)
       res%stepped = .true.
       if (ierr_pack /= ICE_ERR_NONE) return

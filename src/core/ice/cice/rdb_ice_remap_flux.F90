@@ -131,6 +131,7 @@ module rdb_ice_remap_flux
    use rdb_ice_remap_recon_batch, only: remap_recon_batch_t, remap_recon_batch, remap_input_check, RECON_CFG_OK, &
                                         RECON_CFG_TABLE, RECON_CFG_RANGE, RECON_CFG_MASK
    use rdb_ice_transport_pack, only: transport_workspace_t
+   use rdb_ice_transport_seam, only: transport_seam_t, seam_sum_int, seam_pair_fold_flux
    implicit none
    private
 
@@ -143,6 +144,8 @@ module rdb_ice_remap_flux
    public :: REMAP_QUAD_W0, REMAP_QUAD_W1, REMAP_QUAD_FRAC
    public :: remap_ledger_t, remap_ledger_impl, REMAP_TGROUP
 
+   integer, parameter :: NGV = 3
+      !! Counts reduced together over the ranks at one decision point.
    integer, parameter :: REMAP_TGROUP = 9
       !! Tracers accumulated together in registers by the face flux kernel.
 
@@ -708,7 +711,7 @@ contains
    end subroutine remap_update
 
    subroutine remap_advect(ws, wso, gw, rb, fw, is, ie, js, je, dt, puny, u, v, dxU, dyU, HTE, HTN, tarea, earea, narea, &
-                           epm, npm, uvm, hm, ice_err, nbad, nneg, ngeo, nrecon, nlaunch, ledger, cfg)
+                           epm, npm, uvm, hm, ice_err, nbad, nneg, ngeo, nrecon, nlaunch, ledger, cfg, seam)
       !! Advect the packed fields of `ws` into `wso` over the owned cells
       !! `is:ie, js:je`: geometry (six launches plus the error fold), the input check (one), then
       !! per category batch the fluxes (two), the update (one) and the ledger (one).  `wso` is
@@ -738,10 +741,18 @@ contains
       integer, intent(out) :: nbad, nneg, nrecon, nlaunch, cfg
       integer, intent(out) :: ngeo(3)
       type(remap_ledger_t), intent(out) :: ledger
+      type(transport_seam_t), intent(in), optional :: seam
+         !! The decomposition (module `rdb_ice_transport_seam`; default one rank, no fold).  With it
+         !! `ngeo`, `nrecon`, `nbad`, `nneg` and `cfg` are GLOBAL (the same on every rank, so a stop
+         !! is a stop everywhere) and the fold-row fluxes of every batch are paired before the
+         !! update; `ledger` stays the sum over this rank's owned cells.
+      type(transport_seam_t) :: sm
+      integer :: gv(NGV)
       integer :: lnc
       real(wp) :: lca, lvi, lvs, lei, les
       integer :: nlo, nhi, nbb, nnn, rcfg, i0, i1, j0, j1
 
+      if (present(seam)) sm = seam
       nbad = 0
       nneg = 0
       ngeo = 0
@@ -779,14 +790,20 @@ contains
       j1 = je
       call remap_geometry_errors_impl(ws%nx, ws%ny, i0, i1, j0, j1, fw%gerr, ice_err, ngeo(1), ngeo(2), ngeo(3))
       nlaunch = nlaunch + 1
+      call seam_sum_int(sm, 3, ngeo)
       if (any(ngeo > 0)) return
 
       ! the read ring of the reconstruction: finite values, a 0/1 land mask, the table and the range
       call remap_input_check(ws, is, ie, js, je, hm, nrecon, rcfg)
-      if (rcfg /= RECON_CFG_OK) then
+      nlaunch = nlaunch + 1
+      ! decided on the global counts: a land mask or a table refused by one tile refuses the step everywhere
+      gv(1) = nrecon
+      gv(2) = merge(1, 0, rcfg == RECON_CFG_MASK)
+      gv(3) = merge(1, 0, rcfg /= RECON_CFG_OK .and. rcfg /= RECON_CFG_MASK)
+      call seam_sum_int(sm, 3, gv(1:3))
+      nrecon = gv(1)
+      if (gv(3) > 0) then
          select case (rcfg)
-         case (RECON_CFG_MASK)
-            cfg = REMAP_CFG_MASK
          case (RECON_CFG_TABLE)
             cfg = REMAP_CFG_TABLE
          case (RECON_CFG_RANGE)
@@ -796,7 +813,10 @@ contains
          end select
          return
       end if
-      nlaunch = nlaunch + 1
+      if (gv(2) > 0) then
+         cfg = REMAP_CFG_MASK
+         return
+      end if
       if (nrecon > 0) return
 
       ! fluxes and update, a category batch at a time
@@ -810,6 +830,8 @@ contains
             return
          end if
          call remap_flux_integrals(ws, gw, rb, fw, is, ie, js, je, nlo, nhi, puny)
+         ! the fold seam: both sides of a duplicated fold-row face take ONE flux (no-op off the fold)
+         call seam_pair_fold_flux(sm, ws%nx, ws%ny, is, ie, je, nhi - nlo + 1, ws%ntrace, fw%mflx_n, fw%mtflx_n)
          call remap_update(ws, wso, fw, is, ie, js, je, nlo, nhi, puny, tarea, nbb, nnn)
          nbad = nbad + nbb
          nneg = nneg + nnn
@@ -826,6 +848,11 @@ contains
          nlaunch = nlaunch + 5
          nlo = nhi + 1
       end do
+      gv(1) = nbad
+      gv(2) = nneg
+      call seam_sum_int(sm, 2, gv(1:2))
+      nbad = gv(1)
+      nneg = gv(2)
    end subroutine remap_advect
 
 end module rdb_ice_remap_flux
