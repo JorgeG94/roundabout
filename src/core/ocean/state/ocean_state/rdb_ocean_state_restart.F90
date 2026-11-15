@@ -509,8 +509,10 @@ contains
                                   optional=.true.)
          ! CICE-port ice: the shortwave through the ice (`sw_ice`, window mean of `fswthru`) is
          ! refreshed only at the thermo hand-off yet read EVERY step through `sw_net`, so a
-         ! checkpoint inside a window must carry it (the SIS2-derived scheme's `sw_ice` is rebuilt
-         ! from the restart-carried `sw_thru_diag`'s own tag, not registered here).
+         ! checkpoint inside a window must carry it.  The SIS2-derived scheme's `sw_ice` is NOT
+         ! registered: its resume folds the restart-carried `sw_thru_diag` into `Q_heat` only, so
+         ! after a mid-window resume its `sw_net` lacks the ice shortwave until the next hand-off
+         ! (a gap older than this tag; `restart_time_varying` gates the CICE-port side).
          if (state%ice%cice%is_init .and. allocated(state%surface_flux%sw_ice)) then
             call reg%register_2d("sf_sw_ice", state%surface_flux%sw_ice, 0, &
                                  size(state%surface_flux%sw_ice, 1), &

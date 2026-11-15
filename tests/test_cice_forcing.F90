@@ -1336,11 +1336,19 @@ contains
       real(wp) :: t_a, t_b, umax, wmax
       integer :: step_b, ierr, nw, na, n_face
       logical :: ok
+      character(len=:), allocatable :: nml_pen
 
       nw = 5          ! odd: the checkpoint falls inside a thermodynamics window (ratio 2)
+      ! Shortwave penetration ON through `sw_source = 'q_sw'`: the through-ice shortwave `sw_ice`
+      ! is then read EVERY step via `sw_net` but refreshed only at the thermo hand-off, so the
+      ! mid-window checkpoint is bitwise only if the restart carries it (`sf_sw_ice`).
+      nml_pen = replace(case_nml("basin", 0.6_wp, 2, .true.), &
+                        "&ocean_thermo_nml enable_thermodynamics = .true. /", &
+                        "&ocean_thermo_nml enable_thermodynamics = .true., sw_pen_frac = 0.4, "// &
+                        "sw_source = 'q_sw' /")
       na = 4
       call write_atm_files("cold")
-      call make_engine(ea, cfg_a, case_nml("basin", 0.6_wp, 2, .true.), ok)
+      call make_engine(ea, cfg_a, nml_pen, ok)
       call check(error, ok, "engine A setup failed")
       if (allocated(error)) then
          call remove_atm_files()
@@ -1379,7 +1387,7 @@ contains
          return
       end if
 
-      call make_engine(eb, cfg_b, case_nml("basin", 0.6_wp, 2, .true.), ok, restart_file=FN_RT, t0=t_b, step0=step_b)
+      call make_engine(eb, cfg_b, nml_pen, ok, restart_file=FN_RT, t0=t_b, step0=step_b)
       call check(error, ok, "engine B (warm restart) setup failed")
       if (allocated(error)) then
          call remove_atm_files()

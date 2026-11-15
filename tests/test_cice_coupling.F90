@@ -1367,7 +1367,8 @@ contains
          end do
       end do
       call check(error, worst <= 1.0e-11_wp, "middle-layer deposit = pen_frac (q_sw + fswthru) (T(d_top) - T(d_bot))")
-      call check(error, worst_open > 1.0e-3_wp, "and it is NOT the open-water share alone")
+      if (.not. allocated(error)) call check(error, worst_open > 1.0e-3_wp, &
+                                             "and it is NOT the open-water share alone")
       call sf%exit_data()
       call av%exit_data()
       call fx%exit_data()
