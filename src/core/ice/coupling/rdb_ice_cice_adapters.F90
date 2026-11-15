@@ -8,11 +8,11 @@ module rdb_ice_cice_adapters
    !!
    !! | ice flux (cell, per s) | ocean field | formula | sign / unit on the ocean side |
    !! |---|---|---|---|
-   !! | `fhocn` [W m-2, + into ocean] | `ice_heat` (comp. on) / `Q_heat` (off) | `fhocn`; `Q_heat_const + fhocn + fswthru` when off | + warms, W m-2 |
-   !! | `fswthru` [W m-2, + down] | `ice_sw` (comp. on) / `Q_heat` (off) | `fswthru` | + warms, W m-2; `Q_heat` CONTAINS the shortwave |
-   !! | `fsalt`, `fresh` [kg m-2 s-1] | `ice_salt` (comp. on) / `Q_salt` (off) | `1000*fsalt - S_surf*fresh` (+ `Q_salt_const` when off) | + salinifies, psu kg m-2 s-1 |
+   !! | `fhocn` [W m-2, + into ocean] | `heat_ice` (comp. on) / `Q_heat` (off) | `fhocn`; `Q_heat_const + fhocn + fswthru` when off | + warms, W m-2 |
+   !! | `fswthru` [W m-2, + down] | `sw_ice` (comp. on) / `Q_heat` (off) | `fswthru` | + warms, W m-2; `Q_heat` CONTAINS the shortwave; `sw_ice` enters `sw_net` (penetrates) |
+   !! | `fsalt`, `fresh` [kg m-2 s-1] | `salt_ice` (comp. on) / `Q_salt` (off) | `1000*fsalt - S_surf*fresh` (+ `Q_salt_const` when off) | + salinifies, psu kg m-2 s-1 |
    !! | `fresh` | optional output of `ice_cice_apply_window` | `fresh` | + into ocean, kg m-2 s-1 |
-   !! | `fswthru_vis` | not adapted here (the visible-band consumer is a later PR); stays in the averager's `acc_fswthru_vis` | | |
+   !! | `fswthru_vis` | not adapted here (a visible-band consumer is not wired); stays in the averager's `acc_fswthru_vis` | | |
    !!
    !! **Write order and ownership of the ocean slots (components on).**  Per outer step the
    !! ocean's shared components are written by `engine_step` (data forcing, atm state, bulk
@@ -20,15 +20,18 @@ module rdb_ice_cice_adapters
    !! step, as FULL overwrites; the ice hand-off runs at the thermo step (after them);
    !! `ocean_surface_flux_assemble` (`engine_step_finalize`, thermo step) sums them.  An
    !! adapter writing `q_sw`/`heat_added`/`salt_flux` would therefore erase the open-water
-   !! shortwave and a reader's heat at every hand-off.  So the CICE ice owns its OWN
-   !! components `ice_heat`, `ice_sw`, `ice_salt` (`ocean_surface_flux_t%set_ice_components`,
-   !! allocated only under this scheme), overwritten at each hand-off and ADDED by the
-   !! assembler after the shared sum; nobody else writes them, nothing needs zeroing, and
-   !! under `scheme = "sis2"` they do not exist.  The new scheme requires
-   !! `enable_components`; the components-off branch below (`Q_heat`/`Q_salt` overwrite, the
-   !! SIS2 couplers' form) exists for the equivalence test and for runs without the bulk
-   !! forcing.  The under-ice shortwave is added to `Q_heat` at the surface layer; it is not
-   !! penetrated (`sw_source = "q_sw"` reads `q_sw` only) until the visible-band PR.
+   !! shortwave and a reader's heat at every hand-off.  So the ice hand-off writes the SHARED
+   !! sea-ice components `heat_ice`, `sw_ice`, `salt_ice` of `ocean_surface_flux_t` (the same slots
+   !! the SIS2-derived coupler writes; the two schemes never run together), overwritten at each
+   !! hand-off and summed by the assembler next to `heat_added`/`q_sw`/`salt_flux`; nobody else
+   !! writes them, nothing needs zeroing.  `sw_ice` also forms `sw_net = q_sw + sw_ice`, so under
+   !! `sw_source = "q_sw"` the shortwave through the ice penetrates like any other.  The values are
+   !! grid-cell means (`fhocn`, `fswthru`, `fsalt` are already weighted by the ice area), and the
+   !! only assembler variant that scales them, the ice-shelf cover twin (`1 - cover_frac`), runs
+   !! only under `&ocean_cavity_dyn_nml enable`, which this scheme refuses.  The scheme requires
+   !! `enable_components`; the components-off branch below (`Q_heat`/`Q_salt` overwrite, the SIS2
+   !! couplers' form) is not reachable from a validated namelist and is kept for the equivalence
+   !! test of the adapters.  Under it the shortwave sits inside `Q_heat` and does not penetrate.
    !!
    !! **Seam ghosts.**  The adapters write OWNED cells; the ocean's surface-flux application
    !! reads a seam ghost, so `ice_cice_apply_window` ends with the centre-field halo
@@ -124,7 +127,7 @@ module rdb_ice_cice_adapters
 
    public :: ice_cice_to_surface_flux, ice_cice_apply_window, ice_cice_stress_blend
    public :: ice_cice_stress_mirror_t, ice_cice_stress_resume_apply
-   public :: ICE_ADAPT_ERR_NO_COMPONENT, ICE_ADAPT_ERR_WINDOW
+   public :: ICE_ADAPT_ERR_WINDOW
    public :: ice_adapt_heat_impl, ice_adapt_set_impl, ice_adapt_salt_impl
    public :: ICE_ADAPT_OK, ICE_ADAPT_ERR_SHAPE, ICE_ADAPT_ERR_EMPTY
    public :: PSU_PER_MASS_FRACTION
@@ -136,8 +139,6 @@ module rdb_ice_cice_adapters
       !! Call ran.
    integer, parameter :: ICE_ADAPT_ERR_SHAPE = 1
       !! A slot is uninitialised or the shapes disagree; nothing ran.
-   integer, parameter :: ICE_ADAPT_ERR_NO_COMPONENT = 3
-      !! Components are on but the ice components were not allocated; nothing ran.
    integer, parameter :: ICE_ADAPT_ERR_WINDOW = 4
       !! The accumulated time differs from the expected thermo-window length; nothing ran.
    integer, parameter :: ICE_ADAPT_ERR_EMPTY = 2
@@ -173,9 +174,8 @@ contains
       !! fluxes, the three adapters of the module table, in the two modes of the
       !! SIS2 couplers (`sf%use_components`): components OFF overwrites `Q_heat`
       !! (`Q_heat_const + fhocn`, then `+ fswthru`) and `Q_salt`; components ON
-      !! overwrites the ice's OWN `ice_heat` (`fhocn`), `ice_sw` (`fswthru`) and
-      !! `ice_salt`, summed by the assembler (`ICE_ADAPT_ERR_NO_COMPONENT` if they were
-      !! not allocated).  Latches `has_heat`, `has_salt`.  No halo exchange here (see
+      !! overwrites the shared ice components `heat_ice` (`fhocn`), `sw_ice` (`fswthru`) and
+      !! `salt_ice`, summed by the assembler.  Latches `has_heat`, `has_salt`.  No halo exchange here (see
       !! `ice_cice_apply_window`).  OWNED cells only.  All arrays are `(nx_total, ny_total)`; mapped on an
       !! offload build.
       type(hgrid_t), intent(in) :: grid
@@ -199,13 +199,9 @@ contains
       js = grid%nghost + 1
       je = grid%nghost + grid%ny_phys
       if (sf%use_components) then
-         if (.not. sf%use_ice_components) then
-            ierr = ICE_ADAPT_ERR_NO_COMPONENT
-            return
-         end if
-         call ice_adapt_set_impl(nx, ny, is, ie, js, je, fhocn, sf%ice_heat)
-         call ice_adapt_set_impl(nx, ny, is, ie, js, je, fswthru, sf%ice_sw)
-         call ice_adapt_salt_impl(nx, ny, is, ie, js, je, fsalt, fresh, sss_ocn, 0.0_wp, sf%ice_salt)
+         call ice_adapt_set_impl(nx, ny, is, ie, js, je, fhocn, sf%heat_ice)
+         call ice_adapt_set_impl(nx, ny, is, ie, js, je, fswthru, sf%sw_ice)
+         call ice_adapt_salt_impl(nx, ny, is, ie, js, je, fsalt, fresh, sss_ocn, 0.0_wp, sf%salt_ice)
       else
          call ice_adapt_heat_impl(nx, ny, is, ie, js, je, fhocn, fswthru, sf%Q_heat_const, sf%Q_heat)
          call ice_adapt_salt_impl(nx, ny, is, ie, js, je, fsalt, fresh, sss_ocn, sf%Q_salt_const, sf%Q_salt)
@@ -268,9 +264,9 @@ contains
          call ocean_halo_exchange_centre_field(fresh_mass_out, grid, bc)
       end if
       if (sf%use_components) then
-         call ocean_halo_exchange_centre_field(sf%ice_heat, grid, bc)
-         call ocean_halo_exchange_centre_field(sf%ice_sw, grid, bc)
-         call ocean_halo_exchange_centre_field(sf%ice_salt, grid, bc)
+         call ocean_halo_exchange_centre_field(sf%heat_ice, grid, bc)
+         call ocean_halo_exchange_centre_field(sf%sw_ice, grid, bc)
+         call ocean_halo_exchange_centre_field(sf%salt_ice, grid, bc)
       else
          call ocean_halo_exchange_centre_field(sf%Q_heat, grid, bc)
          call ocean_halo_exchange_centre_field(sf%Q_salt, grid, bc)

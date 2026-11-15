@@ -46,10 +46,11 @@ module test_cice_coupling
    use rdb_comm_env, only: comm_env_init, comm_env_setup_roles
    use rdb_ocean_boundary_types, only: ocean_bc_state_t, ocean_bc_state_init, OBC_PERIODIC, &
                                        ocean_bc_validate_periodic
-   use rdb_ocean_surface_flux, only: ocean_surface_flux_assemble, ocean_surface_flux_apply_tracers
+   use rdb_ocean_surface_flux, only: ocean_surface_flux_assemble, ocean_surface_flux_apply_tracers, &
+                                     ocean_surface_flux_apply_sw_penetration, ocean_surface_flux_refresh_sw_net
    use rdb_ice_import_ocean, only: ice_melt_cap
    use rdb_ice_cice_adapters, only: ice_cice_stress_mirror_t, ice_cice_stress_resume_apply, &
-                                    ICE_ADAPT_ERR_NO_COMPONENT, ICE_ADAPT_ERR_WINDOW, &
+                                    ICE_ADAPT_ERR_WINDOW, &
                                     ice_cice_to_surface_flux, ice_cice_apply_window, ice_cice_stress_blend, &
                                     ICE_ADAPT_OK, ICE_ADAPT_ERR_EMPTY, PSU_PER_MASS_FRACTION
    implicit none
@@ -89,6 +90,7 @@ contains
                   new_unittest("stress_blend_needs_unweighted_wind", test_stress_unweighted), &
                   new_unittest("stress_mirror_restart_roundtrip", test_stress_restart), &
                   new_unittest("ice_components_summed_not_overwritten", test_ice_components_end_to_end), &
+                  new_unittest("through_ice_sw_penetrates_under_q_sw", test_through_ice_sw_penetrates), &
                   new_unittest("seam_ghosts_equal_owners_periodic", test_ghosts), &
                   new_unittest("melt_cap_window_bound", test_melt_cap), &
                   new_unittest("melt_cap_ratio1_bitwise", test_melt_cap_ratio1), &
@@ -342,7 +344,6 @@ contains
       call av%init(g)
       call sf%init(g)
       if (comps) call sf%set_components(g, .true.)
-      if (comps) call sf%set_ice_components(g, .true.)
       call make_halo(g, bc, .false.)
       qhc = 3.0_wp
       qsc = 0.0_wp
@@ -396,9 +397,9 @@ contains
          call check(error, av%n_acc == 0.0_wp .and. av%t_acc == 0.0_wp .and. owned_max(av%acc_fhocn) == 0.0_wp, &
                     "the window is reset after the hand-off")
          if (comps) then
-            !$acc update self(sf%ice_heat, sf%ice_sw, sf%ice_salt, fw)
-            o_h = o_h + (sf%ice_heat + sf%ice_sw)*win
-            o_s = o_s + sf%ice_salt*win
+            !$acc update self(sf%heat_ice, sf%sw_ice, sf%salt_ice, fw)
+            o_h = o_h + (sf%heat_ice + sf%sw_ice)*win
+            o_s = o_s + sf%salt_ice*win
          else
             !$acc update self(sf%Q_heat, sf%Q_salt, fw)
             o_h = o_h + (sf%Q_heat - qhc)*win
@@ -561,7 +562,6 @@ contains
       call g%init(NXP, NYP, NG, 1000.0_wp, 1000.0_wp)
       call sf%init(g)
       if (comps) call sf%set_components(g, .true.)
-      if (comps) call sf%set_ice_components(g, .true.)
       sf%Q_heat_const = 3.0_wp
       sf%Q_salt_const = -0.5_wp
       allocate (a(NX, NY), b(NX, NY), c(NX, NY), d(NX, NY), e(NX, NY))
@@ -579,12 +579,12 @@ contains
       hadd = -1.0e30_wp
       saltf = -1.0e30_wp
       if (comps) then
-         !$acc update self(sf%ice_heat, sf%ice_sw, sf%ice_salt)
-         hadd = sf%ice_heat(IS + 1, JS + 1)
-         qsw = sf%ice_sw(IS + 1, JS + 1)
-         saltf = sf%ice_salt(IS + 1, JS + 1)
+         !$acc update self(sf%heat_ice, sf%sw_ice, sf%salt_ice)
+         hadd = sf%heat_ice(IS + 1, JS + 1)
+         qsw = sf%sw_ice(IS + 1, JS + 1)
+         saltf = sf%salt_ice(IS + 1, JS + 1)
          qh = merge(1.0_wp, 0.0_wp, sf%has_heat .and. sf%has_salt)
-         if (any(sf%ice_heat(1:NG, :) /= 0.0_wp)) qh = -1.0_wp
+         if (any(sf%heat_ice(1:NG, :) /= 0.0_wp)) qh = -1.0_wp
       else
          !$acc update self(sf%Q_heat, sf%Q_salt)
          qh = sf%Q_heat(IS + 1, JS + 1)
@@ -618,8 +618,8 @@ contains
       call check(error, qs > -1.0e30_wp, "ghost cells of the ocean fields are untouched")
       if (allocated(error)) return
       call adapt_one(.true., fresh, fsalt, 12.5_wp, 7.25_wp, S, qh, qs, qsw, hadd, saltf)
-      call check(error, hadd == 12.5_wp .and. qsw == 7.25_wp, "components on: ice_heat = fhocn, ice_sw = fswthru")
-      call check(error, abs(saltf - want) <= 1.0e-14_wp*want, "components on: ice_salt has no const term")
+      call check(error, hadd == 12.5_wp .and. qsw == 7.25_wp, "components on: heat_ice = fhocn, sw_ice = fswthru")
+      call check(error, abs(saltf - want) <= 1.0e-14_wp*want, "components on: salt_ice has no const term")
       call check(error, qh == 1.0_wp, "components on: has_heat, has_salt latched; ghosts untouched")
    end subroutine test_adapters
 
@@ -1217,7 +1217,6 @@ contains
          call ms%init(g)
          call sf%init(g)
          call sf%set_components(g, .true.)
-         call sf%set_ice_components(g, .true.)
          it = ms%idx_temperature
          is_ = ms%idx_salinity
          ms%h_layer = 10.0_wp
@@ -1298,6 +1297,90 @@ contains
       end do
    end subroutine test_ice_components_end_to_end
 
+   subroutine test_through_ice_sw_penetrates(error)
+      !! The CICE-port hand-off writes the SHARED `sw_ice` slot, so under `sw_source="q_sw"` the
+      !! shortwave through the ice (`fswthru`) enters `sw_net = q_sw + sw_ice` and penetrates:
+      !! the middle layer of a three-layer column, whose only heat source is the two-band
+      !! absorption `I0 (T(d_top) - T(d_bot))`, `I0 = pen_frac (q_sw + fswthru)`, with the
+      !! two-band transmission `T` evaluated here from the formula (Paulson & Simpson 1977).
+      !! Cells differ in both `q_sw` (by i) and `fswthru` (by j).  Run on a column whose deposit
+      !! from `q_sw` alone is a different number, so a `sw_net` without the ice share fails.
+      type(error_type), allocatable, intent(out) :: error
+      real(wp), parameter :: FRAC = 0.5_wp, R = 0.58_wp, Z1 = 0.35_wp, Z2 = 23.0_wp, HL = 10.0_wp, W = 900.0_wp
+      type(hgrid_t) :: g
+      type(ice_flux_t) :: fx
+      type(ice_flux_avg_t) :: av
+      type(ocean_surface_flux_t) :: sf
+      type(multilayer_state_t) :: ms
+      type(ocean_bc_state_t) :: bc
+      real(wp), allocatable :: sss(:, :)
+      real(wp) :: i0, tt, tb, want, got, worst, worst_open, base_t, qsw_ij
+      integer :: ierr, i, j, it
+
+      call make_flux(g, fx, ierr)
+      call av%init(g)
+      call make_halo(g, bc, .false.)
+      ms%nz_ml = 3
+      call ms%init(g)
+      call sf%init(g)
+      call sf%set_components(g, .true.)
+      call sf%set_sw_penetration(FRAC, R, Z1, Z2, sw_source="q_sw")
+      it = ms%idx_temperature
+      base_t = 5.0_wp
+      ms%h_layer = HL
+      ms%tracers(it)%c = base_t
+      allocate (sss(NX, NY))
+      sss = 34.0_wp
+      do j = 1, NY
+         do i = 1, NX
+            sf%q_sw(i, j) = 40.0_wp + 3.0_wp*real(i, wp)
+         end do
+      end do
+      sf%has_q_sw = .true.
+      !$acc enter data copyin(ms)
+      call ms%enter_data()
+      !$acc update device(ms%wet_mask, ms%h_layer, ms%k_top, ms%k_bot)
+      !$acc update device(ms%tracers(it)%c)
+      !$acc enter data copyin(sss)
+      call fx%enter_data()
+      call av%enter_data()
+      call sf%enter_data()
+      call stub_growth(fx, 1.0_wp, 1)
+      call ice_flux_avg_accumulate(av, fx, W, ierr)
+      call ice_cice_apply_window(g, bc, av, sf, sss, ierr, window_expected=W)
+      call check(error, ierr, ICE_ADAPT_OK, "hand-off")
+      call ocean_surface_flux_refresh_sw_net(sf)
+      call ocean_surface_flux_apply_sw_penetration(g, sf, ms, W)
+      !$acc update self(ms%tracers(it)%c)
+      worst = 0.0_wp
+      worst_open = 0.0_wp
+      do j = JS, JE
+         do i = IS, IE
+            qsw_ij = 40.0_wp + 3.0_wp*real(i, wp)
+            tt = R*exp(-HL/Z1) + (1.0_wp - R)*exp(-HL/Z2)
+            tb = R*exp(-2.0_wp*HL/Z1) + (1.0_wp - R)*exp(-2.0_wp*HL/Z2)
+            i0 = FRAC*(qsw_ij + (3.0_wp + 0.25_wp*real(j, wp)))
+            want = i0*(tt - tb)*W/(sf%rho0*sf%cp*HL)
+            got = ms%tracers(it)%c(i, j, 2) - base_t
+            worst = max(worst, abs(got - want)/want)
+            worst_open = max(worst_open, abs(FRAC*qsw_ij*(tt - tb)*W/(sf%rho0*sf%cp*HL) - got)/want)
+         end do
+      end do
+      call check(error, worst <= 1.0e-11_wp, "middle-layer deposit = pen_frac (q_sw + fswthru) (T(d_top) - T(d_bot))")
+      if (.not. allocated(error)) call check(error, worst_open > 1.0e-3_wp, &
+                                             "and it is NOT the open-water share alone")
+      call sf%exit_data()
+      call av%exit_data()
+      call fx%exit_data()
+      !$acc exit data delete(sss)
+      call ms%exit_data()
+      !$acc exit data delete(ms)
+      deallocate (sss)
+      call ms%destroy()
+      call sf%destroy()
+      call av%destroy()
+   end subroutine test_through_ice_sw_penetrates
+
    subroutine test_ghosts(error)
       !! Periodic domain: after the hand-off every seam ghost of the ice components, and of the
       !! returned mass flux, equals its owner (two-pass, corners included).
@@ -1314,7 +1397,6 @@ contains
       call av%init(g)
       call sf%init(g)
       call sf%set_components(g, .true.)
-      call sf%set_ice_components(g, .true.)
       call make_halo(g, bc, .true.)
       allocate (sss(NX, NY), fw(NX, NY))
       sss = 34.0_wp
@@ -1327,19 +1409,19 @@ contains
       call ice_flux_avg_accumulate(av, fx, 900.0_wp, ierr)
       call ice_cice_apply_window(g, bc, av, sf, sss, ierr, fresh_mass_out=fw)
       call check(error, ierr, ICE_ADAPT_OK, "hand-off")
-      !$acc update self(sf%ice_heat, sf%ice_sw, sf%ice_salt, fw)
+      !$acc update self(sf%heat_ice, sf%sw_ice, sf%salt_ice, fw)
       nbad = 0
       do j = 1, NY
          do i = 1, NX
             io = IS + modulo(i - IS, NXP)
             jo = JS + modulo(j - JS, NYP)
-            if (sf%ice_heat(i, j) /= sf%ice_heat(io, jo) .or. sf%ice_sw(i, j) /= sf%ice_sw(io, jo) .or. &
-                sf%ice_salt(i, j) /= sf%ice_salt(io, jo) .or. fw(i, j) /= fw(io, jo)) nbad = nbad + 1
-            if (.not. ieee_is_finite(sf%ice_salt(i, j))) nbad = nbad + 1
+            if (sf%heat_ice(i, j) /= sf%heat_ice(io, jo) .or. sf%sw_ice(i, j) /= sf%sw_ice(io, jo) .or. &
+                sf%salt_ice(i, j) /= sf%salt_ice(io, jo) .or. fw(i, j) /= fw(io, jo)) nbad = nbad + 1
+            if (.not. ieee_is_finite(sf%salt_ice(i, j))) nbad = nbad + 1
          end do
       end do
       call check(error, nbad == 0, "every seam ghost equals its owner")
-      call check(error, sf%ice_heat(1, 1) /= 0.0_wp .and. sf%ice_salt(1, JS) /= 0.0_wp, "and the ghosts are not just zero")
+      call check(error, sf%heat_ice(1, 1) /= 0.0_wp .and. sf%salt_ice(1, JS) /= 0.0_wp, "and the ghosts are not just zero")
       call sf%exit_data()
       call av%exit_data()
       call fx%exit_data()
@@ -1478,7 +1560,7 @@ call check(error,.not. ieee_is_finite(ice_melt_cap(-100.0_wp, nan, 1800.0_wp, 90
       type(hgrid_t) :: g
       type(ice_flux_t) :: fx
       type(ice_flux_avg_t) :: av
-      type(ocean_surface_flux_t) :: sf, sf2
+      type(ocean_surface_flux_t) :: sf
       type(ocean_bc_state_t) :: bc
       type(restart_registry_t) :: r1, r2
       real(wp), allocatable :: sss(:, :)
@@ -1494,27 +1576,20 @@ call check(error,.not. ieee_is_finite(ice_melt_cap(-100.0_wp, nan, 1800.0_wp, 90
       call make_halo(g, bc, .false.)
       call sf%init(g)
       call sf%set_components(g, .true.)
-      call sf%set_ice_components(g, .true.)
-      call sf2%init(g)
-      call sf2%set_components(g, .true.)
       allocate (sss(NX, NY))
       sss = 34.0_wp
       !$acc enter data copyin(sss)
       call fx%enter_data()
       call av%enter_data()
       call sf%enter_data()
-      call sf2%enter_data()
       call stub_growth(fx, 1.0_wp, 1)
       call ice_flux_avg_accumulate(av, fx, 900.0_wp, ierr)
       call ice_cice_apply_window(g, bc, av, sf, sss, ierr, window_expected=1800.0_wp, t_window=tw)
       call check(error, ierr, ICE_ADAPT_ERR_WINDOW, "a window of 900 s against an expected 1800 s is refused")
       call check(error, tw == 900.0_wp .and. av%n_acc == 1.0_wp, "and left untouched; the accumulated time is reported")
-      call ice_cice_apply_window(g, bc, av, sf2, sss, ierr)
-      call check(error, ierr, ICE_ADAPT_ERR_NO_COMPONENT, "components on without the ice components is refused")
       call ice_cice_apply_window(g, bc, av, sf, sss, ierr, window_expected=900.0_wp, t_window=tw)
       call check(error, ierr, ICE_ADAPT_OK, "the right window passes")
       e = 0
-      call sf2%exit_data()
       call sf%exit_data()
       call av%exit_data()
       call fx%exit_data()

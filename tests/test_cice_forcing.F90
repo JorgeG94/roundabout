@@ -317,7 +317,7 @@ contains
       associate (sf => engine%state%surface_flux)
          !$acc update self(sf%q_sw, sf%q_lw, sf%q_sens, sf%q_lat, sf%evap, sf%lprec, sf%fprec)
          !$acc update self(sf%heat_content_lprec, sf%heat_content_fprec, sf%heat_content_massin, sf%heat_content_massout)
-         !$acc update self(sf%ice_heat, sf%ice_sw, sf%ice_salt, sf%Q_heat, sf%Q_salt)
+         !$acc update self(sf%heat_ice, sf%sw_ice, sf%salt_ice, sf%Q_heat, sf%Q_salt)
       end associate
    end subroutine pull_sf
 
@@ -1047,13 +1047,13 @@ contains
             do j = js, je
                do i = is, ie
                   ! ratio 1: the window is this step; the ice share is the ice's own hand-over
-                  w_h = max(w_h, abs(sf%ice_heat(i, j) - f%fhocn(i, j))/(abs(f%fhocn(i, j)) + 1.0_wp))
-                  w_isw = max(w_isw, abs(sf%ice_sw(i, j) - f%fswthru(i, j))/(abs(f%fswthru(i, j)) + 1.0_wp))
+                  w_h = max(w_h, abs(sf%heat_ice(i, j) - f%fhocn(i, j))/(abs(f%fhocn(i, j)) + 1.0_wp))
+                  w_isw = max(w_isw, abs(sf%sw_ice(i, j) - f%fswthru(i, j))/(abs(f%fswthru(i, j)) + 1.0_wp))
                   ! rain through the ice is NOT diluted: the salt hand-over is the ice's own water and salt
                   e_ice_salt = 1000.0_wp*f%fsalt(i, j) - o%sss_ocn(i, j)*(f%fresh(i, j) - w%frain(i, j)*c%aice_init(i, j))
-                  w_salt = max(w_salt, abs(sf%ice_salt(i, j) - e_ice_salt)/(abs(e_ice_salt) + 1.0e-6_wp))
+                  w_salt = max(w_salt, abs(sf%salt_ice(i, j) - e_ice_salt)/(abs(e_ice_salt) + 1.0e-6_wp))
                   ! shortwave: open water + transmitted through the ice stays within the incident shortwave
-                  esw_ice = max(esw_ice, (sf%q_sw(i, j) + sf%ice_sw(i, j) - a%rsds(i, j))/a%rsds(i, j))
+                  esw_ice = max(esw_ice, (sf%q_sw(i, j) + sf%sw_ice(i, j) - a%rsds(i, j))/a%rsds(i, j))
                end do
             end do
          end associate
@@ -1137,7 +1137,7 @@ contains
                   spent = spent + efrz
                   stock = stock + area(i, j)*engine%state%ice%frazil_heat(i, j)
                   if (ratio == 1) then
-                     ice_asm = ice_asm + area(i, j)*DT*(sf%ice_heat(i, j) + sf%ice_sw(i, j))
+                     ice_asm = ice_asm + area(i, j)*DT*(sf%heat_ice(i, j) + sf%sw_ice(i, j))
                   end if
                end do
             end do
@@ -1336,11 +1336,19 @@ contains
       real(wp) :: t_a, t_b, umax, wmax
       integer :: step_b, ierr, nw, na, n_face
       logical :: ok
+      character(len=:), allocatable :: nml_pen
 
       nw = 5          ! odd: the checkpoint falls inside a thermodynamics window (ratio 2)
+      ! Shortwave penetration ON through `sw_source = 'q_sw'`: the through-ice shortwave `sw_ice`
+      ! is then read EVERY step via `sw_net` but refreshed only at the thermo hand-off, so the
+      ! mid-window checkpoint is bitwise only if the restart carries it (`sf_sw_ice`).
+      nml_pen = replace(case_nml("basin", 0.6_wp, 2, .true.), &
+                        "&ocean_thermo_nml enable_thermodynamics = .true. /", &
+                        "&ocean_thermo_nml enable_thermodynamics = .true., sw_pen_frac = 0.4, "// &
+                        "sw_source = 'q_sw' /")
       na = 4
       call write_atm_files("cold")
-      call make_engine(ea, cfg_a, case_nml("basin", 0.6_wp, 2, .true.), ok)
+      call make_engine(ea, cfg_a, nml_pen, ok)
       call check(error, ok, "engine A setup failed")
       if (allocated(error)) then
          call remove_atm_files()
@@ -1379,7 +1387,7 @@ contains
          return
       end if
 
-      call make_engine(eb, cfg_b, case_nml("basin", 0.6_wp, 2, .true.), ok, restart_file=FN_RT, t0=t_b, step0=step_b)
+      call make_engine(eb, cfg_b, nml_pen, ok, restart_file=FN_RT, t0=t_b, step0=step_b)
       call check(error, ok, "engine B (warm restart) setup failed")
       if (allocated(error)) then
          call remove_atm_files()

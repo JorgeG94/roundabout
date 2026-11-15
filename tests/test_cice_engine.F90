@@ -409,7 +409,6 @@ contains
       call check(error,.not. engine%state%ice%cice%is_init, "the new state slot is not initialised")
       call check(error,.not. engine%state%icec%is_init, "the run slots are not initialised")
       call check(error, engine%state%icec%bytes() == 0_int64, "the run slots count no bytes")
-      call check(error,.not. engine%state%surface_flux%use_ice_components, "no ice flux components")
       call check(error,.not. engine%state%ice%dync%is_init, "the C-grid slot is absent under sis2_c")
       call ocean_state_build_restart_registry(engine%state, engine%grid, reg)
       found_new = .false.
