@@ -1196,16 +1196,27 @@ contains
    end subroutine set_diag_remap_flat
 
    subroutine diag_remap_workspace_ensure(nx, ny, n, nz_out)
-      !! Lazily size + device-map the flat remap's scratch.  A no-op once
-      !! the shapes match, so the per-step call costs three `size` tests.
+      !! Lazily size + device-map the flat remap's scratch.  GROW-ONLY in the
+      !! vertical: a buffer at least as deep as the request is reused as is
+      !! (the kernel takes explicit shapes, so the spare levels are never
+      !! touched), which keeps a run with time-mean diagnostics on two output
+      !! grids of different depth from re-allocating + re-mapping on every
+      !! call.  A no-op once large enough: the per-step call costs four
+      !! `size` tests.
       integer, intent(in) :: nx, ny, n, nz_out
+      integer :: n_alloc, nz_out_alloc
+      n_alloc = n
+      nz_out_alloc = nz_out
       if (allocated(diag_remap_zo)) then
-         if (size(diag_remap_zo, 1) == nx .and. size(diag_remap_zo, 2) == ny .and. &
-             size(diag_remap_zo, 3) == n .and. size(diag_remap_zn, 3) == nz_out) return
+         if (size(diag_remap_zo, 1) == nx .and. size(diag_remap_zo, 2) == ny) then
+            if (size(diag_remap_zo, 3) >= n .and. size(diag_remap_zn, 3) >= nz_out) return
+            n_alloc = max(n, size(diag_remap_zo, 3))
+            nz_out_alloc = max(nz_out, size(diag_remap_zn, 3))
+         end if
          call diag_remap_workspace_cleanup()
       end if
-      allocate (diag_remap_zo(nx, ny, n), diag_remap_zn(nx, ny, nz_out), &
-                diag_remap_dzn(nx, ny, nz_out))
+      allocate (diag_remap_zo(nx, ny, n_alloc), diag_remap_zn(nx, ny, nz_out_alloc), &
+                diag_remap_dzn(nx, ny, nz_out_alloc))
       diag_remap_zo = 0.0_wp
       diag_remap_zn = 0.0_wp
       diag_remap_dzn = 0.0_wp
@@ -1269,7 +1280,12 @@ contains
       !! buffer value — possibly the NaN sentinel — is never read) and for
       !! the zero-thickness padding `kw > nz`; an extensive field is
       !! divided by the thickness (integral → concentration).
-      integer, intent(in) :: nx, ny, nz, i, j, kw
+      !!
+      !! The cell indices are `value` dummies: nvfortran passes a
+      !! `do concurrent` index by reference as its lower bound when the index
+      !! has no other use in the loop body.
+      integer, intent(in) :: nx, ny, nz
+      integer, value :: i, j, kw
       real(wp), intent(in) :: h_layer(nx, ny, nz)
       real(wp), intent(in) :: layer_buf(nx, ny, nz)
       logical, intent(in) :: is_extensive
