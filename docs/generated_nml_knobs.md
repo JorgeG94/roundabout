@@ -1260,7 +1260,7 @@ JRA55-do-style prescribed atmospheric state driving bulk-flux ocean/ice surface 
 | `states_regrid` | `"bilinear"` |  | Horizontal regrid for tas/huss/uas/vas/psl (only 'bilinear' is implemented) |
 | `fluxes_regrid` | `"conservative"` |  | Horizontal regrid for rlds/rsds/prra/prsn |
 | `sw_interp` | `"coszen"` |  | coszen (default, held interval + diurnal cosine-zenith factor) or linear (plain time-blend) |
-| `sw_offset_s` | `-0.5400000000E+04` | s | Time offset applied to the rsds query time before the bracket search (sw_interp=coszen) |
+| `sw_offset_s` | `0.5400000000E+04` | s | Time offset applied to the rsds query time before the bracket search (sw_interp=coszen) |
 | `orb_year` | `1990` |  | Orbital-parameter year (reserved: v1 coszen uses fixed Spencer (1971) coefficients, so a non-default value is refused) |
 | `wind_relative` | `.true.` |  | Subtract the ocean surface current from the atmospheric wind before the bulk flux |
 | `ocean_albedo` | `0.6600000000E-01` |  | Ocean surface shortwave albedo (Large & Yeager 2009) |

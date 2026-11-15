@@ -747,7 +747,7 @@ contains
    end subroutine fill_atm_prsn
 
    subroutine fill_atm_cosz(state_handle, buf)
-      !! Instantaneous cosine of the solar zenith angle, straight
+      !! Step-mean cosine of the solar zenith angle, straight
       !! passthrough of `atm_state_t%cosz` -- stays 0 under
       !! `sw_interp="linear"` (never computed there). Gated as
       !! `fill_atm_tas` (`&ocean_atm_forcing_nml enable`, not
