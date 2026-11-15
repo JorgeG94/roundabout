@@ -70,6 +70,9 @@ module test_ocean_restart_engine
    use rdb_ocean_restart, only: restart_registry_t
    use rdb_ocean_status, only: OCEAN_STATUS_OK
    use rdb_comm_env, only: comm_env_init, comm_env_setup_roles
+   use rdb_io_netcdf, only: nc_create_file, nc_close, nc_def_dim, nc_def_var_2d, &
+                            nc_def_var_3d, nc_enddef, rdb_def_var_1d, rdb_put_var_1d, nc_put_att
+   use netcdf, only: nf90_put_var
    implicit none
    private
 
@@ -77,7 +80,12 @@ module test_ocean_restart_engine
 
    real(wp), parameter :: DT = 600.0_wp
    character(len=*), parameter :: FN = "test_ocean_restart_engine_rt.nc"
+   character(len=*), parameter :: ATM_FILE = "rsw_atm.nc"
+   character(len=*), parameter :: ATM_LIST = "rsw_atm.list"
+   character(len=*), parameter :: ATM_SW0_FILE = "rsw_atm_sw0.nc"
+   character(len=*), parameter :: ATM_SW0_LIST = "rsw_atm_sw0.list"
    integer, parameter :: MAXF = 160
+   character(len=*), parameter :: NL = new_line("a")
 
    logical :: comm_inited = .false.
 
@@ -106,6 +114,10 @@ contains
                                test_engine_bit_exact_ice_ssp), &
                   new_unittest("restart_engine_bit_exact_sea_ice_components", &
                                test_engine_bit_exact_ice_components), &
+                  new_unittest("restart_engine_bit_exact_sea_ice_components_bulk", &
+                               test_engine_bit_exact_ice_components_bulk), &
+                  new_unittest("engine_ice_enabled_icefree_shortwave_matches_ice_disabled", &
+                               test_engine_icefree_sw), &
                   new_unittest("restart_engine_bit_exact_gm_meke_varmix_therm2", &
                                test_engine_bit_exact_gm), &
                   new_unittest("restart_engine_bit_exact_visc_rem_chain", &
@@ -346,6 +358,43 @@ contains
          if (label == "sea_ice_components") then
             nml = nml//"&ocean_forcing_nml enable_components = .true. /"//NL
          end if
+      case ("sea_ice_components_bulk")
+         ! Ice + components + the atmosphere-driven bulk forcing: the path on
+         ! which the ice couplers used to overwrite the bulk consumer's
+         ! open-water `q_sw` (the decomposition harness's `bulk_flux_ice`,
+         ! on one rank).  The transmitted shortwave, the open-water
+         ! shortwave and the brine/heat components are all live, and the
+         ! checkpoint lands mid thermo window.
+         nml = "&sim_nml sim_type = 'ocean' /"//NL// &
+               "&time_nml t_end = 86400.0, dt_fixed = 600.0, start_date = '2000-06-21' /"//NL// &
+               "&nonhydrostatic_nml nz_layers = 4 /"//NL// &
+               "&ocean_bt_nml auto_n_inner = .true., split_scheme = 'pred_corr' /"//NL// &
+               "&ocean_hvisc_nml nu_h = 200.0, lateral_closure = 'smagorinsky', "// &
+               "smag_ah = .true. /"//NL// &
+               "&ocean_diag_nml enabled = .false. /"//NL// &
+               "&ocean_eos_nml eos = 'wright' /"//NL// &
+               "&ocean_thermo_nml enable_thermodynamics = .true. /"//NL// &
+               "&ocean_forcing_nml enable_components = .true. /"//NL// &
+               "&ocean_bulk_flux_nml enable = .true., n_iter = 5, z_wind = 10.0, "// &
+               "z_ta = 10.0 /"//NL// &
+               "&tracer_nml initial_temperature = -1.83, initial_salinity = 34.0, "// &
+               "T_init_surface = -1.82, T_init_bottom = -1.835 /"//NL// &
+               atm_group(ATM_LIST)// &
+               "&ocean_vmix_nml dt_therm_ratio = 2 /"//NL// &
+               "&ocean_ice_nml enable = .true., ncat = 5, nk_ice = 2, "// &
+               "restore_lambda = 20.0, dynamics = .true., evp_sub_steps = 30, "// &
+               "cfl_trunc = 0.01, project_ci = .true., transport = .true., "// &
+               "adv_substeps = 2 /"//NL// &
+               "&ocean_ice_ic_nml conc_config = 'uniform', h_ice = 1.0, conc = 0.7 /"//NL// &
+               "&grid_nml nx = 24, ny = 16, nghost = 3, dx = 1.0, dy = 1.0 /"//NL// &
+               "&ocean_grid_nml grid_config = 'spherical', lon_west = 0.0, "// &
+               "lat_south = 20.0, rad_earth = 6.371e6, coriolis_scheme = 'planetary' /"//NL// &
+               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
+               "&ocean_topo_nml topo_config = 'spoon', max_depth = 3000.0, "// &
+               "edge_depth = 300.0, slope_scale = 300000.0 /"//NL// &
+               "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
+               "north = 'wall' /"//NL// &
+               "&output_nml output_to_file = .false. /"//NL
       case ("gm_meke_varmix_therm2")
          ! Stratified seamount on z* with GM + MEKE + VarMix (the compat
          ! matrix's `gm_meke` overlay), thermo every second step.
@@ -1166,6 +1215,223 @@ contains
       if (allocated(error)) return
       call run_round_trip(error, "cavity_sigma_tdrag_ustar_therm2", 5, 4, n_ice)
    end subroutine test_engine_bit_exact_cavity_tdrag_sigma
+
+   function atm_group(list) result(g)
+      !! `&ocean_atm_forcing_nml` pointing all nine fields at one filelist.
+      character(len=*), intent(in) :: list
+      character(len=:), allocatable :: g
+      g = "&ocean_atm_forcing_nml enable = .true., time_mode = 'interannual', "// &
+          "sw_interp = 'linear', filelist_tas = '"//list//"', filelist_huss = '"//list// &
+          "', filelist_uas = '"//list//"', filelist_vas = '"//list//"', filelist_psl = '"// &
+          list//"', filelist_rlds = '"//list//"', filelist_rsds = '"//list// &
+          "', filelist_prra = '"//list//"', filelist_prsn = '"//list//"' /"//NL
+   end function atm_group
+
+   subroutine write_atm_file(path, listname, tas0, huss0, rsds_const)
+      !! One global lon-lat file (10 degrees, two time records, all nine CMOR
+      !! names) of spatially varying prescribed atmospheric state, plus the
+      !! one-line filelist the namelist points at.  `rsds_const >= 0` makes
+      !! the downwelling shortwave spatially/temporally UNIFORM at that value
+      !! (the shortwave probe); negative keeps the varying field.
+      character(len=*), intent(in) :: path, listname
+      real(wp), intent(in) :: tas0, huss0, rsds_const
+      integer, parameter :: NLON = 36, NLAT = 18
+      real(wp), parameter :: PI = 3.14159265358979323846_wp
+      character(len=4), parameter :: VN(9) = [character(len=4) :: "tas", "huss", "uas", &
+                                                                                       "vas", "psl", "rlds", "rsds", "prra", "prsn"]
+      real(wp) :: lon(NLON), lat(NLAT), lonb(2, NLON), latb(2, NLAT), tax(2), f(NLON, NLAT, 2)
+      real(wp) :: sx, sy, dlo, dla
+      integer :: ncid, dlon_, dlat_, dbnd, dtim, vlon, vlat, vlonb, vlatb, vtim, vf(9)
+      integer :: v, i, j, k, ierr, u
+
+      dlo = 360.0_wp/real(NLON, wp)
+      dla = 180.0_wp/real(NLAT, wp)
+      do i = 1, NLON
+         lonb(1, i) = dlo*real(i - 1, wp)
+         lonb(2, i) = dlo*real(i, wp)
+         lon(i) = 0.5_wp*(lonb(1, i) + lonb(2, i))
+      end do
+      do j = 1, NLAT
+         latb(1, j) = -90.0_wp + dla*real(j - 1, wp)
+         latb(2, j) = -90.0_wp + dla*real(j, wp)
+         lat(j) = 0.5_wp*(latb(1, j) + latb(2, j))
+      end do
+      tax = [0.0_wp, 10.0_wp]
+      call nc_create_file(path, ncid)
+      call nc_def_dim(ncid, "lon", NLON, dlon_)
+      call nc_def_dim(ncid, "lat", NLAT, dlat_)
+      call nc_def_dim(ncid, "bnds", 2, dbnd)
+      call nc_def_dim(ncid, "time", 2, dtim)
+      call rdb_def_var_1d(ncid, "lon", dlon_, vlon)
+      call rdb_def_var_1d(ncid, "lat", dlat_, vlat)
+      call nc_def_var_2d(ncid, "lon_bnds", [dbnd, dlon_], vlonb)
+      call nc_def_var_2d(ncid, "lat_bnds", [dbnd, dlat_], vlatb)
+      call rdb_def_var_1d(ncid, "time", dtim, vtim)
+      call nc_put_att(ncid, vtim, "units", "days since 2000-06-20 00:00:00")
+      do v = 1, 9
+         call nc_def_var_3d(ncid, trim(VN(v)), [dlon_, dlat_, dtim], vf(v))
+      end do
+      call nc_enddef(ncid)
+      call rdb_put_var_1d(ncid, vlon, lon)
+      call rdb_put_var_1d(ncid, vlat, lat)
+      ierr = nf90_put_var(ncid, vlonb, lonb)
+      ierr = nf90_put_var(ncid, vlatb, latb)
+      call rdb_put_var_1d(ncid, vtim, tax)
+      do v = 1, 9
+         do k = 1, 2
+            do j = 1, NLAT
+               do i = 1, NLON
+                  sx = sin(2.0_wp*PI*lon(i)/37.0_wp + 0.3_wp)
+                  sy = cos(2.0_wp*PI*lat(j)/29.0_wp - 0.5_wp)
+                  select case (v)
+                  case (1)
+                     f(i, j, k) = tas0 + 4.0_wp*sx + 0.15_wp*(lat(j) - 20.0_wp) + 0.05_wp*tax(k)
+                  case (2)
+                     f(i, j, k) = huss0*(1.0_wp + 0.2_wp*sy + 0.1_wp*sx)
+                  case (3)
+                     f(i, j, k) = 6.0_wp + 4.0_wp*sx + 0.05_wp*(lat(j) - 20.0_wp)
+                  case (4)
+                     f(i, j, k) = -3.0_wp + 3.0_wp*sy + 0.04_wp*lon(i) + 0.02_wp*tax(k)
+                  case (5)
+                     f(i, j, k) = 1.01e5_wp - 300.0_wp*sx + 5.0_wp*lat(j)
+                  case (6)
+                     f(i, j, k) = 330.0_wp + 15.0_wp*sy + 20.0_wp*sx
+                  case (7)
+                     if (rsds_const >= 0.0_wp) then
+                        f(i, j, k) = rsds_const
+                     else
+                        f(i, j, k) = 180.0_wp + 40.0_wp*sx*sy + 0.5_wp*lat(j)
+                     end if
+                  case (8)
+                     f(i, j, k) = 2.0e-5_wp*(1.0_wp + 0.5_wp*sx)
+                  case default
+                     f(i, j, k) = 1.0e-6_wp*(1.0_wp + 0.5_wp*sy)
+                  end select
+               end do
+            end do
+         end do
+         ierr = nf90_put_var(ncid, vf(v), f)
+      end do
+      call nc_close(ncid)
+      open (newunit=u, file=listname, status='replace', action='write')
+      write (u, '(a)') trim(path)
+      close (u)
+   end subroutine write_atm_file
+
+   subroutine test_engine_bit_exact_ice_components_bulk(error)
+      !! Restart round trip of the ice + components + bulk-forcing path,
+      !! checkpoint mid thermo window (N_WRITE odd, `dt_therm_ratio = 2`).
+      type(error_type), allocatable, intent(out) :: error
+      integer :: n_ice
+      call write_atm_file(ATM_FILE, ATM_LIST, 255.0_wp, 6.0e-4_wp, -1.0_wp)
+      call ice_round_trip(error, "sea_ice_components_bulk")
+      call delete_file(ATM_FILE)
+      call delete_file(ATM_LIST)
+      n_ice = 0
+   end subroutine test_engine_bit_exact_ice_components_bulk
+
+   function probe_nml(ratio, ice_on, list) result(nml)
+      !! The 6x6 spherical flat-100 m, 4-layer, 15 degC warm basin: the
+      !! atmosphere-driven bulk forcing + components, ice enabled with NO ice
+      !! present (default `conc_config`) or disabled.
+      integer, intent(in) :: ratio
+      logical, intent(in) :: ice_on
+      character(len=*), intent(in) :: list
+      character(len=:), allocatable :: nml
+      character(len=2) :: sr
+      write (sr, '(i0)') ratio
+      nml = "&sim_nml sim_type = 'ocean' /"//NL// &
+            "&grid_nml nx = 6, ny = 6, nghost = 3, dx = 1.0, dy = 1.0 /"//NL// &
+            "&time_nml t_end = 4800.0, dt_fixed = 600.0, start_date = '2000-06-21' /"//NL// &
+            "&nonhydrostatic_nml nz_layers = 4 /"//NL// &
+            "&ocean_bt_nml auto_n_inner = .true., split_scheme = 'pred_corr' /"//NL// &
+            "&ocean_diag_nml enabled = .false. /"//NL// &
+            "&ocean_eos_nml eos = 'wright' /"//NL// &
+            "&ocean_thermo_nml enable_thermodynamics = .true. /"//NL// &
+            "&ocean_forcing_nml enable_components = .true. /"//NL// &
+            "&ocean_bulk_flux_nml enable = .true., n_iter = 5, z_wind = 10.0, z_ta = 10.0 /"//NL// &
+            "&tracer_nml initial_temperature = 15.0, initial_salinity = 35.0 /"//NL// &
+            atm_group(list)// &
+            "&ocean_vmix_nml dt_therm_ratio = "//trim(sr)//" /"//NL// &
+            "&ocean_ice_nml enable = "//trim(merge(".true. ", ".false.", ice_on))//" /"//NL// &
+            "&ocean_grid_nml grid_config = 'spherical', lon_west = 0.0, lat_south = 20.0, "// &
+            "rad_earth = 6.371e6, coriolis_scheme = 'planetary' /"//NL// &
+            "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
+            "&ocean_topo_nml topo_config = 'flat', max_depth = 100.0 /"//NL// &
+            "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL// &
+            "&output_nml output_to_file = .false. /"//NL
+   end function probe_nml
+
+   subroutine run_probe(ratio, ice_on, list, nsteps, t_top, ok)
+      !! Run the probe `nsteps` steps; return the surface-layer temperature.
+      integer, intent(in) :: ratio, nsteps
+      logical, intent(in) :: ice_on
+      character(len=*), intent(in) :: list
+      real(wp), allocatable, intent(out) :: t_top(:, :)
+      logical, intent(out) :: ok
+      type(ocean_engine_t), target :: e
+      type(config_t) :: cfg
+      real(wp) :: t
+      integer :: nz, it
+
+      call make_engine(e, cfg, probe_nml(ratio, ice_on, list), ok)
+      if (.not. ok) return
+      t = 0.0_wp
+      call advance(e, cfg, t, nsteps, ok)
+      if (ok) then
+         nz = e%state%multilayer%nz_ml
+         it = e%state%multilayer%idx_temperature
+         !$acc update self(e%state%multilayer%tracers(it)%c)
+         t_top = e%state%multilayer%tracers(it)%c(:, :, nz)
+      end if
+      call engine_exit_data(e)
+      call engine_teardown(e)
+   end subroutine run_probe
+
+   subroutine test_engine_icefree_sw(error)
+      !! The regression for "ice enabled => the ocean receives no shortwave".
+      !! Surface-layer warming caused by the shortwave (T at rsds = 400 minus
+      !! T at rsds = 0) must be the SAME with ice enabled (no ice present) as
+      !! with ice disabled, at `dt_therm_ratio` 1 and 3 -- and nonzero.
+      !! Before the fix the ice-enabled warming was exactly 0.
+      type(error_type), allocatable, intent(out) :: error
+      real(wp), allocatable :: t4_on(:, :), t0_on(:, :), t4_off(:, :), t0_off(:, :)
+      real(wp) :: d_on, d_off
+      integer :: ratios(2), k, ip, jp
+      logical :: ok
+
+      call write_atm_file(ATM_FILE, ATM_LIST, 288.0_wp, 6.0e-3_wp, 400.0_wp)
+      call write_atm_file(ATM_SW0_FILE, ATM_SW0_LIST, 288.0_wp, 6.0e-3_wp, 0.0_wp)
+      ratios = [1, 3]
+      do k = 1, 2
+         call run_probe(ratios(k), .true., ATM_LIST, 6, t4_on, ok)
+         call check(error, ok, "probe (ice on, sw 400) failed")
+         if (allocated(error)) exit
+         call run_probe(ratios(k), .true., ATM_SW0_LIST, 6, t0_on, ok)
+         call check(error, ok, "probe (ice on, sw 0) failed")
+         if (allocated(error)) exit
+         call run_probe(ratios(k), .false., ATM_LIST, 6, t4_off, ok)
+         call check(error, ok, "probe (ice off, sw 400) failed")
+         if (allocated(error)) exit
+         call run_probe(ratios(k), .false., ATM_SW0_LIST, 6, t0_off, ok)
+         call check(error, ok, "probe (ice off, sw 0) failed")
+         if (allocated(error)) exit
+         ip = 3 + 3
+         jp = 3 + 3
+         d_on = t4_on(ip, jp) - t0_on(ip, jp)
+         d_off = t4_off(ip, jp) - t0_off(ip, jp)
+         call check(error, d_off > 1.0e-6_wp, "precondition: shortwave warms the ice-disabled run")
+         if (allocated(error)) exit
+         call check(error, abs(d_on - d_off) <= 1.0e-9_wp*d_off, &
+                    "ice-enabled shortwave warming equals the ice-disabled value (ratio "// &
+                    itoa(ratios(k))//")")
+         if (allocated(error)) exit
+      end do
+      call delete_file(ATM_FILE)
+      call delete_file(ATM_LIST)
+      call delete_file(ATM_SW0_FILE)
+      call delete_file(ATM_SW0_LIST)
+   end subroutine test_engine_icefree_sw
 
    subroutine ice_round_trip(error, label)
       !! N_WRITE = 5 (odd) with `dt_therm_ratio = 2`: the checkpoint lands
