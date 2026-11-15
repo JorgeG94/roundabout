@@ -3,6 +3,7 @@ submodule(rdb_ocean_state) rdb_ocean_state_seed
    !! rdb_ocean_state.F90 (analytical ICs, bathymetry/cavity seed
    !! dispatch, land-cell seeding; see
    !! src/core/ocean/state/rdb_ocean_state.F90 for the public interface).
+   use rdb_safe_math, only: safe_exp, safe_sin, safe_cos, safe_tanh, safe_cosh
    implicit none
 
 contains
@@ -1178,7 +1179,7 @@ contains
       allocate (d_k(nz), e_k(nz), a_k(nz))
       do k = 1, nz
          d_k(k) = (real(nz - k, wp) + 0.5_wp)*dz
-         e_k(k) = exp(-(d_k(k)/Hv)**2)
+         e_k(k) = safe_exp(-(d_k(k)/Hv)**2)
       end do
       ! Static stability of the discrete centre-column profile (the anomaly is
       ! separable in r, so the centre column is the worst case): T must not
@@ -1213,7 +1214,7 @@ contains
          yy = (real(j - ng + joff, wp) - 0.5_wp)*dy
          do i = 0, nx + 1
             xx = (real(i - ng + ioff, wp) - 0.5_wp)*dx
-            gcell(i, j) = exp(-((xx - x0)**2 + (yy - y0)**2)/R**2)
+            gcell(i, j) = safe_exp(-((xx - x0)**2 + (yy - y0)**2)/R**2)
          end do
       end do
       do j = 1, ny + 1
@@ -1491,7 +1492,7 @@ contains
       dlat = grid%dy
       ! Jet-centre latitude = domain centre; φ = (lat_south + ny/2·dlat).
       phi0 = (lat_south + 0.5_wp*real(nyg, wp)*dlat)*DEG2RAD
-      cos_phi0 = cos(phi0)
+      cos_phi0 = safe_cos(phi0)
 
       ! Zonal perturbation wavenumber.  L_x = R·cosφ₀·(lon span, rad);
       ! integer pert_nx ⇒ k_x·L_x = 2π·pert_nx makes the x-continuation
@@ -1503,12 +1504,12 @@ contains
       do j = 1, ny_total
          phi = (lat_south + (real(j - ng + joff, wp) - 0.5_wp)*dlat)*DEG2RAD
          y_arg = rad_earth*(phi - phi0)/jet_L
-         tanh_y = tanh(y_arg)
-         sech2 = 1.0_wp/cosh(y_arg)**2
+         tanh_y = safe_tanh(y_arg)
+         sech2 = 1.0_wp/safe_cosh(y_arg)**2
          do i = 1, nx_total
             lam_deg = lon_west + (real(i - ng + ioff, wp) - 0.5_wp)*dlon
             xm = rad_earth*cos_phi0*((lam_deg - lon_west)*DEG2RAD)
-            xi_full = dxi*tanh_y + a_pert*sech2*cos(kx*xm)
+            xi_full = dxi*tanh_y + a_pert*sech2*safe_cos(kx*xm)
             eta_local = -(gprime/g_fs)*xi_full
             state%multilayer%h_layer(i, j, 1) = H_bed + xi_full            ! lower (bed)
             state%multilayer%h_layer(i, j, 2) = H_surf + (eta_local - xi_full)  ! upper (surface)
@@ -1524,8 +1525,8 @@ contains
       do j = 1, ny_total
          phi = (lat_south + (real(j - ng + joff, wp) - 0.5_wp)*dlat)*DEG2RAD
          y_arg = rad_earth*(phi - phi0)/jet_L
-         sech2 = 1.0_wp/cosh(y_arg)**2
-         f_u = 2.0_wp*omega*sin(phi)
+         sech2 = 1.0_wp/safe_cosh(y_arg)**2
+         f_u = 2.0_wp*omega*safe_sin(phi)
          u_jet = (gprime/f_u)*(dxi/jet_L)*sech2
          do i = 1, nx_total + 1
             state%multilayer%u_face_x_layer(i, j, 2) = u_jet
@@ -1660,7 +1661,7 @@ contains
             i_phys = i - ng + ioff
             x_phys = (real(i_phys, wp) - 0.5_wp)*grid%dx
             r2 = (x_phys - x_c)**2 + (y_phys - y_c)**2
-            eta_local = cfg%ocean%ic%ga_eta_amp*exp(-r2*inv_L2)
+            eta_local = cfg%ocean%ic%ga_eta_amp*safe_exp(-r2*inv_L2)
             state%barotropic%h(i, j) = state%barotropic%b(i, j) + eta_local
          end do
       end do

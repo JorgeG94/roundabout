@@ -82,6 +82,22 @@ repos:
         language: system
         pass_filenames: false
         files: '^(src|app)/.*\.(f|F|f90|F90)$'
+      - id: safe-math-intrinsics
+        name: No bare exp/log/sin/cos/... or real-exponent ** (use rdb_safe_math)
+        # Diff-aware: only NEW/changed lines relative to the merge base are
+        # errors, so the existing sites do not block commits; the burn-down
+        # inventory is `python3 tools/check_safe_math.py --all`.  Waive a line
+        # with `! safe-math-ok: <reason>`.  Skips cleanly with no base ref.
+        entry: tools/check_safe_math_precommit.sh
+        language: system
+        pass_filenames: false
+        files: '^(src|app)/.*\.(F90|f90|inc)$'
+      - id: safe-math-lint-selftest
+        name: Unit tests for the safe-math linter and the vector-math check
+        entry: python3 -m unittest tools/test_check_safe_math.py tools/test_check_no_vector_math.py
+        language: system
+        pass_filenames: false
+        files: '^tools/(check_safe_math|check_no_vector_math|test_check_safe_math|test_check_no_vector_math)[^/]*$'
       - id: openmp-portability
         name: OpenMP portability (no NEW ifx-breaking !$acc directive shapes)
         # Mirrors .github/workflows/openmp-portability-lint.yml: diff-aware

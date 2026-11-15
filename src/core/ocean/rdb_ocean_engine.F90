@@ -111,7 +111,7 @@ module rdb_ocean_engine
    use rdb_barotropic_substep, only: chapman_setup_corner, chapman_workspace_cleanup
    use rdb_ocean_boundary_types, only: ocean_bc_state_set_edges, ocean_bc_state_set_topology, &
                                        ocean_bc_type_from_string, OBC_PERIODIC, OBC_WALL, &
-                                       OBC_TRIPOLAR_FOLD, OBC_CHAPMAN
+                                       OBC_TRIPOLAR_FOLD, OBC_CHAPMAN, OBC_OPEN, OBC_TIDAL
    use rdb_ocean_metrics, only: metrics_assemble_from_supergrid_arrays, metrics_finalize, &
                                 metrics_fold_periodic_ghosts
    use rdb_eos, only: parse_ts_convention, TS_CONS_ABS
@@ -185,6 +185,7 @@ module rdb_ocean_engine
    private
 
    public :: ocean_engine_t
+   public :: WETDRY_OPEN_EDGE_MIN_FACTOR
    public :: engine_setup
    public :: engine_enter_data
    public :: engine_step
@@ -193,6 +194,14 @@ module rdb_ocean_engine
    public :: engine_exit_data
    public :: engine_teardown
    public :: diag_vgrid_from_name
+
+   real(wp), parameter :: WETDRY_OPEN_EDGE_MIN_FACTOR = 10.0_wp
+      !! Minimum resting depth of a wet column on an OPEN / TIDAL edge under
+      !! dynamic wet/dry, as a multiple of `&ocean_wetdry_nml dry_depth`
+      !! (`check_wetdry_open_edge_depth`).  The Flather velocity scales with
+      !! `sqrt(g/max(D, 1e-6))`, so a near-dry edge column runs away on any rank
+      !! count; empirical: 0.35 m blew up, 0.6 m was stable (0.25 m tide,
+      !! `dry_depth = 0.05`), and the factor 10 (0.5 m) lies between.
 
    type :: ocean_engine_t
       !! One ocean simulation's setup products, minus the caller-owned
@@ -347,8 +356,9 @@ contains
          !! stream is not opened and its directory is not created.
          !! Default `.false.`.
 
-      integer :: rank, csize, mrank, sss_net_mode
+      integer :: rank, csize, mrank, sss_net_mode, ie
       integer :: cav_edges(4)
+      character(len=32) :: edge_name
       logical :: no_output, sss_conv_sp
       character(len=512) :: restart_filename
       real(wp) :: t_restart_local
@@ -453,15 +463,19 @@ contains
          ! Dynamic wet/dry is decomposition-safe on a wall / periodic domain
          ! (nghost >= 3 keeps the owned cells and the innermost ghost layer
          ! exact through the fast loop by induction; three once-per-stage
-         ! refreshes keep the outer ghosts as images).  Two things are UNPROVEN
-         ! on a decomposed domain and refused here:
+         ! refreshes keep the outer ghosts as images), and on the legacy-Flather
+         ! OPEN and TIDAL edges: there the limiter adds min(theta(ng),
+         ! theta(ng+1)) at the boundary face and theta(ng) reads fluxes at
+         ! faces OUTSIDE the domain, whose corner ghosts across an MPI seam are
+         ! images from the two-pass exchange (the y pass spans the outside
+         ! columns).  Two things stay UNPROVEN on a decomposed domain and are
+         ! refused here:
          !  * the tripolar fold: the wd_* masks and the limiter fluxes are
          !    never folded, on any rank count;
-         !  * any edge that is not WALL or PERIODIC: the limiter adds
-         !    min(theta(ng), theta(ng+1)) at the boundary face, and theta(ng)
-         !    reads fluxes at faces OUTSIDE the domain, which at a seam
-         !    crossing the open edge come from corner ghosts / the
-         !    zero-gradient fill, a radius no OBC decomposition case reads.
+         !  * every other edge type (clamped, chapman, sponge, nested, inflow,
+         !    discharge) and, on an open / tidal edge, Orlanski radiation, the
+         !    full Flather form, asymmetric nudging and the tracer reservoirs
+         !    (`res_lscale_in/out`; no wet/dry decomposition case).
          if (cfg%ocean%wetdry%enable .and. &
              ocean_bc_type_from_string(cfg%ocean%bc%north) == OBC_TRIPOLAR_FOLD) then
             call fail("&ocean_wetdry_nml enable = .true. with north = 'tripolar_fold' is "// &
@@ -471,16 +485,48 @@ contains
                       ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
-         if (cfg%ocean%wetdry%enable .and. ( &
-             wetdry_edge_is_open(cfg%ocean%bc%west) .or. wetdry_edge_is_open(cfg%ocean%bc%east) .or. &
-             wetdry_edge_is_open(cfg%ocean%bc%south) .or. wetdry_edge_is_open(cfg%ocean%bc%north))) then
-            call fail("&ocean_wetdry_nml enable = .true. with an &ocean_bc_nml edge that is "// &
-                      "neither wall nor periodic (open / tidal / clamped / chapman / sponge / "// &
-                      "...) is unproven on more than one rank ("//to_string(csize)// &
-                      " ranks requested): the limiter at the boundary face reads fluxes "// &
-                      "outside the domain that are not decomposition-checked.  Run on 1 rank.", &
-                      ierr, OCEAN_STATUS_ERR_SETUP)
-            return
+         if (cfg%ocean%wetdry%enable) then
+            ! Proven on > 1 rank: WALL, PERIODIC, and the legacy-Flather OPEN and
+            ! TIDAL edges (the limiter at an open face reads the outside corner
+            ! ghosts of eta/ubt/vbt, which the two-pass exchange keeps as images;
+            ! `wetdry_tidal_flat` / `wetdry_open_flat` in the decomposition gate).
+            do ie = 1, 4
+               select case (ie)
+               case (1)
+                  edge_name = cfg%ocean%bc%west
+               case (2)
+                  edge_name = cfg%ocean%bc%east
+               case (3)
+                  edge_name = cfg%ocean%bc%south
+               case default
+                  edge_name = cfg%ocean%bc%north
+               end select
+               if (wetdry_edge_is_unproven(edge_name)) then
+                  call fail("&ocean_wetdry_nml enable = .true. with the &ocean_bc_nml edge '"// &
+                            trim(edge_name)//"' is unproven on more than one rank ("// &
+                            to_string(csize)//" ranks requested): only wall, periodic, open "// &
+                            "(Flather) and tidal edges are decomposition-checked under dynamic "// &
+                            "wet/dry (clamped, chapman, sponge, nested, inflow, discharge are not).  "// &
+                            "Run on 1 rank.", ierr, OCEAN_STATUS_ERR_SETUP)
+                  return
+               end if
+            end do
+            if (wetdry_has_open_edge(cfg)) then
+               if (trim(cfg%ocean%bc%radiation_scheme) /= "anomaly" .or. &
+                   trim(cfg%ocean%bc%flather_form) /= "legacy" .or. &
+                   cfg%ocean%bc%nudge_tau_in > 0.0_wp .or. cfg%ocean%bc%nudge_tau_out > 0.0_wp .or. &
+                   cfg%ocean%bc%res_lscale_in > 0.0_wp .or. cfg%ocean%bc%res_lscale_out > 0.0_wp) then
+                  call fail("&ocean_wetdry_nml enable = .true. with an open / tidal edge is "// &
+                            "decomposition-checked only for the default boundary closure "// &
+                            "(&ocean_bc_nml radiation_scheme = 'anomaly', flather_form = 'legacy', "// &
+                            "nudge_tau_in = nudge_tau_out = res_lscale_in = res_lscale_out = 0): "// &
+                            "Orlanski radiation, full Flather, asymmetric nudging and tracer "// &
+                            "reservoirs are unproven on more than one rank ("// &
+                            to_string(csize)//" ranks requested).  Run on 1 rank.", &
+                            ierr, OCEAN_STATUS_ERR_SETUP)
+                  return
+               end if
+            end if
          end if
          ! Ice-shelf cavity (dyn + virtual melt + top drag) runs decomposed,
          ! bitwise (`cavity_*` cases of `test_ocean_decomp_bitid_mpi`).  The
@@ -691,6 +737,8 @@ contains
       ! hysteresis mask must be allocated + registered before the restart
       ! registry walk). Default off => no-op, byte-identical.
       call configure_ocean_wetdry(cfg, engine%state, engine%grid, rank)
+      call check_wetdry_open_edge_depth(cfg, engine, ierr)
+      if (setup_failed(ierr)) return
 
       ! The surface-flux component set is allocated BEFORE the restart read:
       ! the registry walk only sees the components (`sf_heat_cavity`/
@@ -1508,16 +1556,117 @@ contains
       if (allocated(engine%staged_tracers)) deallocate (engine%staged_tracers)
    end subroutine engine_apply_staged_ic
 
-   pure function wetdry_edge_is_open(edge_name) result(is_open)
-      !! `.true.` iff the edge string parses to anything but WALL or PERIODIC
-      !! (open, tidal, clamped, chapman, sponge, an unparsable name, ...): the
-      !! edge types the multi-rank wet/dry gate has no decomposition case for.
+   subroutine check_wetdry_open_edge_depth(cfg, engine, ierr)
+      !! Configure-time refusal (any rank count): with dynamic wet/dry on, a
+      !! wet column on an OPEN (Flather) or TIDAL edge whose resting depth is
+      !! below `WETDRY_OPEN_EDGE_MIN_FACTOR * &ocean_wetdry_nml dry_depth` is
+      !! refused.  The Flather radiation velocity scales with
+      !! `sqrt(g/max(D, 1e-6))`, so a near-dry edge column turns a small
+      !! elevation mismatch into a runaway edge velocity; measured on the
+      !! decomposition-gate tidal flat (0.25 m tide, `dry_depth = 0.05`): an
+      !! edge column of 0.35 m blows up on ONE rank, one floored at 0.6 m is
+      !! stable.  The factor 10 (0.5 m at the default `dry_depth`) sits between.
+      !! A static-land column (`b < -land_margin`) is a wall and is not
+      !! checked.  Each rank checks the owned columns of the edges it holds
+      !! (`has_*`) and the verdict is a global minimum, so every rank refuses
+      !! together and the answer does not depend on the decomposition.
+      type(config_t), intent(in) :: cfg
+      type(ocean_engine_t), intent(in) :: engine
+      integer, intent(out), optional :: ierr
+      integer :: ie, ng, nxp, nyp, i, j, t
+      real(wp) :: dmin_loc, dmin_glob, thr
+      character(len=8) :: nm
+      character(len=32) :: edge_name
+      logical :: has_edge
+
+      if (present(ierr)) ierr = OCEAN_STATUS_OK
+      if (.not. cfg%ocean%wetdry%enable) return
+      thr = WETDRY_OPEN_EDGE_MIN_FACTOR*cfg%ocean%wetdry%dry_depth
+      ng = engine%grid%nghost
+      nxp = engine%grid%nx_phys
+      nyp = engine%grid%ny_phys
+      do ie = 1, 4
+         select case (ie)
+         case (1)
+            edge_name = cfg%ocean%bc%west
+            nm = "west"
+            has_edge = engine%decomp%has_west
+         case (2)
+            edge_name = cfg%ocean%bc%east
+            nm = "east"
+            has_edge = engine%decomp%has_east
+         case (3)
+            edge_name = cfg%ocean%bc%south
+            nm = "south"
+            has_edge = engine%decomp%has_south
+         case default
+            edge_name = cfg%ocean%bc%north
+            nm = "north"
+            has_edge = engine%decomp%has_north
+         end select
+         t = ocean_bc_type_from_string(edge_name)
+         if (t /= OBC_OPEN .and. t /= OBC_TIDAL) cycle   ! rank-uniform (config only)
+         dmin_loc = huge(1.0_wp)
+         if (has_edge) then
+            select case (ie)
+            case (1)
+               do j = ng + 1, ng + nyp
+                  call take_wet_depth(engine%state%barotropic%b(ng + 1, j))
+               end do
+            case (2)
+               do j = ng + 1, ng + nyp
+                  call take_wet_depth(engine%state%barotropic%b(ng + nxp, j))
+               end do
+            case (3)
+               do i = ng + 1, ng + nxp
+                  call take_wet_depth(engine%state%barotropic%b(i, ng + 1))
+               end do
+            case default
+               do i = ng + 1, ng + nxp
+                  call take_wet_depth(engine%state%barotropic%b(i, ng + nyp))
+               end do
+            end select
+         end if
+         call halo_allreduce_min(dmin_loc, dmin_glob)
+         if (dmin_glob < thr) then
+            call fail("&ocean_wetdry_nml enable = .true. with the "//trim(nm)//" edge '"// &
+                      trim(edge_name)//"': a wet boundary column has a resting depth of "// &
+                      to_string(dmin_glob)//" m, below the minimum "//to_string(thr)// &
+                      " m ("//to_string(WETDRY_OPEN_EDGE_MIN_FACTOR)//" x dry_depth) for an "// &
+                      "open / tidal edge: the Flather velocity scales with sqrt(g/D) and "// &
+                      "runs away on a near-dry edge column.  Deepen the bathymetry at the "// &
+                      "edge or move the edge.", ierr, OCEAN_STATUS_ERR_SETUP)
+            return
+         end if
+      end do
+   contains
+      subroutine take_wet_depth(b)
+         real(wp), intent(in) :: b
+         if (b >= -cfg%ocean%wetdry%land_margin) dmin_loc = min(dmin_loc, b)
+      end subroutine take_wet_depth
+   end subroutine check_wetdry_open_edge_depth
+
+   pure function wetdry_edge_is_unproven(edge_name) result(unproven)
+      !! `.true.` iff the edge string parses to anything but WALL, PERIODIC, OPEN
+      !! or TIDAL (clamped, chapman, sponge, nested, inflow, discharge, an
+      !! unparsable name, ...): the edge types the multi-rank wet/dry gate has no
+      !! decomposition case for.  (The tripolar fold has its own, earlier refusal.)
       character(len=*), intent(in) :: edge_name
-      logical :: is_open
+      logical :: unproven
       integer :: t
       t = ocean_bc_type_from_string(edge_name)
-      is_open = (t /= OBC_WALL .and. t /= OBC_PERIODIC)
-   end function wetdry_edge_is_open
+      unproven = (t /= OBC_WALL .and. t /= OBC_PERIODIC .and. t /= OBC_OPEN .and. t /= OBC_TIDAL)
+   end function wetdry_edge_is_unproven
+
+   pure function wetdry_has_open_edge(cfg) result(has_open)
+      !! `.true.` iff any edge is OPEN (Flather) or TIDAL.
+      type(config_t), intent(in) :: cfg
+      logical :: has_open
+      integer :: t(4)
+      t = [ocean_bc_type_from_string(cfg%ocean%bc%west), ocean_bc_type_from_string(cfg%ocean%bc%east), &
+           ocean_bc_type_from_string(cfg%ocean%bc%south), ocean_bc_type_from_string(cfg%ocean%bc%north)]
+      has_open = any(t == OBC_OPEN .or. t == OBC_TIDAL)
+   end function wetdry_has_open_edge
 
    pure function setup_failed(ierr) result(bad)
       !! `.true.` iff `ierr` is present and non-OK — the "shall I
