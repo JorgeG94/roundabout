@@ -260,6 +260,7 @@ contains
       type(nml_schema_t), intent(inout) :: schema
       type(nml_group_t) :: g
       logical, pointer :: pl
+      character(len=:), pointer :: ps
 
       g%name = "ocean_forcing"
       g%doc = "Surface-flux component-set gate (PR-12): allocate the "// &
@@ -269,6 +270,14 @@ contains
       call g%add(nml_logical("enable_components", pl, &
                              "Allocate the surface-flux component set and run "// &
                              "the assembler (default off => byte-identical)"))
+      ps => cfg%ocean%forcing%freshwater
+      call g%add(nml_enum("freshwater", ps, &
+                          "Surface fresh-water mass fluxes (lprec/fprec/evap/"// &
+                          "lrunoff/frunoff): 'none' (default, enthalpy only), "// &
+                          "'virtual' (virtual salt flux -S_surf*F, fixed column "// &
+                          "mass; needs enable_components) or 'mass' (reserved, "// &
+                          "refused at configure)", &
+                          allowed=[character(len=8) :: "none", "virtual", "mass"]))
       call schema%add_group(g)
    end subroutine register_ocean_forcing
 

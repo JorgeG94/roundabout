@@ -116,6 +116,10 @@ contains
                                test_engine_bit_exact_ice_components), &
                   new_unittest("restart_engine_bit_exact_sea_ice_components_bulk", &
                                test_engine_bit_exact_ice_components_bulk), &
+                  new_unittest("restart_engine_bit_exact_sea_ice_components_bulk_freshwater", &
+                               test_engine_bit_exact_fw), &
+                  new_unittest("engine_freshwater_none_is_knob_absent", test_engine_fw_none_is_absent), &
+                  new_unittest("engine_freshwater_virtual_composition_sis2", test_engine_fw_composition), &
                   new_unittest("engine_ice_enabled_icefree_shortwave_matches_ice_disabled", &
                                test_engine_icefree_sw), &
                   new_unittest("restart_engine_bit_exact_gm_meke_varmix_therm2", &
@@ -358,7 +362,8 @@ contains
          if (label == "sea_ice_components") then
             nml = nml//"&ocean_forcing_nml enable_components = .true. /"//NL
          end if
-      case ("sea_ice_components_bulk")
+      case ("sea_ice_components_bulk", "sea_ice_components_bulk_fw", "sea_ice_components_bulk_none", &
+            "sea_ice_components_bulk_fw_ratio1")
          ! Ice + components + the atmosphere-driven bulk forcing: the path on
          ! which the ice couplers used to overwrite the bulk consumer's
          ! open-water `q_sw` (the decomposition harness's `bulk_flux_ice`,
@@ -427,7 +432,27 @@ contains
       case default
          error stop "test_ocean_restart_engine: unknown case"
       end select
+      ! The fresh-water variants of the bulk case: the same namelist with the knob set.
+      select case (label)
+      case ("sea_ice_components_bulk_fw", "sea_ice_components_bulk_fw_ratio1")
+         nml = swap(nml, "&ocean_forcing_nml enable_components = .true. /", &
+                    "&ocean_forcing_nml enable_components = .true., freshwater = 'virtual' /")
+      case ("sea_ice_components_bulk_none")
+         nml = swap(nml, "&ocean_forcing_nml enable_components = .true. /", &
+                    "&ocean_forcing_nml enable_components = .true., freshwater = 'none' /")
+      end select
+      if (label == "sea_ice_components_bulk_fw_ratio1") nml = swap(nml, "dt_therm_ratio = 2", "dt_therm_ratio = 1")
    end function case_nml
+
+   function swap(s, a, b) result(r)
+      !! `s` with the first `a` replaced by `b` (error stop when absent).
+      character(len=*), intent(in) :: s, a, b
+      character(len=:), allocatable :: r
+      integer :: p
+      p = index(s, a)
+      if (p == 0) error stop "test_ocean_restart_engine: swap pattern absent"
+      r = s(1:p - 1)//b//s(p + len(a):)
+   end function swap
 
    function cavity_nml(label) result(nml)
       !! Ice-shelf cavity with basal melt (and optionally top drag) over a
@@ -1329,6 +1354,141 @@ contains
       call delete_file(ATM_LIST)
       n_ice = 0
    end subroutine test_engine_bit_exact_ice_components_bulk
+
+   subroutine test_engine_bit_exact_fw(error)
+      !! The virtual fresh-water flux on the ice + components + bulk path, checkpoint mid thermo window
+      !! (N_WRITE odd, `dt_therm_ratio = 2`): `salt_fw` is rewritten before every assembly from state the
+      !! checkpoint carries (the prescribed rain is re-read at the top of the step), so it is not restart
+      !! state and the resumed run must reproduce the straight one bit for bit.
+      type(error_type), allocatable, intent(out) :: error
+      call write_atm_file(ATM_FILE, ATM_LIST, 255.0_wp, 6.0e-4_wp, -1.0_wp)
+      call ice_round_trip(error, "sea_ice_components_bulk_fw")
+      call delete_file(ATM_FILE)
+      call delete_file(ATM_LIST)
+   end subroutine test_engine_bit_exact_fw
+
+   subroutine test_engine_fw_none_is_absent(error)
+      !! `freshwater = 'none'` IS the knob absent: the whole restart registry and the carried surface fluxes
+      !! are bitwise the same after four steps.
+      type(error_type), allocatable, intent(out) :: error
+      type(ocean_engine_t), target :: ea, eb
+      type(config_t) :: cfg_a, cfg_b
+      type(snapshot_t) :: sa, sb
+      real(wp) :: t_a, t_b
+      integer :: n_ice
+      logical :: ok
+
+      call write_atm_file(ATM_FILE, ATM_LIST, 255.0_wp, 6.0e-4_wp, -1.0_wp)
+      call make_engine(ea, cfg_a, case_nml("sea_ice_components_bulk"), ok)
+      call check(error, ok, "engine (knob absent) setup")
+      if (.not. allocated(error)) then
+         call make_engine(eb, cfg_b, case_nml("sea_ice_components_bulk_none"), ok)
+         call check(error, ok, "engine (knob 'none') setup")
+      end if
+      if (.not. allocated(error)) then
+         t_a = 0.0_wp
+         t_b = 0.0_wp
+         call advance(ea, cfg_a, t_a, 4, ok)
+         call check(error, ok, "engine (knob absent) steps")
+      end if
+      if (.not. allocated(error)) then
+         call advance(eb, cfg_b, t_b, 4, ok)
+         call check(error, ok, "engine (knob 'none') steps")
+      end if
+      if (.not. allocated(error)) then
+         call take_snapshot(ea, sa)
+         call take_snapshot(eb, sb)
+         call compare(error, sa, sb, n_ice, "knob absent vs 'none'")
+      end if
+      call engine_exit_data(ea)
+      call engine_teardown(ea)
+      call engine_exit_data(eb)
+      call engine_teardown(eb)
+      call delete_file(ATM_FILE)
+      call delete_file(ATM_LIST)
+   end subroutine test_engine_fw_none_is_absent
+
+   subroutine test_engine_fw_composition(error)
+      !! SIS2-derived sea ice + the prescribed atmosphere, thermo every step: after the first outer step the
+      !! two runs (knob on / off) are the same state, so the assembled `Q_salt` of the knob-on run must be the
+      !! knob-off one plus exactly `-S_surf (lprec + fprec + evap)` (the open-water P - E term), and the
+      !! knob-off `Q_salt` is the ice's `salt_ice` alone: nothing is counted twice and the ice keeps its own.
+      type(error_type), allocatable, intent(out) :: error
+      type(ocean_engine_t), target :: ev, en
+      type(config_t) :: cfg_v, cfg_n
+      real(wp), allocatable :: qs_v(:, :), qs_n(:, :), si_v(:, :), si_n(:, :), fw_v(:, :), lp(:, :), fp(:, :), ev_(:, :)
+      real(wp), allocatable :: st(:, :)
+      real(wp) :: t, e_fw, e_sum, e_ice, term, n_nz
+      integer :: ierr, i, j, ng
+      logical :: ok
+
+      call write_atm_file(ATM_FILE, ATM_LIST, 255.0_wp, 6.0e-4_wp, -1.0_wp)
+      call make_engine(ev, cfg_v, case_nml("sea_ice_components_bulk_fw_ratio1"), ok)
+      call check(error, ok, "virtual engine setup")
+      if (.not. allocated(error)) then
+         call make_engine(en, cfg_n, swap(case_nml("sea_ice_components_bulk"), "dt_therm_ratio = 2", "dt_therm_ratio = 1"), ok)
+         call check(error, ok, "knob-off engine setup")
+      end if
+      if (.not. allocated(error)) then
+         t = 0.0_wp
+         call engine_step(ev, DT, t, ierr=ierr)
+         if (ierr == OCEAN_STATUS_OK) call engine_step_ice(ev, cfg_v, DT, t, ierr=ierr)
+         if (ierr == OCEAN_STATUS_OK) call engine_step_finalize(ev, DT, t, ierr=ierr)
+         call check(error, ierr == OCEAN_STATUS_OK, "virtual engine step")
+      end if
+      if (.not. allocated(error)) then
+         t = 0.0_wp
+         call engine_step(en, DT, t, ierr=ierr)
+         if (ierr == OCEAN_STATUS_OK) call engine_step_ice(en, cfg_n, DT, t, ierr=ierr)
+         if (ierr == OCEAN_STATUS_OK) call engine_step_finalize(en, DT, t, ierr=ierr)
+         call check(error, ierr == OCEAN_STATUS_OK, "knob-off engine step")
+      end if
+      if (.not. allocated(error)) then
+         !$acc update self(ev%state%surface_flux%Q_salt, ev%state%surface_flux%salt_ice, ev%state%surface_flux%salt_fw)
+         !$acc update self(ev%state%surface_flux%lprec, ev%state%surface_flux%fprec, ev%state%surface_flux%evap)
+         !$acc update self(en%state%surface_flux%Q_salt, en%state%surface_flux%salt_ice)
+         associate (cS => ev%state%multilayer%tracers(ev%state%multilayer%idx_salinity)%c)
+            !$acc update self(cS)
+            allocate (st, source=cS(:, :, ev%state%multilayer%nz_ml))
+         end associate
+         qs_v = ev%state%surface_flux%Q_salt
+         si_v = ev%state%surface_flux%salt_ice
+         fw_v = ev%state%surface_flux%salt_fw
+         lp = ev%state%surface_flux%lprec
+         fp = ev%state%surface_flux%fprec
+         ev_ = ev%state%surface_flux%evap
+         qs_n = en%state%surface_flux%Q_salt
+         si_n = en%state%surface_flux%salt_ice
+         ng = ev%grid%nghost
+         e_fw = 0.0_wp
+         e_sum = 0.0_wp
+         e_ice = 0.0_wp
+         n_nz = 0.0_wp
+         do j = ng + 1, ng + ev%grid%ny_phys
+            do i = ng + 1, ng + ev%grid%nx_phys
+               term = -st(i, j)*(lp(i, j) + fp(i, j) + ev_(i, j))
+               if (abs(term) > 0.0_wp) n_nz = n_nz + 1.0_wp
+               e_fw = max(e_fw, abs(fw_v(i, j) - term)/(abs(term) + 1.0e-12_wp))
+               e_sum = max(e_sum, abs(qs_v(i, j) - (qs_n(i, j) + term))/(abs(qs_v(i, j)) + 1.0e-12_wp))
+               e_ice = max(e_ice, abs(qs_n(i, j) - si_n(i, j))/(abs(qs_n(i, j)) + 1.0e-12_wp), &
+                           abs(si_v(i, j) - si_n(i, j))/(abs(si_n(i, j)) + 1.0e-12_wp))
+            end do
+         end do
+         write (*, '(a,4es11.3)') "  fw sis2: worst rel err salt_fw, Q_salt sum, ice term, n:", e_fw, e_sum, e_ice, n_nz
+         call check(error, n_nz > 50.0_wp, "the open-water P - E term is live in the cells compared")
+         if (.not. allocated(error)) call check(error, e_fw < 1.0e-13_wp, "salt_fw = -S_surf (lprec + fprec + evap)")
+         if (.not. allocated(error)) call check(error, e_sum < 1.0e-9_wp, &
+                                                "Q_salt(on) = Q_salt(off) + salt_fw (ocean tendency = ice term + P - E)")
+         if (.not. allocated(error)) call check(error, e_ice < 1.0e-12_wp, &
+                                           "the ice's own salt term is the same with the knob on and is all Q_salt has with it off")
+      end if
+      call engine_exit_data(ev)
+      call engine_teardown(ev)
+      call engine_exit_data(en)
+      call engine_teardown(en)
+      call delete_file(ATM_FILE)
+      call delete_file(ATM_LIST)
+   end subroutine test_engine_fw_composition
 
    function probe_nml(ratio, ice_on, list) result(nml)
       !! The 6x6 spherical flat-100 m, 4-layer, 15 degC warm basin: the

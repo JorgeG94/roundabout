@@ -102,7 +102,7 @@ module rdb_ocean_engine
    use rdb_halo, only: halo_allreduce_sum_i8, halo_allreduce_min
    use rdb_barotropic_dtbt, only: bt_dtbt_dt_max, bt_dtbt_n_inner
    use rdb_ocean_halo_state, only: ocean_halo_exchange_ml_state, ocean_halo_exchange_ice_state, &
-                                   ocean_halo_exchange_ice_fluxes
+                                   ocean_halo_exchange_ice_fluxes, ocean_halo_exchange_centre_field
    use rdb_ocean_fold_exchange, only: ocean_fold_exchange_init, ocean_fold_exchange_reserve, &
                                       ocean_fold_exchange_destroy, ocean_fold_north_corner
    use rdb_ocean_periodic, only: ocean_periodic_wrap_state, ocean_periodic_wrap_centre_2d
@@ -118,7 +118,9 @@ module rdb_ocean_engine
    use rdb_ocean_dyn, only: ocean_dyn_step, ocean_dyn_step_split, ocean_porous_refresh, &
                             ocean_dyn_enable_bt_wide, isopycnal_vanish_tol
    use rdb_ocean_surface_flux, only: ocean_surface_flux_assemble, &
-                                     ocean_surface_flux_refresh_sw_net
+                                     ocean_surface_flux_refresh_sw_net, &
+                                     ocean_surface_flux_fw_virtual_step, parse_surface_freshwater, &
+                                     SURF_FW_MASS, SURF_FW_INVALID, SURF_FW_VIRTUAL
    use rdb_ocean_surface_stress, only: ocean_surface_stress_set_shelf_from_ustar
    use rdb_ocean_cavity_flux, only: ocean_cavity_flux_step
    use rdb_ocean_cavity_melt, only: parse_cavity_freshwater, CAVITY_FW_MASS
@@ -766,6 +768,23 @@ contains
       ! `sf_salt_cavity`) and the carried assembly (`sf_Q_heat`/`sf_Q_salt`)
       ! once they exist -- allocated after the read they were written but
       ! never restored.
+      ! `validate_config` refuses these too; engine_setup is reached without it (library and
+      ! test callers), and a reserved value must never run as `none`.
+      select case (parse_surface_freshwater(cfg%ocean%forcing%freshwater))
+      case (SURF_FW_MASS, SURF_FW_INVALID)
+         call fail("&ocean_forcing_nml freshwater = '"//trim(adjustl(cfg%ocean%forcing%freshwater))// &
+                   "' is not implemented (shipped: none, virtual; 'mass' is reserved)", &
+                   ierr, OCEAN_STATUS_ERR_SETUP)
+         return
+      case (SURF_FW_VIRTUAL)
+         if (.not. cfg%ocean%forcing%enable_components) then
+            call fail("&ocean_forcing_nml freshwater = 'virtual' requires enable_components = .true.", &
+                      ierr, OCEAN_STATUS_ERR_SETUP)
+            return
+         end if
+      case default
+         continue
+      end select
       call engine%state%surface_flux%set_components(engine%grid, &
                                                     cfg%ocean%forcing%enable_components)
       ! The restart registry makes the ice-ocean stress tags REQUIRED under the prescribed atmosphere
@@ -866,6 +885,10 @@ contains
          engine%state%surface_flux%Q_heat = q_heat_resume
          engine%state%surface_flux%Q_salt = q_salt_resume
       end if
+      ! After the const seed (which resets has_salt): latch the virtual
+      ! fresh-water form.  `none` is a no-op, so every existing run is unchanged.
+      call engine%state%surface_flux%set_freshwater( &
+         parse_surface_freshwater(cfg%ocean%forcing%freshwater))
       call engine%state%surface_flux%set_p_surf_const( &
          cfg%ocean%psurf%p_surf_const)
       ! E3 top-of-column IN-SITU EOS pressure: seed `ms%p_top` from the
@@ -2570,6 +2593,19 @@ contains
       ! (rather than at apply time) is also what makes the `Q_heat` /
       ! `Q_salt` that KPP and EPBL read for `B_0` the MASKED values.
       ! Cavity off ⇒ the original call, byte-identical.
+      ! Virtual fresh-water salt flux: its ONE writer, right before the
+      ! assembler sums it (same thermo cadence).  The writer fills OWNED
+      ! cells, so the seam ghosts are exchanged like `salt_ice`'s.
+      if (engine%state%surface_flux%fw_virtual) then
+         call ocean_surface_flux_fw_virtual_step(engine%grid, engine%state%surface_flux, &
+                                                 engine%state%multilayer, &
+                                                 active=engine%state%dyn%enable_thermodynamics &
+                                                 .and. engine%state%dyn%is_thermo_step())
+         if (engine%state%dyn%enable_thermodynamics .and. engine%state%dyn%is_thermo_step()) then
+            call ocean_halo_exchange_centre_field(engine%state%surface_flux%salt_fw, &
+                                                  engine%grid, engine%state%bc)
+         end if
+      end if
       if (engine%state%metrics%use_cavity) then
          call ocean_surface_flux_assemble(engine%grid, engine%state%surface_flux, &
                                           engine%state%multilayer, &

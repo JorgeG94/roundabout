@@ -52,7 +52,8 @@ contains
       use rdb_ocean_pseudo_salt, only: pseudo_salt_conflicts_restore, &
                                        pseudo_salt_conflicts_ice, &
                                        pseudo_salt_needs_thermo_warning
-      use rdb_ocean_surface_flux, only: sw_source_is_implemented
+      use rdb_ocean_surface_flux, only: sw_source_is_implemented, parse_surface_freshwater, &
+                                        SURF_FW_NONE, SURF_FW_VIRTUAL, SURF_FW_MASS, SURF_FW_INVALID
       use rdb_ocean_vmix, only: kpp_sw_method_is_implemented, &
                                 parse_vmix_interior_closure, VMIX_INTERIOR_NONE, &
                                 bkgnd_henyey_conflicts_profile
@@ -3937,6 +3938,33 @@ contains
                            "under enable_thermodynamics=.false.)")
          has_error = .true.
       end if
+
+      ! ---- &ocean_forcing_nml freshwater (surface fresh-water mass fluxes) ----
+      ! 'virtual' turns lprec/fprec/evap/lrunoff/frunoff into the virtual salt
+      ! flux `salt_fw`, a component only the component set allocates.  'mass'
+      ! (the real Boussinesq flux) is a reserved value: refused until it ships.
+      select case (parse_surface_freshwater(cfg%ocean%forcing%freshwater))
+      case (SURF_FW_NONE)
+         continue
+      case (SURF_FW_VIRTUAL)
+         if (.not. cfg%ocean%forcing%enable_components) then
+            call logger%error("&ocean_forcing_nml freshwater='virtual' requires "// &
+                              "enable_components=.true. (the virtual salt flux is a "// &
+                              "component of the surface-flux set)")
+            has_error = .true.
+         end if
+      case (SURF_FW_MASS)
+         call logger%error("&ocean_forcing_nml freshwater='mass' is not implemented "// &
+                           "yet (the real Boussinesq fresh-water mass flux is a "// &
+                           "follow-up); use 'virtual' (fixed column mass, virtual "// &
+                           "salt flux) or 'none'")
+         has_error = .true.
+      case default
+         call logger%error("&ocean_forcing_nml freshwater = '"// &
+                           trim(adjustl(cfg%ocean%forcing%freshwater))// &
+                           "' is not recognised (shipped: none, virtual; reserved: mass)")
+         has_error = .true.
+      end select
 
       ! ---- &ocean_dataovr_nml (PR-15 file-backed surface forcing) ----
       !

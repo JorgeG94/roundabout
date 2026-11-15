@@ -118,7 +118,17 @@
 !!     and `ocean_cavity_mass_step` removes it again from the tracer.
 !!   * mass fluxes (`evap`, `lprec`, `fprec`, `vprec`, `lrunoff`, `frunoff`,
 !!     `seaice_melt`) and their `heat_content_*` twins: a forcing reader OR
-!!     the bulk-flux consumer; a mass flux owes its enthalpy companion.
+!!     the bulk-flux consumer; a mass flux owes its enthalpy companion.  Today
+!!     only `evap`, `lprec`, `fprec` (+ `heat_content_lprec/fprec`) have a
+!!     writer; nothing writes `vprec`, `lrunoff`, `frunoff`, `seaice_melt`.
+!!   * `salt_fw` (positive SALINIFIES): `ocean_surface_flux_fw_virtual_step`
+!!     (`&ocean_forcing_nml freshwater = "virtual"`) and nothing else.  The
+!!     virtual salt flux `-S_surf*F` of the open-ocean fresh-water mass flux
+!!     `F = lprec + fprec + evap + lrunoff + frunoff`; a FULL OVERWRITE of the
+!!     owned cells right before the assembler, so not restart state.  Under it
+!!     the assembler drops the mass enthalpy of those fluxes from `Q_heat`
+!!     (no mass enters the column).  `vprec`, `seaice_melt` and the cavity are
+!!     NOT part of `F` (their consumers own them).  See the step's docstring.
 !!   * `heat_content_massin`/`massout`, `Q_heat`, `Q_salt`: the assembler
 !!     (`ocean_surface_flux_assemble`) ONLY.  A filler writing these is a bug.
 !!   * `p_surf_atm` (Pa): a reader, a configure seed, or the bulk consumer
@@ -155,6 +165,9 @@ module rdb_ocean_surface_flux
    public :: sw_opacity_manizza
    public :: sw_pe_cost_shape
    public :: sw_source_is_implemented
+   public :: ocean_surface_flux_fw_virtual_step
+   public :: parse_surface_freshwater
+   public :: SURF_FW_NONE, SURF_FW_VIRTUAL, SURF_FW_MASS, SURF_FW_INVALID
 
    ! Visible share of the total shortwave when only the total is carried
    ! (Manizza et al. 2005): SW_vis = 0.42*SW, SW_nir = SW - SW_vis.
@@ -163,6 +176,12 @@ module rdb_ocean_surface_flux
    ! Seconds per day — converts the MOM6 `FLUXCONST` piston velocity
    ! (specified in m/day) to MKS m/s at the seed call.
    real(wp), parameter :: SECONDS_PER_DAY = 86400.0_wp
+
+   ! `&ocean_forcing_nml freshwater` codes (mirrors the `nml_enum` list).
+   integer, parameter :: SURF_FW_NONE = 0
+   integer, parameter :: SURF_FW_VIRTUAL = 1
+   integer, parameter :: SURF_FW_MASS = 2
+   integer, parameter :: SURF_FW_INVALID = -1
 
    ! Specific heat capacity of seawater (J/kg/K): alias of
    ! `SEAWATER_CP_DEFAULT` (MOM6 `C_P` as set by ACCESS-OM3).
@@ -345,6 +364,14 @@ module rdb_ocean_surface_flux
          !! `seaice_melt`.  Cheap early-return gate for a future
          !! freshwater kernel (real-mass PR).  Same contract as
          !! `has_heat` (`:56-62`) — never set from a device reduction.
+      logical :: fw_virtual = .false.
+         !! `&ocean_forcing_nml freshwater = "virtual"`: the net fresh-water
+         !! mass flux becomes the virtual salt flux `salt_fw`
+         !! (`ocean_surface_flux_fw_virtual_step`), summed by the assembler,
+         !! and the enthalpy of that mass no longer enters `Q_heat` (no mass
+         !! moves, so isothermal mass changes nothing).  Host-side gate,
+         !! latched by `set_freshwater`; `.false.` is the bit-identical
+         !! default.
       logical :: has_q_sw = .false.
          !! Host-side latch — set by a filler after writing `q_sw`
          !! (e.g. an ice `sw_thru` coupler).  **Not** the same as
@@ -501,6 +528,18 @@ module rdb_ocean_surface_flux
          !! `apply_surface_src_2d_impl` stamped.  So: one field, two
          !! readers, and only the tracer reader is corrected.
 
+      real(wp), allocatable :: salt_fw(:, :)
+         !! **Virtual fresh-water salt component** (kg salt/m^2/s, positive
+         !! SALINIFIES): `-S_surf*F` with `F = lprec + fprec + evap + lrunoff
+         !! + frunoff` (kg m-2 s-1, into the ocean) and `S_surf` the first
+         !! LIVE layer's salinity.  OWNED by
+         !! `ocean_surface_flux_fw_virtual_step` and nothing else, a FULL
+         !! OVERWRITE of the owned cells at every thermo step right before
+         !! the assembler sums it (so not restart state), seam-exchanged by
+         !! the engine.  All zero unless `fw_virtual`.  Excluded on purpose:
+         !! `vprec` (the restoring convention, owed to its own consumer),
+         !! `seaice_melt` (the ice hand-off already carries the melt water in
+         !! `salt_ice`) and every cavity term.
       real(wp), allocatable :: p_surf_atm(:, :)
          !! **Input component.**  Atmospheric surface-pressure load
          !! (Pa, >= 0).  Filled by an external reader / configure-time
@@ -526,6 +565,7 @@ module rdb_ocean_surface_flux
       procedure, non_overridable :: set_restore_file => ocean_surfflux_set_restore_file
       procedure, non_overridable :: set_components => ocean_surfflux_set_components
       procedure, non_overridable :: set_p_surf_const => ocean_surfflux_set_p_surf_const
+      procedure, non_overridable :: set_freshwater => ocean_surfflux_set_freshwater
       procedure, non_overridable :: bytes => ocean_surface_flux_bytes
    end type ocean_surface_flux_t
 
@@ -597,6 +637,7 @@ contains
       if (allocated(this%heat_content_massout)) deallocate (this%heat_content_massout)
       if (allocated(this%salt_flux)) deallocate (this%salt_flux)
       if (allocated(this%salt_cavity)) deallocate (this%salt_cavity)
+      if (allocated(this%salt_fw)) deallocate (this%salt_fw)
       if (allocated(this%p_surf_atm)) deallocate (this%p_surf_atm)
       if (allocated(this%p_surf)) deallocate (this%p_surf)
    end subroutine ocean_surfflux_dealloc_components
@@ -632,7 +673,7 @@ contains
          !$acc&                  this%heat_content_vprec, this%heat_content_lrunoff, &
          !$acc&                  this%heat_content_frunoff, this%heat_content_seaice_melt, &
          !$acc&                  this%heat_content_massin, this%heat_content_massout, &
-         !$acc&                  this%salt_flux, this%salt_cavity, &
+         !$acc&                  this%salt_flux, this%salt_cavity, this%salt_fw, &
          !$acc&                  this%p_surf_atm, this%p_surf)
          !$acc update device(this%q_sw, this%q_lw, this%q_lat, this%q_sens, &
          !$acc&               this%heat_added, this%heat_cavity, this%evap, &
@@ -643,7 +684,7 @@ contains
          !$acc&               this%heat_content_vprec, this%heat_content_lrunoff, &
          !$acc&               this%heat_content_frunoff, this%heat_content_seaice_melt, &
          !$acc&               this%heat_content_massin, this%heat_content_massout, &
-         !$acc&               this%salt_flux, this%salt_cavity, &
+         !$acc&               this%salt_flux, this%salt_cavity, this%salt_fw, &
          !$acc&               this%p_surf_atm, this%p_surf)
       end if
    end subroutine ocean_surfflux_enter_data_impl
@@ -668,7 +709,7 @@ contains
          !$acc&                 this%heat_content_vprec, this%heat_content_lrunoff, &
          !$acc&                 this%heat_content_frunoff, this%heat_content_seaice_melt, &
          !$acc&                 this%heat_content_massin, this%heat_content_massout, &
-         !$acc&                 this%salt_flux, this%salt_cavity, &
+         !$acc&                 this%salt_flux, this%salt_cavity, this%salt_fw, &
          !$acc&                 this%p_surf_atm, this%p_surf)
       end if
       if (allocated(this%sss_target)) then
@@ -933,6 +974,7 @@ contains
       allocate (this%heat_content_massout(nx, ny), source=0.0_wp)
       allocate (this%salt_flux(nx, ny), source=0.0_wp)
       allocate (this%salt_cavity(nx, ny), source=0.0_wp)
+      allocate (this%salt_fw(nx, ny), source=0.0_wp)
       allocate (this%p_surf_atm(nx, ny), source=0.0_wp)
       allocate (this%p_surf(nx, ny), source=0.0_wp)
    end subroutine ocean_surfflux_alloc_components
@@ -1932,7 +1974,7 @@ contains
                + arr_bytes(this%heat_content_massin) &
                + arr_bytes(this%heat_content_massout) &
                + arr_bytes(this%salt_flux) &
-               + arr_bytes(this%salt_cavity) &
+               + arr_bytes(this%salt_cavity) + arr_bytes(this%salt_fw) &
                + arr_bytes(this%p_surf_atm) + arr_bytes(this%p_surf)
    end function ocean_surface_flux_bytes
 
@@ -1987,6 +2029,129 @@ contains
       end do
    end subroutine ocean_surfflux_cover_const_impl
 
+   pure function parse_surface_freshwater(name) result(code)
+      !! Translate a `&ocean_forcing_nml freshwater` string into a
+      !! `SURF_FW_*` code.  The accepted set MIRRORS the `nml_enum`
+      !! registration in `register_ocean_forcing` -- the two lists move
+      !! together.
+      character(len=*), intent(in) :: name
+      integer :: code
+      select case (trim(adjustl(name)))
+      case ("none", "NONE", "off")
+         code = SURF_FW_NONE
+      case ("virtual", "VIRTUAL", "virtual_salt")
+         code = SURF_FW_VIRTUAL
+      case ("mass", "MASS", "real", "real_mass")
+         code = SURF_FW_MASS
+      case default
+         code = SURF_FW_INVALID
+      end select
+   end function parse_surface_freshwater
+
+   subroutine ocean_surfflux_set_freshwater(this, code)
+      !! Latch `&ocean_forcing_nml freshwater` (a `SURF_FW_*` code).  Host
+      !! only.  `SURF_FW_VIRTUAL` sets `fw_virtual` and `has_salt` (the
+      !! apply kernel's early-return guard: with it unset, a run whose only
+      !! salt source is `salt_fw` would never deposit it).  Call AFTER
+      !! `set_surface_flux_const`, which resets `has_salt` from the scalar.
+      !! `SURF_FW_NONE` leaves everything untouched (bit-identical); the
+      !! reserved `SURF_FW_MASS` is refused by `validate_config` before any
+      !! slot exists and is a no-op here.
+      class(ocean_surface_flux_t), intent(inout) :: this
+      integer, intent(in) :: code
+      if (code == SURF_FW_VIRTUAL) then
+         this%fw_virtual = .true.
+         this%has_salt = .true.
+      end if
+   end subroutine ocean_surfflux_set_freshwater
+
+   pure subroutine ocean_surface_flux_fw_virtual_step(grid, sf, ms, active)
+      !! **The one writer of `salt_fw`** (virtual fresh-water salt flux,
+      !! `&ocean_forcing_nml freshwater = "virtual"`).  A full overwrite of
+      !! the OWNED cells, run right before `ocean_surface_flux_assemble`
+      !! every thermo step (`engine_step_finalize`), which sums it into
+      !! `Q_salt`; the engine then seam-exchanges the slot, as it does for
+      !! `salt_ice`.
+      !!
+      !!   F         = lprec + fprec + evap + lrunoff + frunoff
+      !!   salt_fw   = -wet * S_surf * F
+      !!
+      !! `F` (kg m-2 s-1, positive INTO the ocean; `evap` is stored <= 0, so
+      !! it enters with its own sign) is the fresh water the atmosphere
+      !! and the rivers exchange with the OPEN ocean; `S_surf` is the
+      !! salinity of the first LIVE layer at or below `k_top`.  Dilution of a
+      !! fixed-volume surface layer by `F` is, to first order in `F*dt/h`,
+      !! `dS/dt = -S*F/(rho0*h)`, i.e. exactly the virtual salt flux
+      !! `-S_surf*F` of the `dS/dt = Q_salt/(rho0*h)` apply kernel (Griffies
+      !! et al., 2001; Huang, 1993).  Same units and sign as `salt_flux` /
+      !! `salt_ice`.
+      !!
+      !! Components deliberately NOT in `F`:
+      !!   * `vprec`: the SSS-restoring convention, owed to whatever
+      !!     converts it (its own consumer); counting it here would apply a
+      !!     restoring flux twice.
+      !!   * `seaice_melt`: the sea-ice hand-off carries its melt and growth
+      !!     water in `salt_ice` already (CICE-port `1000*fsalt - S_surf*fresh`;
+      !!     SIS2-derived brine/melt flux), and no filler writes the slot.
+      !!   * the ice-shelf cavity (`salt_cavity`, separate slot, untouched).
+      !! Open-ocean precipitation and evaporation are weighted by the
+      !! open-water fraction at the source (`rdb_ocean_bulk_forcing`), and
+      !! the ice takes the rest, so the two shares do not overlap.
+      !!
+      !! Outer-shim + flat-impl: the salinity is `ms%tracers(idx_S)%c`, an
+      !! array-of-DT registry deref that stays on the host before the device
+      !! loop.  No-op unless `sf%fw_virtual` and a salinity tracer exists.
+      type(hgrid_t), intent(in) :: grid
+      type(ocean_surface_flux_t), intent(inout) :: sf
+      type(multilayer_state_t), intent(in) :: ms
+      logical, intent(in), optional :: active
+         !! Thermo-cadence gate (present-and-false => early return), the
+         !! `ocean_surface_flux_assemble` convention.
+
+      integer :: nx, ny, nz, idx_S, ng
+
+      if (.not. sf%fw_virtual) return
+      if (.not. sf%use_components) return
+      if (present(active)) then
+         if (.not. active) return
+      end if
+      if (.not. allocated(ms%tracers)) return
+      idx_S = ms%idx_salinity
+      if (idx_S <= 0) return
+
+      nx = grid%nx_total
+      ny = grid%ny_total
+      nz = ms%nz_ml
+      ng = grid%nghost
+      call ocean_surfflux_fw_virtual_impl(sf%salt_fw, sf%lprec, sf%fprec, sf%evap, &
+                                          sf%lrunoff, sf%frunoff, ms%tracers(idx_S)%c, &
+                                          ms%h_layer, ms%wet_mask, ms%k_top, &
+                                          ng + 1, ng + grid%nx_phys, ng + 1, ng + grid%ny_phys, &
+                                          nz, nx, ny)
+   end subroutine ocean_surface_flux_fw_virtual_step
+
+   pure subroutine ocean_surfflux_fw_virtual_impl(salt_fw, lprec, fprec, evap, lrunoff, frunoff, &
+                                                  c_S, h_layer, wet_mask, k_top, &
+                                                  is, ie, js, je, nz, nx, ny)
+      !! Flat `do concurrent` kernel of `ocean_surface_flux_fw_virtual_step`:
+      !! `salt_fw = -wet*S_top*(lprec + fprec + evap + lrunoff + frunoff)` on
+      !! the owned cells (explicit-shape dummies, dims first).
+      integer, intent(in)    :: nz, nx, ny, is, ie, js, je
+      real(wp), intent(inout) :: salt_fw(nx, ny)
+      real(wp), intent(in)    :: lprec(nx, ny), fprec(nx, ny), evap(nx, ny)
+      real(wp), intent(in)    :: lrunoff(nx, ny), frunoff(nx, ny)
+      real(wp), intent(in)    :: c_S(nx, ny, nz), h_layer(nx, ny, nz), wet_mask(nx, ny)
+      integer, intent(in)    :: k_top(nx, ny)
+      integer :: i, j, kt
+      real(wp) :: fw
+
+      do concurrent(j=js:je, i=is:ie) local(kt, fw)
+         kt = rdb_vl_first_live(nx, ny, nz, h_layer, i, j, k_top(i, j))
+         fw = lprec(i, j) + fprec(i, j) + evap(i, j) + lrunoff(i, j) + frunoff(i, j)
+         salt_fw(i, j) = -wet_mask(i, j)*c_S(i, j, kt)*fw
+      end do
+   end subroutine ocean_surfflux_fw_virtual_impl
+
    pure subroutine ocean_surface_flux_assemble(grid, sf, ms, active, cover_frac)
       !! **The single gate** that derives `Q_heat`/`Q_salt` from the
       !! component set (§3.1/§3.3 of the PR-12 plan) — the exact analogue
@@ -2003,7 +2168,17 @@ contains
       !!                            lrunoff,frunoff,seaice_melt}
       !!   heat_content_massout = SEAWATER_CP * T_sst * evap
       !! Net surface salt flux:
-      !!   Q_salt = Q_salt_const + (salt_flux + salt_ice) + salt_cavity
+      !!   Q_salt = Q_salt_const + (salt_flux + salt_ice) + salt_fw + salt_cavity
+      !! `salt_fw` is the virtual fresh-water term (zero, and not read, unless
+      !! `sf%fw_virtual`).  Under `fw_virtual` the mass enthalpy changes too:
+      !!   heat_content_massin  = heat_content_{vprec,seaice_melt}
+      !!   heat_content_massout = 0
+      !! because the mass of `lprec/fprec/lrunoff/frunoff/evap` is not added to
+      !! the column and mass entering at the surface temperature leaves the
+      !! temperature unchanged; keeping `cp*SST*(P-E)` in `Q_heat` would warm
+      !! the surface layer with no mass behind it (the `"none"` behaviour,
+      !! unchanged).  A mass flux whose own enthalpy differs from `cp*SST*m`
+      !! loses that anomaly under `"virtual"`; the real-mass flux restores it.
       !! All four outputs multiplied by `ms%wet_mask` (land carries
       !! exactly zero; interior loop bounds are NOT restricted — see
       !! CLAUDE.md's "nghost and the assembler loop bounds" gotcha).
@@ -2071,9 +2246,9 @@ contains
             sf%sw_ice, sf%heat_ice, sf%salt_ice, &
             sf%heat_content_lprec, sf%heat_content_fprec, sf%heat_content_vprec, &
             sf%heat_content_lrunoff, sf%heat_content_frunoff, sf%heat_content_seaice_melt, &
-            sf%evap, sf%salt_flux, sf%salt_cavity, &
+            sf%evap, sf%salt_flux, sf%salt_fw, sf%salt_cavity, &
             ms%tracers(idx_T)%c, ms%h_layer, ms%wet_mask, cover_frac, &
-            sf%Q_heat_const, sf%Q_salt_const, sf%cp, sf%h_min, ms%k_top, nz, nx, ny)
+            sf%Q_heat_const, sf%Q_salt_const, sf%cp, sf%h_min, sf%fw_virtual, ms%k_top, nz, nx, ny)
          sf%q_assembled = 1.0_wp
          return
       end if
@@ -2084,9 +2259,9 @@ contains
          sf%sw_ice, sf%heat_ice, sf%salt_ice, &
          sf%heat_content_lprec, sf%heat_content_fprec, sf%heat_content_vprec, &
          sf%heat_content_lrunoff, sf%heat_content_frunoff, sf%heat_content_seaice_melt, &
-         sf%evap, sf%salt_flux, sf%salt_cavity, &
+         sf%evap, sf%salt_flux, sf%salt_fw, sf%salt_cavity, &
          ms%tracers(idx_T)%c, ms%h_layer, ms%wet_mask, &
-         sf%Q_heat_const, sf%Q_salt_const, sf%cp, sf%h_min, ms%k_top, nz, nx, ny)
+         sf%Q_heat_const, sf%Q_salt_const, sf%cp, sf%h_min, sf%fw_virtual, ms%k_top, nz, nx, ny)
       sf%q_assembled = 1.0_wp
    end subroutine ocean_surface_flux_assemble
 
@@ -2097,9 +2272,9 @@ contains
                                                 heat_content_lprec, heat_content_fprec, &
                                                 heat_content_vprec, heat_content_lrunoff, &
                                                 heat_content_frunoff, heat_content_seaice_melt, &
-                                                evap, salt_flux, salt_cavity, &
+                                                evap, salt_flux, salt_fw, salt_cavity, &
                                                 c_T, h_layer, wet_mask, &
-                                                Q_heat_const, Q_salt_const, cp, h_min, k_top, &
+                                                Q_heat_const, Q_salt_const, cp, h_min, fw_virtual, k_top, &
                                                 nz, nx, ny)
       !! Flat `do concurrent` kernel — explicit-shape dummies, integer
       !! dims declared first (decl-order, ifx #8586).  See
@@ -2114,9 +2289,11 @@ contains
       real(wp), intent(in)    :: heat_content_lprec(nx, ny), heat_content_fprec(nx, ny)
       real(wp), intent(in)    :: heat_content_vprec(nx, ny), heat_content_lrunoff(nx, ny)
       real(wp), intent(in)    :: heat_content_frunoff(nx, ny), heat_content_seaice_melt(nx, ny)
-      real(wp), intent(in)    :: evap(nx, ny), salt_flux(nx, ny), salt_cavity(nx, ny)
+      real(wp), intent(in)    :: evap(nx, ny), salt_flux(nx, ny), salt_fw(nx, ny), salt_cavity(nx, ny)
       real(wp), intent(in)    :: c_T(nx, ny, nz), h_layer(nx, ny, nz), wet_mask(nx, ny)
       real(wp), intent(in)    :: Q_heat_const, Q_salt_const, cp, h_min
+      logical, intent(in)    :: fw_virtual
+         !! `sf%fw_virtual`, by value: selects the virtual-fresh-water form.
       integer, intent(in)    :: k_top(nx, ny)
          !! `ms%k_top`; SST is read at the first LIVE layer at or below it.
       integer :: i, j, kt
@@ -2129,6 +2306,10 @@ contains
          kt = rdb_vl_first_live(nx, ny, nz, h_layer, i, j, k_top(i, j))
          sst = c_T(i, j, kt)
          massout = cp*sst*evap(i, j)
+         if (fw_virtual) then
+            massin = heat_content_vprec(i, j) + heat_content_seaice_melt(i, j)
+            massout = 0.0_wp
+         end if
          heat_content_massin(i, j) = wet_mask(i, j)*massin
          heat_content_massout(i, j) = wet_mask(i, j)*massout
          Q_heat(i, j) = wet_mask(i, j)* &
@@ -2136,9 +2317,15 @@ contains
                          q_lat(i, j) + q_sens(i, j) + &
                          (heat_added(i, j) + heat_ice(i, j)) + heat_cavity(i, j) + &
                          massin + massout)
-         Q_salt(i, j) = wet_mask(i, j)*(Q_salt_const + &
-                                        (salt_flux(i, j) + salt_ice(i, j)) + &
-                                        salt_cavity(i, j))
+         if (fw_virtual) then
+            Q_salt(i, j) = wet_mask(i, j)*(Q_salt_const + &
+                                           (salt_flux(i, j) + salt_ice(i, j)) + &
+                                           salt_fw(i, j) + salt_cavity(i, j))
+         else
+            Q_salt(i, j) = wet_mask(i, j)*(Q_salt_const + &
+                                           (salt_flux(i, j) + salt_ice(i, j)) + &
+                                           salt_cavity(i, j))
+         end if
       end do
    end subroutine ocean_surfflux_assemble_impl
 
@@ -2150,9 +2337,9 @@ contains
                                                       heat_content_lprec, heat_content_fprec, &
                                                       heat_content_vprec, heat_content_lrunoff, &
                                                       heat_content_frunoff, heat_content_seaice_melt, &
-                                                      evap, salt_flux, salt_cavity, &
+                                                      evap, salt_flux, salt_fw, salt_cavity, &
                                                       c_T, h_layer, wet_mask, cover_frac, &
-                                                      Q_heat_const, Q_salt_const, cp, h_min, k_top, &
+                                                      Q_heat_const, Q_salt_const, cp, h_min, fw_virtual, k_top, &
                                                       nz, nx, ny)
       !! Ice-shelf-cover twin of `ocean_surfflux_assemble_impl`: the
       !! open-water factor `open_f = 1 - cover_frac` multiplies the
@@ -2162,7 +2349,8 @@ contains
       !!   masked   — `Q_heat_const`, `q_sw`, `q_lw`, `q_lat`, `q_sens`,
       !!              `heat_added`, `heat_content_massin` (the six
       !!              mass-enthalpy companions), `heat_content_massout`
-      !!              (`cp·SST·evap`), `Q_salt_const`, `salt_flux`;
+      !!              (`cp·SST·evap`), `Q_salt_const`, `salt_flux`, `salt_ice`,
+      !!              `salt_fw`;
       !!   UNmasked — `heat_cavity`, `salt_cavity`.
       !!
       !! The two `heat_content_mass*` OUTPUTS carry the factor too: they
@@ -2182,10 +2370,12 @@ contains
       real(wp), intent(in)    :: heat_content_lprec(nx, ny), heat_content_fprec(nx, ny)
       real(wp), intent(in)    :: heat_content_vprec(nx, ny), heat_content_lrunoff(nx, ny)
       real(wp), intent(in)    :: heat_content_frunoff(nx, ny), heat_content_seaice_melt(nx, ny)
-      real(wp), intent(in)    :: evap(nx, ny), salt_flux(nx, ny), salt_cavity(nx, ny)
+      real(wp), intent(in)    :: evap(nx, ny), salt_flux(nx, ny), salt_fw(nx, ny), salt_cavity(nx, ny)
       real(wp), intent(in)    :: c_T(nx, ny, nz), h_layer(nx, ny, nz), wet_mask(nx, ny)
       real(wp), intent(in)    :: cover_frac(nx, ny)
       real(wp), intent(in)    :: Q_heat_const, Q_salt_const, cp, h_min
+      logical, intent(in)    :: fw_virtual
+         !! `sf%fw_virtual`, by value: selects the virtual-fresh-water form.
       integer, intent(in)    :: k_top(nx, ny)
          !! `ms%k_top`; SST is read at the first LIVE layer at or below it.
       integer :: i, j, kt
@@ -2201,6 +2391,10 @@ contains
          kt = rdb_vl_first_live(nx, ny, nz, h_layer, i, j, k_top(i, j))
          sst = c_T(i, j, kt)
          massout = open_f*cp*sst*evap(i, j)
+         if (fw_virtual) then
+            massin = open_f*(heat_content_vprec(i, j) + heat_content_seaice_melt(i, j))
+            massout = 0.0_wp
+         end if
          heat_content_massin(i, j) = wet_mask(i, j)*massin
          heat_content_massout(i, j) = wet_mask(i, j)*massout
          Q_heat(i, j) = wet_mask(i, j)* &
@@ -2208,9 +2402,16 @@ contains
                                  q_lat(i, j) + q_sens(i, j) + &
                                  (heat_added(i, j) + heat_ice(i, j))) + &
                          heat_cavity(i, j) + massin + massout)
-         Q_salt(i, j) = wet_mask(i, j)*(open_f*(Q_salt_const + &
-                                                (salt_flux(i, j) + salt_ice(i, j))) + &
-                                        salt_cavity(i, j))
+         if (fw_virtual) then
+            Q_salt(i, j) = wet_mask(i, j)*(open_f*(Q_salt_const + &
+                                                   (salt_flux(i, j) + salt_ice(i, j)) + &
+                                                   salt_fw(i, j)) + &
+                                           salt_cavity(i, j))
+         else
+            Q_salt(i, j) = wet_mask(i, j)*(open_f*(Q_salt_const + &
+                                                   (salt_flux(i, j) + salt_ice(i, j))) + &
+                                           salt_cavity(i, j))
+         end if
       end do
    end subroutine ocean_surfflux_assemble_cover_impl
 
