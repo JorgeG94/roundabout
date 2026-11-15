@@ -23,16 +23,21 @@ module rdb_ice_cice_hooks
    !!  3. `atm_prepare`: `ice_atm_prepare_cell_inputs` from the prescribed atmospheric state
    !!     (`atm%enable`) or the uniform atmosphere of the run slot; the reference heights;
    !!     `work%sw_down` is the surface downward shortwave.
-   !!  9. and 15. `halo_state`, `halo_state_post`: single rank, so a LOCAL refresh: the periodic
-   !!     wrap of the category state and `aice0` (a wall edge keeps its ghosts: the C-grid metrics pin
-   !!     them to land).  No tripolar fold, no exchange: refused at configure.
+   !!  9. and 15. `halo_state`, `halo_state_post`: `ice_halo_category_state` (the ocean's exchange, the
+   !!     periodic wrap and the tripolar fold of the category state and `aice0`; a wall edge keeps its
+   !!     ghosts: the C-grid metrics pin them to land).  The whole scheme is still refused on more than
+   !!     one rank and with a fold at configure (the transport itself is gated on several ranks and
+   !!     across the fold by `test_cice_remap_decomp_mpi`; see `docs/CAPABILITIES_AND_LIMITATIONS.md`
+   !!     for what else stands between the scheme and a decomposed run).
    !! 11. `stress_to_faces`: periodic wrap of the T wind stress, then `ice_atm_stress_to_faces`
    !!     into the dynamics slot's `strairxE/yN` (the dynamics keeps them: `wind_on_faces`).
    !! 12. `dynamics`: the scheme-neutral aggregates are refreshed from the haloed state, then the
    !!     C-grid EVP of `ice_dyn_c_step` runs with the CATEGORY strength (`kstrength`) from the
    !!     post-thermodynamics state; `work%tau_x/y` (the persistent centre ice-ocean stress) and
    !!     `work%rdg_conv/rdg_shear` are copied from the dynamics slot.
-   !! 13. `transport`: `ice_step_transport` with the post mode of the context (NONE).
+   !! 13. `transport`: `ice_step_transport` with the post mode of the context (NONE); the transport's
+   !!     decomposition seam (`rdb_ice_transport_seam`: reductions, fold-row flux pairing) is bound at
+   !!     every call, a no-op on one rank without a fold.
    !! 14. `ridging`: `ice_step_ridge`; cells that needed more than one pass get the counted
    !!     `ICE_ERR_RIDGE_PASSES` bit.
    !! 17. `ocean_handoff`: accumulate the step's fluxes into the window mean; the face stress
@@ -60,7 +65,7 @@ module rdb_ice_cice_hooks
    use rdb_grid, only: hgrid_t
    use rdb_config, only: config_t
    use rdb_ocean_state, only: ocean_state_t
-   use rdb_ocean_periodic, only: ocean_periodic_wrap_centre_2d, ocean_periodic_wrap_centre_3d
+   use rdb_ocean_periodic, only: ocean_periodic_wrap_centre_2d
    use rdb_ice_state, only: ice_aggregates_fill
    use rdb_ice_cice_state, only: ice_cice_state_t, ice_update_state, ice_state_seed_uniform
    use rdb_ice_step_cice, only: ice_step_cice, ice_step_hooks_t, ice_step_opts_t, ice_step_result_t, &
@@ -76,6 +81,7 @@ module rdb_ice_cice_hooks
                                  ice_atm_stress_to_faces
    use rdb_ice_dyn_c, only: ice_dyn_c_step, ice_dyn_c_cat_t
    use rdb_ice_transport_cice, only: ice_step_transport, transport_result_t, TRANSPORT_CFG_OK
+   use rdb_ice_transport_seam_comm, only: ice_transport_seam_bind, ice_halo_category_state
    use rdb_ice_cice_run, only: ICE_LCUM_NCLIP, ICE_LCUM_AREA, ICE_LCUM_VICE, ICE_LCUM_VSNO, ICE_LCUM_EICE, ICE_LCUM_ESNO
    use rdb_ice_ridge, only: ice_step_ridge
    use rdb_ice_flux_avg, only: ice_flux_avg_accumulate, ice_flux_avg_stash_pending, ICE_AVG_OK
@@ -297,43 +303,14 @@ contains
       end do
    end subroutine ridge_bits_impl
 
-   subroutine wrap4_impl(nx, ny, nc, nl, nxp, nyp, ng, wrap_x, wrap_y, q)
-      !! Periodic ghost wrap of a `(nx, ny, ncat, nlayer)` field (x then y, as the ocean's).
-      integer, intent(in) :: nx, ny, nc, nl, nxp, nyp, ng
-      logical, intent(in) :: wrap_x, wrap_y
-      real(wp), intent(inout) :: q(nx, ny, nc, nl)
-      integer :: i, j, c, l, g
-
-      if (wrap_x) then
-         do concurrent(l=1:nl, c=1:nc, j=1:ny, g=1:ng)
-            q(g, j, c, l) = q(g + nxp, j, c, l)
-            q(nxp + ng + g, j, c, l) = q(ng + g, j, c, l)
-         end do
-      end if
-      if (wrap_y) then
-         do concurrent(l=1:nl, c=1:nc, g=1:ng, i=1:nx)
-            q(i, g, c, l) = q(i, g + nyp, c, l)
-            q(i, nyp + ng + g, c, l) = q(i, ng + g, c, l)
-         end do
-      end if
-   end subroutine wrap4_impl
-
    subroutine wrap_category_state(c)
-      !! The local halo refresh of the category state and `aice0` (module docstring).
+      !! The halo refresh of the category state and `aice0` (module docstring): the ocean's two-pass
+      !! exchange (the periodic wrap on an axis that is not split; a wall edge keeps its ghosts) and the
+      !! tripolar fold, through `ice_halo_category_state` (`rdb_ice_transport_seam_comm`).
       type(ice_cice_state_t), intent(inout) :: c
-      logical :: wx, wy
 
-      wx = S%bc%periodic_x
-      wy = S%bc%periodic_y
-      if (.not. (wx .or. wy)) return
-      call ocean_periodic_wrap_centre_3d(c%aicen, c%nx, c%ny, c%ncat, c%nx_phys, c%ny_phys, c%nghost, wx, wy)
-      call ocean_periodic_wrap_centre_3d(c%vicen, c%nx, c%ny, c%ncat, c%nx_phys, c%ny_phys, c%nghost, wx, wy)
-      call ocean_periodic_wrap_centre_3d(c%vsnon, c%nx, c%ny, c%ncat, c%nx_phys, c%ny_phys, c%nghost, wx, wy)
-      call ocean_periodic_wrap_centre_3d(c%Tsfcn, c%nx, c%ny, c%ncat, c%nx_phys, c%ny_phys, c%nghost, wx, wy)
-      call wrap4_impl(c%nx, c%ny, c%ncat, c%nilyr, c%nx_phys, c%ny_phys, c%nghost, wx, wy, c%qicen)
-      call wrap4_impl(c%nx, c%ny, c%ncat, c%nilyr, c%nx_phys, c%ny_phys, c%nghost, wx, wy, c%sicen)
-      call wrap4_impl(c%nx, c%ny, c%ncat, c%nslyr, c%nx_phys, c%ny_phys, c%nghost, wx, wy, c%qsnon)
-      call ocean_periodic_wrap_centre_2d(c%aice0, c%nx, c%ny, c%nx_phys, c%ny_phys, c%nghost, wx, wy)
+      call ice_halo_category_state(G, S%bc, c%nx, c%ny, c%ncat, c%nilyr, c%nslyr, c%aicen, c%vicen, c%vsnon, &
+                                   c%Tsfcn, c%qicen, c%sicen, c%qsnon, c%aice0)
    end subroutine wrap_category_state
 
    ! ------------------------------------------------------------------
@@ -494,6 +471,9 @@ contains
       ie = ctx%cice%nghost + ctx%cice%nx_phys
       js = ctx%cice%nghost + 1
       je = ctx%cice%nghost + ctx%cice%ny_phys
+      ! the decomposition seam of the transport (collectives, fold pairing): a few pointer assignments, one rank and
+      ! no fold being the default it leaves unchanged
+      call ice_transport_seam_bind(S%icec%tws%seam, G, S%bc, S%icec%tws%fw%nbatch, S%icec%tws%ntrace)
       associate (cm => S%ice_cgrid, c => ctx%cice, w => ctx%work, f => ctx%flux)
          call ice_step_transport(S%icec%tws, c%p, ctx%dt, ctx%transport_post, is, ie, js, je, &
                                  S%ice%u_ice, S%ice%v_ice, cm%HTE, cm%HTN, cm%tarea, cm%dxT, cm%dyT, &

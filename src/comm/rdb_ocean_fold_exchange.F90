@@ -412,7 +412,7 @@ contains
       call ocean_fold_pack_3d(fld, nxa, nya, 1, stagger, device_resident)
    end subroutine ocean_fold_pack_2d
 
-   subroutine ocean_fold_pack_3d(fld, nxa, nya, nz, stagger, device_resident)
+   subroutine ocean_fold_pack_3d(fld, nxa, nya, nz, stagger, device_resident, row_shift)
       !! Pack every layer of a 3D field into the open group: the sender's
       !! owned mirror-source points, rows below (and, for v / corner, on)
       !! the fold line.
@@ -424,6 +424,12 @@ contains
          !! `FOLD_STAG_*`.
       logical, intent(in), optional :: device_resident
          !! `.false.` ⇒ host arrays; default device-resident.
+      integer, intent(in), optional :: row_shift
+         !! Storage-row offset of `fld` against the ocean's staggering (default 0): a face
+         !! quantity addressed by the cell BELOW it (the ice's `N(i,j)`, the north face of cell
+         !! `j`, i.e. y-face row `j+1`) passes `-1`, so its fold-line row `ng+nj` is read as
+         !! the v-face fold line `ng+nj+1`.  Every row index of the message maps by the same
+         !! offset; `ocean_fold_unpack` must be given the same value.
 
       integer :: fam, nrow, sbase, g, g0, ng_e, L, r, p, cap, oT, oU
       logical :: on_device
@@ -444,6 +450,7 @@ contains
       ! corner; r = 1 is the fold-line row) — `fold_row_map`.
       sbase = fx_ng + fx_nyl + 1
       if (nrow == fx_ng + 1) sbase = sbase + 1
+      if (present(row_shift)) sbase = sbase + row_shift
       g0 = fx_s0(fam)
       ng_e = fx_ns(fam)
       cap = fx_cap
@@ -555,7 +562,7 @@ contains
       call ocean_fold_unpack_3d(fld, nxa, nya, 1, stagger, negate, device_resident)
    end subroutine ocean_fold_unpack_2d
 
-   subroutine ocean_fold_unpack_3d(fld, nxa, nya, nz, stagger, negate, device_resident)
+   subroutine ocean_fold_unpack_3d(fld, nxa, nya, nz, stagger, negate, device_resident, row_shift)
       !! Unpack the next field of the exchanged group: write every north
       !! ghost row (all storage columns) and, for v / corner, the fold-line
       !! row's west half (self-conjugate column → 0 for a vector).
@@ -569,6 +576,9 @@ contains
          !! `.true.` for a true-vector component.
       logical, intent(in), optional :: device_resident
          !! `.false.` ⇒ host arrays; default device-resident.
+      integer, intent(in), optional :: row_shift
+         !! As at pack (default 0).  A nonzero shift also moves the north ghost rows the unpack
+         !! writes: the caller owns that part of the array.
 
       integer :: fam, nrow, dbase, g, g0, ng_e, L, r, p, cap, oT, oU, ib, cls
       logical :: on_device, has_row
@@ -587,6 +597,7 @@ contains
       ! Destination row of message row r: ng+nyl+r for every stagger
       ! (`fold_row_map`: T/u ng+nyl+d, v/corner ng+nyl+1+d with d = r-1).
       dbase = fx_ng + fx_nyl
+      if (present(row_shift)) dbase = dbase + row_shift
       g0 = fx_r0(fam)
       ng_e = fx_nr(fam)
       cap = fx_cap

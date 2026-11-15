@@ -41,6 +41,7 @@ set(RDB_ICE_CORE_SOURCES
     ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_transport_checks.F90
     ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_transport_cice.F90
     ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_transport_pack.F90
+    ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_transport_seam.F90
     ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_upwind.F90
     ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_vprofile.F90
     ${PROJECT_SOURCE_DIR}/src/core/ice/thermo/rdb_ice_enthalpy.F90)

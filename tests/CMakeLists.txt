@@ -775,6 +775,7 @@ if(RDB_ENABLE_MPI)
       test_ocean_fold_exchange_mpi
       test_ocean_fold_sites_mpi
       test_ocean_decomp_bitid_mpi
+      test_cice_remap_decomp_mpi
       test_ocean_ke_probe_mpi)
   set(MPI_TEST_NPROCS_test_halo_mpi 4)
   set(MPI_TEST_NPROCS_test_halo_ocean_mpi 4)
@@ -785,6 +786,7 @@ if(RDB_ENABLE_MPI)
   set(MPI_TEST_NPROCS_test_ocean_fold_exchange_mpi 2)
   set(MPI_TEST_NPROCS_test_ocean_fold_sites_mpi 2)
   set(MPI_TEST_NPROCS_test_ocean_decomp_bitid_mpi 2)
+  set(MPI_TEST_NPROCS_test_cice_remap_decomp_mpi 2)
   set(MPI_TEST_NPROCS_test_ocean_ke_probe_mpi 4)
   # Per-test regime label (same values as the RDB_TESTS 5th field;
   # classification is by the source path of the modules each test imports).
@@ -797,6 +799,7 @@ if(RDB_ENABLE_MPI)
   set(MPI_TEST_REGIME_test_ocean_fold_exchange_mpi ocean)
   set(MPI_TEST_REGIME_test_ocean_fold_sites_mpi ocean)
   set(MPI_TEST_REGIME_test_ocean_decomp_bitid_mpi ocean)
+  set(MPI_TEST_REGIME_test_cice_remap_decomp_mpi ocean)
   set(MPI_TEST_REGIME_test_ocean_ke_probe_mpi ocean)
   # Writes + reads NetCDF inputs (the per-rank windowed readers).
   set(MPI_NETCDF_TESTS test_ocean_decomp_bitid_mpi)
@@ -935,6 +938,19 @@ if(RDB_ENABLE_MPI)
   set_tests_properties(
     rdb_test_ocean_decomp_bitid_mpi_1rank rdb_test_ocean_decomp_bitid_mpi_4rank
     PROPERTIES LABELS "ocean" ENVIRONMENT "OMP_NUM_THREADS=1" TIMEOUT 14400)
+  # CICE6 port D10.6: the incremental-remapping transport, every px x py layout
+  # of 1/2/4 ranks vs the serial run (owned cells bitwise), the tripolar fold
+  # seam included.  The 2-rank leg is the unsuffixed MPI_TESTS entry.
+  foreach(_np 1 4)
+    add_test(NAME rdb_test_cice_remap_decomp_mpi_${_np}rank
+             COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${_np}
+                     $<TARGET_FILE:test_cice_remap_decomp_mpi>)
+    set_tests_properties(
+      rdb_test_cice_remap_decomp_mpi_${_np}rank
+      PROPERTIES LABELS "ocean" ENVIRONMENT "OMP_NUM_THREADS=1")
+  endforeach()
+  set_tests_properties(rdb_test_cice_remap_decomp_mpi
+                       PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=1")
   # OM3 C2c-3b: atm-state provider + ocean bulk-flux consumer, 1 vs 2x2
   # bit-identity (atm%tas, ss%tau_x/tau_y, sf%q_sens physical cells). Not part
   # of the generic MPI_TESTS foreach above (it needs exactly the {1,4}rank legs

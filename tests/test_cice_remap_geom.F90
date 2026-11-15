@@ -98,6 +98,7 @@ contains
                   new_unittest("zero_velocity_clears_everything", test_zero), &
                   new_unittest("cfl_bits_both_signs_and_crossing", test_cfl), &
                   new_unittest("nan_in_raises_bit", test_nan), &
+                  new_unittest("zero_area_face_is_inactive", test_zero_area_face), &
                   new_unittest("mirror_symmetry_x_and_y", test_mirror), &
                   new_unittest("coast_and_island_no_flux_through_walls", test_coast), &
                   new_unittest("stated_input_halo_is_enough", test_halo_window), &
@@ -1850,6 +1851,74 @@ contains
       call check(error, bits == ICE_ERR_NONFINITE, "nan: a NaN displacement at the edge routine")
       call geo_destroy(g)
    end subroutine test_nan
+
+   subroutine test_zero_area_face(error)
+      !! A face with no cell area (`earea = 0`, the zero-length face at a bipole of a tripolar grid, in water) and no
+      !! prescribed area (`HTE = 0`) carries nothing although the corner next to it moves: it is INACTIVE (no triangle,
+      !! no branch code, no error bit) and the other edges are untouched.  With a non-zero prescribed area on the same
+      !! zero-area cell the geometry is unusable and still raises `ICE_ERR_NONFINITE` (the prescribed area is not dropped).
+      type(error_type), allocatable, intent(out) :: error
+      type(geo_t) :: g, h
+      integer :: i, j
+      integer, parameter :: ei = 6, ej = 5
+
+      call geo_init(g, 12, 10, .false.)
+      g%dt = 1.0_wp
+      call set_random_faces(g, 0.1_wp*g%dxU(1, 1), 11_int64)
+      call geo_init(h, 12, 10, .false.)
+      h%dt = 1.0_wp
+      call set_random_faces(h, 0.1_wp*h%dxU(1, 1), 11_int64)
+      call geo_run(h, 1)
+      ! zero-length east face of cell (ei, ej): no area, no length, no velocity through it, a moving corner beside it
+      g%earea(ei, ej) = 0.0_wp
+      g%HTE(ei, ej) = 0.0_wp
+      g%u(ei + 1, ej) = 0.0_wp
+      g%epm(ei, ej) = 0.0_wp
+      call geo_run(g, 1)
+      do j = g%js - 1, g%je
+         do i = g%is - 1, g%ie
+            if (g%ierr(i, j) /= 0_int32) then
+               call test_failed(error, "zero-area face: an error bit was raised")
+               call geo_destroy(g)
+               call geo_destroy(h)
+               return
+            end if
+         end do
+      end do
+      if (any(g%ws%src_e(ei, ej, :) /= 0_int8) .or. any(g%ws%area_e(ei, ej, :) /= 0.0_wp) .or. g%ws%icase_e(ei, ej) /= 0_int32) then
+         call test_failed(error, "zero-area face: the edge must be inactive (no triangle, area, branch code)")
+         call geo_destroy(g)
+         call geo_destroy(h)
+         return
+      end if
+      ! a far-away east edge is unchanged by the edit (same random state, no shared inputs)
+      if (any(g%ws%area_e(ei + 3, ej + 2, :) /= h%ws%area_e(ei + 3, ej + 2, :))) then
+         call test_failed(error, "zero-area face: an unrelated edge changed")
+         call geo_destroy(g)
+         call geo_destroy(h)
+         return
+      end if
+      ! a NaN area on that face is not "zero": the edge stays active and raises the bit
+      g%HTE(ei, ej) = 0.0_wp
+      g%u(ei + 1, ej) = 0.0_wp
+      g%earea(ei, ej) = ieee_value(1.0_wp, ieee_quiet_nan)
+      call geo_run(g, 1)
+      if (iand(g%ierr(ei, ej), ICE_ERR_NONFINITE) == 0_int32) then
+         call test_failed(error, "zero-area face: a NaN area must raise the non-finite bit, not be treated as zero")
+         call geo_destroy(g)
+         call geo_destroy(h)
+         return
+      end if
+      g%earea(ei, ej) = 0.0_wp
+      ! a prescribed area on a zero-area cell is NOT dropped: fatal bit, no triangle
+      g%HTE(ei, ej) = 1.0e4_wp
+      g%u(ei + 1, ej) = 0.05_wp*g%dxU(1, 1)
+      call geo_run(g, 1)
+      call check(error, iand(g%ierr(ei, ej), ICE_ERR_NONFINITE) /= 0_int32 .and. all(g%ws%src_e(ei, ej, :) == 0_int8), &
+                 "zero-area face with a prescribed area must raise the bit and carry no triangle")
+      call geo_destroy(g)
+      call geo_destroy(h)
+   end subroutine test_zero_area_face
 
    subroutine test_mirror(error)
       !! Reflecting the velocity field in x (resp. y) reflects every edge's area per source cell,

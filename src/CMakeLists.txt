@@ -205,6 +205,10 @@ set(CORE_SOURCES
     # depends on rdb_ocean_metrics, rdb_ocean_halo, rdb_ocean_periodic,
     # rdb_ocean_fold_apply (all declared earlier in this file).
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/cice/rdb_ice_cgrid_metrics.F90
+    # CICE6 port D10.6: the transport's decomposition seam (collectives, the
+    # distributed fold pairing, the category-state halo); uses rdb_halo,
+    # rdb_ocean_halo, rdb_ocean_fold_exchange.
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/cice/rdb_ice_transport_seam_comm.F90
     # CICE6 port D9.2: C-grid EVP driver on the SIS2-derived state (coupling
     # kernels, subcycle loop with the face halo, strocnT).
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/dynamics/rdb_ice_dyn_c.F90
