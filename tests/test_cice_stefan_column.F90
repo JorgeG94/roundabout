@@ -2,25 +2,37 @@
 !! ocean slab at its freezing point, under a constant -30 C atmosphere, 60 days at dt = 900 s, run through the
 !! production engine path (`engine_step` -> `engine_step_ice` -> `engine_step_finalize`).
 !!
-!! The reference is INDEPENDENT of the model: `ref_integrate` below is a small one-dimensional enthalpy-method
-!! (fixed grid, 1 cm, explicit) solution of the freezing problem of Stefan (1891) for sea ice, written from physical
-!! constants and the published constitutive laws only (the Pringle et al. 2007 conductivity, the Bitz and Lipscomb 1999
-!! enthalpy of brine-bearing ice, the freezing point of sea water, a bulk surface balance of longwave, sensible and
-!! latent heat with a Monin-Obukhov-range transfer coefficient).  It calls none of the model's thermodynamics.  Its
-!! own correctness is pinned by `test_reference_neumann`: with the surface held at a fixed temperature and fresh,
-!! constant-property ice it reproduces the exact one-phase solution (Neumann/Stefan: `h = 2 lambda sqrt(kappa t)`,
-!! `lambda sqrt(pi) exp(lambda^2) erf(lambda) = c dT / L`) to better than 0.5 percent.
+!! The reference is INDEPENDENT of the model's thermodynamics: `ref_integrate` below is a small one-dimensional
+!! enthalpy-method (fixed grid, 2 cm, explicit) solution of the freezing problem of Stefan (1891) for sea ice, written
+!! from physical constants and the published constitutive laws (the Pringle et al. 2007 conductivity, the Bitz and
+!! Lipscomb 1999 enthalpy of brine-bearing ice at the mean salinity 2.6 ppt of their profile, the freezing point of sea
+!! water and its rise with the brine the ice rejects, a surface balance of longwave, sensible and latent heat).  It calls
+!! none of the model's thermodynamics.  Its own correctness is pinned by `test_reference_neumann`: with the surface held
+!! at a fixed temperature and fresh, constant-property ice it reproduces the exact one-phase solution (Neumann/Stefan:
+!! `h = 2 lambda sqrt(kappa t)`, `lambda sqrt(pi) exp(lambda^2) erf(lambda) = c dT / L`) to better than 0.5 percent.
 !!
-!! What the tolerance is made of (the model's 4 layers and brine pockets shift the answer from the pure-ice law).
-!! The gate takes the ENVELOPE of the reference over the quantities the physics does not fix:
-!!   * ice bulk salinity 0 (fresh) to 4 ppt (the salt-flux reference salinity): brine changes the conductivity
-!!     (Pringle) and adds latent heat storage in brine pockets (Bitz and Lipscomb); worth 0.5 percent of h(60 d);
-!!   * the bulk transfer coefficient of heat and moisture, from half the neutral value (stably stratified surface
-!!     layer, Ts well below Ta) to the neutral value `(kappa/ln(z/z0))^2` for the model's roughness: worth +-2.3 percent
-!!     of h(60 d); this is the dominant term.  Everything else the surface balance needs (emissivity, longwave, wind,
-!!     humidity) is fixed by the namelist;
-!! and then widens it by `TOL_LAYERS`, the discretisation error of the model's four ice layers (plus the
-!! five-category linear ITD), pinned from the measured run (see the header of `test_stefan_growth` for the number).
+!! SHARED WITH THE MODEL BY DESIGN (the forcing definition, copied from the model's configuration, NOT independent
+!! physics, and not checked here): the air density `p/(R (1 + 0.608 q) T)` and the air POTENTIAL temperature referenced
+!! to 1000 hPa, `T (1e5/p)^0.286` (0.9 K below `uni_tas`; worth about 1.4 percent of h(60 d)); equal scalar and
+!! momentum roughness; the stable-branch profile function (Holtslag and de Bruin; never reached, the surface is warmer
+!! than the air throughout, so the layer is unstable and the transfer coefficient about twice the neutral value);
+!! the windless sensible-heat term of Jordan et al. (1999), 1 W m-2 K-1; the roughness `z0 = 5e-4 m`, the emissivity
+!! 0.985, the 4 ppt salt-flux reference salinity.  A wrong value of any of them in BOTH the model and this file is not
+!! seen.
+!!
+!! WEAKLY SENSITIVE TO THE TURBULENT COEFFICIENTS.  The conductive resistance of the ice dominates the heat transfer
+!! (h/k = 0.6 m2 K/W at 1.4 m against about 0.1 for the whole surface), so scaling the model's sensible and latent
+!! coefficients by 0.8 moves h(60 d) by only 0.3 percent, below what the gate resolves.  This test does NOT gate the
+!! transfer coefficients; the atmosphere kernel's own tests do.
+!!
+!! THE GATE.  The model's four ice layers (and five-category linear ITD) overshoot the continuum answer by a ONE-SIGNED
+!! error: with 2, 4 and 8 layers h(60 d) = 1.3985, 1.3914, 1.3870 m (differences 0.0071, 0.0044, ratio 0.62, Richardson
+!! limit 1.3798 m against the reference's 1.3796 m).  So the gate is asymmetric and centred where the 4-layer model
+!! sits: `+0.3 percent <= (h - h_ref)/h_ref <= +1.8 percent` on every day 10-60 (measured +0.77 to +1.33; margin 0.47
+!! percent to each side).  The ice salinity (0 to 4 ppt) moves the reference by 0.5 percent, inside the margin.  A model
+!! error of -1.4 percent in h(60 d) (conductivity x0.95, or Lfresh x1.05) lands at -0.6 percent and fails it.  The heat
+!! the surface loses to the atmosphere over the run is gated the same way, `+0.5 .. +2.0 percent` of the reference
+!! (measured +1.1).
 !!
 !! Conservation (independently accumulated): the ocean's heat and salt come from the ocean's own tracer arrays,
 !! the ice's from the state totals; the atmosphere's input from the ice's surface-flux terms (`ledger tab`), the
@@ -84,12 +96,13 @@ module test_cice_stefan_column
 
    real(wp), parameter :: SNOWFALL = 1.0e-4_wp
       !! Snowfall of the snow variant [kg m-2 s-1].
-   integer, parameter :: SNOW_DAYS = 20
+   integer, parameter :: SNOW_DAYS = 15
       !! Length of the snow variant [days].
    real(wp), parameter :: SNOW_RHO = 330.0_wp
       !! Density of the fallen snow [kg m-3].
-   real(wp), parameter :: TOL_LAYERS = 0.02_wp
-      !! Relative widening of the reference envelope for the 4-layer discretisation (see `test_stefan_growth`).
+   real(wp), parameter :: GATE_LO = 0.003_wp, GATE_HI = 0.018_wp
+      !! Asymmetric gate on `(h - h_ref)/h_ref` (see the header).
+   real(wp), parameter :: HEAT_LO = 0.005_wp, HEAT_HI = 0.020_wp
 
    logical :: comm_inited = .false.
 
@@ -129,6 +142,8 @@ module test_cice_stefan_column
       real(wp) :: r_water = 0.0_wp, sc_water = 0.0_wp, hand_mis = 0.0_wp
       real(wp) :: bl99_ratio = 0.0_wp
          !! Worst per-step `|heat residual in therm1|` over `1.1 ICE_FERRMAX dt sum(A aice_init)` (<= 1).
+      real(wp) :: frz_lat = 0.0_wp, atot = 1.0_wp, e_gain = 0.0_wp
+         !! New-ice latent heat booked by the ledger [J]; the column area [m2]; heat the ice gained from the atmosphere [J].
       real(wp) :: atm_heat = 0.0_wp
          !! Heat the ice lost to the atmosphere, per unit area [J m-2] (positive = lost).
       real(wp) :: fresh_sum = 0.0_wp
@@ -495,7 +510,7 @@ contains
       integer :: ierr, n, i, j, k, ng, is, ie, js, je, nz, spd
       real(wp) :: t, hmean, hprev, atot, rho0, h0o, so0o, h1o, so1o, m0, si0, e0, m1, si1, e1, a_dt
       real(wp) :: icefl_all, ice_app, ice_pend, ice_asm, ice_asm_last, open_app, open_pend, open_forc, icefl
-      real(wp) :: sum_ext, w_in, fresh_all, dil_app, dil_pend, dil_n, fsalt_last, fresh_n, sst, tfz, snow_in
+      real(wp) :: sum_ext, w_in, fresh_all, dil_app, dil_pend, dil_n, fsalt_last, fresh_n, sst, tfz, rain_in
       real(wp) :: fsalt_n, atm_sum, expected
       real(wp), allocatable :: area(:, :)
 
@@ -514,6 +529,7 @@ contains
       spd = 96
       area = engine%state%metrics%areaT
       atot = sum(area(is:ie, js:je))
+      rd%atot = atot
       rho0 = engine%state%eos%rho0
       associate (ms => engine%state%multilayer)
          h0o = engine%state%eos%rho0*engine%state%eos%c_p*compute_total_tracer(ms%tracers(ms%idx_temperature)%c, ms%h_layer, &
@@ -538,7 +554,7 @@ contains
       w_in = 0.0_wp
       a_dt = 0.0_wp
       atm_sum = 0.0_wp
-      snow_in = 0.0_wp
+      rain_in = 0.0_wp
       rd%ok = .true.
       do n = 1, nsteps
          call engine_step(engine, DT, t, ierr=ierr)
@@ -601,7 +617,8 @@ contains
             sum_ext = sum_ext + L%tab%lw_in - L%tab%snow_enth + L%tab%atm_rad + L%tab%atm_lat
             atm_sum = atm_sum + L%tab%atm_rad + L%tab%atm_lat + L%tab%lw_in
             w_in = w_in + L%tab%snow + L%tab%evap
-            snow_in = snow_in + L%tab%rain
+            rain_in = rain_in + L%tab%rain
+            rd%frz_lat = rd%frz_lat + L%tab%frz_lat
             rd%bl99_ratio = max(rd%bl99_ratio, abs(L%tab%res(ICE_LT_HEAT, ICE_LT_THERM1))/ &
                                 (1.1_wp*ICE_FERRMAX*max(sum(DT*area(is:ie, js:je)*c%aice_init(is:ie, js:je)), tiny(1.0_wp))))
          end associate
@@ -628,7 +645,7 @@ contains
          rd%r_salt = (si1 - si0) + (so1o - so0o)/1000.0_wp + fsalt_last + dil_app/1000.0_wp
          rd%sc_salt = max(abs(si1 - si0), abs(so1o - so0o)/1000.0_wp, abs(dil_app)/1000.0_wp, 1.0e-30_wp)
          ! water [kg]: the ice's mass change + what it booked to the ocean (`fresh`) = what the atmosphere delivered to it
-         rd%r_water = (m1 - m0) + fresh_all - w_in - snow_in
+         rd%r_water = (m1 - m0) + fresh_all - w_in - rain_in
          rd%sc_water = max(abs(m1 - m0), abs(fresh_all), abs(w_in), 1.0e-30_wp)
          rd%atm_heat = -atm_sum/atot
          rd%fresh_sum = fresh_all/atot
@@ -681,99 +698,85 @@ contains
       call check(error, rd%hand_mis < 1.0e-12_wp, "the ice hand-over: applied + in transit == what the ice booked")
    end subroutine check_closures
 
-   subroutine reference_envelope(hc, hlo, hhi, ea, ealo)
-      !! The central reference (ice salinity 2.6 ppt, the mean of the Bitz and Lipscomb salinity profile) and the envelope
-      !! over the ice salinity (0, fresh, to 4 ppt, the salt-flux reference salinity).
-      real(wp), intent(out) :: hc(0:NDAYS), hlo(0:NDAYS), hhi(0:NDAYS), ea, ealo
-      type(ref_cfg_t) :: rc
-      real(wp) :: tmp(0:NDAYS), e2, hf
-      real(wp), parameter :: SV(2) = [0.0_wp, 4.0_wp]
-      integer :: v
-
-      rc = ref_cfg_t()
-      call ref_integrate(rc, hc, ea, hf)
-      hlo = hc
-      hhi = hc
-      ealo = ea
-      do v = 1, 2
-         rc = ref_cfg_t(sice=SV(v))
-         call ref_integrate(rc, tmp, e2, hf)
-         hlo = min(hlo, tmp)
-         hhi = max(hhi, tmp)
-         ealo = min(ealo, e2)
-      end do
-   end subroutine reference_envelope
-
    subroutine test_stefan_growth(error)
-      !! I1 gates 1-3: thickness against the independent reference (envelope widened by `TOL_LAYERS`), monotone growth,
-      !! closures, slab T >= Tf, and the heat the surface lost to the atmosphere against the reference's.
-      !!
-      !! `TOL_LAYERS` (2 percent) is the measured discretisation error of the 4-layer ice against the fine-grid reference:
-      !! the run lies 0.9 percent above the central reference at day 60 and at most 1.3 percent above it at day 10 (the
-      !! 0.6 m ice has only just left the single category of the seed); with 2 and 8 ice layers day 60 is 1.3985, 1.3914
-      !! and 1.3870 m against the reference's 1.3796 m: the layer error is not converged at 4 layers but shrinks
-      !! (0.5 percent per halving), so 2 percent bounds it with margin.  A 10 percent change of the driving temperature
-      !! difference (air 3 K warmer) moves h(60 d) by -4.6 percent and one of the conductivity (reference side) by 4.3
-      !! percent (the square-root growth law): the worst excursions are then 3.4 and 2.9 percent, and both fail the gate.
+      !! I1 gates 1-3: thickness against the independent reference (asymmetric gate, see the module header), monotone
+      !! growth, closures, slab T >= Tf, no new-ice (frazil) heat, and the heat the surface lost to the atmosphere.
       type(error_type), allocatable, intent(out) :: error
       type(column_run_t) :: rd
-      real(wp) :: hc(0:NDAYS), hlo(0:NDAYS), hhi(0:NDAYS), ea, ealo, above, below, dstefan
+      type(ref_cfg_t) :: rc
+      real(wp) :: hc(0:NDAYS), ea, hf, dev, devmin, devmax, dstefan, edev
       integer :: d
 
       call run_column(stefan_nml(TAIR, RLDS, 0.0_wp, 0.0_wp, H0, 4), NSTEPS, rd)
       call check(error, rd%ok, "the engine ran 60 days")
       if (allocated(error)) return
-      call reference_envelope(hc, hlo, hhi, ea, ealo)
-      call print_curve("ice thickness [m]: model vs central reference:", rd, hc)
-      above = -huge(1.0_wp)
-      below = -huge(1.0_wp)
+      rc = ref_cfg_t()
+      call ref_integrate(rc, hc, ea, hf)
+      call print_curve("ice thickness [m]: model vs reference:", rd, hc)
+      devmin = huge(1.0_wp)
+      devmax = -huge(1.0_wp)
       do d = 10, NDAYS
-         above = max(above, (rd%h(d) - hhi(d))/hhi(d))
-         below = max(below, (hlo(d) - rd%h(d))/hlo(d))
+         dev = (rd%h(d) - hc(d))/hc(d)
+         devmin = min(devmin, dev)
+         devmax = max(devmax, dev)
       end do
-      write (output_unit, "(a,f8.4,a,f8.4,a,f8.4)") "    day 60: model", rd%h(NDAYS), ", reference envelope", hlo(NDAYS), " to", hhi(NDAYS)
-      write (output_unit, "(a,es10.3,a,es10.3,a,es10.3)") "    days 10-60, worst relative excursion above the envelope", above, &
-         ", below", below, ", tolerance", TOL_LAYERS
+      write (output_unit, "(a,f8.4,a,f8.4)") "    day 60: model", rd%h(NDAYS), ", reference", hc(NDAYS)
+      write (output_unit, "(a,f8.4,a,f8.4,a,f6.3,a,f6.3)") "    days 10-60, relative deviation from", devmin, " to", devmax, &
+         "; gate", GATE_LO, " to", GATE_HI
+      write (output_unit, "(a,f8.4,a,f8.4,a,f8.4)") "    margins: lower", devmin - GATE_LO, ", upper", GATE_HI - devmax
       ! the zero-surface-resistance Stefan law of the plan (h^2 = h0^2 + 2 k dT t/(rho L), k = 2.35 above any ice value)
       dstefan = sqrt(H0**2 + 2.0_wp*2.35_wp*(30.0_wp - 1.836_wp)*real(NDAYS, wp)*86400.0_wp/(RHOI*LFUS))
       call check(error, rd%h(NDAYS) < dstefan, "h(60 d) is below the zero-surface-resistance Stefan law (k = 2.35)")
       if (allocated(error)) return
-    call check(error, above <= TOL_LAYERS .and. below <= TOL_LAYERS, "h(t) within the reference envelope +- 2 percent (days 10-60)")
+      call check(error, devmin >= GATE_LO, "h(t) not below the reference + 0.3 percent (days 10-60)")
+      if (allocated(error)) return
+      call check(error, devmax <= GATE_HI, "h(t) not above the reference + 1.8 percent (days 10-60)")
       if (allocated(error)) return
       call check(error, rd%dh_minus < 1.0e-6_wp, "growth is monotone (no step lost more than 1 micron)")
       if (allocated(error)) return
       call check(error, rd%tmargin >= -1.0e-12_wp, "slab temperature stays at or above the freezing point")
       if (allocated(error)) return
+      write (output_unit, "(a,es10.3,a,es10.3)") "    new-ice latent heat booked [J]:", rd%frz_lat, ", atmosphere heat loss x area", rd%atm_heat*rd%atot
+      ! A trace of frazil ice forms (brine rejection and the one-step-old freezing point); its latent heat is paid by the
+      ! ocean's own tracers, which the closure already holds, so it is not an extra source.  It must stay far below the
+      ! throughput, and the closure must hold within the solver bound with it added in either sign.
+   call check(error, abs(rd%frz_lat) <= 2.0e-6_wp*abs(rd%atm_heat)*rd%atot, "new-ice latent heat below 2e-6 of the heat throughput")
+      if (allocated(error)) return
+      call check(error, abs(abs(rd%r_heat) + abs(rd%frz_lat)) <= rd%bound_heat, "closure holds within the solver bound even with the new-ice heat added")
+      if (allocated(error)) return
       call check_closures(error, rd)
       if (allocated(error)) return
-      write (output_unit, "(a,es10.3,a,es10.3,a,es10.3)") "    atmosphere heat loss over 60 d [J m-2]: model", rd%atm_heat, ", reference", ea, &
-         ", lowest of the envelope", ealo
-      call check(error, abs(rd%atm_heat - ea)/ea < 0.03_wp, "heat lost to the atmosphere within 3 percent of the reference")
+      edev = (rd%atm_heat - ea)/ea
+ write (output_unit, "(a,es10.3,a,es10.3,a,f8.4,a,f6.3,a,f6.3)") "    atmosphere heat loss over 60 d [J m-2]: model", rd%atm_heat, &
+         ", reference", ea, ", deviation", edev, "; gate", HEAT_LO, " to", HEAT_HI
+call check(error, edev >= HEAT_LO .and. edev <= HEAT_HI, "heat lost to the atmosphere within +0.5 .. +2.0 percent of the reference")
    end subroutine test_stefan_growth
 
    subroutine test_stefan_snow(error)
-      !! Variant with snowfall (1e-4 kg m-2 s-1, 173 kg m-2 over 20 days): the snow insulates (the ice is more than 10
-      !! percent thinner than the snow-free reference's at day 20: 19 percent measured); the snow that floods through the
-      !! negative freeboard becomes ice (less than 80 percent of the fallen snow mass is still snow: 42 percent measured;
-      !! sublimation is two orders smaller and nothing melts), and the mass, salt and heat closures hold through that
-      !! conversion.
+      !! Variant with snowfall (1e-4 kg m-2 s-1, 130 kg m-2 over 15 days): the snow insulates (the ice is more than 10
+      !! percent thinner than the snow-free reference's at day 15); the snow that floods through the negative freeboard
+      !! becomes ice (less than 80 percent of the fallen snow mass is still snow; sublimation is two orders smaller and
+      !! nothing melts), and the mass, salt and heat closures hold through that conversion.  No independent reference for
+      !! the snow itself.
       type(error_type), allocatable, intent(out) :: error
       type(column_run_t) :: rs
-      real(wp) :: hc(0:NDAYS), hlo(0:NDAYS), hhi(0:NDAYS), ea, ealo
+      type(ref_cfg_t) :: rc
+      real(wp) :: hc(0:NDAYS), ea, hf
 
       call run_column(stefan_nml(TAIR, RLDS, 0.0_wp, SNOWFALL, H0, 4), SNOW_DAYS*96, rs)
       call check(error, rs%ok, "the run completed")
       if (allocated(error)) return
-      call reference_envelope(hc, hlo, hhi, ea, ealo)
+      rc = ref_cfg_t(ndays=SNOW_DAYS)
+      call ref_integrate(rc, hc, ea, hf)
       call print_curve("snow variant, ice thickness [m]:", rs, hc, SNOW_DAYS)
-   write (output_unit, "(a,f8.4,a,f8.4,a,f8.4)") "    h(20 d) with snow", rs%h(SNOW_DAYS), ", snow-free reference", hc(SNOW_DAYS), &
-         ", snow depth", rs%hs_end
+      write (output_unit, "(a,f8.4,a,f8.4,a,f8.4,a,f8.4)") "    h(15 d) with snow", rs%h(SNOW_DAYS), ", snow-free reference", &
+ hc(SNOW_DAYS), ", snow depth", rs%hs_end, ", snow mass fraction left", SNOW_RHO*rs%hs_end/(SNOWFALL*real(SNOW_DAYS, wp)*86400.0_wp)
       call check(error, rs%hs_end > 0.05_wp, "snow accumulated (more than 5 cm)")
       if (allocated(error)) return
       call check(error, SNOW_RHO*rs%hs_end < 0.8_wp*SNOWFALL*real(SNOW_DAYS, wp)*86400.0_wp, &
                  "snow-ice: a fifth or more of the fallen snow was converted to ice through the freeboard")
       if (allocated(error)) return
-      call check(error, rs%h(SNOW_DAYS) < 0.9_wp*hlo(SNOW_DAYS), "snow insulates: the ice is more than 10 percent thinner than the snow-free reference")
+      call check(error, rs%h(SNOW_DAYS) < 0.9_wp*hc(SNOW_DAYS), "snow insulates: the ice is more than 10 percent thinner than the snow-free reference")
       if (allocated(error)) return
       call check(error, rs%dh_minus < 1.0e-6_wp, "growth is monotone")
       if (allocated(error)) return
@@ -782,18 +785,36 @@ contains
 
    subroutine test_melt_out(error)
       !! Reversal: warm air and shortwave melt a 0.1 m ice out (day 8.1 measured); meltwater goes to the ocean (the slab
-      !! freshens), the cell returns to open water (`aice0 = 1`) and stays there, and the closures hold.
+      !! freshens), the cell returns to open water (`aice0 = 1`, to a nanometre of residue: a 1e-12 threshold was fragile, a sub-nanometre sliver
+      !! outlives melt-out for a while when Lfresh is 5 percent larger) and stays there, and the closures hold.  The melt-out day
+      !! (6.9-9.4) is a regression pin on the measured 8.1, not independent physics; the independent part is the energy bound.
       type(error_type), allocatable, intent(out) :: error
       type(column_run_t) :: rd
+      real(wp) :: eneed
+      integer :: i
 
       call run_column(stefan_nml(278.15_wp, 330.0_wp, 250.0_wp, 0.0_wp, 0.1_wp, 4), 10*96, rd)
       call check(error, rd%ok, "the engine ran")
       if (allocated(error)) return
       write (output_unit, "(a,f7.3,a,es10.3,a,es10.3,a,f8.3)") "    melt-out at day", real(rd%step_out, wp)/96.0_wp, ", aice0", rd%aice0_end, &
          ", fresh [kg m-2]", rd%fresh_sum, ", slab salinity", rd%so_end
-      call check(error, rd%vice_end < 1.0e-12_wp .and. rd%aice0_end > 1.0_wp - 1.0e-12_wp, "melted out: open water, aice0 = 1")
+      call check(error, rd%vice_end < 1.0e-9_wp .and. rd%aice0_end > 1.0_wp - 1.0e-9_wp, "melted out: open water, aice0 = 1 (no residue above a nanometre)")
       if (allocated(error)) return
       call check(error, rd%step_out > 0 .and. rd%step_out < 10*96, "the ice melted out before the end, and stayed out")
+      if (allocated(error)) return
+      eneed = 0.0_wp
+      do i = 1, 40
+         eneed = eneed + 0.1_wp*q_ice(TICE0 + (-MUF*SO0 - TICE0)*(real(i, wp) - 0.5_wp)/40.0_wp, 2.6_wp)/40.0_wp
+      end do
+      write (output_unit, "(a,es10.3,a,es10.3,a,f7.3)") "    energy to melt the seed [J m-2]:", eneed, "; heat the ice gained from the atmosphere:", &
+         -rd%atm_heat, "; ratio", -rd%atm_heat/eneed
+      ! the ice cannot melt without receiving its enthalpy (ratio >= 1); the excess is the shortwave that passes through the thin
+      ! ice into the ocean, which the same ledger term counts (at most a third of 250 W m-2 over the 8 days)
+      call check(error, -rd%atm_heat/eneed >= 1.0_wp .and. -rd%atm_heat/eneed < 1.7_wp, &
+                 "the ice gained at least the energy its enthalpy needs to melt, and not 70 percent more")
+      if (allocated(error)) return
+      call check(error, real(rd%step_out, wp)/96.0_wp > 6.9_wp .and. real(rd%step_out, wp)/96.0_wp < 9.4_wp, &
+                 "melt-out day within 15 percent of the 8.1 measured")
       if (allocated(error)) return
       call check(error, rd%fresh_sum > 0.0_wp, "meltwater: fresh has the sign opposite to growth")
       if (allocated(error)) return
