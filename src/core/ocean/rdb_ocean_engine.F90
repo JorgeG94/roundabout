@@ -814,7 +814,9 @@ contains
       ! The atm provider is configured later (it needs the metrics), but the
       ! diag registry gates the `atm_*` diagnostics on `atm%enable`: pre-set it
       ! from the namelist so they register (`atm_state_configure` re-derives it).
+#ifndef RDB_NO_NETCDF
       engine%state%atm%enable = cfg%ocean%atm_forcing%enable
+#endif
       call engine_configure_diag(cfg, engine%state, mrank, engine%decomp, ierr=ierr, &
                                  open_stream_file=.not. no_output)
       if (setup_failed(ierr)) return
