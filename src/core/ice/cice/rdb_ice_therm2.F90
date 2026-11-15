@@ -119,6 +119,18 @@ module rdb_ice_therm2
    private
 
    public :: ice_step_therm2
+   public :: ICE_THERM2_ALL, ICE_THERM2_REMAP, ICE_THERM2_NEWICE, ICE_THERM2_LATERAL, ICE_THERM2_CLEANUP
+
+   integer, parameter :: ICE_THERM2_ALL = 0
+      !! `stage` selector: every sweep (the production call).
+   integer, parameter :: ICE_THERM2_REMAP = 1
+      !! `stage` selector: the rain term and the remap only (sweep A).
+   integer, parameter :: ICE_THERM2_NEWICE = 2
+      !! `stage` selector: new ice only (sweep B).
+   integer, parameter :: ICE_THERM2_LATERAL = 3
+      !! `stage` selector: lateral melt only (sweep C).
+   integer, parameter :: ICE_THERM2_CLEANUP = 4
+      !! `stage` selector: the clean-up and the aggregates only (sweep D).
    public :: ice_therm2_remap_cell, ice_therm2_newice_cell, ice_therm2_lateral_cell, ice_therm2_cleanup_cell
 
 contains
@@ -254,7 +266,7 @@ contains
                               wet, Tf, frzmlt, frain, rside, bank, &
                               aicen_init, vicen_init, aicen, vicen, vsnon, Tsfcn, qicen, sicen, qsnon, &
                               aice, vice, vsno, aice0, Tsfc_c, qice_c, sice_c, qsno_c, &
-                              fresh, fsalt, fhocn, meltl, frazil_vol, ierr, fuse_bc)
+                              fresh, fsalt, fhocn, meltl, frazil_vol, ierr, fuse_bc, stage)
       !! Host shim of the `therm2` sweeps over the owned cells `i_lo:i_hi, j_lo:j_hi` (see the module
       !! header).  Every array, `hin_max`, `salinz` and `wet` included, must be device-present on an
       !! offload build; the parameter bundle is read on the host.  The remap runs when `p%itd%kitd == 1`.
@@ -276,15 +288,22 @@ contains
       real(wp), intent(inout) :: fresh(nx, ny), fsalt(nx, ny), fhocn(nx, ny), meltl(nx, ny), frazil_vol(nx, ny)
       integer(int32), intent(inout) :: ierr(nx, ny)
       logical, intent(in), optional :: fuse_bc
+      integer, intent(in), optional :: stage
+         !! `ICE_THERM2_*`: run only that sweep (the conservation ledger probes the state between the sweeps;
+         !! the four calls in order are bitwise the one full call, every sweep being per cell).  Default: all.
       logical :: fuse
+      integer :: stg
 
       fuse = .true.
       if (present(fuse_bc)) fuse = fuse_bc
+      stg = ICE_THERM2_ALL
+      if (present(stage)) stg = stage
+      if (stg /= ICE_THERM2_ALL) fuse = .false.
       if (.not. (ieee_is_finite(dt) .and. dt > 0.0_wp)) then
          call flag_all(nx, ny, i_lo, i_hi, j_lo, j_hi, ierr)
          return
       end if
-      call therm2_impl(nx, ny, ncat, nilyr, nslyr, i_lo, i_hi, j_lo, j_hi, dt, p%itd%kitd == 1, fuse, &
+      call therm2_impl(nx, ny, ncat, nilyr, nslyr, i_lo, i_hi, j_lo, j_hi, dt, p%itd%kitd == 1, fuse, stg, &
                        p%c%rhoi, p%c%rhos, p%c%Lfresh, p%c%cp_ice, p%c%hs_min, p%c%puny, p%c%itd_area_min, &
                        p%c%itd_mass_min, p%thermo%ice_ref_salinity, p%thermo%hfrazilmin, p%thermo%hi_min, &
                        p%thermo%update_ocn_f, hin_max, salinz, wet, Tf, frzmlt, frain, rside, bank, &
@@ -305,13 +324,13 @@ contains
       !$acc end data
    end subroutine flag_all
 
-   subroutine therm2_impl(nx, ny, ncat, nilyr, nslyr, i_lo, i_hi, j_lo, j_hi, dt, do_linear_itd, fuse_bc, &
+   subroutine therm2_impl(nx, ny, ncat, nilyr, nslyr, i_lo, i_hi, j_lo, j_hi, dt, do_linear_itd, fuse_bc, stg, &
                           rhoi, rhos, Lfresh, cp_ice, hs_min, puny, area_min, mass_min, sref, &
                           hfrazilmin, hi_min, update_ocn_f, hin_max, salinz, wet, Tf, frzmlt, frain, rside, bank, &
                           aicen_init, vicen_init, aicen, vicen, vsnon, Tsfcn, qicen, sicen, qsnon, &
                           aice, vice, vsno, aice0, Tsfc_c, qice_c, sice_c, qsno_c, &
                           fresh, fsalt, fhocn, meltl, frazil_vol, ierr)
-      integer, intent(in) :: nx, ny, ncat, nilyr, nslyr, i_lo, i_hi, j_lo, j_hi
+      integer, intent(in) :: nx, ny, ncat, nilyr, nslyr, i_lo, i_hi, j_lo, j_hi, stg
       real(wp), intent(in) :: dt
       logical, intent(in) :: do_linear_itd, fuse_bc, update_ocn_f
       real(wp), intent(in) :: rhoi, rhos, Lfresh, cp_ice, hs_min, puny, area_min, mass_min, sref, hfrazilmin, hi_min
@@ -333,13 +352,15 @@ contains
       !$acc& present(Tsfcn, qicen, sicen, qsnon, aice, vice, vsno, aice0, Tsfc_c, qice_c, sice_c, qsno_c) &
       !$acc& present(fresh, fsalt, fhocn, meltl, frazil_vol, ierr)
       ! A: finite check, rain, remap
-      do concurrent(j=j_lo:j_hi, i=i_lo:i_hi)
-         if (wet(i, j)) then
-            call ice_therm2_remap_cell(i, j, nx, ny, ncat, nilyr, nslyr, do_linear_itd, rhos, Lfresh, hi_min, puny, &
-                                       hin_max, Tf(i, j), frzmlt(i, j), frain(i, j), rside(i, j), aice, aicen_init, &
-                                       vicen_init, aicen, vicen, vsnon, Tsfcn, qicen, sicen, qsnon, fresh, ierr)
-         end if
-      end do
+      if (stg == ICE_THERM2_ALL .or. stg == ICE_THERM2_REMAP) then
+         do concurrent(j=j_lo:j_hi, i=i_lo:i_hi)
+            if (wet(i, j)) then
+               call ice_therm2_remap_cell(i, j, nx, ny, ncat, nilyr, nslyr, do_linear_itd, rhos, Lfresh, hi_min, puny, &
+                                          hin_max, Tf(i, j), frzmlt(i, j), frain(i, j), rside(i, j), aice, aicen_init, &
+                                          vicen_init, aicen, vicen, vsnon, Tsfcn, qicen, sicen, qsnon, fresh, ierr)
+            end if
+         end do
+      end if
       if (fuse_bc) then
          ! B + C in one sweep
          do concurrent(j=j_lo:j_hi, i=i_lo:i_hi)
@@ -353,30 +374,36 @@ contains
          end do
       else
          ! B: new ice
-         do concurrent(j=j_lo:j_hi, i=i_lo:i_hi)
-            if (wet(i, j)) then
-               call ice_therm2_newice_cell(i, j, nx, ny, ncat, nilyr, dt, rhoi, Lfresh, puny, sref, hfrazilmin, &
-                                           update_ocn_f, hin_max, salinz, Tf(i, j), frzmlt(i, j), bank, aicen, vicen, &
-                                           Tsfcn, qicen, sicen, aice0, fresh, fsalt, frazil_vol, ierr)
-            end if
-         end do
+         if (stg == ICE_THERM2_ALL .or. stg == ICE_THERM2_NEWICE) then
+            do concurrent(j=j_lo:j_hi, i=i_lo:i_hi)
+               if (wet(i, j)) then
+                  call ice_therm2_newice_cell(i, j, nx, ny, ncat, nilyr, dt, rhoi, Lfresh, puny, sref, hfrazilmin, &
+                                              update_ocn_f, hin_max, salinz, Tf(i, j), frzmlt(i, j), bank, aicen, vicen, &
+                                              Tsfcn, qicen, sicen, aice0, fresh, fsalt, frazil_vol, ierr)
+               end if
+            end do
+         end if
          ! C: lateral melt
+         if (stg == ICE_THERM2_ALL .or. stg == ICE_THERM2_LATERAL) then
+            do concurrent(j=j_lo:j_hi, i=i_lo:i_hi)
+               if (wet(i, j)) then
+                  call ice_therm2_lateral_cell(i, j, nx, ny, ncat, nilyr, nslyr, dt, rhoi, rhos, sref, puny, rside(i, j), &
+                                               aicen, vicen, vsnon, qicen, qsnon, fresh, fsalt, fhocn, meltl, ierr)
+               end if
+            end do
+         end if
+      end if
+      ! D: clean-up and the aggregates
+      if (stg == ICE_THERM2_ALL .or. stg == ICE_THERM2_CLEANUP) then
          do concurrent(j=j_lo:j_hi, i=i_lo:i_hi)
             if (wet(i, j)) then
-               call ice_therm2_lateral_cell(i, j, nx, ny, ncat, nilyr, nslyr, dt, rhoi, rhos, sref, puny, rside(i, j), &
-                                            aicen, vicen, vsnon, qicen, qsnon, fresh, fsalt, fhocn, meltl, ierr)
+               call ice_therm2_cleanup_cell(i, j, nx, ny, ncat, nilyr, nslyr, hin_max, dt, Tf(i, j), rhoi, rhos, Lfresh, &
+                                            cp_ice, hs_min, puny, area_min, mass_min, sref, aicen, vicen, vsnon, Tsfcn, &
+                                            qicen, sicen, qsnon, aice, vice, vsno, aice0, Tsfc_c, qice_c, sice_c, qsno_c, &
+                                            fresh, fsalt, fhocn, ierr)
             end if
          end do
       end if
-      ! D: clean-up and the aggregates
-      do concurrent(j=j_lo:j_hi, i=i_lo:i_hi)
-         if (wet(i, j)) then
-            call ice_therm2_cleanup_cell(i, j, nx, ny, ncat, nilyr, nslyr, hin_max, dt, Tf(i, j), rhoi, rhos, Lfresh, &
-                                         cp_ice, hs_min, puny, area_min, mass_min, sref, aicen, vicen, vsnon, Tsfcn, &
-                                         qicen, sicen, qsnon, aice, vice, vsno, aice0, Tsfc_c, qice_c, sice_c, qsno_c, &
-                                         fresh, fsalt, fhocn, ierr)
-         end if
-      end do
       !$acc end data
    end subroutine therm2_impl
 

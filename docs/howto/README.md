@@ -40,6 +40,7 @@ the kernel; the guide's job is to tell you *where the seam is and what to edit*.
 | [Add a diagnostic](add_diagnostic.md) | yes — the diag registry + `fill_*` |
 | [Add a turbulence closure](add_closure.md) | yes — the vmix contributor chain / `LMIX_*` select-case |
 | [Add a boundary condition](add_boundary_condition.md) | yes — the `OBC_*` enum + per-edge dispatch |
+| [Read the sea-ice conservation ledger](read_ice_ledger.md) | no — a reading guide for `&ocean_ice_nml ledger` under `scheme = "cice"`; also how to add a stage to it |
 
 ## Deployment
 

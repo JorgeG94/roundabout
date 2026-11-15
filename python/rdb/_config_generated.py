@@ -3404,6 +3404,15 @@ class OceanIce(Group):
         default=True,
     )
 
+    ledger = Bool(
+        'ledger',
+        doc="scheme='cice': run the named-term ice conservation ledger every step and print its residual line at the console cadence (default off => bit-identical)",
+        units='',
+        required=False,
+        default=False,
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
+    )
+
     hfreeze = Real(
         'hfreeze',
         doc='Depth cap of the melt-potential (frzmlt) integral, capped by the boundary-layer depth where KPP/EPBL provide one; -1 = off (OM3 HFREEZE = 10)',

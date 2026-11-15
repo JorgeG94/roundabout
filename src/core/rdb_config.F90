@@ -440,6 +440,11 @@ module rdb_config
          !! OM3 `RECLAIM_FRAZIL`: spend the standing frazil bank on a warm
          !! surface layer before the sweep.  Default `.true.` (the OM3
          !! value) but USED ONLY with `frazil_column`; inert otherwise.
+      logical :: ledger = .false.
+         !! `scheme = "cice"` only: run the named-term conservation ledger
+         !! (`rdb_ice_ledger_terms`) every ice step, restart-carried, and print its
+         !! residual line at the console cadence.  Default off: the step takes none of
+         !! it and the run is bit-identical.
       real(wp) :: hfreeze = -1.0_wp
          !! Depth cap [m] of the melt-potential integral
          !! (`rdb_ice_melt_potential`; OM3 `HFREEZE` = 10): the sea ice's

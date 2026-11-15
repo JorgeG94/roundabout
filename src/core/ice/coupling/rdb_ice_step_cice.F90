@@ -164,7 +164,9 @@ module rdb_ice_step_cice
    use rdb_ice_rad_state, only: ice_rad_state_t
    use rdb_ice_radiation, only: ICE_RAD_OK
    use rdb_ice_sw_wiring, only: ice_step_sw_therm1
-   use rdb_ice_therm2, only: ice_step_therm2
+   use rdb_ice_therm2, only: ice_step_therm2, ICE_THERM2_ALL
+   use rdb_ice_ledger_terms, only: ice_term_ledger_t, ICE_LT_THERM1, ICE_LT_REMAP, ICE_LT_TRANSPORT, &
+                                   ICE_LT_RIDGING
    use rdb_ice_transport_cice, only: ICE_TRANSPORT_POST_NONE
    use rdb_ice_errors, only: ice_err_summary_t, ice_err_reduce, ice_err_is_fatal, ice_err_clear, ICE_ERR_FATAL_MASK
    implicit none
@@ -359,6 +361,13 @@ module rdb_ice_step_cice
          !! Accept hooks installed with `is_double`.  Tests only.
       integer(int32) :: fatal_mask = ICE_ERR_FATAL_MASK
          !! Bits that stop the step (`ice_err_fatal_set(fatal_on_error)`).
+      type(ice_term_ledger_t), pointer :: ledger => null()
+         !! The named-term conservation ledger (`rdb_ice_ledger_terms`).  Associated and `%on`: the step
+         !! probes the state and the flux accumulators between the stages (and runs `therm2` as its four
+         !! sweeps, bitwise the one call); else nothing of it runs.
+      logical :: skip_thermo = .false.
+         !! DIAGNOSTIC (the dynamics-only invariance test): skip `radiation`, `therm1` and `therm2`.  The
+         !! fluxes stay zero and the state moves by dynamics, transport and ridging only.  Never set in a run.
    end type ice_step_opts_t
 
    type :: ice_step_plan_t
@@ -922,8 +931,8 @@ contains
       integer, intent(in) :: istep
       type(ice_step_result_t), intent(out) :: res
       type(ice_step_ctx_t) :: ctx
-      integer :: is, ie, js, je, nx, ny, nc, nl, ns, ierr, istat
-      logical :: ok
+      integer :: is, ie, js, je, nx, ny, nc, nl, ns, ierr, istat, kst, kfirst, klast
+      logical :: ok, led_on
 
       res%plan = ice_step_plan_build(hooks, cice%p%atm%highfreq)
       call check_envelope(cice, flux, rad, work, opts, dt, res%plan, res)
@@ -968,40 +977,56 @@ contains
       call ice_flux_zero(flux)
       call note_exec(res, ICE_STAGE_SAVE_INIT)
       call ice_save_init(cice)
+      led_on = .false.
+      if (associated(opts%ledger)) led_on = opts%ledger%on
+      if (led_on) call opts%ledger%begin(cice, flux, dt, work%fsnow, work%frain, work%flw, opts%nranks, &
+                                         .not. opts%skip_thermo)
 
       ! ---- thermodynamics group: radiation + therm1 + through-ice shortwave are ONE call ----
-      call note_exec(res, ICE_STAGE_RADIATION)
-      call ice_step_sw_therm1(rad, cice%p%sw, nx, ny, nc, nl, ns, is, ie, js, je, dt, cice%p, cice%p%sw%sw_redist, &
-                              work%zlvl, work%zlvs, work%sw_down, work%uatm, work%vatm, work%wind, work%potT, &
-                              work%Qa, work%rhoa, work%flw, work%fsnow, work%uvel, work%vvel, work%Tf, work%sst, &
-                              work%frzmlt, work%tau_x, work%tau_y, &
-                              cice%aicen_init, cice%aicen, cice%vicen, cice%vsnon, cice%Tsfcn, cice%qicen, &
-                              cice%sicen, cice%qsnon, &
-                              flux%fresh, flux%fsalt, flux%fhocn, flux%evap, flux%fsens, flux%flat, flux%flwout, &
-                              flux%fswabs, flux%meltt, flux%meltb, flux%congel, flux%snoice, &
-                              flux%freshn, flux%fsaltn, flux%fhocnn, flux%evapn, flux%fsensn, flux%flatn, &
-                              flux%flwoutn, flux%fswabsn, flux%melttn, flux%meltbn, flux%congeln, flux%snoicen, &
-                              work%strairxn, work%strairyn, work%strair_x_T, work%strair_y_T, &
-                              work%fbot, work%rside, work%wlat, work%ierr_n, cice%ice_err, &
-                              flux%fswthru, flux%fswthru_vis, ierr, istat)
-      if (ierr /= ICE_RAD_OK) then
-         res%stage_status = ierr
-         call refuse(res, ICE_STEP_STAGE_FAILED, ICE_STAGE_RADIATION, "stage 'radiation' failed")
-         return
+      if (.not. opts%skip_thermo) then
+         call note_exec(res, ICE_STAGE_RADIATION)
+         call ice_step_sw_therm1(rad, cice%p%sw, nx, ny, nc, nl, ns, is, ie, js, je, dt, cice%p, cice%p%sw%sw_redist, &
+                                 work%zlvl, work%zlvs, work%sw_down, work%uatm, work%vatm, work%wind, work%potT, &
+                                 work%Qa, work%rhoa, work%flw, work%fsnow, work%uvel, work%vvel, work%Tf, work%sst, &
+                                 work%frzmlt, work%tau_x, work%tau_y, &
+                                 cice%aicen_init, cice%aicen, cice%vicen, cice%vsnon, cice%Tsfcn, cice%qicen, &
+                                 cice%sicen, cice%qsnon, &
+                                 flux%fresh, flux%fsalt, flux%fhocn, flux%evap, flux%fsens, flux%flat, flux%flwout, &
+                                 flux%fswabs, flux%meltt, flux%meltb, flux%congel, flux%snoice, &
+                                 flux%freshn, flux%fsaltn, flux%fhocnn, flux%evapn, flux%fsensn, flux%flatn, &
+                                 flux%flwoutn, flux%fswabsn, flux%melttn, flux%meltbn, flux%congeln, flux%snoicen, &
+                                 work%strairxn, work%strairyn, work%strair_x_T, work%strair_y_T, &
+                                 work%fbot, work%rside, work%wlat, work%ierr_n, cice%ice_err, &
+                                 flux%fswthru, flux%fswthru_vis, ierr, istat)
+         if (ierr /= ICE_RAD_OK) then
+            res%stage_status = ierr
+            call refuse(res, ICE_STEP_STAGE_FAILED, ICE_STAGE_RADIATION, "stage 'radiation' failed")
+            return
+         end if
+         call note_exec(res, ICE_STAGE_THERM1)
+         if (istat /= 0) then
+            res%stage_status = istat
+            call refuse(res, ICE_STEP_STAGE_FAILED, ICE_STAGE_THERM1, "stage 'therm1' failed")
+            return
+         end if
+         if (led_on) call opts%ledger%probe(ICE_LT_THERM1, cice, flux)
+         call note_exec(res, ICE_STAGE_THERM2)
+         kfirst = ICE_THERM2_ALL
+         klast = ICE_THERM2_ALL
+         if (led_on) then
+            kfirst = 1
+            klast = 4
+         end if
+         do kst = kfirst, klast
+            call ice_step_therm2(nx, ny, nc, nl, ns, is, ie, js, je, dt, cice%p, cice%hin_max, work%salinz, work%wet, &
+                                 work%Tf, work%frzmlt, work%frain, work%rside, work%bank, &
+                                 cice%aicen_init, cice%vicen_init, cice%aicen, cice%vicen, cice%vsnon, cice%Tsfcn, &
+                                 cice%qicen, cice%sicen, cice%qsnon, cice%aice, cice%vice, cice%vsno, cice%aice0, &
+                                 work%Tsfc_c, work%qice_c, work%sice_c, work%qsno_c, &
+                                 flux%fresh, flux%fsalt, flux%fhocn, flux%meltl, flux%frazil_vol, cice%ice_err, stage=kst)
+            if (led_on) call opts%ledger%probe(ICE_LT_REMAP + kst - 1, cice, flux)
+         end do
       end if
-      call note_exec(res, ICE_STAGE_THERM1)
-      if (istat /= 0) then
-         res%stage_status = istat
-         call refuse(res, ICE_STEP_STAGE_FAILED, ICE_STAGE_THERM1, "stage 'therm1' failed")
-         return
-      end if
-      call note_exec(res, ICE_STAGE_THERM2)
-      call ice_step_therm2(nx, ny, nc, nl, ns, is, ie, js, je, dt, cice%p, cice%hin_max, work%salinz, work%wet, &
-                           work%Tf, work%frzmlt, work%frain, work%rside, work%bank, &
-                           cice%aicen_init, cice%vicen_init, cice%aicen, cice%vicen, cice%vsnon, cice%Tsfcn, &
-                           cice%qicen, cice%sicen, cice%qsnon, cice%aice, cice%vice, cice%vsno, cice%aice0, &
-                           work%Tsfc_c, work%qice_c, work%sice_c, work%qsno_c, &
-                           flux%fresh, flux%fsalt, flux%fhocn, flux%meltl, flux%frazil_vol, cice%ice_err)
       call enforce(cice, opts, res, ICE_STAGE_THERM2, ok)
       if (.not. ok) return
 
@@ -1020,10 +1045,15 @@ contains
       ! ---- transport, enforced alone, then the closing group ----
       call run_hook(hooks%transport, ctx, ICE_STAGE_TRANSPORT, res, ok)
       if (.not. ok) return
+      if (led_on) call opts%ledger%probe(ICE_LT_TRANSPORT, cice, flux)
       call enforce(cice, opts, res, ICE_STAGE_TRANSPORT, ok)
       if (.not. ok) return
       call run_hook(hooks%ridging, ctx, ICE_STAGE_RIDGING, res, ok)
       if (.not. ok) return
+      if (led_on) then
+         call opts%ledger%probe(ICE_LT_RIDGING, cice, flux)
+         call opts%ledger%end_step()
+      end if
       call run_hook(hooks%halo_state_post, ctx, ICE_STAGE_HALO_STATE_POST, res, ok)
       if (.not. ok) return
       call note_exec(res, ICE_STAGE_AGGREGATE)

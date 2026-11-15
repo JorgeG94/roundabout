@@ -24,6 +24,7 @@ module rdb_driver
    ! P2.4b: the sea-ice per-step block (frazil/EVP/thermo-driver/transport)
    ! moved into the same shared engine (`engine_step_ice`) — the driver no
    ! longer `use`s the individual rdb_ice_* kernel modules directly.
+   use rdb_ice_cice_hooks, only: ice_cice_ledger_report
    use rdb_ocean_engine, only: ocean_engine_t, engine_setup, engine_enter_data, &
                                engine_step, engine_step_ice, engine_step_finalize, &
                                engine_exit_data, engine_teardown, diag_vgrid_from_name
@@ -463,6 +464,7 @@ contains
                                                   SPLIT_SCHEME_PRED_CORR), &
                                                   reproducing_sums=cfg%ocean%diag%reproducing_sums)
                end if
+               call ice_cice_ledger_report(ocean_state, compute_rank)
                ! ntrunc: collective sum so the printed total is global.
                block
                   real(wp) :: nt_l, nt_g
@@ -535,6 +537,7 @@ contains
                                                   SPLIT_SCHEME_PRED_CORR), &
                                                   reproducing_sums=cfg%ocean%diag%reproducing_sums)
                end if
+               call ice_cice_ledger_report(ocean_state, compute_rank)
                ! ntrunc: collective sum.
                block
                   real(wp) :: nt_l, nt_g

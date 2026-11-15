@@ -101,6 +101,11 @@ contains
       msgs = ""
       n = 0
 
+      if (cfg%ocean%ice%ledger .and. .not. ice_scheme_is_cice(cfg)) then
+         call add_msg(msgs, n, "&ocean_ice_nml ledger = .true. needs scheme = 'cice' (the named-term ledger "// &
+                      "books the CICE-port stages; it would be silently inert under 'sis2')")
+      end if
+
       ! ---- structure: scheme and the not-yet-runnable refusal ----
       if (ice_scheme_is_cice(cfg)) then
          nilyr = cfg%ocean%ice%nilyr

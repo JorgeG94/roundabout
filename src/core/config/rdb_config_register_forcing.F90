@@ -333,6 +333,11 @@ contains
       call g%add(nml_logical("reclaim_frazil", pl, &
                              "Spend the standing frazil bank on a warm surface layer "// &
                              "(OM3 RECLAIM_FRAZIL; default true, used only with frazil_column)"))
+      pl => cfg%ocean%ice%ledger
+      call g%add(nml_logical("ledger", pl, &
+                             "scheme='cice': run the named-term ice conservation ledger every step and "// &
+                             "print its residual line at the console cadence (default off => bit-identical)", &
+                             dead_on_ocean_path=ICE_DEAD))
       pr => cfg%ocean%ice%hfreeze
       call g%add(nml_real("hfreeze", pr, &
                           "Depth cap of the melt-potential (frzmlt) integral, capped by the "// &

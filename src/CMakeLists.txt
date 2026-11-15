@@ -171,6 +171,7 @@ set(CORE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/state/rdb_ice_dyn_c_state.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/state/rdb_ice_flux_state.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/coupling/rdb_ice_ledger.F90
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/coupling/rdb_ice_ledger_terms.F90
     # CICE-port ice step sequencer (D11.3): stage order, cadence, error
     # enforcement; needs the slots above and the ice-core drivers.
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/coupling/rdb_ice_step_cice.F90

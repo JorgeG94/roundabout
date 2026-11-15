@@ -264,6 +264,7 @@ set(RDB_TESTS
     "test_cice_coupling|test_cice_coupling|collect_cice_coupling_tests|cice_coupling|ocean"
     "test_cice_engine|test_cice_engine|collect_cice_engine_tests|cice_engine|ocean"
     "test_cice_forcing|test_cice_forcing|collect_cice_forcing_tests|cice_forcing|ocean"
+    "test_cice_closure|test_cice_closure|collect_cice_closure_tests|cice_closure|ocean"
     "test_ocean_ice_evp_fold|test_ocean_ice_evp_fold|collect_ocean_ice_evp_fold_tests|ocean_ice_evp_fold|ocean"
     "test_ocean_ice_restart|test_ocean_ice_restart|collect_ocean_ice_restart_tests|ocean_ice_restart|ocean"
     "test_ocean_ice_diags|test_ocean_ice_diags|collect_ocean_ice_diags_tests|ocean_ice_diags|ocean"
@@ -629,6 +630,12 @@ foreach(row ${RDB_TESTS})
   endif()
   target_link_libraries(${test_name} PRIVATE ${_core_for_test} rdb_analytical
                                              test-drive::test-drive)
+  if(test_name STREQUAL "test_cice_forcing" OR test_name STREQUAL
+                                               "test_cice_closure")
+    # the synthetic prescribed atmosphere shared by the two engine tests
+    target_sources(${test_name}
+                   PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/test_cice_synth_atm.F90)
+  endif()
   if(RDB_ENABLE_MPI AND ${test_name} IN_LIST MPI_LAUNCH_TESTS)
     add_test(NAME rdb_${test_name}
              COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 1
@@ -638,6 +645,12 @@ foreach(row ${RDB_TESTS})
   endif()
   set_tests_properties(rdb_${test_name} PROPERTIES LABELS
                                                    "${TEST_REGIME_LABELS}")
+  if(test_name STREQUAL "test_cice_closure")
+    # the dynamics-only case freezes the thermodynamics, a harness-only switch
+    set_tests_properties(
+      rdb_${test_name}
+      PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=1;RDB_ICE_ALLOW_SKIP_THERMO=1")
+  endif()
   if(${test_name} IN_LIST NETCDF_TESTS)
     set_tests_properties(rdb_${test_name} PROPERTIES ENVIRONMENT
                                                      "OMP_NUM_THREADS=1")

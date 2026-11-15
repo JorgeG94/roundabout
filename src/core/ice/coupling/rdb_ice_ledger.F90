@@ -33,14 +33,19 @@ module rdb_ice_ledger
    !! integrates over the step:
    !! `W_ext = dt*sum A*(fsnow*aice_init + frain*aice)` (snowfall on ice plus the
    !! rain that passes through `fresh`);
-   !! `H_ext = dt*sum A*(aice_init*flw - Lfresh*fsnow*aice_init) + E_frz`, where
+   !! `H_ext = dt*sum A*(aice_init*flw - Lfresh*fsnow*aice_init) - E_frz`, where
    !! `aice_init*flw` is the incoming longwave weighted by the start-of-step area
    !! (the merge stores `flwout - (1-emis)*flw` per area, so `sum_n aicen_init*
    !! (emis*flw + flwoutn) = flwout_cell + aice_init*flw`), `-Lfresh*fsnow*aice_init`
-   !! is the falling-snow enthalpy and `E_frz` the bank energy spent by new ice
-   !! (`frzmlt_pos`; the ocean already gave it up).  Where the plan's C.5 text
+   !! is the falling-snow enthalpy and `E_frz = dt*sum A*frzmlt_pos` the bank energy
+   !! spent by new ice.  **The sign is MINUS** (settled in D11.5): new ice is the pure
+   !! latent enthalpy `-rhoi*Lfresh` per volume (Bitz and Lipscomb, 1999), so freezing a
+   !! bank of `E_frz` lowers the stored ice energy by `E_frz` (the ocean kept the heat: the
+   !! frazil clamp warmed the water back to freezing); an earlier version of this text said
+   !! `+ E_frz`.  The named-term ledger (`rdb_ice_ledger_terms`) books this as the `newice`
+   !! term `-rhoi*Lfresh*dt*sum A*frazil_vol`.  Where the plan's C.5 text
    !! differs (a second `aice_init` weight on the atmosphere terms, `flat` in
-   !! the heat line, no vapour term) upstream wins.
+   !! the heat line, no vapour term, `+ frzmlt_pos`) the code and upstream win.
    !! The residual of a line is `LHS - RHS` (signed); its scale is the sum of the
    !! absolute values of every term, and `rel_residual` is `|res|/scale`.  There
    !! are no dropped-flux terms: this port conserves, so a non-zero residual is a

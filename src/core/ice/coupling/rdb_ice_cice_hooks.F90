@@ -86,7 +86,7 @@ module rdb_ice_cice_hooks
    implicit none
    private
 
-   public :: ice_cice_bind, ice_cice_step, ice_cice_ic_apply, ice_cice_post_enter
+   public :: ice_cice_bind, ice_cice_step, ice_cice_ic_apply, ice_cice_post_enter, ice_cice_ledger_report
    public :: ice_cice_hooks_manifest
 
    type(ocean_state_t), pointer, save :: S => null()
@@ -141,11 +141,21 @@ contains
       integer, intent(in) :: istep
       type(ice_step_opts_t) :: opts
       type(ice_step_result_t) :: res
+      integer :: nlen, nstat
 
       opts%ndtd = 1
       opts%nranks = 1
       opts%dt_outer = dt
       opts%fatal_mask = ICE_ERR_FATAL_MASK
+      if (S%icec%skip_thermo) then
+         ! a test-harness diagnostic (it bypasses the stage manifest): only with the harness's environment switch
+         call get_environment_variable("RDB_ICE_ALLOW_SKIP_THERMO", length=nlen, status=nstat)
+         if (nstat /= 0 .or. nlen < 1) then
+            error stop "ice_cice_step: skip_thermo is a test-harness diagnostic (set RDB_ICE_ALLOW_SKIP_THERMO)"
+         end if
+      end if
+      opts%skip_thermo = S%icec%skip_thermo
+      if (S%icec%ledger%on) opts%ledger => S%icec%ledger
       call ice_step_cice(S%ice%cice, S%icec%flux, S%icec%rad, S%icec%work, HOOKS, opts, dt, thermo_step, istep, res)
       S%icec%n_steps = S%icec%n_steps + 1
       if (res%status == ICE_STEP_OK) return
@@ -155,6 +165,22 @@ contains
                         to_string(res%stage_status)//"): "//trim(res%message))
       error stop "ice_step_cice: the ice step failed (see the log)"
    end subroutine ice_cice_step
+
+   subroutine ice_cice_ledger_report(state, compute_rank)
+      !! The console line of the named-term ice ledger (`&ocean_ice_nml ledger`): the cumulative
+      !! residual of each line (water, salt, heat) relative to its cumulative scale, with the stage
+      !! that carries the largest one.  Called at the status cadence next to the ocean's console
+      !! block; the sums are EFP reproducing sums, so the numbers do not depend on the backend.  Inert
+      !! (prints nothing, touches nothing) under `scheme = "sis2"` and with the ledger off.  Single
+      !! rank: the ledger refuses more, so no collective is needed.
+      type(ocean_state_t), intent(in) :: state
+      integer, intent(in) :: compute_rank
+
+      if (compute_rank /= 0) return
+      if (.not. state%icec%is_init) return
+      if (.not. state%icec%ledger%on .or. state%icec%ledger%nsteps < 0.5_wp) return
+      call logger%info(trim(state%icec%ledger%console_line()))
+   end subroutine ice_cice_ledger_report
 
    subroutine ice_cice_post_enter(state)
       !! After `enter_data` (device): the aggregates are not restart state, so rebuild them over

@@ -36,6 +36,7 @@ module rdb_ice_cice_run
    use rdb_ice_transport_cice, only: transport_cice_ws_t, transport_result_t
    use rdb_ice_remap_flux, only: remap_ledger_t
    use rdb_ice_params, only: ICE_ADVECT_REMAP
+   use rdb_ice_ledger_terms, only: ice_term_ledger_t
    implicit none
    private
 
@@ -67,6 +68,10 @@ module rdb_ice_cice_run
          !! dropped volume and enthalpy content), for the conservation ledger to book.
       type(remap_ledger_t) :: ledger_cum
          !! The same, summed over the run (not restart state).
+      type(ice_term_ledger_t) :: ledger
+         !! The named-term conservation ledger (`&ocean_ice_nml ledger`; inert otherwise).
+      logical :: skip_thermo = .false.
+         !! DIAGNOSTIC: skip the thermodynamic stages (the dynamics-only invariance test).  Never set in a run.
       real(wp), allocatable :: cosA(:, :), sinA(:, :)
          !! Cosine and sine of the grid angle at T (static, set by `finalize`).
       real(wp), allocatable :: u_tas(:, :), u_huss(:, :), u_uas(:, :), u_vas(:, :), u_psl(:, :)
@@ -119,6 +124,7 @@ contains
          return
       end if
       call this%avg%init(grid)
+      call this%ledger%init(cice, cfg%ocean%ice%ledger)
       call this%oin%init(grid)
       call this%tws%init(nx, ny, cice%ncat, cice%nilyr, cice%nslyr, .false., e, &
                          remap=(cice%p%transport%advection == ICE_ADVECT_REMAP), &
@@ -142,14 +148,16 @@ contains
       this%mapped = .false.
    end subroutine run_init
 
-   subroutine run_finalize(this, wet_T, angle_dx)
+   subroutine run_finalize(this, wet_T, angle_dx, tarea)
       !! Setup values that need the final metrics (host loops, BEFORE `enter_data`): the wet
       !! mask of the work slot (`wet_T > 0.5`) and `cos/sin` of the grid angle.
       class(ice_cice_run_t), intent(inout) :: this
-      real(wp), intent(in) :: wet_T(:, :), angle_dx(:, :)
+      real(wp), intent(in) :: wet_T(:, :), angle_dx(:, :), tarea(:, :)
+         !! `tarea`: the T-cell areas of the C-grid metrics (the ledger's weights).
       integer :: i, j
 
       if (.not. this%is_init) return
+      call this%ledger%set_area(tarea)
       call this%work%set_wet(wet_T > 0.5_wp)
       do j = 1, this%ny
          do i = 1, this%nx
@@ -169,6 +177,7 @@ contains
       call this%avg%enter_data()
       call this%oin%enter_data()
       call this%tws%enter_data()
+      call this%ledger%enter_data()
       !$acc enter data copyin(this%cosA, this%sinA)
       !$acc enter data copyin(this%u_tas, this%u_huss, this%u_uas, this%u_vas, this%u_psl)
       !$acc enter data copyin(this%u_rlds, this%u_prra, this%u_prsn, this%u_rsds)
@@ -182,6 +191,7 @@ contains
       !$acc exit data delete(this%u_tas, this%u_huss, this%u_uas, this%u_vas, this%u_psl)
       !$acc exit data delete(this%u_rlds, this%u_prra, this%u_prsn, this%u_rsds)
       !$acc exit data delete(this%cosA, this%sinA)
+      call this%ledger%exit_data()
       call this%tws%exit_data()
       call this%oin%exit_data()
       call this%avg%exit_data()
@@ -196,6 +206,7 @@ contains
 
       if (this%mapped) call this%exit_data()
       call this%tws%destroy()
+      call this%ledger%destroy()
       call this%oin%destroy()
       call this%avg%destroy()
       call this%work%destroy()
@@ -216,7 +227,7 @@ contains
       nbytes = 0_int64
       if (.not. this%is_init) return
       nbytes = this%flux%bytes() + this%rad%bytes() + this%work%bytes() + this%avg%bytes() &
-               + this%oin%bytes() + this%tws%bytes() &
+               + this%oin%bytes() + this%tws%bytes() + this%ledger%bytes() &
                + arr_bytes(this%cosA) + arr_bytes(this%sinA) &
                + arr_bytes(this%u_tas) + arr_bytes(this%u_huss) + arr_bytes(this%u_uas) &
                + arr_bytes(this%u_vas) + arr_bytes(this%u_psl) + arr_bytes(this%u_rlds) &
@@ -232,6 +243,7 @@ contains
       if (.not. this%is_init) return
       call this%work%register_restart(reg)
       call this%avg%register_restart(reg)
+      call this%ledger%register_restart(reg)
    end subroutine run_register_restart
 
 end module rdb_ice_cice_run

@@ -1410,7 +1410,8 @@ contains
       ! CICE-port run slots: the wet mask (the C-grid metrics' pinned T mask) and the grid
       ! rotation, host values the device map then copies.
       if (engine%state%icec%is_init) then
-         call engine%state%icec%finalize(engine%state%ice_cgrid%hm, engine%state%metrics%angle_dx)
+         call engine%state%icec%finalize(engine%state%ice_cgrid%hm, engine%state%metrics%angle_dx, &
+                                         engine%state%ice_cgrid%tarea)
       end if
 
       ! Configure-time stability audit (viscous CFL / kappa_h diffusive
