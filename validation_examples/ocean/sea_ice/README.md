@@ -207,3 +207,11 @@ analytic references above):
   the mechanism behind the thermo case's late-time excess growth above.
 - **Frazil checks the surface layer only** (`k = nz`), not the full
   column (`docs/CLOSURE_MATRIX.md`).
+
+## CICE-port Stefan column
+
+`cice_stefan_column.nml` is the single-column integration test I1 of the CICE-port
+(`scheme = "cice"`): a 20 m slab at its freezing point under a constant -30 C air
+for 60 days.  `tests/test_cice_stefan_column.F90` runs it through the engine and
+compares the ice thickness with an independent enthalpy-method solution of the
+Stefan (1891) problem; see the namelist header.
