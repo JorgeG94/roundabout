@@ -54,8 +54,8 @@ module rdb_ice_cgrid_metrics
    !! periodic wrap fills the ghost faces, then the tripolar fold (true
    !! vector: negate, v fold row projected antisymmetric) runs, a no-op off the
    !! north rank row (`bc%north_fold` already carries `has_north`).  A
-   !! decomposed axis stops (`error stop`) until the multi-rank PR adds the
-   !! shifted one-face exchange.  The corner-staggered
+   !! decomposed axis goes through the ocean's face exchange (D9.4; see
+   !! `ice_halo_faces`).  The corner-staggered
    !! persistent stress is wrapped with the public `evp_wrap_corner_impl`
    !! of `rdb_ice_evp`.
    use, intrinsic :: iso_fortran_env, only: int64
@@ -66,7 +66,7 @@ module rdb_ice_cgrid_metrics
    use rdb_ocean_periodic, only: ocean_periodic_wrap_centre_2d, &
                                  ocean_periodic_wrap_face_x_2d, &
                                  ocean_periodic_wrap_face_y_2d
-   use rdb_ocean_halo, only: ocean_halo_face_x, ocean_halo_face_y, &
+   use rdb_ocean_halo, only: ocean_halo_face_pair_2d, &
                              ocean_halo_is_decomposed_x, ocean_halo_is_decomposed_y
    use rdb_ocean_fold_apply, only: ocean_fold_wrap_face_pair
    implicit none
@@ -397,9 +397,20 @@ contains
       !! `v(:,js) = v(:,je+1)`), after which the ocean's wrap is a no-op on the
       !! seam and fills the ghost faces.
       !!
-      !! A DECOMPOSED axis needs the shifted one-face exchange of the
-      !! multi-rank PR (the ocean exchange duplicates the other way too) and
-      !! stops here until then.
+      !! **Decomposed axes (D9.4).**  The ocean's face exchange (`ocean_halo_face_pair_2d`: the two exchanges of
+      !! `ocean_halo_face_x/_y` bundled, one message per direction and one `waitall` per pass; D1: the west/south rank owns a seam face) already has the ice's ownership at
+      !! every rank seam AND across the periodic wrap pair: the sender's last face
+      !! `u(ie+1)` is the one the solver computed and it overwrites the receiver's
+      !! duplicate `u(is)` and west ghosts, so the exchange is called as is.  The two
+      !! things that differ are the LOCAL wrap of an axis that is not split (its
+      !! direction is the opposite one, handled by the duplicate copy above, which runs
+      !! on every axis the halo does not own) and the north fold, which on `px > 1`
+      !! reads the owned faces `is+1 .. ie+1` of the post-exchange arrays (its
+      !! sender lists are exactly those; the west-seam copy `u(is)` is never a source
+      !! of the fold).  Order on every path: duplicate -> exchange -> wrap -> fold.
+      !! Persistent buffers, device-resident (CUDA-aware path when the build selects
+      !! it, host-staged otherwise, as for every ocean halo); no allocation per call.
+      !! The tile must hold the faces the exchange sends (`nghost + 1` columns/rows).
       type(hgrid_t), intent(in) :: grid
       type(ocean_bc_state_t), intent(in) :: bc
       real(wp), intent(inout) :: u(grid%nx_total + 1, grid%ny_total)
@@ -420,26 +431,30 @@ contains
       je = grid%nghost + grid%ny_phys
       halo_x = ocean_halo_is_decomposed_x()
       halo_y = ocean_halo_is_decomposed_y()
-      if (halo_x .or. halo_y) then
-         error stop "ice_halo_faces: a decomposed axis needs the shifted one-face exchange "// &
-            "of the multi-rank PR (not available yet)"
-      end if
       wrap_x = bc%periodic_x
       wrap_y = bc%periodic_y
-      if (wrap_x) then
+      ! The duplicate copy is for a LOCALLY wrapped axis only: on a split axis the
+      ! exchange below delivers the owner's face to the duplicate.
+      if (wrap_x .and. .not. halo_x) then
          do concurrent(j=1:ny)
             u(is, j) = u(ie + 1, j)
          end do
       end if
-      if (wrap_y) then
+      if (wrap_y .and. .not. halo_y) then
          do concurrent(i=1:nx)
             v(i, js) = v(i, je + 1)
          end do
       end if
-      call ocean_periodic_wrap_face_x_2d(u, nx + 1, ny, grid%nx_phys, grid%ny_phys, &
-                                         grid%nghost, wrap_x, wrap_y)
-      call ocean_periodic_wrap_face_y_2d(v, nx, ny + 1, grid%nx_phys, grid%ny_phys, &
-                                         grid%nghost, wrap_x, wrap_y)
+      if (halo_x .or. halo_y) then
+         ! Exchange (each does its own X pass then Y pass, the local periodic wrap on
+         ! an axis that is not split included), then the fold.
+         call ocean_halo_face_pair_2d(u, v, device_resident)
+      else
+         call ocean_periodic_wrap_face_x_2d(u, nx + 1, ny, grid%nx_phys, grid%ny_phys, &
+                                            grid%nghost, wrap_x, wrap_y)
+         call ocean_periodic_wrap_face_y_2d(v, nx, ny + 1, grid%nx_phys, grid%ny_phys, &
+                                            grid%nghost, wrap_x, wrap_y)
+      end if
       call ocean_fold_wrap_face_pair(grid, bc, u, v, device_resident)
    end subroutine ice_halo_faces
 

@@ -67,6 +67,7 @@ module rdb_ice_ocean_coupler
    use rdb_grid, only: hgrid_t
    use rdb_ocean_boundary_types, only: ocean_bc_state_t
    use rdb_ocean_halo_state, only: ocean_seam_refresh_surface_stress
+   use rdb_ocean_halo, only: ocean_halo_is_decomposed_x, ocean_halo_is_decomposed_y
    implicit none
    private
 
@@ -458,11 +459,16 @@ contains
                                       metrics%wet_u, metrics%wet_v)
       ! The ocean's periodic seam refresh copies the WEST face onto the east one
       ! (`tau(ie+1) := tau(is)`), while the face stress is computed at the east
-      ! one, so the west seam face takes the computed value first.
+      ! one, so the west seam face takes the computed value first.  On a SPLIT axis the ocean's
+      ! exchange (D1: the west/south rank owns the seam face, the wrap pair included) already
+      ! delivers the owner's computed face to the duplicate, so the local copy runs only on
+      ! the axes that are not split (D9.4).
       if (present(grid) .and. present(bc)) then
          call ice_ocean_stress_seam_impl(ice%nx_total, ice%ny_total, grid%nghost + 1, &
                                          grid%nghost + grid%nx_phys, grid%nghost + 1, &
-                                         grid%nghost + grid%ny_phys, bc%periodic_x, bc%periodic_y, &
+                                         grid%nghost + grid%ny_phys, &
+                                         bc%periodic_x .and. .not. ocean_halo_is_decomposed_x(), &
+                                         bc%periodic_y .and. .not. ocean_halo_is_decomposed_y(), &
                                          stress%tau_x, stress%tau_y)
       end if
       call ice_ocean_stress_publish(stress, ice, grid, bc)

@@ -390,15 +390,12 @@ contains
       call refusal_text(replace(base, "nghost = 3", "nghost = 2"), t)
       call check(error, index(t, "nghost >= 3") > 0, "cice_c needs nghost >= 3: "//t)
       if (allocated(error)) return
+      ! D9.4: several ranks are accepted, with and without the tripolar fold.
       call refusal_text(base//"&mpi_nml px = 2, py = 1 /"//NL, t)
-      call check(error, index(t, "single-rank") > 0, "cice_c is single-rank: "//t)
-      if (allocated(error)) return
-      ! D9.3: the tripolar fold is accepted on one rank (and still refused on several)
-      call refusal_text(replace(base, "north = 'wall'", "north = 'tripolar_fold'"), t)
-      call check(error, len_trim(t) == 0, "cice_c accepts the tripolar fold on one rank: "//t)
+      call check(error, len_trim(t) == 0, "cice_c accepts several ranks: "//t)
       if (allocated(error)) return
       call refusal_text(replace(base, "north = 'wall'", "north = 'tripolar_fold'")//"&mpi_nml px = 2, py = 1 /"//NL, t)
-      call check(error, index(t, "D9.4") > 0, "cice_c on a fold with several ranks names the multi-rank PR: "//t)
+      call check(error, len_trim(t) == 0, "cice_c accepts the fold on several ranks: "//t)
    end subroutine test_refusals
 
    ! ------------------------------------------------------------------

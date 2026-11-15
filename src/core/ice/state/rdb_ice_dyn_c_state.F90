@@ -16,7 +16,10 @@ module rdb_ice_dyn_c_state
    !!     on.  It lives in `ocean_state_t%ice_cgrid`.)
    !!   * the coupling inputs at E and N (`fcorE`, `strairxE`, `ss_tltxE`,
    !!     `uocnE`, `vocnE`, ... : rebuilt every step by `rdb_ice_dyn_c`),
-   !!   * `strocnT_x/y`, the ice-ocean stress per ICE area at T (restart state,
+   !!   * `strocnT_x/y`, the ice-ocean stress per ICE area at T (OWNED cells only valid: the
+   !!     ghost ring is not refreshed, and its input `wE`/`wN` is exchanged FOLD-BLIND, as a centre
+   !!     field, which is right only for the west/south reads of `dync_strocnt_impl`; a ghost
+   !!     consumer must use the face-pair fold semantics) (restart state,
    !!     read one step late by the basal heat flux) and the per-ice-area face
    !!     stress it is built from,
    !!   * `ice_err`, the per-cell error words of the step (`rdb_ice_errors`),

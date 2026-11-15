@@ -354,11 +354,6 @@ contains
             call add_msg(msgs, n, "&ocean_ice_dyn_nml dyn_scheme='cice_c' needs nghost >= 3 (the "// &
                          "corner stress reaches three cells into the halo)")
          end if
-         if (cfg%px*cfg%py > 1) then
-            call add_msg(msgs, n, "&ocean_ice_dyn_nml dyn_scheme='cice_c' is single-rank for now "// &
-                         "(the multi-rank halo of the C-grid EVP, with the distributed tripolar fold, "// &
-                         "arrives in PR D9.4); use dyn_scheme='sis2_c' or one rank")
-         end if
          if (cfg%ocean%ice_ridge%kstrength /= 0 .and. .not. ice_scheme_is_cice(cfg)) then
             call add_msg(msgs, n, "&ocean_ice_dyn_nml dyn_scheme='cice_c' needs &ocean_ice_ridge_nml "// &
                          "kstrength = 0 (Hibler strength of the aggregates, from Pstar/Cstar): the "// &

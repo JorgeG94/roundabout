@@ -57,9 +57,10 @@ module rdb_ice_evp_c
    !! copy back when `ndte` is odd); a multi-rank caller replaces the wrap by
    !! the halo exchange.  `ice_evp_c_average` (the interpolation, now off the
    !! subcycle path) runs once after the loop because `ice_evp_c_finish` reads
-   !! its `uvelN`/`vvelE`.  Single rank periodic: `wrap_x`, `wrap_y`.
+   !! its `uvelN`/`vvelE`.  Single rank periodic: `wrap_x`, `wrap_y`.  The engine's decomposed path is
+   !! `ice_halo_faces` (D9.4, any rank count).
    !!
-   !! **Tripolar fold (single rank, D9.3).**  The fold line is the north edge of
+   !! **Tripolar fold (D9.3 on one rank; D9.4 on any rank count, through the ocean's px-aware fold).**  The fold line is the north edge of
    !! T row `nj` (storage row `ng + nj`); the maps are those of `rdb_ocean_fold`
    !! (a 180-degree rotation `(x, y) -> (ni - x, 2 nj - y)`, so both unit vectors
    !! reverse: a vector NEGATES, a scalar and the pseudoscalars (`f`, `sigma_12`,
@@ -112,14 +113,25 @@ module rdb_ice_evp_c
    !! sum in the opposite operand order) and are not projected, and the fold-row `v` east half is
    !! authoritative.  A whole-step tripole symmetry test must therefore use a tolerance.
    !!
-   !! **Contract for the multi-rank PR (D9.4).**
-   !!   1. A shifted one-face x exchange BEFORE packing the owner-routed fold (the ice treats
-   !!      `u(ie+1)`, `v(je+1)` as the authoritative computed faces, the opposite of the ocean).
-   !!   2. The fold-row projection takes the post-update east-half owner over EVERY storage
-   !!      column, x ghosts included.
-   !!   3. All `ng` ghost rows are filled (K1 with `avg_strength` reads `v` up to row `je+3`).
-   !!   4. Keep the order duplicate -> exchange -> wrap -> fold.
-   !!   5. Any corner projection added later must run identically at `px = 1`.
+   !! **Multi-rank contract (D9.4), all items met.**
+   !!   1. Face ownership.  The ice treats `u(ie+1)`, `v(je+1)` (the east / north face of the last
+   !!      owned cell) as the authoritative computed faces and `u(is)`, `v(js)` as duplicates.  The
+   !!      ocean halo's D1 ownership is the SAME (the west/south rank owns a seam face, i.e. every rank
+   !!      owns its east / north face, the periodic wrap pair included), so no shifted exchange is
+   !!      needed: the exchange delivers the sender's computed face to the receiver's duplicate.  Only
+   !!      the ocean's SINGLE-RANK local wrap kernel goes the other way (`u(ie+1) := u(is)`), which
+   !!      is why `ice_halo_faces` first copies the computed face onto its duplicate on every axis
+   !!      that is not split.  The fold's sender lists are the owned faces `is+1 .. ie+1`, so it
+   !!      reads the authoritative ones.  Met in `ice_halo_faces`.
+   !!   2. The fold-row projection takes the east-half owner over every storage column, x ghosts
+   !!      included (the receiver writes the west-half slots, ghost columns by their mirror class).
+   !!      Met by the ocean's owner-routed fold (`rdb_ocean_fold_plan`), reached through
+   !!      `ocean_fold_wrap_face_pair`.
+   !!   3. All `nghost` ghost rows are filled (`avg_strength` reads `v` up to `je+3`).  Met by the
+   !!      exchange (`ng` rows/columns) and the fold; `nghost >= 3` is a configure-time check.
+   !!   4. Order duplicate -> exchange -> wrap -> fold.  Met in `ice_halo_faces`.
+   !!   5. Any corner projection added later must run identically at `px = 1`: none is added
+   !!      (the corner fold-row slots are recomputed on every rank from identical data).
    !!
    !! **Sphere.**  A solid-body rotation has zero stress only with metric-consistent corner
    !! lengths (`dxU` the `earea`-weighted mean of the two `dxE` it sits between).  With the natural

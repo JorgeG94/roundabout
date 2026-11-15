@@ -328,7 +328,7 @@ program test_ocean_decomp_bitid_mpi
       !! `RDB_BITID_CASES`: run only the cases whose name contains this substring.
    type(comm_t) :: comm
    character(len=16), parameter :: SCHEMES(2) = [character(len=16) :: "pred_corr", "ssp_rk2"]
-   character(len=24), parameter :: CASES(72) = [character(len=24) :: &
+   character(len=24), parameter :: CASES(77) = [character(len=24) :: &
                                                 "island_basin", "weno7_pv", &
                                                 "periodic_channel_zstar", &
                                                 "visc_rem_zstar", &
@@ -356,6 +356,8 @@ program test_ocean_decomp_bitid_mpi
                                                 "eulz_tripolar", "eulz_epbl_mle", "bulk_flux", &
                                                 "bulk_flux_ice", "bulk_flux_fold", "bulk_flux_sw", "manizza", "dtbt_reset", &
                                                 "dtbt_reset_period", &
+                                                "sea_ice_cdyn", "sea_ice_cdyn_rev", "sea_ice_cdyn_island", &
+                                                "sea_ice_cdyn_fold", "sea_ice_cdyn_edge", &
                                                 "cavity_zfixed", "cavity_sigma", &
                                                 "cavity_sigma_ratio2", "cavity_gall", "cavity_melt_only", "cavity_periodic", &
                                                 "cavity_combo", "wetdry_shoal", &
@@ -424,7 +426,7 @@ program test_ocean_decomp_bitid_mpi
 
 contains
 
-   function case_nml(label, scheme, px, py) result(nml)
+   recursive function case_nml(label, scheme, px, py) result(nml)
       !! The namelist of one case on a px x py process grid.
       character(len=*), intent(in) :: label, scheme
       integer, intent(in) :: px, py
@@ -436,6 +438,11 @@ contains
       character(len=40) :: vortex_balance
       character(len=8) :: sponge_w, sponge_e
       character(len=64) :: wl
+
+      if (index(label, "sea_ice_cdyn") == 1) then
+         nml = cdyn_nml(label, scheme, px, py)
+         return
+      end if
 
       ! The visc_rem chain rides on the common &ocean_bt_nml group (one
       ! group per namelist).  D1 follow-up (2026-10): the weighted
@@ -1360,6 +1367,64 @@ contains
       end if
    end function case_nml
 
+   function cdyn_nml(label, scheme, px, py) result(nml)
+      !! The C-grid EVP cases (D9.4): a sea-ice case with `&ocean_ice_dyn_nml dyn_scheme = 'cice_c'`
+      !! on top of the SIS2 thermodynamics + transport.  `sea_ice_cdyn`: the periodic channel over a
+      !! seamount (the ice crosses the wrap seam and every rank seam); `_rev`: revised EVP with the
+      !! averaged-strength corner viscosity; `_island`: a closed basin with an interior land block;
+      !! `_fold`: the tripolar cap (distributed fold on every x split).
+      character(len=*), intent(in) :: label, scheme
+      integer, intent(in) :: px, py
+      character(len=:), allocatable :: nml
+      character(len=*), parameter :: NL = new_line("a")
+      character(len=:), allocatable :: dyn
+      integer :: a, b
+
+      dyn = "&ocean_ice_ridge_nml kstrength = 0 /"//NL// &
+            "&ocean_ice_dyn_nml dyn_scheme = 'cice_c', ndte = 10 /"//NL
+      if (label == "sea_ice_cdyn_rev") then
+         dyn = "&ocean_ice_ridge_nml kstrength = 0 /"//NL// &
+               "&ocean_ice_dyn_nml dyn_scheme = 'cice_c', ndte = 10, revised_evp = .true., "// &
+               "visc_method = 'avg_strength' /"//NL
+      end if
+      if (label == "sea_ice_cdyn_fold") then
+         nml = case_nml("sea_ice_fold", scheme, px, py)//dyn
+         return
+      end if
+      if (label == "sea_ice_cdyn_edge") then
+         ! The fold cap with ice only poleward of 66 N on a column at the liquidus without cooling (q_heat = 0): the
+         ! southern rows carry no ice at all, so on a 1x4 split one rank's tile is ice free
+         ! (an empty tile must stay empty and still take part in every exchange).
+         nml = case_nml("sea_ice_fold", scheme, px, py)//dyn
+         call replace_once(nml, "conc_config = 'uniform', h_ice = 1.0, conc = 0.7", &
+                           "conc_config = 'latitudes', h_ice = 1.0, conc = 0.7, arctic_edge = 66.0")
+         call replace_once(nml, "q_heat = -100.0", "q_heat = 0.0")
+         return
+      end if
+      nml = case_nml("sea_ice_transport", scheme, px, py)//dyn
+      if (label == "sea_ice_cdyn_island") then
+         a = index(nml, "&ocean_topo_nml")
+         b = a + index(nml(a:), "/") - 1
+         nml = nml(1:a - 1)//"&ocean_topo_nml topo_config = 'island', max_depth = 1000.0, "// &
+               "slope_scale = 0.15 /"//nml(b + 1:)
+         a = index(nml, "&ocean_bc_nml")
+         b = a + index(nml(a:), "/") - 1
+         nml = nml(1:a - 1)//"&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', "// &
+               "north = 'wall' /"//nml(b + 1:)
+      end if
+   end function cdyn_nml
+
+   subroutine replace_once(str, old, new)
+      !! Replace the first occurrence of `old` in `str` (stop when absent: a test-namelist typo).
+      character(len=:), allocatable, intent(inout) :: str
+      character(len=*), intent(in) :: old, new
+      integer :: a
+
+      a = index(str, old)
+      if (a == 0) error stop "replace_once: pattern not found in the case namelist: "//old
+      str = str(1:a - 1)//new//str(a + len(old):)
+   end subroutine replace_once
+
    function cavity_nml(label, scheme, spx, spy, gfrac) result(nml)
       !! Ice-shelf cavity cases (dyn + virtual melt + quadratic top drag, all
       !! walls).  The text is `cavity_case_nml` of `test_ocean_cavity_engine`
@@ -2031,7 +2096,8 @@ contains
    pure logical function is_ice_fold_case(label)
       !! The sea-ice-on-the-tripolar-cap cases (A7).
       character(len=*), intent(in) :: label
-      is_ice_fold_case = label == "sea_ice_fold" .or. label == "sea_ice_fold_nodyn"
+      is_ice_fold_case = label == "sea_ice_fold" .or. label == "sea_ice_fold_nodyn" .or. &
+                         label == "sea_ice_cdyn_fold" .or. label == "sea_ice_cdyn_edge"
    end function is_ice_fold_case
 
    subroutine check_ice_seam(ref, tag)
@@ -2081,6 +2147,62 @@ contains
          n_fail = n_fail + 1
       end if
    end subroutine check_ice_seam
+
+   subroutine check_cdyn_seams(ref, label, tag)
+      !! Non-vacuity of the C-grid EVP decomposition cases, on the SERIAL reference: the ice
+      !! velocity must be non-zero across EVERY rank seam of the 2- and 4-rank layouts (the u
+      !! faces on each x seam, the v faces on each y seam; equal split, the first ranks one
+      !! cell wider), else a stale ghost could hide.  `sea_ice_cdyn_edge` additionally needs a
+      !! tile with no ice at all (rows 1..6 empty, the southern tile of a 1x4 split) and ice
+      !! in the northern rows.
+      type(snap_t), intent(in) :: ref
+      character(len=*), intent(in) :: label, tag
+      integer, parameter :: NSEAM_X = 4, NSEAM_Y = 4
+      integer :: seam_x(NSEAM_X), seam_y(NSEAM_Y), k, e, nbad
+      real(wp) :: umax, vmax, mice_south, mice_north
+
+      ! first-face index of the east tile: 2 ranks 13 | 14 ; 4 ranks 7|8, 14|15, 20|21 (x);
+      ! 9 | 10 ; 5|6, 10|11, 14|15 (y), as the global face index of the seam face.
+      seam_x = [14, 8, 15, 21]
+      seam_y = [10, 6, 11, 15]
+      if (label == "sea_ice_cdyn_fold" .or. label == "sea_ice_cdyn_edge") then
+         ! the cap grid is 30 x 24
+         seam_x = [16, 9, 17, 24]
+         seam_y = [13, 7, 13, 19]
+      end if
+      nbad = 0
+      mice_south = 0.0_wp
+      mice_north = 0.0_wp
+      do e = 1, ref%n
+         if (trim(ref%f(e)%tag) == "ice_u_ice") then
+            do k = 1, NSEAM_X
+               if (label == "sea_ice_cdyn_edge") cycle
+               umax = maxval(abs(ref%f(e)%a(ref%ng + seam_x(k), ref%ng + 1:ref%ng + ref%nyl, 1)))
+               if (.not. (umax > 0.0_wp)) nbad = nbad + 1
+            end do
+         else if (trim(ref%f(e)%tag) == "ice_v_ice") then
+            do k = 1, NSEAM_Y
+               if (label == "sea_ice_cdyn_edge" .and. k /= 4) cycle
+               vmax = maxval(abs(ref%f(e)%a(ref%ng + 1:ref%ng + ref%nxl, ref%ng + seam_y(k), 1)))
+               if (.not. (vmax > 0.0_wp)) nbad = nbad + 1
+            end do
+         else if (trim(ref%f(e)%tag) == "ice_m_ice") then
+            mice_south = maxval(abs(ref%f(e)%a(ref%ng + 1:ref%ng + ref%nxl, ref%ng + 1:ref%ng + 6, :)))
+            mice_north = maxval(abs(ref%f(e)%a(ref%ng + 1:ref%ng + ref%nxl, ref%ng + ref%nyl, :)))
+         end if
+      end do
+      if (nbad > 0) then
+         write (*, '(3a,i0,a,i0)') "FAIL ", tag, ": ice velocity is zero on ", nbad, " seam line(s), rank ", rank
+         n_fail = n_fail + 1
+      end if
+      if (label == "sea_ice_cdyn_edge") then
+         if (mice_south /= 0.0_wp .or. .not. (mice_north > 0.0_wp)) then
+            write (*, '(3a,2es10.2,a,i0)') "FAIL ", tag, ": expected an ice-free south tile and ice in the north: ", &
+               mice_south, mice_north, " rank ", rank
+            n_fail = n_fail + 1
+         end if
+      end if
+   end subroutine check_cdyn_seams
 
    pure logical function carried_tendency(tag)
       !! The `pred_corr` predictor's carried viscous tendency
@@ -2136,6 +2258,7 @@ contains
       end if
 
       if (is_ice_fold_case(label)) call check_ice_seam(ref, trim(label)//"/"//scheme)
+      if (index(label, "sea_ice_cdyn") == 1) call check_cdyn_seams(ref, label, trim(label)//"/"//scheme)
       if (is_wetdry_case(label)) then
          ! Non-vacuity: the front must cross every seam band in BOTH directions
          ! in the serial reference (the decomposed runs are then compared to it).
@@ -2198,7 +2321,7 @@ contains
             ! (dyn + draft only) resumes bit-identically and the ratio-2 twin
             ! does too: a serial warm-restart defect of the melt path at
             ! `dt_therm_ratio = 1`, not a decomposition defect.
-            if ((label == "sea_ice" .or. label == "sea_ice_transport" .or. &
+            if ((label == "sea_ice" .or. label == "sea_ice_transport" .or. index(label, "sea_ice_cdyn") == 1 .or. &
                  label == "bulk_flux_ice" .or. label == "dtbt_reset" .or. &
                  label == "cavity_sigma_ratio2" .or. is_wetdry_case(label) .or. is_ice_fold_case(label)) .and. &
                 (nprocs/px == 1 .or. px == nprocs/px) .and. &

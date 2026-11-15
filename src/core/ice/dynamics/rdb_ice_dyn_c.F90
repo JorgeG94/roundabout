@@ -43,7 +43,9 @@ module rdb_ice_dyn_c
    !!      `ice_evp_c_finish` (the strain-rate diagnostics, `strocnxE/yN`, the
    !!      velocity guard);
    !!   4. the face stress per ice area, the mirrors of the two face masks and
-   !!      `strocnT` (per ice area at T: `0.5 (w_E(i-1) A_E(i-1) + w_E(i) A_E(i))
+   !!      `strocnT` (fold-blind: the face stresses are exchanged as centre fields, valid
+   !!      because only the west/south neighbours are read; see the comment at the exchange;
+   !!      per ice area at T: `0.5 (w_E(i-1) A_E(i-1) + w_E(i) A_E(i))
    !!      / A_T`, `w = strocn/ai` where `ai > puny`; the division by the face
    !!      area comes BEFORE the average to T);
    !!   5. one reduction of the error words; a fatal bit (`ICE_ERR_DYN_VEL` for
@@ -53,8 +55,9 @@ module rdb_ice_dyn_c
    !! The hand-off of `-strocn` to the ocean surface stress is
    !! `ice_ocean_stress_flux_c` (`rdb_ice_ocean_coupler`).
    !!
-   !! Single rank (refused at configure on more than one; the multi-rank PR lifts
-   !! it); a tripolar north fold is supported (D9.3).  The face halo of every
+   !! Any rank count (D9.4: the face pair is exchanged every subcycle, `nghost >= 3`;
+   !! under `scheme = "cice"` the whole ice step is still single rank); a tripolar north fold is
+   !! supported (D9.3, `px > 1` too).  The face halo of every
    !! subcycle is `ice_halo_faces` (`rdb_ice_cgrid_metrics`), which on a periodic
    !! axis keeps the east/north seam face the solver computes and copies it onto the
    !! duplicate (the ocean's own wrap goes the other way and would clobber it) and
@@ -74,17 +77,19 @@ module rdb_ice_dyn_c
    !! wall or periodic edges only).  `strocnT_x/y` is restart state with no
    !! consumer until the basal-heat wiring.  When the ice mass loads the
    !! surface the tilt must use the pressure-loaded surface, not `sum h - b`.
-   use, intrinsic :: iso_fortran_env, only: int32
+   use, intrinsic :: iso_fortran_env, only: int32, int64
    use rdb_constants, only: wp, H_VANISHED
    use rdb_grid, only: hgrid_t
    use rdb_ocean_metrics, only: ocean_metrics_t
    use rdb_ocean_boundary_types, only: ocean_bc_state_t
    use rdb_multilayer_state, only: multilayer_state_t
    use rdb_ocean_periodic, only: ocean_periodic_wrap_centre_2d
+   use rdb_ocean_halo, only: ocean_halo_centre, ocean_halo_is_decomposed, ocean_halo_global_extent
+   use rdb_halo, only: halo_allreduce_sum_i8
    use rdb_ice_column, only: ICE_RHO_ICE, ICE_RHO_SNOW
    use rdb_ice_state, only: ocean_sea_ice_t
    use rdb_ice_errors, only: ICE_ERR_FATAL_MASK, ice_err_summary_t, ice_err_clear, ice_err_reduce, &
-                             ice_err_enforce
+                             ice_err_enforce, ice_err_is_fatal
    use rdb_ice_evp_c_prep, only: ice_evp_c_const_t, ice_evp_c_constants, ice_evp_c_prep, ice_evp_c_ghost_ok, &
                                  ice_evp_c_face_fraction
    use rdb_ice_evp_c, only: ice_evp_c_substep, ice_evp_c_average, ice_evp_c_finish, ice_evp_c_copy_faces
@@ -183,7 +188,9 @@ contains
       type(ice_evp_c_const_t) :: k
       type(ice_err_summary_t) :: summ
       integer :: nx, ny, nz, ng, is, ie, js, je, ksub
-      logical :: odd, keep_air
+      integer :: gi0, gj0, gnx, gny
+      integer(int64) :: n_fatal_loc, n_fatal_glob
+      logical :: odd, keep_air, decomposed
 
       nx = grid%nx_total
       ny = grid%ny_total
@@ -198,6 +205,15 @@ contains
       k%rhoi = ICE_RHO_ICE
       k%rhos = ICE_RHO_SNOW
       odd = mod(k%ndte, 2) == 1
+      decomposed = ocean_halo_is_decomposed()
+      gi0 = 0
+      gj0 = 0
+      gnx = grid%nx_phys
+      if (decomposed) then
+         call ocean_halo_global_extent(gi0, gj0, gnx, gny)
+         gi0 = gi0 - 1
+         gj0 = gj0 - 1
+      end if
 
       call ice_err_clear(ice%dync%ice_err, nx, ny)
       call dync_ssh_impl(nx, ny, nz, ms%h_layer, b, metrics%wet_T, ice%dync%ssh)
@@ -263,19 +279,45 @@ contains
       call dync_post_impl(nx, ny, is, ie, js, je, ice%dync%p%c%puny, ice%dync%w%strocnxE, &
                           ice%dync%w%strocnyN, ice%dync%w%aiE, ice%dync%w%aiN, ice%dync%w%iceEmask, &
                           ice%dync%w%iceNmask, ice%dync%wE, ice%dync%wN, ice%dync%emask_r, ice%dync%nmask_r)
-      call ocean_periodic_wrap_centre_2d(ice%dync%wE, nx, ny, grid%nx_phys, grid%ny_phys, ng, &
-                                         bc%periodic_x, bc%periodic_y)
-      call ocean_periodic_wrap_centre_2d(ice%dync%wN, nx, ny, grid%nx_phys, grid%ny_phys, ng, &
-                                         bc%periodic_x, bc%periodic_y)
+      ! The west / south face stress per ice area the T average reads: the local periodic wrap on
+      ! one rank, the ocean's centre exchange (owner values, wrap pair included) when decomposed.
+      ! FOLD-BLIND on purpose: `wE`/`wN` are VECTOR face values held in centre-indexed storage and
+      ! this is the plain centre exchange, so no fold sign is applied and the north ghost rows are
+      ! not filled.  That is valid only because `dync_strocnt_impl` reads the WEST and SOUTH
+      ! neighbours (`wE(i-1)`, `wN(j-1)`); a consumer of a north / east ghost must instead go
+      ! through the face-pair semantics (`ice_halo_faces`: exchange, wrap, fold with the vector
+      ! sign and the fold-row projection) on the true face arrays.
+      if (decomposed) then
+         call ocean_halo_centre(ice%dync%wE)
+         call ocean_halo_centre(ice%dync%wN)
+      else
+         call ocean_periodic_wrap_centre_2d(ice%dync%wE, nx, ny, grid%nx_phys, grid%ny_phys, ng, &
+                                            bc%periodic_x, bc%periodic_y)
+         call ocean_periodic_wrap_centre_2d(ice%dync%wN, nx, ny, grid%nx_phys, grid%ny_phys, ng, &
+                                            bc%periodic_x, bc%periodic_y)
+      end if
       call dync_strocnt_impl(nx, ny, is, ie, js, je, ice%dync%wE, ice%dync%wN, cm%earea, &
                              cm%narea, cm%tarear, ice%dync%strocnT_x, ice%dync%strocnT_y)
 
-      call ice_err_reduce(ice%dync%ice_err, nx, ny, is, ie, js, je, 0, 0, grid%nx_phys, &
+      call ice_err_reduce(ice%dync%ice_err, nx, ny, is, ie, js, je, gi0, gj0, gnx, &
                           ICE_ERR_FATAL_MASK, summ)
       if (present(err_summary)) then
          err_summary = summ
       else
-         call ice_err_enforce(summ, grid%nx_phys, ICE_ERR_FATAL_MASK)
+         ! Rank-uniform verdict: the per-rank summary is local (`combine_across_ranks` is not a
+         ! collective yet), so ONE sum of the fatal flags decides for every rank and a rank that is
+         ! not the offender stops too instead of waiting in the next halo.
+         if (decomposed) then
+            n_fatal_loc = 0_int64
+            if (ice_err_is_fatal(summ, ICE_ERR_FATAL_MASK)) n_fatal_loc = 1_int64
+            call halo_allreduce_sum_i8(n_fatal_loc, n_fatal_glob)
+            if (n_fatal_glob > 0_int64) then
+               call ice_err_enforce(summ, gnx, ICE_ERR_FATAL_MASK)
+               error stop "ice_dyn_c_step: a fatal sea-ice error bit is set on another rank"
+            end if
+         else
+            call ice_err_enforce(summ, grid%nx_phys, ICE_ERR_FATAL_MASK)
+         end if
       end if
    end subroutine ice_dyn_c_step
 

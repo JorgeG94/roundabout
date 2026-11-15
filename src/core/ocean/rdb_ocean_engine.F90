@@ -598,17 +598,10 @@ contains
          ! Ice + fold on `px > 1` is covered by the `sea_ice_fold*` cases of
          ! `test_ocean_decomp_bitid_mpi` (A7, #143); the fold-exchange
          ! reserve is sized for the widest ice group below.
-         ! The CICE C-grid EVP under the SIS2-derived state is single-rank for
-         ! now: keyed on the ACTUAL rank count (an unset process grid does not
-         ! trip the `validate_config` check).
-         if (cfg%ocean%ice%enable .and. cfg%ocean%ice%dynamics .and. &
-             trim(adjustl(cfg%ocean%ice_dyn%dyn_scheme)) == "cice_c") then
-            call fail("&ocean_ice_dyn_nml dyn_scheme = 'cice_c' is single-rank for now ("// &
-                      to_string(csize)//" ranks requested): its halo exchange arrives in a "// &
-                      "later PR.  Use dyn_scheme = 'sis2_c' or 1 rank.", &
-                      ierr, OCEAN_STATUS_ERR_SETUP)
-            return
-         end if
+         ! The CICE C-grid EVP under the SIS2-derived state (`dyn_scheme = 'cice_c'`) runs on the
+         ! ocean's decomposition (D9.4): the face pair is exchanged every subcycle
+         ! (`ice_halo_faces`), the tripolar fold included (`px > 1` too); the cases
+         ! `sea_ice_cdyn*` of `test_ocean_decomp_bitid_mpi` pin it bitwise.
          ! The CICE-port ice (`scheme = "cice"`) is single-rank: its halo hooks are the local
          ! periodic refresh, its dynamics halo is the single-rank one.  Keyed on the ACTUAL
          ! rank count.
