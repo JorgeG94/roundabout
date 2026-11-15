@@ -63,6 +63,7 @@ module rdb_ocean_bbl_mixing
    use rdb_eos, only: eos_t
    use rdb_ocean_tidal_mixing, only: column_layer_n2
    use, intrinsic :: iso_fortran_env, only: int64
+   use, intrinsic :: ieee_arithmetic, only: ieee_is_nan, ieee_is_finite
    use rdb_mem_report, only: arr_bytes
    implicit none
    private
@@ -130,7 +131,14 @@ module rdb_ocean_bbl_mixing
       procedure, non_overridable :: bytes => ocean_bbl_mixing_bytes
    end type ocean_bbl_mixing_t
 
+   ! Position-independent exp (`rdb_sm_*`), so a decomposed run rounds
+   ! this closure exactly as one rank does.  Constants once here, bodies in
+   ! `contains`.
+#include "rdb_safe_math_consts.inc"
+
 contains
+
+#include "rdb_safe_math_core.inc"
 
    subroutine ocean_bbl_mixing_init(this, nx, ny, nz)
       !! Allocate the persistent fields (zeroed).  Called from configure
@@ -388,7 +396,7 @@ contains
       do k = kbed, nz - 1
          ! Joule loss across layer k, then serve its top interface K = k+1.
          z = z + h(k)
-         rem = rem*exp(-h(k)*lam_inv)
+         rem = rem*rdb_sm_exp(-h(k)*lam_inv)
          zt = dtot - z
          den = ustar*dtot + f_abs*z*zt
          kw = 0.0_wp

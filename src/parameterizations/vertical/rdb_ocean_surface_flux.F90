@@ -113,10 +113,16 @@
 !!
 !! Which of these change real column MASS is in `docs/codebase/CONTRACTS.md`.
 module rdb_ocean_surface_flux
+   !! **Reproducibility.**  In this module the shortwave transmission `exp` and the Manizza opacity power (`sw_opacity_manizza`, `sw_transmission`,
+   !! `sw_transmission_nb`, `sw_pe_cost_shape`) use the module-local `rdb_sm_exp`/`rdb_sm_pow`
+   !! (`rdb_safe_math`); the deposition kernel and both boundary-layer schemes share these
+   !! helpers, so they agree bit for bit and on any tile width.
+   !!
    use rdb_constants, only: wp, SEAWATER_CP_DEFAULT, H_DIV_EPS, H_VANISHED, NZ_STACK_MAX
    use rdb_grid, only: hgrid_t
    use rdb_multilayer_state, only: multilayer_state_t
    use, intrinsic :: iso_fortran_env, only: int64
+   use, intrinsic :: ieee_arithmetic, only: ieee_is_nan, ieee_is_finite
    use rdb_mem_report, only: arr_bytes
    implicit none
    private
@@ -470,6 +476,12 @@ module rdb_ocean_surface_flux
       procedure, non_overridable :: bytes => ocean_surface_flux_bytes
    end type ocean_surface_flux_t
 
+   ! Position-independent exp/pow for the shortwave transmission profile
+   ! and the chlorophyll band opacity (`rdb_sm_*`), shared by the deposition kernel and both boundary-layer
+   ! schemes through `sw_transmission*`.  Constants once here, bodies at the
+   ! end of `contains`.
+#include "rdb_safe_math_consts.inc"
+
 contains
 
    subroutine ocean_surfflux_init(this, grid)
@@ -699,7 +711,7 @@ contains
       !$acc routine seq
       real(wp), intent(in) :: chl, a, b, p, chl_floor
       real(wp) :: kappa
-      kappa = a + b*max(chl, chl_floor)**p
+      kappa = a + b*rdb_sm_pow(max(chl, chl_floor), p)
    end function sw_opacity_manizza
 
    pure function sw_transmission_nb(d, i, j, nx, ny, nb, kappa, frac) result(trans)
@@ -717,7 +729,7 @@ contains
       integer :: n
       trans = 0.0_wp
       do n = 1, nb
-         trans = trans + frac(n)*exp(-kappa(i, j, n)*d)
+         trans = trans + frac(n)*rdb_sm_exp(-kappa(i, j, n)*d)
       end do
    end function sw_transmission_nb
 
@@ -1287,7 +1299,7 @@ contains
       !$acc routine seq
       real(wp), intent(in) :: d, R, zeta1, zeta2
       real(wp) :: trans
-      trans = R*exp(-d/zeta1) + (1.0_wp - R)*exp(-d/zeta2)
+      trans = R*rdb_sm_exp(-d/zeta1) + (1.0_wp - R)*rdb_sm_exp(-d/zeta2)
    end function sw_transmission
 
    pure function sw_pe_cost_shape(tau) result(phi)
@@ -1319,8 +1331,8 @@ contains
       if (tau <= TAU_TAYLOR) then
          phi = C1_6*tau*(1.0_wp - C1_60*tau*tau)
       else
-         em1 = 1.0_wp - exp(-tau)
-         phi = (tau*(1.0_wp + exp(-tau)) - 2.0_wp*em1)/(tau*em1)
+         em1 = 1.0_wp - rdb_sm_exp(-tau)
+         phi = (tau*(1.0_wp + rdb_sm_exp(-tau)) - 2.0_wp*em1)/(tau*em1)
       end if
    end function sw_pe_cost_shape
 
@@ -2101,5 +2113,9 @@ contains
 
 #include "rdb_vanished_layer.inc"
 #include "rdb_tracer_conc.inc"
+
+#include "rdb_safe_math_core.inc"
+
+#include "rdb_safe_math_pow.inc"
 
 end module rdb_ocean_surface_flux

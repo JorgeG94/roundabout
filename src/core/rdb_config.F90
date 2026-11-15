@@ -1154,8 +1154,11 @@ module rdb_config
          !! bed-blocking momentum gate; requires the sigma
          !! vertical coordinate, `&ocean_continuity_nml ppm_limit_pos`
          !! and `&ocean_bt_nml split_scheme = "ssp_rk2"` (fail-loud at configure).  Multi-rank: bit-identical to one rank
-         !! (needs `nghost >= 3`); refused on >1 rank with the tripolar fold
-         !! or any non-wall, non-periodic edge (unproven).
+         !! (needs `nghost >= 3`); refused on >1 rank with the tripolar fold,
+         !! a clamped/chapman/sponge/nested/inflow/discharge edge, or Orlanski
+         !! radiation / full Flather / nudging / tracer reservoirs on an open or tidal edge
+         !! (unproven).  An OPEN/TIDAL-edge wet column shallower than 10 x
+         !! `dry_depth` is refused at configure (any rank count).
       real(wp) :: dry_depth = 0.05_wp
          !! Total-depth dry threshold (m): a column with `D < dry_depth`
          !! is dynamically dry (masked).  Must be > 0.

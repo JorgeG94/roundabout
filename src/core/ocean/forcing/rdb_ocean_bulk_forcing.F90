@@ -88,6 +88,7 @@ module rdb_ocean_bulk_forcing
    !! T_s"). No salt component is written (v1 bulk fluxes carry no
    !! virtual-salt term), so `has_salt` is left untouched.
    use, intrinsic :: iso_fortran_env, only: int64
+   use, intrinsic :: ieee_arithmetic, only: ieee_is_nan, ieee_is_finite
    use rdb_constants, only: H_VANISHED, NZ_STACK_MAX, wp, H_DIV_EPS
    use rdb_grid, only: hgrid_t
    use rdb_config, only: config_t, ocean_atm_forcing_config_t
@@ -156,6 +157,10 @@ module rdb_ocean_bulk_forcing
       procedure, non_overridable :: bytes => bulk_forcing_bytes
       procedure, non_overridable :: destroy => bulk_forcing_destroy
    end type bulk_forcing_t
+
+   ! Position-independent sin/cos for the grid-angle rotation in the core
+   ! kernel (`rdb_sm_*`): constants once here, bodies at the end of `contains`.
+#include "rdb_safe_math_consts.inc"
 
 contains
 
@@ -404,8 +409,8 @@ contains
          kt = rdb_vl_first_live(nx, ny, nz, h_layer, ii, jj, k_top(ii, jj))
          if (wet_T(ii, jj) > 0.5_wp) then
             ow = open_water(ii, jj)
-            cosA = cos(angle_dx(ii, jj))
-            sinA = sin(angle_dx(ii, jj))
+            cosA = rdb_sm_cos(angle_dx(ii, jj))
+            sinA = rdb_sm_sin(angle_dx(ii, jj))
             u_g = cosA*uas(ii, jj) + sinA*vas(ii, jj)
             v_g = -sinA*uas(ii, jj) + cosA*vas(ii, jj)
             if (wind_relative) then
@@ -511,5 +516,9 @@ contains
 
 #include "rdb_vanished_layer.inc"
 #include "rdb_tracer_conc.inc"
+
+#include "rdb_safe_math_core.inc"
+
+#include "rdb_safe_math_trig.inc"
 
 end module rdb_ocean_bulk_forcing
