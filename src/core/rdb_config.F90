@@ -3640,10 +3640,12 @@ module rdb_config
          !! over its interval and modulate by a diurnal cosine-zenith
          !! factor. `"linear"`: plain time-blend like every other flux
          !! (disables the hold + the coszen kernel).
-      real(wp) :: sw_offset_s = -5400.0_wp
-         !! Time offset (s) applied to the `rsds` query time before the
-         !! bracket search -- moves an interval-centred timestamp onto
-         !! the interval start for the hold (`sw_interp = "coszen"`).
+      real(wp) :: sw_offset_s = 5400.0_wp
+         !! Time offset (s) ADDED to the `rsds` query time before the
+         !! bracket search (`sw_interp = "coszen"`): half the 3-hour
+         !! bucket, so a model time inside bucket `[3k h, 3k h + 3 h)`
+         !! finds the record stamped at that bucket's CENTRE (JRA55-do
+         !! stamps its interval means 01:30, 04:30, ...).
       integer :: orb_year = 1990
          !! Orbital-parameter year, reserved for a future Berger (1978)
          !! upgrade. The v1 coszen kernel uses the fixed Spencer (1971)

@@ -1,8 +1,8 @@
 !! JRA55-do-style prescribed atmospheric-state provider (OM3 wave-3, C2c-2b).
 module rdb_atm_state
    !! **Reproducibility.**  The solar-position sin/cos are `safe_sin`/`safe_cos`
-   !! (host, `rdb_safe_math`) and `rdb_sm_sin`/`rdb_sm_cos` (the per-cell zenith
-   !! kernel), so `cosz` does not depend on a cell's vector position or tile width.
+   !! (host, `rdb_safe_math`) and `rdb_sm_sin`/`rdb_sm_cos`/`rdb_sm_atan2` (the per-cell
+   !! zenith kernel), so `cosz` does not depend on a cell's vector position or tile width.
    !! Every phase is bounded (day-of-year angle in [0, 2 pi), hour angle within a
    !! few hundred degrees), so no time-growing argument reaches the library.
    !!
@@ -18,36 +18,55 @@ module rdb_atm_state
    !!
    !! **`rsds` -- held interval + diurnal cosine-zenith factor
    !! (`sw_interp = "coszen"`, the namelist default, C2c-2b).**  The JRA55-
-   !! do `rsds` file carries 3-hour interval MEANS; registering it with
-   !! `hold = .true.` and `t_offset = sw_offset_s` (default -5400 s, half
-   !! the 3-hour bucket) makes the shared reader return that bucket's
-   !! value PIECEWISE-CONSTANT (`rsds_rec`, weight forced to 0 -- no
-   !! blend toward the next record) rather than linearly interpolated.
+   !! do `rsds` file carries 3-hour interval MEANS stamped at the interval
+   !! CENTRE (01:30, 04:30, ...), record `k` meaning the mean over the UTC
+   !! bucket `[3k h, 3k h + 3 h)`.  Registering it with `hold = .true.` and
+   !! `t_offset = sw_offset_s` (default `+5400` s, half the bucket) makes
+   !! the shared reader return, for model time `t`, the record whose stamp
+   !! is the last one `<= t + 5400 s`: exactly the record of the bucket
+   !! that CONTAINS `t`, PIECEWISE-CONSTANT (`rsds_rec`, blend weight
+   !! forced to 0).  (The offset is added to the QUERY time; a negative
+   !! one selects the PREVIOUS bucket's record -- it did until 2026-11,
+   !! and divided it by the current bucket's cosine mean, which blows up
+   !! at every sunset/sunrise bucket boundary.)
+   !!
    !! The diurnal shape within the bucket is restored by
-   !! `rsds = rsds_rec * cosz / cosz_mean` (0 where `cosz_mean < 1e-6`,
-   !! i.e. the whole bucket is night): `cosz` is the INSTANTANEOUS cosine
-   !! of the solar zenith angle at the query time `t`; `cosz_mean` is a
-   !! 12-point midpoint quadrature of `max(0, cos Z)` over the bucket
-   !! `[t_rec, t_rec + 3h)` that `rsds_rec` itself represents (`t_rec =
-   !! floor(t / 3h) * 3h`, the JRA55-do bucket boundary) -- so
-   !! `cosz_mean * 3h` is (to the quadrature's own accuracy) the bucket's
-   !! true clear-sky-insolation-weighted mean, matching the file's
-   !! interval-mean convention and preserving the daily energy total
-   !! exactly in the limit where the model's own step cadence samples the
-   !! same 12 nodes (`test_ocean_atm_state`'s energy-identity gate).  The
-   !! solar position (declination + equation of time) comes from the
-   !! Spencer (1971) Fourier fit -- a `day-of-year` + `hour-of-day`
-   !! function only, computed HOST-SIDE via `rdb_calendar` (calendar
-   !! arithmetic is not device-safe) and handed to the per-cell device
-   !! kernel as a handful of scalars/short arrays; the kernel itself does
-   !! only elementwise trigonometry on `geolonT`/`geolatT`, never touches
-   !! the calendar.  `orb_year` is the reserved Berger (1978) orbital-
-   !! parameter follow-up -- `validate_config` refuses any value other
-   !! than its default, since this chunk's declination uses the FIXED
-   !! Spencer coefficients.  `sw_interp = "linear"` disables all of the
-   !! above (`hold = .false.`, `t_offset = 0`, plain blend, same answer as
-   !! every other flux) -- `rsds` is then `rsds_rec` copied straight
-   !! through.
+   !! `rsds = rsds_rec * cosz / cosz_mean`, where, with the Sun's
+   !! declination and the equation of time frozen at their value at the
+   !! bucket midpoint (Spencer 1971 Fourier fit, host-side `rdb_calendar`
+   !! arithmetic) and `omega` the hour angle, `cos Z(omega) = a + b cos
+   !! omega` with `a = sin(lat) sin(dec)` and `b = cos(lat) cos(dec)`:
+   !!   * `cosz_mean` is the EXACT mean of `max(0, cos Z)` over the UTC
+   !!     bucket `[t_rec, t_rec + 3 h)` that `rsds_rec` represents;
+   !!   * `cosz` is the EXACT mean of `max(0, cos Z)` over the model step
+   !!     `[t, t + dt)` that the flux is applied for (not the instantaneous
+   !!     value at `t`: a step that straddles sunset must carry the
+   !!     step's mean insolation, not the value at its first instant).
+   !! Both are differences of ONE closed-form antiderivative of
+   !! `max(0, a + b cos omega)` (clipped at the sunrise/sunset hour angle
+   !! `acos(-a/b)`; polar day and polar night are the unclipped / empty
+   !! cases), so they telescope: for steps that tile the bucket
+   !! (`dt` divides 3 h, `t` on the `dt` grid) `Sum_steps rsds * dt =
+   !! rsds_rec * 3 h` to round-off in EVERY cell, however thin the sunlit
+   !! sliver; and since each step's integral cannot exceed the bucket's,
+   !! `rsds <= rsds_rec * 3 h / dt` (6 x the record at `dt = 1800`),
+   !! exactly 0 when the Sun is down for the whole step, and 0 in a
+   !! bucket whose mean cosine is below `1e-9` (a sliver of a few
+   !! seconds; the record there is ~1e-6 W/m2 and the 0/0 would otherwise
+   !! be noise).  If `dt` does not divide 3 h a step that straddles the
+   !! bucket edge is normalised by the bucket it STARTS in, so the
+   !! per-bucket energy is off by at most one step's worth at the edge.
+   !! The solar-position scalars are computed HOST-SIDE (calendar
+   !! arithmetic is not device-safe); the per-cell device kernel does only
+   !! elementwise trigonometry on `geolonT`/`geolatT`.  Time of day is UTC
+   !! (JRA55-do's convention), taken from `start_date` + `t`, so a
+   !! `start_date` that is not on a 3 h boundary is handled.  `orb_year`
+   !! is the reserved Berger (1978) orbital-parameter follow-up --
+   !! `validate_config` refuses any value other than its default, since
+   !! this chunk's declination uses the FIXED Spencer coefficients.
+   !! `sw_interp = "linear"` disables all of the above (`hold = .false.`,
+   !! `t_offset = 0`, plain blend, same answer as every other flux) --
+   !! `rsds` is then `rsds_rec` copied straight through.
    !!
    !! There is NO bulk-flux/ice-seam CONSUMER here (that is C2c-3) -- the
    !! engine only configures this slot and refreshes it every step;
@@ -107,11 +126,17 @@ module rdb_atm_state
 
    real(wp), parameter :: ATM_SW_BUCKET_S = 10800.0_wp
       !! JRA55-do shortwave accumulation bucket width (3 h; Tsujino et al.
-      !! 2018) -- the `coszen` kernel's quadrature window, fixed by the
-      !! dataset convention rather than derived from the reader's own
-      !! bracket (see the module docstring's `rsds` paragraph).
-   integer, parameter :: ATM_COSZ_NQUAD = 12
-      !! Midpoint-quadrature node count for `cosz_mean`.
+      !! 2018) -- the normalisation window of the `coszen` kernel, fixed
+      !! by the dataset convention rather than derived from the reader's
+      !! own bracket (see the module docstring's `rsds` paragraph).
+   real(wp), parameter :: ATM_EARTH_OMEGA = TWO_PI/86400.0_wp
+      !! Hour-angle rate (rad/s): 15 degrees per hour.
+   real(wp), parameter :: ATM_COSZ_MEAN_MIN = 1.0e-9_wp
+      !! A bucket whose exact mean `max(0, cos Z)` is below this (a sunlit
+      !! sliver of a few seconds, carrying ~1e-6 W/m2 of record) gets
+      !! `rsds = 0`: the ratio of two such round-off-sized integrals is
+      !! noise, not a flux.  Bounds the ratio's denominator only -- the
+      !! ratio itself is bounded by `3 h / dt` by construction.
 
    type :: atm_state_t
       !! Nine-field atmospheric state, device-resident, physical cells
@@ -173,13 +198,14 @@ module rdb_atm_state
          !! cosz / cosz_mean` under `coszen`, `rsds = rsds_rec` under
          !! `linear`.
       real(wp), allocatable :: cosz(:, :)
-         !! Instantaneous cosine of the solar zenith angle at the
-         !! current query time `t`, clamped to `>= 0` (night is not
-         !! negative insolation). `coszen` only -- stays 0 under
-         !! `linear`.
+         !! Mean of `max(0, cos Z)` (cosine of the solar zenith angle,
+         !! clamped to `>= 0`: night is not negative insolation) over the
+         !! model step `[t, t + dt)` the flux is applied for. `coszen`
+         !! only -- stays 0 under `linear`.
       real(wp), allocatable :: cosz_mean(:, :)
-         !! 12-point midpoint quadrature of `max(0, cos Z)` over the
-         !! `rsds_rec` bucket `[t_rec, t_rec+3h)`. `coszen` only.
+         !! Exact mean of `max(0, cos Z)` over the `rsds_rec` bucket
+         !! `[t_rec, t_rec+3h)` (UTC 3-hour bucket containing `t`).
+         !! `coszen` only.
    contains
       procedure, non_overridable :: enter_data => atm_state_enter_data
       procedure, non_overridable :: exit_data => atm_state_exit_data
@@ -675,7 +701,7 @@ contains
    ! Per-step update (immediately after ocean_data_input_update_all)
    ! ======================================================================
 
-   subroutine atm_state_update(this, reader, metrics, t)
+   subroutine atm_state_update(this, reader, metrics, t, dt)
       !! Blend + regrid every one of the nine fields' current bracket,
       !! then (`sw_interp = "coszen"`) restore `rsds`'s diurnal shape
       !! from the held bucket mean -- see the module docstring's `rsds`
@@ -683,12 +709,14 @@ contains
       !! `ocean_data_input_update_all` was just called with -- the
       !! reader enforces this and aborts otherwise (see
       !! `ocean_data_input_update_2d`'s fail-loud freshness check).
+      !! `dt` is the model step `[t, t + dt)` the result is applied
+      !! for (the coszen window; unused under `sw_interp = "linear"`).
       !! `metrics` supplies `geolonT`/`geolatT` for the coszen kernel
       !! (unused, and not read, when `sw_interp = "linear"`).
       class(atm_state_t), intent(inout) :: this
       type(ocean_data_input_t), intent(in) :: reader
       type(ocean_metrics_t), intent(in) :: metrics
-      real(wp), intent(in) :: t
+      real(wp), intent(in) :: t, dt
 
       if (.not. this%enable) return
 
@@ -776,52 +804,44 @@ contains
       end if
 
       if (this%sw_coszen) then
-         call atm_sw_coszen_refresh(this, metrics, t)
+         call atm_sw_coszen_refresh(this, metrics, t, dt)
       else
          call atm_state_copy_impl(this%nx_total, this%ny_total, this%rsds_rec, this%rsds)
       end if
    end subroutine atm_state_update
 
-   subroutine atm_sw_coszen_refresh(this, metrics, t)
+   subroutine atm_sw_coszen_refresh(this, metrics, t, dt)
       !! Host-side Spencer (1971) solar-position scalars (calendar
-      !! arithmetic, not device-safe) for the instantaneous query time
-      !! `t` and `ATM_COSZ_NQUAD` midpoint-quadrature nodes spanning the
-      !! `rsds_rec` bucket `[t_rec, t_rec+3h)`, then ONE device kernel
-      !! (`atm_coszen_apply_impl`) doing the per-cell trigonometry.
+      !! arithmetic, not device-safe) for the UTC 3-hour bucket
+      !! `[t_rec, t_rec + 3 h)` containing `t`, then ONE device kernel
+      !! (`atm_coszen_apply_impl`) doing the per-cell closed-form
+      !! integrals over the step `[t, t + dt)` and over the bucket.
       class(atm_state_t), intent(inout) :: this
       type(ocean_metrics_t), intent(in) :: metrics
-      real(wp), intent(in) :: t
+      real(wp), intent(in) :: t, dt
 
-      real(wp) :: t_rec, t_node, dt_node
-      real(wp) :: hour_frac_inst, decl_inst, eqtime_inst
-      real(wp) :: hour_frac_q(ATM_COSZ_NQUAD), decl_q(ATM_COSZ_NQUAD), &
-                  eqtime_q(ATM_COSZ_NQUAD)
-      real(wp) :: sdec_inst, cdec_inst
-      real(wp) :: sdec_q(ATM_COSZ_NQUAD), cdec_q(ATM_COSZ_NQUAD)
-      integer :: k
+      type(date_t) :: d
+      real(wp) :: sod, t_off, t_rec, hour_frac_rec, hour_frac_mid
+      real(wp) :: decl_mid, eqtime_mid, decl_unused, eqtime_unused
 
-      call atm_spencer_sun(this%epoch, t, hour_frac_inst, decl_inst, eqtime_inst)
+      ! UTC time of day -> position inside the 3-hour bucket.  The JRA55-do
+      ! buckets are fixed to the UTC clock, not to the model's epoch.
+      call seconds_to_date(t, this%epoch, d)
+      sod = real(d%h, wp)*3600.0_wp + real(d%mi, wp)*60.0_wp + d%s
+      t_off = modulo(sod, ATM_SW_BUCKET_S)
+      t_rec = t - t_off
 
-      t_rec = floor(t/ATM_SW_BUCKET_S)*ATM_SW_BUCKET_S
-      dt_node = ATM_SW_BUCKET_S/real(ATM_COSZ_NQUAD, wp)
-      do k = 1, ATM_COSZ_NQUAD
-         t_node = t_rec + (real(k, wp) - 0.5_wp)*dt_node
-         call atm_spencer_sun(this%epoch, t_node, hour_frac_q(k), decl_q(k), eqtime_q(k))
-      end do
-
-      ! Declination sin/cos are scalars of the step: evaluate them once here (the
-      ! same library routine as the kernel's `rdb_sm_*`, so the same bits), not
-      ! once per cell per node.
-      sdec_inst = safe_sin(decl_inst)
-      cdec_inst = safe_cos(decl_inst)
-      sdec_q = safe_sin(decl_q)
-      cdec_q = safe_cos(decl_q)
+      ! Hour of day at the bucket start; declination + equation of time
+      ! frozen at the bucket midpoint (so every step's integral and the
+      ! bucket's come from ONE function and telescope exactly).
+      call atm_spencer_sun(this%epoch, t_rec, hour_frac_rec, decl_unused, eqtime_unused)
+      call atm_spencer_sun(this%epoch, t_rec + 0.5_wp*ATM_SW_BUCKET_S, hour_frac_mid, &
+                           decl_mid, eqtime_mid)
 
       call atm_coszen_apply_impl(this%nx_total, this%ny_total, this%nghost, &
-                                 this%nx_phys, this%ny_phys, ATM_COSZ_NQUAD, &
-                                 hour_frac_q, eqtime_q, &
-                                 hour_frac_inst, sdec_inst, cdec_inst, eqtime_inst, &
-                                 sdec_q, cdec_q, &
+                                 this%nx_phys, this%ny_phys, &
+                                 hour_frac_rec, safe_sin(decl_mid), safe_cos(decl_mid), &
+                                 eqtime_mid, t_off, dt, ATM_SW_BUCKET_S, &
                                  metrics%geolonT, metrics%geolatT, &
                                  this%rsds_rec, this%cosz, this%cosz_mean, this%rsds)
    end subroutine atm_sw_coszen_refresh
@@ -855,31 +875,33 @@ contains
                               - 0.014615_wp*safe_cos(2.0_wp*gamma) - 0.040849_wp*safe_sin(2.0_wp*gamma))
    end subroutine atm_spencer_sun
 
-   pure subroutine atm_coszen_apply_impl(nx_total, ny_total, nghost, nx_phys, ny_phys, nq, &
-                                         hour_frac_q, eqtime_q, &
-                                         hour_frac_inst, sdec_inst, cdec_inst, eqtime_inst, &
-                                         sdec_q, cdec_q, &
+   pure subroutine atm_coszen_apply_impl(nx_total, ny_total, nghost, nx_phys, ny_phys, &
+                                         hour_frac_rec, sdec, cdec, eqtime, t_off, dt, bucket, &
                                          geolonT, geolatT, rsds_rec, cosz, cosz_mean, rsds)
-      !! The ONE device kernel: per physical T-cell, the instantaneous
-      !! `cos Z` (clamped >= 0) at `(hour_frac_inst, decl_inst,
-      !! eqtime_inst)`, the `nq`-point midpoint-quadrature mean of
-      !! `max(0, cos Z)` over the `(hour_frac_q, decl_q, eqtime_q)`
-      !! nodes, and the coszen-restored `rsds`. Explicit-shape
-      !! throughout; no cross-module calls -- every quantity but
-      !! `geolonT`/`geolatT` is a host-precomputed scalar/short array
-      !! (CLAUDE.md `do-concurrent` dummy + device-safety rules).
-      integer, intent(in) :: nx_total, ny_total, nghost, nx_phys, ny_phys, nq
-      real(wp), intent(in) :: hour_frac_q(nq), eqtime_q(nq)
-      real(wp), intent(in) :: sdec_q(nq), cdec_q(nq)
-      real(wp), intent(in) :: hour_frac_inst, sdec_inst, cdec_inst, eqtime_inst
+      !! The ONE device kernel.  Per physical T-cell, with `cos Z(omega) =
+      !! a + b cos omega` (`a = sin(lat) sin(dec)`, `b = cos(lat) cos(dec)`,
+      !! `omega` the hour angle, advancing `ATM_EARTH_OMEGA` rad/s): the
+      !! exact mean of `max(0, cos Z)` over the step `[t, t+dt)` (`cosz`)
+      !! and over the whole `bucket` (`cosz_mean`) -- both differences of
+      !! `atm_cosz_cumulative` -- and `rsds = rsds_rec * cosz /
+      !! cosz_mean` (see the module docstring for the conservation and
+      !! bound this gives).  `t_off` = seconds from the bucket start to
+      !! `t`; `hour_frac_rec` = UTC hour of day at the bucket start;
+      !! `sdec`/`cdec`/`eqtime` frozen at the bucket midpoint.
+      !! Explicit-shape throughout; no cross-module calls -- every quantity
+      !! but `geolonT`/`geolatT` is a host-precomputed scalar.
+      integer, intent(in) :: nx_total, ny_total, nghost, nx_phys, ny_phys
+      real(wp), intent(in) :: hour_frac_rec, sdec, cdec, eqtime, t_off, dt, bucket
       real(wp), intent(in) :: geolonT(nx_total, ny_total), geolatT(nx_total, ny_total)
       real(wp), intent(in) :: rsds_rec(nx_total, ny_total)
       real(wp), intent(inout) :: cosz(nx_total, ny_total), cosz_mean(nx_total, ny_total)
       real(wp), intent(inout) :: rsds(nx_total, ny_total)
 
-      integer :: i, j, ii, jj, k
-      real(wp) :: lat_r, slat, clat, lon_deg, tst_min, ha, cz, acc, mean_val
+      integer :: i, j, ii, jj
+      real(wp) :: lat_r, slat, clat, lon_deg, a, b, w_bucket0, w_step0, ratio
+      real(wp) :: step_mean, bucket_mean, ratio_max
 
+      ratio_max = bucket/dt
       do concurrent(j=1:ny_phys, i=1:nx_phys)
          ii = nghost + i
          jj = nghost + j
@@ -887,29 +909,60 @@ contains
          lon_deg = geolonT(ii, jj)
          slat = rdb_sm_sin(lat_r)
          clat = rdb_sm_cos(lat_r)
+         a = slat*sdec
+         b = clat*cdec
 
-         tst_min = hour_frac_inst*60.0_wp + eqtime_inst + 4.0_wp*lon_deg
-         ha = (tst_min/4.0_wp - 180.0_wp)*DEG2RAD
-         cz = slat*sdec_inst + clat*cdec_inst*rdb_sm_cos(ha)
-         cosz(ii, jj) = max(0.0_wp, cz)
+         ! Hour angle at the bucket start, and at the step start.
+         w_bucket0 = (15.0_wp*hour_frac_rec + 0.25_wp*eqtime + lon_deg - 180.0_wp)*DEG2RAD
+         w_step0 = w_bucket0 + ATM_EARTH_OMEGA*t_off
 
-         acc = 0.0_wp
-         do k = 1, nq
-            tst_min = hour_frac_q(k)*60.0_wp + eqtime_q(k) + 4.0_wp*lon_deg
-            ha = (tst_min/4.0_wp - 180.0_wp)*DEG2RAD
-            cz = slat*sdec_q(k) + clat*cdec_q(k)*rdb_sm_cos(ha)
-            acc = acc + max(0.0_wp, cz)
-         end do
-         mean_val = acc/real(nq, wp)
-         cosz_mean(ii, jj) = mean_val
+         bucket_mean = (atm_cosz_cumulative(w_bucket0 + ATM_EARTH_OMEGA*bucket, a, b) &
+                        - atm_cosz_cumulative(w_bucket0, a, b))/(ATM_EARTH_OMEGA*bucket)
+         step_mean = (atm_cosz_cumulative(w_step0 + ATM_EARTH_OMEGA*dt, a, b) &
+                      - atm_cosz_cumulative(w_step0, a, b))/(ATM_EARTH_OMEGA*dt)
+         bucket_mean = max(0.0_wp, bucket_mean)
+         step_mean = max(0.0_wp, step_mean)
+         cosz(ii, jj) = step_mean
+         cosz_mean(ii, jj) = bucket_mean
 
-         if (mean_val < 1.0e-6_wp) then
+         if (bucket_mean < ATM_COSZ_MEAN_MIN) then
             rsds(ii, jj) = 0.0_wp
          else
-            rsds(ii, jj) = rsds_rec(ii, jj)*cosz(ii, jj)/mean_val
+            ratio = min(step_mean/bucket_mean, ratio_max)
+            rsds(ii, jj) = rsds_rec(ii, jj)*ratio
          end if
       end do
    end subroutine atm_coszen_apply_impl
+
+   pure function atm_cosz_cumulative(x, a, b) result(c)
+      !! Antiderivative `C(x) = Integral_0^x max(0, a + b cos w) dw`
+      !! of the clamped cosine of the zenith angle, `b >= 0`, up to an
+      !! additive constant that cancels in every difference.  Three cases:
+      !! `a >= b` (polar day: never clamped, `C = a x + b sin x`);
+      !! `a + b <= 0` (polar night: `C = 0`); else the Sun is up for
+      !! `|w mod 2 pi| < w0`, `cos w0 = -a/b`, and `C` adds the per-day
+      !! integral `P = 2 (a w0 + b sin w0)` once per elapsed day.
+      !! Device-callable (`routine seq`, same-module).
+      !$acc routine seq
+      real(wp), intent(in) :: x, a, b
+      real(wp) :: c
+
+      real(wp) :: s0, w0, per, y, yc, n
+
+      if (a >= b) then
+         c = a*x + b*rdb_sm_sin(x)
+      else if (a + b <= 0.0_wp) then
+         c = 0.0_wp
+      else
+         s0 = sqrt((b - a)*(b + a))/b
+         w0 = rdb_sm_atan2(s0, -a/b)
+         per = 2.0_wp*(a*w0 + b*s0)
+         n = floor((x + 0.5_wp*TWO_PI)/TWO_PI)
+         y = x - n*TWO_PI
+         yc = max(-w0, min(w0, y))
+         c = n*per + a*(yc + w0) + b*(rdb_sm_sin(yc) + s0)
+      end if
+   end function atm_cosz_cumulative
 
    pure subroutine atm_state_copy_impl(n1, n2, src, dst)
       !! `sw_interp = "linear"` path: `rsds = rsds_rec`, unchanged.
@@ -963,5 +1016,7 @@ contains
 #include "rdb_safe_math_core.inc"
 
 #include "rdb_safe_math_trig.inc"
+
+#include "rdb_safe_math_atan.inc"
 
 end module rdb_atm_state

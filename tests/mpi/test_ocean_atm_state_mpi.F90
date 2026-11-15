@@ -344,7 +344,7 @@ contains
 
       tq = TQ_DAYS*86400.0_wp
       call ocean_data_input_update_all(reader, tq)
-      call atm_state_update(atm, reader, metrics, tq)
+      call atm_state_update(atm, reader, metrics, tq, 3600.0_wp)
       !$acc update self(atm%tas)
 
       ! Production device residency (as `test_ocean_bulk_forcing::run_apply`):

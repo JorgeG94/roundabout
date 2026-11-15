@@ -1997,7 +1997,7 @@ contains
       ! read the SAME reader brackets `ocean_data_input_update_all` just
       ! refreshed, and neither writes a slot the other reads.
       call atm_state_update(engine%state%atm, engine%state%data_input, &
-                            engine%state%metrics, t)
+                            engine%state%metrics, t, dt)
       ! Chlorophyll -> per-band opacities (no-op unless sw_scheme="manizza05").
       call sw_chl_apply(engine%state%sw_chl, engine%state%data_input, engine%grid, &
                         engine%state%multilayer%wet_mask, engine%state%surface_flux, &
