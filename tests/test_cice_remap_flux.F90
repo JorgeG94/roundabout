@@ -47,6 +47,7 @@ module test_cice_remap_flux
    use rdb_ice_transport_cice, only: transport_cice_ws_t, transport_result_t, ice_step_transport, &
                                      ICE_TRANSPORT_POST_NONE, TRANSPORT_CFG_OK, TRANSPORT_CFG_PARAMS, TRANSPORT_CFG_RANGE, &
                                      TRANSPORT_CFG_REMAP
+   use rdb_ice_transport_seam, only: transport_seam_t, seam_pair_fold_flux
    use lcg_deterministic, only: lcg_next, lcg_unit
    implicit none
    private
@@ -103,6 +104,7 @@ contains
                   new_unittest("category_batch_is_bit_identical", test_batch), &
                   new_unittest("tiny_departure_closes_the_flux_adjustment", test_tiny), &
                   new_unittest("nonuniform_metrics_conserve_and_stay_monotone", test_nonuniform), &
+                  new_unittest("fold_row_flux_pairing_kernel", test_fold_pairing), &
                   new_unittest("configuration_refusals_and_halo", test_cfg), &
                   new_unittest("throughput_launches_memory", test_throughput) &
                   ]
@@ -2366,6 +2368,100 @@ write (error_unit, "(a,es10.3)") "  [remap] non-uniform metrics, constant tracer
    ! ------------------------------------------------------------------
    ! (13) configuration refusals and the halo
    ! ------------------------------------------------------------------
+
+   subroutine test_fold_pairing(error)
+      !! The local fold pairing (`px = 1`) of `rdb_ice_transport_seam` on device-mapped flux buffers against a host
+      !! reference, EVERY element (so a wrong-column write cannot hide): in the fold row `je` the west half takes the
+      !! negated flux of its mirror, the east half is untouched, a self-conjugate column (odd width) is zero, every
+      !! other row is unchanged; and a rank without the fold, or with the pairing switched off, changes nothing.
+      type(error_type), allocatable, intent(out) :: error
+      integer, parameter :: NXG = 14, NYG = 11, NB = 3, NT = 4, IS = 4, JE = 8
+      real(wp) :: a(NXG, NYG, NB), at(NXG, NYG, NT, NB), a0(NXG, NYG, NB), at0(NXG, NYG, NT, NB)
+      type(transport_seam_t) :: seam
+      integer(int64) :: st
+      integer :: ie, ni, i, j, b, t, p, pm, itry, nbad
+
+      do itry = 1, 2
+         ie = merge(11, 10, itry == 1)
+         ni = ie - IS + 1
+         st = 99_int64 + int(itry, int64)
+         do b = 1, NB
+            do j = 1, NYG
+               do i = 1, NXG
+                  st = lcg_next(st)
+                  a0(i, j, b) = 2.0_wp*lcg_unit(st) - 1.0_wp
+               end do
+            end do
+         end do
+         do b = 1, NB
+            do t = 1, NT
+               do j = 1, NYG
+                  do i = 1, NXG
+                     st = lcg_next(st)
+                     at0(i, j, t, b) = 2.0_wp*lcg_unit(st) - 1.0_wp
+                  end do
+               end do
+            end do
+         end do
+         a = a0
+         at = at0
+         seam%fold = .true.
+         !$acc enter data copyin(a, at)
+         call seam_pair_fold_flux(seam, NXG, NYG, IS, ie, JE, NB, NT, a, at)
+         !$acc update self(a, at)
+         !$acc exit data delete(a, at)
+         nbad = 0
+         do b = 1, NB
+            do j = 1, NYG
+               do i = 1, NXG
+                  p = i - IS + 1
+                  pm = ni + 1 - p
+                  if (j == JE .and. i >= IS .and. i <= ie .and. p < pm) then
+                     if (a(i, j, b) /= -a0(IS - 1 + pm, j, b)) nbad = nbad + 1
+                     do t = 1, NT
+                        if (at(i, j, t, b) /= -at0(IS - 1 + pm, j, t, b)) nbad = nbad + 1
+                     end do
+                  else if (j == JE .and. i >= IS .and. i <= ie .and. p == pm) then
+                     if (a(i, j, b) /= 0.0_wp) nbad = nbad + 1
+                     do t = 1, NT
+                        if (at(i, j, t, b) /= 0.0_wp) nbad = nbad + 1
+                     end do
+                  else
+                     if (a(i, j, b) /= a0(i, j, b)) nbad = nbad + 1
+                     do t = 1, NT
+                        if (at(i, j, t, b) /= at0(i, j, t, b)) nbad = nbad + 1
+                     end do
+                  end if
+               end do
+            end do
+         end do
+         call check(error, nbad, 0, "fold pairing: every element equals the host reference")
+         if (allocated(error)) return
+         ! the antisymmetry the update relies on, in the paired row itself
+         do b = 1, NB
+            do i = IS, ie
+               if (a(i, JE, b) + a(IS + ie - i, JE, b) /= 0.0_wp) then
+                  call test_failed(error, "fold pairing: F(i) + F(mirror) is not exactly zero")
+                  return
+               end if
+            end do
+         end do
+         ! no fold on this rank / pairing off: untouched
+         a = a0
+         at = at0
+         seam%fold = .false.
+         !$acc enter data copyin(a, at)
+         call seam_pair_fold_flux(seam, NXG, NYG, IS, ie, JE, NB, NT, a, at)
+         seam%fold = .true.
+         seam%pair_fold = .false.
+         call seam_pair_fold_flux(seam, NXG, NYG, IS, ie, JE, NB, NT, a, at)
+         seam%pair_fold = .true.
+         !$acc update self(a, at)
+         !$acc exit data delete(a, at)
+         call check(error, all(a == a0) .and. all(at == at0), "fold pairing: no fold / pairing off must change nothing")
+         if (allocated(error)) return
+      end do
+   end subroutine test_fold_pairing
 
    subroutine test_cfg(error)
       type(error_type), allocatable, intent(out) :: error

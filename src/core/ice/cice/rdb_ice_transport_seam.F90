@@ -182,6 +182,7 @@ contains
       integer :: i, b, t, p, pm, ni
 
       ni = ie - is + 1
+      !$acc data present(mflx_n, mtflx_n)
       do concurrent(b=1:nb, i=is:ie) local(p, pm)
          p = i - is + 1
          pm = ni + 1 - p
@@ -200,6 +201,7 @@ contains
             mtflx_n(i, je, t, b) = 0.0_wp
          end if
       end do
+      !$acc end data
    end subroutine pair_fold_local
 
 end module rdb_ice_transport_seam
