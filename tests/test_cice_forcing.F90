@@ -159,6 +159,7 @@ contains
       nml = "&sim_nml sim_type = 'ocean' /"//NL// &
             "&time_nml t_end = 86400.0, dt_fixed = 600.0, start_date = '2000-01-01' /"//NL// &
             "&nonhydrostatic_nml nz_layers = 3 /"//NL// &
+            "&ocean_diag_nml enabled = .false. /"//NL// &
             "&tracer_nml initial_temperature = -1.0, initial_salinity = 34.0, "// &
             "T_init_surface = -1.0, T_init_bottom = -1.0 /"//NL// &
             "&ocean_bt_nml auto_n_inner = .true. /"//NL// &
@@ -189,6 +190,7 @@ contains
       nml = "&sim_nml sim_type = 'ocean' /"//NL// &
             "&time_nml t_end = 86400.0, dt_fixed = 600.0, start_date = '2000-01-01' /"//NL// &
             "&nonhydrostatic_nml nz_layers = 3 /"//NL// &
+            "&ocean_diag_nml enabled = .false. /"//NL// &
             "&tracer_nml initial_temperature = -1.0, initial_salinity = 34.0, "// &
             "T_init_surface = -1.0, T_init_bottom = -1.0 /"//NL// &
             "&ocean_bt_nml auto_n_inner = .true. /"//NL// &
