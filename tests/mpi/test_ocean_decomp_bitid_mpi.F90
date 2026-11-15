@@ -3141,7 +3141,9 @@ contains
    end subroutine write_input_files
 
    subroutine write_atm_file(path, listname, tas0, huss0, nlon, nlat)
-      !! One global lon-lat file (5 degrees, two time records, all nine CMOR
+      !! One global lon-lat file (5 degrees, NT three-hourly records stamped at
+      !! the interval centres over 2000-06-20..22 -- `sw_interp = 'coszen'` infers
+      !! the averaging interval from the `rsds` axis and needs >= 3 -- all nine CMOR
       !! names) of spatially varying, east-west and north-south ASYMMETRIC
       !! prescribed atmospheric state (affine + sinusoid in lon/lat), plus
       !! the one-line filelist the namelist points at.
@@ -3151,7 +3153,8 @@ contains
       real(wp), parameter :: PI = 3.14159265358979323846_wp
       character(len=4), parameter :: VN(9) = [character(len=4) :: "tas", "huss", "uas", &
                                                                                        "vas", "psl", "rlds", "rsds", "prra", "prsn"]
-      real(wp) :: lon(nlon), lat(nlat), lonb(2, nlon), latb(2, nlat), tax(2), f(nlon, nlat, 2)
+      integer, parameter :: NT = 24
+      real(wp) :: lon(nlon), lat(nlat), lonb(2, nlon), latb(2, nlat), tax(NT), f(nlon, nlat, NT)
       real(wp) :: sx, sy, dlo, dla
       integer :: ncid, dlon_, dlat_, dbnd, dtim, vlon, vlat, vlonb, vlatb, vtim, vf(9)
       integer :: v, i, j, k, ierr, u
@@ -3168,12 +3171,14 @@ contains
          latb(2, j) = -90.0_wp + dla*real(j, wp)
          lat(j) = 0.5_wp*(latb(1, j) + latb(2, j))
       end do
-      tax = [0.0_wp, 10.0_wp]
+      do k = 1, NT
+         tax(k) = 0.125_wp*(real(k, wp) - 0.5_wp)
+      end do
       call nc_create_file(path, ncid)
       call nc_def_dim(ncid, "lon", nlon, dlon_)
       call nc_def_dim(ncid, "lat", nlat, dlat_)
       call nc_def_dim(ncid, "bnds", 2, dbnd)
-      call nc_def_dim(ncid, "time", 2, dtim)
+      call nc_def_dim(ncid, "time", NT, dtim)
       call rdb_def_var_1d(ncid, "lon", dlon_, vlon)
       call rdb_def_var_1d(ncid, "lat", dlat_, vlat)
       call nc_def_var_2d(ncid, "lon_bnds", [dbnd, dlon_], vlonb)
@@ -3190,7 +3195,7 @@ contains
       ierr = nf90_put_var(ncid, vlatb, latb)
       call rdb_put_var_1d(ncid, vtim, tax)
       do v = 1, 9
-         do k = 1, 2
+         do k = 1, NT
             do j = 1, nlat
                do i = 1, nlon
                   sx = sin(2.0_wp*PI*lon(i)/37.0_wp + 0.3_wp)
