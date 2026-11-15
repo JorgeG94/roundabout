@@ -90,6 +90,7 @@ module rdb_config
    public :: diag_density_levels_ok
    public :: dataovr_entry_is_valid, dataovr_time_is_valid
    public :: dataovr_freshwater_needs_components, dataovr_any_tag_set
+   public :: dataovr_heat_salt_clobbers_ice
    public :: build_rdb_schema
    public :: resolve_bt_halo
    public :: bt_dtbt_is_set, bt_split_derived
@@ -4625,6 +4626,14 @@ module rdb_config
          logical, intent(in) :: use_components
          logical :: bad
       end function dataovr_freshwater_needs_components
+
+      pure module function dataovr_heat_salt_clobbers_ice(cfg, use_components, ice_enable) result(bad)
+            !! See submodule [[rdb_config_validate]].
+         implicit none
+         type(ocean_dataovr_config_t), intent(in) :: cfg
+         logical, intent(in) :: use_components, ice_enable
+         logical :: bad
+      end function dataovr_heat_salt_clobbers_ice
 
       pure module function atm_forcing_prereq_code(cfg) result(code)
             !! See submodule [[rdb_config_validate]].

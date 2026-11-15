@@ -114,7 +114,7 @@ their `heat_content_*` companions are enthalpy and salt bookkeeping only. They d
 |---|---|
 | Ice-shelf basal melt, `&ocean_cavity_melt_nml freshwater = "mass"` | Yes. The only one. |
 | Ice-shelf basal melt, `freshwater = "virtual"` (default) | No |
-| Sea ice (`salt_flux`, `heat_added` through the coupler) | No. Virtual. |
+| Sea ice (`salt_ice`, `heat_ice`, `sw_ice` through the coupler) | No. Virtual. |
 | The seven atmospheric/river mass-flux components | No |
 
 Under `"mass"` the melt is a Boussinesq volume source, `dh = m·dt/ρ₀`, added to `h_layer(:,:,nz)` by
