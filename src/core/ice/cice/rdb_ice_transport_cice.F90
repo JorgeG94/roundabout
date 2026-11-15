@@ -139,7 +139,9 @@ module rdb_ice_transport_cice
    use rdb_ice_remap_geom, only: remap_geom_workspace_t
    use rdb_ice_remap_recon, only: recon_table_ok
    use rdb_ice_remap_recon_batch, only: remap_recon_batch_t
-   use rdb_ice_remap_flux, only: remap_flux_workspace_t, remap_ledger_t, remap_advect, remap_default_nbatch, REMAP_CFG_OK, &
+   use pic_logger, only: logger => global_logger
+   use pic_strings, only: to_string
+   use rdb_ice_remap_flux, only: remap_flux_workspace_t, remap_ledger_t, remap_flux_bytes_per_index, remap_advect, remap_default_nbatch, REMAP_CFG_OK, &
                                  REMAP_CFG_TABLE, REMAP_CFG_RANGE
    use rdb_ice_upwind, only: upwind_advect, upwind_empty_tsfc, upwind_table_ok, UPWIND_CFG_OK, UPWIND_CFG_DEPEND, &
                              UPWIND_THICK_FLOOR
@@ -309,6 +311,17 @@ contains
             call this%destroy()
             ierr = TRANSPORT_CFG_REMAP
             return
+         end if
+         call logger%info("ice remap transport workspace: "//to_string(nbatch)//" category index(es) per batch of "// &
+                          to_string(ncat + 1)//", "//to_string(this%bytes())//" bytes in all ("// &
+                          to_string(remap_flux_bytes_per_index(nx, ny, this%ntrace))//" per category index, budget "// &
+                          to_string(bmax)//")")
+         if (remap_flux_bytes_per_index(nx, ny, this%ntrace) > bmax) then
+            call logger%warning("ice remap transport: ONE category index ("// &
+                                to_string(remap_flux_bytes_per_index(nx, ny, this%ntrace))// &
+                                " bytes of flux and reconstruction buffers) exceeds the buffer budget ("// &
+                                to_string(bmax)//" bytes): the batch is one index, the least the scheme can run "// &
+                                "(&ocean_ice_dyn_nml transport_buffer_mib)")
          end if
       end if
       this%is_init = .true.

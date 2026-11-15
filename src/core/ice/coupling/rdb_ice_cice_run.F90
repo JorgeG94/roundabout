@@ -41,6 +41,11 @@ module rdb_ice_cice_run
    private
 
    public :: ice_cice_run_t
+   public :: ICE_LCUM_N, ICE_LCUM_NCLIP, ICE_LCUM_AREA, ICE_LCUM_VICE, ICE_LCUM_VSNO, ICE_LCUM_EICE, ICE_LCUM_ESNO
+
+   integer, parameter :: ICE_LCUM_NCLIP = 1, ICE_LCUM_AREA = 2, ICE_LCUM_VICE = 3, ICE_LCUM_VSNO = 4
+   integer, parameter :: ICE_LCUM_EICE = 5, ICE_LCUM_ESNO = 6, ICE_LCUM_N = 6
+      !! Slots of `ice_cice_run_t%ledger_cum`.
 
    type :: ice_cice_run_t
       logical :: is_init = .false.
@@ -66,8 +71,10 @@ module rdb_ice_cice_run
          !! The result of the LAST transport call (host scalars, not restart state): `tres%ledger` is
          !! what the remap update's guards created or dropped that step (clipped cells and area,
          !! dropped volume and enthalpy content), for the conservation ledger to book.
-      type(remap_ledger_t) :: ledger_cum
-         !! The same, summed over the run (not restart state).
+      real(wp) :: ledger_cum(ICE_LCUM_N) = 0.0_wp
+         !! The same, summed over the whole run (RESTART state: optional scalars `ice_remap_*`, so a resumed run
+         !! continues the total; a checkpoint without them restarts it at 0).  Entries `ICE_LCUM_NCLIP`
+         !! (clipped cells, as a real), `_AREA`, `_VICE`, `_VSNO`, `_EICE`, `_ESNO`: the fields of `remap_ledger_t`.
       type(ice_term_ledger_t) :: ledger
          !! The named-term conservation ledger (`&ocean_ice_nml ledger`; inert otherwise).
       logical :: skip_thermo = .false.
@@ -244,6 +251,12 @@ contains
       call this%work%register_restart(reg)
       call this%avg%register_restart(reg)
       call this%ledger%register_restart(reg)
+      call reg%register_scalar("ice_remap_n_clip", this%ledger_cum(ICE_LCUM_NCLIP), optional=.true.)
+      call reg%register_scalar("ice_remap_clip_area", this%ledger_cum(ICE_LCUM_AREA), optional=.true.)
+      call reg%register_scalar("ice_remap_drop_vice", this%ledger_cum(ICE_LCUM_VICE), optional=.true.)
+      call reg%register_scalar("ice_remap_drop_vsno", this%ledger_cum(ICE_LCUM_VSNO), optional=.true.)
+      call reg%register_scalar("ice_remap_drop_eice", this%ledger_cum(ICE_LCUM_EICE), optional=.true.)
+      call reg%register_scalar("ice_remap_drop_esno", this%ledger_cum(ICE_LCUM_ESNO), optional=.true.)
    end subroutine run_register_restart
 
 end module rdb_ice_cice_run

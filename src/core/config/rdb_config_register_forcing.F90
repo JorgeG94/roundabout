@@ -778,7 +778,8 @@ contains
       pi => cfg%ocean%ice_dyn%transport_buffer_mib
       call gd%add(nml_int("transport_buffer_mib", pi, "advection='remap': memory budget [MiB] of the "// &
                           "flux and reconstruction buffers of one category batch (bigger = fewer "// &
-                          "launches); must be >= 1", dead_on_ocean_path=ICE_DEAD))
+                          "launches); at least one category index per batch whatever the budget; "// &
+                          "must be >= 1", dead_on_ocean_path=ICE_DEAD))
       pi => cfg%ocean%ice_dyn%ndtd
       call gd%add(nml_int("ndtd", pi, "Dynamics substeps per ice step; only 1 is "// &
                           "supported (refused otherwise)", &

@@ -876,7 +876,7 @@ contains
       call parse("&ocean_ice_nml scheme='cice' /"//new_line('a')// &
                  "&ocean_ice_dyn_nml advection='remap' /", cfg, error)
       if (allocated(error)) return
-      call check(error, has_msg(cfg, "advection="), .false., "remap accepted under cice (the scheme itself is still refused: not runnable)")
+      call check(error, has_msg(cfg, "advection="), .false., "remap accepted under cice")
       if (allocated(error)) return
       call parse("&ocean_ice_nml scheme='cice' /"//new_line('a')// &
                  "&ocean_ice_dyn_nml advection='upwind' /", cfg, error)

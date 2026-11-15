@@ -76,6 +76,7 @@ module rdb_ice_cice_hooks
                                  ice_atm_stress_to_faces
    use rdb_ice_dyn_c, only: ice_dyn_c_step, ice_dyn_c_cat_t
    use rdb_ice_transport_cice, only: ice_step_transport, transport_result_t, TRANSPORT_CFG_OK
+   use rdb_ice_cice_run, only: ICE_LCUM_NCLIP, ICE_LCUM_AREA, ICE_LCUM_VICE, ICE_LCUM_VSNO, ICE_LCUM_EICE, ICE_LCUM_ESNO
    use rdb_ice_ridge, only: ice_step_ridge
    use rdb_ice_flux_avg, only: ice_flux_avg_accumulate, ice_flux_avg_stash_pending, ICE_AVG_OK
    use rdb_ice_cice_adapters, only: ice_cice_apply_window, ICE_ADAPT_OK
@@ -503,12 +504,12 @@ contains
       end associate
       ! the step's clip/drop ledger of the remap update, kept for the conservation ledger (module slot)
       S%icec%tres = tres
-      S%icec%ledger_cum%n_clip = S%icec%ledger_cum%n_clip + tres%ledger%n_clip
-      S%icec%ledger_cum%clip_area = S%icec%ledger_cum%clip_area + tres%ledger%clip_area
-      S%icec%ledger_cum%drop_vice = S%icec%ledger_cum%drop_vice + tres%ledger%drop_vice
-      S%icec%ledger_cum%drop_vsno = S%icec%ledger_cum%drop_vsno + tres%ledger%drop_vsno
-      S%icec%ledger_cum%drop_eice = S%icec%ledger_cum%drop_eice + tres%ledger%drop_eice
-      S%icec%ledger_cum%drop_esno = S%icec%ledger_cum%drop_esno + tres%ledger%drop_esno
+      S%icec%ledger_cum(ICE_LCUM_NCLIP) = S%icec%ledger_cum(ICE_LCUM_NCLIP) + real(tres%ledger%n_clip, wp)
+      S%icec%ledger_cum(ICE_LCUM_AREA) = S%icec%ledger_cum(ICE_LCUM_AREA) + tres%ledger%clip_area
+      S%icec%ledger_cum(ICE_LCUM_VICE) = S%icec%ledger_cum(ICE_LCUM_VICE) + tres%ledger%drop_vice
+      S%icec%ledger_cum(ICE_LCUM_VSNO) = S%icec%ledger_cum(ICE_LCUM_VSNO) + tres%ledger%drop_vsno
+      S%icec%ledger_cum(ICE_LCUM_EICE) = S%icec%ledger_cum(ICE_LCUM_EICE) + tres%ledger%drop_eice
+      S%icec%ledger_cum(ICE_LCUM_ESNO) = S%icec%ledger_cum(ICE_LCUM_ESNO) + tres%ledger%drop_esno
       ! A refused step (cell error bits) is reported by the sequencer's post-transport enforcement
       ! with the first offender; only a configuration refusal is a hook failure.
       if (tres%cfg /= TRANSPORT_CFG_OK) status = tres%cfg

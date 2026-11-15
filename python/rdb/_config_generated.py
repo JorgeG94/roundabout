@@ -4334,7 +4334,7 @@ class OceanIceDyn(Group):
 
     transport_buffer_mib = Int(
         'transport_buffer_mib',
-        doc="advection='remap': memory budget [MiB] of the flux and reconstruction buffers of one category batch (bigger = fewer launches); must be >= 1",
+        doc="advection='remap': memory budget [MiB] of the flux and reconstruction buffers of one category batch (bigger = fewer launches); at least one category index per batch whatever the budget; must be >= 1",
         units='',
         required=False,
         default=1024,

@@ -324,14 +324,14 @@ contains
                         ! formed once per run of children of the same parent
                         if (p /= pcur) then
                            pbits = nbits
-                           if (abs(trm(i - 1, j + 1, p, n)) <= puny) pbits = ibclr(pbits, 0)
-                           if (abs(trm(i, j + 1, p, n)) <= puny) pbits = ibclr(pbits, 1)
-                           if (abs(trm(i + 1, j + 1, p, n)) <= puny) pbits = ibclr(pbits, 2)
-                           if (abs(trm(i - 1, j, p, n)) <= puny) pbits = ibclr(pbits, 3)
-                           if (abs(trm(i + 1, j, p, n)) <= puny) pbits = ibclr(pbits, 4)
-                           if (abs(trm(i - 1, j - 1, p, n)) <= puny) pbits = ibclr(pbits, 5)
-                           if (abs(trm(i, j - 1, p, n)) <= puny) pbits = ibclr(pbits, 6)
-                           if (abs(trm(i + 1, j - 1, p, n)) <= puny) pbits = ibclr(pbits, 7)
+                           if (.not. (abs(trm(i - 1, j + 1, p, n)) > puny)) pbits = ibclr(pbits, 0)
+                           if (.not. (abs(trm(i, j + 1, p, n)) > puny)) pbits = ibclr(pbits, 1)
+                           if (.not. (abs(trm(i + 1, j + 1, p, n)) > puny)) pbits = ibclr(pbits, 2)
+                           if (.not. (abs(trm(i - 1, j, p, n)) > puny)) pbits = ibclr(pbits, 3)
+                           if (.not. (abs(trm(i + 1, j, p, n)) > puny)) pbits = ibclr(pbits, 4)
+                           if (.not. (abs(trm(i - 1, j - 1, p, n)) > puny)) pbits = ibclr(pbits, 5)
+                           if (.not. (abs(trm(i, j - 1, p, n)) > puny)) pbits = ibclr(pbits, 6)
+                           if (.not. (abs(trm(i + 1, j - 1, p, n)) > puny)) pbits = ibclr(pbits, 7)
                            pcur = p
                         end if
                         pnw = merge(trm(i - 1, j + 1, nt, n), pc, btest(pbits, 0))

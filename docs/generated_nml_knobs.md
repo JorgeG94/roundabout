@@ -751,7 +751,7 @@ CICE-port ice dynamics and transport knobs (upstream CICE code defaults; the EVP
 | `vel_cap` | `0.1000000000E+02` | m/s | Face speed above which the velocity guard raises ICE_ERR_DYN_VEL (never clamps); must be > 0 |
 | `advection` | `"remap"` |  | Horizontal transport: remap = incremental remapping (Lipscomb and Hunke 2004; upstream default), upwind = first-order upwind |
 | `transport_check` | `.false.` |  | Run the transport checks (non-finite entry, negative area, CFL, conservation of area and tracers, monotonicity) |
-| `transport_buffer_mib` | `1024` |  | advection='remap': memory budget [MiB] of the flux and reconstruction buffers of one category batch (bigger = fewer launches); must be >= 1 |
+| `transport_buffer_mib` | `1024` |  | advection='remap': memory budget [MiB] of the flux and reconstruction buffers of one category batch (bigger = fewer launches); at least one category index per batch whatever the budget; must be >= 1 |
 | `ndtd` | `1` |  | Dynamics substeps per ice step; only 1 is supported (refused otherwise) |
 
 ### &ocean_ice_ic_nml

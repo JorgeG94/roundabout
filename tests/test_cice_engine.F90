@@ -31,8 +31,10 @@ module test_cice_engine
    use rdb_comm_env, only: comm_env_init, comm_env_setup_roles
    use rdb_ice_config, only: ice_config_check, ICE_CONFIG_MSG_LEN, ICE_CONFIG_MAX_MSGS
    use rdb_ice_ledger, only: ice_ledger_mirror_t, ICE_LEDGER_WATER, ICE_LEDGER_SALT, ICE_LEDGER_HEAT
-   use rdb_ice_cice_hooks, only: ice_cice_bind, ice_cice_hooks_manifest
+   use rdb_ice_cice_hooks, only: ice_cice_bind, ice_cice_hooks_manifest, ice_cice_post_enter
+   use rdb_ice_cice_run, only: ICE_LCUM_NCLIP, ICE_LCUM_AREA, ICE_LCUM_VICE, ICE_LCUM_VSNO, ICE_LCUM_EICE, ICE_LCUM_ESNO
    use rdb_ice_step_cice, only: ICE_NSTAGE
+   use rdb_ice_thickness, only: ICE_FERRMAX
    use rdb_ocean_console_stats, only: compute_total_tracer
    implicit none
    private
@@ -60,6 +62,10 @@ module test_cice_engine
       real(wp) :: ocean_heat = 0.0_wp, ocean_salt = 0.0_wp
       real(wp) :: vice_first = 0.0_wp, vice_last = 0.0_wp, aice_max = 0.0_wp
       real(wp) :: ridge_max = 0.0_wp
+      real(wp) :: hr_max = 0.0_wp, hr_sum = 0.0_wp
+         !! Per-step ice heat residual over its bound `0.9 ICE_FERRMAX dt sum(A aice_init)`: max and sum.
+      integer :: hr_n = 0, hr_over = 0
+         !! Steps counted, and steps whose residual exceeded the bound (plus the round-off allowance).
       logical :: finite = .true.
    end type closure_t
 
@@ -78,6 +84,9 @@ contains
                   new_unittest("remap_accepted_and_ledger_exposed", test_remap_config), &
                   new_unittest("remap_smoke_2d_closure", test_remap_smoke), &
                   new_unittest("remap_vs_upwind", test_remap_vs_upwind), &
+                  new_unittest("remap_channel_closure", test_remap_channel), &
+                  new_unittest("shift_equivariance_remap", test_shift_remap), &
+                  new_unittest("shift_equivariance_upwind", test_shift_upwind), &
                   new_unittest("remap_restart_round_trip", test_remap_restart), &
                   new_unittest("restart_round_trip", test_restart), &
                   new_unittest("consumers_follow", test_consumers), &
@@ -271,6 +280,7 @@ contains
       integer, intent(in) :: ratio
       type(ice_ledger_mirror_t) :: led
       real(wp) :: h0, s0, h1, s1, sum_h, sum_s, prev_h, prev_s, win_h, dh, ds, hext, scl, efrz, spent, stock
+      real(wp) :: asum, hbound, hratio
       integer :: n, i, j, ng, is, ie, js, je
       real(wp), allocatable :: area(:, :), acc_fs(:, :), acc_fr(:, :)
 
@@ -320,7 +330,24 @@ contains
                   acc_fr(i, j) = acc_fr(i, j) + f%fresh(i, j)*DT
                end do
             end do
+            ! the remap update's guards drop content from the ice state outside the flux terms: the energy
+            ! they remove (ice enthalpy, snow enthalpy out of the packed frame) is an external change
+            hext = hext - (engine%state%icec%tres%ledger%drop_eice &
+                           + engine%state%icec%tres%ledger%drop_esno &
+                           - c%p%c%rhos*c%p%c%Lfresh*engine%state%icec%tres%ledger%drop_vsno)
             call led%close(c, f, engine%state%ice_cgrid%tarea, 0.0_wp, hext)
+            asum = 0.0_wp
+            do j = js, je
+               do i = is, ie
+                  asum = asum + area(i, j)*c%aice_init(i, j)
+               end do
+            end do
+            hbound = 0.9_wp*ICE_FERRMAX*DT*asum
+            hratio = abs(led%res(ICE_LEDGER_HEAT))/max(hbound, tiny(1.0_wp))
+            cl%hr_max = max(cl%hr_max, hratio)
+            cl%hr_sum = cl%hr_sum + hratio
+            cl%hr_n = cl%hr_n + 1
+            if (abs(led%res(ICE_LEDGER_HEAT)) > hbound + 1.0e-12_wp*led%scale(ICE_LEDGER_HEAT)) cl%hr_over = cl%hr_over + 1
             cl%water = max(cl%water, abs(led%res(ICE_LEDGER_WATER))/max(led%scale(ICE_LEDGER_WATER), tiny(1.0_wp)))
             cl%salt = max(cl%salt, abs(led%res(ICE_LEDGER_SALT))/max(led%scale(ICE_LEDGER_SALT), tiny(1.0_wp)))
             cl%heat = max(cl%heat, abs(led%res(ICE_LEDGER_HEAT))/max(led%scale(ICE_LEDGER_HEAT), tiny(1.0_wp)))
@@ -501,6 +528,8 @@ contains
       type(closure_t), intent(in) :: cl
       write (*, '(a,a,5(1x,es10.3),a,3(1x,es10.3))') "  closure ", label, cl%water, cl%salt, cl%heat, cl%ocean_heat, &
          cl%ocean_salt, "  vice0/vice1/aice_max", cl%vice_first, cl%vice_last, cl%aice_max
+ write (*, '(a,a,2(1x,es10.3),a,i0,a,i0)') "  heat residual / BL99 bound ", label, cl%hr_max, cl%hr_sum/real(max(cl%hr_n, 1), wp), &
+         " (max, mean) steps over the bound: ", cl%hr_over, " of ", cl%hr_n
    end subroutine report_closure
 
    subroutine test_column_growth(error)
@@ -606,6 +635,7 @@ contains
       if (.not. allocated(error)) call check(error, cl%aice_max <= 1.0_wp + 1.0e-9_wp, "ice area <= 1 after every step")
      if (.not. allocated(error)) call check(error, cl%water < 1.0e-9_wp, "water conserved against the fluxes (transport + ridging)")
       if (.not. allocated(error)) call check(error, cl%salt < 1.0e-9_wp, "salt conserved against the fluxes")
+      if (.not. allocated(error)) call check(error, cl%hr_over == 0, "ice heat: every step within the BL99 energy-error bound")
       if (.not. allocated(error)) call check(error, cl%ridge_max > 0.0_wp, "ridging happens under convergence")
       if (.not. allocated(error)) call check(error, cl%ocean_heat < 1.0e-8_wp, "ocean heat = what the ice handed over")
       if (.not. allocated(error)) call check(error, cl%ocean_salt < 1.0e-9_wp, "ocean salt = virtual-salt hand-off")
@@ -642,12 +672,12 @@ contains
       if (.not. allocated(error)) call check(error, engine%state%icec%tres%stepped, "the transport stepped")
       if (.not. allocated(error)) call check(error, engine%state%icec%tres%ierr == 0, "no transport error bit")
       if (.not. allocated(error)) then
-         call check(error, ieee_is_finite(engine%state%icec%ledger_cum%clip_area + engine%state%icec%ledger_cum%drop_vice), &
+      call check(error, ieee_is_finite(engine%state%icec%ledger_cum(ICE_LCUM_AREA) + engine%state%icec%ledger_cum(ICE_LCUM_VICE)), &
                     "the clip ledger is finite")
-         write (*, '(a,i0,5(1x,es10.2))') "  transport ledger, 6 steps: clipped cells, area, vice, vsno, eice, esno:", &
-            engine%state%icec%ledger_cum%n_clip, engine%state%icec%ledger_cum%clip_area, &
-            engine%state%icec%ledger_cum%drop_vice, engine%state%icec%ledger_cum%drop_vsno, &
-            engine%state%icec%ledger_cum%drop_eice, engine%state%icec%ledger_cum%drop_esno
+         write (*, '(a,6(1x,es10.2))') "  transport ledger, 6 steps: clipped cells, area, vice, vsno, eice, esno:", &
+            engine%state%icec%ledger_cum(ICE_LCUM_NCLIP), engine%state%icec%ledger_cum(ICE_LCUM_AREA), &
+            engine%state%icec%ledger_cum(ICE_LCUM_VICE), engine%state%icec%ledger_cum(ICE_LCUM_VSNO), &
+            engine%state%icec%ledger_cum(ICE_LCUM_EICE), engine%state%icec%ledger_cum(ICE_LCUM_ESNO)
       end if
       call finish_engine(engine)
    end subroutine test_remap_config
@@ -668,14 +698,14 @@ contains
       call run_closed(engine, cfg, t, 300, ok, cl, 180.0_wp, 2)
       call check(error, ok, "300 steps of the closed basin ran with remap")
       if (.not. allocated(error)) call report_closure("basin remap (water salt heat | ocean heat salt)", cl)
-      if (.not. allocated(error)) write (*, '(a,i0,5(1x,es10.2))') "  remap ledger over the run (n_clip, area, vice, vsno, eice, esno): ", &
-         engine%state%icec%ledger_cum%n_clip, engine%state%icec%ledger_cum%clip_area, engine%state%icec%ledger_cum%drop_vice, &
-         engine%state%icec%ledger_cum%drop_vsno, engine%state%icec%ledger_cum%drop_eice, engine%state%icec%ledger_cum%drop_esno
+ if (.not. allocated(error)) write (*, '(a,6(1x,es10.2))') "  remap ledger over the run (n_clip, area, vice, vsno, eice, esno): ", &
+         engine%state%icec%ledger_cum(ICE_LCUM_NCLIP), engine%state%icec%ledger_cum(ICE_LCUM_AREA), engine%state%icec%ledger_cum(ICE_LCUM_VICE), &
+         engine%state%icec%ledger_cum(ICE_LCUM_VSNO), engine%state%icec%ledger_cum(ICE_LCUM_EICE), engine%state%icec%ledger_cum(ICE_LCUM_ESNO)
       if (.not. allocated(error)) call check(error, cl%finite, "finite, no error bit in any cell")
       if (.not. allocated(error)) call check(error, cl%aice_max <= 1.0_wp + 1.0e-9_wp, "ice area <= 1 after every step")
      if (.not. allocated(error)) call check(error, cl%water < 1.0e-9_wp, "water conserved against the fluxes (transport + ridging)")
       if (.not. allocated(error)) call check(error, cl%salt < 1.0e-9_wp, "salt conserved against the fluxes")
-      if (.not. allocated(error)) call check(error, cl%heat < 1.0e-6_wp, "ice heat against the fluxes (upwind: 2.3e-7, the line's own bookkeeping level)")
+      if (.not. allocated(error)) call check(error, cl%hr_over == 0, "ice heat: every step within the BL99 energy-error bound")
       if (.not. allocated(error)) call check(error, cl%ridge_max > 0.0_wp, "ridging happens under convergence")
       if (.not. allocated(error)) call check(error, cl%ocean_heat < 1.0e-8_wp, "ocean heat = what the ice handed over")
       if (.not. allocated(error)) call check(error, cl%ocean_salt < 1.0e-9_wp, "ocean salt = virtual-salt hand-off")
@@ -726,6 +756,169 @@ write (*, '(a,2es12.4,a,2es12.4)') "  basin 200 steps: total ice volume upwind/r
       call finish_engine(eu)
       call finish_engine(er)
    end subroutine test_remap_vs_upwind
+
+   function channel_flat_nml(adv) result(nml)
+      !! The periodic channel (x periodic, walls south/north) with a FLAT bed: x-uniform geometry, forcing
+      !! and ocean state.
+      character(len=*), intent(in) :: adv
+      character(len=:), allocatable :: nml
+      nml = replace(case_nml("channel"), "topo_config = 'seamount', max_depth = 1000.0, edge_depth = 800.0, "// &
+                    "slope_scale = 60000.0", "topo_config = 'flat', max_depth = 1000.0")
+      nml = replace(nml, "advection = 'upwind'", "advection = '"//adv//"'")
+   end function channel_flat_nml
+
+   subroutine test_remap_channel(error)
+      !! The closed-run conservation of the periodic channel under remap: a stale periodic ghost would leak
+      !! through the seam.
+      type(error_type), allocatable, intent(out) :: error
+      type(ocean_engine_t), target :: engine
+      type(config_t) :: cfg
+      type(closure_t) :: cl
+      real(wp) :: t
+      logical :: ok
+
+      call make_engine(engine, cfg, channel_flat_nml("remap"), ok)
+      call check(error, ok, "engine setup failed")
+      if (allocated(error)) return
+      t = 0.0_wp
+      call run_closed(engine, cfg, t, 200, ok, cl, 180.0_wp, 2)
+      call check(error, ok, "200 steps of the periodic channel ran with remap")
+      if (.not. allocated(error)) call report_closure("channel remap (water salt heat | ocean heat salt)", cl)
+      if (.not. allocated(error)) call check(error, cl%finite, "finite, no error bit in any cell")
+      if (.not. allocated(error)) call check(error, cl%water < 1.0e-9_wp, "water conserved through the seam")
+      if (.not. allocated(error)) call check(error, cl%salt < 1.0e-9_wp, "salt conserved through the seam")
+      if (.not. allocated(error)) call check(error, cl%hr_over == 0, "ice heat: every step within the BL99 energy-error bound")
+      if (.not. allocated(error)) call check(error, cl%ocean_heat < 1.0e-8_wp, "ocean heat = what the ice handed over")
+      if (.not. allocated(error)) call check(error, cl%ocean_salt < 1.0e-9_wp, "ocean salt = virtual-salt hand-off")
+      call finish_engine(engine)
+   end subroutine test_remap_channel
+
+   subroutine apply_shifted_feature(engine, k)
+      !! Overwrite the ice state of an engine (host, then device) by its x-uniform initial state times a
+      !! factor `f(ix - k)`, `f = 1` on cells 5..10 and 0.3 elsewhere (periodic in x, ghosts included): the
+      !! area, volumes and snow volume scale together, so the thicknesses and every tracer are unchanged.
+      type(ocean_engine_t), intent(inout), target :: engine
+      integer, intent(in) :: k
+      integer :: i, j, n, ng, nxp, ix
+      real(wp) :: fac
+
+      ng = engine%grid%nghost
+      nxp = engine%grid%nx_phys
+      associate (c => engine%state%ice%cice)
+         !$acc update self(c%aicen, c%vicen, c%vsnon, c%aice0)
+         do j = 1, c%ny
+            do i = 1, c%nx
+               ix = 1 + modulo(i - ng - 1 - k, nxp)
+               fac = merge(1.0_wp, 0.3_wp, ix >= 5 .and. ix <= 10)
+               do n = 1, c%ncat
+                  c%aicen(i, j, n) = c%aicen(i, j, n)*fac
+                  c%vicen(i, j, n) = c%vicen(i, j, n)*fac
+                  c%vsnon(i, j, n) = c%vsnon(i, j, n)*fac
+               end do
+               c%aice0(i, j) = 1.0_wp - sum(c%aicen(i, j, :))
+            end do
+         end do
+         !$acc update device(c%aicen, c%vicen, c%vsnon, c%aice0)
+      end associate
+      call ice_cice_post_enter(engine%state)
+   end subroutine apply_shifted_feature
+
+   subroutine compare_shifted(error, sa, sb, k, ng, nxp, label)
+      !! `sb` (the run with the feature shifted by `k`) equals `sa` shifted by `k` in x, bit for bit, on the owned
+      !! columns of every restart-registry field (ocean and ice).
+      type(error_type), allocatable, intent(out) :: error
+      type(snapshot_t), intent(in) :: sa, sb
+      integer, intent(in) :: k, ng, nxp
+      character(len=*), intent(in) :: label
+      integer :: e, i, j, kk, ia, nbad, nb
+      character(len=:), allocatable :: msg
+
+      nbad = 0
+      msg = ""
+      do e = 1, sa%n
+         if (size(sa%f(e)%a, 2) == 1 .and. size(sa%f(e)%a, 1) == 1) then
+            ! host scalars (window counters, ...)
+            if (transfer(sa%f(e)%a(1, 1, 1), 0_int64) /= transfer(sb%f(e)%a(1, 1, 1), 0_int64)) then
+               nbad = nbad + 1
+               msg = msg//" "//trim(sa%f(e)%tag)
+            end if
+            cycle
+         end if
+         nb = 0
+         do kk = 1, size(sa%f(e)%a, 3)
+            do j = 1, size(sa%f(e)%a, 2)
+               do i = ng + 1, ng + nxp
+                  ia = ng + 1 + modulo(i - ng - 1 - k, nxp)
+                  if (transfer(sb%f(e)%a(i, j, kk), 0_int64) /= transfer(sa%f(e)%a(ia, j, kk), 0_int64)) then
+                     if (nb == 0) write (*, '(a,a,a,3(1x,i0),a,es24.16,a,es24.16)') label, ": ", trim(sa%f(e)%tag)//" first at", &
+                        i, j, kk, ": shifted run ", sb%f(e)%a(i, j, kk), " vs reference ", sa%f(e)%a(ia, j, kk)
+                     nb = nb + 1
+                  end if
+               end do
+            end do
+         end do
+         if (nb > 0) then
+            nbad = nbad + 1
+            msg = msg//" "//trim(sa%f(e)%tag)
+         end if
+      end do
+      call check(error, nbad == 0, "shift equivariance "//label//": fields differ:"//msg)
+   end subroutine compare_shifted
+
+   subroutine shift_case(error, adv, k, nsteps)
+      type(error_type), allocatable, intent(out) :: error
+      character(len=*), intent(in) :: adv
+      integer, intent(in) :: k, nsteps
+      type(ocean_engine_t), target :: ea, eb
+      type(config_t) :: cfg_a, cfg_b
+      type(snapshot_t) :: sa, sb
+      real(wp) :: t_a, t_b, umax
+      logical :: ok
+      character(len=64) :: label
+
+      write (label, '(a,a,i0)') trim(adv), " k=", k
+      call make_engine(ea, cfg_a, channel_flat_nml(adv), ok)
+      call check(error, ok, "engine A setup failed")
+      if (allocated(error)) return
+      call make_engine(eb, cfg_b, channel_flat_nml(adv), ok)
+      call check(error, ok, "engine B setup failed")
+      if (allocated(error)) then
+         call finish_engine(ea)
+         return
+      end if
+      call apply_shifted_feature(ea, 0)
+      call apply_shifted_feature(eb, k)
+      t_a = 0.0_wp
+      t_b = 0.0_wp
+      call advance(ea, cfg_a, t_a, nsteps, ok)
+      call check(error, ok, "engine A ran")
+      if (.not. allocated(error)) call advance(eb, cfg_b, t_b, nsteps, ok)
+      if (.not. allocated(error)) call check(error, ok, "engine B ran")
+      if (.not. allocated(error)) then
+         call take_snapshot(ea, sa)
+         call take_snapshot(eb, sb)
+         !$acc update self(ea%state%ice%u_ice)
+         umax = maxval(abs(ea%state%ice%u_ice))
+         call check(error, umax > 1.0e-7_wp, "the ice moves in the equivariance case")
+         if (.not. allocated(error)) call compare_shifted(error, sa, sb, k, ea%grid%nghost, ea%grid%nx_phys, trim(label))
+      end if
+      call finish_engine(ea)
+      call finish_engine(eb)
+   end subroutine shift_case
+
+   subroutine test_shift_remap(error)
+      type(error_type), allocatable, intent(out) :: error
+      call shift_case(error, "remap", 1, 8)
+      if (allocated(error)) return
+      call shift_case(error, "remap", 20, 8)     ! the feature crosses the periodic seam (cells 25..30 -> 1..6)
+   end subroutine test_shift_remap
+
+   subroutine test_shift_upwind(error)
+      type(error_type), allocatable, intent(out) :: error
+      call shift_case(error, "upwind", 1, 8)
+      if (allocated(error)) return
+      call shift_case(error, "upwind", 20, 8)
+   end subroutine test_shift_upwind
 
    subroutine test_melt_cap_pending(error)
       !! Ratio 3, a warm ocean offering a small melt potential (`hfreeze` tiny): the ice draws about half
@@ -1130,6 +1323,9 @@ write (*, '(a,2es12.4,a,2es12.4)') "  basin 200 steps: total ice volume upwind/r
       call advance(ea, cfg_a, t_a, nw, ok)
       call check(error, ok, "engine A failed before the checkpoint")
       if (allocated(error)) return
+      ! a non-zero remap ledger total must survive the checkpoint (it is restart state)
+      ea%state%icec%ledger_cum(ICE_LCUM_AREA) = 1.5e-3_wp
+      ea%state%icec%ledger_cum(ICE_LCUM_NCLIP) = 3.0_wp
       call ocean_state_restart_write(ea%state, ea%grid, ea%decomp, FN, t_a, nw, ierr=ierr)
       call check(error, ierr == OCEAN_STATUS_OK, "checkpoint write failed")
       if (allocated(error)) return
@@ -1148,6 +1344,9 @@ write (*, '(a,2es12.4,a,2es12.4)') "  basin 200 steps: total ice volume upwind/r
       call check(error, ok, "engine B (warm restart) setup failed")
       if (allocated(error)) return
       call check(error, step_b == nw .and. eb%warm_restart, "warm restart taken at the written step")
+      if (allocated(error)) return
+      call check(error, eb%state%icec%ledger_cum(ICE_LCUM_AREA) == 1.5e-3_wp .and. &
+                 eb%state%icec%ledger_cum(ICE_LCUM_NCLIP) == 3.0_wp, "the remap ledger total is restored")
       if (allocated(error)) return
       call take_snapshot(eb, sb0)
       call compare(error, sa0, sb0, "at the resume point", n_new)
