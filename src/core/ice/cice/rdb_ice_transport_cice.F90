@@ -111,11 +111,21 @@ module rdb_ice_transport_cice
    !! step needs.  (a) EVERY decision is rank-uniform: the counts and the error word
    !! of the CFL check, the pack, the entry checks, the geometry, the reconstruction
    !! input, the result checks and the unpack are summed (OR-ed) over the ranks before
-   !! the step goes on or stops, so `res%ierr`, `res%n_*` and `res%cfg` are the same
-   !! on every rank (`res%ledger` stays this rank's owned sum; the ledger reduces it);
-   !! (b) the EFP sums "before"/"after" are combined bin-wise over the ranks, so the
+   !! the step goes on or stops, so `res%ierr` and `res%cfg` are the same on every rank
+   !! (`res%ledger` stays this rank's owned sum; the ledger reduces it).  The configuration
+   !! verdict (tile range, table, workspace) and the `ok` flags of the conservation sums and
+   !! the bounds are reduced too (a refusing or unable tile refuses/disables everywhere).  The
+   !! counts `res%n_*` are decomposition-DEPENDENT diagnostics: the CFL check and the entry
+   !! checks run over the ghost rings, so a seam face or cell is counted by both ranks, and a
+   !! failure with no cell of its own marks the first owned cell of EVERY rank; only their
+   !! being zero or not is serial-equal.  (b) the category BATCH is the minimum of the ranks'
+   !! capacities (`w%seam%nbatch`, set by `ice_transport_seam_bind`): the fold pairing is a
+   !! collective per batch, so tiles of different width (hence different buffers under the
+   !! same `transport_buffer_mib`) must still run the same batches.  Binding the seam is
+   !! REQUIRED before a multi-rank call;
+   !! (c) the EFP sums "before"/"after" are combined bin-wise over the ranks, so the
    !! conservation comparison and `res%worst_rel` are the global ones, bitwise the
-   !! same for every layout; (c) at the fold the north fluxes of the fold row are
+   !! same for every layout; (d) at the fold the north fluxes of the fold row are
    !! PAIRED before the update (what leaves a cell enters its mirror cell in the same
    !! bits), locally at `px = 1` and by the ocean's owner-routed fold exchange at
    !! `px > 1`.  Each face flux is otherwise computed by both cells it joins from the
@@ -156,7 +166,7 @@ module rdb_ice_transport_cice
                                        transport_check_finite, transport_check_neg_area, transport_check_cfl, &
                                        transport_conserved_sums, transport_bounds, transport_check_monotone
    use rdb_ice_remap_geom, only: remap_geom_workspace_t
-   use rdb_ice_transport_seam, only: transport_seam_t, seam_sum_int, seam_sum_one, seam_or_bits, seam_sum_efp
+   use rdb_ice_transport_seam, only: transport_seam_t, seam_sum_int, seam_sum_one, seam_or_bits, seam_sum_efp, seam_all_true
    use rdb_ice_remap_recon, only: recon_table_ok
    use rdb_ice_remap_recon_batch, only: remap_recon_batch_t
    use pic_logger, only: logger => global_logger
@@ -463,57 +473,54 @@ contains
 
       res%ierr = ICE_ERR_NONE
       res%cfg = TRANSPORT_CFG_OK
-      if (.not. w%is_init) then
-         res%cfg = TRANSPORT_CFG_WORKSPACE
-         return
-      end if
       nxg = w%nx
       nyg = w%ny
       ncatg = w%ncat
       nilg = w%nilyr
       nslg = w%nslyr
       ntrg = w%ntrace
-      if (.not. ice_transport_params_valid(p%transport) &
-          .or. p%ncat /= ncatg .or. p%nilyr /= nilg .or. p%nslyr /= nslg) then
-         res%cfg = TRANSPORT_CFG_PARAMS
+      remap = p%transport%advection == ICE_ADVECT_REMAP
+      pi0 = is - 1
+      pi1 = ie + 1
+      pj0 = js - 1
+      pj1 = je + 1
+      ! Configuration verdict.  It depends on rank-local facts (tile shape, workspace), and every later step is
+      ! collective, so it is taken over the ranks: one refusing tile refuses the call on every rank.
+      cfg = TRANSPORT_CFG_OK
+      if (.not. w%is_init) then
+         cfg = TRANSPORT_CFG_WORKSPACE
+      else if (.not. ice_transport_params_valid(p%transport) &
+               .or. p%ncat /= ncatg .or. p%nilyr /= nilg .or. p%nslyr /= nslg) then
+         cfg = TRANSPORT_CFG_PARAMS
+      else if (remap) then
+         if (.not. (present(dxU) .and. present(dyU) .and. present(earea) .and. present(narea) .and. present(uvm))) then
+            cfg = TRANSPORT_CFG_PARAMS
+         else if (.not. w%remap) then
+            cfg = TRANSPORT_CFG_REMAP
+         else if (.not. recon_table_ok(w%a)) then
+            cfg = TRANSPORT_CFG_TABLE
+         else if (is < 4 .or. ie > nxg - 3 .or. js < 4 .or. je > nyg - 3 .or. ie < is .or. je < js) then
+            ! three ghost cells: the departure geometry reads `earea` three cells to the west / south of the window
+            cfg = TRANSPORT_CFG_RANGE
+         end if
+      else
+         if (.not. upwind_table_ok(w%a)) then
+            cfg = TRANSPORT_CFG_TABLE
+         else if (is < 2 .or. ie > nxg - 1 .or. js < 2 .or. je > nyg - 1 .or. ie < is .or. je < js) then
+            cfg = TRANSPORT_CFG_RANGE
+         end if
+      end if
+      ni = merge(1, 0, cfg /= TRANSPORT_CFG_OK)
+      call seam_sum_one(w%seam, ni)
+      if (ni > 0) then
+         res%cfg = merge(cfg, TRANSPORT_CFG_WORKSPACE, cfg /= TRANSPORT_CFG_OK)
          return
       end if
-      remap = p%transport%advection == ICE_ADVECT_REMAP
       if (remap) then
-         if (.not. (present(dxU) .and. present(dyU) .and. present(earea) .and. present(narea) .and. present(uvm))) then
-            res%cfg = TRANSPORT_CFG_PARAMS
-            return
-         end if
-         if (.not. w%remap) then
-            res%cfg = TRANSPORT_CFG_REMAP
-            return
-         end if
-         if (.not. recon_table_ok(w%a)) then
-            res%cfg = TRANSPORT_CFG_TABLE
-            return
-         end if
-         ! three ghost cells: the departure geometry reads `earea` three cells to the west / south of the window
-         if (is < 4 .or. ie > nxg - 3 .or. js < 4 .or. je > nyg - 3 .or. ie < is .or. je < js) then
-            res%cfg = TRANSPORT_CFG_RANGE
-            return
-         end if
          pi0 = is - 2
          pi1 = ie + 2
          pj0 = js - 2
          pj1 = je + 2
-      else
-         if (.not. upwind_table_ok(w%a)) then
-            res%cfg = TRANSPORT_CFG_TABLE
-            return
-         end if
-         if (is < 2 .or. ie > nxg - 1 .or. js < 2 .or. je > nyg - 1 .or. ie < is .or. je < js) then
-            res%cfg = TRANSPORT_CFG_RANGE
-            return
-         end if
-         pi0 = is - 1
-         pi1 = ie + 1
-         pj0 = js - 1
-         pj1 = je + 1
       end if
       puny = p%c%puny
       check = p%transport%check
@@ -562,10 +569,11 @@ contains
                                        w%a%aim, w%a%trm, w%before, ok)
          call seam_sum_efp(w%seam, w%nq, w%before)
          res%n_launch = res%n_launch + 2
-         res%conserv_done = ok
+         res%conserv_done = seam_all_true(w%seam, ok)
          if (w%chk%has_bounds) then
             call transport_bounds(w%chk, nxg, nyg, ncatg, ntrg, is + 1, ie - 1, js + 1, je - 1, puny, &
                                   w%a%tab%tracer_type(1:ntrg), w%a%tab%depend(1:ntrg), w%a%aim, w%a%trm, okb)
+            okb = seam_all_true(w%seam, okb)
             res%n_launch = res%n_launch + 1
          end if
       end if

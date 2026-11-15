@@ -1898,6 +1898,18 @@ contains
          call geo_destroy(h)
          return
       end if
+      ! a NaN area on that face is not "zero": the edge stays active and raises the bit
+      g%HTE(ei, ej) = 0.0_wp
+      g%u(ei + 1, ej) = 0.0_wp
+      g%earea(ei, ej) = ieee_value(1.0_wp, ieee_quiet_nan)
+      call geo_run(g, 1)
+      if (iand(g%ierr(ei, ej), ICE_ERR_NONFINITE) == 0_int32) then
+         call test_failed(error, "zero-area face: a NaN area must raise the non-finite bit, not be treated as zero")
+         call geo_destroy(g)
+         call geo_destroy(h)
+         return
+      end if
+      g%earea(ei, ej) = 0.0_wp
       ! a prescribed area on a zero-area cell is NOT dropped: fatal bit, no triangle
       g%HTE(ei, ej) = 1.0e4_wp
       g%u(ei + 1, ej) = 0.05_wp*g%dxU(1, 1)

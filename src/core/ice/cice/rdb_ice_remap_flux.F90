@@ -131,7 +131,7 @@ module rdb_ice_remap_flux
    use rdb_ice_remap_recon_batch, only: remap_recon_batch_t, remap_recon_batch, remap_input_check, RECON_CFG_OK, &
                                         RECON_CFG_TABLE, RECON_CFG_RANGE, RECON_CFG_MASK
    use rdb_ice_transport_pack, only: transport_workspace_t
-   use rdb_ice_transport_seam, only: transport_seam_t, seam_sum_int, seam_pair_fold_flux
+   use rdb_ice_transport_seam, only: transport_seam_t, seam_sum_int, seam_sum_one, seam_pair_fold_flux
    implicit none
    private
 
@@ -750,7 +750,7 @@ contains
       integer :: gv(NGV)
       integer :: lnc
       real(wp) :: lca, lvi, lvs, lei, les
-      integer :: nlo, nhi, nbb, nnn, rcfg, i0, i1, j0, j1
+      integer :: nlo, nhi, nbb, nnn, rcfg, i0, i1, j0, j1, nbe
 
       if (present(seam)) sm = seam
       nbad = 0
@@ -760,25 +760,30 @@ contains
       nrecon = 0
       nlaunch = 0
       cfg = REMAP_CFG_OK
+      ! configuration refusals: rank-local facts (tile shape, workspaces) that gate every later collective, so the verdict
+      ! is taken over the ranks: one refusing tile refuses the step everywhere (a rank that only agrees gets WORKSPACE)
       if (.not. (ws%is_init .and. wso%is_init .and. gw%is_init .and. rb%is_init .and. fw%is_init)) then
          cfg = REMAP_CFG_WORKSPACE
-         return
-      end if
-      if (ws%nx /= wso%nx .or. ws%ny /= wso%ny .or. ws%ncat /= wso%ncat .or. ws%ntrace /= wso%ntrace &
-          .or. gw%nx /= ws%nx .or. gw%ny /= ws%ny .or. rb%nx /= ws%nx .or. rb%ny /= ws%ny &
-          .or. rb%ncat /= ws%ncat .or. rb%ntrace /= ws%ntrace .or. rb%nbatch /= fw%nbatch .or. fw%nx /= ws%nx &
-          .or. fw%ny /= ws%ny .or. fw%ncat /= ws%ncat .or. fw%ntrace /= ws%ntrace) then
+      else if (ws%nx /= wso%nx .or. ws%ny /= wso%ny .or. ws%ncat /= wso%ncat .or. ws%ntrace /= wso%ntrace &
+               .or. gw%nx /= ws%nx .or. gw%ny /= ws%ny .or. rb%nx /= ws%nx .or. rb%ny /= ws%ny &
+               .or. rb%ncat /= ws%ncat .or. rb%ntrace /= ws%ntrace .or. rb%nbatch /= fw%nbatch .or. fw%nx /= ws%nx &
+               .or. fw%ny /= ws%ny .or. fw%ncat /= ws%ncat .or. fw%ntrace /= ws%ntrace) then
          cfg = REMAP_CFG_WORKSPACE
-         return
-      end if
-      if (.not. recon_table_ok(ws)) then
+      else if (.not. recon_table_ok(ws)) then
          cfg = REMAP_CFG_TABLE
-         return
-      end if
-      if (is < 4 .or. js < 4 .or. ie > ws%nx - 3 .or. je > ws%ny - 3 .or. ie < is .or. je < js) then
+      else if (is < 4 .or. js < 4 .or. ie > ws%nx - 3 .or. je > ws%ny - 3 .or. ie < is .or. je < js) then
          cfg = REMAP_CFG_RANGE
+      end if
+      gv(1) = merge(1, 0, cfg /= REMAP_CFG_OK)
+      call seam_sum_one(sm, gv(1))
+      if (gv(1) > 0) then
+         if (cfg == REMAP_CFG_OK) cfg = REMAP_CFG_WORKSPACE
          return
       end if
+      ! the batch is the same on every rank (the minimum of the local capacities, bound by the seam): the loop below and
+      ! the fold pairing in it are collective per batch.  The batch and reconstruction buffers hold at least that many.
+      nbe = fw%nbatch
+      if (sm%nbatch > 0) nbe = min(nbe, sm%nbatch)
 
       ! geometry once; the error word is folded into the cell word and reset
       call remap_geometry(gw, is, ie, js, je, dt, 1, puny, u, v, dxU, dyU, HTE, HTN, earea, narea, epm, npm, uvm, fw%gerr)
@@ -822,9 +827,10 @@ contains
       ! fluxes and update, a category batch at a time
       nlo = 0
       do while (nlo <= ws%ncat)
-         nhi = min(ws%ncat, nlo + fw%nbatch - 1)
+         nhi = min(ws%ncat, nlo + nbe - 1)
          ! the batch's reconstruction on the owned cells plus one ring (one launch)
          call remap_recon_batch(ws, rb, is - 1, ie + 1, js - 1, je + 1, nlo, nhi, puny, hm, rcfg)
+         ! uniform by construction: nlo, nhi and nbe are the same on every rank and each rank's buffers hold nbe
          if (rcfg /= RECON_CFG_OK) then
             cfg = REMAP_CFG_WORKSPACE
             return

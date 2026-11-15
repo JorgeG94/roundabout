@@ -153,7 +153,7 @@ module rdb_ice_remap_geom
    !! An edge is ACTIVE when either of its two corners has a non-zero
    !! departure displacement or (with `efa`) `edgearea /= 0`; an inactive
    !! edge gets `src = 0`, `area = 0`, `icase = 0`.  With `efa`, an edge whose own
-   !! cell has no area (`earea`/`narea` not positive: the zero-length face at a bipole of a
+   !! cell has EXACTLY zero area (`earea`/`narea` = 0; a NaN or negative area stays active and raises the error bit: the zero-length face at a bipole of a
    !! tripolar grid, in water) AND no prescribed area is inactive whatever its corners do: it
    !! carries nothing (found by the fold decomposition test, where it was a fatal bit).
    !!
@@ -991,7 +991,7 @@ contains
          ! a face with no cell area and no prescribed area (a zero-length face at a bipole of a tripolar grid, in
          ! water) carries nothing, whatever its neighbouring corners do: it is inactive, not an error
          if (efa /= 0) then
-            if (.not. (narea(i, j) > 0.0_wp) .and. edgearea(i, j) == 0.0_wp) active = .false.
+            if (narea(i, j) == 0.0_wp .and. edgearea(i, j) == 0.0_wp) active = .false.
          end if
          if (active) then
             dlx = scaled_disp(dpx(i - 1, j), dxU(i - 1, j))
@@ -1034,7 +1034,7 @@ contains
          if (efa /= 0) active = active .or. edgearea(i, j) /= 0.0_wp
          ! zero-area face with nothing prescribed: inactive (see the north twin)
          if (efa /= 0) then
-            if (.not. (earea(i, j) > 0.0_wp) .and. edgearea(i, j) == 0.0_wp) active = .false.
+            if (earea(i, j) == 0.0_wp .and. edgearea(i, j) == 0.0_wp) active = .false.
          end if
          if (active) then
             ! left = NE corner U(i,j), right = SE corner U(i,j-1); frame turned: (x, y) = (-dy, dx)

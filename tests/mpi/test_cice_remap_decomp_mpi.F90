@@ -32,7 +32,7 @@
 #ifdef RDB_ENABLE_MPI
 program test_cice_remap_decomp_mpi
    use, intrinsic :: iso_fortran_env, only: int32, int64
-   use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+   use, intrinsic :: ieee_arithmetic, only: ieee_is_finite, ieee_value, ieee_quiet_nan
    use rdb_constants, only: wp
    use rdb_config, only: config_t, read_config_from_string, validate_config
    use rdb_ocean_status, only: OCEAN_STATUS_OK
@@ -63,13 +63,15 @@ program test_cice_remap_decomp_mpi
       integer :: worst_q = 0
       real(wp) :: mass0 = 0.0_wp, mass1 = 0.0_wp
          !! Global sum of `aicen*tarea` before and after the run (plain sum, for the round-off check).
-      real(wp) :: anti_max = -1.0_wp, flux_max = -1.0_wp
+      real(wp) :: anti_max = -1.0_wp, flux_max = -1.0_wp, anti_t = -1.0_wp, flux_t = -1.0_wp
          !! Fold row of the last step's north area fluxes: `max |F(i) + F(mirror)|` and `max |F|` (-1: no fold).
       logical :: ok = .false.
    end type snap_t
 
    integer :: rank, nprocs, n_fail, total_fail
    type(comm_t) :: comm
+   character(len=64) :: case_filter = ""
+      !! `RDB_REMAP_CASES=<substring>`: run only the cases whose label contains it (development filter).
 
    call comm_env_init()
    call comm_env_setup_roles(.false.)
@@ -77,12 +79,20 @@ program test_cice_remap_decomp_mpi
    nprocs = comm_env_size()
    comm = comm_env_compute_comm()
    n_fail = 0
+   call get_environment_variable("RDB_REMAP_CASES", case_filter)
 
    call run_case("channel", .false.)
    call run_case("island", .false.)
    call run_case("fold", .false.)
    call run_case("fold_upwind", .false.)
+   call run_case("fold_smallbuf", .false.)
+   call run_case("fold_odd", .false.)
+   call run_case("fold_odd_smallbuf", .false.)
+   call run_case("channel_nan", .false.)
+   call run_case("channel_cfl", .false.)
+   call run_case("fold_nan", .false.)
    call run_case("fold", .true.)
+   call run_case("fold_odd", .true.)
 
    call comm%barrier()
    total_fail = n_fail
@@ -114,8 +124,9 @@ contains
       write (spx, '(i0)') px
       write (spy, '(i0)') py
       select case (label)
-      case ("fold", "fold_upwind")
-         grid = "&grid_nml nx = 30, ny = 24, nghost = 3, dx = 12.0, dy = 1.0 /"//NL// &
+      case ("fold", "fold_upwind", "fold_smallbuf", "fold_odd", "fold_odd_smallbuf", "fold_nan")
+         grid = "&grid_nml nx = "//merge("29", "30", index(label, "odd") > 0)//", ny = 24, nghost = 3, dx = "// &
+                merge("12.413793", "12.0     ", index(label, "odd") > 0)//", dy = 1.0 /"//NL// &
                 "&ocean_grid_nml grid_config = 'tripolar', lon_west = 0.0, lat_south = 59.0, "// &
                 "phi_join = 74.0, lon_pole = 0.0, rad_earth = 6.378e6, coriolis_scheme = 'planetary' /"//NL
          topo = "&ocean_topo_nml topo_config = 'double_drake', max_depth = 1000.0, slope_scale = 0.2 /"//NL
@@ -124,7 +135,7 @@ contains
          grid = "&grid_nml nx = 26, ny = 18, nghost = 3, dx = 20000.0, dy = 20000.0 /"//NL
          topo = "&ocean_topo_nml topo_config = 'island', max_depth = 1000.0, slope_scale = 0.15 /"//NL
          bc = "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
-      case default
+      case default   ! channel, channel_nan, channel_cfl
          grid = "&grid_nml nx = 26, ny = 18, nghost = 3, dx = 20000.0, dy = 20000.0 /"//NL
          topo = "&ocean_topo_nml topo_config = 'seamount', max_depth = 1000.0, edge_depth = 800.0, "// &
                 "slope_scale = 60000.0 /"//NL
@@ -252,10 +263,18 @@ contains
       integer :: ierr, nx, ny, ng, is, ie, js, je, i, j, n, k, step, gi, gj, nxg, nyg
       real(wp) :: s, tot
       logical :: fold_case, upwind
+      integer :: inj, nt_probe
+      real(wp) :: vscale
+      integer(int64) :: bmax
+      type(transport_cice_ws_t) :: probe
 
       snap%ok = .false.
       fold_case = index(label, "fold") == 1
       upwind = label == "fold_upwind"
+      inj = 0
+      vscale = 1.0_wp
+      if (index(label, "_nan") > 0) inj = 1
+      if (index(label, "_cfl") > 0) inj = 2
       call read_config_from_string(case_nml(label, px, py), cfg, ierr=ierr)
       if (ierr /= OCEAN_STATUS_OK) return
       call validate_config(cfg, ierr)
@@ -285,7 +304,17 @@ contains
          p = ice_params_default(ICE_CONSTANTS_ICEPACK, NCAT, NIL, 1)
          p%transport%advection = merge(ICE_ADVECT_UPWIND, ICE_ADVECT_REMAP, upwind)
          p%transport%check = .true.
-         call w%init(nx, ny, NCAT, NIL, 1, .true., ierr, remap=.not. upwind)
+         if (index(label, "smallbuf") > 0) then
+            ! a flux-buffer budget that gives tiles of different width DIFFERENT local batch sizes (x tile widths of
+            ! 40 ghosted columns: 13-wide tiles take 3 category indices, 14-wide ones 2): the batch must still be uniform
+            call probe%init(nx, ny, NCAT, NIL, 1, .true., ierr, remap=.true.)
+            nt_probe = probe%ntrace
+            call probe%destroy()
+            bmax = int(4 + 5*nt_probe, int64)*40_int64*int(ny, int64)*8_int64
+            call w%init(nx, ny, NCAT, NIL, 1, .true., ierr, remap=.true., remap_flux_bytes_max=bmax)
+         else
+            call w%init(nx, ny, NCAT, NIL, 1, .true., ierr, remap=.not. upwind)
+         end if
          if (ierr /= 0) then
             write (*, '(a,i0)') "FAIL: transport workspace init ierr ", ierr
             call engine_exit_data(engine)
@@ -296,9 +325,10 @@ contains
          bc_vel = engine%state%bc
          if (ctrl == 1) bc_state%north_fold = .false.
          if (ctrl == 2) bc_vel%north_fold = .false.
-         call ice_transport_seam_bind(w%seam, g, engine%state%bc, NCAT + 1, w%ntrace)
+         call ice_transport_seam_bind(w%seam, g, engine%state%bc, w%fw%nbatch, w%ntrace)
          if (ctrl == 3) w%seam%multirank = .false.
          if (ctrl == 4) w%seam%pair_fold = .false.
+         if (ctrl == 5) w%seam%pair_tracers = .false.
 
          allocate (u(nx + 1, ny), v(nx, ny + 1), Tf(nx, ny), hin_max(0:NCAT))
          allocate (aice0(nx, ny), aicen(nx, ny, NCAT), vicen(nx, ny, NCAT), vsnon(nx, ny, NCAT), Tsfcn(nx, ny, NCAT))
@@ -343,24 +373,35 @@ contains
             end do
          end do
 
-         ! the face velocities: the owned faces from the global face index, scaled by the face length so the
-         ! displacement is a fixed fraction of the cell; closed faces zero; ghosts by the production halo
+         ! the face velocities: the owned faces from the global face index, scaled by the narrower of the two cells
+         ! the face joins, so the displacement is a fixed fraction of it (the CFL check's own measure); closed faces zero; ghosts by the production halo
          u = 0.0_wp
          v = 0.0_wp
          do j = js, je
             do i = is, ie + 1
                gi = g%i_offset_global + (i - ng)
                gj = g%j_offset_global + (j - ng)
-               u(i, j) = ufrac(gi, gj, nxg, nyg)*cm%dxE(i - 1, j)/DT*cm%epm(i - 1, j)
+               u(i, j) = vscale*ufrac(gi, gj, nxg, nyg)*min(cm%dxT(i - 1, j), cm%dxT(i, j))/DT*cm%epm(i - 1, j)
             end do
          end do
          do j = js, je + 1
             do i = is, ie
                gi = g%i_offset_global + (i - ng)
                gj = g%j_offset_global + (j - ng)
-               v(i, j) = vfrac(gi, gj, nxg, nyg)*cm%dyN(i, j - 1)/DT*cm%npm(i, j - 1)
+               v(i, j) = vscale*vfrac(gi, gj, nxg, nyg)*min(cm%dyT(i, j - 1), cm%dyT(i, j))/DT*cm%npm(i, j - 1)
             end do
          end do
+         if (inj > 0) then
+            ! one rank only: a face near the east end of the middle rows
+            do j = js, je
+               do i = is, ie + 1
+                  if (g%i_offset_global + (i - ng) == nxg - 2 .and. g%j_offset_global + (j - ng) == 4) then
+                     if (inj == 1) u(i, j) = ieee_value(1.0_wp, ieee_quiet_nan)
+                     if (inj == 2) u(i, j) = 3.0_wp*max(cm%dxT(i - 1, j), cm%dxT(i, j))/DT
+                  end if
+               end do
+            end do
+         end if
          call ice_halo_faces(g, bc_vel, u, v, .true.)
 
          tot = 0.0_wp
@@ -394,6 +435,12 @@ contains
                write (*, '(a,i0,a,i0,a,z0,5(a,i0))') "  [transport refused] step ", step, " cfg ", res%cfg, " ierr 0x", res%ierr, &
                   ": n_cfl ", res%n_cfl, " n_geom ", res%n_geom, " n_nonfinite ", res%n_nonfinite, " n_neg ", res%n_neg, &
                   " n_mono ", res%n_mono
+               do j = 1, ny
+                  do i = 1, nx
+                   if (ice_err(i, j) /= 0_int32) write (*, '(a,4(i0,1x),4es11.3)') "    cell (i j gi gj) dxT dyT dxE dyN: ", i, j, &
+                      g%i_offset_global + i - ng, g%j_offset_global + j - ng, cm%dxT(i, j), cm%dyT(i, j), cm%dxE(i, j), cm%dyN(i, j)
+                  end do
+               end do
             end if
             if (.not. res%stepped) exit
          end do
@@ -412,7 +459,7 @@ contains
          call global_sum(snap%mass0)
          call global_sum(snap%mass1)
 
-         if (fold_case) call fold_row_stats(w, engine%state%bc%north_fold, g, ctrl, snap%anti_max, snap%flux_max, upwind)
+         if (fold_case) call fold_row_stats(w, engine%state%bc%north_fold, g, ctrl, snap%anti_max, snap%flux_max, snap%anti_t, snap%flux_t, upwind)
          if (csize == 1) then
             call comm_env_pop_compute_comm()
             call self_comm%finalize()
@@ -447,7 +494,7 @@ contains
       call allreduce(c, x, MPI_SUM)
    end subroutine global_sum
 
-   subroutine fold_row_stats(w, has_fold, g, ctrl, anti_max, flux_max, upwind)
+   subroutine fold_row_stats(w, has_fold, g, ctrl, anti_max, flux_max, anti_t, flux_t, upwind)
       !! Gather the fold row of the last step's north AREA fluxes (all category indices of the one batch)
       !! over the ranks and measure `max |F(i) + F(ni+1-i)|` (zero when the face is paired) and `max |F|`.
       use rdb_grid, only: hgrid_t
@@ -455,31 +502,47 @@ contains
       logical, intent(in) :: has_fold, upwind
       type(hgrid_t), intent(in) :: g
       integer, intent(in) :: ctrl
-      real(wp), intent(out) :: anti_max, flux_max
-      real(wp), allocatable :: loc(:), glob(:)
+      real(wp), intent(out) :: anti_max, flux_max, anti_t, flux_t
+      real(wp), allocatable :: loc(:), glob(:), loct(:), globt(:)
+      integer :: t, nt
       type(comm_t) :: c
       integer :: ni, nb, b, i, im, je, is
 
       anti_max = -1.0_wp
       flux_max = -1.0_wp
+      anti_t = -1.0_wp
+      flux_t = -1.0_wp
       if (upwind) return
       ni = g%nx_global
       nb = NCAT + 1
       if (w%fw%nbatch < nb) return
       je = g%nghost + g%ny_phys
       is = g%nghost + 1
-      allocate (loc(ni*nb), glob(ni*nb))
+      nt = w%ntrace
+      allocate (loc(ni*nb), glob(ni*nb), loct(ni*nb*nt), globt(ni*nb*nt))
       loc = 0.0_wp
+      loct = 0.0_wp
       if (has_fold) then
          do b = 1, nb
             do i = 1, g%nx_phys
                loc((b - 1)*ni + g%i_offset_global + i) = w%fw%mflx_n(is - 1 + i, je, b)
             end do
          end do
+         do b = 1, nb
+            do t = 1, nt
+               do i = 1, g%nx_phys
+                  loct(((b - 1)*nt + t - 1)*ni + g%i_offset_global + i) = w%fw%mtflx_n(is - 1 + i, je, t, b)
+               end do
+            end do
+         end do
       end if
       c = comm_env_compute_comm()
       glob = loc
-      if (c%size() > 1) call allreduce(c, loc, glob, op=MPI_SUM)
+      globt = loct
+      if (c%size() > 1) then
+         call allreduce(c, loc, glob, op=MPI_SUM)
+         call allreduce(c, loct, globt, op=MPI_SUM)
+      end if
       anti_max = 0.0_wp
       flux_max = 0.0_wp
       do b = 1, nb
@@ -487,6 +550,15 @@ contains
             im = ni + 1 - i
             anti_max = max(anti_max, abs(glob((b - 1)*ni + i) + glob((b - 1)*ni + im)))
             flux_max = max(flux_max, abs(glob((b - 1)*ni + i)))
+         end do
+      end do
+      anti_t = 0.0_wp
+      flux_t = 0.0_wp
+      do b = 1, nb*nt
+         do i = 1, ni
+            im = ni + 1 - i
+            anti_t = max(anti_t, abs(globt((b - 1)*ni + i) + globt((b - 1)*ni + im)))
+            flux_t = max(flux_t, abs(globt((b - 1)*ni + i)))
          end do
       end do
       if (ctrl < 0) anti_max = -1.0_wp
@@ -547,6 +619,12 @@ contains
             ref%worst_rel
          have = .true.
       end if
+      if (dec%anti_t /= ref%anti_t .and. dec%anti_t >= 0.0_wp .and. ref%anti_t >= 0.0_wp) then
+         nbad = nbad + 1
+         if (.not. have) write (first, '(a,es12.4,a,es12.4)') "fold-row tracer flux antisymmetry differs: ", dec%anti_t, " vs ", &
+            ref%anti_t
+         have = .true.
+      end if
       if (dec%anti_max /= ref%anti_max .and. dec%anti_max >= 0.0_wp .and. ref%anti_max >= 0.0_wp) then
          nbad = nbad + 1
          if (.not. have) write (first, '(a,es12.4,a,es12.4)') "fold-row flux antisymmetry differs: ", dec%anti_max, " vs ", &
@@ -585,16 +663,43 @@ contains
       type(snap_t) :: ref, dec
       integer :: px, nbad, ctrl, nglob, ncells_w, nseam
       character(len=160) :: tag, first
-      logical :: fold_case, upwind
+      logical :: fold_case, upwind, fault
       real(wp) :: rel
       integer :: i, j
 
+      if (len_trim(case_filter) > 0) then
+         if (index(label, trim(case_filter)) == 0) return
+      end if
       fold_case = index(label, "fold") == 1
       upwind = label == "fold_upwind"
+      fault = index(label, "_nan") > 0 .or. index(label, "_cfl") > 0
       call run_one(label, 1, 1, 1, 0, 0, ref)
       if (.not. ref%ok) then
          write (*, '(3a,i0)') "FAIL ", label, ": serial reference failed on rank ", rank
          n_fail = n_fail + 1
+         return
+      end if
+      if (fault) then
+         ! fault injection on one rank: the reference (one rank) and every layout must refuse the step with the same word
+         if (ref%nbad_steps /= 1 .or. ref%ierr == 0) then
+            write (*, '(3a)') "FAIL ", label, ": the injected fault did not refuse the reference step"
+            n_fail = n_fail + 1
+            return
+         end if
+         do px = nprocs, 1, -1
+            if (mod(nprocs, px) /= 0) cycle
+            write (tag, '(a,1x,i0,a,i0)') trim(label), px, "x", nprocs/px
+            call run_one(label, px, nprocs/px, nprocs, rank, 0, dec)
+            call compare(dec, ref, nbad, first)
+            nseam = nbad
+            call global_isum(nseam)
+            if (.not. dec%ok .or. nseam > 0 .or. dec%nbad_steps /= 1) then
+         write (*, '(5a,i0,a,z0,a,z0)') "FAIL ", trim(tag), " rank ", "", ": ", nseam, " ierr dec 0x", dec%ierr, " ref 0x", ref%ierr
+               n_fail = n_fail + 1
+            else if (rank == 0) then
+               write (*, '(3a,z0)') "ok   ", trim(tag), ": every rank refused the step with the serial word 0x", ref%ierr
+            end if
+         end do
          return
       end if
       ! the reference itself: accepted, finite, conserving to round-off, and the ice really moved
@@ -621,12 +726,16 @@ contains
             write (*, '(3a)') "FAIL ", label, ": no ice crossed the fold into the west half (vacuous test)"
             n_fail = n_fail + 1
          end if
-         if (.not. upwind) then
+         if (.not. upwind .and. ref%flux_max >= 0.0_wp) then
             if (.not. (ref%flux_max > 0.0_wp)) then
                write (*, '(3a)') "FAIL ", label, ": the reference fold-row flux is zero (vacuous test)"
                n_fail = n_fail + 1
             end if
-            if (ref%anti_max /= 0.0_wp) then
+            if (.not. (ref%flux_t > 0.0_wp)) then
+               write (*, '(3a)') "FAIL ", label, ": the reference fold-row tracer flux is zero (vacuous test)"
+               n_fail = n_fail + 1
+            end if
+            if (ref%anti_max /= 0.0_wp .or. ref%anti_t /= 0.0_wp) then
                write (*, '(3a,es10.3)') "FAIL ", label, ": reference fold row not exactly antisymmetric: ", ref%anti_max
                n_fail = n_fail + 1
             end if
@@ -684,7 +793,7 @@ contains
       character(len=40) :: what
       logical :: want
 
-      do ctrl = 1, 4
+      do ctrl = 1, 5
          select case (ctrl)
          case (1)
             what = "category state fold skipped"
@@ -692,31 +801,33 @@ contains
             what = "face velocity fold skipped"
          case (3)
             what = "seam reductions off"
-         case default
+         case (4)
             what = "flux pairing off"
+         case default
+            what = "tracer flux pairing off"
          end select
          ! the layout that exercises the control: any decomposed one (px = nprocs, py = 1 and, for the
          ! pairing, the serial run itself: it is a property of the fold row, not of the decomposition)
-         if (ctrl == 4) then
+         if (ctrl >= 4) then
             call run_one(label, 1, 1, 1, 0, ctrl, dec)
             if (.not. dec%ok) then
                write (*, '(3a)') "FAIL control ", trim(what), ": run failed"
                n_fail = n_fail + 1
                cycle
             end if
-            if (.not. (dec%anti_max > 0.0_wp)) then
+            if (.not. (ctrl_defect(dec, ctrl) > 0.0_wp)) then
                write (*, '(3a,es10.3)') "FAIL control ", trim(what), ": the unpaired fold row is already exactly antisymmetric: ", &
-                  dec%anti_max
+                  ctrl_defect(dec, ctrl)
                n_fail = n_fail + 1
             else if (rank == 0) then
-               write (*, '(3a,es10.3)') "ok   control ", trim(what), ": unpaired fold row antisymmetry defect ", dec%anti_max
+            write (*, '(3a,es10.3)') "ok   control ", trim(what), ": unpaired fold row antisymmetry defect ", ctrl_defect(dec, ctrl)
             end if
             if (nprocs >= 2) then
                ! the distributed pairing too: with it off, the fold row of the px = nprocs run is not antisymmetric
                call run_one(label, nprocs, 1, nprocs, rank, ctrl, dec)
                nbad_all = 0
                if (dec%ok) then
-                  if (.not. (dec%anti_max > 0.0_wp)) nbad_all = 1
+                  if (.not. (ctrl_defect(dec, ctrl) > 0.0_wp)) nbad_all = 1
                else
                   nbad_all = 1
                end if
@@ -725,7 +836,7 @@ contains
                   write (*, '(3a)') "FAIL control ", trim(what), ": the split fold row is already antisymmetric without pairing"
                   n_fail = n_fail + 1
                else if (rank == 0) then
-                  write (*, '(3a,es10.3)') "ok   control ", trim(what), " (split fold row): defect ", dec%anti_max
+                  write (*, '(3a,es10.3)') "ok   control ", trim(what), " (split fold row): defect ", ctrl_defect(dec, ctrl)
                end if
             end if
             cycle
@@ -750,6 +861,20 @@ contains
          end if
       end do
    end subroutine run_controls
+
+   function ctrl_defect(dec, ctrl) result(d)
+      !! The antisymmetry defect a pairing control must produce: the tracer fluxes for control 5 (the area flux stays
+      !! paired there and is required exactly antisymmetric), area and tracers otherwise.
+      type(snap_t), intent(in) :: dec
+      integer, intent(in) :: ctrl
+      real(wp) :: d
+      if (ctrl == 5) then
+         d = dec%anti_t
+         if (dec%anti_max /= 0.0_wp) d = -1.0_wp
+      else
+         d = min(dec%anti_max, dec%anti_t)
+      end if
+   end function ctrl_defect
 
    subroutine global_isum(n)
       integer, intent(inout) :: n

@@ -41,7 +41,8 @@ module rdb_ice_transport_seam
 
    public :: transport_seam_t
    public :: seam_sum, seam_sum_efp, seam_pair_fold_flux, seam_sum_int, seam_sum_one, seam_or_bits
-   public :: seam_sum_iface, seam_sum_efp_iface, seam_pair_fold_iface
+   public :: seam_sum_iface, seam_sum_efp_iface, seam_pair_fold_iface, seam_min_iface
+   public :: seam_min_one, seam_all_true
 
    integer, parameter :: ERR_WORD_BITS = 32
       !! Bits of the 32-bit error word.
@@ -55,6 +56,12 @@ module rdb_ice_transport_seam
          integer(int64), intent(inout) :: v(n)
       end subroutine seam_sum_iface
 
+      subroutine seam_min_iface(v)
+         !! In-place minimum of one integer over the ranks (collective).
+         implicit none
+         integer, intent(inout) :: v
+      end subroutine seam_min_iface
+
       subroutine seam_sum_efp_iface(n, list)
          !! In-place, order-invariant sum of `n` EFP values over the ranks (collective).
          import :: efp_t
@@ -63,11 +70,12 @@ module rdb_ice_transport_seam
          type(efp_t), intent(inout) :: list(n)
       end subroutine seam_sum_efp_iface
 
-      subroutine seam_pair_fold_iface(nx, ny, nb, ntrace, mflx_n, mtflx_n)
+      subroutine seam_pair_fold_iface(nx, ny, nb, ntrace, with_tracers, mflx_n, mtflx_n)
          !! Pair the fold-row north fluxes across a split north rank row (collective over it).
          import :: wp
          implicit none
          integer, intent(in) :: nx, ny, nb, ntrace
+         logical, intent(in) :: with_tracers
          real(wp), intent(inout) :: mflx_n(nx, ny, nb), mtflx_n(nx, ny, ntrace, nb)
       end subroutine seam_pair_fold_iface
    end interface
@@ -83,7 +91,13 @@ module rdb_ice_transport_seam
       logical :: pair_fold = .true.
          !! `.false.` leaves the fold-row fluxes UNPAIRED.  A diagnostic switch for the tests'
          !! negative control; the model never clears it.
+      logical :: pair_tracers = .true.
+         !! `.false.` pairs the area flux only (diagnostic switch of the tests' negative control).
+      integer :: nbatch = 0
+         !! Category indices per flux batch, the MINIMUM over the ranks (0: not bound, use the local one).  The
+         !! batch loop and the fold pairing are collective per batch, so every rank must run the same batches.
       procedure(seam_sum_iface), pointer, nopass :: sum_i8 => null()
+      procedure(seam_min_iface), pointer, nopass :: min_i => null()
       procedure(seam_sum_efp_iface), pointer, nopass :: sum_efp => null()
       procedure(seam_pair_fold_iface), pointer, nopass :: pair_fold_dist => null()
    end type transport_seam_t
@@ -145,6 +159,29 @@ contains
       end do
    end subroutine seam_or_bits
 
+   subroutine seam_min_one(seam, v)
+      !! Global minimum of one integer, in place.  No-op on one rank.
+      type(transport_seam_t), intent(in) :: seam
+      integer, intent(inout) :: v
+
+      if (.not. seam%multirank) return
+      if (.not. associated(seam%min_i)) error stop "transport seam: multirank without a min_i binding"
+      call seam%min_i(v)
+   end subroutine seam_min_one
+
+   function seam_all_true(seam, flag) result(all_ok)
+      !! `flag` on EVERY rank (collective on `multirank`): the way a rank-local condition that gates a later
+      !! collective is made rank-uniform.
+      type(transport_seam_t), intent(in) :: seam
+      logical, intent(in) :: flag
+      logical :: all_ok
+      integer :: v
+
+      v = merge(1, 0, flag)
+      call seam_min_one(seam, v)
+      all_ok = v == 1
+   end function seam_all_true
+
    subroutine seam_sum_efp(seam, n, list)
       !! Global EFP sum of `n` values (no-op on one rank).  Collective on `multirank`.
       type(transport_seam_t), intent(in) :: seam
@@ -167,17 +204,18 @@ contains
       if (.not. seam%fold .or. .not. seam%pair_fold) return
       if (seam%fold_dist) then
          if (.not. associated(seam%pair_fold_dist)) error stop "transport seam: split fold without a binding"
-         call seam%pair_fold_dist(nx, ny, nb, ntrace, mflx_n, mtflx_n)
+         call seam%pair_fold_dist(nx, ny, nb, ntrace, seam%pair_tracers, mflx_n, mtflx_n)
       else
-         call pair_fold_local(nx, ny, is, ie, je, nb, ntrace, mflx_n, mtflx_n)
+         call pair_fold_local(nx, ny, is, ie, je, nb, ntrace, seam%pair_tracers, mflx_n, mtflx_n)
       end if
    end subroutine seam_pair_fold_flux
 
-   subroutine pair_fold_local(nx, ny, is, ie, je, nb, ntrace, mflx_n, mtflx_n)
+   subroutine pair_fold_local(nx, ny, is, ie, je, nb, ntrace, with_tracers, mflx_n, mtflx_n)
       !! `px = 1`: the whole fold row is local.  Owned column `p` (1-based) is in the west half
       !! when `p < ni + 1 - p`: it takes the negated flux of its mirror, the east half is read
       !! only; the self-conjugate column carries nothing.  Two launches (area, tracers).
       integer, intent(in) :: nx, ny, is, ie, je, nb, ntrace
+      logical, intent(in) :: with_tracers
       real(wp), intent(inout) :: mflx_n(nx, ny, nb), mtflx_n(nx, ny, ntrace, nb)
       integer :: i, b, t, p, pm, ni
 
@@ -192,6 +230,7 @@ contains
             mflx_n(i, je, b) = 0.0_wp
          end if
       end do
+      if (with_tracers) then
       do concurrent(b=1:nb, t=1:ntrace, i=is:ie) local(p, pm)
          p = i - is + 1
          pm = ni + 1 - p
@@ -201,6 +240,7 @@ contains
             mtflx_n(i, je, t, b) = 0.0_wp
          end if
       end do
+      end if
       !$acc end data
    end subroutine pair_fold_local
 

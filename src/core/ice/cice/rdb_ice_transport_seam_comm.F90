@@ -28,14 +28,14 @@ module rdb_ice_transport_seam_comm
    use rdb_efp, only: efp_t
    use rdb_grid, only: hgrid_t
    use rdb_ocean_boundary_types, only: ocean_bc_state_t
-   use rdb_halo, only: halo_allreduce_sum_vec, halo_allreduce_efp_list
+   use rdb_halo, only: halo_allreduce_sum_vec, halo_allreduce_efp_list, halo_allreduce_min
    use rdb_ocean_halo, only: ocean_halo_centre, ocean_halo_is_decomposed_x, ocean_halo_is_decomposed_y
    use rdb_ocean_periodic, only: ocean_periodic_wrap_centre_3d
    use rdb_ocean_fold_apply, only: ocean_fold_wrap_centre_flat
    use rdb_ocean_fold_exchange, only: ocean_fold_is_distributed, ocean_fold_begin, ocean_fold_pack, &
                                       ocean_fold_exchange, ocean_fold_unpack, ocean_fold_end, &
                                       ocean_fold_exchange_reserve, FOLD_STAG_V
-   use rdb_ice_transport_seam, only: transport_seam_t
+   use rdb_ice_transport_seam, only: transport_seam_t, seam_min_one
    implicit none
    private
 
@@ -64,7 +64,12 @@ contains
       seam%sum_i8 => comm_sum_i8
       seam%sum_efp => comm_sum_efp
       seam%pair_fold_dist => comm_pair_fold
-      if (seam%fold_dist) call ocean_fold_exchange_reserve((sc_nghost + 1)*nbatch*(1 + ntrace))
+      seam%min_i => comm_min_i
+      ! the batch size is the minimum over the ranks: tiles differ, and the batch loop and the fold pairing are
+      ! collective per batch
+      seam%nbatch = nbatch
+      call seam_min_one(seam, seam%nbatch)
+      if (seam%fold_dist) call ocean_fold_exchange_reserve((sc_nghost + 1)*seam%nbatch*(1 + ntrace))
    end subroutine ice_transport_seam_bind
 
    subroutine comm_sum_i8(n, v)
@@ -78,6 +83,15 @@ contains
       v = nint(glob, int64)
    end subroutine comm_sum_i8
 
+   subroutine comm_min_i(v)
+      integer, intent(inout) :: v
+      real(wp) :: x, y
+
+      x = real(v, wp)
+      call halo_allreduce_min(x, y)
+      v = nint(y)
+   end subroutine comm_min_i
+
    subroutine comm_sum_efp(n, list)
       integer, intent(in) :: n
       type(efp_t), intent(inout) :: list(n)
@@ -87,17 +101,18 @@ contains
       list = glob
    end subroutine comm_sum_efp
 
-   subroutine comm_pair_fold(nx, ny, nb, ntrace, mflx_n, mtflx_n)
+   subroutine comm_pair_fold(nx, ny, nb, ntrace, with_tracers, mflx_n, mtflx_n)
       !! Pair the fold-row north fluxes over a split north rank row (module docstring).
       integer, intent(in) :: nx, ny, nb, ntrace
+      logical, intent(in) :: with_tracers
       real(wp), intent(inout) :: mflx_n(nx, ny, nb), mtflx_n(nx, ny, ntrace, nb)
 
-      call ocean_fold_begin((sc_nghost + 1)*nb*(1 + ntrace))
+      call ocean_fold_begin((sc_nghost + 1)*nb*(1 + merge(ntrace, 0, with_tracers)))
       call fold_pack_flat(mflx_n, nx, ny, nb)
-      call fold_pack_flat(mtflx_n, nx, ny, ntrace*nb)
+      if (with_tracers) call fold_pack_flat(mtflx_n, nx, ny, ntrace*nb)
       call ocean_fold_exchange(.true.)
       call fold_unpack_flat(mflx_n, nx, ny, nb)
-      call fold_unpack_flat(mtflx_n, nx, ny, ntrace*nb)
+      if (with_tracers) call fold_unpack_flat(mtflx_n, nx, ny, ntrace*nb)
       call ocean_fold_end()
    end subroutine comm_pair_fold
 
