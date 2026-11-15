@@ -317,7 +317,7 @@ contains
       associate (sf => engine%state%surface_flux)
          !$acc update self(sf%q_sw, sf%q_lw, sf%q_sens, sf%q_lat, sf%evap, sf%lprec, sf%fprec)
          !$acc update self(sf%heat_content_lprec, sf%heat_content_fprec, sf%heat_content_massin, sf%heat_content_massout)
-         !$acc update self(sf%ice_heat, sf%ice_sw, sf%ice_salt, sf%Q_heat, sf%Q_salt)
+         !$acc update self(sf%heat_ice, sf%sw_ice, sf%salt_ice, sf%Q_heat, sf%Q_salt)
       end associate
    end subroutine pull_sf
 
@@ -1047,13 +1047,13 @@ contains
             do j = js, je
                do i = is, ie
                   ! ratio 1: the window is this step; the ice share is the ice's own hand-over
-                  w_h = max(w_h, abs(sf%ice_heat(i, j) - f%fhocn(i, j))/(abs(f%fhocn(i, j)) + 1.0_wp))
-                  w_isw = max(w_isw, abs(sf%ice_sw(i, j) - f%fswthru(i, j))/(abs(f%fswthru(i, j)) + 1.0_wp))
+                  w_h = max(w_h, abs(sf%heat_ice(i, j) - f%fhocn(i, j))/(abs(f%fhocn(i, j)) + 1.0_wp))
+                  w_isw = max(w_isw, abs(sf%sw_ice(i, j) - f%fswthru(i, j))/(abs(f%fswthru(i, j)) + 1.0_wp))
                   ! rain through the ice is NOT diluted: the salt hand-over is the ice's own water and salt
                   e_ice_salt = 1000.0_wp*f%fsalt(i, j) - o%sss_ocn(i, j)*(f%fresh(i, j) - w%frain(i, j)*c%aice_init(i, j))
-                  w_salt = max(w_salt, abs(sf%ice_salt(i, j) - e_ice_salt)/(abs(e_ice_salt) + 1.0e-6_wp))
+                  w_salt = max(w_salt, abs(sf%salt_ice(i, j) - e_ice_salt)/(abs(e_ice_salt) + 1.0e-6_wp))
                   ! shortwave: open water + transmitted through the ice stays within the incident shortwave
-                  esw_ice = max(esw_ice, (sf%q_sw(i, j) + sf%ice_sw(i, j) - a%rsds(i, j))/a%rsds(i, j))
+                  esw_ice = max(esw_ice, (sf%q_sw(i, j) + sf%sw_ice(i, j) - a%rsds(i, j))/a%rsds(i, j))
                end do
             end do
          end associate
@@ -1137,7 +1137,7 @@ contains
                   spent = spent + efrz
                   stock = stock + area(i, j)*engine%state%ice%frazil_heat(i, j)
                   if (ratio == 1) then
-                     ice_asm = ice_asm + area(i, j)*DT*(sf%ice_heat(i, j) + sf%ice_sw(i, j))
+                     ice_asm = ice_asm + area(i, j)*DT*(sf%heat_ice(i, j) + sf%sw_ice(i, j))
                   end if
                end do
             end do

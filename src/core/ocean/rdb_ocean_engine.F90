@@ -768,9 +768,6 @@ contains
       ! never restored.
       call engine%state%surface_flux%set_components(engine%grid, &
                                                     cfg%ocean%forcing%enable_components)
-      ! The three ice-owned components of the CICE-port ice (`scheme = "cice"` only; nothing
-      ! under "sis2"): allocated here for the same reason, before the restart read.
-      call engine%state%surface_flux%set_ice_components(engine%grid, engine%state%ice%cice%is_init)
       ! The restart registry makes the ice-ocean stress tags REQUIRED under the prescribed atmosphere
       ! under this scheme: latch the flag before the read (`bulk_forcing_configure` sets it again).
       engine%state%bulk_forcing%cice_wind = bulk_forcing_wants_cice_wind(cfg)

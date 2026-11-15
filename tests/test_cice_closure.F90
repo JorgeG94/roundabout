@@ -345,7 +345,7 @@ contains
       type(ocean_engine_t), intent(inout) :: engine
 
       associate (sf => engine%state%surface_flux)
-         !$acc update self(sf%ice_heat, sf%ice_sw, sf%ice_salt, sf%Q_heat, sf%Q_salt)
+         !$acc update self(sf%heat_ice, sf%sw_ice, sf%salt_ice, sf%Q_heat, sf%Q_salt)
          !$acc update self(sf%q_sw, sf%q_lw, sf%q_lat, sf%q_sens, sf%evap, sf%lprec, sf%fprec)
          !$acc update self(sf%heat_content_lprec, sf%heat_content_fprec)
       end associate
@@ -734,8 +734,8 @@ contains
    ! ------------------------------------------------------------------
 
    subroutine interface_case(error, nml, ratio, nsteps, label, prescribed)
-      !! Window means of the ice's `fhocn`, `fswthru`, `fsalt`, `fresh` against the ocean's `ice_heat`, `ice_sw`,
-      !! `ice_salt` at every hand-over, cell by cell, and the assembled `Q_heat`, `Q_salt` of the cells with no
+      !! Window means of the ice's `fhocn`, `fswthru`, `fsalt`, `fresh` against the ocean's `heat_ice`, `sw_ice`,
+      !! `salt_ice` at every hand-over, cell by cell, and the assembled `Q_heat`, `Q_salt` of the cells with no
       !! other source (uniform atmosphere).
       type(error_type), allocatable, intent(out) :: error
       character(len=*), intent(in) :: nml, label
@@ -815,16 +815,16 @@ contains
                      exp_s = 1000.0_wp*a_fs(i, j)/real(ratio, wp) - engine%state%icec%oin%sss_ocn(i, j)*a_fr(i, j)/real(ratio, wp)
                      exp_fr = a_fr(i, j)/real(ratio, wp)
                      scl = max(abs(exp_h), 1.0e-3_wp)
-                     e_h = max(e_h, abs(sf%ice_heat(i, j) - exp_h)/scl)
+                     e_h = max(e_h, abs(sf%heat_ice(i, j) - exp_h)/scl)
                      scl = max(abs(exp_sw), 1.0e-3_wp)
-                     e_sw = max(e_sw, abs(sf%ice_sw(i, j) - exp_sw)/scl)
+                     e_sw = max(e_sw, abs(sf%sw_ice(i, j) - exp_sw)/scl)
                      scl = max(abs(exp_s), 1.0e-9_wp)
-                     e_s = max(e_s, abs(sf%ice_salt(i, j) - exp_s)/scl)
+                     e_s = max(e_s, abs(sf%salt_ice(i, j) - exp_s)/scl)
                      if (.not. prescribed) then
                         ! nothing else feeds the assembler: Q_heat and Q_salt are the ice's
                         scl = max(abs(exp_h + exp_sw), 1.0e-3_wp)
-                        e_w = max(e_w, abs(sf%Q_heat(i, j) - (sf%ice_heat(i, j) + sf%ice_sw(i, j)))/scl, &
-                                  abs(sf%Q_salt(i, j) - sf%ice_salt(i, j))/max(abs(exp_s), 1.0e-9_wp))
+                        e_w = max(e_w, abs(sf%Q_heat(i, j) - (sf%heat_ice(i, j) + sf%sw_ice(i, j)))/scl, &
+                                  abs(sf%Q_salt(i, j) - sf%salt_ice(i, j))/max(abs(exp_s), 1.0e-9_wp))
                      end if
                   end do
                end do
@@ -989,7 +989,7 @@ contains
                do i = is, ie
                   sst = ms%tracers(ms%idx_temperature)%c(i, j, nz)
                   icefl = icefl + DT*area(i, j)*(f%fhocn(i, j) + f%fswthru(i, j))
-                  ice_asm = ice_asm + DT*area(i, j)*(sf%ice_heat(i, j) + sf%ice_sw(i, j))
+                  ice_asm = ice_asm + DT*area(i, j)*(sf%heat_ice(i, j) + sf%sw_ice(i, j))
                   q_n = q_n + DT*area(i, j)*sf%Q_heat(i, j)
                   qs_n = qs_n + DT*area(i, j)*sf%Q_salt(i, j)
                   ! the open water's heat from the bulk-forcing outputs (the assembler's formula, rebuilt from them)
