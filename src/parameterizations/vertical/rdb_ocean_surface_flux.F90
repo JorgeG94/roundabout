@@ -83,19 +83,20 @@
 !!       (`Q_heat`/`Q_salt`, `heat_content_massin/massout`) are never
 !!       registered (derived-field rule, `ocean_state_build_restart_registry`
 !!       in `ocean_state/rdb_ocean_state_restart.F90`).
-!!   (f) a filler that writes its components on PHYSICAL cells only (anything
-!!       but a full-array overwrite from already-exchanged data, which is what
-!!       the ice couplers do) sets `phys_only_fill = .true.` (heat side) and/or `phys_only_fill_salt` at configure.  The
-!!       boundary-layer schemes loop the FULL array and read the assembled
-!!       `Q_heat`/`Q_salt`/`sw_net` in the ghost columns, whose neighbour-owned
-!!       value the assembler cannot rebuild from components whose own ghosts are
-!!       stale; with the latch set the engine exchanges (MPI, periodic wrap, or
-!!       tripolar fold, scalar copy) `Q_heat`/`Q_salt` after every assembly and
-!!       `sw_net` after every formation (`ocean_seam_refresh_surface_flux`).
-!!       The refresh sits on the assembled sums, not on each component: the
-!!       sums are the only flux ghosts any shipped kernel reads (every component is consumed
-!!       column-locally by the assembler), so two exchanges per thermo step
-!!       replace one per component.
+!!   (f) the assembled `Q_heat`/`Q_salt` (and `sw_net`) are what the boundary-layer
+!!       schemes read, over the FULL array, so in the ghost columns too.  A filler
+!!       that writes its components on PHYSICAL cells only (the bulk consumer, a
+!!       data-override reader, the ice-shelf cavity bands) leaves the assembled
+!!       ghost band stale.  The engine therefore exchanges `Q_heat` and `Q_salt`
+!!       after every thermo-step assembly and `sw_net` after every formation
+!!       (`ocean_seam_refresh_surface_flux` / `ocean_seam_refresh_sw_net`: MPI,
+!!       periodic wrap, tripolar fold, scalar copy), whenever the component set is
+!!       on, with no per-filler flag: where every ghost already equals its
+!!       neighbour's value (sea ice alone, constants) the exchange rewrites
+!!       identical bits (measured: ghost change 0 in the sea-ice and closure
+!!       groups and every unit test), so a new filler cannot forget it.  The
+!!       refresh sits on the assembled sums, not on each component: the sums are
+!!       the only flux ghosts any shipped kernel reads.
 !!
 !! **Component ownership: exactly ONE legal writer per field.**  A second
 !! writer on any row is a silent clobber, not a merge.
@@ -349,31 +350,6 @@ module rdb_ocean_surface_flux
          !! `seaice_melt`.  Cheap early-return gate for a future
          !! freshwater kernel (real-mass PR).  Same contract as
          !! `has_heat` (`:56-62`) — never set from a device reduction.
-      logical :: phys_only_fill = .false.
-         !! Host-side latch (configure time, never a device reduction): a
-         !! filler of the component set writes a HEAT component (`q_sw`,
-         !! `q_lw`, `q_lat`, `q_sens`, `heat_added`, an `evap`/`lprec`
-         !! enthalpy) on PHYSICAL cells only -- the atmosphere-driven bulk
-         !! consumer, or a `&ocean_dataovr_nml` heat/evap/lprec reader under
-         !! `use_components`.  Then the assembled `Q_heat` (and `sw_net` under
-         !! `sw_source="q_sw"`) holds a stale ghost band, which KPP/EPBL read
-         !! in their full-array loops; the engine refreshes the seam ghosts
-         !! (`ocean_seam_refresh_surface_flux`) after the assembler, and only
-         !! when this is set.  Kept as a latch, NOT "whenever components are
-         !! on": an exchange is idempotent only where the ghost already equals
-         !! the neighbour's value, and the assembler's own ghost value is a
-         !! function of ghost inputs of different age (`heat_content_massout`
-         !! reads the ghost SST, the cavity bands read ghost state), so an
-         !! unconditional exchange would move ghost bits -- and, through the
-         !! seam face's `kv`, owned answers -- in the ice, cavity and
-         !! constant-flux configurations that have no physical-span-only
-         !! filler.  Latched, those stay bit-identical and issue no exchange.
-      logical :: phys_only_fill_salt = .false.
-         !! Same, for the SALT side: set by the `&ocean_dataovr_nml salt`
-         !! reader under `use_components` (`salt_flux` on physical cells).  The
-         !! bulk consumer adds no salt component (its freshwater is a mass
-         !! flux), so under bulk forcing alone `Q_salt` is the configure-time
-         !! constant and is not exchanged.
       logical :: has_q_sw = .false.
          !! Host-side latch — set by a filler after writing `q_sw`
          !! (e.g. an ice `sw_thru` coupler).  **Not** the same as
