@@ -45,7 +45,8 @@ module test_ocean_bulk_forcing
                                   BULK_GAS_CONST_AIR, BULK_TVQ_AIR, BULK_CP_AIR, &
                                   BULK_LATENT_SUBLIMATION, BULK_QSAT_ICE_COEF_B, BULK_WIND_MIN
    use rdb_ocean_surface_stress, only: ocean_surface_stress_t
-   use rdb_ocean_surface_flux, only: ocean_surface_flux_t, ocean_surface_flux_assemble
+   use rdb_ocean_surface_flux, only: ocean_surface_flux_t, ocean_surface_flux_assemble, &
+                                     ocean_surface_flux_apply_tracers
    use rdb_ice_ocean_coupler, only: ice_ocean_brine_flux, ice_ocean_heat_flux, ice_ocean_sw_flux
    use rdb_ocean_bulk_forcing, only: bulk_forcing_t, bulk_forcing_apply
    use rdb_teos10_convert, only: pt_from_ct
@@ -70,6 +71,10 @@ module test_ocean_bulk_forcing
    integer, parameter :: N_ITER = 5
    real(wp), parameter :: EMISSIVITY = 0.97_wp, OCEAN_ALBEDO = 0.066_wp
    real(wp), parameter :: READER_HEAT = 11.0_wp, READER_SALT = 5.0e-6_wp
+   real(wp), parameter :: LF_TEST = 3.34e5_wp
+      !! Latent heat of fusion, literal on purpose: the expectation must not
+      !! read the code's own constant.
+   real(wp), parameter :: DT_SNOW = 600.0_wp
 
 contains
 
@@ -88,7 +93,12 @@ contains
                   new_unittest("ice_enabled_icefree_keeps_shortwave", test_icefree_keeps_sw), &
                   new_unittest("ice_partial_cover_open_plus_transmitted_sw", test_partial_cover_sw), &
                   new_unittest("ice_and_reader_flux_both_arrive", test_reader_and_ice_both_arrive), &
-                  new_unittest("ice_coupler_no_accumulation_across_window", test_no_accumulation) &
+                  new_unittest("ice_coupler_no_accumulation_across_window", test_no_accumulation), &
+                  new_unittest("bulk_snow_latent_heat_closed_form", test_snow_latent_closed_form), &
+                  new_unittest("bulk_snow_latent_heat_open_water_share", test_snow_latent_open_share), &
+                  new_unittest("bulk_snow_latent_heat_no_double_count_ice_snowfall", &
+                               test_snow_latent_no_double_count), &
+                  new_unittest("bulk_no_snow_q_heat_bitwise_old_sum", test_no_snow_bitwise) &
                   ]
    end subroutine collect_ocean_bulk_forcing_tests
 
@@ -907,6 +917,223 @@ contains
       end do
       call check(error, c(2), 9.0_wp, "sw_ice is the single-window value, not a running sum", thr=0.0_wp)
    end subroutine test_no_accumulation
+
+   ! =================================================================
+   ! Snow on open water: latent heat of fusion
+   ! =================================================================
+   ! Snow that lands on OPEN water has to melt: a cooling `L_f * fprec`
+   ! that used to be charged nowhere.
+
+   subroutine snow_case(prsn_v, prra_v, cover, ice_snowfall, qh, qfus, comp_sum, dT, hbud, &
+                        fprec, atm_fprec_ice)
+      !! One thermo step on a resting single-layer column, uniform 15 degC:
+      !! bulk consumer -> (ice couplers, if ice) -> assembler -> surface
+      !! tracer deposit.  `comp_sum` is the sum of every OTHER heat band
+      !! (the assembler's own addends, summed here from the component
+      !! arrays) so a test can isolate the snow term.  `cover < 0` => ice
+      !! disabled.  Returns the probe cell's values.
+      real(wp), intent(in) :: prsn_v, prra_v, cover
+      logical, intent(in) :: ice_snowfall
+      real(wp), intent(out) :: qh, qfus, comp_sum, dT, hbud, fprec, atm_fprec_ice
+
+      type(hgrid_t) :: grid
+      type(ocean_metrics_t) :: metrics
+      type(ocean_bc_state_t) :: bc
+      type(multilayer_state_t) :: ms
+      type(ocean_sea_ice_t) :: ice
+      type(atm_state_t) :: atm
+      type(bulk_forcing_t) :: bf
+      type(ocean_surface_stress_t) :: ss
+      type(ocean_surface_flux_t) :: sf
+      type(bulk_flux_config_t) :: bcfg
+      integer :: ip, jp
+      logical :: ice_on
+      real(wp) :: massin
+
+      ice_on = cover >= 0.0_wp
+      call make_grid(grid)
+      call make_cartesian_metrics(metrics, grid)
+      call init_halo_single_rank(grid)
+      ip = grid%nghost + 2
+      jp = grid%nghost + 2
+      call make_ms(grid, ms)
+      ms%wet_mask = 1.0_wp
+      call make_atm(grid, atm)
+      atm%prsn = prsn_v
+      atm%prra = prra_v
+      call make_bulk_forcing(grid, .true., bf)
+      call ss%init(grid)
+      call sf%init(grid)
+      call sf%set_components(grid, .true.)
+      sf%has_heat = .true.
+      sf%has_salt = .true.
+      if (ice_on) then
+         ice%ncat = 1
+         call ice%init(grid)
+         ice%enable = .true.
+         ice%has_snowfall = ice_snowfall
+         ice%part_size(:, :, 0) = 1.0_wp - cover
+         ice%part_size(:, :, 1) = cover
+         bcfg%emissivity = EMISSIVITY
+         call ice_atm_forcing_from_atm(ice, atm, bcfg)
+      end if
+
+      !$acc enter data copyin(atm, ms, bf, ss, sf)
+      call atm%enter_data()
+      call ms%enter_data()
+      call bf%enter_data()
+      call ss%enter_data()
+      call sf%enter_data()
+      if (ice_on) then
+         !$acc enter data copyin(ice)
+         call ice%enter_data()
+      end if
+
+      call bulk_forcing_apply(grid, metrics, bc, atm, ms, ice, bf, ss, sf)
+      call ocean_surface_flux_assemble(grid, sf, ms, active=.true.)
+      call ocean_surface_flux_apply_tracers(grid, sf, ms, DT_SNOW)
+
+      !$acc update self(sf%Q_heat, sf%q_fus, sf%q_sw, sf%q_lw, sf%q_lat, sf%q_sens, sf%fprec, sf%lprec)
+      !$acc update self(sf%heat_content_fprec, sf%heat_content_lprec, sf%heat_content_massout)
+      !$acc update self(ms%heat_budget_surface)
+      if (ice_on) then
+         !$acc update self(ice%atm_fprec)
+      end if
+      qh = sf%Q_heat(ip, jp)
+      qfus = sf%q_fus(ip, jp)
+      fprec = sf%fprec(ip, jp)
+      ! The assembler's own addition order, minus the fusion term (the
+      ! unused bands -- sw_ice, heat_added, heat_ice, heat_cavity, the three
+      ! other mass enthalpies, Q_heat_const -- are exact zeros here).
+      massin = sf%heat_content_lprec(ip, jp) + sf%heat_content_fprec(ip, jp) &
+               + 0.0_wp + 0.0_wp + 0.0_wp + 0.0_wp
+      comp_sum = 0.0_wp + (sf%q_sw(ip, jp) + 0.0_wp) + sf%q_lw(ip, jp) + &
+                 sf%q_lat(ip, jp) + sf%q_sens(ip, jp) + (0.0_wp + 0.0_wp) + &
+                 0.0_wp + massin + sf%heat_content_massout(ip, jp)
+      hbud = ms%heat_budget_surface(ip, jp, 1)
+      atm_fprec_ice = 0.0_wp
+      if (ice_on) atm_fprec_ice = ice%atm_fprec(ip, jp)
+
+      if (ice_on) then
+         call ice%exit_data()
+         !$acc exit data delete(ice)
+      end if
+      call sf%exit_data()
+      call ss%exit_data()
+      call bf%exit_data()
+      call ms%exit_data()
+      call atm%exit_data()
+      !$acc exit data delete(atm, ms, bf, ss, sf)
+      dT = ms%tracers(ms%idx_temperature)%c(ip, jp, 1) - SST_DEGC
+      call ocean_halo_destroy()
+      call destroy_cartesian_metrics(metrics)
+   end subroutine snow_case
+
+   subroutine test_snow_latent_closed_form(error)
+      !! Ice-free column, snow at P = 1e-5 kg/m2/s (3.34 W/m2 of fusion).
+      !! (a) the assembled Q_heat is the other bands plus the mass enthalpy
+      !! plus EXACTLY `-L_f*P`; (b) the same mass rate as RAIN does not cool:
+      !! snow - rain differs by `-L_f*P` and nothing else; (c) the column
+      !! temperature falls by `-L_f*P*dt/(rho0*cp*h)` more than under rain
+      !! and the console heat-budget accumulator carries the same number.
+      type(error_type), allocatable, intent(out) :: error
+      real(wp), parameter :: P = 1.0e-5_wp
+      real(wp) :: qh_s, qf_s, cs_s, dT_s, hb_s, fp_s, ai_s
+      real(wp) :: qh_r, qf_r, cs_r, dT_r, hb_r, fp_r, ai_r
+      real(wp) :: dq_expected, dT_expected, rho0cp
+
+      call snow_case(P, 0.0_wp, -1.0_wp, .false., qh_s, qf_s, cs_s, dT_s, hb_s, fp_s, ai_s)
+      call snow_case(0.0_wp, P, -1.0_wp, .false., qh_r, qf_r, cs_r, dT_r, hb_r, fp_r, ai_r)
+
+      dq_expected = -LF_TEST*P
+      call check(error, fp_s, P, "snow lands as fprec = P on open water", thr=1.0e-15_wp)
+      if (allocated(error)) return
+      call check(error, qf_s, dq_expected, "q_fus == -L_f * P", thr=1.0e-9_wp)
+      if (allocated(error)) return
+      call check(error, qf_r, 0.0_wp, "rain: no latent heat of fusion", thr=0.0_wp)
+      if (allocated(error)) return
+      call check(error, qh_s - cs_s, dq_expected, "snow Q_heat = other bands + mass enthalpy - L_f*P", &
+                 thr=1.0e-9_wp)
+      if (allocated(error)) return
+      call check(error, qh_r - cs_r, 0.0_wp, "rain Q_heat = other bands + mass enthalpy", thr=1.0e-9_wp)
+      if (allocated(error)) return
+      call check(error, qh_s - qh_r, dq_expected, "snow minus rain at the same mass rate = -L_f*P", &
+                 thr=1.0e-9_wp)
+      if (allocated(error)) return
+
+      ! Column: dT = Q*dt/(rho0*cp*h).
+      rho0cp = 1035.0_wp*3992.0_wp
+      dT_expected = dq_expected*DT_SNOW/(rho0cp*H0)
+      call check(error, dT_s - dT_r, dT_expected, "column cools by L_f*P*dt/(rho0*cp*h) more than rain", &
+                 thr=1.0e-12_wp)
+      if (allocated(error)) return
+      ! Heat-budget accumulator (K*m) closes against the column's own content change.
+      call check(error, hb_s - hb_r, dq_expected*DT_SNOW/rho0cp, "heat_budget_surface carries the fusion term", &
+                 thr=1.0e-12_wp)
+      if (allocated(error)) return
+      call check(error, hb_s, dT_s*H0, "heat_budget_surface == h*dT (budget Error stays round-off)", &
+                 thr=1.0e-10_wp)
+   end subroutine test_snow_latent_closed_form
+
+   subroutine test_snow_latent_open_share(error)
+      !! Sea ice covering 60 % of the cell (SIS2-derived scheme; `scheme =
+      !! "cice"` is not on this branch): the ocean's fprec and its fusion
+      !! charge are the OPEN-water 40 % of the snow; the ice is handed the
+      !! full snowfall rate per unit ice area (`atm_fprec == prsn`), so the
+      !! cell total is open + covered = 1 x P: nothing counted twice or lost.
+      !! Fully covered: the ocean pays nothing.
+      type(error_type), allocatable, intent(out) :: error
+      real(wp), parameter :: P = 1.0e-5_wp, COVER = 0.6_wp
+      real(wp) :: qh, qf, cs, dT, hb, fp, ai
+      real(wp) :: qh0, qf0, cs0, dT0, hb0, fp0, ai0
+
+      call snow_case(P, 0.0_wp, COVER, .false., qh, qf, cs, dT, hb, fp, ai)
+      call check(error, fp, (1.0_wp - COVER)*P, "ocean fprec = open-water share of the snow", thr=1.0e-15_wp)
+      if (allocated(error)) return
+      call check(error, qf, -LF_TEST*(1.0_wp - COVER)*P, "ocean pays L_f on the open share only", &
+                 thr=1.0e-9_wp)
+      if (allocated(error)) return
+      call check(error, ai, P, "ice is handed the snowfall rate per unit ice area", thr=1.0e-15_wp)
+      if (allocated(error)) return
+      call check(error, fp + COVER*ai, P, "open share + ice share = the full snowfall (no double count)", &
+                 thr=1.0e-15_wp)
+      if (allocated(error)) return
+
+      call snow_case(P, 0.0_wp, 1.0_wp, .false., qh0, qf0, cs0, dT0, hb0, fp0, ai0)
+      call check(error, qf0, 0.0_wp, "fully ice-covered: the ocean pays no latent heat", thr=0.0_wp)
+      if (allocated(error)) return
+      call check(error, fp0, 0.0_wp, "fully ice-covered: no snow mass reaches the ocean", thr=0.0_wp)
+   end subroutine test_snow_latent_open_share
+
+   subroutine test_snow_latent_no_double_count(error)
+      !! `&ocean_ice_nml snowfall /= 0` (`has_snowfall`): the ice model
+      !! already delivers the open-water snow share to the ocean through
+      !! `heat_flux_diag` at the full melt-and-warm enthalpy, `L_f`
+      !! included, so the bulk consumer must NOT charge it again.
+      type(error_type), allocatable, intent(out) :: error
+      real(wp), parameter :: P = 1.0e-5_wp
+      real(wp) :: qh, qf, cs, dT, hb, fp, ai
+
+      call snow_case(P, 0.0_wp, 0.4_wp, .true., qh, qf, cs, dT, hb, fp, ai)
+      call check(error, qf, 0.0_wp, "has_snowfall: bulk consumer leaves the fusion charge to the ice", &
+                 thr=0.0_wp)
+      if (allocated(error)) return
+      call snow_case(P, 0.0_wp, 0.4_wp, .false., qh, qf, cs, dT, hb, fp, ai)
+      call check(error, qf < 0.0_wp, .true., "without has_snowfall the same cell IS charged")
+   end subroutine test_snow_latent_no_double_count
+
+   subroutine test_no_snow_bitwise(error)
+      !! No snowfall: the new component is exactly zero and the assembled
+      !! Q_heat is bit for bit the old sum of the other bands (the
+      !! assembler's own left-to-right order minus the new addend).
+      type(error_type), allocatable, intent(out) :: error
+      real(wp) :: qh, qf, cs, dT, hb, fp, ai
+
+      call snow_case(0.0_wp, 2.0e-5_wp, -1.0_wp, .false., qh, qf, cs, dT, hb, fp, ai)
+      call check(error, qf, 0.0_wp, "no snow: q_fus == 0", thr=0.0_wp)
+      if (allocated(error)) return
+      call check(error, qh, cs, "no snow: Q_heat == old sum of the other bands (bitwise)", thr=0.0_wp)
+   end subroutine test_no_snow_bitwise
 
    subroutine run_apply(grid, metrics, bc, atm, ms, ice, bf, ss, sf)
       !! `bulk_forcing_apply` with the production device residency: the

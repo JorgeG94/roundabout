@@ -137,38 +137,53 @@ contains
    ! ================================================================
 
    pure subroutine fold_north_centre_2d(fld, nx_total, ny_total, &
-                                        nx_phys, ny_phys, nghost)
+                                        nx_phys, ny_phys, nghost, negate)
       !! Fill the north halo of a 2D cell-centred field by the T-fold.
       integer, intent(in) :: nx_total, ny_total, nx_phys, ny_phys, nghost
       real(wp), intent(inout) :: fld(nx_total, ny_total)
-         !! Cell-centred field, shape (nx_total, ny_total).
+      logical, intent(in), optional :: negate
+         !! DEFAULT `.false.` (a scalar copy, bit-identical), UNLIKE the u- and v-face folds below whose `negate`
+         !! defaults to `.true.` (a face field is a normal component).  `.true.`: a true-vector component
+         !! held at cell centres (the ice's T-cell wind stress), which changes sign across the fold.
 
       integer :: i, j, isum, jsum, j_lo
+      real(wp) :: sgn
 
+      sgn = 1.0_wp
+      if (present(negate)) then
+         if (negate) sgn = -1.0_wp
+      end if
       isum = 2*nghost + nx_phys + 1
       jsum = 2*nghost + 2*ny_phys + 1
       j_lo = nghost + ny_phys + 1   ! first north halo row (storage)
 
       do concurrent(j=j_lo:ny_total, i=1:nx_total)
-         fld(i, j) = fld(isum - i, jsum - j)
+         fld(i, j) = sgn*fld(isum - i, jsum - j)
       end do
    end subroutine fold_north_centre_2d
 
    pure subroutine fold_north_centre_3d(fld, nx_total, ny_total, nz, &
-                                        nx_phys, ny_phys, nghost)
+                                        nx_phys, ny_phys, nghost, negate)
       !! 3D T-fold halo-fill — identical per level.
       integer, intent(in) :: nx_total, ny_total, nz, nx_phys, ny_phys, nghost
       real(wp), intent(inout) :: fld(nx_total, ny_total, nz)
+      logical, intent(in), optional :: negate
+         !! As the 2-D kernel.
          !! Cell-centred 3D field, shape (nx_total, ny_total, nz).
 
       integer :: i, j, k, isum, jsum, j_lo
+      real(wp) :: sgn
 
+      sgn = 1.0_wp
+      if (present(negate)) then
+         if (negate) sgn = -1.0_wp
+      end if
       isum = 2*nghost + nx_phys + 1
       jsum = 2*nghost + 2*ny_phys + 1
       j_lo = nghost + ny_phys + 1
 
       do concurrent(k=1:nz, j=j_lo:ny_total, i=1:nx_total)
-         fld(i, j, k) = fld(isum - i, jsum - j, k)
+         fld(i, j, k) = sgn*fld(isum - i, jsum - j, k)
       end do
    end subroutine fold_north_centre_3d
 

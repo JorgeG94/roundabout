@@ -133,8 +133,7 @@ module rdb_ice_transport_cice
    !! Pinned by `test_cice_remap_decomp_mpi` (every px x py layout of 1, 2 and 4 ranks
    !! against the serial run, owned cells bitwise, the fold with `px = 1` and `px > 1`).
    !! Not gated: the `upwind` advection's fold seam (it computes each face flux from
-   !! one donor and passed the same decomposition cases, but its fold row is not
-   !! paired), and the configuration refusals (range, table) are assumed uniform: a
+   !! one donor, and its fold row is not paired: `TRANSPORT_CFG_FOLD` refuses it across the fold), and the configuration refusals (range, table) are assumed uniform: a
    !! tile too small for the ring is refused on that rank only.
    !!
    !! **Conservation** is to round-off (one division by the cell area, the
@@ -180,7 +179,7 @@ module rdb_ice_transport_cice
 
    public :: ICE_TRANSPORT_POST_NONE, ICE_TRANSPORT_POST_AGGREGATE, ICE_TRANSPORT_POST_CLEANUP
    public :: TRANSPORT_CFG_OK, TRANSPORT_CFG_PARAMS, TRANSPORT_CFG_WORKSPACE, TRANSPORT_CFG_TABLE, TRANSPORT_CFG_RANGE
-   public :: TRANSPORT_CFG_REMAP, TRANSPORT_REMAP_FLUX_BYTES_MAX
+   public :: TRANSPORT_CFG_REMAP, TRANSPORT_CFG_FOLD, TRANSPORT_REMAP_FLUX_BYTES_MAX
    public :: transport_cice_ws_t, transport_result_t
    public :: ice_step_transport, transport_conservation_compare_floor
 
@@ -205,6 +204,9 @@ module rdb_ice_transport_cice
    integer, parameter :: TRANSPORT_CFG_REMAP = 5
       !! `advection = remap` and the workspace was not built with `remap = .true.`, or the remap refused (land mask not 0/1,
       !! workspaces of different extents).
+   integer, parameter :: TRANSPORT_CFG_FOLD = 6
+      !! `advection = upwind` across a tripolar fold: its fold-row face flux is not paired (the configure-time refusal
+      !! of `ice_config_check` backstopped here for a caller that skips validation).
    integer(int64), parameter :: TRANSPORT_REMAP_FLUX_BYTES_MAX = 1073741824_int64
       !! Default budget of the remap flux and reconstruction buffers (1 GiB): the category batch is the largest that fits.
 
@@ -301,6 +303,9 @@ contains
 
       ierr = 0
       call this%destroy()
+      ! a fresh decomposition seam: a workspace re-initialised for a new run must not carry the previous run's binding (a
+      ! stale `nbatch` skips the bind and with it the fold-buffer reserve)
+      this%seam = transport_seam_t()
       if (nslyr /= 1) then
          ierr = TRANSPORT_CFG_PARAMS
          return
@@ -508,7 +513,9 @@ contains
             cfg = TRANSPORT_CFG_RANGE
          end if
       else
-         if (.not. upwind_table_ok(w%a)) then
+         if (w%seam%fold) then
+            cfg = TRANSPORT_CFG_FOLD
+         else if (.not. upwind_table_ok(w%a)) then
             cfg = TRANSPORT_CFG_TABLE
          else if (is < 2 .or. ie > nxg - 1 .or. js < 2 .or. je > nyg - 1 .or. ie < is .or. je < js) then
             cfg = TRANSPORT_CFG_RANGE

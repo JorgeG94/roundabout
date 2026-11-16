@@ -25,6 +25,7 @@ module test_cice_sw_wiring
    use rdb_constants, only: wp
    use lcg_deterministic, only: lcg_next, lcg_unit
    use rdb_ice_bl99, only: ICE_NITERMAX, ICE_SW_FRAC, ICE_SW_DTEMP
+   use rdb_ice_dims, only: ICE_NTHX
    use rdb_ice_errors, only: ICE_ERR_NONFINITE
    use rdb_ice_params, only: ice_params_t, ice_params_default, ice_sw_params_t, ICE_CONSTANTS_ICEPACK, ice_q_from_T, &
                              ice_qsno_from_T
@@ -69,7 +70,7 @@ module test_cice_sw_wiring
       real(wp), allocatable :: aicen_init(:, :, :), aicen(:, :, :), vicen(:, :, :), vsnon(:, :, :), Tsfcn(:, :, :), &
                                freshn(:, :, :), fsaltn(:, :, :), fhocnn(:, :, :), evapn(:, :, :), fsensn(:, :, :), &
                                flatn(:, :, :), flwoutn(:, :, :), fswabsn(:, :, :), melttn(:, :, :), meltbn(:, :, :), &
-                               congeln(:, :, :), snoicen(:, :, :), sxn(:, :, :), syn(:, :, :)
+                               congeln(:, :, :), snoicen(:, :, :), sxn(:, :, :), syn(:, :, :), thx(:, :, :), thxn(:, :, :, :)
       real(wp), allocatable :: qicen(:, :, :, :), sicen(:, :, :, :), qsnon(:, :, :, :)
    end type world_t
 
@@ -123,7 +124,7 @@ contains
                 w%Tsfcn(nx, ny, ncat), w%freshn(nx, ny, ncat), w%fsaltn(nx, ny, ncat), w%fhocnn(nx, ny, ncat), &
                 w%evapn(nx, ny, ncat), w%fsensn(nx, ny, ncat), w%flatn(nx, ny, ncat), w%flwoutn(nx, ny, ncat), &
                 w%fswabsn(nx, ny, ncat), w%melttn(nx, ny, ncat), w%meltbn(nx, ny, ncat), w%congeln(nx, ny, ncat), &
-                w%snoicen(nx, ny, ncat), w%sxn(nx, ny, ncat), w%syn(nx, ny, ncat), w%qicen(nx, ny, ncat, nil), &
+                w%snoicen(nx, ny, ncat), w%thx(nx, ny, ICE_NTHX), w%thxn(nx, ny, ncat, ICE_NTHX), w%sxn(nx, ny, ncat), w%syn(nx, ny, ncat), w%qicen(nx, ny, ncat, nil), &
                 w%sicen(nx, ny, ncat, nil), w%qsnon(nx, ny, ncat, 1))
       w%sw = 0.0_wp
       w%uatm = 6.0_wp; w%vatm = 0.0_wp; w%wind = 6.0_wp; w%potT = 263.0_wp; w%Qa = 6.0e-4_wp; w%rhoa = 1.3_wp
@@ -133,7 +134,7 @@ contains
       w%sx = 0.0_wp; w%sy = 0.0_wp; w%fbot = 0.0_wp; w%rside = 0.0_wp; w%wlat = 0.0_wp
       w%ice_err = 0_int32; w%ierr_n = 0_int32
       w%freshn = SENT; w%fsaltn = SENT; w%fhocnn = SENT; w%evapn = SENT; w%fsensn = SENT; w%flatn = SENT
-      w%flwoutn = SENT; w%fswabsn = SENT; w%melttn = SENT; w%meltbn = SENT; w%congeln = SENT; w%snoicen = SENT
+      w%flwoutn = SENT; w%fswabsn = SENT; w%melttn = SENT; w%meltbn = SENT; w%congeln = SENT; w%snoicen = SENT; w%thx = SENT; w%thxn = SENT
       w%sxn = SENT; w%syn = SENT
       w%rad%fswsfcn = SENT; w%rad%fswintn = SENT; w%rad%fswthrun = SENT; w%rad%Iswabsn = SENT
       w%rad%alvn = SENT; w%rad%alin = SENT; w%rad%alv_ai = SENT; w%rad%ali_ai = SENT; w%rad%errn = 0_int32
@@ -154,7 +155,7 @@ contains
       !$acc& copyin(w%flwout, w%fswabs, w%meltt, w%meltb, w%congel, w%snoice, w%sx, w%sy, w%fbot, w%rside, w%wlat) &
       !$acc& copyin(w%fswthru, w%fswthru_vis, w%ice_err, w%ierr_n, w%aicen_init, w%aicen, w%vicen, w%vsnon, w%Tsfcn) &
       !$acc& copyin(w%freshn, w%fsaltn, w%fhocnn, w%evapn, w%fsensn, w%flatn, w%flwoutn, w%fswabsn, w%melttn) &
-      !$acc& copyin(w%meltbn, w%congeln, w%snoicen, w%sxn, w%syn, w%qicen, w%sicen, w%qsnon)
+      !$acc& copyin(w%meltbn, w%congeln, w%snoicen, w%thx, w%thxn, w%sxn, w%syn, w%qicen, w%sicen, w%qsnon)
       call w%rad%enter_data()
    end subroutine world_map
 
@@ -166,7 +167,7 @@ contains
       !$acc& delete(w%flwout, w%fswabs, w%meltt, w%meltb, w%congel, w%snoice, w%sx, w%sy, w%fbot, w%rside, w%wlat) &
       !$acc& delete(w%fswthru, w%fswthru_vis, w%ice_err, w%ierr_n, w%aicen_init, w%aicen, w%vicen, w%vsnon, w%Tsfcn) &
       !$acc& delete(w%freshn, w%fsaltn, w%fhocnn, w%evapn, w%fsensn, w%flatn, w%flwoutn, w%fswabsn, w%melttn) &
-      !$acc& delete(w%meltbn, w%congeln, w%snoicen, w%sxn, w%syn, w%qicen, w%sicen, w%qsnon)
+      !$acc& delete(w%meltbn, w%congeln, w%snoicen, w%thx, w%thxn, w%sxn, w%syn, w%qicen, w%sicen, w%qsnon)
    end subroutine world_unmap
 
    subroutine world_push(w)
@@ -183,7 +184,7 @@ contains
       !$acc update self(w%fresh, w%fsalt, w%fhocn, w%evap, w%fsens, w%flat, w%flwout, w%fswabs, w%meltt, w%meltb) &
       !$acc& self(w%congel, w%snoice, w%sx, w%sy, w%fbot, w%rside, w%wlat, w%fswthru, w%fswthru_vis, w%ice_err, w%ierr_n) &
       !$acc& self(w%aicen, w%vicen, w%vsnon, w%Tsfcn, w%qicen, w%qsnon, w%freshn, w%fsaltn, w%fhocnn, w%evapn) &
-      !$acc& self(w%fsensn, w%flatn, w%flwoutn, w%fswabsn, w%melttn, w%meltbn, w%congeln, w%snoicen, w%sxn, w%syn)
+      !$acc& self(w%fsensn, w%flatn, w%flwoutn, w%fswabsn, w%melttn, w%meltbn, w%congeln, w%snoicen, w%thx, w%thxn, w%sxn, w%syn)
       !$acc update self(w%rad%fswsfcn, w%rad%fswintn, w%rad%fswthrun, w%rad%Iswabsn, w%rad%alvn, w%rad%alin, w%rad%errn)
    end subroutine world_pull
 
@@ -198,8 +199,8 @@ contains
                               w%vvel, w%Tf, w%sst, w%frzmlt, w%tau_x, w%tau_y, &
                               w%aicen_init, w%aicen, w%vicen, w%vsnon, w%Tsfcn, w%qicen, w%sicen, w%qsnon, &
                               w%fresh, w%fsalt, w%fhocn, w%evap, w%fsens, w%flat, w%flwout, w%fswabs, w%meltt, w%meltb, &
-                              w%congel, w%snoice, w%freshn, w%fsaltn, w%fhocnn, w%evapn, w%fsensn, w%flatn, w%flwoutn, &
-                              w%fswabsn, w%melttn, w%meltbn, w%congeln, w%snoicen, w%sxn, w%syn, w%sx, w%sy, &
+                              w%congel, w%snoice, w%thx, w%freshn, w%fsaltn, w%fhocnn, w%evapn, w%fsensn, w%flatn, w%flwoutn, &
+                              w%fswabsn, w%melttn, w%meltbn, w%congeln, w%snoicen, w%thxn, w%sxn, w%syn, w%sx, w%sy, &
                               w%fbot, w%rside, w%wlat, w%ierr_n, w%ice_err, w%fswthru, w%fswthru_vis, ierr, istat)
       call world_pull(w)
    end subroutine world_step
@@ -436,8 +437,8 @@ contains
                            r%uatm, r%vatm, r%wind, r%potT, r%Qa, r%rhoa, r%flw, r%fsnow, r%uvel, r%vvel, r%Tf, r%sst, &
                            r%frzmlt, r%tau_x, r%tau_y, r%aicen_init, r%aicen, r%vicen, r%vsnon, r%Tsfcn, r%qicen, r%sicen, &
                            r%qsnon, z3, z3b, z3c, z4, s4, r%fresh, r%fsalt, r%fhocn, r%evap, r%fsens, r%flat, r%flwout, r%fswabs, &
-                           r%meltt, r%meltb, r%congel, r%snoice, r%freshn, r%fsaltn, r%fhocnn, r%evapn, r%fsensn, r%flatn, &
-                           r%flwoutn, r%fswabsn, r%melttn, r%meltbn, r%congeln, r%snoicen, r%sxn, r%syn, r%sx, r%sy, r%fbot, &
+                           r%meltt, r%meltb, r%congel, r%snoice, r%thx, r%freshn, r%fsaltn, r%fhocnn, r%evapn, r%fsensn, r%flatn, &
+                         r%flwoutn, r%fswabsn, r%melttn, r%meltbn, r%congeln, r%snoicen, r%thxn, r%sxn, r%syn, r%sx, r%sy, r%fbot, &
                            r%rside, r%wlat, r%ierr_n, r%ice_err, ist2)
       call world_pull(r)
       !$acc exit data delete(z3, z3b, z3c, z4, s4)
@@ -603,8 +604,8 @@ contains
                               v%vvel, v%Tf, v%sst, v%frzmlt, v%tau_x, v%tau_y, &
                               v%aicen_init, v%aicen, v%vicen, v%vsnon, v%Tsfcn, v%qicen, v%sicen, v%qsnon, &
                               v%fresh, v%fsalt, v%fhocn, v%evap, v%fsens, v%flat, v%flwout, v%fswabs, v%meltt, v%meltb, &
-                              v%congel, v%snoice, v%freshn, v%fsaltn, v%fhocnn, v%evapn, v%fsensn, v%flatn, v%flwoutn, &
-                              v%fswabsn, v%melttn, v%meltbn, v%congeln, v%snoicen, v%sxn, v%syn, v%sx, v%sy, &
+                              v%congel, v%snoice, v%thx, v%freshn, v%fsaltn, v%fhocnn, v%evapn, v%fsensn, v%flatn, v%flwoutn, &
+                              v%fswabsn, v%melttn, v%meltbn, v%congeln, v%snoicen, v%thxn, v%sxn, v%syn, v%sx, v%sy, &
                               v%fbot, v%rside, v%wlat, v%ierr_n, v%ice_err, v%fswthru, v%fswthru_vis, ierr, istat)
       call world_pull(v)
       call world_unmap(v)
@@ -737,7 +738,7 @@ contains
                                     r%aicen_init, r%aicen, r%vicen, r%vsnon, r%Tsfcn, r%qicen, r%sicen, r%qsnon, &
                                     r%rad%fswsfcn, r%rad%fswintn, r%rad%fswthrun, r%rad%Iswabsn, s4, &
                                     r%freshn, r%fsaltn, r%fhocnn, r%evapn, r%fsensn, r%flatn, r%flwoutn, r%fswabsn, &
-                                    r%melttn, r%meltbn, r%congeln, r%snoicen, r%sxn, r%syn, r%ice_err, r%ierr_n)
+                                    r%melttn, r%meltbn, r%congeln, r%snoicen, r%thxn, r%sxn, r%syn, r%ice_err, r%ierr_n)
             end do
          end do
       end do
@@ -857,8 +858,8 @@ contains
                                     w%fsnow, w%uvel, w%vvel, w%Tf, w%sst, w%frzmlt, w%tau_x, w%tau_y, &
                                     w%aicen_init, w%aicen, w%vicen, w%vsnon, w%Tsfcn, w%qicen, w%sicen, w%qsnon, &
                                     w%fresh, w%fsalt, w%fhocn, w%evap, w%fsens, w%flat, w%flwout, w%fswabs, w%meltt, &
-                                    w%meltb, w%congel, w%snoice, w%freshn, w%fsaltn, w%fhocnn, w%evapn, w%fsensn, w%flatn, &
-                                    w%flwoutn, w%fswabsn, w%melttn, w%meltbn, w%congeln, w%snoicen, w%sxn, w%syn, w%sx, &
+                                    w%meltb, w%congel, w%snoice, w%thx, w%freshn, w%fsaltn, w%fhocnn, w%evapn, w%fsensn, w%flatn, &
+                                    w%flwoutn, w%fswabsn, w%melttn, w%meltbn, w%congeln, w%snoicen, w%thxn, w%sxn, w%syn, w%sx, &
                                     w%sy, w%fbot, w%rside, w%wlat, w%ierr_n, w%ice_err, w%fswthru, w%fswthru_vis, ierr, istat)
          end do
          !$acc update self(w%fswthru, w%ice_err)

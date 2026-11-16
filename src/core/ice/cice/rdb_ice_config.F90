@@ -25,7 +25,8 @@
 !! option, a non-positive `ahmax`) apply under either scheme; structure checks
 !! (layer and category counts, `hlim`) apply under `scheme="cice"`.
 !! `scheme="cice"` is runnable, on any rank count on walls and periodic edges, on the envelope the checks
-!! above spell out; the tripolar fold stays refused (the named-term ledger runs on several ranks).
+!! above spell out; the tripolar fold (remap advection) and the named-term ledger run on several ranks; across the fold the upwind
+!! advection stays refused.
 module rdb_ice_config
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    use rdb_constants, only: wp
@@ -176,9 +177,10 @@ contains
          if (cfg%ocean%ice_dyn%transport_buffer_mib < 1) then
             call add_msg(msgs, n, "&ocean_ice_dyn_nml transport_buffer_mib must be >= 1")
          end if
-         if (trim(adjustl(cfg%ocean%bc%north)) == "tripolar_fold") then
-            call add_msg(msgs, n, "&ocean_bc_nml scheme='cice' with a tripolar north fold is not "// &
-                         "supported yet (the fold of the new state arrays is not wired)")
+         if (trim(adjustl(cfg%ocean%bc%north)) == "tripolar_fold" .and. &
+             trim(adjustl(cfg%ocean%ice_dyn%advection)) == "upwind") then
+            call add_msg(msgs, n, "&ocean_ice_dyn_nml advection='upwind' across a tripolar north fold is not "// &
+                         "supported (its fold-row face flux is not paired; use advection='remap')")
          end if
          if (cfg%ocean%wetdry%enable) then
             call add_msg(msgs, n, "&ocean_wetdry_nml enable=.true. is not supported by scheme='cice' "// &
@@ -189,7 +191,7 @@ contains
                          "scheme='cice' (no ice under an ice shelf)")
          end if
          if (.not. (edge_is_closed(cfg%ocean%bc%west) .and. edge_is_closed(cfg%ocean%bc%east) .and. &
-                    edge_is_closed(cfg%ocean%bc%south) .and. edge_is_closed(cfg%ocean%bc%north))) then
+                    edge_is_closed(cfg%ocean%bc%south) .and. edge_is_closed(cfg%ocean%bc%north, fold_ok=.true.))) then
             call add_msg(msgs, n, "&ocean_bc_nml scheme='cice' supports 'wall' or 'periodic' edges "// &
                          "only (an open ocean boundary is land for the ice dynamics)")
          end if
@@ -480,11 +482,16 @@ contains
       set = set .or. cfg%ocean%ice%sw_down /= 0.0_wp .or. cfg%ocean%ice%snowfall /= 0.0_wp
    end function uniform_atmosphere_set
 
-   pure function edge_is_closed(tag) result(ok)
-      !! A boundary tag the ice dynamics can live with: a wall or a periodic seam.
+   pure function edge_is_closed(tag, fold_ok) result(ok)
+      !! A boundary tag the ice dynamics can live with: a wall or a periodic seam, and on the north edge
+      !! (`fold_ok`) the tripolar fold (Murray 1996).
       character(len=*), intent(in) :: tag
+      logical, intent(in), optional :: fold_ok
       logical :: ok
       ok = trim(adjustl(tag)) == "wall" .or. trim(adjustl(tag)) == "periodic"
+      if (present(fold_ok)) then
+         if (fold_ok .and. trim(adjustl(tag)) == "tripolar_fold") ok = .true.
+      end if
    end function edge_is_closed
 
    pure function unit_closed(x) result(ok)

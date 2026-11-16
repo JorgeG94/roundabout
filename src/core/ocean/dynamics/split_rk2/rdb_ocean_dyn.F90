@@ -551,6 +551,9 @@ contains
       else
          call this%bt_work%init(grid)
       end if
+      ! The cadence counter restarts with the run: a reused state object (a second engine on the same
+      ! storage) must not inherit the parity of the last run's step count (a warm restart sets it after).
+      this%outer_step_count = 0
       this%is_init = .true.
    end subroutine ocean_dyn_init
 
@@ -766,6 +769,7 @@ contains
    subroutine ocean_dyn_destroy(this)
       class(ocean_dyn_t), intent(inout) :: this
       this%is_init = .false.
+      this%outer_step_count = 0
       call this%bt_work%destroy()
       if (allocated(this%bt_wide)) then
          call this%bt_wide%destroy()

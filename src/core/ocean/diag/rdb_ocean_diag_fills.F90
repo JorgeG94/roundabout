@@ -32,6 +32,10 @@ module rdb_ocean_diag_fills
    use rdb_remap_column, only: remap_column
    use rdb_ice_column, only: ICE_RHO_ICE
    use rdb_ocean_pseudo_salt, only: ocean_pseudo_salt_deviation
+   use rdb_ocean_diag_ice_cice, only: cice_fill, cice_scheme_active, CD_CONGEL, CD_FRAZIL, CD_SNOICE, &
+                                      CD_MELTT, CD_MELTB, CD_MELTL, CD_DVIDTT, CD_DVIDTD, CD_DAIDTT, &
+                                      CD_DAIDTD, CD_TSFC, CD_FSWABS, CD_FLWUP, CD_FSENS, CD_FLAT, &
+                                CD_FHOCN, CD_FSWTHRU, CD_FRESH, CD_FSALT, CD_EVAP, CD_ALBSNI, CD_EVAPI, CD_EVAPS, CD_MELTS, CD_FSWDN
    implicit none
    private
 #ifdef LFORTRAN_PASSING
@@ -52,6 +56,9 @@ module rdb_ocean_diag_fills
    public :: fill_ice_hs, fill_ice_tsfc, fill_ice_congel, fill_ice_frazil
    public :: fill_ice_snoice, fill_ice_meltt, fill_ice_meltb, fill_ice_meltl
    public :: fill_ice_dvidtt
+   public :: fill_ice_dvidtd, fill_ice_daidtt, fill_ice_daidtd, fill_ice_fswabs, fill_ice_fswthru
+   public :: fill_ice_albsni, fill_ice_flwup, fill_ice_fsens, fill_ice_flat, fill_ice_fhocn
+   public :: fill_ice_fresh, fill_ice_fsalt, fill_ice_evap, fill_ice_evapi, fill_ice_evaps, fill_ice_melts, fill_ice_fswdn
    public :: fill_atm_tas, fill_atm_huss, fill_atm_uas, fill_atm_vas, fill_atm_psl
    public :: fill_atm_rlds, fill_atm_rsds, fill_atm_prra, fill_atm_prsn, fill_atm_cosz
    public :: remap_layer_to_z
@@ -99,7 +106,7 @@ module rdb_ocean_diag_fills
    real(wp), allocatable, save :: diag_remap_dzn(:, :, :)
       !! Target cell thickness, clipped to the column (`(nx,ny,nz_out)`).
 
-   integer, parameter :: N_CANONICAL_DIAGS = 37
+   integer, parameter :: N_CANONICAL_DIAGS = 54
    real(wp), parameter :: CM_DAY_PER_M_S = 8.64e6_wp
       !! Unit conversion for the CICE thickness-rate diagnostics: m/s -> cm/day
       !! (86400 s/day x 100 cm/m). CICE writes every thickness-tendency field
@@ -114,7 +121,11 @@ module rdb_ocean_diag_fills
                                     "dvidtt", &
                                     "pseudo_salt", "pseudo_salt_diff", &
                                     "atm_tas", "atm_huss", "atm_uas", "atm_vas", "atm_psl", &
-                                    "atm_rlds", "atm_rsds", "atm_prra", "atm_prsn", "atm_cosz"]
+                                    "atm_rlds", "atm_rsds", "atm_prra", "atm_prsn", "atm_cosz", &
+                                    "dvidtd", "daidtt", "daidtd", "albsni", "fswabs_ai", "fswthru_ai", &
+                                    "flwup_ai", "fsens_ai", "flat_ai", "fhocn_ai", "fresh_ai", &
+                                    "fsalt_ai", "evap_ai", "evapi_ai", "evaps_ai", "melts", "fswdn_ai"]
+      !! New names are APPENDED: the C-ABI catalog indices of the existing ones never move.
       !! The single source of truth for `is_canonical_diag_name` AND the
       !! P7 discoverability getters (`canonical_diag_catalog_size`/
       !! `_name`, wrapped by the C ABI as `rdb_ocean_canonical_*`) —
@@ -427,16 +438,22 @@ contains
    end subroutine fill_ice_hs
 
    subroutine fill_ice_tsfc(state_handle, buf)
-      !! CICE `Tsfc`: aggregate surface temperature (degC) — the
-      !! ice-area-weighted mean of the per-category skin temperatures,
-      !! with the open-water share of the cell at the seawater freezing
-      !! temperature (CICE's aggregate convention). Land/ghost = NaN.
+      !! `Tsfc`: aggregate surface temperature (degC).  Under SIS2: the
+      !! ice-area-weighted mean of the per-category skin temperatures with
+      !! the open-water share of the cell at the seawater freezing
+      !! temperature (a cell-mean blend; it is NOT CICE's definition, which
+      !! is the ice-area mean with the freezing point only where there is no
+      !! ice, as `scheme = "cice"` computes).  Land/ghost = NaN.
       class(*), intent(in) :: state_handle
       real(wp), intent(inout) :: buf(:, :, :)
       select type (state => state_handle)
       class is (ocean_state_t)
          if (.not. state%ice%is_init) then
             call fill_zero_impl(buf)
+            return
+         end if
+         if (cice_scheme_active(state)) then
+            call cice_fill(state, CD_TSFC, buf)
             return
          end if
          call fill_ice_tsfc_impl(state%ice%ncat, size(state%ice%m_ice, 1), &
@@ -453,6 +470,10 @@ contains
       real(wp), intent(inout) :: buf(:, :, :)
       select type (state => state_handle)
       class is (ocean_state_t)
+         if (cice_scheme_active(state)) then
+            call cice_fill(state, CD_CONGEL, buf)
+            return
+         end if
          call fill_ice_rate_src(state, state%ice%m_congel_win, 1.0_wp, buf)
       end select
    end subroutine fill_ice_congel
@@ -464,6 +485,10 @@ contains
       real(wp), intent(inout) :: buf(:, :, :)
       select type (state => state_handle)
       class is (ocean_state_t)
+         if (cice_scheme_active(state)) then
+            call cice_fill(state, CD_FRAZIL, buf)
+            return
+         end if
          call fill_ice_rate_src(state, state%ice%m_frozen_diag, 1.0_wp, buf)
       end select
    end subroutine fill_ice_frazil
@@ -474,6 +499,10 @@ contains
       real(wp), intent(inout) :: buf(:, :, :)
       select type (state => state_handle)
       class is (ocean_state_t)
+         if (cice_scheme_active(state)) then
+            call cice_fill(state, CD_SNOICE, buf)
+            return
+         end if
          call fill_ice_rate_src(state, state%ice%m_snoice_win, 1.0_wp, buf)
       end select
    end subroutine fill_ice_snoice
@@ -484,6 +513,10 @@ contains
       real(wp), intent(inout) :: buf(:, :, :)
       select type (state => state_handle)
       class is (ocean_state_t)
+         if (cice_scheme_active(state)) then
+            call cice_fill(state, CD_MELTT, buf)
+            return
+         end if
          call fill_ice_rate_src(state, state%ice%m_meltt_win, 1.0_wp, buf)
       end select
    end subroutine fill_ice_meltt
@@ -494,6 +527,10 @@ contains
       real(wp), intent(inout) :: buf(:, :, :)
       select type (state => state_handle)
       class is (ocean_state_t)
+         if (cice_scheme_active(state)) then
+            call cice_fill(state, CD_MELTB, buf)
+            return
+         end if
          call fill_ice_rate_src(state, state%ice%m_meltb_win, 1.0_wp, buf)
       end select
    end subroutine fill_ice_meltb
@@ -507,6 +544,10 @@ contains
       real(wp), intent(inout) :: buf(:, :, :)
       select type (state => state_handle)
       class is (ocean_state_t)
+         if (cice_scheme_active(state)) then
+            call cice_fill(state, CD_MELTL, buf)
+            return
+         end if
          call fill_ice_rate_src(state, state%ice%m_meltb_win, 0.0_wp, buf)
       end select
    end subroutine fill_ice_meltl
@@ -522,6 +563,10 @@ contains
       real(wp) :: scale
       select type (state => state_handle)
       class is (ocean_state_t)
+         if (cice_scheme_active(state)) then
+            call cice_fill(state, CD_DVIDTT, buf)
+            return
+         end if
          scale = ice_rate_scale(state%ice%dt_win)
          if (.not. state%ice%is_init) then
             call fill_zero_impl(buf)
@@ -534,6 +579,195 @@ contains
                                    state%ice%m_meltb_win, scale, buf)
       end select
    end subroutine fill_ice_dvidtt
+
+   subroutine fill_ice_dvidtd(state_handle, buf)
+      !! CICE `dvidtd`: dynamic ice-volume tendency (cm/day), `(vice_end - vice_after_thermo)/dt`.  Registered only under
+      !! `&ocean_ice_nml scheme = "cice"` (see `rdb_ocean_diag_ice_cice`).
+      class(*), intent(in) :: state_handle
+      real(wp), intent(inout) :: buf(:, :, :)
+      select type (state => state_handle)
+      class is (ocean_state_t)
+         call cice_fill(state, CD_DVIDTD, buf)
+      end select
+   end subroutine fill_ice_dvidtd
+
+   subroutine fill_ice_daidtt(state_handle, buf)
+      !! CICE `daidtt`: thermodynamic ice-area tendency (%/day).  Registered only under
+      !! `&ocean_ice_nml scheme = "cice"` (see `rdb_ocean_diag_ice_cice`).
+      class(*), intent(in) :: state_handle
+      real(wp), intent(inout) :: buf(:, :, :)
+      select type (state => state_handle)
+      class is (ocean_state_t)
+         call cice_fill(state, CD_DAIDTT, buf)
+      end select
+   end subroutine fill_ice_daidtt
+
+   subroutine fill_ice_daidtd(state_handle, buf)
+      !! CICE `daidtd`: dynamic ice-area tendency (%/day).  Registered only under
+      !! `&ocean_ice_nml scheme = "cice"` (see `rdb_ocean_diag_ice_cice`).
+      class(*), intent(in) :: state_handle
+      real(wp), intent(inout) :: buf(:, :, :)
+      select type (state => state_handle)
+      class is (ocean_state_t)
+         call cice_fill(state, CD_DAIDTD, buf)
+      end select
+   end subroutine fill_ice_daidtd
+
+   subroutine fill_ice_fswabs(state_handle, buf)
+      !! CICE `fswabs_ai`: shortwave absorbed by snow, ice and the part passed to the ocean (W m-2, + down), per cell area.  Registered only under
+      !! `&ocean_ice_nml scheme = "cice"` (see `rdb_ocean_diag_ice_cice`).
+      class(*), intent(in) :: state_handle
+      real(wp), intent(inout) :: buf(:, :, :)
+      select type (state => state_handle)
+      class is (ocean_state_t)
+         call cice_fill(state, CD_FSWABS, buf)
+      end select
+   end subroutine fill_ice_fswabs
+
+   subroutine fill_ice_fswthru(state_handle, buf)
+      !! CICE `fswthru_ai`: shortwave through the ice into the ocean (W m-2, + down), per cell area.  Registered only under
+      !! `&ocean_ice_nml scheme = "cice"` (see `rdb_ocean_diag_ice_cice`).
+      class(*), intent(in) :: state_handle
+      real(wp), intent(inout) :: buf(:, :, :)
+      select type (state => state_handle)
+      class is (ocean_state_t)
+         call cice_fill(state, CD_FSWTHRU, buf)
+      end select
+   end subroutine fill_ice_fswthru
+
+   subroutine fill_ice_albsni(state_handle, buf)
+      !! CICE `albsni`: broadband snow/ice albedo (%), ice-area weighted.  Registered only under
+      !! `&ocean_ice_nml scheme = "cice"` (see `rdb_ocean_diag_ice_cice`).
+      class(*), intent(in) :: state_handle
+      real(wp), intent(inout) :: buf(:, :, :)
+      select type (state => state_handle)
+      class is (ocean_state_t)
+         call cice_fill(state, CD_ALBSNI, buf)
+      end select
+   end subroutine fill_ice_albsni
+
+   subroutine fill_ice_flwup(state_handle, buf)
+      !! CICE `flwup_ai`: outgoing longwave (W m-2, NEGATIVE: + is downward), per cell area.  Registered only under
+      !! `&ocean_ice_nml scheme = "cice"` (see `rdb_ocean_diag_ice_cice`).
+      class(*), intent(in) :: state_handle
+      real(wp), intent(inout) :: buf(:, :, :)
+      select type (state => state_handle)
+      class is (ocean_state_t)
+         call cice_fill(state, CD_FLWUP, buf)
+      end select
+   end subroutine fill_ice_flwup
+
+   subroutine fill_ice_fsens(state_handle, buf)
+      !! CICE `fsens_ai`: sensible heat flux, + downward (W m-2), per cell area.  Registered only under
+      !! `&ocean_ice_nml scheme = "cice"` (see `rdb_ocean_diag_ice_cice`).
+      class(*), intent(in) :: state_handle
+      real(wp), intent(inout) :: buf(:, :, :)
+      select type (state => state_handle)
+      class is (ocean_state_t)
+         call cice_fill(state, CD_FSENS, buf)
+      end select
+   end subroutine fill_ice_fsens
+
+   subroutine fill_ice_flat(state_handle, buf)
+      !! CICE `flat_ai`: latent heat flux, + downward (W m-2), per cell area.  Registered only under
+      !! `&ocean_ice_nml scheme = "cice"` (see `rdb_ocean_diag_ice_cice`).
+      class(*), intent(in) :: state_handle
+      real(wp), intent(inout) :: buf(:, :, :)
+      select type (state => state_handle)
+      class is (ocean_state_t)
+         call cice_fill(state, CD_FLAT, buf)
+      end select
+   end subroutine fill_ice_flat
+
+   subroutine fill_ice_fhocn(state_handle, buf)
+      !! CICE `fhocn_ai`: heat flux ice to ocean, + into the ocean (W m-2), per cell area.  Registered only under
+      !! `&ocean_ice_nml scheme = "cice"` (see `rdb_ocean_diag_ice_cice`).
+      class(*), intent(in) :: state_handle
+      real(wp), intent(inout) :: buf(:, :, :)
+      select type (state => state_handle)
+      class is (ocean_state_t)
+         call cice_fill(state, CD_FHOCN, buf)
+      end select
+   end subroutine fill_ice_fhocn
+
+   subroutine fill_ice_fresh(state_handle, buf)
+      !! CICE `fresh_ai`: fresh-water flux ice to ocean, + into the ocean (cm/day water equivalent), per cell area.
+      !! It includes the rain that falls through the ice, which the hand-off removes from the ocean's input under the
+      !! prescribed atmosphere with `freshwater = "none"`.  Registered only under
+      !! `&ocean_ice_nml scheme = "cice"` (see `rdb_ocean_diag_ice_cice`).
+      class(*), intent(in) :: state_handle
+      real(wp), intent(inout) :: buf(:, :, :)
+      select type (state => state_handle)
+      class is (ocean_state_t)
+         call cice_fill(state, CD_FRESH, buf)
+      end select
+   end subroutine fill_ice_fresh
+
+   subroutine fill_ice_fsalt(state_handle, buf)
+      !! CICE `fsalt_ai`: salt flux ice to ocean, + into the ocean (kg m-2 s-1), per cell area.  Registered only under
+      !! `&ocean_ice_nml scheme = "cice"` (see `rdb_ocean_diag_ice_cice`).
+      class(*), intent(in) :: state_handle
+      real(wp), intent(inout) :: buf(:, :, :)
+      select type (state => state_handle)
+      class is (ocean_state_t)
+         call cice_fill(state, CD_FSALT, buf)
+      end select
+   end subroutine fill_ice_fsalt
+
+   subroutine fill_ice_evap(state_handle, buf)
+      !! CICE `evap_ai`: evaporative water flux, + condensation (cm/day water equivalent), per cell area.  Registered only under
+      !! `&ocean_ice_nml scheme = "cice"` (see `rdb_ocean_diag_ice_cice`).
+      class(*), intent(in) :: state_handle
+      real(wp), intent(inout) :: buf(:, :, :)
+      select type (state => state_handle)
+      class is (ocean_state_t)
+         call cice_fill(state, CD_EVAP, buf)
+      end select
+   end subroutine fill_ice_evap
+
+   subroutine fill_ice_evapi(state_handle, buf)
+      !! CICE `evapi_ai`: evaporation (+ condensation) of the ICE part of `evap_ai` (cm/day water equivalent), per cell area.  Registered only under
+      !! `&ocean_ice_nml scheme = "cice"` (see `rdb_ocean_diag_ice_cice`).
+      class(*), intent(in) :: state_handle
+      real(wp), intent(inout) :: buf(:, :, :)
+      select type (state => state_handle)
+      class is (ocean_state_t)
+         call cice_fill(state, CD_EVAPI, buf)
+      end select
+   end subroutine fill_ice_evapi
+
+   subroutine fill_ice_evaps(state_handle, buf)
+      !! CICE `evaps_ai`: evaporation (+ condensation) of the SNOW part of `evap_ai` (cm/day water equivalent), per cell area.  Registered only under
+      !! `&ocean_ice_nml scheme = "cice"` (see `rdb_ocean_diag_ice_cice`).
+      class(*), intent(in) :: state_handle
+      real(wp), intent(inout) :: buf(:, :, :)
+      select type (state => state_handle)
+      class is (ocean_state_t)
+         call cice_fill(state, CD_EVAPS, buf)
+      end select
+   end subroutine fill_ice_evaps
+
+   subroutine fill_ice_melts(state_handle, buf)
+      !! CICE `melts`: top snow melt, snow thickness (cm/day), per cell area.  Registered only under
+      !! `&ocean_ice_nml scheme = "cice"` (see `rdb_ocean_diag_ice_cice`).
+      class(*), intent(in) :: state_handle
+      real(wp), intent(inout) :: buf(:, :, :)
+      select type (state => state_handle)
+      class is (ocean_state_t)
+         call cice_fill(state, CD_MELTS, buf)
+      end select
+   end subroutine fill_ice_melts
+
+   subroutine fill_ice_fswdn(state_handle, buf)
+      !! CICE `fswdn_ai`: incoming shortwave on the ice, `sw_down*aice_init` (W m-2, + down); the denominator of the shortwave-weighted albedo.  Registered only under
+      !! `&ocean_ice_nml scheme = "cice"` (see `rdb_ocean_diag_ice_cice`).
+      class(*), intent(in) :: state_handle
+      real(wp), intent(inout) :: buf(:, :, :)
+      select type (state => state_handle)
+      class is (ocean_state_t)
+         call cice_fill(state, CD_FSWDN, buf)
+      end select
+   end subroutine fill_ice_fswdn
 
    pure function ice_rate_scale(dt_win) result(scale)
       !! Window mass (kg/m^2 of cell) -> cm/day rate factor:
@@ -915,7 +1149,8 @@ contains
    end subroutine fill_ice_hs_impl
 
    pure subroutine fill_ice_tsfc_impl(ncat, nx, ny, wet_T, part_size, m_ice, tsurf, tfw, buf)
-      !! CICE aggregate surface temperature: ice-covered categories (the
+      !! Cell-mean aggregate surface temperature (SIS2 path; NOT the CICE definition, which is the
+      !! ice-area mean): ice-covered categories (the
       !! column's own entry gate, m_ice > ICE_RHO_ICE*H_VANISHED) weighted
       !! by their area, plus the open-water share at the seawater freezing
       !! temperature `tfw`. ncat==1 is the lumped cell (one category, or
@@ -1992,9 +2227,10 @@ contains
                                         fill_ice_thick, 1, DIAG_OP_MEAN, &
                                         "grid_mean_sea_ice_thickness")
          end if
-         ! Thickness-tendency rates (cm/day, CICE convention): window masses
-         ! exist only when the thermodynamic column runs.
-         if (state%dyn%enable_thermodynamics) then
+         ! Thickness-tendency rates (cm/day, CICE convention): the SIS2 path's window masses
+         ! exist only when the ocean thermodynamics run; the CICE-port scheme's per-step
+         ! quantities exist whenever the ice does.
+         if (state%dyn%enable_thermodynamics .or. cice_scheme_active(state)) then
             call register_one_canonical(state, specs, dcoord, dtout, "congel", "cm/day", &
                                         fill_ice_congel, 1, DIAG_OP_MEAN, &
                                         "congelation_ice_growth_rate")
@@ -2016,6 +2252,57 @@ contains
             call register_one_canonical(state, specs, dcoord, dtout, "dvidtt", "cm/day", &
                                         fill_ice_dvidtt, 1, DIAG_OP_MEAN, &
                                         "thermodynamic_ice_volume_tendency")
+         end if
+         ! The CICE-port scheme's own history set (window means of the last ice step's
+         ! quantities; definitions in `rdb_ocean_diag_ice_cice`).  Registered ONLY when that scheme
+         ! runs, so the SIS2 path's output is unchanged.
+         if (cice_scheme_active(state)) then
+            call register_one_canonical(state, specs, dcoord, dtout, "dvidtd", "cm/day", &
+                                        fill_ice_dvidtd, 1, DIAG_OP_MEAN, "dynamic_ice_volume_tendency")
+            call register_one_canonical(state, specs, dcoord, dtout, "daidtt", "%/day", &
+                                        fill_ice_daidtt, 1, DIAG_OP_MEAN, "thermodynamic_ice_area_tendency")
+            call register_one_canonical(state, specs, dcoord, dtout, "daidtd", "%/day", &
+                                        fill_ice_daidtd, 1, DIAG_OP_MEAN, "dynamic_ice_area_tendency")
+            call register_one_canonical(state, specs, dcoord, dtout, "albsni", "%", &
+                                        fill_ice_albsni, 1, DIAG_OP_MEAN, "ice_area_weighted_snow_ice_albedo")
+            call register_one_canonical(state, specs, dcoord, dtout, "fswabs_ai", "W m-2", &
+                                        fill_ice_fswabs, 1, DIAG_OP_MEAN, &
+                                        "shortwave_absorbed_by_snow_ice_and_ocean_under_ice_cell_mean")
+            call register_one_canonical(state, specs, dcoord, dtout, "fswthru_ai", "W m-2", &
+                                        fill_ice_fswthru, 1, DIAG_OP_MEAN, &
+                                        "shortwave_through_ice_to_ocean_cell_mean")
+            call register_one_canonical(state, specs, dcoord, dtout, "flwup_ai", "W m-2", &
+                                        fill_ice_flwup, 1, DIAG_OP_MEAN, &
+                                        "upward_longwave_flux_positive_downward_cell_mean")
+            call register_one_canonical(state, specs, dcoord, dtout, "fsens_ai", "W m-2", &
+                                        fill_ice_fsens, 1, DIAG_OP_MEAN, &
+                                        "sensible_heat_flux_positive_downward_cell_mean")
+            call register_one_canonical(state, specs, dcoord, dtout, "flat_ai", "W m-2", &
+                                        fill_ice_flat, 1, DIAG_OP_MEAN, &
+                                        "latent_heat_flux_positive_downward_cell_mean")
+            call register_one_canonical(state, specs, dcoord, dtout, "fhocn_ai", "W m-2", &
+                                        fill_ice_fhocn, 1, DIAG_OP_MEAN, &
+                                        "heat_flux_ice_to_ocean_cell_mean")
+            call register_one_canonical(state, specs, dcoord, dtout, "fresh_ai", "cm/day", &
+                                        fill_ice_fresh, 1, DIAG_OP_MEAN, &
+                                        "freshwater_flux_ice_to_ocean_cell_mean")
+            call register_one_canonical(state, specs, dcoord, dtout, "fsalt_ai", "kg m-2 s-1", &
+                                        fill_ice_fsalt, 1, DIAG_OP_MEAN, &
+                                        "salt_flux_ice_to_ocean_cell_mean")
+            call register_one_canonical(state, specs, dcoord, dtout, "evap_ai", "cm/day", &
+                                        fill_ice_evap, 1, DIAG_OP_MEAN, &
+                                        "evaporative_water_flux_positive_condensation_cell_mean")
+            call register_one_canonical(state, specs, dcoord, dtout, "evapi_ai", "cm/day", &
+                                        fill_ice_evapi, 1, DIAG_OP_MEAN, &
+                                        "ice_evaporation_positive_condensation_cell_mean")
+            call register_one_canonical(state, specs, dcoord, dtout, "evaps_ai", "cm/day", &
+                                        fill_ice_evaps, 1, DIAG_OP_MEAN, &
+                                        "snow_evaporation_positive_condensation_cell_mean")
+            call register_one_canonical(state, specs, dcoord, dtout, "melts", "cm/day", &
+                                        fill_ice_melts, 1, DIAG_OP_MEAN, "top_snow_melt_rate")
+            call register_one_canonical(state, specs, dcoord, dtout, "fswdn_ai", "W m-2", &
+                                        fill_ice_fswdn, 1, DIAG_OP_MEAN, &
+                                        "incoming_shortwave_on_ice_cell_mean")
          end if
       end if
 #ifndef RDB_NO_NETCDF
@@ -2210,7 +2497,10 @@ contains
       case ("ice_conc", "ice_thick", "aice", "hi", "hs", "Tsfc")
          hint = "&ocean_ice_nml enable"
       case ("congel", "frazil", "snoice", "meltt", "meltb", "meltl", "dvidtt")
-         hint = "&ocean_ice_nml enable (+ thermodynamics)"
+         hint = "&ocean_ice_nml enable (+ thermodynamics, or scheme = 'cice')"
+      case ("dvidtd", "daidtt", "daidtd", "albsni", "fswabs_ai", "fswthru_ai", "flwup_ai", "fsens_ai", &
+            "flat_ai", "fhocn_ai", "fresh_ai", "fsalt_ai", "evap_ai", "evapi_ai", "evaps_ai", "melts", "fswdn_ai")
+         hint = "&ocean_ice_nml scheme = 'cice'"
       case ("atm_tas", "atm_huss", "atm_uas", "atm_vas", "atm_psl", &
             "atm_rlds", "atm_rsds", "atm_prra", "atm_prsn", "atm_cosz")
          hint = "&ocean_atm_forcing_nml enable"

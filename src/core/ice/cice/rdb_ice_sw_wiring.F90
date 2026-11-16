@@ -40,6 +40,7 @@ module rdb_ice_sw_wiring
    !! shortwave".
    use, intrinsic :: iso_fortran_env, only: int32
    use rdb_constants, only: wp
+   use rdb_ice_dims, only: ICE_NTHX
    use rdb_ice_params, only: ice_params_t, ice_sw_params_t
    use rdb_ice_rad_state, only: ice_rad_state_t
    use rdb_ice_radiation, only: ice_step_radiation, ICE_RAD_OK
@@ -115,9 +116,9 @@ contains
    subroutine ice_step_sw_therm1(rad, swp, nx, ny, ncat, nilyr, nslyr, is, ie, js, je, dt, p, sw_redist, zlvl, zlvs, &
                                  sw_down, uatm, vatm, wind, potT, Qa, rhoa, flw, fsnow, uvel, vvel, Tf, sst, frzmlt, &
                                  tau_x, tau_y, aicen_init, aicen, vicen, vsnon, Tsfcn, qicen, sicen, qsnon, &
-                                 fresh, fsalt, fhocn, evap, fsens, flat, flwout, fswabs, meltt, meltb, congel, snoice, &
+                                 fresh, fsalt, fhocn, evap, fsens, flat, flwout, fswabs, meltt, meltb, congel, snoice, thx, &
                                  freshn, fsaltn, fhocnn, evapn, fsensn, flatn, flwoutn, fswabsn, &
-                                 melttn, meltbn, congeln, snoicen, strairxn, strairyn, strair_x_T, strair_y_T, &
+                                 melttn, meltbn, congeln, snoicen, thxn, strairxn, strairyn, strair_x_T, strair_y_T, &
                                  fbot, rside, wlat, ierr_n, ice_err, fswthru, fswthru_vis, ierr, istat)
       !! Radiation -> therm1 -> transmitted-shortwave producer for the cells `is:ie, js:je` (module
       !! header).  The arguments are `ice_step_therm1`'s with the five shortwave inputs replaced
@@ -142,6 +143,7 @@ contains
       real(wp), intent(in) :: sicen(nx, ny, ncat, nilyr)
       real(wp), intent(inout) :: fresh(nx, ny), fsalt(nx, ny), fhocn(nx, ny), evap(nx, ny), fsens(nx, ny), flat(nx, ny)
       real(wp), intent(inout) :: flwout(nx, ny), fswabs(nx, ny), meltt(nx, ny), meltb(nx, ny), congel(nx, ny), snoice(nx, ny)
+      real(wp), intent(inout) :: thx(nx, ny, ICE_NTHX), thxn(nx, ny, ncat, ICE_NTHX)
       real(wp), intent(inout) :: freshn(nx, ny, ncat), fsaltn(nx, ny, ncat), fhocnn(nx, ny, ncat), evapn(nx, ny, ncat)
       real(wp), intent(inout) :: fsensn(nx, ny, ncat), flatn(nx, ny, ncat), flwoutn(nx, ny, ncat), fswabsn(nx, ny, ncat)
       real(wp), intent(inout) :: melttn(nx, ny, ncat), meltbn(nx, ny, ncat), congeln(nx, ny, ncat), snoicen(nx, ny, ncat)
@@ -160,9 +162,9 @@ contains
                            uatm, vatm, wind, potT, Qa, rhoa, flw, fsnow, uvel, vvel, Tf, sst, frzmlt, tau_x, tau_y, &
                            aicen_init, aicen, vicen, vsnon, Tsfcn, qicen, sicen, qsnon, &
                            rad%fswsfcn, rad%fswintn, rad%fswthrun, rad%Iswabsn, sswabs_zero, &
-                           fresh, fsalt, fhocn, evap, fsens, flat, flwout, fswabs, meltt, meltb, congel, snoice, &
+                           fresh, fsalt, fhocn, evap, fsens, flat, flwout, fswabs, meltt, meltb, congel, snoice, thx, &
                            freshn, fsaltn, fhocnn, evapn, fsensn, flatn, flwoutn, fswabsn, &
-                           melttn, meltbn, congeln, snoicen, strairxn, strairyn, strair_x_T, strair_y_T, &
+                           melttn, meltbn, congeln, snoicen, thxn, strairxn, strairyn, strair_x_T, strair_y_T, &
                            fbot, rside, wlat, ierr_n, ice_err, istat)
       if (istat /= 0) return
       call ice_sw_thru_merge_impl(nx, ny, ncat, is, ie, js, je, p%c%puny, aicen_init, rad%fswthrun, fswabsn, &

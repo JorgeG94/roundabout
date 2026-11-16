@@ -81,6 +81,13 @@ module rdb_ice_remap_geom
    !! in either component, or departure points that cross (`DR` not east of
    !! `DL`), raise `ICE_ERR_TRANSPORT_CFL` (the reference checks only one
    !! sign, against the wrong length); outputs are then unspecified.
+   !! (Regression, device: where the symmetry of a state demands a zero corner velocity (a bipole, the centre vertex
+   !! of a symmetric domain) the FMA-contracted device build leaves `+-1e-20`; a departure point then sits on a side
+   !! line with an ordinate of the opposite sign to the other, and the computed axis crossing of `DL-DR` can fall one
+   !! ulp OUTSIDE the bracket `[xdl, xdr]` it lies in.  The crossing is therefore held to that bracket, the
+   !! opposite-sides test is a pair of sign tests (not a product, which underflows), and every decision of the table
+   !! reads one evaluation of each ordinate, so the branches stay exclusive and exhaustive whatever the rounding;
+   !! `test_cice_remap_geom` `degenerate_corners_device_vs_host`.)
    !! (Regression: a departure point a hair off a cell side puts the axis crossing `IC`
    !! of `DL-DR` ON the corner after rounding; the pinned-crossing tests of the edge flux
    !! adjustment are closed intervals, `xcl <= xic < 0` and `0 <= xic <= xcr`, so such an
@@ -608,6 +615,7 @@ contains
       real(wp) :: xicl, yicl, xicr, yicr, mdl, mdr, area1, area2, area3, area4, area_c, w1, w2, wx, wy, a
       integer :: g, v, k, ic_l, ic_r, ic_c, ic_e, di, dj
       integer(int32) :: bits
+      logical :: opposite
 
       ibits = 0_int32
       icase = 0_int32
@@ -661,8 +669,15 @@ contains
       xir = xcr
       yir = (xcr*(ydr - ydm) - xdm*ydr + xdr*ydm)/(xdr - xdm)
       md = (ydr - ydl)/(xdr - xdl)
+      opposite = (ydl > 0.0_wp .and. ydr < 0.0_wp) .or. (ydl < 0.0_wp .and. ydr > 0.0_wp)
       if (abs(md) > puny) then
          xic = xdl - ydl/md
+         ! Departure points strictly on opposite sides of the axis: the line DL-DR crosses it BETWEEN them, so the
+         ! computed crossing is held to [xdl, xdr].  Rounding (an FMA-contracted device build, a corner velocity
+         ! that is +-1e-20 instead of the exact zero its symmetry demands) can put it one ulp past DR; when DR sits on
+         ! the side line that is outside [0, xcr], the pinned-crossing tests below all miss and the edge keeps the
+         ! unadjusted area (ICE_ERR_TRANSPORT_CONSERV).  Bit-identical wherever the crossing was already inside.
+         if (opposite) xic = min(max(xic, xdl), xdr)
       else
          xic = 0.0_wp
       end if
@@ -726,8 +741,9 @@ contains
          area1 = tri_area(px, py, af, 1)
          area2 = tri_area(px, py, af, 2)
          area3 = tri_area(px, py, af, 3)
-         if (ydl*ydr >= 0.0_wp) then
-            ! both departure points on one side of the axis
+         if (.not. ((ydl > 0.0_wp .and. ydr < 0.0_wp) .or. (ydl < 0.0_wp .and. ydr > 0.0_wp))) then
+            ! both departure points on one side of the axis (or one on it); a sign test, not a product: a product
+            ! of two tiny ordinates underflows to zero and would send an opposite-sides edge here
             ic_e = 1
             area_c = edgearea - area1 - area2 - area3
             w1 = 2.0_wp*area_c/fc + (xdr - xcl)*ydl + (xcr - xdl)*ydr

@@ -200,7 +200,7 @@ contains
       !$acc update self(fx%snoice, fx%dardg1dt, fx%dardg2dt, fx%dvirdgdt, fx%opening)
       !$acc update self(fx%freshn, fx%fsaltn, fx%fhocnn, fx%evapn, fx%fsensn)
       !$acc update self(fx%flatn, fx%flwoutn, fx%fswabsn, fx%melttn, fx%meltbn)
-      !$acc update self(fx%congeln, fx%snoicen)
+      !$acc update self(fx%congeln, fx%snoicen, fx%thx, fx%thxn)
    end subroutine pull_flux
 
    subroutine push_flux(fx)
@@ -212,7 +212,7 @@ contains
       !$acc update device(fx%snoice, fx%dardg1dt, fx%dardg2dt, fx%dvirdgdt, fx%opening)
       !$acc update device(fx%freshn, fx%fsaltn, fx%fhocnn, fx%evapn, fx%fsensn)
       !$acc update device(fx%flatn, fx%flwoutn, fx%fswabsn, fx%melttn, fx%meltbn)
-      !$acc update device(fx%congeln, fx%snoicen)
+      !$acc update device(fx%congeln, fx%snoicen, fx%thx, fx%thxn)
    end subroutine push_flux
 
    subroutine fill_flux_random(fx, seed, scale)
@@ -278,7 +278,8 @@ contains
       call check(error, size(fx%freshn, 1) == NX .and. size(fx%freshn, 2) == NY .and. size(fx%freshn, 3) == NCAT, &
                  "per-category shape (nx,ny,ncat)")
       call check(error, all(pt2(fx, 1) == 0.0_wp) .and. all(fx%snoicen == 0.0_wp), "inited to zero")
-      want = int(NX*NY, int64)*8_int64*(int(NCELL, int64) + int(NCATF, int64)*int(NCAT, int64))
+      ! +2 aice_th, vice_th and +3 the history extras thx (cell) / 3*ncat thxn (per category): none zeroed by ice_flux_zero's canary loop
+      want = int(NX*NY, int64)*8_int64*(int(NCELL + 2 + 3, int64) + int((NCATF + 3)*NCAT, int64))
       call check(error, fx%bytes() == want, "bytes() counts every array (closed form)")
       call fx%destroy()
       call check(error,.not. fx%is_init .and. .not. allocated(fx%fresh) .and. fx%bytes() == 0_int64, &
@@ -463,12 +464,17 @@ contains
       fx%freshn(1, 1, 2) = ieee_value(1.0_wp, ieee_positive_inf)
       fx%opening(NX, NY) = ieee_value(1.0_wp, ieee_quiet_nan)
       fx%snoicen(NX, NY, NCAT) = ieee_value(1.0_wp, ieee_quiet_nan)
+      fx%thx = 7.0_wp
+      fx%thxn = 7.0_wp
+      fx%thxn(2, 3, 1, 2) = ieee_value(1.0_wp, ieee_quiet_nan)
       st%aicen = 0.25_wp
       call st%enter_data()
       call fx%enter_data()
       call push_flux(fx)
       call ice_flux_zero(fx)
       call pull_flux(fx)
+      call check(error, all(fx%thx == 0.0_wp) .and. all(fx%thxn == 0.0_wp), "the history extras thx, thxn are zeroed too")
+      if (allocated(error)) return
       do k = 1, NCELL
          p => pt2(fx, k)
          do j = 1, NY

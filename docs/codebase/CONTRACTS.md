@@ -28,7 +28,7 @@ is the bug.
 | Diagnostics are pull-only | module header of `src/core/ocean/diag/rdb_ocean_diag.F90` |
 | Order-invariant global sums | `src/framework/rdb_efp.F90` |
 | CICE-port ice step order, hook contracts, error enforcement between stage groups | module header of `src/core/ice/coupling/rdb_ice_step_cice.F90` |
-| CICE-port transport on several ranks and across the tripolar fold (rank-uniform decisions and a rank-uniform category batch, paired fold-row fluxes for area and tracers (not for upwind), the category-state halo, the seam binding) | module headers of `src/core/ice/cice/rdb_ice_transport_seam.F90`, `rdb_ice_transport_seam_comm.F90`, `rdb_ice_transport_cice.F90`; the `row_shift` option of `src/comm/rdb_ocean_fold_exchange.F90` |
+| CICE-port transport on several ranks and across the tripolar fold (rank-uniform decisions and a rank-uniform category batch, paired fold-row fluxes for area and tracers (not for upwind), the category-state halo, the seam binding, the T-cell stress pair folded as a vector by `ocean_fold_wrap_centre_vector_pair`) | module headers of `src/core/ice/cice/rdb_ice_transport_seam.F90`, `rdb_ice_transport_seam_comm.F90`, `rdb_ice_transport_cice.F90`; the `row_shift` option of `src/comm/rdb_ocean_fold_exchange.F90` |
 | CICE-port multi-rank step (which exchange feeds which stage, rank-uniform statuses and error words, the flux-ghost refresh, the test seam of the negative controls) | module headers of `src/core/ice/coupling/rdb_ice_cice_hooks.F90`, `rdb_ice_step_cice.F90` and `src/core/ice/cice/rdb_ice_errors.F90`, `rdb_ice_transport_seam_comm.F90` |
 | CICE-port engine wiring (hook adapters bound to the engine state, run slots, start path, scheme select in `engine_step_ice`) | module headers of `src/core/ice/coupling/rdb_ice_cice_hooks.F90`, `rdb_ice_cice_run.F90` |
 | CICE-port ocean-ice flux hand-off (import, window-mean averager + restart tags, `Q_*` adapters, virtual-salt form, shared `heat_ice`/`sw_ice`/`salt_ice` surface-flux components (one slot set for both ice schemes), stress blend + restart mirror, melt-potential cap) | module headers of `src/core/ice/coupling/rdb_ice_import_ocean.F90`, `rdb_ice_flux_avg.F90`, `rdb_ice_cice_adapters.F90` |
@@ -115,6 +115,7 @@ reproducible, and `efp_real_diff` for a difference against a latched reference.
 
 The mass-flux components (`evap`, `lprec`, `fprec`, `vprec`, `lrunoff`, `frunoff`, `seaice_melt`) and
 their `heat_content_*` companions are enthalpy and salt bookkeeping only. They do not change column mass.
+The latent heat of fusion of a frozen flux is its own heat component, `q_fus` (`-L_f*fprec`, written by whoever writes `fprec`), kept apart from `heat_content_fprec` so it stays charged whatever the mass treatment does.
 
 | Path | Real column mass? |
 |---|---|

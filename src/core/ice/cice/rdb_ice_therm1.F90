@@ -118,7 +118,7 @@ module rdb_ice_therm1
    use rdb_ice_atmo, only: ice_atm_boundary_ice
    use rdb_ice_basal_heat, only: ice_basal_heat_step
    use rdb_ice_bl99, only: ice_temperature_changes, ICE_NITERMAX, ICE_SW_FRAC, ICE_SW_DTEMP
-   use rdb_ice_dims, only: ICE_NCAT_MAX, ICE_NILYR_MAX, ICE_NSLYR_MAX
+   use rdb_ice_dims, only: ICE_NCAT_MAX, ICE_NILYR_MAX, ICE_NSLYR_MAX, ICE_NTHX, ICE_TH_EVAPI, ICE_TH_EVAPS, ICE_TH_MELTS
    use rdb_ice_errors, only: ICE_ERR_NONFINITE, ICE_ERR_FATAL_MASK
    use rdb_ice_flux, only: ice_flux_merge_impl
    use rdb_ice_params, only: ice_constants_t, ice_atm_params_t, ice_params_t
@@ -140,7 +140,7 @@ contains
                                    aicen_init, aicen, vicen, vsnon, Tsfcn, qicen, sicen, qsnon, &
                                    fswsfcn, fswintn, fswthrun, Iswabsn, Sswabsn, &
                                    freshn, fsaltn, fhocnn, evapn, fsensn, flatn, flwoutn, fswabsn, &
-                                   melttn, meltbn, congeln, snoicen, strairxn, strairyn, ice_err, ierr_n)
+                                   melttn, meltbn, congeln, snoicen, thxn, strairxn, strairyn, ice_err, ierr_n)
       !! One `(i, j, n)` category: the whole upstream per-category sequence (see
       !! the module header).  `i, j, n` are passed BY VALUE (a compiler fault
       !! passes a bare non-innermost `do concurrent` index by reference as its
@@ -151,7 +151,7 @@ contains
       !! layer arrays `(nx, ny, ncat, nilyr|nslyr)`.  Updated in place on success:
       !! `aicen, vicen, vsnon, Tsfcn, qicen, qsnon` and, only with `sw_redist`,
       !! `fswsfcn, fswintn, Iswabsn, Sswabsn`.  Written: the 12 flux outputs
-      !! `freshn ... snoicen`, the stress `strairxn, strairyn` [N/m2, on the model
+      !! `freshn ... snoicen`, the three history outputs `thxn` (`ICE_TH_*`: ice and snow evaporation, snow melt), the stress `strairxn, strairyn` [N/m2, on the model
       !! axes, on the ice] and the category error word `ierr_n`.  A skipped or
       !! flagged category writes zeros to the flux outputs and leaves the state alone.
       !$acc routine seq
@@ -173,6 +173,7 @@ contains
       real(wp), intent(inout) :: freshn(nx, ny, ncat), fsaltn(nx, ny, ncat), fhocnn(nx, ny, ncat), evapn(nx, ny, ncat)
       real(wp), intent(inout) :: fsensn(nx, ny, ncat), flatn(nx, ny, ncat), flwoutn(nx, ny, ncat), fswabsn(nx, ny, ncat)
       real(wp), intent(inout) :: melttn(nx, ny, ncat), meltbn(nx, ny, ncat), congeln(nx, ny, ncat), snoicen(nx, ny, ncat)
+      real(wp), intent(inout) :: thxn(nx, ny, ncat, ICE_NTHX)
       real(wp), intent(inout) :: strairxn(nx, ny, ncat), strairyn(nx, ny, ncat)
       integer(int32), intent(in) :: ice_err(nx, ny)
       integer(int32), intent(inout) :: ierr_n(nx, ny, ncat)
@@ -364,6 +365,9 @@ contains
          meltbn(i, j, n) = meltb
          congeln(i, j, n) = congel
          snoicen(i, j, n) = snoice
+         thxn(i, j, n, ICE_TH_EVAPI) = evapi
+         thxn(i, j, n, ICE_TH_EVAPS) = evaps
+         thxn(i, j, n, ICE_TH_MELTS) = melts
          strairxn(i, j, n) = strx
          strairyn(i, j, n) = stry
       else
@@ -379,6 +383,9 @@ contains
          meltbn(i, j, n) = 0.0_wp
          congeln(i, j, n) = 0.0_wp
          snoicen(i, j, n) = 0.0_wp
+         thxn(i, j, n, ICE_TH_EVAPI) = 0.0_wp
+         thxn(i, j, n, ICE_TH_EVAPS) = 0.0_wp
+         thxn(i, j, n, ICE_TH_MELTS) = 0.0_wp
          strairxn(i, j, n) = 0.0_wp
          strairyn(i, j, n) = 0.0_wp
       end if
@@ -393,7 +400,7 @@ contains
                               aicen_init, aicen, vicen, vsnon, Tsfcn, qicen, sicen, qsnon, &
                               fswsfcn, fswintn, fswthrun, Iswabsn, Sswabsn, &
                               freshn, fsaltn, fhocnn, evapn, fsensn, flatn, flwoutn, fswabsn, &
-                              melttn, meltbn, congeln, snoicen, strairxn, strairyn, ice_err, ierr_n)
+                              melttn, meltbn, congeln, snoicen, thxn, strairxn, strairyn, ice_err, ierr_n)
       !! The category-parallel launch over the owned cells `is:ie, js:je`: ONE
       !! `do concurrent (n, j, i)` calling `ice_therm1_cell` (arguments as there).
       !! Every array must be device-present on an offload build (`present`
@@ -416,6 +423,7 @@ contains
       real(wp), intent(inout) :: freshn(nx, ny, ncat), fsaltn(nx, ny, ncat), fhocnn(nx, ny, ncat), evapn(nx, ny, ncat)
       real(wp), intent(inout) :: fsensn(nx, ny, ncat), flatn(nx, ny, ncat), flwoutn(nx, ny, ncat), fswabsn(nx, ny, ncat)
       real(wp), intent(inout) :: melttn(nx, ny, ncat), meltbn(nx, ny, ncat), congeln(nx, ny, ncat), snoicen(nx, ny, ncat)
+      real(wp), intent(inout) :: thxn(nx, ny, ncat, ICE_NTHX)
       real(wp), intent(inout) :: strairxn(nx, ny, ncat), strairyn(nx, ny, ncat)
       integer(int32), intent(in) :: ice_err(nx, ny)
       integer(int32), intent(inout) :: ierr_n(nx, ny, ncat)
@@ -426,7 +434,7 @@ contains
       !$acc& present(aicen_init, aicen, vicen, vsnon, Tsfcn, qicen, sicen, qsnon) &
       !$acc& present(fswsfcn, fswintn, fswthrun, Iswabsn, Sswabsn) &
       !$acc& present(freshn, fsaltn, fhocnn, evapn, fsensn, flatn, flwoutn, fswabsn) &
-      !$acc& present(melttn, meltbn, congeln, snoicen, strairxn, strairyn, ice_err, ierr_n)
+      !$acc& present(melttn, meltbn, congeln, snoicen, thxn, strairxn, strairyn, ice_err, ierr_n)
       do concurrent(n=1:ncat, j=js:je, i=is:ie)
          call ice_therm1_cell(i, j, n, nx, ny, ncat, nilyr, nslyr, dt, c, atm, &
                               conduct, l_brine, emissivity, ref_salinity, sw_redist, sw_frac, sw_dtemp, nitermax, &
@@ -435,7 +443,7 @@ contains
                               aicen_init, aicen, vicen, vsnon, Tsfcn, qicen, sicen, qsnon, &
                               fswsfcn, fswintn, fswthrun, Iswabsn, Sswabsn, &
                               freshn, fsaltn, fhocnn, evapn, fsensn, flatn, flwoutn, fswabsn, &
-                              melttn, meltbn, congeln, snoicen, strairxn, strairyn, ice_err, ierr_n)
+                              melttn, meltbn, congeln, snoicen, thxn, strairxn, strairyn, ice_err, ierr_n)
       end do
       !$acc end data
    end subroutine ice_therm1_impl
@@ -482,9 +490,9 @@ contains
                               uatm, vatm, wind, potT, Qa, rhoa, flw, fsnow, uvel, vvel, Tf, sst, frzmlt, tau_x, tau_y, &
                               aicen_init, aicen, vicen, vsnon, Tsfcn, qicen, sicen, qsnon, &
                               fswsfcn, fswintn, fswthrun, Iswabsn, Sswabsn, &
-                              fresh, fsalt, fhocn, evap, fsens, flat, flwout, fswabs, meltt, meltb, congel, snoice, &
+                              fresh, fsalt, fhocn, evap, fsens, flat, flwout, fswabs, meltt, meltb, congel, snoice, thx, &
                               freshn, fsaltn, fhocnn, evapn, fsensn, flatn, flwoutn, fswabsn, &
-                              melttn, meltbn, congeln, snoicen, strairxn, strairyn, strair_x_T, strair_y_T, &
+                              melttn, meltbn, congeln, snoicen, thxn, strairxn, strairyn, strair_x_T, strair_y_T, &
                               fbot, rside, wlat, ierr_n, ice_err, istat)
       !! The host shim of the whole step (see the module header): basal heat
       !! launch, category launch, flux merge launch, stress/error merge launch.
@@ -513,9 +521,11 @@ contains
       real(wp), intent(inout) :: Iswabsn(nx, ny, ncat, nilyr), Sswabsn(nx, ny, ncat, nslyr)
       real(wp), intent(inout) :: fresh(nx, ny), fsalt(nx, ny), fhocn(nx, ny), evap(nx, ny), fsens(nx, ny), flat(nx, ny)
       real(wp), intent(inout) :: flwout(nx, ny), fswabs(nx, ny), meltt(nx, ny), meltb(nx, ny), congel(nx, ny), snoice(nx, ny)
+      real(wp), intent(inout) :: thx(nx, ny, ICE_NTHX)
       real(wp), intent(inout) :: freshn(nx, ny, ncat), fsaltn(nx, ny, ncat), fhocnn(nx, ny, ncat), evapn(nx, ny, ncat)
       real(wp), intent(inout) :: fsensn(nx, ny, ncat), flatn(nx, ny, ncat), flwoutn(nx, ny, ncat), fswabsn(nx, ny, ncat)
       real(wp), intent(inout) :: melttn(nx, ny, ncat), meltbn(nx, ny, ncat), congeln(nx, ny, ncat), snoicen(nx, ny, ncat)
+      real(wp), intent(inout) :: thxn(nx, ny, ncat, ICE_NTHX)
       real(wp), intent(inout) :: strairxn(nx, ny, ncat), strairyn(nx, ny, ncat), strair_x_T(nx, ny), strair_y_T(nx, ny)
       real(wp), intent(inout) :: fbot(nx, ny), rside(nx, ny), wlat(nx, ny)
       integer(int32), intent(inout) :: ierr_n(nx, ny, ncat), ice_err(nx, ny)
@@ -541,12 +551,12 @@ contains
                            aicen_init, aicen, vicen, vsnon, Tsfcn, qicen, sicen, qsnon, &
                            fswsfcn, fswintn, fswthrun, Iswabsn, Sswabsn, &
                            freshn, fsaltn, fhocnn, evapn, fsensn, flatn, flwoutn, fswabsn, &
-                           melttn, meltbn, congeln, snoicen, strairxn, strairyn, ice_err, ierr_n)
+                           melttn, meltbn, congeln, snoicen, thxn, strairxn, strairyn, ice_err, ierr_n)
       call ice_flux_merge_impl(nx, ny, ncat, is, ie, js, je, p%thermo%emissivity, p%c%puny, flw, aicen_init, &
                                freshn, fsaltn, fhocnn, evapn, fsensn, flatn, flwoutn, fswabsn, &
-                               melttn, meltbn, congeln, snoicen, &
+                               melttn, meltbn, congeln, snoicen, thxn, &
                                fresh, fsalt, fhocn, evap, fsens, flat, flwout, fswabs, &
-                               meltt, meltb, congel, snoice, ice_err)
+                               meltt, meltb, congel, snoice, thx, ice_err)
       call ice_therm1_merge_impl(nx, ny, ncat, is, ie, js, je, aicen_init, strairxn, strairyn, ierr_n, &
                                  strair_x_T, strair_y_T, ice_err)
    end subroutine ice_step_therm1

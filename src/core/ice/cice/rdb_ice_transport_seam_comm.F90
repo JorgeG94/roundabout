@@ -21,7 +21,10 @@ module rdb_ice_transport_seam_comm
    !! (the cell-centred scalars `aicen, vicen, vsnon, Tsfcn, qicen, sicen, qsnon, aice0`): the
    !! ocean's two-pass centre exchange on a split axis, the local periodic wrap (the kernel the single-rank
    !! hooks always used) on one rank; a wall edge keeps its ghosts, and then, on the north fold row, the tripolar fold as a plain
-   !! copy (scalars: no sign).  It is the multi-rank form of the single-rank wrap of
+   !! copy (scalars: no sign).  **`ice_halo_centre_pair`** is the same refresh for a TRUE-VECTOR pair held at cell
+   !! centres (the T-cell wind stress the face hand-off averages): its fold negates both components
+   !! (`ocean_fold_wrap_centre_vector_pair`, one exchange group on a split fold row); a scalar copy there would hand
+   !! the north-face stress of the fold row the wrong sign.  It is the multi-rank form of the single-rank wrap of
    !! `rdb_ice_cice_hooks` and is what the transport asks for before its call (two rings valid).
    use, intrinsic :: iso_fortran_env, only: int64, int32
    use rdb_constants, only: wp
@@ -31,7 +34,7 @@ module rdb_ice_transport_seam_comm
    use rdb_halo, only: halo_allreduce_sum_vec, halo_allreduce_efp_list, halo_allreduce_min
    use rdb_ocean_halo, only: ocean_halo_centre, ocean_halo_is_decomposed_x, ocean_halo_is_decomposed_y
    use rdb_ocean_periodic, only: ocean_periodic_wrap_centre_3d, ocean_periodic_wrap_centre_2d
-   use rdb_ocean_fold_apply, only: ocean_fold_wrap_centre_flat
+   use rdb_ocean_fold_apply, only: ocean_fold_wrap_centre_flat, ocean_fold_wrap_centre_vector_pair
    use rdb_ocean_fold_exchange, only: ocean_fold_is_distributed, ocean_fold_begin, ocean_fold_pack, &
                                       ocean_fold_exchange, ocean_fold_unpack, ocean_fold_end, &
                                       ocean_fold_exchange_reserve, FOLD_STAG_V
@@ -203,20 +206,33 @@ contains
       call ocean_fold_unpack(fld, nx, ny, nz, FOLD_STAG_V, .true., .true., row_shift=-1)
    end subroutine fold_unpack_flat
 
-   subroutine ice_halo_centre_pair(grid, bc, nx, ny, fa, fb, device_resident)
+   subroutine ice_halo_centre_pair(grid, bc, nx, ny, fa, fb, device_resident, test_fold)
       !! Refresh the ghost ring of two cell-centred 2-D fields (the T-cell wind stress the face hand-off
       !! averages): the ocean's two-pass centre exchange on a split axis, the local periodic wrap on one
-      !! rank, then the tripolar fold as a plain copy on the fold row.  Collective on a split axis.
+      !! rank, then the tripolar fold on the fold row with the VECTOR sign (the pair is a true vector, both components
+      !! negate).  Collective on a split axis.
       type(hgrid_t), intent(in) :: grid
       type(ocean_bc_state_t), intent(in) :: bc
       integer, intent(in) :: nx, ny
       real(wp), intent(inout) :: fa(nx, ny), fb(nx, ny)
       logical, intent(in), optional :: device_resident
+      integer, intent(in), optional :: test_fold
+         !! Test harness only: 1 = fold the pair as a SCALAR copy (the wrong sign), 2 = no fold.  Absent: the vector fold.
       logical :: split
+      integer :: tf
 
+      tf = 0
+      if (present(test_fold)) tf = test_fold
       split = ocean_halo_is_decomposed_x() .or. ocean_halo_is_decomposed_y()
       call refresh_one(fa)
       call refresh_one(fb)
+      ! the pair is a TRUE VECTOR: both components change sign across the fold (one exchange group on a split fold row)
+      if (tf == 0) then
+         call ocean_fold_wrap_centre_vector_pair(grid, bc, fa, fb, device_resident)
+      else if (tf == 1) then
+         call ocean_fold_wrap_centre_flat(grid, bc, fa, nx, ny, 1, device_resident)
+         call ocean_fold_wrap_centre_flat(grid, bc, fb, nx, ny, 1, device_resident)
+      end if
 
    contains
 
@@ -229,7 +245,6 @@ contains
             call ocean_periodic_wrap_centre_2d(fld, nx, ny, grid%nx_phys, grid%ny_phys, grid%nghost, bc%periodic_x, &
                                                bc%periodic_y)
          end if
-         if (bc%north_fold) call ocean_fold_wrap_centre_flat(grid, bc, fld, nx, ny, 1, device_resident)
       end subroutine refresh_one
 
    end subroutine ice_halo_centre_pair

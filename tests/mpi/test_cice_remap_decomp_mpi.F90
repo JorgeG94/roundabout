@@ -22,7 +22,8 @@
 !! and every rank seam); `island` (a closed basin with an interior land block: land across seams);
 !! `fold` (the tripolar cap, a blob in the east half driven north through the fold row into the west
 !! half; `px = 1` runs the local pairing, `px > 1` the distributed fold exchange); `fold_upwind`
-!! (the same with `advection = "upwind"`: the reductions and halos, no flux pairing).
+!! (the same with `advection = "upwind"`: its fold-row flux is not paired, so the transport REFUSES the step with
+!! `TRANSPORT_CFG_FOLD` on the serial run and on every layout, with the same word).
 !!
 !! Negative controls (each must FAIL its comparison, so the comparison can fail): the category state
 !! fold skipped, the face velocity fold skipped, the seam's reductions off (the EFP conservation
@@ -42,7 +43,7 @@ program test_cice_remap_decomp_mpi
    use pic_mpi_lib, only: comm_t, allreduce, MPI_SUM
    use rdb_ice_params, only: ice_params_t, ice_params_default, ICE_CONSTANTS_ICEPACK, ICE_ADVECT_REMAP, ICE_ADVECT_UPWIND
    use rdb_ice_transport_cice, only: transport_cice_ws_t, transport_result_t, ice_step_transport, ICE_TRANSPORT_POST_NONE, &
-                                     TRANSPORT_CFG_OK
+                                     TRANSPORT_CFG_OK, TRANSPORT_CFG_FOLD
    use rdb_ice_cgrid_metrics, only: ice_halo_faces
    use rdb_ice_transport_seam_comm, only: ice_transport_seam_bind, ice_halo_category_state
    use rdb_ocean_boundary_types, only: ocean_bc_state_t
@@ -402,6 +403,11 @@ contains
                end do
             end do
          end if
+         ! mem:separate: every array the transport kernels touch must be device-present (the engine maps its own
+         ! state, not this test's local fields or workspace).  Host edits are all above, so the copyin carries them.
+         !$acc enter data copyin(u, v, Tf, hin_max, aice0, aicen, vicen, vsnon, Tsfcn, qicen, sicen, qsnon)
+         !$acc enter data copyin(aice, vice, vsno, Tsfc_c, qice_c, sice_c, qsno_c, fresh, fsalt, fhocn, ice_err)
+         call w%enter_data()
          call ice_halo_faces(g, bc_vel, u, v, .true.)
 
          tot = 0.0_wp
@@ -432,6 +438,7 @@ contains
             snap%worst_q = res%worst_q
             if (.not. res%stepped) then
                snap%nbad_steps = snap%nbad_steps + 1
+               !$acc update self(ice_err)
                write (*, '(a,i0,a,i0,a,z0,5(a,i0))') "  [transport refused] step ", step, " cfg ", res%cfg, " ierr 0x", res%ierr, &
                   ": n_cfl ", res%n_cfl, " n_geom ", res%n_geom, " n_nonfinite ", res%n_nonfinite, " n_neg ", res%n_neg, &
                   " n_mono ", res%n_mono
@@ -444,6 +451,8 @@ contains
             end if
             if (.not. res%stepped) exit
          end do
+         !$acc update self(aice0, aicen, vicen, vsnon, Tsfcn, qicen, sicen, qsnon)
+         !$acc update self(aice, vice, vsno, Tsfc_c, qice_c, sice_c, qsno_c, fresh, fsalt, fhocn, ice_err)
          snap%n_err_cells = count(ice_err(is:ie, js:je) /= 0_int32)
          call ice_halo_category_state(g, bc_state, nx, ny, NCAT, NIL, 1, aicen, vicen, vsnon, Tsfcn, qicen, sicen, qsnon, &
                                       aice0, .true.)
@@ -459,12 +468,18 @@ contains
          call global_sum(snap%mass0)
          call global_sum(snap%mass1)
 
+         if (fold_case .and. .not. upwind) then
+            !$acc update self(w%fw%mflx_n, w%fw%mtflx_n)
+         end if
          if (fold_case) call fold_row_stats(w, engine%state%bc%north_fold, g, ctrl, snap%anti_max, snap%flux_max, snap%anti_t, snap%flux_t, upwind)
          if (csize == 1) then
             call comm_env_pop_compute_comm()
             call self_comm%finalize()
          end if
 
+         call w%exit_data()
+         !$acc exit data delete(aice, vice, vsno, Tsfc_c, qice_c, sice_c, qsno_c, fresh, fsalt, fhocn, ice_err)
+         !$acc exit data delete(u, v, Tf, hin_max, aice0, aicen, vicen, vsnon, Tsfcn, qicen, sicen, qsnon)
          allocate (snap%aicen(snap%nxl, snap%nyl, NCAT), snap%vicen(snap%nxl, snap%nyl, NCAT))
          allocate (snap%vsnon(snap%nxl, snap%nyl, NCAT), snap%Tsfcn(snap%nxl, snap%nyl, NCAT), snap%aice0(snap%nxl, snap%nyl))
          allocate (snap%qicen(snap%nxl, snap%nyl, NCAT, NIL), snap%sicen(snap%nxl, snap%nyl, NCAT, NIL))
@@ -661,7 +676,7 @@ contains
       character(len=*), intent(in) :: label
       logical, intent(in) :: with_controls
       type(snap_t) :: ref, dec
-      integer :: px, nbad, ctrl, nglob, ncells_w, nseam
+      integer :: px, nbad, ctrl, nglob, ncells_w, nseam, nfold
       character(len=160) :: tag, first
       logical :: fold_case, upwind, fault
       real(wp) :: rel
@@ -698,6 +713,32 @@ contains
                n_fail = n_fail + 1
             else if (rank == 0) then
                write (*, '(3a,z0)') "ok   ", trim(tag), ": every rank refused the step with the serial word 0x", ref%ierr
+            end if
+         end do
+         return
+      end if
+      if (label == "fold_upwind") then
+         ! upwind across the fold is refused (its fold-row face flux is not paired): serial and every layout alike
+         if (ref%cfg /= TRANSPORT_CFG_FOLD .or. ref%nbad_steps /= 1) then
+            write (*, '(3a,i0)') "FAIL ", label, ": the serial run was not refused with TRANSPORT_CFG_FOLD, cfg ", ref%cfg
+            n_fail = n_fail + 1
+            return
+         end if
+         do px = nprocs, 1, -1
+            if (mod(nprocs, px) /= 0) cycle
+            write (tag, '(a,1x,i0,a,i0)') trim(label), px, "x", nprocs/px
+            call run_one(label, px, nprocs/px, nprocs, rank, 0, dec)
+            ! every rank refuses (the verdict is reduced); the ranks holding the fold row name TRANSPORT_CFG_FOLD, the
+            ! others a generic configuration error
+            nseam = merge(0, 1, dec%cfg /= TRANSPORT_CFG_OK .and. dec%nbad_steps == 1)
+            nfold = merge(1, 0, dec%cfg == TRANSPORT_CFG_FOLD)
+            call global_isum(nseam)
+            call global_isum(nfold)
+            if (nseam > 0 .or. nfold == 0) then
+               write (*, '(3a)') "FAIL ", trim(tag), ": not every rank refused, or no rank named TRANSPORT_CFG_FOLD"
+               n_fail = n_fail + 1
+            else if (rank == 0) then
+               write (*, '(3a)') "ok   ", trim(tag), ": every rank refused upwind across the fold (TRANSPORT_CFG_FOLD)"
             end if
          end do
          return
