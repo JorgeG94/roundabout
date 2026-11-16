@@ -565,7 +565,7 @@ contains
       call g%add(nml_int("bt_halo", pi, &
                          "Wide-halo BT march-in width "// &
                          "(-1 = auto: resolves to 0, the march-in is opt-in; "// &
-                         "0 = explicit off). > 0: bitwise equal to the one-rank "// &
+                         "0 = explicit off). > 0: verified bitwise equal to the one-rank "// &
                          "bt_halo = 0 run on walls, periodic, Flather (legacy and full) "// &
                          "and tidal edges, land (incl. land meeting an open edge), "// &
                          "lon-lat and supergrid metrics, porous barriers, z-level closed "// &

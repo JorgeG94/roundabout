@@ -636,14 +636,16 @@ contains
                              trim(bt_excl_reason)//" active)")
          else
             call logger%info("BT march-in: bt_halo auto -> 0 (opt-in: set "// &
-                             "&ocean_bt_nml bt_halo = 8 explicitly; bitwise equal to "// &
-                             "the one-rank run on every configuration it accepts)")
+                             "&ocean_bt_nml bt_halo = 8 explicitly; verified bitwise equal "// &
+                             "to the one-rank run on the configurations listed in "// &
+                             "docs/CAPABILITIES_AND_LIMITATIONS.md)")
          end if
       end if
       if (rank == 0 .and. bt_halo_res > 0 .and. csize > 1) then
          call logger%info("BT march-in ON (bt_halo = "//to_string(bt_halo_res)// &
-                          "): bitwise equal to the one-rank bt_halo = 0 run on every "// &
-                          "configuration validate_config accepts.")
+                          "): verified bitwise equal to the one-rank bt_halo = 0 run on the "// &
+                          "configurations tested (docs/CAPABILITIES_AND_LIMITATIONS.md, "// &
+                          "bth*/bthx* cases); other accepted combinations are untested.")
       end if
 
       call engine%grid%init(engine%decomp%nx_local, engine%decomp%ny_local, &
@@ -1894,7 +1896,9 @@ contains
                                        engine%state%coriolis_adv%f_corner, &
                                        refresh_widths=engine%state%metrics%use_porous .or. &
                                        engine%state%metrics%use_closed_faces, &
-                                       ring_poison=ring_poison_env)
+                                       ring_poison=ring_poison_env, &
+                                       eta_forcing_on=cfg%ocean%tides%enable .or. &
+                                       cfg%ocean%psurf%enable)
       end if
 
       ! The prognostic exchange is a WARM-UP (it opens the device-path

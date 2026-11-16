@@ -817,7 +817,7 @@ contains
    end subroutine ocean_dyn_exit_data_impl
 
    subroutine ocean_dyn_enable_bt_wide(dyn, grid, metrics, f_corner, refresh_widths, &
-                                       ring_poison)
+                                       ring_poison, eta_forcing_on)
       !! Allocate, initialise, and GPU-attach the wide-halo shadow state
       !! from `dyn%bt_halo` (already set by the caller).
       !!
@@ -851,6 +851,8 @@ contains
          !! once per solve.
       integer, intent(in), optional :: ring_poison
          !! Test hook (`RDB_BT_RING_POISON`): garbage in the wide outer ring.
+      logical, intent(in), optional :: eta_forcing_on
+         !! A tide / psurf `eta_forcing` will be passed: allocate its wide copy.
 
       integer :: bh, ng_w
 
@@ -874,7 +876,7 @@ contains
       allocate (dyn%bt_wide)
       dyn%bt_wide%bt_halo = bh
       call dyn%bt_wide%init(grid, metrics, f_corner, refresh_widths=refresh_widths, &
-                            ring_poison=ring_poison)
+                            ring_poison=ring_poison, eta_forcing_on=eta_forcing_on)
       call dyn%bt_wide%enter_data()
    end subroutine ocean_dyn_enable_bt_wide
 

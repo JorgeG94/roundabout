@@ -241,3 +241,20 @@ The reviewer's 31 namelists (`review_btwide/runs`) all reproduce bitwise against
 except the four `wdragrp*` (`wave_drag_form = 'roughness_proxy'`), which also differ at `bt_halo = 0`
 (`wdragrp0`, `wdragrp210`): a decomposition non-identity of the roughness proxy that has nothing to do with
 the march-in.
+
+## Stage 3: periodic axis meeting an open / clamped edge (merged `fix/periodic-edge-decomp-bitid`)
+
+Reviewer findings on 20acd150b, both rooted in `bt_halo = 0` beta:
+
+* periodic x + open/clamped south: the y-pass of the open-edge eta ghost fill skipped the periodic x-ghost
+  columns, leaving the corner at the wrap of Pass-1 ghost-row garbage (one rank) vs the exchange's
+  (decomposed).  Fixed on beta (fill over every column); the one-rank march-in difference at W = 4 had the same
+  cause (the wide kernel runs the same fill).  One-rank answers moved for periodic-x + open/tidal/clamped
+  south/north: 6 h seamount, clamped south, h 1.0e-7 m, u 3.6e-6, v 2.2e-6 m/s.
+* periodic y with a beta plane or lon-lat / supergrid metrics: the duplicated seam row carries two values of f
+  and of the metrics, which copy survives depends on the split (1x2: u 1e-4).  Not well posed (f jumps across
+  the wrap): REFUSED at configure on beta (`south/north = periodic` needs `grid_config = cartesian`,
+  `coriolis_beta = 0`).  `exchange_corner_host` therefore never sees a y-varying duplicated row.
+
+New wide cases `bthx_perxo`, `bthx_perxc` (W = 4, 8), `bthx_peryo`, `bthx_perxy` (W = 4): bitwise at 1 rank
+(`bt_halo = W` against 0) and 2 / 4 ranks.

@@ -143,8 +143,8 @@ module rdb_config
       !! `&ocean_bt_nml bt_halo` default: AUTO.  Resolved at configure (in the
       !! driver, where `compute_size` is known).  AUTO resolves to 0 — the
       !! march-in is OPT-IN (set `bt_halo` explicitly) until the performance
-      !! stage lands (it is bitwise equal to the one-rank run on every
-      !! configuration it accepts).  See `resolve_bt_halo`.
+      !! stage lands (it is verified bitwise equal to the one-rank run on the
+      !! configurations the `bth*` / `bthx*` cases cover).  See `resolve_bt_halo`.
    integer, parameter :: BT_HALO_AUTO_WIDTH = 8
       !! The recommended EXPLICIT march-in width (the validated production
       !! width).  AUTO no longer selects it — see `resolve_bt_halo`.
@@ -1078,8 +1078,8 @@ module rdb_config
          !! Reserved for PR-14 (MOM6 `BT_WAVE_DRAG_VAR`); unused today.
       integer :: bt_halo = BT_HALO_AUTO_SENTINEL
          !! Wide-halo march-in width.  `-1` (default) = AUTO, which resolves
-         !! to 0: the march-in is OPT-IN.  Every configuration it accepts is
-         !! bitwise equal to the one-rank `bt_halo = 0` run
+         !! to 0: the march-in is OPT-IN.  It is verified bitwise equal to the
+         !! one-rank `bt_halo = 0` run on the configurations tested
          !! (`test_ocean_decomp_bitid_mpi`, cases `bth_*` / `bthx_*`); AUTO
          !! stays at 0 until the performance stage lands.  `8`
          !! (`BT_HALO_AUTO_WIDTH`) is the recommended explicit width.

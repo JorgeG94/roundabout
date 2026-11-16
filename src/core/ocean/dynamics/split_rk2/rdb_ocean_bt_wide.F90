@@ -197,7 +197,8 @@ contains
                + arr_bytes(this%w_force_v)
    end function bt_wide_bytes
 
-   subroutine bt_wide_init(this, grid, metrics, f_corner, refresh_widths, ring_poison)
+   subroutine bt_wide_init(this, grid, metrics, f_corner, refresh_widths, ring_poison, &
+                           eta_forcing_on)
       !! Allocate the wide shadow state and fill its STATIC fields from their
       !! owners.  Builds `grid_w` (same nx_phys/ny_phys as `grid`,
       !! nghost = grid%nghost + bt_halo).  Every metric array the fast loop
@@ -225,6 +226,10 @@ contains
          !! Porous barriers or closed faces on (per-solve width refresh).
       integer, intent(in), optional :: ring_poison
          !! Test hook: see `bt_wide_t%ring_poison`.
+      logical, intent(in), optional :: eta_forcing_on
+         !! A body tide or surface-pressure load will be passed
+         !! (`set_eta_forcing`): allocate the wide `eta_forcing`.  Absent /
+         !! false => a 1 x 1 placeholder (still mapped, never read).
 
       integer :: nx_w, ny_w, bt_h
 
@@ -258,7 +263,10 @@ contains
       allocate (this%w_iarea_t(nx_w, ny_w), source=0.0_wp)
       allocate (this%w_iarea_bu(nx_w + 1, ny_w + 1), source=0.0_wp)
       allocate (this%f_corner_w(nx_w + 1, ny_w + 1), source=0.0_wp)
-      allocate (this%w_eta_forcing(nx_w, ny_w), source=0.0_wp)
+      if (present(eta_forcing_on)) then
+         if (eta_forcing_on) allocate (this%w_eta_forcing(nx_w, ny_w), source=0.0_wp)
+      end if
+      if (.not. allocated(this%w_eta_forcing)) allocate (this%w_eta_forcing(1, 1), source=0.0_wp)
 
       call offset_fill(this%w_area_cu, metrics%areaCu, bt_h)
       call offset_fill(this%w_dx_cu, metrics%dxCu, bt_h)
@@ -690,6 +698,9 @@ contains
       off = this%bt_halo
       nx = grid%nx_total
       ny = grid%ny_total
+      if (size(this%w_eta_forcing, 1) /= nx + 2*off .or. size(this%w_eta_forcing, 2) /= ny + 2*off) then
+         error stop "bt_wide_set_eta_forcing: wide eta_forcing not allocated (init without eta_forcing_on)"
+      end if
       do concurrent(j=1:ny + 2*off, i=1:nx + 2*off) local(i_src, j_src)
          i_src = min(max(i - off, 1), nx)
          j_src = min(max(j - off, 1), ny)

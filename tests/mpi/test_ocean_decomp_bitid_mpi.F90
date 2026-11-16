@@ -386,7 +386,7 @@ program test_ocean_decomp_bitid_mpi
       !! `RDB_BITID_CASES`: run only the cases whose name contains this substring.
    type(comm_t) :: comm
    character(len=16), parameter :: SCHEMES(2) = [character(len=16) :: "pred_corr", "ssp_rk2"]
-   character(len=24), parameter :: CASES(125) = [character(len=24) :: &
+   character(len=24), parameter :: CASES(131) = [character(len=24) :: &
                                                  "island_basin", "weno7_pv", &
                                                  "periodic_channel_zstar", &
                                                  "visc_rem_zstar", &
@@ -441,7 +441,10 @@ program test_ocean_decomp_bitid_mpi
                                                  "bthx_zfixed_w4", "bthx_zfixed_w8", &
                                                  "cavity_mass", "cavity_mass_comp", &
                                                  "perx_open_south", "perx_clamped_south", &
-                                                 "pery_open_west", "perxy_fplane"]
+                                                 "pery_open_west", "perxy_fplane", &
+                                                 "bthx_perxo_w4", "bthx_perxo_w8", &
+                                                 "bthx_perxc_w4", "bthx_perxc_w8", &
+                                                 "bthx_peryo_w4", "bthx_perxy_w4"]
 
    call comm_env_init()
    call comm_env_setup_roles(.false.)
@@ -965,9 +968,11 @@ contains
                "&ocean_tides_nml enable = .true., constituents = 'M2,S2,K1,O1', "// &
                "ref_date = '2020-03-15', add_nodal = .true. /"//NL
       case ("bthx_psurf_w4")
-         ! Surface-pressure loading rides the same `eta_forcing` seam (a uniform
-         ! load: gauge-inert physically, but the wide copy / exchange / argument
-         ! path is the one a non-uniform load takes).
+         ! Surface-pressure loading rides the same `eta_forcing` seam.  The load
+         ! here is UNIFORM (no file-free non-uniform path exists), and the kernel
+         ! reads only differences of eta_forcing, so this case CANNOT fail on the
+         ! wide eta_forcing VALUES: it only runs the path.  `bthx_tides_*` (a
+         ! body tide varying in space and time) is the case that tests them.
          nml = common// &
                "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
                "dx = 20000.0, dy = 20000.0 /"//NL// &
@@ -1045,7 +1050,9 @@ contains
                "&ocean_vdiff_nml implicit_drag = .true. /"//NL// &
                "&ocean_bdrag_nml form = 'quadratic', cd = 3.0e-3, hbbl = 0.0 /"//NL// &
                "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
-      case ("perx_open_south", "perx_clamped_south", "pery_open_west", "perxy_fplane")
+      case ("perx_open_south", "perx_clamped_south", "pery_open_west", "perxy_fplane", &
+            "bthx_perxo_w4", "bthx_perxo_w8", "bthx_perxc_w4", "bthx_perxc_w8", &
+            "bthx_peryo_w4", "bthx_perxy_w4")
          ! A periodic axis meeting a non-wall edge on the other axis (f-plane
          ! Cartesian seamount, 6 h of fast loop at n_inner = 20).  Decomposed
          ! along the periodic axis these used to differ from one rank: the
@@ -1060,13 +1067,13 @@ contains
                "&ocean_topo_nml topo_config = 'seamount', max_depth = 2000.0, "// &
                "edge_depth = 1500.0, slope_scale = 60000.0 /"//NL
          select case (label)
-         case ("perx_open_south")
+         case ("perx_open_south", "bthx_perxo_w4", "bthx_perxo_w8")
             nml = nml//"&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'open', "// &
                   "north = 'wall' /"//NL
-         case ("perx_clamped_south")
+         case ("perx_clamped_south", "bthx_perxc_w4", "bthx_perxc_w8")
             nml = nml//"&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'clamped', "// &
                   "south_clamped_v = 0.01, north = 'wall' /"//NL
-         case ("pery_open_west")
+         case ("pery_open_west", "bthx_peryo_w4")
             nml = nml//"&ocean_bc_nml west = 'open', east = 'wall', south = 'periodic', "// &
                   "north = 'periodic' /"//NL
          case default
