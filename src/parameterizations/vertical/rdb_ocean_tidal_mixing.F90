@@ -74,6 +74,7 @@ module rdb_ocean_tidal_mixing
    use rdb_multilayer_state, only: multilayer_state_t
    use rdb_eos, only: eos_t, eos_specvol_derivs
    use, intrinsic :: iso_fortran_env, only: int64
+   use, intrinsic :: ieee_arithmetic, only: ieee_is_nan, ieee_is_finite
    use rdb_mem_report, only: arr_bytes
    implicit none
    private
@@ -230,7 +231,14 @@ module rdb_ocean_tidal_mixing
       procedure, non_overridable :: bytes => ocean_tidal_mixing_bytes
    end type ocean_tidal_mixing_t
 
+   ! Position-independent exp (`rdb_sm_*`), so a decomposed run rounds
+   ! this closure exactly as one rank does.  Constants once here, bodies in
+   ! `contains`.
+#include "rdb_safe_math_consts.inc"
+
 contains
+
+#include "rdb_safe_math_core.inc"
 
    pure function tidal_mixing_is_inert(enable, e_uniform, e_compute) result(inert)
       !! `.true.` iff tidal mixing is enabled but has no energy source
@@ -710,7 +718,7 @@ contains
             if (hz < 1.0e-14_wp) then
                inv_int = 1.0_wp
             else
-               inv_int = 1.0_wp/(1.0_wp - exp(-hz))
+               inv_int = 1.0_wp/(1.0_wp - rdb_sm_exp(-hz))
             end if
 
             ! ---- Polzin (2009) scale: per-column scalars ----
@@ -765,7 +773,7 @@ contains
                   end if
                   frac_top = inv_int*zp_st/(zp_st + zs_top)
                else
-                  frac_top = inv_int*exp(-z_top*izeta)
+                  frac_top = inv_int*rdb_sm_exp(-z_top*izeta)
                end if
                tke_lay = tke_rem - tke_bot*frac_top
 

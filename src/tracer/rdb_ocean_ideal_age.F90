@@ -48,6 +48,7 @@ module rdb_ocean_ideal_age
    !!     call, which is strictly stronger (idempotent, exact) and
    !!     matches the tracer's definition as a hard Dirichlet condition
    !!     rather than a relaxation.
+   use rdb_safe_math, only: safe_exp
    use rdb_constants, only: H_VANISHED, H_DIV_EPS, wp
    use rdb_grid, only: hgrid_t
    use rdb_multilayer_state, only: multilayer_state_t
@@ -152,12 +153,12 @@ contains
 
    pure function ocean_ideal_age_young_val(young_val, sfc_growth_rate, t) result(young)
       !! Host-scalar evaluation of the surface-band age value `A_young(t)`
-      !! (s), MOM6 `ideal_age_example.F90`'s `young_val` computation
-      !! (`:380-385`), taken exactly in spirit including the
-      !! `growth_rate == 0` short-circuit (no `exp` call, no `t`
+      !! (s), the surface ideal-age source of Thiele & Sarmiento (1990),
+      !! including the `growth_rate == 0` short-circuit (no `exp` call, no `t`
       !! dependence) — this is what keeps the default bit-identical:
       !!   `young = young_val`                     if sfc_growth_rate == 0
       !!   `young = young_val * exp(sfc_growth_rate*t)`  otherwise
+      !! (`exp` is `safe_exp`, the reproducible library)
       !! `t` is model time (s) since run start. `young_val` (s) and
       !! `sfc_growth_rate` (1/s) are host scalars from `ocean_dyn_t`;
       !! call this ONCE per outer step on the host, never inside a
@@ -170,7 +171,7 @@ contains
       if (sfc_growth_rate == 0.0_wp) then
          young = young_val
       else
-         young = young_val*exp(sfc_growth_rate*t)
+         young = young_val*safe_exp(sfc_growth_rate*t)
       end if
    end function ocean_ideal_age_young_val
 

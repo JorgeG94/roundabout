@@ -279,7 +279,7 @@ ROWS = [
          "item 9 (queued)",
          message=r"zfixed_closed_faces does not yet compose with &ocean_bt_nml correction_bc_pgf"),
 
-    # ----- under an ice-shelf cavity (single-rank row) -------------------
+    # ----- under an ice-shelf cavity -------------------------------------------
     _gap("cavity_vcoord", "refused", ("cavity",),
          "Under a cavity v1 accepts sigma (it rescales the live column) and z_fixed (taught "
          "the ice base) only; the others are unvalidated or draft-following -- zstar too, "
@@ -518,15 +518,8 @@ ROWS = [
                   "pgf": "mont", "eos": "linear", "coriolis": "sadourny", "pv_adv": "weno5",
                   "bt": "wave_drag", "geometry": "obc", "grid": "spherical"}),
 
-    # ===================================================================
-    # KNOWN_GAP -- single-rank features: the DECOMP leg's configure-time
-    # refusal on more than one rank.
-    # ===================================================================
-    _single_rank("cavity_single_rank", ("cavity",),
-                 "The ice-shelf cavity is single-rank in v1: the grounding statistics are "
-                 "global reductions its configure does not take.",
-                 "'Single-rank-only features to lift: ... cavity'",
-                 message=r"&ocean_cavity_dyn_nml enable=\.true\. is single-rank in v1"),
+    # (No KNOWN_GAP section for single-rank features: the last row, the
+    # cavity's, was deleted when the cavity went multi-rank.)
 ]
 
 
@@ -601,6 +594,7 @@ VALUE_PATHS.update({
     ("geometry", "tripolar"): ["src/core/ocean/boundary/rdb_ocean_fold*.F90",
                                "src/core/ocean/state/rdb_ocean_bipolar.F90"],
     ("geometry", "cavity"): ["src/core/ocean/state/rdb_ocean_cavity.F90",
+                             "src/core/ocean/state/setup/rdb_ocean_setup_cavity.F90",
                              _P + "vertical/rdb_ocean_cavity_*.F90",
                              _P + "vertical/rdb_ocean_top_drag.F90"],
     ("forcing", "cool"): [_P + "vertical/rdb_ocean_surface_flux.F90"],

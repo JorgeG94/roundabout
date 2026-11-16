@@ -49,7 +49,9 @@ contains
    subroutine ocean_rebaseline_apply(state, grid, thermo_active, reseed_pseudo_salt)
       !! Steps 3-8 of `rdb_ocean_rebaseline` (the API wrapper does the
       !! precondition checks, the windowed-tracer flush and the host refresh
-      !! first).  Single-rank: the ghost fill reads the whole local interior.
+      !! first).  Decomposition-safe (exercised decomposed by the `balance_*`
+      !! cases of `test_ocean_decomp_bitid_mpi`); the C API handle that reaches
+      !! it is single-rank.
       type(ocean_state_t), intent(inout) :: state
       type(hgrid_t), intent(in) :: grid
       logical, intent(in) :: thermo_active

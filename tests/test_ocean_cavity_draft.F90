@@ -868,8 +868,10 @@ contains
                                           ".false., n_inner = 8, bt_halo = 8 /"), &
                           "bt_halo > 0")
       if (allocated(error)) return
-      call expect_invalid(error, nml_case(on, extra="&mpi_nml px = 2, py = 1 /"), &
-                          "multi-rank")
+      ! The cavity runs decomposed (the narrow multi-rank refusals live in
+      ! `engine_setup`, tested by `test_ocean_decomp_bitid_mpi`).
+      call expect_valid(error, nml_case(on, extra="&mpi_nml px = 2, py = 1 /"), &
+                        "multi-rank (accepted)")
       if (allocated(error)) return
 
       ! --- mutually exclusive capabilities ---

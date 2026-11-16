@@ -27,6 +27,7 @@ module rdb_ocean_metrics
    !! metric vocabulary, studied 2026-06-11); Adcroft reciprocal.  This
    !! is an independent implementation — no source ported.
    use rdb_constants, only: wp
+   use rdb_safe_math, only: safe_sin, safe_cos, safe_tan, safe_atan, safe_atan2
    use rdb_grid, only: hgrid_t
 #ifndef RDB_NO_NETCDF
    use rdb_io_netcdf, only: nc_check, nc_open_read, nc_close, &
@@ -1068,7 +1069,7 @@ contains
             lon_t = lon_west + (real(i + grid%i_offset_global - ng, wp) - 0.5_wp)*dlon_deg
             this%geolatT(i, j) = lat_t
             this%geolonT(i, j) = lon_t
-            this%dxT(i, j) = rad_earth*cos(lat_t*DEG2RAD)*dlon_rad
+            this%dxT(i, j) = rad_earth*safe_cos(lat_t*DEG2RAD)*dlon_rad
             this%dyT(i, j) = dy_len
             this%areaT(i, j) = this%dxT(i, j)*dy_len
          end do
@@ -1088,7 +1089,7 @@ contains
       do j = 1, ny
          lat_t = lat_south + (real(j + grid%j_offset_global - ng, wp) - 0.5_wp)*dlat_deg
          do i = 1, nx + 1
-            this%dxCu(i, j) = rad_earth*cos(lat_t*DEG2RAD)*dlon_rad
+            this%dxCu(i, j) = rad_earth*safe_cos(lat_t*DEG2RAD)*dlon_rad
             this%dyCu(i, j) = dy_len
             this%dy_cu(i, j) = dy_len
             this%areaCu(i, j) = this%dxCu(i, j)*dy_len
@@ -1103,7 +1104,7 @@ contains
       do j = 1, ny + 1
          lat_b = lat_south + real(j + grid%j_offset_global - ng - 1, wp)*dlat_deg
          do i = 1, nx
-            this%dxCv(i, j) = rad_earth*cos(lat_b*DEG2RAD)*dlon_rad
+            this%dxCv(i, j) = rad_earth*safe_cos(lat_b*DEG2RAD)*dlon_rad
             this%dyCv(i, j) = dy_len
             this%dx_cv(i, j) = this%dxCv(i, j)
             this%areaCv(i, j) = this%dxCv(i, j)*dy_len
@@ -1116,7 +1117,7 @@ contains
             lon_b = lon_west + real(i + grid%i_offset_global - ng - 1, wp)*dlon_deg
             this%geolatBu(i, j) = lat_b
             this%geolonBu(i, j) = lon_b
-            this%dxBu(i, j) = rad_earth*cos(lat_b*DEG2RAD)*dlon_rad
+            this%dxBu(i, j) = rad_earth*safe_cos(lat_b*DEG2RAD)*dlon_rad
             this%dyBu(i, j) = dy_len
             this%areaBu(i, j) = this%dxBu(i, j)*dy_len
          end do
@@ -2250,8 +2251,8 @@ contains
       pure function unit_vector(lat_deg, lon_deg) result(v)
          real(wp), intent(in) :: lat_deg, lon_deg
          real(wp) :: v(3)
-         v = [cos(lat_deg*DEG2RAD)*cos(lon_deg*DEG2RAD), &
-              cos(lat_deg*DEG2RAD)*sin(lon_deg*DEG2RAD), sin(lat_deg*DEG2RAD)]
+         v = [safe_cos(lat_deg*DEG2RAD)*safe_cos(lon_deg*DEG2RAD), &
+              safe_cos(lat_deg*DEG2RAD)*safe_sin(lon_deg*DEG2RAD), safe_sin(lat_deg*DEG2RAD)]
       end function unit_vector
    end function supergrid_top_row_folds
 
@@ -2277,7 +2278,7 @@ contains
          do m = 2, size(sg_x, 1) - 1, 2
             dlon = modulo(sg_x(m + 1, n) - sg_x(m - 1, n) + 180.0_wp, 360.0_wp) - 180.0_wp
             dlat = sg_y(m + 1, n) - sg_y(m - 1, n)
-            angle_deg(m, n) = atan2(dlat, dlon*cos(sg_y(m, n)*DEG2RAD))/DEG2RAD
+            angle_deg(m, n) = safe_atan2(dlat, dlon*safe_cos(sg_y(m, n)*DEG2RAD))/DEG2RAD
          end do
       end do
    end function supergrid_angle_dx_from_geography
@@ -2295,8 +2296,8 @@ contains
       ! wrap dlam into [-pi, pi] so the antimeridian doesn't blow up
       dlam = modulo(dlam + 3.14159265358979323846_wp, 2.0_wp*3.14159265358979323846_wp) &
              - 3.14159265358979323846_wp
-      h = sin(0.5_wp*dphi)**2 + cos(p1)*cos(p2)*sin(0.5_wp*dlam)**2
-      a = 2.0_wp*atan2(sqrt(h), sqrt(max(0.0_wp, 1.0_wp - h)))
+      h = safe_sin(0.5_wp*dphi)**2 + safe_cos(p1)*safe_cos(p2)*safe_sin(0.5_wp*dlam)**2
+      a = 2.0_wp*safe_atan2(sqrt(h), sqrt(max(0.0_wp, 1.0_wp - h)))
       d = r*a
    end function great_circle
 
@@ -2324,12 +2325,12 @@ contains
       c = great_circle(1.0_wp, lat1, lon1, lat2, lon2)
       sps = 0.5_wp*(a + b + c)
       ! tan(E/4) = sqrt(tan(s/2) tan((s-a)/2) tan((s-b)/2) tan((s-c)/2))
-      t = tan(0.5_wp*sps)*tan(0.5_wp*(sps - a))* &
-          tan(0.5_wp*(sps - b))*tan(0.5_wp*(sps - c))
+      t = safe_tan(0.5_wp*sps)*safe_tan(0.5_wp*(sps - a))* &
+          safe_tan(0.5_wp*(sps - b))*safe_tan(0.5_wp*(sps - c))
       if (t <= 0.0_wp) then
          area = 0.0_wp
       else
-         e = 4.0_wp*atan(sqrt(t))
+         e = 4.0_wp*safe_atan(sqrt(t))
          area = r*r*e
       end if
    end function spherical_tri_area
@@ -2483,12 +2484,12 @@ contains
          ! 2*omega*sin(geolat) at the respective stagger.
          do j = 1, size(f_corner, 2)
             do i = 1, size(f_corner, 1)
-               f_corner(i, j) = 2.0_wp*omega*sin(this%geolatBu(i, j)*DEG2RAD)
+               f_corner(i, j) = 2.0_wp*omega*safe_sin(this%geolatBu(i, j)*DEG2RAD)
             end do
          end do
          do j = 1, size(f_centre, 2)
             do i = 1, size(f_centre, 1)
-               f_centre(i, j) = abs(2.0_wp*omega*sin(this%geolatT(i, j)*DEG2RAD))
+               f_centre(i, j) = abs(2.0_wp*omega*safe_sin(this%geolatT(i, j)*DEG2RAD))
             end do
          end do
       case default   ! CORIOLIS_SCHEME_BETA_PLANE

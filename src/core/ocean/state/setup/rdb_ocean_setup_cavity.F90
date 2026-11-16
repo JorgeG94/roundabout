@@ -58,7 +58,7 @@ contains
          !! absent behaves as today (`error stop`).
 
       integer :: nx, ny, i, j
-      real(wp) :: resid, datum_tol
+      real(wp) :: resid, datum_tol, g_max, g_min, pice_max, ptop_max
 
       if (.not. ocean_state%metrics%use_cavity) then
          if (present(ierr)) ierr = OCEAN_STATUS_OK
@@ -96,14 +96,19 @@ contains
       ! `validate_config` carries the same refusal on the config-level
       ! predicate so the user meets it before any state is built.
       if (.not. ocean_state%pressure_force%p_top_in_bc) then
-         if (maxval(ocean_state%metrics%z_draft) /= &
-             minval(ocean_state%metrics%z_draft)) then
+         ! GLOBAL max/min: a tile-local test would let a tile whose own draft
+         ! is uniform carry on while its neighbours refuse (desynchronised
+         ! ranks, a hang at the next collective).
+         call grid_allreduce_max(grid, maxval(ocean_state%metrics%z_draft), g_max)
+         call grid_allreduce_min(grid, minval(ocean_state%metrics%z_draft), g_min)
+         if (g_max /= g_min) then
+            call grid_allreduce_max(grid, maxval(ocean_state%metrics%p_ice_ref), pice_max)
             call fail("&ocean_cavity_dyn_nml enable=.true. with a NON-UNIFORM "// &
                       "draft requires &ocean_pgf_nml p_top_in_bc=.true.  The "// &
                       "isostatic load rho_ref*g*z_draft would otherwise never "// &
                       "reach the FV_MOM6 pa(nz+1) surface boundary condition, "// &
                       "leaving the pressure stack ~"// &
-                      to_string(maxval(ocean_state%metrics%p_ice_ref))// &
+                      to_string(pice_max)// &
                       " Pa off its anomaly scale and the column out of "// &
                       "hydrostatic balance.  (A UNIFORM draft is exempt: a "// &
                       "load with no gradient is provably inert in the top BC.)", &
@@ -185,12 +190,15 @@ contains
       ! places, and an FMA-contracting build is free to round them
       ! differently.)
       if (cfg%ocean%bt%n_inner >= 1) then
-         datum_tol = 8.0_wp*epsilon(1.0_wp)* &
-                     max(maxval(abs(ocean_state%barotropic%b)), 1.0_wp)
-         resid = cavity_datum_residual(ocean_state%dyn%bt_work%bt_H_ref, &
-                                       ocean_state%barotropic%b, &
-                                       ocean_state%metrics%z_draft, &
-                                       cfg%ocean%cavity_dyn%h_min_cavity, nx, ny)
+         ! Global max of both the tolerance scale and the residual, so the
+         ! verdict is the same on every rank.
+         call grid_allreduce_max(grid, maxval(abs(ocean_state%barotropic%b)), g_max)
+         datum_tol = 8.0_wp*epsilon(1.0_wp)*max(g_max, 1.0_wp)
+         call grid_allreduce_max(grid, cavity_datum_residual(ocean_state%dyn%bt_work%bt_H_ref, &
+                                                             ocean_state%barotropic%b, &
+                                                             ocean_state%metrics%z_draft, &
+                                                             cfg%ocean%cavity_dyn%h_min_cavity, &
+                                                             nx, ny), resid)
          if (.not. (resid <= datum_tol)) then
             call fail("&ocean_cavity_dyn_nml: the barotropic datum and the ice "// &
                       "draft disagree (max |bt_H_ref - (b - z_draft)| = "// &
@@ -231,14 +239,17 @@ contains
       call ocean_surface_flux_apply_cover_const(ocean_state%surface_flux, &
                                                 ocean_state%metrics%cover_frac)
 
+      ! Global maxima for the log (collective on every rank, then rank 0 prints).
+      call grid_allreduce_max(grid, maxval(ocean_state%metrics%p_ice_ref), pice_max)
+      call grid_allreduce_max(grid, maxval(ocean_state%multilayer%p_top), ptop_max)
       if (compute_rank == 0) then
          call logger%info("Ice-shelf cavity: isostatic load p_ice_ref = "// &
                           "rho_ref*g*z_draft, max = "// &
-                          to_string(maxval(ocean_state%metrics%p_ice_ref))// &
+                          to_string(pice_max)// &
                           " Pa (rho_ref = "// &
                           to_string(ocean_state%pressure_force%rho_ref)//" kg/m^3)")
          call logger%info("                  assembled into ms%p_top (max = "// &
-                          to_string(maxval(ocean_state%multilayer%p_top))// &
+                          to_string(ptop_max)// &
                           " Pa = p_ice_ref + sf%p_surf); NOT into sf%p_surf, "// &
                           "which the eta_forcing seam is built from")
          if (ocean_state%pressure_force%p_top_in_bc) then
@@ -291,6 +302,9 @@ contains
          !! Non-zero on a melt configuration conflict when present;
          !! absent behaves as today (`error stop`).
       integer :: nx, ny, n_zero_f, n_unloaded
+      integer(int64) :: nz_glob, n_own_glob
+      integer :: ng, nxp, nyp
+      real(wp) :: ptop_max
       real(wp) :: gamma_s_eff
 
       if (.not. ocean_state%cavity_flux%enable) then
@@ -300,6 +314,9 @@ contains
 
       nx = size(ocean_state%cavity_flux%f_cor, 1)
       ny = size(ocean_state%cavity_flux%f_cor, 2)
+      ng = grid%nghost
+      nxp = grid%nx_phys
+      nyp = grid%ny_phys
 
       ! ---- knobs -> slot ----
       ocean_state%cavity_flux%far_field_depth = cfg%ocean%cavity_melt%far_field_depth
@@ -356,9 +373,22 @@ contains
          n_zero_f = cavity_count_zero_f(ocean_state%cavity_flux%f_cor, &
                                         ocean_state%metrics%cover_frac, &
                                         ocean_state%multilayer%wet_mask, nx, ny)
-         if (n_zero_f > 0) then
+         ! Rank-uniform verdict: global sum (a tile-local count would let one
+         ! rank refuse while the others carry on).
+         call grid_allreduce_sum_i8(grid, int(n_zero_f, int64), nz_glob)
+         ! The verdict keeps the all-cell count (it was never layout-free at
+         ! the ghost ring and is unchanged on one rank); the PRINTED number
+         ! is the OWNED-cell global count, which does not depend on the
+         ! decomposition (a seam ghost is another rank's owned cell).
+         n_zero_f = cavity_count_zero_f( &
+                    ocean_state%cavity_flux%f_cor(ng + 1:ng + nxp, ng + 1:ng + nyp), &
+                    ocean_state%metrics%cover_frac(ng + 1:ng + nxp, ng + 1:ng + nyp), &
+                    ocean_state%multilayer%wet_mask(ng + 1:ng + nxp, ng + 1:ng + nyp), &
+                    nxp, nyp)
+         call grid_allreduce_sum_i8(grid, int(n_zero_f, int64), n_own_glob)
+         if (nz_glob > 0) then
             call fail("&ocean_cavity_melt_nml exchange_law='hj99': "// &
-                      to_string(n_zero_f)//" ice-covered wet column(s) sit at "// &
+                      to_string(n_own_glob)//" owned ice-covered wet column(s) sit at "// &
                       "f = 0.  Holland & Jenkins (1999) eq. (15) takes "// &
                       "ln(.../|f| h_nu) and eq. (18) divides by f*L_O, so the law "// &
                       "has no value there and the kernel would return "// &
@@ -377,8 +407,16 @@ contains
       ! silently delete the entire ice pump.
       n_unloaded = cavity_count_unloaded_p_top(ocean_state%multilayer%p_top, &
                                                ocean_state%metrics%p_ice_ref, nx, ny)
-      if (n_unloaded > 0) then
-         call fail("&ocean_cavity_melt_nml: "//to_string(n_unloaded)//" column(s) "// &
+      call grid_allreduce_sum_i8(grid, int(n_unloaded, int64), nz_glob)
+      ! Verdict on the all-cell count (unchanged); printed number = owned
+      ! cells, layout-independent.
+      n_unloaded = cavity_count_unloaded_p_top( &
+                   ocean_state%multilayer%p_top(ng + 1:ng + nxp, ng + 1:ng + nyp), &
+                   ocean_state%metrics%p_ice_ref(ng + 1:ng + nxp, ng + 1:ng + nyp), &
+                   nxp, nyp)
+      call grid_allreduce_sum_i8(grid, int(n_unloaded, int64), n_own_glob)
+      if (nz_glob > 0) then
+         call fail("&ocean_cavity_melt_nml: "//to_string(n_own_glob)//" owned column(s) "// &
                    "have ms%p_top < metrics%p_ice_ref, so the top-of-column load was "// &
                    "never assembled.  The melt liquidus is a CONSUMER of ms%p_top; "// &
                    "its sole producer is configure_ocean_cavity "// &
@@ -387,6 +425,7 @@ contains
          return
       end if
 
+      call grid_allreduce_max(grid, maxval(ocean_state%multilayer%p_top), ptop_max)
       if (compute_rank == 0) then
          call logger%info("Ice-shelf basal melt: exchange_law='"// &
                           trim(adjustl(cfg%ocean%cavity_melt%exchange_law))// &
@@ -401,7 +440,7 @@ contains
                           ", u_tide = "//to_string(cfg%ocean%cavity_melt%u_tide)//" m/s")
          call logger%info("                      liquidus evaluated at ms%p_top "// &
                           "(max = "// &
-                          to_string(maxval(ocean_state%multilayer%p_top))// &
+                          to_string(ptop_max)// &
                           " Pa), assembled by configure_ocean_cavity as "// &
                           "p_ice_ref + sf%p_surf")
          if (ocean_state%cavity_flux%freshwater == CAVITY_FW_MASS) then
@@ -497,6 +536,15 @@ contains
                                          ocean_state%tdrag%cover_v, &
                                          ocean_state%metrics%cover_frac, nx, ny)
       ocean_state%tdrag%cover_t(:, :) = ocean_state%metrics%cover_frac(:, :)
+      ! Faces 1 and nx+1 (1 and ny+1) are left 0 by the fill (no stencil of
+      ! its own); on a tile seam or a periodic wrap that ghost face must be
+      ! its owner's value.  HOST side, before `ocean_state_enter_data`;
+      ! unconditional on the decomposition, the guard is the rank-uniform
+      ! `ocean_halo_is_init()`.  Single non-periodic rank: a no-op.
+      if (ocean_halo_is_init()) then
+         call ocean_halo_face_x(ocean_state%tdrag%cover_u, device_resident=.false.)
+         call ocean_halo_face_y(ocean_state%tdrag%cover_v, device_resident=.false.)
+      end if
 
       ! ONE drag coefficient for momentum and melt.  MOM6 carries two
       ! independent top-drag coefficients; we deliberately do not — see

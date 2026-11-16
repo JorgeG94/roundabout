@@ -1,5 +1,9 @@
 !! Sea-ice shortwave optics (SIS2 port, PR 3a).
 module rdb_ice_optics
+   !! **Reproducibility.**  Every exp/cos/atan here is the module-local
+   !! `rdb_sm_*` body (`rdb_safe_math_*.inc`), so a cell's value does not depend
+   !! on its vector position or tile.
+   !!
    !! CSIM4 (non-delta-Eddington) branch of `ice_optics_SIS2`
    !! (SIS_optics.F90:371-409, Apache-2.0) — snow/ice albedo + the
    !! Beer's-law vertical partition of absorbed shortwave into the
@@ -13,11 +17,17 @@ module rdb_ice_optics
    !! Everything pure + `!$acc routine seq`: called from inside the
    !! per-column `do concurrent` driver in `rdb_ice_column`.
    use rdb_constants, only: wp
+   use, intrinsic :: ieee_arithmetic, only: ieee_is_nan, ieee_is_finite
+   use, intrinsic :: iso_fortran_env, only: int64
    use rdb_ice_enthalpy, only: ice_t_freeze
    implicit none
    private
 
    public :: ice_optics_csim4
+
+   ! Position-independent exp/atan (`rdb_sm_*`): the optics run per column
+   ! inside the ice driver's `do concurrent`.
+#include "rdb_safe_math_consts.inc"
 
    ! ---- CSIM4 optics constants (SIS_optics.F90:129-141 defaults) ----
    real(wp), parameter, public :: ICE_ALB_SNOW = 0.85_wp
@@ -27,6 +37,8 @@ module rdb_ice_optics
    real(wp), parameter, public :: ICE_PEN_ICE = 0.3_wp
       !! Fraction of absorbed SW that penetrates below the surface skin
       !! for bare ice — SIS2 `ICE_SW_PEN_FRAC`.
+   real(wp), parameter :: ATAN_2P5 = atan(2.5_wp)  ! safe-math-ok: compile-time constant
+      !! `atan(5 * 0.5)`: the thickness-ramp normaliser, folded at compile time.
    real(wp), parameter, public :: ICE_OPT_DEP_ICE = 0.67_wp
       !! E-folding optical depth of penetrating SW in ice (m) — SIS2
       !! `ICE_OPTICAL_DEPTH`.
@@ -50,7 +62,7 @@ contains
       !!
       !! Partition identity (up to ~1 `exp` round-off): `abs_sfc +
       !! abs_snow + sum(abs_ice_lay) + abs_ocn == 1`, because
-      !! `opt_decay_lay**nk == exp(-hi/ICE_OPT_DEP_ICE)`.
+      !! `opt_decay_lay**nk == rdb_sm_exp(-hi/ICE_OPT_DEP_ICE)`.
       !$acc routine seq
       integer, intent(in) :: nk
          !! Number of ice layers (declared first — decl-order).
@@ -92,7 +104,7 @@ contains
       snow_cover = hs/(hs + ICE_SNOW_PATCH)
       temp_ice_freeze = ice_t_freeze(sal_ice_top)
 
-      fh = min(atan(5.0_wp*hi)/atan(5.0_wp*0.5_wp), 1.0_wp)
+      fh = min(rdb_sm_atan(5.0_wp*hi)/ATAN_2P5, 1.0_wp)
 
       if (ts + ICE_T_RANGE_MELT > temp_ice_freeze) then
          ! Reduce albedo for melting, CSIM4 0.53/0.47 vis/ir split
@@ -106,8 +118,8 @@ contains
       albedo = snow_cover*as + (1.0_wp - snow_cover)*ai
 
       pen = (1.0_wp - snow_cover)*ICE_PEN_ICE
-      opt_decay_lay = exp(-hi/(real(nk, wp)*ICE_OPT_DEP_ICE))
-      abs_ocn = pen*exp(-hi/ICE_OPT_DEP_ICE)
+      opt_decay_lay = rdb_sm_exp(-hi/(real(nk, wp)*ICE_OPT_DEP_ICE))
+      abs_ocn = pen*rdb_sm_exp(-hi/ICE_OPT_DEP_ICE)
       abs_sfc = 1.0_wp - pen
       abs_snow = 0.0_wp
 
@@ -118,5 +130,9 @@ contains
       end do
       abs_int = pen - sw_frac_top
    end subroutine ice_optics_csim4
+
+#include "rdb_safe_math_core.inc"
+
+#include "rdb_safe_math_atan.inc"
 
 end module rdb_ice_optics

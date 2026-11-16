@@ -45,7 +45,8 @@ module test_ocean_bulk_forcing
                                   BULK_GAS_CONST_AIR, BULK_TVQ_AIR, BULK_CP_AIR, &
                                   BULK_LATENT_SUBLIMATION, BULK_QSAT_ICE_COEF_B, BULK_WIND_MIN
    use rdb_ocean_surface_stress, only: ocean_surface_stress_t
-   use rdb_ocean_surface_flux, only: ocean_surface_flux_t
+   use rdb_ocean_surface_flux, only: ocean_surface_flux_t, ocean_surface_flux_assemble
+   use rdb_ice_ocean_coupler, only: ice_ocean_brine_flux, ice_ocean_heat_flux, ice_ocean_sw_flux
    use rdb_ocean_bulk_forcing, only: bulk_forcing_t, bulk_forcing_apply
    use rdb_teos10_convert, only: pt_from_ct
    use rdb_ice_atm_forcing, only: ice_atm_forcing_from_atm
@@ -68,6 +69,7 @@ module test_ocean_bulk_forcing
    real(wp), parameter :: Z_WIND = 10.0_wp, Z_TA = 2.0_wp
    integer, parameter :: N_ITER = 5
    real(wp), parameter :: EMISSIVITY = 0.97_wp, OCEAN_ALBEDO = 0.066_wp
+   real(wp), parameter :: READER_HEAT = 11.0_wp, READER_SALT = 5.0e-6_wp
 
 contains
 
@@ -80,7 +82,13 @@ contains
                   new_unittest("bulk_forcing_sst_first_live", test_sst_first_live), &
                   new_unittest("bulk_forcing_rotation_exact", test_rotation_exact), &
                   new_unittest("bulk_forcing_open_water_halves", test_open_water_halves), &
-                  new_unittest("ice_atm_forcing_seb_linearization", test_ice_seb_linearization) &
+                  new_unittest("bulk_forcing_stress_fold_line", test_stress_fold_line), &
+                  new_unittest("bulk_forcing_stress_no_fold_unchanged", test_stress_no_fold_line), &
+                  new_unittest("ice_atm_forcing_seb_linearization", test_ice_seb_linearization), &
+                  new_unittest("ice_enabled_icefree_keeps_shortwave", test_icefree_keeps_sw), &
+                  new_unittest("ice_partial_cover_open_plus_transmitted_sw", test_partial_cover_sw), &
+                  new_unittest("ice_and_reader_flux_both_arrive", test_reader_and_ice_both_arrive), &
+                  new_unittest("ice_coupler_no_accumulation_across_window", test_no_accumulation) &
                   ]
    end subroutine collect_ocean_bulk_forcing_tests
 
@@ -575,6 +583,330 @@ contains
 
       call destroy_cartesian_metrics(metrics)
    end subroutine test_open_water_halves
+
+   ! =================================================================
+   ! Tripolar fold line -- the meridional stress on the fold-line face
+   ! =================================================================
+
+   subroutine fold_stress_case(fold, tau_y_fold, tauy_c_last, ni, jf)
+      !! Run `bulk_forcing_apply` on a (6 x 3) single-rank tile with a
+      !! wind field that is a TRUE VECTOR field continuous across the
+      !! tripolar fold: the 180-degree rotation of the local frame negates
+      !! both components at the mirror cell `i' = ni+1-i`, so
+      !! `uas(i') = -uas(i)` and `vas(i') = -vas(i)` on the last row (the
+      !! stress is odd in the wind).  Returns the fold-line `tau_y` row
+      !! (storage row `jf = nghost+nj+1`) and the last physical row of the
+      !! cell-centred `tauy_c`.
+      logical, intent(in) :: fold
+      integer, intent(in) :: ni, jf
+      real(wp), intent(out) :: tau_y_fold(ni), tauy_c_last(ni)
+
+      type(hgrid_t) :: grid
+      type(ocean_metrics_t) :: metrics
+      type(ocean_bc_state_t) :: bc
+      type(multilayer_state_t) :: ms
+      type(ocean_sea_ice_t) :: ice
+      type(atm_state_t) :: atm
+      type(bulk_forcing_t) :: bf
+      type(ocean_surface_stress_t) :: ss
+      type(ocean_surface_flux_t) :: sf
+      integer :: i, j
+      real(wp) :: d
+
+      call grid%init(ni, NYP, NGHOST, 1.0_wp, 1.0_wp)
+      call make_cartesian_metrics(metrics, grid)
+      call init_halo_single_rank(grid)
+      bc%north_fold = fold
+      call make_ms(grid, ms)
+      call make_atm(grid, atm)
+      do j = 1, grid%ny_total
+         do i = 1, grid%nx_total
+            d = real(i - NGHOST, wp) - 0.5_wp*real(ni + 1, wp)
+            atm%uas(i, j) = 2.0_wp*d + 0.1_wp*d**3
+            atm%vas(i, j) = 3.0_wp*d - 0.2_wp*d**3 + 1.0_wp*d*real(j, wp)/real(NYP, wp)
+         end do
+      end do
+      call make_bulk_forcing(grid, .true., bf)
+      call ss%init(grid)
+      call sf%init(grid)
+      call sf%set_components(grid, .true.)
+      ! uas/vas are host-set: run_apply's atm%enter_data() copies them in (no update before the map).
+      call run_apply(grid, metrics, bc, atm, ms, ice, bf, ss, sf)
+      do i = 1, ni
+         tau_y_fold(i) = ss%tau_y(NGHOST + i, jf)
+         tauy_c_last(i) = bf%tauy_c(NGHOST + i, NGHOST + NYP)
+      end do
+      call ocean_halo_destroy()
+      call destroy_cartesian_metrics(metrics)
+   end subroutine fold_stress_case
+
+   subroutine test_stress_fold_line(error)
+      !! The fold-line `tau_y` face (the NORTH face of the last physical
+      !! T-row, storage row `nghost+nj+1`) must be the two-sided average
+      !! across the fold, the mirror cell's stress entering with the vector
+      !! sign: `0.5*(tauy_c(i) - tauy_c(i'))`.  Antisymmetric by itself.
+      !! Before the fix the north ghost row of `tauy_c` was never folded
+      !! (zero), giving `0.5*tauy_c(i)` on the east half.
+      type(error_type), allocatable, intent(out) :: error
+      integer, parameter :: NI = 6
+      real(wp) :: tau_y(NI), tc(NI), want, odd_err
+      integer :: i, ip
+
+      call fold_stress_case(.true., tau_y, tc, NI, NGHOST + NYP + 1)
+      checks: block
+         odd_err = 0.0_wp
+         do i = 1, NI
+            odd_err = max(odd_err, abs(tc(i) + tc(NI + 1 - i)))
+         end do
+         call check(error, odd_err < 1.0e-14_wp, .true., "precondition: tauy_c odd across the fold")
+         if (allocated(error)) exit checks
+         call check(error, maxval(abs(tc)) > 1.0e-3_wp, .true., "precondition: nonzero stress")
+         if (allocated(error)) exit checks
+         do i = 1, NI
+            ip = NI + 1 - i
+            want = 0.5_wp*(tc(i) - tc(ip))
+            call check(error, abs(tau_y(i) - want) < 1.0e-14_wp, .true., &
+                       "fold-line tau_y == two-sided average 0.5*(tauy_c(i) - tauy_c(i'))")
+            if (allocated(error)) exit checks
+            call check(error, tau_y(i) + tau_y(ip), 0.0_wp, "fold-line tau_y antisymmetric", thr=0.0_wp)
+            if (allocated(error)) exit checks
+         end do
+      end block checks
+   end subroutine test_stress_fold_line
+
+   subroutine test_stress_no_fold_line(error)
+      !! Without a fold the last-row face is the one-sided edge average against the
+      !! zero ghost, `0.5*tauy_c(i, last)` -- unchanged by the fold fix.
+      type(error_type), allocatable, intent(out) :: error
+      integer, parameter :: NI = 6
+      real(wp) :: tau_y(NI), tc(NI)
+      integer :: i
+
+      call fold_stress_case(.false., tau_y, tc, NI, NGHOST + NYP + 1)
+      do i = 1, NI
+         call check(error, tau_y(i), 0.5_wp*tc(i), "no fold: tau_y(jf) = 0.5*(tauy_c(last) + 0 ghost)", &
+                    thr=0.0_wp)
+         if (allocated(error)) return
+      end do
+   end subroutine test_stress_no_fold_line
+
+   ! =================================================================
+   ! Ice coupler x bulk consumer x data-forcing reader: write order
+   ! =================================================================
+   ! The real per-step sequence of `engine_step` / `engine_step_ice` /
+   ! `engine_step_finalize`, at unit level: reader write (every step) ->
+   ! `bulk_forcing_apply` (every step) -> on a thermo step (`mod(step,
+   ! ratio) == 0`) the three ice couplers -> `ocean_surface_flux_assemble`
+   ! (same gate).  Before the fix the couplers full-overwrote `q_sw` /
+   ! `heat_added` / `salt_flux`, so the assembled `Q_heat` carried NO open-
+   ! water shortwave and none of the reader's heat/salt.
+
+   subroutine run_sequence(ratio, nsteps, ice_on, cover, swt, hice, sice, reader, &
+                           qh, qs, comp)
+      !! `comp` = [q_sw, sw_ice, heat_added, heat_ice, salt_flux, salt_ice]
+      !! at the probe cell after the last step; `qh`/`qs` = `Q_heat`/`Q_salt`
+      !! there after every step (carried between thermo steps, as in the
+      !! engine).  `reader` writes `heat_added = READER_HEAT`,
+      !! `salt_flux = READER_SALT` every step.
+      integer, intent(in) :: ratio, nsteps
+      logical, intent(in) :: ice_on, reader
+      real(wp), intent(in) :: cover, swt, hice, sice
+      real(wp), intent(out) :: qh(nsteps), qs(nsteps), comp(6)
+
+      type(hgrid_t) :: grid
+      type(ocean_metrics_t) :: metrics
+      type(ocean_bc_state_t) :: bc
+      type(multilayer_state_t) :: ms
+      type(ocean_sea_ice_t) :: ice
+      type(atm_state_t) :: atm
+      type(bulk_forcing_t) :: bf
+      type(ocean_surface_stress_t) :: ss
+      type(ocean_surface_flux_t) :: sf
+      integer :: ip, jp, step
+      logical :: thermo
+
+      call make_grid(grid)
+      call make_cartesian_metrics(metrics, grid)
+      call init_halo_single_rank(grid)
+      ip = grid%nghost + 2
+      jp = grid%nghost + 2
+      call make_ms(grid, ms)
+      ms%wet_mask = 1.0_wp
+      call make_atm(grid, atm)
+      call make_bulk_forcing(grid, .true., bf)
+      call ss%init(grid)
+      call sf%init(grid)
+      call sf%set_components(grid, .true.)
+      sf%has_heat = .true.
+      sf%has_salt = .true.
+      if (ice_on) then
+         ice%ncat = 1
+         call ice%init(grid)
+         ice%enable = .true.
+         ice%part_size(:, :, 0) = 1.0_wp - cover
+         ice%part_size(:, :, 1) = cover
+         ice%sw_thru_diag = swt
+         ice%heat_flux_diag = hice
+         ice%salt_flux_diag = sice
+      end if
+
+      !$acc enter data copyin(atm, ms, bf, ss, sf)
+      call atm%enter_data()
+      call ms%enter_data()
+      call bf%enter_data()
+      call ss%enter_data()
+      call sf%enter_data()
+      if (ice_on) then
+         !$acc enter data copyin(ice)
+         call ice%enter_data()
+      end if
+
+      do step = 1, nsteps
+         thermo = (mod(step, ratio) == 0)
+         if (reader) then
+            sf%heat_added = READER_HEAT
+            sf%salt_flux = READER_SALT
+            !$acc update device(sf%heat_added, sf%salt_flux)
+         end if
+         call bulk_forcing_apply(grid, metrics, bc, atm, ms, ice, bf, ss, sf)
+         if (thermo) then
+            if (ice_on) then
+               call ice_ocean_brine_flux(sf, ice)
+               call ice_ocean_heat_flux(sf, ice)
+               call ice_ocean_sw_flux(sf, ice)
+            end if
+            call ocean_surface_flux_assemble(grid, sf, ms, active=.true.)
+         end if
+         !$acc update self(sf%Q_heat, sf%Q_salt)
+         qh(step) = sf%Q_heat(ip, jp)
+         qs(step) = sf%Q_salt(ip, jp)
+      end do
+
+      !$acc update self(sf%q_sw, sf%sw_ice, sf%heat_added, sf%heat_ice, sf%salt_flux, sf%salt_ice)
+      comp = [sf%q_sw(ip, jp), sf%sw_ice(ip, jp), sf%heat_added(ip, jp), &
+              sf%heat_ice(ip, jp), sf%salt_flux(ip, jp), sf%salt_ice(ip, jp)]
+
+      if (ice_on) then
+         call ice%exit_data()
+         !$acc exit data delete(ice)
+      end if
+      call sf%exit_data()
+      call ss%exit_data()
+      call bf%exit_data()
+      call ms%exit_data()
+      call atm%exit_data()
+      !$acc exit data delete(atm, ms, bf, ss, sf)
+      call ocean_halo_destroy()
+      call destroy_cartesian_metrics(metrics)
+   end subroutine run_sequence
+
+   subroutine test_icefree_keeps_sw(error)
+      !! Ice ENABLED but no ice present (all diags 0, open fraction 1): the
+      !! ocean must receive exactly what it does with ice DISABLED -- the
+      !! open-water shortwave included -- at `dt_therm_ratio` 1 and 3.
+      type(error_type), allocatable, intent(out) :: error
+      integer, parameter :: NS = 6
+      real(wp) :: qh_on(NS), qs_on(NS), qh_off(NS), qs_off(NS), c_on(6), c_off(6)
+      integer :: ratio, k, ratios(2)
+
+      ratios = [1, 3]
+      do k = 1, 2
+         ratio = ratios(k)
+         call run_sequence(ratio, NS, .true., 0.0_wp, 0.0_wp, 0.0_wp, 0.0_wp, .false., &
+                           qh_on, qs_on, c_on)
+         call run_sequence(ratio, NS, .false., 0.0_wp, 0.0_wp, 0.0_wp, 0.0_wp, .false., &
+                           qh_off, qs_off, c_off)
+         call check(error, c_off(1) > 1.0_wp, .true., "precondition: bulk open-water q_sw > 0")
+         if (allocated(error)) return
+         call check(error, c_on(1), c_off(1), "ice enabled: q_sw survives the ice coupler", thr=0.0_wp)
+         if (allocated(error)) return
+         call check(error, maxval(abs(qh_on - qh_off)), 0.0_wp, &
+                    "ice-free ice-enabled Q_heat == ice-disabled Q_heat (bitwise)", thr=0.0_wp)
+         if (allocated(error)) return
+         call check(error, maxval(abs(qs_on - qs_off)), 0.0_wp, &
+                    "ice-free ice-enabled Q_salt == ice-disabled Q_salt (bitwise)", thr=0.0_wp)
+         if (allocated(error)) return
+      end do
+   end subroutine test_icefree_keeps_sw
+
+   subroutine test_partial_cover_sw(error)
+      !! 30 % ice cover: the cell gets the bulk open-water shortwave
+      !! (open fraction x (1 - albedo) x rsds, written by the bulk consumer)
+      !! PLUS the ice-transmitted shortwave (per cell area) -- each once.
+      type(error_type), allocatable, intent(out) :: error
+      integer, parameter :: NS = 3
+      real(wp), parameter :: COVER = 0.3_wp, SWT = 12.5_wp
+      real(wp) :: qh(NS), qs(NS), c(6), qh0(NS), qs0(NS), c0(6), sw_open
+
+      call run_sequence(3, NS, .true., COVER, SWT, 0.0_wp, 0.0_wp, .false., qh, qs, c)
+      call run_sequence(3, NS, .false., 0.0_wp, 0.0_wp, 0.0_wp, 0.0_wp, .false., qh0, qs0, c0)
+      sw_open = (1.0_wp - COVER)*(1.0_wp - OCEAN_ALBEDO)*RSDS
+      call check(error, c(1), sw_open, "q_sw == open fraction x (1-albedo) x rsds", thr=TOL)
+      if (allocated(error)) return
+      call check(error, c(2), SWT, "sw_ice == transmitted shortwave", thr=0.0_wp)
+      if (allocated(error)) return
+      ! Every bulk band scales with the open fraction, so the whole-cell
+      ! heat is (1-a)*Q_heat(ice-free) + the transmitted shortwave, once.
+      call check(error, abs(qh(NS) - ((1.0_wp - COVER)*qh0(NS) + SWT)) &
+                 < 1.0e-12_wp*max(abs(qh(NS)), 1.0_wp), .true., &
+                 "Q_heat == (1-a)*Q_heat_icefree + transmitted shortwave")
+   end subroutine test_partial_cover_sw
+
+   subroutine test_reader_and_ice_both_arrive(error)
+      !! A data-forcing reader writing `heat_added`/`salt_flux` every step
+      !! AND the ice contributing `heat_flux_diag`/`salt_flux_diag`: the
+      !! assembled fluxes carry BOTH, once each; neither slot is clobbered.
+      type(error_type), allocatable, intent(out) :: error
+      integer, parameter :: NS = 6
+      real(wp), parameter :: HICE = -7.0_wp, SICE = 3.0e-6_wp
+      real(wp) :: qh(NS), qs(NS), c(6), qh_r(NS), qs_r(NS), c_r(6)
+      real(wp) :: qh_i(NS), qs_i(NS), c_i(6), qh_n(NS), qs_n(NS), c_n(6)
+
+      call run_sequence(3, NS, .true., 0.0_wp, 0.0_wp, HICE, SICE, .true., qh, qs, c)
+      call run_sequence(3, NS, .true., 0.0_wp, 0.0_wp, 0.0_wp, 0.0_wp, .true., qh_r, qs_r, c_r)
+      call run_sequence(3, NS, .true., 0.0_wp, 0.0_wp, HICE, SICE, .false., qh_i, qs_i, c_i)
+      call run_sequence(3, NS, .true., 0.0_wp, 0.0_wp, 0.0_wp, 0.0_wp, .false., qh_n, qs_n, c_n)
+      call check(error, c(3), READER_HEAT, "reader heat_added survives the ice coupler", thr=0.0_wp)
+      if (allocated(error)) return
+      call check(error, c(5), READER_SALT, "reader salt_flux survives the ice coupler", thr=0.0_wp)
+      if (allocated(error)) return
+      call check(error, c(4), HICE, "heat_ice == heat_flux_diag", thr=0.0_wp)
+      if (allocated(error)) return
+      call check(error, c(6), SICE, "salt_ice == salt_flux_diag", thr=0.0_wp)
+      if (allocated(error)) return
+      ! reader + ice == (reader alone) + (ice alone) - (neither), to round-off
+      call check(error, abs(qh(NS) - (qh_r(NS) + qh_i(NS) - qh_n(NS))) &
+                 < 1.0e-12_wp*max(abs(qh(NS)), 1.0_wp), .true., "Q_heat carries reader AND ice")
+      if (allocated(error)) return
+      call check(error, abs(qh(NS) - qh_n(NS) - (READER_HEAT + HICE)) &
+                 < 1.0e-12_wp*max(abs(qh(NS)), 1.0_wp), .true., "Q_heat step = reader + ice heat")
+      if (allocated(error)) return
+      call check(error, abs(qs(NS) - qs_n(NS) - (READER_SALT + SICE)) &
+                 < 1.0e-12_wp*max(abs(qs(NS)), 1.0e-6_wp), .true., "Q_salt step = reader + ice salt")
+   end subroutine test_reader_and_ice_both_arrive
+
+   subroutine test_no_accumulation(error)
+      !! Constant forcing, `dt_therm_ratio` 3 over 4 windows: the assembled
+      !! flux is the SAME at every thermo step (the ice slots are re-assigned
+      !! before each assembly, never added to), is carried unchanged through
+      !! the non-thermo steps in between, and ice + reader + bulk are all in.
+      type(error_type), allocatable, intent(out) :: error
+      integer, parameter :: NS = 12
+      real(wp) :: qh(NS), qs(NS), c(6)
+      integer :: w
+
+      call run_sequence(3, NS, .true., 0.2_wp, 9.0_wp, -4.0_wp, 2.0e-6_wp, .true., qh, qs, c)
+      do w = 2, NS/3
+         call check(error, qh(3*w), qh(3), "Q_heat identical at every thermo step", thr=0.0_wp)
+         if (allocated(error)) return
+         call check(error, qs(3*w), qs(3), "Q_salt identical at every thermo step", thr=0.0_wp)
+         if (allocated(error)) return
+         call check(error, qh(3*w - 1), qh(3*w - 3), "Q_heat carried through non-thermo steps", &
+                    thr=0.0_wp)
+         if (allocated(error)) return
+      end do
+      call check(error, c(2), 9.0_wp, "sw_ice is the single-window value, not a running sum", thr=0.0_wp)
+   end subroutine test_no_accumulation
 
    subroutine run_apply(grid, metrics, bc, atm, ms, ice, bf, ss, sf)
       !! `bulk_forcing_apply` with the production device residency: the

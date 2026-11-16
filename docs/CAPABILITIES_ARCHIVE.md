@@ -1688,8 +1688,8 @@ ice (thermo + ITD, EVP dynamics, the ice->ocean stress blend, in a
 cooled periodic channel, without and with the category transport; every
 ice registry field compared). It
 passes on gfortran (CPU ranks), nvfortran CPU + HPC-X, and nvfortran (one V100
-per rank). On the nvfortran CPU build `rdb_ocean_horizontal_viscosity.F90` is
-compiled `-Mnofma` (`cmake/compiler_flags.cmake`): its vectorised kernels
+per rank). The CPU builds compile with FMA contraction off (nvfortran `-Mnofma`, gfortran
+`-ffp-contract=off`, `cmake/compiler_flags.cmake`): vectorised kernels
 otherwise round a face differently in the vector body and the scalar
 remainder, i.e. by its position in the tile, and `pred_corr` carries that
 tendency into the prognostics.

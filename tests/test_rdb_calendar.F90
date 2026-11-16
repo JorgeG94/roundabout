@@ -160,6 +160,20 @@ contains
       call check(error, abs(scale - 3600.0_wp) < 1.0e-10_wp, "parse_time_units: hour scale wrong")
       if (allocated(error)) return
 
+      ! JRA55-do under gfortran: the units attribute carries a trailing NUL.
+      call parse_time_units("days since 1900-01-01 00:00:00"//achar(0), scale, epoch, ok)
+      call check(error, ok, "parse_time_units: trailing NUL must be tolerated")
+      if (allocated(error)) return
+      call check(error, epoch%y == 1900 .and. epoch%m == 1 .and. epoch%d == 1 .and. &
+                 epoch%h == 0 .and. abs(scale - 86400.0_wp) < 1.0e-10_wp, &
+                 "parse_time_units: NUL-terminated units parsed to the wrong epoch/scale")
+      if (allocated(error)) return
+      call parse_time_units("hours since 1958-01-01 06:00:00"//achar(0)//achar(0)//" ", &
+                            scale, epoch, ok)
+      call check(error, ok .and. epoch%h == 6 .and. abs(scale - 3600.0_wp) < 1.0e-10_wp, &
+                 "parse_time_units: several trailing NULs/blanks must be tolerated")
+      if (allocated(error)) return
+
       call parse_time_units("furlongs since 1900-01-01", scale, epoch, ok)
       call check(error,.not. ok, "parse_time_units: unrecognised unit must report ok=.false.")
       if (allocated(error)) return

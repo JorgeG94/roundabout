@@ -2,6 +2,8 @@ submodule(rdb_ocean_state) rdb_ocean_state_topo
    !! R2b split: host-only formula-bathymetry setter bodies, moved
    !! verbatim from rdb_ocean_state.F90 (see
    !! src/core/ocean/state/rdb_ocean_state.F90 for the public interface).
+   use rdb_constants, only: PI
+   use rdb_safe_math, only: safe_exp, safe_sin, safe_cos, safe_pow
    implicit none
 
 contains
@@ -165,7 +167,6 @@ contains
       real(wp), intent(inout) :: b(:, :)
       type(hgrid_t), intent(in) :: grid
       real(wp), intent(in) :: max_depth, edge_depth, slope_scale
-      real(wp), parameter :: PI = 4.0_wp*atan(1.0_wp)
       real(wp) :: x_len, y_len, x_phys, y_phys, D_0, denom, D_local
       integer :: i, j, i_phys, j_phys, ng
       integer :: ioff, joff
@@ -176,7 +177,7 @@ contains
       ng = grid%nghost
       x_len = real(grid%nx_global, wp)*grid%dx
       y_len = real(grid%ny_global, wp)*grid%dy
-      denom = 1.0_wp - exp(-0.5_wp*y_len/slope_scale)
+      denom = 1.0_wp - safe_exp(-0.5_wp*y_len/slope_scale)
       D_0 = (max_depth - edge_depth)/(denom*denom)
 
       ! Fill the full array including ghost rows.  Ghost cells left at
@@ -195,8 +196,8 @@ contains
             ! Global physical x position: local i_phys shifted by ioff.
             x_phys = (real(i_phys + ioff, wp) - 0.5_wp)*grid%dx
             D_local = edge_depth &
-                      + D_0*sin(PI*x_phys/x_len) &
-                      *(1.0_wp - exp((y_phys - y_len)/slope_scale))
+                      + D_0*safe_sin(PI*x_phys/x_len) &
+                      *(1.0_wp - safe_exp((y_phys - y_len)/slope_scale))
             ! Safety: the sin term goes negative outside [0, x_len],
             ! and the exp term saturates the depth at the north wall.
             ! Clamp to [edge_depth, max_depth].
@@ -276,7 +277,7 @@ contains
             ! Global physical x position: local i_phys shifted by ioff.
             x_phys = (real(i_phys + ioff, wp) - 0.5_wp)*grid%dx
             r2 = (x_phys - xc)**2 + (y_phys - yc)**2
-            b(i, j) = max_depth - depression*exp(-r2/(half_width*half_width))
+            b(i, j) = max_depth - depression*safe_exp(-r2/(half_width*half_width))
          end do
       end do
    end subroutine set_bathymetry_seamount
@@ -372,8 +373,7 @@ contains
       !! Marques et al. (2022, GMD) "Neverworld2"; MOM6-inspired.
       real(wp), intent(in) :: x, L
       real(wp) :: c
-      real(wp), parameter :: PI = 4.0_wp*atan(1.0_wp)
-      c = 0.5_wp*(1.0_wp + cos(PI*min(abs(x/L), 1.0_wp)))
+      c = 0.5_wp*(1.0_wp + safe_cos(PI*min(abs(x/L), 1.0_wp)))
    end function nw2_cosbell
 
    pure function nw2_spike(x, L) result(s)
@@ -383,8 +383,7 @@ contains
       !! (2022, GMD); MOM6-inspired.
       real(wp), intent(in) :: x, L
       real(wp) :: s
-      real(wp), parameter :: PI = 4.0_wp*atan(1.0_wp)
-      s = 1.0_wp - sin(PI*min(abs(x/L), 0.5_wp))
+      s = 1.0_wp - safe_sin(PI*min(abs(x/L), 0.5_wp))
    end function nw2_spike
 
    module subroutine set_bathymetry_neverworld2(b, grid, max_depth, nl_continent_amp, nl_roughness_amp, min_depth)
@@ -450,7 +449,6 @@ contains
          !! all-wet and stable.  Lower values give stronger topographic
          !! steering at the cost of thinner layers (min_depth/nz); true land
          !! barriers wait on the wet/dry-plumbing follow-up.
-      real(wp), parameter :: PI = 4.0_wp*atan(1.0_wp)
       real(wp) :: x, y, d_frac, nxp, nyp
       integer :: i, j, i_phys, j_phys, ng, ioff, joff
 
@@ -478,11 +476,11 @@ contains
                      + 1.2_wp*(nw2_spike(x, 0.12_wp) + nw2_spike(x - 1.0_wp, 0.12_wp)) &
                      *nw2_spike(max(0.0_wp, y - 0.06_wp), 0.12_wp) &                        ! Antarctic Peninsula
                      + 0.1_wp*(nw2_cosbell(x, 0.1_wp) + nw2_cosbell(x - 1.0_wp, 0.1_wp)) &  ! Drake Passage ridge
-                     + 0.5_wp*nw2_cosbell(x - 0.16_wp, 0.05_wp)*(nw2_cosbell(y - 0.18_wp, 0.13_wp)**0.4_wp) &  ! Scotia Arc E
-                     + 0.4_wp*(nw2_cosbell(x - 0.09_wp, 0.08_wp)**0.4_wp)*nw2_cosbell(y - 0.26_wp, 0.05_wp) &  ! Scotia Arc N
-                     + 0.4_wp*(nw2_cosbell(x - 0.08_wp, 0.08_wp)**0.4_wp)*nw2_cosbell(y - 0.1_wp, 0.05_wp)) &  ! Scotia Arc S
-                     - nl_roughness_amp*cos(14.0_wp*PI*x)*sin(14.0_wp*PI*y) &  ! roughness
-                     - nl_roughness_amp*cos(20.0_wp*PI*x)*cos(20.0_wp*PI*y)
+                     + 0.5_wp*nw2_cosbell(x - 0.16_wp, 0.05_wp)*(safe_pow(nw2_cosbell(y - 0.18_wp, 0.13_wp), 0.4_wp)) &  ! Scotia Arc E
+                     + 0.4_wp*(safe_pow(nw2_cosbell(x - 0.09_wp, 0.08_wp), 0.4_wp))*nw2_cosbell(y - 0.26_wp, 0.05_wp) &  ! Scotia Arc N
+                     + 0.4_wp*(safe_pow(nw2_cosbell(x - 0.08_wp, 0.08_wp), 0.4_wp))*nw2_cosbell(y - 0.1_wp, 0.05_wp)) &  ! Scotia Arc S
+                     - nl_roughness_amp*safe_cos(14.0_wp*PI*x)*safe_sin(14.0_wp*PI*y) &  ! roughness
+                     - nl_roughness_amp*safe_cos(20.0_wp*PI*x)*safe_cos(20.0_wp*PI*y)
             if (d_frac < 0.0_wp) d_frac = 0.0_wp
             b(i, j) = max(d_frac*max_depth, min_depth)
          end do

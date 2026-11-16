@@ -97,27 +97,32 @@ module rdb_ocean_engine
    use rdb_ocean_halo, only: ocean_halo_init, ocean_halo_destroy, ocean_halo_reserve, &
                              ocean_halo_centre, &
                              ocean_halo_bt_group_2d, ocean_halo_face_x, &
-                             ocean_halo_bt_group_2d_wide, ocean_halo_is_decomposed
+                             ocean_halo_bt_group_2d_wide, ocean_halo_is_decomposed, &
+                             ocean_halo_is_decomposed_x, ocean_halo_is_decomposed_y
    use rdb_halo, only: halo_allreduce_sum_i8, halo_allreduce_min
    use rdb_barotropic_dtbt, only: bt_dtbt_dt_max, bt_dtbt_n_inner
    use rdb_ocean_halo_state, only: ocean_halo_exchange_ml_state, ocean_halo_exchange_ice_state, &
-                                   ocean_halo_exchange_ice_fluxes
+                                   ocean_halo_exchange_ice_fluxes, &
+                                   ocean_seam_refresh_surface_flux, ocean_seam_refresh_sw_net
    use rdb_ocean_fold_exchange, only: ocean_fold_exchange_init, ocean_fold_exchange_reserve, &
                                       ocean_fold_exchange_destroy, ocean_fold_north_corner
    use rdb_ocean_periodic, only: ocean_periodic_wrap_state, ocean_periodic_wrap_centre_2d
    use rdb_ocean_fold_apply, only: ocean_fold_wrap_state, ocean_fold_wrap_eta_2d
    use rdb_ocean_boundary_data, only: ocean_boundary_data_constant_t
+   use rdb_barotropic_substep, only: chapman_setup_corner, chapman_workspace_cleanup
    use rdb_ocean_boundary_types, only: ocean_bc_state_set_edges, ocean_bc_state_set_topology, &
-                                       ocean_bc_type_from_string, OBC_PERIODIC, &
-                                       OBC_TRIPOLAR_FOLD, OBC_CHAPMAN
+                                       ocean_bc_type_from_string, OBC_PERIODIC, OBC_WALL, &
+                                       OBC_TRIPOLAR_FOLD, OBC_CHAPMAN, OBC_OPEN, OBC_TIDAL
    use rdb_ocean_metrics, only: metrics_assemble_from_supergrid_arrays, metrics_finalize, &
                                 metrics_fold_periodic_ghosts
    use rdb_eos, only: parse_ts_convention, TS_CONS_ABS
    use rdb_ocean_dyn, only: ocean_dyn_step, ocean_dyn_step_split, ocean_porous_refresh, &
                             ocean_dyn_enable_bt_wide, isopycnal_vanish_tol
-   use rdb_ocean_surface_flux, only: ocean_surface_flux_assemble
+   use rdb_ocean_surface_flux, only: ocean_surface_flux_assemble, &
+                                     ocean_surface_flux_refresh_sw_net
    use rdb_ocean_surface_stress, only: ocean_surface_stress_set_shelf_from_ustar
    use rdb_ocean_cavity_flux, only: ocean_cavity_flux_step
+   use rdb_ocean_cavity_melt, only: parse_cavity_freshwater, CAVITY_FW_MASS
    use rdb_ocean_vcoord, only: parse_ocean_vcoord_type, VCOORD_LAGRANGIAN
    use rdb_ocean_setup, only: configure_ocean_metrics, configure_ocean_land_mask, &
                               configure_ocean_forcing, &
@@ -151,7 +156,7 @@ module rdb_ocean_engine
    use rdb_ocean_data_forcing, only: ocean_data_forcing_configure, ocean_data_forcing_apply, &
                                      ocean_data_forcing_register_sss
    use rdb_ocean_sw_chl, only: sw_chl_configure, sw_chl_apply
-   use rdb_atm_state, only: atm_state_configure, atm_state_update
+   use rdb_atm_state, only: atm_state_configure, atm_state_update, atm_sw_window
    use rdb_ocean_bulk_forcing, only: bulk_forcing_configure, bulk_forcing_apply
    use rdb_io_netcdf, only: output_rank_filename, ensure_directory_exists
 #endif
@@ -182,6 +187,7 @@ module rdb_ocean_engine
    private
 
    public :: ocean_engine_t
+   public :: WETDRY_OPEN_EDGE_MIN_FACTOR
    public :: engine_setup
    public :: engine_enter_data
    public :: engine_step
@@ -190,6 +196,14 @@ module rdb_ocean_engine
    public :: engine_exit_data
    public :: engine_teardown
    public :: diag_vgrid_from_name
+
+   real(wp), parameter :: WETDRY_OPEN_EDGE_MIN_FACTOR = 10.0_wp
+      !! Minimum resting depth of a wet column on an OPEN / TIDAL edge under
+      !! dynamic wet/dry, as a multiple of `&ocean_wetdry_nml dry_depth`
+      !! (`check_wetdry_open_edge_depth`).  The Flather velocity scales with
+      !! `sqrt(g/max(D, 1e-6))`, so a near-dry edge column runs away on any rank
+      !! count; empirical: 0.35 m blew up, 0.6 m was stable (0.25 m tide,
+      !! `dry_depth = 0.05`), and the factor 10 (0.5 m) lies between.
 
    type :: ocean_engine_t
       !! One ocean simulation's setup products, minus the caller-owned
@@ -344,7 +358,9 @@ contains
          !! stream is not opened and its directory is not created.
          !! Default `.false.`.
 
-      integer :: rank, csize, mrank, sss_net_mode
+      integer :: rank, csize, mrank, sss_net_mode, ie
+      integer :: cav_edges(4)
+      character(len=32) :: edge_name
       logical :: no_output, sss_conv_sp
       character(len=512) :: restart_filename
       real(wp) :: t_restart_local
@@ -446,19 +462,126 @@ contains
          ! an unset process grid (px = py = 1, auto-factored above) does
          ! not trip -- so this is the gate that always holds.  Every rank
          ! evaluates the same condition and fails together.
-         if (cfg%ocean%cavity_dyn%enable) then
-            call fail("&ocean_cavity_dyn_nml enable = .true. is single-rank ("// &
-                      to_string(csize)//" ranks requested): the grounding statistics "// &
-                      "are global reductions the configure does not take.  Run on 1 rank.", &
+         ! Dynamic wet/dry is decomposition-safe on a wall / periodic domain
+         ! (nghost >= 3 keeps the owned cells and the innermost ghost layer
+         ! exact through the fast loop by induction; three once-per-stage
+         ! refreshes keep the outer ghosts as images), and on the legacy-Flather
+         ! OPEN and TIDAL edges: there the limiter adds min(theta(ng),
+         ! theta(ng+1)) at the boundary face and theta(ng) reads fluxes at
+         ! faces OUTSIDE the domain, whose corner ghosts across an MPI seam are
+         ! images from the two-pass exchange (the y pass spans the outside
+         ! columns).  Two things stay UNPROVEN on a decomposed domain and are
+         ! refused here:
+         !  * the tripolar fold: the wd_* masks and the limiter fluxes are
+         !    never folded, on any rank count;
+         !  * every other edge type (clamped, chapman, sponge, nested, inflow,
+         !    discharge) and, on an open / tidal edge, Orlanski radiation, the
+         !    full Flather form, asymmetric nudging and the tracer reservoirs
+         !    (`res_lscale_in/out`; no wet/dry decomposition case).
+         if (cfg%ocean%wetdry%enable .and. &
+             ocean_bc_type_from_string(cfg%ocean%bc%north) == OBC_TRIPOLAR_FOLD) then
+            call fail("&ocean_wetdry_nml enable = .true. with north = 'tripolar_fold' is "// &
+                      "unproven on more than one rank ("//to_string(csize)//" ranks "// &
+                      "requested): the wet/dry masks and limiter fluxes are not folded.  "// &
+                      "Run on 1 rank.", &
                       ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
          if (cfg%ocean%wetdry%enable) then
-            call fail("&ocean_wetdry_nml enable = .true. is single-rank ("// &
-                      to_string(csize)//" ranks requested): the wet-mask / outflow-"// &
-                      "limiter halo exchange is not implemented.  Run on 1 rank.", &
-                      ierr, OCEAN_STATUS_ERR_SETUP)
-            return
+            ! Proven on > 1 rank: WALL, PERIODIC, and the legacy-Flather OPEN and
+            ! TIDAL edges (the limiter at an open face reads the outside corner
+            ! ghosts of eta/ubt/vbt, which the two-pass exchange keeps as images;
+            ! `wetdry_tidal_flat` / `wetdry_open_flat` in the decomposition gate).
+            do ie = 1, 4
+               select case (ie)
+               case (1)
+                  edge_name = cfg%ocean%bc%west
+               case (2)
+                  edge_name = cfg%ocean%bc%east
+               case (3)
+                  edge_name = cfg%ocean%bc%south
+               case default
+                  edge_name = cfg%ocean%bc%north
+               end select
+               if (wetdry_edge_is_unproven(edge_name)) then
+                  call fail("&ocean_wetdry_nml enable = .true. with the &ocean_bc_nml edge '"// &
+                            trim(edge_name)//"' is unproven on more than one rank ("// &
+                            to_string(csize)//" ranks requested): only wall, periodic, open "// &
+                            "(Flather) and tidal edges are decomposition-checked under dynamic "// &
+                            "wet/dry (clamped, chapman, sponge, nested, inflow, discharge are not).  "// &
+                            "Run on 1 rank.", ierr, OCEAN_STATUS_ERR_SETUP)
+                  return
+               end if
+            end do
+            if (wetdry_has_open_edge(cfg)) then
+               if (trim(cfg%ocean%bc%radiation_scheme) /= "anomaly" .or. &
+                   trim(cfg%ocean%bc%flather_form) /= "legacy" .or. &
+                   cfg%ocean%bc%nudge_tau_in > 0.0_wp .or. cfg%ocean%bc%nudge_tau_out > 0.0_wp .or. &
+                   cfg%ocean%bc%res_lscale_in > 0.0_wp .or. cfg%ocean%bc%res_lscale_out > 0.0_wp) then
+                  call fail("&ocean_wetdry_nml enable = .true. with an open / tidal edge is "// &
+                            "decomposition-checked only for the default boundary closure "// &
+                            "(&ocean_bc_nml radiation_scheme = 'anomaly', flather_form = 'legacy', "// &
+                            "nudge_tau_in = nudge_tau_out = res_lscale_in = res_lscale_out = 0): "// &
+                            "Orlanski radiation, full Flather, asymmetric nudging and tracer "// &
+                            "reservoirs are unproven on more than one rank ("// &
+                            to_string(csize)//" ranks requested).  Run on 1 rank.", &
+                            ierr, OCEAN_STATUS_ERR_SETUP)
+                  return
+               end if
+            end if
+         end if
+         ! Ice-shelf cavity (dyn + virtual melt + top drag) runs decomposed,
+         ! bitwise (`cavity_*` cases of `test_ocean_decomp_bitid_mpi`).  The
+         ! combinations below have NO case yet; each is refused narrowly,
+         ! keyed on the rank count and on rank-uniform config, so every rank
+         ! fails together.
+         if (cfg%ocean%cavity_dyn%enable) then
+            if (cfg%ocean%cavity_melt%enable .and. &
+                parse_cavity_freshwater(cfg%ocean%cavity_melt%freshwater) == CAVITY_FW_MASS) then
+               call fail("&ocean_cavity_melt_nml freshwater = 'mass' with a cavity is "// &
+                         "unproven on a decomposed domain ("//to_string(csize)// &
+                         " ranks requested): the melt volume and open area are "// &
+                         "global floating-point sums whose order depends on the "// &
+                         "layout.  Use freshwater = 'virtual' or run on 1 rank.", &
+                         ierr, OCEAN_STATUS_ERR_SETUP)
+               return
+            end if
+            if (trim(cfg%ocean%cavity_dyn%draft_config) == "file") then
+               call fail("&ocean_cavity_dyn_nml draft_config = 'file' is unproven on a "// &
+                         "decomposed domain ("//to_string(csize)//" ranks requested): "// &
+                         "the windowed draft reader has no multi-rank bit-identity "// &
+                         "case.  Use an analytic draft or run on 1 rank.", &
+                         ierr, OCEAN_STATUS_ERR_SETUP)
+               return
+            end if
+            if (ocean_bc_type_from_string(cfg%ocean%bc%north) == OBC_TRIPOLAR_FOLD) then
+               call fail("&ocean_cavity_dyn_nml enable with &ocean_bc_nml north = "// &
+                         "'tripolar_fold' is unproven on a decomposed domain ("// &
+                         to_string(csize)//" ranks requested): the cavity face "// &
+                         "twins are never folded and no case covers it.  Run on 1 rank.", &
+                         ierr, OCEAN_STATUS_ERR_SETUP)
+               return
+            end if
+            if (cfg%ocean%bulk_flux%enable) then
+               call fail("&ocean_cavity_dyn_nml enable with &ocean_bulk_flux_nml enable "// &
+                         "is unproven on a decomposed domain ("//to_string(csize)// &
+                         " ranks requested): the bulk stress carries no ice-cover "// &
+                         "mask and has no cavity case.  Run on 1 rank.", &
+                         ierr, OCEAN_STATUS_ERR_SETUP)
+               return
+            end if
+            cav_edges = [ocean_bc_type_from_string(cfg%ocean%bc%west), &
+                         ocean_bc_type_from_string(cfg%ocean%bc%east), &
+                         ocean_bc_type_from_string(cfg%ocean%bc%south), &
+                         ocean_bc_type_from_string(cfg%ocean%bc%north)]
+            if (any(cav_edges /= OBC_WALL .and. cav_edges /= OBC_PERIODIC)) then
+               call fail("&ocean_cavity_dyn_nml enable with an &ocean_bc_nml edge that "// &
+                         "is not 'wall' or 'periodic' (open / tidal / clamped / chapman "// &
+                         "/ sponge) is unproven on a decomposed domain ("// &
+                         to_string(csize)//" ranks requested).  Run on 1 rank.", &
+                         ierr, OCEAN_STATUS_ERR_SETUP)
+               return
+            end if
          end if
          ! Sea ice runs on the ocean's decomposition: the category state,
          ! the EVP ice velocity, the transport's CAS state and the blended
@@ -481,44 +604,6 @@ contains
                       ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
-         ! Chapman radiation keeps ONE edge-uniform eta target per edge,
-         ! computed from the tile's own stretch of the edge (and a corner
-         ! depth): split along a Chapman edge, every rank radiates toward a
-         ! different target.
-         if (any([ocean_bc_type_from_string(cfg%ocean%bc%west), &
-                  ocean_bc_type_from_string(cfg%ocean%bc%east), &
-                  ocean_bc_type_from_string(cfg%ocean%bc%south), &
-                  ocean_bc_type_from_string(cfg%ocean%bc%north)] == OBC_CHAPMAN)) then
-            call fail("&ocean_bc_nml 'chapman' edges are single-rank ("// &
-                      to_string(csize)//" ranks requested): the edge-mean eta target "// &
-                      "is a per-rank partial mean.  Use 'open' (Flather) or run on 1 rank.", &
-                      ierr, OCEAN_STATUS_ERR_SETUP)
-            return
-         end if
-         ! Manizza chlorophyll shortwave: the per-rank windowed chlorophyll read
-         ! fills the interior only (no halo exchange, ghosts stay at the
-         ! floor), and the ghosts feed `sw_kappa`; there is no multi-rank
-         ! bit-identity gate for it.
-         if (trim(cfg%ocean%thermo%sw_scheme) == "manizza05") then
-            call fail("&ocean_thermo_nml sw_scheme = 'manizza05' is single-rank ("// &
-                      to_string(csize)//" ranks requested): the chlorophyll climatology "// &
-                      "is read per rank without ghosts and has no multi-rank "// &
-                      "bit-identity gate.  Run on 1 rank.", &
-                      ierr, OCEAN_STATUS_ERR_SETUP)
-            return
-         end if
-         ! The atm-driven bulk-flux consumer (OM3 C2c-3a) feeds the surface
-         ! stress through the centre halo, the seam refresh and the tripolar
-         ! fold, none of which `test_ocean_decomp_bitid_mpi` covers for it
-         ! yet. Single-rank until C2c-3b brings the 1 vs 2x2 gate.
-         if (cfg%ocean%bulk_flux%enable) then
-            call fail("&ocean_bulk_flux_nml enable = .true. is single-rank ("// &
-                      to_string(csize)//" ranks requested): the atm-driven bulk "// &
-                      "forcing has no multi-rank bit-identity gate yet (C2c-3b).  "// &
-                      "Run on 1 rank.", &
-                      ierr, OCEAN_STATUS_ERR_SETUP)
-            return
-         end if
       end if
 
       call decomp_init_from_config(engine%decomp, cfg, csize, rank)
@@ -530,15 +615,17 @@ contains
       call bt_halo_auto_exclusion(cfg, bt_excluded, bt_excl_reason)
       bt_halo_res = resolve_bt_halo(bt_halo_req, csize, bt_excluded)
       cfg%ocean%bt%bt_halo = bt_halo_res
-      ! `dtbt_reset_period >= 0` re-derives `n_inner` mid-run: the new count
-      ! is not agreed across ranks and does not resize the wide-halo BT clone.
-      ! The init-only form (`dtbt_reset_period < 0`) is allowed everywhere.
+      ! `dtbt_reset_period >= 0` re-derives `n_inner` mid-run.  Across ranks that
+      ! is exact (the domain minimum of dt_max is reduced with an order-independent
+      ! min), but the new count does not resize the wide-halo BT clone, so the
+      ! wide-halo march-in (`bt_halo > 0`) stays refused.  The init-only form
+      ! (`dtbt_reset_period < 0`) is allowed everywhere.
       if (bt_dtbt_is_set(cfg%ocean%bt) .and. cfg%ocean%bt%dtbt_reset_period >= 0.0_wp .and. &
-          (csize > 1 .or. bt_halo_res > 0)) then
-         call fail("&ocean_bt_nml dtbt_reset_period >= 0 is single-rank with bt_halo = 0 ("// &
-                   to_string(csize)//" ranks, bt_halo = "//to_string(bt_halo_res)// &
-                   "): n_inner changes mid-run.  Use dtbt_reset_period < 0 (init-only), "// &
-                   "or run on 1 rank with bt_halo = 0.", &
+          bt_halo_res > 0) then
+         call fail("&ocean_bt_nml dtbt_reset_period >= 0 is not supported with the "// &
+                   "wide-halo barotropic march-in (bt_halo = "//to_string(bt_halo_res)// &
+                   "): n_inner changes mid-run and does not resize the wide-halo BT "// &
+                   "clone.  Use dtbt_reset_period < 0 (init-only), or bt_halo = 0.", &
                    ierr, OCEAN_STATUS_ERR_SETUP)
          return
       end if
@@ -652,6 +739,8 @@ contains
       ! hysteresis mask must be allocated + registered before the restart
       ! registry walk). Default off => no-op, byte-identical.
       call configure_ocean_wetdry(cfg, engine%state, engine%grid, rank)
+      call check_wetdry_open_edge_depth(cfg, engine, ierr)
+      if (setup_failed(ierr)) return
 
       ! The surface-flux component set is allocated BEFORE the restart read:
       ! the registry walk only sees the components (`sf_heat_cavity`/
@@ -724,6 +813,12 @@ contains
       ! Under validate_only the stream is never opened, so teardown must
       ! not try to close it.
       engine%diag_enabled = cfg%ocean%diag%enabled .and. .not. no_output
+      ! The atm provider is configured later (it needs the metrics), but the
+      ! diag registry gates the `atm_*` diagnostics on `atm%enable`: pre-set it
+      ! from the namelist so they register (`atm_state_configure` re-derives it).
+#ifndef RDB_NO_NETCDF
+      engine%state%atm%enable = cfg%ocean%atm_forcing%enable
+#endif
       call engine_configure_diag(cfg, engine%state, mrank, engine%decomp, ierr=ierr, &
                                  open_stream_file=.not. no_output)
       if (setup_failed(ierr)) return
@@ -1155,6 +1250,29 @@ contains
       if (cfg%ocean%bt%n_inner >= 1) then
          call ocean_halo_centre(engine%state%dyn%bt_work%bt_H_ref, device_resident=.false.)
       end if
+      ! Chapman phase-speed scale: global south-west corner `bt_H_ref` and
+      ! `idx_cu`, latched once (static data; collective, all ranks call it).
+      if (cfg%ocean%bt%n_inner >= 1) then
+         call chapman_setup_corner(engine%grid, engine%state%dyn%bt_work%bt_H_ref, &
+                                   engine%state%metrics%idxCu, engine%state%bc)
+      end if
+      ! Dynamic wet/dry cold start: `wd_wet_dyn` was seeded over the whole
+      ! local array by `configure_ocean_wetdry`, BEFORE the bathymetry halo
+      ! fill above, so its seam ghosts hold the seed of whatever `b` the ghost
+      ! held then.  An owner cell in the hysteresis band would keep a wrong
+      ! innermost-ghost mask and the seam-face gate would differ, so the seed
+      ! must be an image.  Measured: the formula bathymetry setters and the
+      ! windowed file reader (full-width band of rows +- nghost, read from the
+      ! file) already hand the seed the owner's seam-ghost values, so removing
+      ! this exchange changes no case (`wetdry_shoal`, `wetdry_file`); what it
+      ! still repairs is a ghost the reader EXTRAPOLATES (a global periodic
+      ! edge: the halo fill wraps it later, the seed saw the extrapolation).
+      ! Kept as the ordering guarantee; no case proves it.  Host data
+      ! (pre-`enter_data`), hence `device_resident=.false.`; collective on the rank-uniform switch; a warm
+      ! restart already carries the checkpointed ghosts.
+      if (cfg%ocean%wetdry%enable .and. .not. did_restart) then
+         call ocean_halo_centre(engine%state%dyn%bt_work%wd_wet_dyn, device_resident=.false.)
+      end if
 
       ! px > 1 tripolar: refresh the static corner Coriolis array's x ghosts
       ! from their OWNERS before it is folded.  The analytic generator
@@ -1290,6 +1408,21 @@ contains
       ! after it (that is where p_ice_ref comes from), BEFORE enter_data.
       call configure_ocean_cavity_melt(cfg, engine%state, engine%grid, rank, ierr=ierr)
       if (setup_failed(ierr)) return
+
+      ! Warm restart with basal melt: the carried `sf_heat_cavity`/
+      ! `sf_salt_cavity` (and the assembled Q) were restored above, but
+      ! `set_surface_flux_const` cleared the host `has_heat`/`has_salt`
+      ! latches and the melt filler only re-latches them in
+      ! `engine_step_finalize`, AFTER the first resumed step -- whose
+      ! tracer apply would otherwise drop the melt flux once.  Same
+      ! resume latch as the sea-ice path above.  Cold start untouched.
+      ! Gated on thermodynamics as well: the straight run's filler returns
+      ! before latching when they are off, so nothing is latched there.
+      if (did_restart .and. engine%state%cavity_flux%enable .and. &
+          cfg%ocean%thermo%enable_thermodynamics) then
+         engine%state%surface_flux%has_heat = .true.
+         engine%state%surface_flux%has_salt = .true.
+      end if
 
       ! Ice-shelf TOP drag (Phase 4a): coefficients + the static FACE
       ! cover masks projected from `metrics%cover_frac`.  AFTER the
@@ -1430,6 +1563,118 @@ contains
       if (allocated(engine%staged_v)) deallocate (engine%staged_v)
       if (allocated(engine%staged_tracers)) deallocate (engine%staged_tracers)
    end subroutine engine_apply_staged_ic
+
+   subroutine check_wetdry_open_edge_depth(cfg, engine, ierr)
+      !! Configure-time refusal (any rank count): with dynamic wet/dry on, a
+      !! wet column on an OPEN (Flather) or TIDAL edge whose resting depth is
+      !! below `WETDRY_OPEN_EDGE_MIN_FACTOR * &ocean_wetdry_nml dry_depth` is
+      !! refused.  The Flather radiation velocity scales with
+      !! `sqrt(g/max(D, 1e-6))`, so a near-dry edge column turns a small
+      !! elevation mismatch into a runaway edge velocity; measured on the
+      !! decomposition-gate tidal flat (0.25 m tide, `dry_depth = 0.05`): an
+      !! edge column of 0.35 m blows up on ONE rank, one floored at 0.6 m is
+      !! stable.  The factor 10 (0.5 m at the default `dry_depth`) sits between.
+      !! A static-land column (`b < -land_margin`) is a wall and is not
+      !! checked.  Each rank checks the owned columns of the edges it holds
+      !! (`has_*`) and the verdict is a global minimum, so every rank refuses
+      !! together and the answer does not depend on the decomposition.
+      type(config_t), intent(in) :: cfg
+      type(ocean_engine_t), intent(in) :: engine
+      integer, intent(out), optional :: ierr
+      integer :: ie, ng, nxp, nyp, i, j, t
+      real(wp) :: dmin_loc, dmin_glob, thr
+      character(len=8) :: nm
+      character(len=32) :: edge_name
+      logical :: has_edge
+
+      if (present(ierr)) ierr = OCEAN_STATUS_OK
+      if (.not. cfg%ocean%wetdry%enable) return
+      thr = WETDRY_OPEN_EDGE_MIN_FACTOR*cfg%ocean%wetdry%dry_depth
+      ng = engine%grid%nghost
+      nxp = engine%grid%nx_phys
+      nyp = engine%grid%ny_phys
+      do ie = 1, 4
+         select case (ie)
+         case (1)
+            edge_name = cfg%ocean%bc%west
+            nm = "west"
+            has_edge = engine%decomp%has_west
+         case (2)
+            edge_name = cfg%ocean%bc%east
+            nm = "east"
+            has_edge = engine%decomp%has_east
+         case (3)
+            edge_name = cfg%ocean%bc%south
+            nm = "south"
+            has_edge = engine%decomp%has_south
+         case default
+            edge_name = cfg%ocean%bc%north
+            nm = "north"
+            has_edge = engine%decomp%has_north
+         end select
+         t = ocean_bc_type_from_string(edge_name)
+         if (t /= OBC_OPEN .and. t /= OBC_TIDAL) cycle   ! rank-uniform (config only)
+         dmin_loc = huge(1.0_wp)
+         if (has_edge) then
+            select case (ie)
+            case (1)
+               do j = ng + 1, ng + nyp
+                  call take_wet_depth(engine%state%barotropic%b(ng + 1, j))
+               end do
+            case (2)
+               do j = ng + 1, ng + nyp
+                  call take_wet_depth(engine%state%barotropic%b(ng + nxp, j))
+               end do
+            case (3)
+               do i = ng + 1, ng + nxp
+                  call take_wet_depth(engine%state%barotropic%b(i, ng + 1))
+               end do
+            case default
+               do i = ng + 1, ng + nxp
+                  call take_wet_depth(engine%state%barotropic%b(i, ng + nyp))
+               end do
+            end select
+         end if
+         call halo_allreduce_min(dmin_loc, dmin_glob)
+         if (dmin_glob < thr) then
+            call fail("&ocean_wetdry_nml enable = .true. with the "//trim(nm)//" edge '"// &
+                      trim(edge_name)//"': a wet boundary column has a resting depth of "// &
+                      to_string(dmin_glob)//" m, below the minimum "//to_string(thr)// &
+                      " m ("//to_string(WETDRY_OPEN_EDGE_MIN_FACTOR)//" x dry_depth) for an "// &
+                      "open / tidal edge: the Flather velocity scales with sqrt(g/D) and "// &
+                      "runs away on a near-dry edge column.  Deepen the bathymetry at the "// &
+                      "edge or move the edge.", ierr, OCEAN_STATUS_ERR_SETUP)
+            return
+         end if
+      end do
+   contains
+      subroutine take_wet_depth(b)
+         real(wp), intent(in) :: b
+         if (b >= -cfg%ocean%wetdry%land_margin) dmin_loc = min(dmin_loc, b)
+      end subroutine take_wet_depth
+   end subroutine check_wetdry_open_edge_depth
+
+   pure function wetdry_edge_is_unproven(edge_name) result(unproven)
+      !! `.true.` iff the edge string parses to anything but WALL, PERIODIC, OPEN
+      !! or TIDAL (clamped, chapman, sponge, nested, inflow, discharge, an
+      !! unparsable name, ...): the edge types the multi-rank wet/dry gate has no
+      !! decomposition case for.  (The tripolar fold has its own, earlier refusal.)
+      character(len=*), intent(in) :: edge_name
+      logical :: unproven
+      integer :: t
+      t = ocean_bc_type_from_string(edge_name)
+      unproven = (t /= OBC_WALL .and. t /= OBC_PERIODIC .and. t /= OBC_OPEN .and. t /= OBC_TIDAL)
+   end function wetdry_edge_is_unproven
+
+   pure function wetdry_has_open_edge(cfg) result(has_open)
+      !! `.true.` iff any edge is OPEN (Flather) or TIDAL.
+      type(config_t), intent(in) :: cfg
+      logical :: has_open
+      integer :: t(4)
+      t = [ocean_bc_type_from_string(cfg%ocean%bc%west), ocean_bc_type_from_string(cfg%ocean%bc%east), &
+           ocean_bc_type_from_string(cfg%ocean%bc%south), ocean_bc_type_from_string(cfg%ocean%bc%north)]
+      has_open = any(t == OBC_OPEN .or. t == OBC_TIDAL)
+   end function wetdry_has_open_edge
 
    pure function setup_failed(ierr) result(bad)
       !! `.true.` iff `ierr` is present and non-OK — the "shall I
@@ -1600,6 +1845,22 @@ contains
    ! Device placement
    ! ================================================================
 
+   subroutine env_int_or_zero(name, val)
+      !! Integer from an environment variable; 0 when unset or unparsable.
+      character(len=*), intent(in) :: name
+      integer, intent(out) :: val
+      character(len=16) :: buf
+      character(len=64) :: msg
+      integer :: ios
+
+      val = 0
+      buf = ""
+      call get_environment_variable(name, buf)
+      if (len_trim(buf) == 0) return
+      read (buf, *, iostat=ios, iomsg=msg) val
+      if (ios /= 0) val = 0
+   end subroutine env_int_or_zero
+
    subroutine engine_enter_data(engine, cfg)
       !! Map the ocean state onto the device, then (when `bt_halo > 0`)
       !! allocate + attach the wide-halo BT march-in workspace, then
@@ -1611,6 +1872,22 @@ contains
 
       call ocean_state_enter_data(engine%state)
       engine%state%dyn%bt_halo = cfg%ocean%bt%bt_halo
+      engine%state%dyn%bt_work%inhalo_stride = 0
+      engine%state%dyn%bt_work%inhalo_poison = 0
+      if (cfg%ocean%bt%inhalo_march) then
+         ! One substep invalidates one more outer ghost layer, so nghost-1
+         ! substeps leave the owned cells exact (see the fast loop).
+         engine%state%dyn%bt_work%inhalo_stride = cfg%ocean%bt%inhalo_stride
+         if (cfg%ocean%bt%inhalo_stride <= 0) then
+            engine%state%dyn%bt_work%inhalo_stride = max(1, engine%grid%nghost - 1)
+         end if
+         ! Test hook (ghost poison, see `inhalo_poison`); host, once.
+         call logger%info("bt inhalo_march ON: stride="// &
+                          to_string(engine%state%dyn%bt_work%inhalo_stride)// &
+                          " nghost="//to_string(engine%grid%nghost)// &
+                          " n_inner="//to_string(cfg%ocean%bt%n_inner))
+         call env_int_or_zero("RDB_BT_INHALO_POISON", engine%state%dyn%bt_work%inhalo_poison)
+      end if
       if (cfg%ocean%bt%bt_halo > 0) then
          call ocean_dyn_enable_bt_wide(engine%state%dyn, engine%grid, &
                                        cfg%dx, cfg%dy, &
@@ -1634,6 +1911,16 @@ contains
       ! Skip it there -- the first step's own exchange opens the handles.
       if (.not. engine%warm_restart) then
          call ocean_halo_exchange_ml_state(engine%state%multilayer)
+      else
+         ! A checkpoint written before the seam-flux refresh existed carries
+         ! stale ghost bands in `Q_heat`/`Q_salt`, which KPP/EPBL would read on
+         ! the first step after the resume, before the first thermo-step
+         ! assembly repairs them.  Device-resident (the periodic wrap kernels
+         ! are device kernels on the GPU build), so after the map; a no-op
+         ! unless the component set is on and a physical-span-only filler is
+         ! latched.
+         call ocean_seam_refresh_surface_flux(engine%state%surface_flux, engine%grid, &
+                                              engine%state%bc)
       end if
       if (cfg%ocean%bt%n_inner >= 1) then
          call ocean_halo_bt_group_2d(engine%state%dyn%bt_work%bt_eta, &
@@ -1665,6 +1952,24 @@ contains
       !! multiple of `P` (and at the first call).  `n_inner` is a pure
       !! function of the state (`h_layer`, `f`, metrics), so a restart that
       !! re-derives at its first step reproduces it for period 0.
+      !!
+      !! **Multi-rank invariant.**  The reduction runs over OWNED cells, but
+      !! each cell's limit reads `h_layer` at its four neighbours, so ghost
+      !! thickness enters through every seam face.  Those ghosts are already
+      !! valid here by construction: the previous step ended on a stage-end
+      !! exchange followed by full-array averaging / ALE remap (or the setup
+      !! exchange, on the first step) -- an invariant the whole bit-identity
+      !! gate relies on, since `ocean_porous_refresh` and several routines at
+      !! the head of the dyn step read start-of-step ghosts before the first
+      !! stage exchange.  The refresh below is DEFENSIVE: it makes this
+      !! reduction independent of that invariant, using the stage-entry
+      !! sequence verbatim (`ocean_halo_exchange_ml_state`, periodic wrap on
+      !! an axis the exchange does not own, tripolar fold).  The ghosts are
+      !! already exact images, so it rewrites identical values and changes no
+      !! state: a `dtbt_reset_period > 0` run cannot depend on where the
+      !! reset steps fall.  Collective when decomposed; the schedule depends
+      !! only on `t` and config, so every rank calls it on the same steps.
+      !! The `min` over ranks is exact, hence rank-count independent.
       type(ocean_engine_t), intent(inout) :: engine
       real(wp), intent(in) :: dt
       real(wp), intent(in) :: t
@@ -1677,6 +1982,11 @@ contains
                               engine%dtbt_reset_period
       end if
       ng = engine%grid%nghost
+      call ocean_halo_exchange_ml_state(engine%state%multilayer)
+      call ocean_periodic_wrap_state(engine%grid, engine%state%bc, engine%state%multilayer, &
+                                     skip_x=ocean_halo_is_decomposed_x(), &
+                                     skip_y=ocean_halo_is_decomposed_y())
+      call ocean_fold_wrap_state(engine%grid, engine%state%bc, engine%state%multilayer)
       call bt_dtbt_dt_max(engine%grid%nx_total, engine%grid%ny_total, &
                           size(engine%state%multilayer%h_layer, 3), &
                           ng + 1, ng + engine%grid%nx_phys, ng + 1, ng + engine%grid%ny_phys, &
@@ -1724,6 +2034,8 @@ contains
       real(wp), intent(in) :: t
       integer, intent(out), optional :: ierr
 
+      real(wp) :: sw_shift, sw_len
+
       if (present(ierr)) ierr = OCEAN_STATUS_OK
 
 #ifndef RDB_NO_NETCDF
@@ -1736,11 +2048,16 @@ contains
       ! Order vs `ocean_data_forcing_apply` above does not matter -- both
       ! read the SAME reader brackets `ocean_data_input_update_all` just
       ! refreshed, and neither writes a slot the other reads.
+      ! The shortwave is applied over the THERMO interval (N*dt at
+      ! dt_therm_ratio = N), so the coszen window must be that interval.
+      call atm_sw_window(dt, engine%state%dyn%dt_therm_ratio, engine%state%dyn%diabatic_first, &
+                         engine%state%dyn%is_thermo_step(), sw_shift, sw_len)
       call atm_state_update(engine%state%atm, engine%state%data_input, &
-                            engine%state%metrics, t)
+                            engine%state%metrics, t, dt, sw_shift, sw_len)
       ! Chlorophyll -> per-band opacities (no-op unless sw_scheme="manizza05").
       call sw_chl_apply(engine%state%sw_chl, engine%state%data_input, engine%grid, &
-                        engine%state%multilayer%wet_mask, engine%state%surface_flux, t)
+                        engine%state%multilayer%wet_mask, engine%state%surface_flux, &
+                        engine%state%bc, t)
 
       ! Ocean bulk-flux consumer (OM3 C2c-3a): no-op unless
       ! `&ocean_bulk_flux_nml enable = .true.` (which `validate_config`
@@ -1750,6 +2067,16 @@ contains
                               engine%state%bulk_forcing, engine%state%surface_stress, &
                               engine%state%surface_flux)
 #endif
+
+      ! `sw_source="q_sw"` consumers (penetration, KPP, EPBL) read the TOTAL
+      ! shortwave: this step's open-water `q_sw` plus the ice-transmitted
+      ! `sw_ice` (carried from the last thermo window).  No-op otherwise.
+      call ocean_surface_flux_refresh_sw_net(engine%state%surface_flux)
+      ! `q_sw` is a physical-span-only write, `sw_net` was just formed over
+      ! the full array, and the boundary-layer schemes read it in the ghost
+      ! columns: exchange its seam ghosts (no-op unless `phys_only_fill`).
+      call ocean_seam_refresh_sw_net(engine%state%surface_flux, engine%grid, &
+                                     engine%state%bc)
 
       call engine%bc_source%update(t, engine%state%bc)
 
@@ -2079,7 +2406,11 @@ contains
                                   engine%state%metrics, engine%state%multilayer, &
                                   engine%state%eos, engine%state%surface_flux, &
                                   active=engine%state%dyn%enable_thermodynamics &
-                                  .and. engine%state%dyn%is_thermo_step())
+                                  .and. engine%state%dyn%is_thermo_step(), &
+                                  ierr=ierr)
+      if (present(ierr)) then
+         if (ierr /= OCEAN_STATUS_OK) return
+      end if
 
       ! Phase 4b — the MELT-ONLY fallback for the boundary-layer `u_*`.
       !
@@ -2151,6 +2482,16 @@ contains
                                           .and. engine%state%dyn%is_thermo_step())
       end if
 
+      ! The assembler summed components, some of which a filler wrote on
+      ! physical cells only (bulk forcing, data override): exchange the
+      ! ASSEMBLED `Q_heat`/`Q_salt` seam ghosts the boundary-layer schemes
+      ! read.  Same thermo cadence; no-op (no call cost beyond the test)
+      ! unless `use_components` and a physical-span-only filler is on.
+      if (engine%state%dyn%enable_thermodynamics .and. engine%state%dyn%is_thermo_step()) then
+         call ocean_seam_refresh_surface_flux(engine%state%surface_flux, engine%grid, &
+                                              engine%state%bc)
+      end if
+
       if (engine%diag_enabled) then
          call engine%state%diag%step(engine%state, dt, t + dt)
       end if
@@ -2180,6 +2521,7 @@ contains
 #ifndef RDB_NO_NETCDF
       if (engine%diag_enabled) call close_stream(engine%state%diag)
 #endif
+      call chapman_workspace_cleanup()
       call ocean_halo_destroy()
       call ocean_fold_exchange_destroy()
       call engine%geo%destroy()

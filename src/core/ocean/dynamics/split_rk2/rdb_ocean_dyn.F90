@@ -5275,7 +5275,9 @@ contains
       ! the BT corrector reads (MOM6's barotropic solver), once
       ! per barotropic call, BEFORE the substeps below.
       if (dyn%bt_work%bt_rem_from_visc_rem) then
+         call profiler_start("ocean_bt_rem")
          call compute_bt_rem_from_visc_rem(grid, dyn%bt_work, ms, metrics, n_inner)
+         call profiler_stop("ocean_bt_rem")
       else if (dyn%bt_work%bt_substep_drag) then
          call compute_bt_rem(grid, dyn%bt_work, ms, metrics, bd%r_linear, bd%hbbl, dt_inner)
       else if (dyn%bt_work%lwd_enable) then
@@ -5339,6 +5341,26 @@ contains
                                                     bc=bc, t=t, eta_forcing=eta_forcing)
       end if
       call profiler_stop("ocean_barotropic_solver")
+      ! Dynamic wet/dry: owned-cell bit-identity does NOT come from this
+      ! refresh.  With nghost >= 3 the fast loop keeps the owned cells plus the
+      ! innermost ghost layer exact by induction (eta/ubt/vbt are images at every
+      ! substep start; the hysteresis mask updates each cell from its own exact
+      ! depth and history), provided the mask ENTERS exact (the cold-start image
+      ! or a restart carrying ghosts).  The outer ghosts are NOT images of their
+      ! owners after the loop; later full-array kernels (`mask_layer_velocities`,
+      ! the surface-flux wet gate, the legacy continuity renorm) read those
+      ! ghosts.  Refresh them once per stage -- not per substep, so the fast
+      ! loop is untouched.  Device-resident data (default `device_resident`);
+      ! collective, gated only on the rank-uniform wet/dry switch and
+      ! unconditional w.r.t. the decomposition (a local wrap when periodic).
+      if (dyn%bt_work%wetdry_enable) then
+         call profiler_start("ocean_comms_bt")
+         call ocean_halo_bt_group_2d(dyn%bt_work%wd_wet_dyn, dyn%bt_work%wd_open_u, &
+                                     dyn%bt_work%wd_open_v)
+         call ocean_halo_face_x(dyn%bt_work%bt_uhbt)
+         call ocean_halo_face_y(dyn%bt_work%bt_vhbt)
+         call profiler_stop("ocean_comms_bt")
+      end if
       call probe_dS(grid, ms, "after barotropic substep", stage_id, step_id)
       ! BT in/out chksums at the substep exit: when the fold's loud count
       ! fires, these rows name which fold INPUT (ubt_end/ubt_at_n/F_bt)

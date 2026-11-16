@@ -543,7 +543,7 @@ contains
 
       integer :: nx, ny, nz, n_filler
       real(wp) :: h_nominal, h_min
-      real(wp), allocatable :: tgt(:, :, :), eta0(:, :)
+      real(wp), allocatable :: tgt(:, :, :), eta0(:, :), fx(:, :), fy(:, :)
 
       if (.not. ocean_state%multilayer%is_init) return
       if (ocean_state%vcoord%coord_type /= VCOORD_Z_FIXED) return
@@ -569,8 +569,27 @@ contains
                                           ocean_state%multilayer%k_top_u, &
                                           ocean_state%multilayer%k_top_v, &
                                           tgt, nx, ny, nz, H_VANISHED)
-      n_filler = count(ocean_state%multilayer%k_top < nz)
       deallocate (tgt, eta0)
+
+      ! The face twins take `min` of the two abutting cells with an index
+      ! clamp on the outermost array face, so on a tile seam or a periodic
+      ! wrap that ghost face is NOT its owner's value (the same defect the
+      ! bed twin below and the closed-face mask were given an exchange
+      ! for).  Integer -> real -> integer rides the real halo exactly.
+      ! HOST side, before `ocean_state_enter_data`; every early return
+      ! above is rank-uniform config, so all ranks reach the collective.
+      ! Single non-periodic rank: a no-op.
+      if (ocean_halo_is_init()) then
+         allocate (fx(nx + 1, ny), fy(nx, ny + 1))
+         fx = real(ocean_state%multilayer%k_top_u, wp)
+         fy = real(ocean_state%multilayer%k_top_v, wp)
+         call ocean_halo_face_x(fx, device_resident=.false.)
+         call ocean_halo_face_y(fy, device_resident=.false.)
+         ocean_state%multilayer%k_top_u = nint(fx)
+         ocean_state%multilayer%k_top_v = nint(fy)
+         deallocate (fx, fy)
+      end if
+      n_filler = count(ocean_state%multilayer%k_top < nz)
 
       if (compute_rank == 0) then
          call logger%info("z_fixed k_top: "//to_string(n_filler)//"/"// &
@@ -626,14 +645,17 @@ contains
       integer, intent(in) :: compute_rank
 
       integer :: nx, ny, nz, n_filler
-      real(wp) :: h_nominal, h_min
+      real(wp) :: h_nominal, h_min, href_max
       real(wp), allocatable :: tgt(:, :, :), eta0(:, :), fx(:, :), fy(:, :)
 
       if (.not. ocean_state%multilayer%is_init) return
       if (ocean_state%vcoord%coord_type /= VCOORD_Z_FIXED) return
       if (ocean_state%vcoord%z_fixed_h_ref <= 0.0_wp) return
       if (.not. ocean_state%dyn%bt_work%is_init) return
-      if (maxval(ocean_state%dyn%bt_work%bt_H_ref) <= 0.0_wp) return
+      ! GLOBAL max (rank-uniform): the face collective below must run on
+      ! every rank or on none; an all-land tile used to return alone.
+      call grid_allreduce_max(grid, maxval(ocean_state%dyn%bt_work%bt_H_ref), href_max)
+      if (href_max <= 0.0_wp) return
 
       nx = grid%nx_total
       ny = grid%ny_total
@@ -746,7 +768,8 @@ contains
 
       integer :: nx, ny, nz, i, j, k
       integer :: n_closed_u, n_closed_v, n_open_u, n_open_v, n_ledge
-      real(wp) :: h_face, sum_all, sum_open
+      real(wp) :: h_face, sum_all, sum_open, href_max
+      integer(int64) :: census_loc(4), census_glob(4)
       real(wp), allocatable :: tgt(:, :, :)
       character(len=16) :: vcoord_label
 
@@ -794,7 +817,10 @@ contains
          return
       end if
       if (ocean_state%dyn%bt_work%is_init) then
-         if (maxval(ocean_state%dyn%bt_work%bt_H_ref) <= 0.0_wp) then
+         ! GLOBAL max: a rank-local test refuses on one tile (an all-land
+         ! tile + halo) while the others go on into the face collective.
+         call grid_allreduce_max(grid, maxval(ocean_state%dyn%bt_work%bt_H_ref), href_max)
+         if (href_max <= 0.0_wp) then
             call fail("&vcoord_nml zfixed_closed_faces: bt_H_ref is empty — "// &
                       "the barotropic datum must be built (&ocean_bt_nml "// &
                       "n_inner >= 1) before the static face mask can be laid", &
@@ -959,11 +985,14 @@ contains
       ! Cheap one-shot census for the configure line: how much of the
       ! array the mask actually closes, and whether it isolated any
       ! water.  Host-side, once, O(nx*ny*nz) — not a per-step diagnostic.
+      ! OWNED faces only (west face of every owned cell in x, south face in
+      ! y), summed over ranks: the line prints the same numbers on every
+      ! layout.
       n_closed_u = 0
       n_open_u = 0
       do k = 1, nz
-         do j = 1, ny
-            do i = 2, nx
+         do j = grid%nghost + 1, grid%nghost + grid%ny_phys
+            do i = grid%nghost + 1, grid%nghost + grid%nx_phys
                if (ocean_state%metrics%open_u(i, j, k) > 0.0_wp) then
                   n_open_u = n_open_u + 1
                else
@@ -975,8 +1004,8 @@ contains
       n_closed_v = 0
       n_open_v = 0
       do k = 1, nz
-         do j = 2, ny
-            do i = 1, nx
+         do j = grid%nghost + 1, grid%nghost + grid%ny_phys
+            do i = grid%nghost + 1, grid%nghost + grid%nx_phys
                if (ocean_state%metrics%open_v(i, j, k) > 0.0_wp) then
                   n_open_v = n_open_v + 1
                else
@@ -985,6 +1014,15 @@ contains
             end do
          end do
       end do
+      census_loc = [int(n_closed_u, int64), int(n_open_u, int64), &
+                    int(n_closed_v, int64), int(n_open_v, int64)]
+      do k = 1, 4
+         call grid_allreduce_sum_i8(grid, census_loc(k), census_glob(k))
+      end do
+      n_closed_u = int(census_glob(1))
+      n_open_u = int(census_glob(2))
+      n_closed_v = int(census_glob(3))
+      n_open_v = int(census_glob(4))
       n_ledge = ocean_vcoord_count_ledges(ocean_state%metrics%open_u, &
                                           ocean_state%metrics%open_v, &
                                           tgt, nx, ny, nz, H_VANISHED)
@@ -1008,7 +1046,7 @@ contains
                           to_string(n_closed_u + n_open_u)//", v closed "// &
                           to_string(n_closed_v)//"/"// &
                           to_string(n_closed_v + n_open_v)// &
-                          ", isolated ledge cells "//to_string(n_ledge))
+                          ", isolated ledge cells (rank-0 tile) "//to_string(n_ledge))
          if (n_ledge > 0) then
             call logger%warning(trim(vcoord_label)//" closed faces: "//to_string(n_ledge)// &
                                 " LIVE cells have all four own-layer faces "// &
@@ -1241,7 +1279,7 @@ contains
       type(hgrid_t), intent(in) :: grid
       integer, intent(in) :: compute_rank
       integer :: nx_w, ny_w, i, j, ng, n_intertidal
-      real(wp) :: d0
+      real(wp) :: d0, n_loc, n_glob
 
       ocean_state%dyn%bt_work%wetdry_enable = cfg%ocean%wetdry%enable
       if (.not. cfg%ocean%wetdry%enable) return
@@ -1285,42 +1323,51 @@ contains
                           to_string(cfg%ocean%wetdry%rewet_depth)// &
                           " m (upwind BT faces + positive-definite "// &
                           "outflow limiter + bed-blocking gate)")
-         ! v2 semantic trap (plan §10.1): with wet/dry ON the static land
-         ! seed cutoff moves to `b < -land_margin`, so any column whose bed
-         ! is in the band `[-land_margin, LAND_DEPTH_THRESHOLD)` is NOT
-         ! static land any more — it becomes a dynamically-dry INTERTIDAL
-         ! flat that floods once eta clears dry_depth.  This affects formula
-         ! topos that flag land as b ≈ 0 (island / double_drake), file
-         ! bathymetry with a b = 1 m land-flag convention, AND generated
-         ! topos like neverworld2 that force continents into the band — so
-         ! a name-based check is incomplete.  Scan the seeded interior
-         ! bathymetry directly and warn (rank 0) with the exact count when
-         ! ANY intertidal-band cell exists.  It's a WARNING, not an abort:
-         ! intertidal flats can be intentional; the message just makes the
-         ! regime change loud and specific.
-         ng = grid%nghost
-         n_intertidal = 0
-         do j = ng + 1, ny_w - ng
-            do i = ng + 1, nx_w - ng
-               d0 = ocean_state%barotropic%b(i, j)
-               if (d0 >= -cfg%ocean%wetdry%land_margin .and. &
-                   d0 < LAND_DEPTH_THRESHOLD) then
-                  n_intertidal = n_intertidal + 1
-               end if
-            end do
+      end if
+      ! v2 semantic trap (plan §10.1): with wet/dry ON the static land
+      ! seed cutoff moves to `b < -land_margin`, so any column whose bed
+      ! is in the band `[-land_margin, LAND_DEPTH_THRESHOLD)` is NOT
+      ! static land any more — it becomes a dynamically-dry INTERTIDAL
+      ! flat that floods once eta clears dry_depth.  This affects formula
+      ! topos that flag land as b ≈ 0 (island / double_drake), file
+      ! bathymetry with a b = 1 m land-flag convention, AND generated
+      ! topos like neverworld2 that force continents into the band — so
+      ! a name-based check is incomplete.  Scan the seeded interior
+      ! bathymetry directly and warn (rank 0) with the exact GLOBAL count when
+      ! ANY intertidal-band cell exists.  It's a WARNING, not an abort:
+      ! intertidal flats can be intentional; the message just makes the
+      ! regime change loud and specific.
+      ng = grid%nghost
+      n_intertidal = 0
+      do j = ng + 1, ny_w - ng
+         do i = ng + 1, nx_w - ng
+            d0 = ocean_state%barotropic%b(i, j)
+            if (d0 >= -cfg%ocean%wetdry%land_margin .and. &
+                d0 < LAND_DEPTH_THRESHOLD) then
+               n_intertidal = n_intertidal + 1
+            end if
          end do
-         if (n_intertidal > 0) then
-            call logger%warning("Wet/dry: "//to_string(n_intertidal)// &
-                                " interior cell(s) have bed elevations in the "// &
-                                "intertidal band [-land_margin, "// &
-                                "LAND_DEPTH_THRESHOLD) — under the wetdry-aware "// &
-                                "static seed (land iff b < -land_margin) these "// &
-                                "are LIVE intertidal flats that flood when eta "// &
-                                "clears dry_depth, NOT static land.  If you "// &
-                                "intended static continents, use bed elevations "// &
-                                "b < -land_margin (= "// &
-                                to_string(-cfg%ocean%wetdry%land_margin)//" m).")
-         end if
+      end do
+      ! Global count: an integer count rides the real64 sum exactly.  Skip the
+      ! collective when this tile IS the whole domain (this runs before
+      ! `ocean_halo_init`, so `ocean_halo_is_decomposed()` is still false here).
+      n_loc = real(n_intertidal, wp)
+      n_glob = n_loc
+      if (grid%nx_phys /= grid%nx_global .or. grid%ny_phys /= grid%ny_global) then
+         call halo_allreduce_sum(n_loc, n_glob)
+      end if
+      n_intertidal = nint(n_glob)
+      if (n_intertidal > 0 .and. compute_rank == 0) then
+         call logger%warning("Wet/dry: "//to_string(n_intertidal)// &
+                             " interior cell(s) have bed elevations in the "// &
+                             "intertidal band [-land_margin, "// &
+                             "LAND_DEPTH_THRESHOLD) — under the wetdry-aware "// &
+                             "static seed (land iff b < -land_margin) these "// &
+                             "are LIVE intertidal flats that flood when eta "// &
+                             "clears dry_depth, NOT static land.  If you "// &
+                             "intended static continents, use bed elevations "// &
+                             "b < -land_margin (= "// &
+                             to_string(-cfg%ocean%wetdry%land_margin)//" m).")
       end if
    end subroutine configure_ocean_wetdry
 

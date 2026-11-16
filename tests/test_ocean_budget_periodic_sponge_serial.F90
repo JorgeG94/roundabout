@@ -64,7 +64,7 @@
 !! only do that with something to compare against, i.e. on its 2- and
 !! 4-rank ctest legs (`rdb_test_ocean_decomp_bitid_mpi`, `..._4rank`;
 !! `RDB_ENABLE_MPI=ON` only).  This file exists so the
-!! `RDB_ENABLE_MPI=OFF` build (the default local/CI build per CLAUDE.md)
+!! `RDB_ENABLE_MPI=OFF` build (the default (MPI=OFF) build)
 !! still runs the configuration.
 !!
 !! `periodic_sponge_seam_out_is_finite_and_bounded` therefore only asserts

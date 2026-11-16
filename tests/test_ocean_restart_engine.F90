@@ -70,6 +70,9 @@ module test_ocean_restart_engine
    use rdb_ocean_restart, only: restart_registry_t
    use rdb_ocean_status, only: OCEAN_STATUS_OK
    use rdb_comm_env, only: comm_env_init, comm_env_setup_roles
+   use rdb_io_netcdf, only: nc_create_file, nc_close, nc_def_dim, nc_def_var_2d, &
+                            nc_def_var_3d, nc_enddef, rdb_def_var_1d, rdb_put_var_1d, nc_put_att
+   use netcdf, only: nf90_put_var
    implicit none
    private
 
@@ -77,7 +80,12 @@ module test_ocean_restart_engine
 
    real(wp), parameter :: DT = 600.0_wp
    character(len=*), parameter :: FN = "test_ocean_restart_engine_rt.nc"
+   character(len=*), parameter :: ATM_FILE = "rsw_atm.nc"
+   character(len=*), parameter :: ATM_LIST = "rsw_atm.list"
+   character(len=*), parameter :: ATM_SW0_FILE = "rsw_atm_sw0.nc"
+   character(len=*), parameter :: ATM_SW0_LIST = "rsw_atm_sw0.list"
    integer, parameter :: MAXF = 160
+   character(len=*), parameter :: NL = new_line("a")
 
    logical :: comm_inited = .false.
 
@@ -106,6 +114,14 @@ contains
                                test_engine_bit_exact_ice_ssp), &
                   new_unittest("restart_engine_bit_exact_sea_ice_components", &
                                test_engine_bit_exact_ice_components), &
+                  new_unittest("restart_engine_bit_exact_sea_ice_components_bulk", &
+                               test_engine_bit_exact_ice_components_bulk), &
+                  new_unittest("restart_engine_bit_exact_bulk_boundary_layer", &
+                               test_engine_bit_exact_bulk_bl), &
+                  new_unittest("restart_engine_old_checkpoint_stale_flux_ghosts_repaired", &
+                               test_engine_old_checkpoint), &
+                  new_unittest("engine_ice_enabled_icefree_shortwave_matches_ice_disabled", &
+                               test_engine_icefree_sw), &
                   new_unittest("restart_engine_bit_exact_gm_meke_varmix_therm2", &
                                test_engine_bit_exact_gm), &
                   new_unittest("restart_engine_bit_exact_visc_rem_chain", &
@@ -117,7 +133,31 @@ contains
                   new_unittest("restart_engine_bkgnd_full_reseed_on_restart", &
                                test_engine_bkgnd_full_reseed_on_restart), &
                   new_unittest("restart_engine_cold_seeds_kv_without_checkpoint", &
-                               test_engine_cold_seeds_kv_without_checkpoint) &
+                               test_engine_cold_seeds_kv_without_checkpoint), &
+                  new_unittest("restart_engine_cavity_old_checkpoint_loads", &
+                               test_engine_cavity_old_checkpoint_loads), &
+                  new_unittest("restart_engine_bit_exact_cavity_melt_drag", &
+                               test_engine_bit_exact_cavity_melt_drag), &
+                  new_unittest("restart_engine_bit_exact_cavity_melt_only", &
+                               test_engine_bit_exact_cavity_melt_only), &
+                  new_unittest("restart_engine_bit_exact_cavity_therm2_window_end", &
+                               test_engine_bit_exact_cavity_therm2_end), &
+                  new_unittest("restart_engine_bit_exact_cavity_therm2_mid_window", &
+                               test_engine_bit_exact_cavity_therm2_mid), &
+                  new_unittest("restart_engine_bit_exact_cavity_melt_only_therm2", &
+                               test_engine_bit_exact_cavity_melt_only_therm2), &
+                  new_unittest("restart_engine_cavity_ustar_not_vacuous", &
+                               test_engine_cavity_ustar_not_vacuous), &
+                  new_unittest("restart_engine_bit_exact_cavity_mass", &
+                               test_engine_bit_exact_cavity_mass), &
+                  new_unittest("restart_engine_bit_exact_cavity_mass_uniform_open", &
+                               test_engine_bit_exact_cavity_mass_uo), &
+                  new_unittest("restart_engine_bit_exact_cavity_ustar", &
+                               test_engine_bit_exact_cavity_ustar), &
+                  new_unittest("restart_engine_bit_exact_cavity_ssp_rk2", &
+                               test_engine_bit_exact_cavity_ssp), &
+                  new_unittest("restart_engine_bit_exact_cavity_tdrag_sigma", &
+                               test_engine_bit_exact_cavity_tdrag_sigma) &
                   ]
    end subroutine collect_ocean_restart_engine_tests
 
@@ -135,6 +175,10 @@ contains
       character(len=*), intent(in) :: label
       character(len=:), allocatable :: nml
       character(len=*), parameter :: NL = new_line("a")
+      if (index(label, "cavity_") == 1) then
+         nml = cavity_nml(label)
+         return
+      end if
       select case (label)
       case ("island_periodic_zfixed")
          ! Periodic channel with an island, `z_fixed` (tanh) layers, wind,
@@ -318,6 +362,71 @@ contains
          if (label == "sea_ice_components") then
             nml = nml//"&ocean_forcing_nml enable_components = .true. /"//NL
          end if
+      case ("bulk_bl_periodic")
+         ! Bulk forcing + components + KPP under a cold dry atmosphere over a
+         ! re-entrant 100 m basin on ten layers: the boundary layer is deeper
+         ! than the top interface, so it reads the assembled `Q_heat` in the
+         ! ghost columns (the seam-flux refresh's case).
+         nml = "&sim_nml sim_type = 'ocean' /"//NL// &
+               "&time_nml t_end = 86400.0, dt_fixed = 600.0, start_date = '2000-06-21' /"//NL// &
+               "&nonhydrostatic_nml nz_layers = 10 /"//NL// &
+               "&ocean_bt_nml auto_n_inner = .true., split_scheme = 'pred_corr' /"//NL// &
+               "&ocean_hvisc_nml nu_h = 200.0, lateral_closure = 'smagorinsky', "// &
+               "smag_ah = .true. /"//NL// &
+               "&ocean_diag_nml enabled = .false. /"//NL// &
+               "&ocean_eos_nml eos = 'wright' /"//NL// &
+               "&ocean_thermo_nml enable_thermodynamics = .true. /"//NL// &
+               "&ocean_forcing_nml enable_components = .true. /"//NL// &
+               "&ocean_bulk_flux_nml enable = .true., n_iter = 5, z_wind = 10.0, "// &
+               "z_ta = 10.0 /"//NL// &
+               "&tracer_nml initial_temperature = 12.0, initial_salinity = 35.0, "// &
+               "T_init_surface = 20.0, T_init_bottom = 19.0 /"//NL// &
+               atm_group(ATM_LIST)// &
+               "&grid_nml nx = 16, ny = 8, nghost = 3, dx = 22.5, dy = 1.0 /"//NL// &
+               "&ocean_grid_nml grid_config = 'spherical', lon_west = 0.0, "// &
+               "lat_south = 30.0, rad_earth = 6.371e6, coriolis_scheme = 'planetary' /"//NL// &
+               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
+               "&ocean_topo_nml max_depth = 100.0 /"//NL// &
+               "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
+               "north = 'wall' /"//NL// &
+               "&output_nml output_to_file = .false. /"//NL
+      case ("sea_ice_components_bulk")
+         ! Ice + components + the atmosphere-driven bulk forcing: the path on
+         ! which the ice couplers used to overwrite the bulk consumer's
+         ! open-water `q_sw` (the decomposition harness's `bulk_flux_ice`,
+         ! on one rank).  The transmitted shortwave, the open-water
+         ! shortwave and the brine/heat components are all live, and the
+         ! checkpoint lands mid thermo window.
+         nml = "&sim_nml sim_type = 'ocean' /"//NL// &
+               "&time_nml t_end = 86400.0, dt_fixed = 600.0, start_date = '2000-06-21' /"//NL// &
+               "&nonhydrostatic_nml nz_layers = 4 /"//NL// &
+               "&ocean_bt_nml auto_n_inner = .true., split_scheme = 'pred_corr' /"//NL// &
+               "&ocean_hvisc_nml nu_h = 200.0, lateral_closure = 'smagorinsky', "// &
+               "smag_ah = .true. /"//NL// &
+               "&ocean_diag_nml enabled = .false. /"//NL// &
+               "&ocean_eos_nml eos = 'wright' /"//NL// &
+               "&ocean_thermo_nml enable_thermodynamics = .true. /"//NL// &
+               "&ocean_forcing_nml enable_components = .true. /"//NL// &
+               "&ocean_bulk_flux_nml enable = .true., n_iter = 5, z_wind = 10.0, "// &
+               "z_ta = 10.0 /"//NL// &
+               "&tracer_nml initial_temperature = -1.83, initial_salinity = 34.0, "// &
+               "T_init_surface = -1.82, T_init_bottom = -1.835 /"//NL// &
+               atm_group(ATM_LIST)// &
+               "&ocean_vmix_nml dt_therm_ratio = 2 /"//NL// &
+               "&ocean_ice_nml enable = .true., ncat = 5, nk_ice = 2, "// &
+               "restore_lambda = 20.0, dynamics = .true., evp_sub_steps = 30, "// &
+               "cfl_trunc = 0.01, project_ci = .true., transport = .true., "// &
+               "adv_substeps = 2 /"//NL// &
+               "&ocean_ice_ic_nml conc_config = 'uniform', h_ice = 1.0, conc = 0.7 /"//NL// &
+               "&grid_nml nx = 24, ny = 16, nghost = 3, dx = 1.0, dy = 1.0 /"//NL// &
+               "&ocean_grid_nml grid_config = 'spherical', lon_west = 0.0, "// &
+               "lat_south = 20.0, rad_earth = 6.371e6, coriolis_scheme = 'planetary' /"//NL// &
+               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
+               "&ocean_topo_nml topo_config = 'spoon', max_depth = 3000.0, "// &
+               "edge_depth = 300.0, slope_scale = 300000.0 /"//NL// &
+               "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
+               "north = 'wall' /"//NL// &
+               "&output_nml output_to_file = .false. /"//NL
       case ("gm_meke_varmix_therm2")
          ! Stratified seamount on z* with GM + MEKE + VarMix (the compat
          ! matrix's `gm_meke` overlay), thermo every second step.
@@ -351,6 +460,80 @@ contains
          error stop "test_ocean_restart_engine: unknown case"
       end select
    end function case_nml
+
+   function cavity_nml(label) result(nml)
+      !! Ice-shelf cavity with basal melt (and optionally top drag) over a
+      !! seamount, closed basin, `enable_components`: the engine-driven
+      !! cavity namelists of the cavity engine tests.  The label selects the
+      !! variant by substring: `zfixed` = z_fixed (no KPP, 8 fixed-z layers,
+      !! top drag on) else sigma with the default KPP and 4 layers;
+      !! `tdrag` = top drag on a sigma cavity; `ustar` = sigma, 16 thin
+      !! layers and a large tidal friction velocity (`u_tide = 0.2`), so the
+      !! under-ice KPP boundary layer is active; `therm2` = `dt_therm_ratio
+      !! = 2`; `ssp` = `ssp_rk2` (else `pred_corr`); `mass` =
+      !! `freshwater = 'mass'`; `_uo` = `volume_compensation =
+      !! 'uniform_open_ocean'`.
+      character(len=*), intent(in) :: label
+      character(len=:), allocatable :: nml
+      character(len=*), parameter :: NL = new_line("a")
+      character(len=:), allocatable :: vc, nzl, cav, vm, td, bt, melt_extra, vk
+      logical :: zfixed, top_drag
+      zfixed = index(label, "zfixed") > 0
+      top_drag = zfixed .or. index(label, "tdrag") > 0
+      vk = ""
+      melt_extra = ""
+      if (zfixed) then
+         nzl = "8"
+         vc = "&vcoord_nml vcoord_type = 'z_fixed', zfixed_closed_faces = .true. /"//NL
+         cav = ", h_min_cavity = 250.0 /"//NL
+         vk = "use_kpp = .false., pp81_nu0 = 0.0, pp81_nu_bg = 1.0e-3, pp81_kappa_bg = 5.0e-5"
+      else
+         nzl = "4"
+         if (index(label, "ustar") > 0) then
+            nzl = "16"
+            melt_extra = ", u_tide = 0.2"
+         end if
+         vc = "&vcoord_nml vcoord_type = 'sigma' /"//NL
+         cav = ", h_min_cavity = 100.0 /"//NL
+      end if
+      if (index(label, "therm2") > 0) then
+         if (len(vk) > 0) vk = vk//", "
+         vk = vk//"dt_therm_ratio = 2"
+      end if
+      vm = ""
+      if (len(vk) > 0) vm = "&ocean_vmix_nml "//vk//" /"//NL
+      if (index(label, "mass") > 0) melt_extra = melt_extra//", freshwater = 'mass'"
+      if (index(label, "_uo") > 0) melt_extra = melt_extra//", volume_compensation = 'uniform_open_ocean'"
+      bt = "&ocean_bt_nml auto_n_inner = .true., split_scheme = 'pred_corr' /"//NL
+      if (index(label, "ssp") > 0) bt = "&ocean_bt_nml auto_n_inner = .true., split_scheme = 'ssp_rk2' /"//NL
+      td = ""
+      if (top_drag) td = "&ocean_tdrag_nml enable = .true., form = 'quadratic', cd = 2.5e-3 /"//NL
+      nml = "&sim_nml sim_type = 'ocean' /"//NL// &
+            "&time_nml t_end = 86400.0, dt_fixed = 600.0 /"//NL// &
+            "&nonhydrostatic_nml nz_layers = "//nzl//" /"//NL// &
+            "&tracer_nml initial_salinity = 34.5, T_init_surface = 3.0, T_init_bottom = 1.0 /"//NL// &
+            bt// &
+            "&ocean_hvisc_nml nu_h = 200.0, lateral_closure = 'smagorinsky', smag_ah = .true. /"//NL// &
+            "&ocean_diag_nml enabled = .false. /"//NL// &
+            "&grid_nml nx = 26, ny = 18, nghost = 3, dx = 20000.0, dy = 20000.0 /"//NL// &
+            "&physics_nml coriolis_f = -1.409e-4 /"//NL// &
+            vc//vm// &
+            "&ocean_topo_nml topo_config = 'seamount', max_depth = 1000.0, edge_depth = 400.0, "// &
+            "slope_scale = 80000.0, wind_config = 'constant', taux_magnitude = 0.05 /"//NL// &
+            "&ocean_cavity_dyn_nml enable = .true., draft_config = 'linear', "// &
+            "draft_depth = 500.0, draft_slope = -4.0e-4, draft_x0 = 0.0, "// &
+            "draft_x1 = 380000.0, draft_y1 = 260000.0"//cav// &
+            "&ocean_forcing_nml enable_components = .true. /"//NL// &
+            "&ocean_cavity_melt_nml enable = .true., exchange_law = 'const_gamma', "// &
+            "gamma_t = 2.2e-2, gamma_s = -1.0, cdrag_top = 2.5e-3, "// &
+            "ice_conduction = 'insulating', s_ice = 0.0, far_field_depth = 10.0"// &
+            melt_extra//" /"//NL// &
+            td// &
+            "&ocean_pgf_nml form = 'fv_mom6', p_top_in_bc = .true. /"//NL// &
+            "&ocean_eos_nml eos = 'linear', tfreeze_set = 'isomip' /"//NL// &
+            "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL// &
+            "&output_nml output_to_file = .false. /"//NL
+   end function cavity_nml
 
    subroutine make_engine(engine, cfg, nml, ok, restart_file, t0, step0)
       type(ocean_engine_t), intent(inout) :: engine
@@ -510,6 +693,14 @@ contains
       call check(error, nbad_fields == 0, "fields differ "//when//":"//msg)
    end subroutine compare
 
+   pure function itoa(n) result(str)
+      integer, intent(in) :: n
+      character(len=:), allocatable :: str
+      character(len=16) :: buf
+      write (buf, '(i0)') n
+      str = trim(buf)
+   end function itoa
+
    subroutine run_round_trip(error, label, n_write, n_after, n_ice, resume_point_only)
       !! Straight N_WRITE + N_AFTER vs N_WRITE + checkpoint + warm restart
       !! through `engine_setup` + N_AFTER, compared on every field -- twice:
@@ -570,7 +761,7 @@ contains
       call check(error, eb%warm_restart, "engine B did not take the warm-restart path")
       if (allocated(error)) return
       call take_snapshot(eb, sb0)
-      call compare(error, sa0, sb0, n_ice, "at the resume point")
+      call compare(error, sa0, sb0, n_ice, trim(label)//" nw="//itoa(n_write)//": at the resume point")
       if (allocated(error) .or. point_only) then
          call engine_exit_data(eb)
          call engine_teardown(eb)
@@ -585,7 +776,7 @@ contains
       call engine_teardown(eb)
       call delete_file(FN)
 
-      call compare(error, sa, sb, n_ice, "after the resumed steps")
+      call compare(error, sa, sb, n_ice, trim(label)//" nw="//itoa(n_write)//": after the resumed steps")
    end subroutine run_round_trip
 
    subroutine test_engine_bit_exact(error)
@@ -776,6 +967,94 @@ contains
       call delete_file(FN)
    end subroutine test_engine_cold_seeds_kv_without_checkpoint
 
+   subroutine test_engine_cavity_old_checkpoint_loads(error)
+      !! OLD-CHECKPOINT path of the cavity restart fields.  The six
+      !! `cavity_*` / `shelf_stress` entries are optional on read, so a
+      !! checkpoint written before they were registered must still load
+      !! (with the "Restart file lacks optional field" warning) and the
+      !! absent field keeps its zero seed.  `drop_field` drops ONE tag per
+      !! call; the one dropped here is `shelf_stress`, the one that feeds
+      !! the melt-only under-ice `u_*` of the first resumed step (the case
+      !! is the melt-only `cavity_sigma_ustar`, where that stress is
+      !! non-zero).  Asserts: setup succeeds, the run is a warm restart,
+      !! the dropped field is at its zero seed while a carried sibling
+      !! (`cavity_ustar`) was restored, and it steps and stays finite.
+      !! NOT bitwise by design (the first resumed step has no under-ice
+      !! u_*); the bitwise gate is the `restart_engine_bit_exact_cavity_*`
+      !! set.
+      use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+      type(error_type), allocatable, intent(out) :: error
+      type(ocean_engine_t), target :: ea, eb
+      type(config_t) :: cfg_a, cfg_b
+      type(snapshot_t) :: sb
+      real(wp) :: t_a, t_b
+      integer :: step_b, ierr, f
+      logical :: ok, ea_live, eb_live
+
+      ea_live = .false.
+      eb_live = .false.
+
+      checks: block
+         call make_engine(ea, cfg_a, case_nml("cavity_sigma_ustar"), ok)
+         ea_live = ok
+         call check(error, ok, "engine A setup failed")
+         if (allocated(error)) exit checks
+         t_a = 0.0_wp
+         call advance(ea, cfg_a, t_a, 5, ok)
+         call check(error, ok, "engine A failed before the checkpoint")
+         if (allocated(error)) exit checks
+         !$acc update self(ea%state%surface_stress%stress_shelf)
+         call check(error, maxval(abs(ea%state%surface_stress%stress_shelf)) > 0.0_wp, &
+                    "vacuous: stress_shelf is zero in the written run")
+         if (allocated(error)) exit checks
+         call ocean_state_restart_write_drop_field(ea%state, ea%grid, ea%decomp, FN, t_a, &
+                                                   5, "shelf_stress", ierr=ierr)
+         call check(error, ierr == OCEAN_STATUS_OK, "checkpoint write (drop shelf_stress) failed")
+         if (allocated(error)) exit checks
+         call engine_exit_data(ea)
+         call engine_teardown(ea)
+         ea_live = .false.
+
+         call make_engine(eb, cfg_b, case_nml("cavity_sigma_ustar"), ok, &
+                          restart_file=FN, t0=t_b, step0=step_b)
+         eb_live = ok
+         call check(error, ok, "engine B (old-style cavity checkpoint) setup failed")
+         if (allocated(error)) exit checks
+         call check(error, eb%warm_restart, "engine B did not take the warm-restart path")
+         if (allocated(error)) exit checks
+         call check(error, step_b == 5, "restart step count not restored")
+         if (allocated(error)) exit checks
+         !$acc update self(eb%state%surface_stress%stress_shelf, eb%state%cavity_flux%ustar)
+         call check(error, maxval(abs(eb%state%surface_stress%stress_shelf)) == 0.0_wp, &
+                    "the dropped shelf_stress did not keep its zero seed")
+         if (allocated(error)) exit checks
+         call check(error, maxval(abs(eb%state%cavity_flux%ustar)) > 0.0_wp, &
+                    "the carried cavity_ustar was not restored")
+         if (allocated(error)) exit checks
+         call advance(eb, cfg_b, t_b, 4, ok)
+         call check(error, ok, "engine B failed to step after the old-style resume")
+         if (allocated(error)) exit checks
+         call take_snapshot(eb, sb)
+         do f = 1, sb%n
+            call check(error, all(ieee_is_finite(sb%f(f)%a)), &
+                       "non-finite "//trim(sb%f(f)%tag)//" after the old-style resume")
+            if (allocated(error)) exit checks
+         end do
+      end block checks
+      ! Tear down whatever is still mapped on EVERY path: a check that
+      ! fails above `exit checks` must not leave an engine's device
+      ! mappings (and the halo buffers) behind for the next case.
+      if (ea_live) then
+         call engine_exit_data(ea)
+         call engine_teardown(ea)
+      end if
+      if (eb_live) then
+         call engine_exit_data(eb)
+         call engine_teardown(eb)
+      end if
+      call delete_file(FN)
+   end subroutine test_engine_cavity_old_checkpoint_loads
+
    subroutine test_engine_bit_exact_ice(error)
       type(error_type), allocatable, intent(out) :: error
       call ice_round_trip(error, "sea_ice_periodic")
@@ -800,6 +1079,486 @@ contains
       integer :: n_ice
       call run_round_trip(error, "gm_meke_varmix_therm2", 5, 4, n_ice)
    end subroutine test_engine_bit_exact_gm
+
+   subroutine test_engine_bit_exact_cavity_melt_drag(error)
+      !! Basal melt + top drag, `dt_therm_ratio = 1`: the first resumed step
+      !! must integrate the carried melt heat/salt flux.
+      type(error_type), allocatable, intent(out) :: error
+      integer :: n_ice
+      call run_round_trip(error, "cavity_zfixed", 5, 4, n_ice)
+   end subroutine test_engine_bit_exact_cavity_melt_drag
+
+   subroutine test_engine_bit_exact_cavity_melt_only(error)
+      !! Melt only (no top drag, KPP on): the under-ice `u_*` of the first
+      !! resumed step comes from the melt slot's lagged `ustar`.
+      type(error_type), allocatable, intent(out) :: error
+      integer :: n_ice
+      call run_round_trip(error, "cavity_sigma_melt_only", 5, 4, n_ice)
+   end subroutine test_engine_bit_exact_cavity_melt_only
+
+   subroutine test_engine_bit_exact_cavity_therm2_end(error)
+      !! `dt_therm_ratio = 2`, checkpoint at a WINDOW BOUNDARY (even N_WRITE):
+      !! the resumed step is a thermo step.
+      type(error_type), allocatable, intent(out) :: error
+      integer :: n_ice
+      call run_round_trip(error, "cavity_zfixed_therm2", 4, 4, n_ice)
+   end subroutine test_engine_bit_exact_cavity_therm2_end
+
+   subroutine test_engine_bit_exact_cavity_therm2_mid(error)
+      !! `dt_therm_ratio = 2`, checkpoint MID window (odd N_WRITE).
+      type(error_type), allocatable, intent(out) :: error
+      integer :: n_ice
+      call run_round_trip(error, "cavity_zfixed_therm2", 5, 4, n_ice)
+   end subroutine test_engine_bit_exact_cavity_therm2_mid
+
+   subroutine test_engine_bit_exact_cavity_melt_only_therm2(error)
+      !! Melt only + KPP at `dt_therm_ratio = 2`, checkpoint at a window
+      !! boundary and mid window: the non-thermo resumed step reads the
+      !! lagged melt `ustar` through `stress_shelf`.
+      type(error_type), allocatable, intent(out) :: error
+      integer :: n_ice
+      call run_round_trip(error, "cavity_sigma_melt_only_therm2", 4, 4, n_ice)
+      if (allocated(error)) return
+      call run_round_trip(error, "cavity_sigma_melt_only_therm2", 5, 4, n_ice)
+   end subroutine test_engine_bit_exact_cavity_melt_only_therm2
+
+   subroutine test_engine_bit_exact_cavity_mass(error)
+      !! `freshwater = 'mass'`: the in-stage mass step of the first resumed
+      !! thermo step reads the previous step's `melt`/`active`/`s_far`/`t_b`.
+      !! Ratio 1, then ratio 2 at a window boundary and mid window.
+      type(error_type), allocatable, intent(out) :: error
+      integer :: n_ice
+      call run_round_trip(error, "cavity_zfixed_mass", 5, 4, n_ice)
+      if (allocated(error)) return
+      call run_round_trip(error, "cavity_zfixed_mass_therm2", 4, 4, n_ice)
+      if (allocated(error)) return
+      call run_round_trip(error, "cavity_zfixed_mass_therm2", 5, 4, n_ice)
+   end subroutine test_engine_bit_exact_cavity_mass
+
+   subroutine test_engine_bit_exact_cavity_mass_uo(error)
+      !! `freshwater = 'mass'` + `volume_compensation = 'uniform_open_ocean'`.
+      type(error_type), allocatable, intent(out) :: error
+      integer :: n_ice
+      call run_round_trip(error, "cavity_zfixed_mass_uo_therm2", 4, 4, n_ice)
+      if (allocated(error)) return
+      call run_round_trip(error, "cavity_zfixed_mass_uo_therm2", 5, 4, n_ice)
+   end subroutine test_engine_bit_exact_cavity_mass_uo
+
+   subroutine test_engine_bit_exact_cavity_ustar(error)
+      !! Melt-only under-ice `u_*` made REAL: sigma, 16 thin layers,
+      !! `u_tide = 0.2`, so the under-ice KPP boundary layer reaches below
+      !! the top layer and `stress_shelf` (lagged melt `ustar`) matters.
+      type(error_type), allocatable, intent(out) :: error
+      integer :: n_ice
+      call run_round_trip(error, "cavity_sigma_ustar", 5, 4, n_ice)
+      if (allocated(error)) return
+      call run_round_trip(error, "cavity_sigma_ustar_therm2", 4, 4, n_ice)
+      if (allocated(error)) return
+      call run_round_trip(error, "cavity_sigma_ustar_therm2", 5, 4, n_ice)
+   end subroutine test_engine_bit_exact_cavity_ustar
+
+   subroutine test_engine_cavity_ustar_not_vacuous(error)
+      !! Non-vacuity guard of the `cavity_sigma_ustar` cases: (1) under-ice
+      !! KPP is live (boundary-layer depth exceeds the top-layer thickness on
+      !! a covered column) and the lagged `stress_shelf` is non-zero; (2)
+      !! zeroing `stress_shelf` ONCE in an otherwise straight run (exactly
+      !! what a resume without it does) changes the answer.
+      type(error_type), allocatable, intent(out) :: error
+      type(ocean_engine_t), target :: ea, ec
+      type(config_t) :: cfg_a, cfg_c
+      type(snapshot_t) :: sa, sc
+      real(wp) :: t_a, t_c, ratio, smax
+      integer :: i, j, e
+      logical :: ok, differs
+
+      call make_engine(ea, cfg_a, case_nml("cavity_sigma_ustar"), ok)
+      call check(error, ok, "engine A setup failed")
+      if (allocated(error)) return
+      call make_engine(ec, cfg_c, case_nml("cavity_sigma_ustar"), ok)
+      call check(error, ok, "engine C setup failed")
+      if (allocated(error)) return
+      t_a = 0.0_wp
+      t_c = 0.0_wp
+      call advance(ea, cfg_a, t_a, 5, ok)
+      call advance(ec, cfg_c, t_c, 5, ok)
+      call check(error, ok, "advance to the perturbation point failed")
+      if (allocated(error)) return
+
+      !$acc update self(ea%state%vmix%bl_depth, ea%state%multilayer%h_layer)
+      !$acc update self(ea%state%surface_stress%stress_shelf)
+      ratio = 0.0_wp
+      smax = maxval(ea%state%surface_stress%stress_shelf)
+      do j = 1, ea%grid%ny_total
+         do i = 1, ea%grid%nx_total
+            if (ea%state%metrics%cover_frac(i, j) > 0.5_wp .and. &
+                ea%state%multilayer%h_layer(i, j, ea%state%multilayer%nz_ml) > 0.0_wp) then
+               ratio = max(ratio, ea%state%vmix%bl_depth(i, j)/ &
+                           ea%state%multilayer%h_layer(i, j, ea%state%multilayer%nz_ml))
+            end if
+         end do
+      end do
+      write (*, '(a,es12.4,a,es12.4)') "ustar guard: max(bl_depth/h_top) under ice = ", &
+         ratio, ";  max stress_shelf = ", smax
+      call check(error, ratio > 1.0_wp, "under-ice KPP boundary layer does not exceed the top layer")
+      if (allocated(error)) return
+      call check(error, smax > 0.0_wp, "stress_shelf is zero in the straight run")
+      if (allocated(error)) return
+
+      ec%state%surface_stress%stress_shelf = 0.0_wp
+      !$acc update device(ec%state%surface_stress%stress_shelf)
+      call advance(ea, cfg_a, t_a, 4, ok)
+      call advance(ec, cfg_c, t_c, 4, ok)
+      call check(error, ok, "advance after the perturbation failed")
+      if (allocated(error)) return
+      call take_snapshot(ea, sa)
+      call take_snapshot(ec, sc)
+      differs = .false.
+      do e = 1, sa%n
+         if (any(shape(sa%f(e)%a) /= shape(sc%f(e)%a))) cycle
+         if (any(transfer(sa%f(e)%a, [0_int64]) /= transfer(sc%f(e)%a, [0_int64]))) then
+            differs = .true.
+         end if
+      end do
+      call check(error, differs, "zeroing stress_shelf did not change the answer: the case is vacuous")
+      call engine_exit_data(ea)
+      call engine_teardown(ea)
+      call engine_exit_data(ec)
+      call engine_teardown(ec)
+   end subroutine test_engine_cavity_ustar_not_vacuous
+
+   subroutine test_engine_bit_exact_cavity_ssp(error)
+      !! `ssp_rk2` applies the surface flux in both stages.
+      type(error_type), allocatable, intent(out) :: error
+      integer :: n_ice
+      call run_round_trip(error, "cavity_sigma_melt_only_ssp", 5, 4, n_ice)
+      if (allocated(error)) return
+      call run_round_trip(error, "cavity_sigma_ustar_therm2_ssp", 5, 4, n_ice)
+      if (allocated(error)) return
+      call run_round_trip(error, "cavity_zfixed_therm2_ssp", 5, 4, n_ice)
+      if (allocated(error)) return
+      call run_round_trip(error, "cavity_zfixed_mass_therm2_ssp", 5, 4, n_ice)
+   end subroutine test_engine_bit_exact_cavity_ssp
+
+   subroutine test_engine_bit_exact_cavity_tdrag_sigma(error)
+      !! Top drag on SIGMA (KPP live), so the axes are not confounded.
+      type(error_type), allocatable, intent(out) :: error
+      integer :: n_ice
+      call run_round_trip(error, "cavity_sigma_tdrag_ustar", 5, 4, n_ice)
+      if (allocated(error)) return
+      call run_round_trip(error, "cavity_sigma_tdrag_ustar_therm2", 5, 4, n_ice)
+   end subroutine test_engine_bit_exact_cavity_tdrag_sigma
+
+   function atm_group(list) result(g)
+      !! `&ocean_atm_forcing_nml` pointing all nine fields at one filelist.
+      character(len=*), intent(in) :: list
+      character(len=:), allocatable :: g
+      g = "&ocean_atm_forcing_nml enable = .true., time_mode = 'interannual', "// &
+          "sw_interp = 'linear', filelist_tas = '"//list//"', filelist_huss = '"//list// &
+          "', filelist_uas = '"//list//"', filelist_vas = '"//list//"', filelist_psl = '"// &
+          list//"', filelist_rlds = '"//list//"', filelist_rsds = '"//list// &
+          "', filelist_prra = '"//list//"', filelist_prsn = '"//list//"' /"//NL
+   end function atm_group
+
+   subroutine write_atm_file(path, listname, tas0, huss0, rsds_const)
+      !! One global lon-lat file (10 degrees, two time records, all nine CMOR
+      !! names) of spatially varying prescribed atmospheric state, plus the
+      !! one-line filelist the namelist points at.  `rsds_const >= 0` makes
+      !! the downwelling shortwave spatially/temporally UNIFORM at that value
+      !! (the shortwave probe); negative keeps the varying field.
+      character(len=*), intent(in) :: path, listname
+      real(wp), intent(in) :: tas0, huss0, rsds_const
+      integer, parameter :: NLON = 36, NLAT = 18
+      real(wp), parameter :: PI = 3.14159265358979323846_wp
+      character(len=4), parameter :: VN(9) = [character(len=4) :: "tas", "huss", "uas", &
+                                                                                       "vas", "psl", "rlds", "rsds", "prra", "prsn"]
+      real(wp) :: lon(NLON), lat(NLAT), lonb(2, NLON), latb(2, NLAT), tax(2), f(NLON, NLAT, 2)
+      real(wp) :: sx, sy, dlo, dla
+      integer :: ncid, dlon_, dlat_, dbnd, dtim, vlon, vlat, vlonb, vlatb, vtim, vf(9)
+      integer :: v, i, j, k, ierr, u
+
+      dlo = 360.0_wp/real(NLON, wp)
+      dla = 180.0_wp/real(NLAT, wp)
+      do i = 1, NLON
+         lonb(1, i) = dlo*real(i - 1, wp)
+         lonb(2, i) = dlo*real(i, wp)
+         lon(i) = 0.5_wp*(lonb(1, i) + lonb(2, i))
+      end do
+      do j = 1, NLAT
+         latb(1, j) = -90.0_wp + dla*real(j - 1, wp)
+         latb(2, j) = -90.0_wp + dla*real(j, wp)
+         lat(j) = 0.5_wp*(latb(1, j) + latb(2, j))
+      end do
+      tax = [0.0_wp, 10.0_wp]
+      call nc_create_file(path, ncid)
+      call nc_def_dim(ncid, "lon", NLON, dlon_)
+      call nc_def_dim(ncid, "lat", NLAT, dlat_)
+      call nc_def_dim(ncid, "bnds", 2, dbnd)
+      call nc_def_dim(ncid, "time", 2, dtim)
+      call rdb_def_var_1d(ncid, "lon", dlon_, vlon)
+      call rdb_def_var_1d(ncid, "lat", dlat_, vlat)
+      call nc_def_var_2d(ncid, "lon_bnds", [dbnd, dlon_], vlonb)
+      call nc_def_var_2d(ncid, "lat_bnds", [dbnd, dlat_], vlatb)
+      call rdb_def_var_1d(ncid, "time", dtim, vtim)
+      call nc_put_att(ncid, vtim, "units", "days since 2000-06-20 00:00:00")
+      do v = 1, 9
+         call nc_def_var_3d(ncid, trim(VN(v)), [dlon_, dlat_, dtim], vf(v))
+      end do
+      call nc_enddef(ncid)
+      call rdb_put_var_1d(ncid, vlon, lon)
+      call rdb_put_var_1d(ncid, vlat, lat)
+      ierr = nf90_put_var(ncid, vlonb, lonb)
+      ierr = nf90_put_var(ncid, vlatb, latb)
+      call rdb_put_var_1d(ncid, vtim, tax)
+      do v = 1, 9
+         do k = 1, 2
+            do j = 1, NLAT
+               do i = 1, NLON
+                  sx = sin(2.0_wp*PI*lon(i)/37.0_wp + 0.3_wp)
+                  sy = cos(2.0_wp*PI*lat(j)/29.0_wp - 0.5_wp)
+                  select case (v)
+                  case (1)
+                     f(i, j, k) = tas0 + 4.0_wp*sx + 0.15_wp*(lat(j) - 20.0_wp) + 0.05_wp*tax(k)
+                  case (2)
+                     f(i, j, k) = huss0*(1.0_wp + 0.2_wp*sy + 0.1_wp*sx)
+                  case (3)
+                     f(i, j, k) = 6.0_wp + 4.0_wp*sx + 0.05_wp*(lat(j) - 20.0_wp)
+                  case (4)
+                     f(i, j, k) = -3.0_wp + 3.0_wp*sy + 0.04_wp*lon(i) + 0.02_wp*tax(k)
+                  case (5)
+                     f(i, j, k) = 1.01e5_wp - 300.0_wp*sx + 5.0_wp*lat(j)
+                  case (6)
+                     f(i, j, k) = 330.0_wp + 15.0_wp*sy + 20.0_wp*sx
+                  case (7)
+                     if (rsds_const >= 0.0_wp) then
+                        f(i, j, k) = rsds_const
+                     else
+                        f(i, j, k) = 180.0_wp + 40.0_wp*sx*sy + 0.5_wp*lat(j)
+                     end if
+                  case (8)
+                     f(i, j, k) = 2.0e-5_wp*(1.0_wp + 0.5_wp*sx)
+                  case default
+                     f(i, j, k) = 1.0e-6_wp*(1.0_wp + 0.5_wp*sy)
+                  end select
+               end do
+            end do
+         end do
+         ierr = nf90_put_var(ncid, vf(v), f)
+      end do
+      call nc_close(ncid)
+      open (newunit=u, file=listname, status='replace', action='write')
+      write (u, '(a)') trim(path)
+      close (u)
+   end subroutine write_atm_file
+
+   subroutine test_engine_bit_exact_ice_components_bulk(error)
+      !! Restart round trip of the ice + components + bulk-forcing path,
+      !! checkpoint mid thermo window (N_WRITE odd, `dt_therm_ratio = 2`).
+      type(error_type), allocatable, intent(out) :: error
+      integer :: n_ice
+      call write_atm_file(ATM_FILE, ATM_LIST, 255.0_wp, 6.0e-4_wp, -1.0_wp)
+      call ice_round_trip(error, "sea_ice_components_bulk")
+      call delete_file(ATM_FILE)
+      call delete_file(ATM_LIST)
+      n_ice = 0
+   end subroutine test_engine_bit_exact_ice_components_bulk
+
+   subroutine test_engine_bit_exact_bulk_bl(error)
+      !! Warm restart of a bulk-forced run whose boundary layer reads the
+      !! seam-ghost flux (checkpoint after 4 steps, 4 more).
+      type(error_type), allocatable, intent(out) :: error
+      call bulk_bl_resume(error, .false.)
+   end subroutine test_engine_bit_exact_bulk_bl
+
+   subroutine test_engine_old_checkpoint(error)
+      !! See `bulk_bl_resume` with `corrupt = .true.`.
+      type(error_type), allocatable, intent(out) :: error
+      call bulk_bl_resume(error, .true.)
+   end subroutine test_engine_old_checkpoint
+
+   subroutine adopt_stress_fields(sa, sb)
+      !! Copy `surface_stress_*` from `sa` into `sb`.  The bulk consumer
+      !! rewrites the stress at the top of every step before anything reads
+      !! it and it is not a restart-registry field, so the resume-point
+      !! snapshot of a bulk-only run differs there by construction (also
+      !! with the seam-flux refresh disabled): not what this test measures.
+      type(snapshot_t), intent(in) :: sa
+      type(snapshot_t), intent(inout) :: sb
+      integer :: e
+      do e = 1, sb%n
+         if (sb%f(e)%tag(1:15) == "surface_stress_") sb%f(e)%a = sa%f(e)%a
+      end do
+   end subroutine adopt_stress_fields
+
+   subroutine bulk_bl_resume(error, corrupt)
+      !! Warm restart of the bulk + KPP periodic case, bitwise against the
+      !! straight run at the resume point and after N_AFTER more steps.
+      !! `corrupt`: emulate a checkpoint written BEFORE the seam-flux
+      !! refresh existed (stale ghost bands in `Q_heat`/`Q_salt`) by
+      !! overwriting the ghost columns of the live arrays right before the
+      !! write; the resumed engine must repair them at setup, not on its
+      !! first thermo-step assembly.
+      type(error_type), allocatable, intent(out) :: error
+      logical, intent(in) :: corrupt
+      type(ocean_engine_t), target :: es, ea, eb
+      type(config_t) :: cfg_s, cfg_a, cfg_b
+      type(snapshot_t) :: ss0, ss, sb0, sb
+      real(wp) :: t_s, t_a, t_b
+      integer :: step_b, ierr, ng, n_ice
+      logical :: ok
+      integer, parameter :: NW = 4, NA = 4
+
+      call write_atm_file(ATM_FILE, ATM_LIST, 255.0_wp, 6.0e-4_wp, -1.0_wp)
+      ! ---- straight run, snapshot at the checkpoint step and at the end ----
+      call make_engine(es, cfg_s, case_nml("bulk_bl_periodic"), ok)
+      call check(error, ok, "straight engine setup failed")
+      if (allocated(error)) return
+      t_s = 0.0_wp
+      call advance(es, cfg_s, t_s, NW, ok)
+      call take_snapshot(es, ss0)
+      call advance(es, cfg_s, t_s, NA, ok)
+      call take_snapshot(es, ss)
+      call engine_exit_data(es)
+      call engine_teardown(es)
+      ! ---- A: NW steps, corrupt the flux ghosts, write ----
+      call make_engine(ea, cfg_a, case_nml("bulk_bl_periodic"), ok)
+      call check(error, ok, "engine A setup failed")
+      if (allocated(error)) return
+      t_a = 0.0_wp
+      call advance(ea, cfg_a, t_a, NW, ok)
+      if (corrupt) then
+         ng = ea%grid%nghost
+         !$acc update self(ea%state%surface_flux%Q_heat)
+         ea%state%surface_flux%Q_heat(1:ng, :) = 0.0_wp
+         ea%state%surface_flux%Q_heat(ea%grid%nx_total - ng + 1:, :) = 0.0_wp
+         !$acc update device(ea%state%surface_flux%Q_heat)
+      end if
+      call ocean_state_restart_write(ea%state, ea%grid, ea%decomp, FN, t_a, NW, ierr=ierr)
+      call check(error, ierr == OCEAN_STATUS_OK, "checkpoint write failed")
+      if (allocated(error)) return
+      call engine_exit_data(ea)
+      call engine_teardown(ea)
+      ! ---- B: resume ----
+      call make_engine(eb, cfg_b, case_nml("bulk_bl_periodic"), ok, restart_file=FN, &
+                       t0=t_b, step0=step_b)
+      call check(error, ok .and. eb%warm_restart, "engine B did not warm-restart")
+      if (allocated(error)) return
+      call take_snapshot(eb, sb0)
+      call adopt_stress_fields(ss0, sb0)
+      call compare(error, ss0, sb0, n_ice, "bulk BL resume: at the resume point")
+      if (.not. allocated(error)) then
+         call advance(eb, cfg_b, t_b, NA, ok)
+         call take_snapshot(eb, sb)
+         call compare(error, ss, sb, n_ice, "bulk BL resume: after the resumed steps")
+      end if
+      call engine_exit_data(eb)
+      call engine_teardown(eb)
+      call delete_file(FN)
+      call delete_file(ATM_FILE)
+      call delete_file(ATM_LIST)
+   end subroutine bulk_bl_resume
+
+   function probe_nml(ratio, ice_on, list) result(nml)
+      !! The 6x6 spherical flat-100 m, 4-layer, 15 degC warm basin: the
+      !! atmosphere-driven bulk forcing + components, ice enabled with NO ice
+      !! present (default `conc_config`) or disabled.
+      integer, intent(in) :: ratio
+      logical, intent(in) :: ice_on
+      character(len=*), intent(in) :: list
+      character(len=:), allocatable :: nml
+      character(len=2) :: sr
+      write (sr, '(i0)') ratio
+      nml = "&sim_nml sim_type = 'ocean' /"//NL// &
+            "&grid_nml nx = 6, ny = 6, nghost = 3, dx = 1.0, dy = 1.0 /"//NL// &
+            "&time_nml t_end = 4800.0, dt_fixed = 600.0, start_date = '2000-06-21' /"//NL// &
+            "&nonhydrostatic_nml nz_layers = 4 /"//NL// &
+            "&ocean_bt_nml auto_n_inner = .true., split_scheme = 'pred_corr' /"//NL// &
+            "&ocean_diag_nml enabled = .false. /"//NL// &
+            "&ocean_eos_nml eos = 'wright' /"//NL// &
+            "&ocean_thermo_nml enable_thermodynamics = .true. /"//NL// &
+            "&ocean_forcing_nml enable_components = .true. /"//NL// &
+            "&ocean_bulk_flux_nml enable = .true., n_iter = 5, z_wind = 10.0, z_ta = 10.0 /"//NL// &
+            "&tracer_nml initial_temperature = 15.0, initial_salinity = 35.0 /"//NL// &
+            atm_group(list)// &
+            "&ocean_vmix_nml dt_therm_ratio = "//trim(sr)//" /"//NL// &
+            "&ocean_ice_nml enable = "//trim(merge(".true. ", ".false.", ice_on))//" /"//NL// &
+            "&ocean_grid_nml grid_config = 'spherical', lon_west = 0.0, lat_south = 20.0, "// &
+            "rad_earth = 6.371e6, coriolis_scheme = 'planetary' /"//NL// &
+            "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
+            "&ocean_topo_nml topo_config = 'flat', max_depth = 100.0 /"//NL// &
+            "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL// &
+            "&output_nml output_to_file = .false. /"//NL
+   end function probe_nml
+
+   subroutine run_probe(ratio, ice_on, list, nsteps, t_top, ok)
+      !! Run the probe `nsteps` steps; return the surface-layer temperature.
+      integer, intent(in) :: ratio, nsteps
+      logical, intent(in) :: ice_on
+      character(len=*), intent(in) :: list
+      real(wp), allocatable, intent(out) :: t_top(:, :)
+      logical, intent(out) :: ok
+      type(ocean_engine_t), target :: e
+      type(config_t) :: cfg
+      real(wp) :: t
+      integer :: nz, it
+
+      call make_engine(e, cfg, probe_nml(ratio, ice_on, list), ok)
+      if (.not. ok) return
+      t = 0.0_wp
+      call advance(e, cfg, t, nsteps, ok)
+      if (ok) then
+         nz = e%state%multilayer%nz_ml
+         it = e%state%multilayer%idx_temperature
+         !$acc update self(e%state%multilayer%tracers(it)%c)
+         t_top = e%state%multilayer%tracers(it)%c(:, :, nz)
+      end if
+      call engine_exit_data(e)
+      call engine_teardown(e)
+   end subroutine run_probe
+
+   subroutine test_engine_icefree_sw(error)
+      !! The regression for "ice enabled => the ocean receives no shortwave".
+      !! Surface-layer warming caused by the shortwave (T at rsds = 400 minus
+      !! T at rsds = 0) must be the SAME with ice enabled (no ice present) as
+      !! with ice disabled, at `dt_therm_ratio` 1 and 3 -- and nonzero.
+      !! Before the fix the ice-enabled warming was exactly 0.
+      type(error_type), allocatable, intent(out) :: error
+      real(wp), allocatable :: t4_on(:, :), t0_on(:, :), t4_off(:, :), t0_off(:, :)
+      real(wp) :: d_on, d_off
+      integer :: ratios(2), k, ip, jp
+      logical :: ok
+
+      call write_atm_file(ATM_FILE, ATM_LIST, 288.0_wp, 6.0e-3_wp, 400.0_wp)
+      call write_atm_file(ATM_SW0_FILE, ATM_SW0_LIST, 288.0_wp, 6.0e-3_wp, 0.0_wp)
+      ratios = [1, 3]
+      do k = 1, 2
+         call run_probe(ratios(k), .true., ATM_LIST, 6, t4_on, ok)
+         call check(error, ok, "probe (ice on, sw 400) failed")
+         if (allocated(error)) exit
+         call run_probe(ratios(k), .true., ATM_SW0_LIST, 6, t0_on, ok)
+         call check(error, ok, "probe (ice on, sw 0) failed")
+         if (allocated(error)) exit
+         call run_probe(ratios(k), .false., ATM_LIST, 6, t4_off, ok)
+         call check(error, ok, "probe (ice off, sw 400) failed")
+         if (allocated(error)) exit
+         call run_probe(ratios(k), .false., ATM_SW0_LIST, 6, t0_off, ok)
+         call check(error, ok, "probe (ice off, sw 0) failed")
+         if (allocated(error)) exit
+         ip = 3 + 3
+         jp = 3 + 3
+         d_on = t4_on(ip, jp) - t0_on(ip, jp)
+         d_off = t4_off(ip, jp) - t0_off(ip, jp)
+         call check(error, d_off > 1.0e-6_wp, "precondition: shortwave warms the ice-disabled run")
+         if (allocated(error)) exit
+         call check(error, abs(d_on - d_off) <= 1.0e-9_wp*d_off, &
+                    "ice-enabled shortwave warming equals the ice-disabled value (ratio "// &
+                    itoa(ratios(k))//")")
+         if (allocated(error)) exit
+      end do
+      call delete_file(ATM_FILE)
+      call delete_file(ATM_LIST)
+      call delete_file(ATM_SW0_FILE)
+      call delete_file(ATM_SW0_LIST)
+   end subroutine test_engine_icefree_sw
 
    subroutine ice_round_trip(error, label)
       !! N_WRITE = 5 (odd) with `dt_therm_ratio = 2`: the checkpoint lands

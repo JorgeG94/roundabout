@@ -1,5 +1,10 @@
 !! Barotropic-substep kernels for the split-explicit ocean driver.
 module rdb_barotropic_substep
+   !! **Reproducibility.**  The tidal open-boundary elevation target uses
+   !! `safe_cos` (`rdb_safe_math`) on a phase reduced with `modulo(., 2 pi)`,
+   !! never the intrinsic `cos`, so its value is independent of vector position
+   !! and of the model time at which it is evaluated.
+   !!
    !! Two kernels:
    !!
    !!   `barotropic_substep_linear`  — linearized shallow-water with closed
@@ -45,7 +50,8 @@ module rdb_barotropic_substep
    !! 15.1 + `-O3 -funroll-loops` was observed to corrupt the flux
    !! divergence when h_face was reused across `if/else` branches.
    !! See `feedback_gfortran_local_reassign.md` in claude memory.
-   use rdb_constants, only: wp, FROUDE_CAP, H_DIV_EPS
+   use rdb_constants, only: wp, FROUDE_CAP, H_DIV_EPS, TWO_PI
+   use rdb_safe_math, only: safe_cos
    use rdb_grid, only: hgrid_t
    use rdb_ocean_metrics, only: ocean_metrics_t
    use rdb_barotropic_workstate, only: barotropic_workstate_t
@@ -53,13 +59,16 @@ module rdb_barotropic_substep
    ! rdb_coriolis_adv removed: cor was demoted to a plain f_corner(:,:) dummy
    use rdb_ocean_boundary_types, only: ocean_bc_state_t, OBC_WALL, OBC_OPEN, OBC_CLAMPED, &
                                        OBC_TIDAL, OBC_CHAPMAN, OBC_PERIODIC, OBC_TRIPOLAR_FOLD
-   use rdb_ocean_halo, only: ocean_halo_bt_group_2d, ocean_halo_face_x, &
+   use rdb_ocean_halo, only: ocean_halo_bt_group_2d, ocean_halo_face_x, ocean_halo_face_y, &
                              ocean_halo_bt_group_2d_wide, &
                              ocean_halo_is_decomposed, &
-                             ocean_halo_is_decomposed_x, ocean_halo_is_decomposed_y
+                             ocean_halo_is_decomposed_x, ocean_halo_is_decomposed_y, &
+                             ocean_halo_global_extent
+   use rdb_halo, only: halo_allreduce_sum_vec
    use rdb_ocean_halo_counters, only: oh_count_bt_u_mid, &
                                       oh_count_suppress_on, oh_count_suppress_off
    use rdb_profiler, only: profiler_start, profiler_stop
+   use, intrinsic :: ieee_arithmetic, only: ieee_value, ieee_quiet_nan
    use rdb_ocean_fold_exchange, only: ocean_fold_is_distributed, ocean_fold_begin, &
                                       ocean_fold_pack, ocean_fold_exchange, &
                                       ocean_fold_unpack, ocean_fold_end, &
@@ -70,8 +79,145 @@ module rdb_barotropic_substep
    public :: barotropic_substep_linear
    public :: barotropic_substep_nonlinear
    public :: barotropic_substep_nonlinear_interior
+   public :: chapman_setup_corner
+   public :: chapman_workspace_cleanup
+
+   real(wp), allocatable :: ch_lbuf(:)
+      !! Chapman edge line at GLOBAL index (device-mapped; host mirror).
+   real(wp), allocatable :: ch_gbuf(:)
+      !! Chapman edge line after the cross-rank sum (host only).
 
 contains
+
+   pure function tidal_cos(phase) result(c)
+      !! `cos(phase)` for the tidal OBC target.  `phase = omega*t + ...` grows
+      !! with model time, so it is first reduced to [0, 2 pi) (`modulo`: a
+      !! deterministic host scalar, computed once per constituent per call, so
+      !! every rank gets the same value) and then passed to the position-
+      !! independent `safe_cos` (valid to 1.6e6 rad; an M2 phase reaches that in
+      !! ~120 model years).  Cody & Waite (1980), ch. 8.
+      real(wp), intent(in) :: phase
+      real(wp) :: c
+      c = safe_cos(modulo(phase, TWO_PI))
+   end function tidal_cos
+
+   subroutine chapman_workspace_ensure(n)
+      !! Lazy-allocate the persistent Chapman line buffers (host + device
+      !! mirror for `ch_lbuf`, host-only `ch_gbuf`) to at least `n` entries.
+      !! Released by `chapman_workspace_cleanup`.
+      integer, intent(in) :: n
+
+      if (allocated(ch_lbuf)) then
+         if (size(ch_lbuf) >= n) return
+         call chapman_workspace_cleanup()
+      end if
+      allocate (ch_lbuf(n), ch_gbuf(n))
+      ch_lbuf = 0.0_wp
+      ch_gbuf = 0.0_wp
+      !$acc enter data copyin(ch_lbuf)
+   end subroutine chapman_workspace_ensure
+
+   subroutine chapman_workspace_cleanup()
+      !! Release the Chapman line buffers (device mirror first).
+      if (allocated(ch_lbuf)) then
+         !$acc exit data delete(ch_lbuf)
+         deallocate (ch_lbuf)
+      end if
+      if (allocated(ch_gbuf)) deallocate (ch_gbuf)
+   end subroutine chapman_workspace_cleanup
+
+   pure function chapman_line_sum(x, n) result(s)
+      !! Sequential, in-index-order sum of the global edge line.  ONE
+      !! non-inlined instance serves every Chapman edge and the end-of-call
+      !! refresh, so the summation order is a single compiled order that
+      !! cannot differ between call sites or rank counts.
+      integer, intent(in) :: n
+      real(wp), intent(in) :: x(n)
+      real(wp) :: s
+      integer :: i
+      !dir$ noinline
+      !gcc$ attributes noinline :: chapman_line_sum
+      s = 0.0_wp
+      ! No vectorisation (no reassociated partial sums).  Per compiler, since
+      ! nvfortran reads a preceding `dir$ novector` as cancelling its own
+      ! `pgi$l novector`: gfortran needs none (no FP reassociation without
+      ! fast-math).
+#ifdef __NVCOMPILER
+      !pgi$l novector
+#elif defined(__INTEL_LLVM_COMPILER) || defined(__INTEL_COMPILER)
+      !dir$ novector
+#endif
+      do i = 1, n
+         s = s + x(i)
+      end do
+   end function chapman_line_sum
+
+   subroutine chapman_edge_mean(n, mean)
+      !! Global Chapman edge mean from the line already written at its
+      !! GLOBAL index into `ch_lbuf(1:n)` (device) by the caller's kernel:
+      !! pull the line, ONE collective sums it (exactly one nonzero addend
+      !! per slot; identity on one rank), then `chapman_line_sum` and the
+      !! division by the global count `n`.  The mean is the same expression
+      !! for every edge, split or not, at any rank count.
+      !! COLLECTIVE: all ranks must call it, in the same order.
+      integer, intent(in) :: n
+      real(wp), intent(out) :: mean
+
+      !$acc update self(ch_lbuf(1:n))
+      if (ocean_halo_is_decomposed()) then
+         call halo_allreduce_sum_vec(ch_lbuf, ch_gbuf, n)
+      else
+         ! One rank (or no halo module, direct kernel callers): the line is
+         ! already global.
+         ch_gbuf(1:n) = ch_lbuf(1:n)
+      end if
+      mean = chapman_line_sum(ch_gbuf, n)/real(n, wp)
+   end subroutine chapman_edge_mean
+
+   subroutine chapman_setup_corner(grid, bt_H_ref, idx_cu, bc)
+      !! Configure-time (static data): latch `bt_H_ref` and `idx_cu` at the
+      !! GLOBAL south-west corner cell (the Chapman phase-speed scale) into
+      !! `bc`, delivered to every rank from the rank that owns it (all
+      !! others add +0).  The substep then reads two scalars.  COLLECTIVE
+      !! when decomposed: every rank must call it.
+      type(hgrid_t), intent(in) :: grid
+      real(wp), intent(in) :: bt_H_ref(grid%nx_total, grid%ny_total)
+      real(wp), intent(in) :: idx_cu(grid%nx_total + 1, grid%ny_total)
+      type(ocean_bc_state_t), intent(inout) :: bc
+      integer :: i0, j0, nxg, nyg
+      real(wp) :: l(2), g(2)
+
+      l = 0.0_wp
+      if (.not. ocean_halo_is_decomposed()) then
+         l(1) = bt_H_ref(grid%nghost + 1, grid%nghost + 1)
+         l(2) = idx_cu(grid%nghost + 1, grid%nghost + 1)
+         g = l
+      else
+         call ocean_halo_global_extent(i0, j0, nxg, nyg)
+         if (i0 == 1 .and. j0 == 1) then
+            l(1) = bt_H_ref(grid%nghost + 1, grid%nghost + 1)
+            l(2) = idx_cu(grid%nghost + 1, grid%nghost + 1)
+         end if
+         call halo_allreduce_sum_vec(l, g, 2)
+      end if
+      bc%chapman_h_corner = g(1)
+      bc%chapman_idx_corner = g(2)
+      bc%chapman_corner_ready = .true.
+   end subroutine chapman_setup_corner
+
+   pure function poison_value(mode, ig, jg) result(v)
+      !! Debug garbage for the in-halo reach test (`bt_work%inhalo_poison`):
+      !! a large finite, global-index-dependent (hence rank-dependent) value,
+      !! or a quiet NaN for `mode == 2`.
+      !$acc routine seq
+      integer, intent(in) :: mode, ig, jg
+      real(wp) :: v
+      if (mode == 2) then
+         v = ieee_value(1.0_wp, ieee_quiet_nan)
+      else
+         v = 10.0_wp*real(1 + mod(abs(7*ig + 13*jg), 11), wp)
+      end if
+   end function poison_value
 
    pure subroutine barotropic_substep_linear(grid, metrics, bt_work, force_u, force_v, n_steps, dt_inner, &
                                              eta_forcing)
@@ -478,7 +624,9 @@ contains
       real(wp) :: t_now
       integer :: nc
       real(wp) :: eta_int_mean_w, eta_int_mean_e, eta_int_mean_s, eta_int_mean_n
-      real(wp) :: chapman_alpha
+      real(wp) :: chapman_alpha, h_corner, idx_corner
+      integer :: gi0, gj0, gnx, gny, jg, jl
+         !! Chapman: global offset + extent of the decomposed domain.
       ! Full-Flather (§4, v2): pre-cached scalars for the interior DC.
       logical  :: use_ff       !! .true. = full-Flather form, .false. = legacy.
       real(wp) :: ext_u_w, ext_u_e, ext_v_s, ext_v_n  !! Exterior velocities.
@@ -536,6 +684,12 @@ contains
          !! reduces to the v1 constant, bit-identical.
       logical :: in_band
          !! Pass-1 per-iteration local: cell lies inside the effective band.
+      integer :: inhalo_k, inhalo_phase
+         !! In-halo march (`bt_work%inhalo_stride`, 0 = off): substeps per
+         !! ghost exchange; substeps since the last exchange.  Host integers, tested once
+         !! per substep.
+      logical :: pz_w, pz_e, pz_s, pz_n
+         !! Debug poison: which sides are MPI seams.
 
       nx = grid%nx_total
       ny = grid%ny_total
@@ -551,6 +705,8 @@ contains
       if (present(bt_halo)) marchin = bt_halo > 0
       num_cycles = 0
       if (marchin) num_cycles = bt_halo/2
+      inhalo_k = bt_work%inhalo_stride
+      if (marchin) inhalo_k = 0
 
       ! Seed the BEBT velocity-projection snapshots from the incoming
       ! state so the first substep's projection is a no-op
@@ -664,41 +820,41 @@ contains
          do nc = 1, bc%west%n_tidal_constituents
             if (use_nodal_bc) then
                eta_target_w = eta_target_w + bc%west%tidal_fnodal(nc)*bc%west%tidal_amp(nc)* &
-                              cos(bc%west%tidal_omega(nc)*t_now + bc%west%tidal_arg(nc) &
-                                  - bc%west%tidal_phase(nc))
+                              tidal_cos(bc%west%tidal_omega(nc)*t_now + bc%west%tidal_arg(nc) &
+                                        - bc%west%tidal_phase(nc))
             else
                eta_target_w = eta_target_w + bc%west%tidal_amp(nc)* &
-                              cos(bc%west%tidal_omega(nc)*t_now + bc%west%tidal_phase(nc))
+                              tidal_cos(bc%west%tidal_omega(nc)*t_now + bc%west%tidal_phase(nc))
             end if
          end do
          do nc = 1, bc%east%n_tidal_constituents
             if (use_nodal_bc) then
                eta_target_e = eta_target_e + bc%east%tidal_fnodal(nc)*bc%east%tidal_amp(nc)* &
-                              cos(bc%east%tidal_omega(nc)*t_now + bc%east%tidal_arg(nc) &
-                                  - bc%east%tidal_phase(nc))
+                              tidal_cos(bc%east%tidal_omega(nc)*t_now + bc%east%tidal_arg(nc) &
+                                        - bc%east%tidal_phase(nc))
             else
                eta_target_e = eta_target_e + bc%east%tidal_amp(nc)* &
-                              cos(bc%east%tidal_omega(nc)*t_now + bc%east%tidal_phase(nc))
+                              tidal_cos(bc%east%tidal_omega(nc)*t_now + bc%east%tidal_phase(nc))
             end if
          end do
          do nc = 1, bc%south%n_tidal_constituents
             if (use_nodal_bc) then
                eta_target_s = eta_target_s + bc%south%tidal_fnodal(nc)*bc%south%tidal_amp(nc)* &
-                              cos(bc%south%tidal_omega(nc)*t_now + bc%south%tidal_arg(nc) &
-                                  - bc%south%tidal_phase(nc))
+                              tidal_cos(bc%south%tidal_omega(nc)*t_now + bc%south%tidal_arg(nc) &
+                                        - bc%south%tidal_phase(nc))
             else
                eta_target_s = eta_target_s + bc%south%tidal_amp(nc)* &
-                              cos(bc%south%tidal_omega(nc)*t_now + bc%south%tidal_phase(nc))
+                              tidal_cos(bc%south%tidal_omega(nc)*t_now + bc%south%tidal_phase(nc))
             end if
          end do
          do nc = 1, bc%north%n_tidal_constituents
             if (use_nodal_bc) then
                eta_target_n = eta_target_n + bc%north%tidal_fnodal(nc)*bc%north%tidal_amp(nc)* &
-                              cos(bc%north%tidal_omega(nc)*t_now + bc%north%tidal_arg(nc) &
-                                  - bc%north%tidal_phase(nc))
+                              tidal_cos(bc%north%tidal_omega(nc)*t_now + bc%north%tidal_arg(nc) &
+                                        - bc%north%tidal_phase(nc))
             else
                eta_target_n = eta_target_n + bc%north%tidal_amp(nc)* &
-                              cos(bc%north%tidal_omega(nc)*t_now + bc%north%tidal_phase(nc))
+                              tidal_cos(bc%north%tidal_omega(nc)*t_now + bc%north%tidal_phase(nc))
             end if
          end do
 
@@ -714,34 +870,76 @@ contains
          ! (perfect outflow), α = 0 ⇒ wall holds eta_old (closed-ish).
          if (bc_w == OBC_CHAPMAN .or. bc_e == OBC_CHAPMAN .or. &
              bc_s == OBC_CHAPMAN .or. bc_n == OBC_CHAPMAN) then
+            if (bc%chapman_corner_ready) then
+               h_corner = bc%chapman_h_corner
+               idx_corner = bc%chapman_idx_corner
+            else
+               ! Direct kernel callers (unit tests) that never ran engine
+               ! setup: the tile's own corner (== the global one on 1 rank).
+               h_corner = bt_H_ref(grid%nghost + 1, grid%nghost + 1)
+               idx_corner = idx_cu(grid%nghost + 1, grid%nghost + 1)
+            end if
             chapman_alpha = min(1.0_wp, &
-                                sqrt(G*max(bt_H_ref(grid%nghost + 1, grid%nghost + 1), 1.0e-6_wp))* &
-                                real(n_steps, wp)*dt_inner*idx_cu(grid%nghost + 1, grid%nghost + 1))
+                                sqrt(G*max(h_corner, 1.0e-6_wp))* &
+                                real(n_steps, wp)*dt_inner*idx_corner)
+            call ocean_halo_global_extent(gi0, gj0, gnx, gny)
+            if (gnx <= 0 .or. gny <= 0) then
+               ! Halo module not initialised (direct kernel callers).
+               gi0 = 1
+               gj0 = 1
+               gnx = grid%nx_phys
+               gny = grid%ny_phys
+            end if
+            call chapman_workspace_ensure(max(gnx, gny))
             if (bc_w == OBC_CHAPMAN) then
-               eta_int_mean_w = sum(bt_eta(i_w_int, &
-                                           grid%nghost + 1:grid%nghost + grid%ny_phys))/ &
-                                real(grid%ny_phys, wp)
+               do concurrent(jg=1:gny) local(jl)
+                  jl = jg - gj0 + 1
+                  if (has_w .and. jl >= 1 .and. jl <= grid%ny_phys) then
+                     ch_lbuf(jg) = bt_eta(i_w_int, grid%nghost + jl)
+                  else
+                     ch_lbuf(jg) = 0.0_wp
+                  end if
+               end do
+               call chapman_edge_mean(gny, eta_int_mean_w)
                eta_target_w = bc%eta_old_chapman_w + &
                               chapman_alpha*(eta_int_mean_w - bc%eta_old_chapman_w)
             end if
             if (bc_e == OBC_CHAPMAN) then
-               eta_int_mean_e = sum(bt_eta(i_e_int, &
-                                           grid%nghost + 1:grid%nghost + grid%ny_phys))/ &
-                                real(grid%ny_phys, wp)
+               do concurrent(jg=1:gny) local(jl)
+                  jl = jg - gj0 + 1
+                  if (has_e .and. jl >= 1 .and. jl <= grid%ny_phys) then
+                     ch_lbuf(jg) = bt_eta(i_e_int, grid%nghost + jl)
+                  else
+                     ch_lbuf(jg) = 0.0_wp
+                  end if
+               end do
+               call chapman_edge_mean(gny, eta_int_mean_e)
                eta_target_e = bc%eta_old_chapman_e + &
                               chapman_alpha*(eta_int_mean_e - bc%eta_old_chapman_e)
             end if
             if (bc_s == OBC_CHAPMAN) then
-               eta_int_mean_s = sum(bt_eta(grid%nghost + 1:grid%nghost + grid%nx_phys, &
-                                           j_s_int))/ &
-                                real(grid%nx_phys, wp)
+               do concurrent(jg=1:gnx) local(jl)
+                  jl = jg - gi0 + 1
+                  if (has_s .and. jl >= 1 .and. jl <= grid%nx_phys) then
+                     ch_lbuf(jg) = bt_eta(grid%nghost + jl, j_s_int)
+                  else
+                     ch_lbuf(jg) = 0.0_wp
+                  end if
+               end do
+               call chapman_edge_mean(gnx, eta_int_mean_s)
                eta_target_s = bc%eta_old_chapman_s + &
                               chapman_alpha*(eta_int_mean_s - bc%eta_old_chapman_s)
             end if
             if (bc_n == OBC_CHAPMAN) then
-               eta_int_mean_n = sum(bt_eta(grid%nghost + 1:grid%nghost + grid%nx_phys, &
-                                           j_n_int))/ &
-                                real(grid%nx_phys, wp)
+               do concurrent(jg=1:gnx) local(jl)
+                  jl = jg - gi0 + 1
+                  if (has_n .and. jl >= 1 .and. jl <= grid%nx_phys) then
+                     ch_lbuf(jg) = bt_eta(grid%nghost + jl, j_n_int)
+                  else
+                     ch_lbuf(jg) = 0.0_wp
+                  end if
+               end do
+               call chapman_edge_mean(gnx, eta_int_mean_n)
                eta_target_n = bc%eta_old_chapman_n + &
                               chapman_alpha*(eta_int_mean_n - bc%eta_old_chapman_n)
             end if
@@ -1437,7 +1635,7 @@ contains
          ! Mid-substep u seam exchange (D4 mirror of the periodic u ghost-wrap
          ! above).  Absorbed at bt_halo>0: the 2-cell/substep stencil budget
          ! already covers Pass 2c's u_at_v consumption inside the wide band.
-         if (.not. marchin .and. ocean_halo_is_decomposed()) then
+         if (.not. marchin .and. inhalo_k == 0 .and. ocean_halo_is_decomposed()) then
             call profiler_start("ocean_comms_bt")
             !$acc wait(1)
             call oh_count_bt_u_mid()
@@ -1719,7 +1917,39 @@ contains
          ! num_cycles substeps (bt_halo/2); skip the last substep (n==n_steps)
          ! since copy_out immediately follows.  The wide band absorbs the
          ! mid-substep u exchange.
-         if (marchin) then
+         if (inhalo_k > 0) then
+            ! In-halo march: exchange every inhalo_k substeps and always on
+            ! the last one (the stage reads exact end-state ghosts).  The
+            ! exchange also carries the previous-substep velocities that
+            ! Pass 1's BEBT projection reads in the ghost band (stashed
+            ! locally, hence inexact there after a skipped exchange).
+            inhalo_phase = mod(n, inhalo_k)
+            if (inhalo_phase == 0 .or. n == n_steps) then
+               call profiler_start("ocean_comms_bt")
+               !$acc wait(1)
+               call ocean_halo_bt_group_2d(bt_eta, bt_ubt, bt_vbt)
+               if (bebt > 0.0_wp .and. n < n_steps .and. ocean_halo_is_decomposed()) then
+                  ! Out-of-line (reaches the arrays through `bt_work`) so the
+                  ! knob-off path hands no new array to an external routine.
+                  call inhalo_exchange_prev(bt_work)
+               end if
+               call profiler_stop("ocean_comms_bt")
+            else if (bt_work%inhalo_poison > 0) then
+               ! Test hook (RDB_BT_INHALO_POISON, read once at setup): prove
+               ! the reach by overwriting the ghost layers the march declares
+               ! invalid with rank-dependent garbage.  Owned results must not
+               ! change.
+               pz_w = ocean_halo_is_decomposed_x() .and. (.not. has_w .or. per_x_tag)
+               pz_e = ocean_halo_is_decomposed_x() .and. (.not. has_e .or. per_x_tag)
+               pz_s = ocean_halo_is_decomposed_y() .and. (.not. has_s .or. per_y_tag)
+               pz_n = ocean_halo_is_decomposed_y() .and. (.not. has_n .or. per_y_tag)
+               call inhalo_poison_ghosts(nx, ny, bt_eta, bt_ubt, bt_vbt, &
+                                         mod(bt_work%inhalo_poison, 10), &
+                                         inhalo_phase + bt_work%inhalo_poison/10, &
+                                         pz_w, pz_e, pz_s, pz_n, &
+                                         grid%i_offset_global, grid%j_offset_global)
+            end if
+         else if (marchin) then
             if (mod(n, num_cycles) == 0 .and. n < n_steps) then
                call profiler_start("ocean_comms_bt")
                !$acc wait(1)
@@ -1777,34 +2007,68 @@ contains
 
       ! Refresh the persistent Chapman state from the end-of-step η.
       ! Next outer-step's substep block reads this as `eta_old` when
-      ! computing the radiation target.  All host-side: the scalar
-      ! `bc%eta_old_chapman_*` is consumed by host code at the top of
-      ! the next substep-block call and never read from inside a `do
-      ! concurrent` (where it would need a device copy).  Pull
-      ! `bt_eta_end` to host so the reduction reads fresh values.
+      ! computing the radiation target.  For each Chapman edge a device
+      ! kernel writes the edge's η line at its GLOBAL index into the
+      ! persistent line buffer `ch_lbuf` (this rank's owned cells only, +0
+      ! elsewhere), `chapman_edge_mean` pulls that line (`update self`),
+      ! sums it across ranks when decomposed, and takes the in-order mean.
+      ! The scalar `bc%eta_old_chapman_*` is host state, never read inside
+      ! a `do concurrent`.
       if (present(bc)) then
          if (bc_w == OBC_CHAPMAN .or. bc_e == OBC_CHAPMAN .or. &
              bc_s == OBC_CHAPMAN .or. bc_n == OBC_CHAPMAN) then
-            !$acc update self(bt_eta_end)
+            call ocean_halo_global_extent(gi0, gj0, gnx, gny)
+            if (gnx <= 0 .or. gny <= 0) then
+               ! Halo module not initialised (direct kernel callers).
+               gi0 = 1
+               gj0 = 1
+               gnx = grid%nx_phys
+               gny = grid%ny_phys
+            end if
+            call chapman_workspace_ensure(max(gnx, gny))
             if (bc_w == OBC_CHAPMAN) then
-               bc%eta_old_chapman_w = sum(bt_eta_end(i_w_int, &
-                                                     grid%nghost + 1:grid%nghost + grid%ny_phys))/ &
-                                      real(grid%ny_phys, wp)
+               do concurrent(jg=1:gny) local(jl)
+                  jl = jg - gj0 + 1
+                  if (has_w .and. jl >= 1 .and. jl <= grid%ny_phys) then
+                     ch_lbuf(jg) = bt_eta_end(i_w_int, grid%nghost + jl)
+                  else
+                     ch_lbuf(jg) = 0.0_wp
+                  end if
+               end do
+               call chapman_edge_mean(gny, bc%eta_old_chapman_w)
             end if
             if (bc_e == OBC_CHAPMAN) then
-               bc%eta_old_chapman_e = sum(bt_eta_end(i_e_int, &
-                                                     grid%nghost + 1:grid%nghost + grid%ny_phys))/ &
-                                      real(grid%ny_phys, wp)
+               do concurrent(jg=1:gny) local(jl)
+                  jl = jg - gj0 + 1
+                  if (has_e .and. jl >= 1 .and. jl <= grid%ny_phys) then
+                     ch_lbuf(jg) = bt_eta_end(i_e_int, grid%nghost + jl)
+                  else
+                     ch_lbuf(jg) = 0.0_wp
+                  end if
+               end do
+               call chapman_edge_mean(gny, bc%eta_old_chapman_e)
             end if
             if (bc_s == OBC_CHAPMAN) then
-               bc%eta_old_chapman_s = sum(bt_eta_end(grid%nghost + 1:grid%nghost + grid%nx_phys, &
-                                                     j_s_int))/ &
-                                      real(grid%nx_phys, wp)
+               do concurrent(jg=1:gnx) local(jl)
+                  jl = jg - gi0 + 1
+                  if (has_s .and. jl >= 1 .and. jl <= grid%nx_phys) then
+                     ch_lbuf(jg) = bt_eta_end(grid%nghost + jl, j_s_int)
+                  else
+                     ch_lbuf(jg) = 0.0_wp
+                  end if
+               end do
+               call chapman_edge_mean(gnx, bc%eta_old_chapman_s)
             end if
             if (bc_n == OBC_CHAPMAN) then
-               bc%eta_old_chapman_n = sum(bt_eta_end(grid%nghost + 1:grid%nghost + grid%nx_phys, &
-                                                     j_n_int))/ &
-                                      real(grid%nx_phys, wp)
+               do concurrent(jg=1:gnx) local(jl)
+                  jl = jg - gi0 + 1
+                  if (has_n .and. jl >= 1 .and. jl <= grid%nx_phys) then
+                     ch_lbuf(jg) = bt_eta_end(grid%nghost + jl, j_n_int)
+                  else
+                     ch_lbuf(jg) = 0.0_wp
+                  end if
+               end do
+               call chapman_edge_mean(gnx, bc%eta_old_chapman_n)
             end if
          end if
       end if
@@ -1829,7 +2093,25 @@ contains
       type(ocean_bc_state_t), intent(inout), optional :: bc
       real(wp), intent(in), optional :: t
       real(wp), intent(in), optional :: eta_forcing(grid%nx_total, grid%ny_total)
+      logical :: inhalo
+         !! In-halo march active on a decomposed run (entry/exit exchanges).
 
+      inhalo = bt_work%inhalo_stride > 0 .and. ocean_halo_is_decomposed()
+      if (inhalo) then
+         ! In-halo march entry: every ghost-band input of the first substeps
+         ! must be an exact image of its owner (the skipped exchanges never
+         ! refresh them).  Once per solve: the state, the slow force and the
+         ! bt_rem weights.  (One rank: the fast loop's own periodic wrap
+         ! covers it, the off path exchanges none of these.)
+         call profiler_start("ocean_comms_bt")
+         !$acc wait(1)
+         call ocean_halo_bt_group_2d(bt_work%bt_eta, bt_work%bt_ubt, bt_work%bt_vbt)
+         call ocean_halo_face_x(bt_work%F_bt_u_fast)
+         call ocean_halo_face_y(bt_work%F_bt_v_fast)
+         call ocean_halo_face_x(bt_work%bt_rem_u)
+         call ocean_halo_face_y(bt_work%bt_rem_v)
+         call profiler_stop("ocean_comms_bt")
+      end if
       call barotropic_substep_nonlinear(grid, bt_work, &
                                         bt_work%F_bt_u_fast, bt_work%F_bt_v_fast, &
                                         n_steps, dt_inner, &
@@ -1852,6 +2134,61 @@ contains
                                         iarea_bu=metrics%iareaBu, iarea_t=metrics%iareaT, &
                                         idx_cu=metrics%idxCu, idy_cv=metrics%idyCv, &
                                         bc=bc, t=t, eta_forcing=eta_forcing)
+      if (inhalo) then
+         ! The time-mean transports accumulated the inexact ghost march of
+         ! the skipped substeps; the slow continuity renormalises on them.
+         call profiler_start("ocean_comms_bt")
+         call ocean_halo_face_x(bt_work%bt_uhbt)
+         call ocean_halo_face_y(bt_work%bt_vhbt)
+         call profiler_stop("ocean_comms_bt")
+      end if
    end subroutine barotropic_substep_nonlinear_interior
+
+   subroutine inhalo_exchange_prev(bt_work)
+      !! In-halo march: exchange the previous-substep velocities that Pass 1's
+      !! BEBT projection reads in the ghost band (stashed locally, hence
+      !! inexact there after a skipped exchange).  Separate from the hot
+      !! routine on purpose: handing `bt_ubt_prev`/`bt_vbt_prev` to an external
+      !! routine from inside it would pessimise its `do concurrent` kernels
+      !! even with the knob off.
+      type(barotropic_workstate_t), intent(inout) :: bt_work
+      call ocean_halo_face_x(bt_work%bt_ubt_prev)
+      call ocean_halo_face_y(bt_work%bt_vbt_prev)
+   end subroutine inhalo_exchange_prev
+
+   subroutine inhalo_poison_ghosts(nx, ny, bt_eta, bt_ubt, bt_vbt, pmode, pz, &
+                                   pz_w, pz_e, pz_s, pz_n, ioff, joff)
+      !! Test hook behind `RDB_BT_INHALO_POISON` (1 finite garbage, 2 NaN,
+      !! +10 per extra layer): overwrite the `pz` outer ghost layers at MPI
+      !! seams with rank-dependent garbage between exchanges.
+      integer, intent(in) :: nx, ny, pmode, pz, ioff, joff
+      logical, intent(in) :: pz_w, pz_e, pz_s, pz_n
+      real(wp), intent(inout) :: bt_eta(nx, ny)
+      real(wp), intent(inout) :: bt_ubt(nx + 1, ny)
+      real(wp), intent(inout) :: bt_vbt(nx, ny + 1)
+      integer :: i, j
+      !$acc wait(1)
+      !$acc kernels async(1) present(bt_eta, bt_ubt, bt_vbt)
+      do concurrent(j=1:ny, i=1:nx)
+         if ((pz_w .and. i <= pz) .or. (pz_e .and. i > nx - pz) .or. &
+             (pz_s .and. j <= pz) .or. (pz_n .and. j > ny - pz)) then
+            bt_eta(i, j) = poison_value(pmode, i + ioff, j + joff)
+         end if
+      end do
+      do concurrent(j=1:ny, i=1:nx + 1)
+         if ((pz_w .and. i <= pz + 1) .or. (pz_e .and. i > nx - pz) .or. &
+             (pz_s .and. j <= pz) .or. (pz_n .and. j > ny - pz)) then
+            bt_ubt(i, j) = poison_value(pmode, i + ioff, j + joff + 1000)
+         end if
+      end do
+      do concurrent(j=1:ny + 1, i=1:nx)
+         if ((pz_w .and. i <= pz + 1) .or. (pz_e .and. i > nx - pz - 1) .or. &
+             (pz_s .and. j <= pz + 1) .or. (pz_n .and. j > ny - pz)) then
+            bt_vbt(i, j) = poison_value(pmode, i + ioff + 2000, j + joff)
+         end if
+      end do
+      !$acc end kernels
+      !$acc wait(1)
+   end subroutine inhalo_poison_ghosts
 
 end module rdb_barotropic_substep

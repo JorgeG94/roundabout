@@ -1,5 +1,9 @@
 !! Sponge relaxation kernel.
 module rdb_ocean_sponge
+   !! **Reproducibility.**  Every exp/cos/atan here is the module-local
+   !! `rdb_sm_*` body (`rdb_safe_math_*.inc`), so a cell's value does not depend
+   !! on its vector position or tile.
+   !!
    !! Two sponge implementations share this module.
    !!
    !! LEGACY BAND PATH (`ocean_sponge_apply` / `ocean_sponge_apply_tracers`,
@@ -50,7 +54,7 @@ module rdb_ocean_sponge
    !! Divergences from MOM6's ALE-sponge / sponge approach (deliberate,
    !! documented per CLAUDE.md "cite the paper not other codebases" — this
    !! list records WHERE we differ, not MOM6's implementation):
-   !!   1. Exponential relaxation `decay = exp(-Idamp*dt); phi <-
+   !!   1. Exponential relaxation `decay = rdb_sm_exp(-Idamp*dt); phi <-
    !!      decay*phi + (1-decay)*phi_ref` (exact for constant phi_ref over
    !!      the step, unconditionally stable, monotone) instead of MOM6's
    !!      backward-Euler `I1pdamp = 1/(1+Idamp*dt)` (physics-equivalent to
@@ -91,6 +95,7 @@ module rdb_ocean_sponge
    !! `test_ocean_sponge::sponge_reference_is_the_ic_not_the_restart` pins
    !! it).
    use rdb_constants, only: wp, H_DIV_EPS, H_VANISHED
+   use, intrinsic :: ieee_arithmetic, only: ieee_is_nan, ieee_is_finite
    use, intrinsic :: iso_fortran_env, only: int64
    use rdb_grid, only: hgrid_t
    use rdb_multilayer_state, only: multilayer_state_t
@@ -110,7 +115,7 @@ module rdb_ocean_sponge
 
    integer, parameter :: SPONGE_RAMP_COSINE = 0
       !! `&ocean_sponge_nml ramp = "cosine"` (default): the legacy band
-      !! kernel's `0.5*(1 + cos(pi*d/band))`.
+      !! kernel's `0.5*(1 + rdb_sm_cos(pi*d/band))`.
    integer, parameter :: SPONGE_RAMP_LINEAR = 1
       !! `&ocean_sponge_nml ramp = "linear"`: `(band - d - 0.5)/band`.
 
@@ -210,7 +215,122 @@ module rdb_ocean_sponge
       procedure, non_overridable :: bytes => ocean_sponge_bytes
    end type ocean_sponge_t
 
+   ! Position-independent exp/cos (`rdb_sm_*`): the band ramp and the decay
+   ! factors must not depend on a cell's place in a vector loop or tile.
+#include "rdb_safe_math_consts.inc"
+
+   ! Persistent kernel workspaces (CLAUDE.md "Persistent kernel workspaces"):
+   ! the exp/cos weights depend only on geometry + (strength, dt), so they are
+   ! evaluated once per distinct key / once per call instead of once per
+   ! (cell, layer).  Allocated lazily, device-mapped at allocation, freed by
+   ! `sponge_workspace_cleanup` (called from the slot's `destroy`/`exit_data`).
+   real(wp), allocatable, save :: band_decay(:, :)
+      !! Legacy band path: `exp(-strength*alpha(d)*dt)` for band position
+      !! `d = 0..band_cap-1`, one column per edge (1 W, 2 E, 3 S, 4 N).
+   integer, save :: band_cap = 0
+      !! Rows allocated in `band_decay`.
+   integer, save :: band_key_n(4) = -1
+      !! Band width the column was last filled for (key; `-1` = never).
+   real(wp), save :: band_key_s(4) = 0.0_wp
+      !! Strength the column was last filled for.
+   real(wp), save :: band_key_dt(4) = -1.0_wp
+      !! Time step the column was last filled for.
+   real(wp), allocatable, save :: map_decay(:, :)
+      !! Map-driven path: per-cell `exp(-Idamp*dt)` for the map being applied
+      !! (u, v, then h reuse the one buffer), shape `(map_nx, map_ny)`.
+   integer, save :: map_nx = 0, map_ny = 0
+      !! Extents of `map_decay`.
+
 contains
+
+   subroutine sponge_workspace_cleanup()
+      !! Release the persistent sponge workspaces (device first).  Idempotent.
+      if (allocated(band_decay)) then
+         !$acc exit data delete(band_decay)
+         deallocate (band_decay)
+      end if
+      if (allocated(map_decay)) then
+         !$acc exit data delete(map_decay)
+         deallocate (map_decay)
+      end if
+      band_cap = 0
+      map_nx = 0
+      map_ny = 0
+      band_key_n = -1
+      band_key_s = 0.0_wp
+      band_key_dt = -1.0_wp
+   end subroutine sponge_workspace_cleanup
+
+   subroutine band_decay_ensure(e, band, strength, dt)
+      !! Make `band_decay(0:band-1, e)` hold `rdb_sm_exp(-(strength*alpha)*dt)`
+      !! with `alpha = 0.5*(1 + rdb_sm_cos(pi*d/band))` -- the same two library
+      !! calls the per-cell kernels used, now evaluated once per distinct
+      !! `(band, strength, dt)` instead of once per (cell, layer).  Host fill +
+      !! one `update device` only when the key changes.
+      integer, intent(in) :: e, band
+      real(wp), intent(in) :: strength, dt
+      real(wp), parameter :: PI = acos(-1.0_wp)
+      real(wp) :: alpha, tau
+      integer :: d
+
+      if (band > band_cap) then
+         if (allocated(band_decay)) then
+            !$acc exit data delete(band_decay)
+            deallocate (band_decay)
+         end if
+         allocate (band_decay(0:band - 1, 4), source=0.0_wp)
+         !$acc enter data create(band_decay)
+         band_cap = band
+         band_key_n = -1
+      end if
+      if (band_key_n(e) == band .and. band_key_s(e) == strength .and. band_key_dt(e) == dt) return
+      do d = 0, band - 1
+         alpha = 0.5_wp*(1.0_wp + rdb_sm_cos(PI*real(d, wp)/real(band, wp)))
+         tau = strength*alpha
+         band_decay(d, e) = rdb_sm_exp(-tau*dt)
+      end do
+      !$acc update device(band_decay)
+      band_key_n(e) = band
+      band_key_s(e) = strength
+      band_key_dt(e) = dt
+   end subroutine band_decay_ensure
+
+   subroutine map_decay_fill(idamp, nxi, nyi, dt)
+      !! Fill the shared `map_decay` buffer with `exp(-idamp*dt)` for one map
+      !! (`idamp > 0` cells; elsewhere 1), growing the buffer if needed.
+      integer, intent(in) :: nxi, nyi
+      real(wp), intent(in) :: idamp(nxi, nyi)
+      real(wp), intent(in) :: dt
+
+      if (nxi > map_nx .or. nyi > map_ny) then
+         if (allocated(map_decay)) then
+            !$acc exit data delete(map_decay)
+            deallocate (map_decay)
+         end if
+         map_nx = max(map_nx, nxi)
+         map_ny = max(map_ny, nyi)
+         allocate (map_decay(map_nx, map_ny), source=1.0_wp)
+         !$acc enter data create(map_decay)
+      end if
+      call map_decay_fill_impl(idamp, map_decay, nxi, nyi, map_nx, map_ny, dt)
+   end subroutine map_decay_fill
+
+   pure subroutine map_decay_fill_impl(idamp, decay, nxi, nyi, nxw, nyw, dt)
+      !! `decay = rdb_sm_exp(-idamp*dt)` where `idamp > 0` (else 1), once per
+      !! cell -- the per-layer kernels below read it for every `k`.
+      integer, intent(in) :: nxi, nyi, nxw, nyw
+      real(wp), intent(in) :: idamp(nxi, nyi)
+      real(wp), intent(inout) :: decay(nxw, nyw)
+      real(wp), intent(in) :: dt
+      integer :: i, j
+      do concurrent(j=1:nyi, i=1:nxi)
+         if (idamp(i, j) > 0.0_wp) then
+            decay(i, j) = rdb_sm_exp(-idamp(i, j)*dt)
+         else
+            decay(i, j) = 1.0_wp
+         end if
+      end do
+   end subroutine map_decay_fill_impl
 
    subroutine ocean_sponge_init(this, grid, nz_ml, n_tracers)
       !! Allocate the maps + reference-state arrays. Call ONLY when
@@ -242,6 +362,7 @@ contains
 
    subroutine ocean_sponge_destroy(this)
       class(ocean_sponge_t), intent(inout) :: this
+      call sponge_workspace_cleanup()
       this%is_init = .false.
       if (allocated(this%idamp_h)) deallocate (this%idamp_h)
       if (allocated(this%idamp_u)) deallocate (this%idamp_u)
@@ -283,6 +404,7 @@ contains
 
    subroutine ocean_sponge_exit_data_impl(this)
       type(ocean_sponge_t), intent(inout) :: this
+      call sponge_workspace_cleanup()
       if (.not. this%is_init) return
       !$acc exit data delete(this%idamp_h, this%idamp_u, this%idamp_v, &
       !$acc&                 this%ref_tracer, this%u_ref, this%v_ref, this%z_top)
@@ -528,7 +650,7 @@ contains
       !! (0 = hard against the sponge-tagged wall) for a band of `band`
       !! cells.  The per-cell rate is `sponge_strength * alpha`.
       !!
-      !!   * `SPONGE_RAMP_COSINE` (default): `0.5*(1 + cos(pi*d/band))` —
+      !!   * `SPONGE_RAMP_COSINE` (default): `0.5*(1 + rdb_sm_cos(pi*d/band))` —
       !!     the legacy band kernel's own ramp, reproduced bit-for-bit
       !!     (including its `acos(-1)` spelling of pi) so `ramp="cosine"`
       !!     stays byte-identical to every shipped namelist.
@@ -549,7 +671,7 @@ contains
       case (SPONGE_RAMP_LINEAR)
          alpha = (real(band - d, wp) - 0.5_wp)/real(band, wp)
       case default   ! SPONGE_RAMP_COSINE
-         alpha = 0.5_wp*(1.0_wp + cos(PI_LOCAL*real(d, wp)/real(band, wp)))
+         alpha = 0.5_wp*(1.0_wp + rdb_sm_cos(PI_LOCAL*real(d, wp)/real(band, wp)))
       end select
    end function sponge_band_alpha
 
@@ -578,11 +700,16 @@ contains
       nz = ms%nz_ml
 
       if (sp%relax_uv) then
-         call relax_map_u_impl(ms%u_face_x_layer, sp%u_ref, sp%idamp_u, nx + 1, ny, nz, dt)
-         call relax_map_v_impl(ms%v_face_y_layer, sp%v_ref, sp%idamp_v, nx, ny + 1, nz, dt)
+         call map_decay_fill(sp%idamp_u, nx + 1, ny, dt)
+         call relax_map_u_impl(ms%u_face_x_layer, sp%u_ref, sp%idamp_u, map_decay, &
+                               map_nx, map_ny, nx + 1, ny, nz)
+         call map_decay_fill(sp%idamp_v, nx, ny + 1, dt)
+         call relax_map_v_impl(ms%v_face_y_layer, sp%v_ref, sp%idamp_v, map_decay, &
+                               map_nx, map_ny, nx, ny + 1, nz)
       end if
 
       if (sp%relax_tracers .and. allocated(ms%tracers)) then
+         call map_decay_fill(sp%idamp_h, nx, ny, dt)
          ! Outer-shim: the per-tracer `it` loop stays outside the `do
          ! concurrent` kernels (§6.4 of the plan) — `ms%tracers(it)%c` is
          ! dereferenced here on the host, never inside the device loop.
@@ -591,82 +718,82 @@ contains
             if (it == ms%idx_salinity) then
                call relax_map_tracer_budget_impl(ms%tracers(it)%c, ms%h_layer, &
                                                  sp%ref_tracer, it, sp%n_tracers, &
-                                                 sp%idamp_h, ms%salt_budget_sponge, &
-                                                 nx, ny, nz, dt)
+                                                 sp%idamp_h, map_decay, map_nx, map_ny, &
+                                                 ms%salt_budget_sponge, nx, ny, nz)
             else if (it == ms%idx_temperature) then
                call relax_map_tracer_budget_impl(ms%tracers(it)%c, ms%h_layer, &
                                                  sp%ref_tracer, it, sp%n_tracers, &
-                                                 sp%idamp_h, ms%heat_budget_sponge, &
-                                                 nx, ny, nz, dt)
+                                                 sp%idamp_h, map_decay, map_nx, map_ny, &
+                                                 ms%heat_budget_sponge, nx, ny, nz)
             else
                call relax_map_tracer_impl(ms%tracers(it)%c, ms%h_layer, &
                                           sp%ref_tracer, it, sp%n_tracers, &
-                                          sp%idamp_h, nx, ny, nz, dt)
+                                          sp%idamp_h, map_decay, map_nx, map_ny, nx, ny, nz)
             end if
          end do
       end if
    end subroutine ocean_sponge_apply_maps
 
-   pure subroutine relax_map_u_impl(u, u_ref, idamp_u, nxu, ny, nz, dt)
+   pure subroutine relax_map_u_impl(u, u_ref, idamp_u, decay_w, nxw, nyw, nxu, ny, nz)
       !! Relax `u_face_x_layer` toward `u_ref` at rate `idamp_u`. Explicit-
       !! shape dummies, dims declared first (decl-order hook). `idamp_u(i,j)
       !! <= 0` is a bit-exact no-op (Idamp = 0 IS the sponge mask; also
       !! guarantees `sponge_idamp_zero_is_exact_identity`, since `decay =
-      !! exp(-0*dt) = 1.0` exactly would already be a no-op algebraically —
+      !! rdb_sm_exp(-0*dt) = 1.0` exactly would already be a no-op algebraically —
       !! the early `if` skips the arithmetic entirely instead of relying on
       !! that).
-      integer, intent(in)    :: nxu, ny, nz
+      integer, intent(in)    :: nxw, nyw, nxu, ny, nz
       real(wp), intent(inout) :: u(nxu, ny, nz)
       real(wp), intent(in)    :: u_ref(nxu, ny, nz)
       real(wp), intent(in)    :: idamp_u(nxu, ny)
-      real(wp), intent(in)    :: dt
+      real(wp), intent(in)    :: decay_w(nxw, nyw)
       integer :: i, j, k
       real(wp) :: decay
       do concurrent(k=1:nz, j=1:ny, i=1:nxu) local(decay)
          if (idamp_u(i, j) > 0.0_wp) then
-            decay = exp(-idamp_u(i, j)*dt)
+            decay = decay_w(i, j)
             u(i, j, k) = relax_toward(u(i, j, k), u_ref(i, j, k), decay)
          end if
       end do
    end subroutine relax_map_u_impl
 
-   pure subroutine relax_map_v_impl(v, v_ref, idamp_v, nx, nyv, nz, dt)
+   pure subroutine relax_map_v_impl(v, v_ref, idamp_v, decay_w, nxw, nyw, nx, nyv, nz)
       !! Relax `v_face_y_layer` toward `v_ref` at rate `idamp_v`. Mirror of
       !! `relax_map_u_impl` for the y-direction.
-      integer, intent(in)    :: nx, nyv, nz
+      integer, intent(in)    :: nxw, nyw, nx, nyv, nz
       real(wp), intent(inout) :: v(nx, nyv, nz)
       real(wp), intent(in)    :: v_ref(nx, nyv, nz)
       real(wp), intent(in)    :: idamp_v(nx, nyv)
-      real(wp), intent(in)    :: dt
+      real(wp), intent(in)    :: decay_w(nxw, nyw)
       integer :: i, j, k
       real(wp) :: decay
       do concurrent(k=1:nz, j=1:nyv, i=1:nx) local(decay)
          if (idamp_v(i, j) > 0.0_wp) then
-            decay = exp(-idamp_v(i, j)*dt)
+            decay = decay_w(i, j)
             v(i, j, k) = relax_toward(v(i, j, k), v_ref(i, j, k), decay)
          end if
       end do
    end subroutine relax_map_v_impl
 
    pure subroutine relax_map_tracer_impl(c, h_layer, ref_tracer, it, n_tr, &
-                                         idamp_h, nx, ny, nz, dt)
+                                         idamp_h, decay_w, nxw, nyw, nx, ny, nz)
       !! Relax one tracer's `c` toward `ref_tracer(:,:,:,it)` at
       !! rate `idamp_h`, no budget mirror (every tracer except S/T — see
       !! `relax_map_tracer_budget_impl`). `ref_tracer` is passed WHOLE +
       !! indexed by the scalar `it` inside the kernel — never sliced by the
       !! caller (§6.4: a device array section of a mapped array is the
       !! descriptor-walk trap the `dc-assumed-shape` hook exists to catch).
-      integer, intent(in)    :: it, n_tr, nx, ny, nz
+      integer, intent(in)    :: it, n_tr, nxw, nyw, nx, ny, nz
       real(wp), intent(inout) :: c(nx, ny, nz)
       real(wp), intent(in)    :: h_layer(nx, ny, nz)
       real(wp), intent(in)    :: ref_tracer(nx, ny, nz, n_tr)
       real(wp), intent(in)    :: idamp_h(nx, ny)
-      real(wp), intent(in)    :: dt
+      real(wp), intent(in)    :: decay_w(nxw, nyw)
       integer :: i, j, k
       real(wp) :: decay, tgt
       do concurrent(k=1:nz, j=1:ny, i=1:nx) local(decay, tgt)
          if (idamp_h(i, j) > 0.0_wp) then
-            decay = exp(-idamp_h(i, j)*dt)
+            decay = decay_w(i, j)
             tgt = ref_tracer(i, j, k, it)
             c(i, j, k) = relax_toward(c(i, j, k), tgt, decay)
          end if
@@ -674,7 +801,7 @@ contains
    end subroutine relax_map_tracer_impl
 
    pure subroutine relax_map_tracer_budget_impl(c, h_layer, ref_tracer, it, n_tr, &
-                                                idamp_h, budget, nx, ny, nz, dt)
+                                                idamp_h, decay_w, nxw, nyw, budget, nx, ny, nz)
       !! `relax_map_tracer_impl` + mirror the per-cell increment into
       !! `budget` (salt or heat), the S/T budget-instrumented variant —
       !! mirrors `apply_geothermal_src_impl`'s host-shim + flat-impl +
@@ -682,18 +809,18 @@ contains
       !! `c_new - c_old = (1-decay)*(tgt-c_old)` (times `h` for the content), written once and
       !! used for BOTH the state update and the budget mirror so the two
       !! stay exactly consistent (no independent recomputation to drift).
-      integer, intent(in)    :: it, n_tr, nx, ny, nz
+      integer, intent(in)    :: it, n_tr, nxw, nyw, nx, ny, nz
       real(wp), intent(inout) :: c(nx, ny, nz)
       real(wp), intent(in)    :: h_layer(nx, ny, nz)
       real(wp), intent(in)    :: ref_tracer(nx, ny, nz, n_tr)
       real(wp), intent(in)    :: idamp_h(nx, ny)
+      real(wp), intent(in)    :: decay_w(nxw, nyw)
       real(wp), intent(inout) :: budget(nx, ny, nz)
-      real(wp), intent(in)    :: dt
       integer :: i, j, k
       real(wp) :: decay, tgt, delta, p_new, p_old
       do concurrent(k=1:nz, j=1:ny, i=1:nx) local(decay, tgt, delta, p_new, p_old)
          if (idamp_h(i, j) > 0.0_wp) then
-            decay = exp(-idamp_h(i, j)*dt)
+            decay = decay_w(i, j)
             tgt = ref_tracer(i, j, k, it)
             delta = (1.0_wp - decay)*(tgt - c(i, j, k))
             p_old = h_layer(i, j, k)*c(i, j, k)
@@ -708,7 +835,7 @@ contains
       !! Shared core algebra for BOTH sponge paths: `cur*decay +
       !! tgt*(1-decay)` — the exact solution of `dphi/dt = -Idamp*(phi -
       !! phi_ref)` over one step at constant `phi_ref`, for whatever
-      !! `decay = exp(-rate*dt)` the caller derived (`relax_one` derives it
+      !! `decay = rdb_sm_exp(-rate*dt)` the caller derived (`band_decay_ensure` derives it
       !! from the legacy edge/band cosine ramp; the map kernels above derive
       !! it directly from a per-cell `Idamp`). "One home" for the algebra
       !! per the plan (§3.1 / step 10).
@@ -725,29 +852,30 @@ contains
       type(multilayer_state_t), intent(inout) :: ms
       real(wp), intent(in) :: dt
 
-      integer :: i, j, k, nz, d
+      integer :: nz
       integer :: i0, i1, j0, j1
       integer :: wall_face, band
       integer :: nx_u, ny_u, nx_v, ny_v
-      real(wp) :: strength, tau, decay, alpha
-      real(wp), parameter :: PI = acos(-1.0_wp)
+      real(wp) :: strength
 
       nz = ms%nz_ml
       i0 = grid%nghost + 1
       i1 = grid%nghost + grid%nx_phys
       j0 = grid%nghost + 1
       j1 = grid%nghost + grid%ny_phys
-      ! Hoisted array extents for the in-band bounds guards (don't call
-      ! size() on a mapped array inside a do concurrent body).
+      ! Face-array extents (the in-band bounds guards live in the kernels).
       nx_u = size(ms%u_face_x_layer, 1)
       ny_u = size(ms%u_face_x_layer, 2)
       nx_v = size(ms%v_face_y_layer, 1)
       ny_v = size(ms%v_face_y_layer, 2)
 
       ! GPU note: `do concurrent` on the device-resident layer velocities.
-      ! Within one edge block every (d, ·, k) tuple writes a distinct
+      ! Within one edge block every (d, ., k) tuple writes a distinct
       ! element, so the DC is race-free; overlapping corner faces between
-      ! edge blocks get both decays applied sequentially.
+      ! edge blocks get both decays applied sequentially.  The per-band-
+      ! position decay is `band_decay(d, edge)`, filled once per distinct
+      ! (band, strength, dt) by `band_decay_ensure` -- cosine ramp: tau peaks
+      ! at d=0 (outer), tapers to 0 at the interior edge of the band.
 
       ! ---- West edge ----
       ! has_* gate: a subdomain seam never carries a sponge band (O0).
@@ -755,27 +883,12 @@ contains
          band = bc%west%sponge_width
          strength = bc%west%sponge_strength
          wall_face = grid%nghost + 1
-         do concurrent(k=1:nz, j=j0:j1, d=0:band - 1) local(alpha, tau, decay, i)
-            ! Cosine ramp: τ peaks at d=0 (outer), tapers to 0 at the
-            ! interior edge of the band.
-            alpha = 0.5_wp*(1.0_wp + cos(PI*real(d, wp)/real(band, wp)))
-            tau = strength*alpha
-            decay = exp(-tau*dt)
-            ! u-face just east of the west wall sits at (wall_face + d + 1)
-            i = wall_face + d + 1
-            if (i >= 1 .and. i <= nx_u) then
-               ms%u_face_x_layer(i, j, k) = decay*ms%u_face_x_layer(i, j, k)
-            end if
-         end do
-         do concurrent(k=1:nz, j=j0:j1 + 1, d=0:band - 1) local(alpha, tau, decay, i)
-            alpha = 0.5_wp*(1.0_wp + cos(PI*real(d, wp)/real(band, wp)))
-            tau = strength*alpha
-            decay = exp(-tau*dt)
-            i = wall_face + d
-            if (i >= 1 .and. i <= nx_v) then
-               ms%v_face_y_layer(i, j, k) = decay*ms%v_face_y_layer(i, j, k)
-            end if
-         end do
+         call band_decay_ensure(1, band, strength, dt)
+         ! u-face just east of the west wall sits at (wall_face + d + 1)
+         call band_damp_x_impl(ms%u_face_x_layer, nx_u, ny_u, nz, j0, j1, wall_face + 1, +1, &
+                               band, band_decay, band_cap, 1)
+         call band_damp_x_impl(ms%v_face_y_layer, nx_v, ny_v, nz, j0, j1 + 1, wall_face, +1, &
+                               band, band_decay, band_cap, 1)
       end if
 
       ! ---- East edge ----
@@ -783,24 +896,11 @@ contains
          band = bc%east%sponge_width
          strength = bc%east%sponge_strength
          wall_face = grid%nghost + grid%nx_phys + 1
-         do concurrent(k=1:nz, j=j0:j1, d=0:band - 1) local(alpha, tau, decay, i)
-            alpha = 0.5_wp*(1.0_wp + cos(PI*real(d, wp)/real(band, wp)))
-            tau = strength*alpha
-            decay = exp(-tau*dt)
-            i = wall_face - d - 1
-            if (i >= 1 .and. i <= nx_u) then
-               ms%u_face_x_layer(i, j, k) = decay*ms%u_face_x_layer(i, j, k)
-            end if
-         end do
-         do concurrent(k=1:nz, j=j0:j1 + 1, d=0:band - 1) local(alpha, tau, decay, i)
-            alpha = 0.5_wp*(1.0_wp + cos(PI*real(d, wp)/real(band, wp)))
-            tau = strength*alpha
-            decay = exp(-tau*dt)
-            i = wall_face - d - 1
-            if (i >= 1 .and. i <= nx_v) then
-               ms%v_face_y_layer(i, j, k) = decay*ms%v_face_y_layer(i, j, k)
-            end if
-         end do
+         call band_decay_ensure(2, band, strength, dt)
+         call band_damp_x_impl(ms%u_face_x_layer, nx_u, ny_u, nz, j0, j1, wall_face - 1, -1, &
+                               band, band_decay, band_cap, 2)
+         call band_damp_x_impl(ms%v_face_y_layer, nx_v, ny_v, nz, j0, j1 + 1, wall_face - 1, -1, &
+                               band, band_decay, band_cap, 2)
       end if
 
       ! ---- South edge ----
@@ -808,24 +908,11 @@ contains
          band = bc%south%sponge_width
          strength = bc%south%sponge_strength
          wall_face = grid%nghost + 1
-         do concurrent(k=1:nz, i=i0:i1 + 1, d=0:band - 1) local(alpha, tau, decay, j)
-            alpha = 0.5_wp*(1.0_wp + cos(PI*real(d, wp)/real(band, wp)))
-            tau = strength*alpha
-            decay = exp(-tau*dt)
-            j = wall_face + d
-            if (j >= 1 .and. j <= ny_u) then
-               ms%u_face_x_layer(i, j, k) = decay*ms%u_face_x_layer(i, j, k)
-            end if
-         end do
-         do concurrent(k=1:nz, i=i0:i1, d=0:band - 1) local(alpha, tau, decay, j)
-            alpha = 0.5_wp*(1.0_wp + cos(PI*real(d, wp)/real(band, wp)))
-            tau = strength*alpha
-            decay = exp(-tau*dt)
-            j = wall_face + d + 1
-            if (j >= 1 .and. j <= ny_v) then
-               ms%v_face_y_layer(i, j, k) = decay*ms%v_face_y_layer(i, j, k)
-            end if
-         end do
+         call band_decay_ensure(3, band, strength, dt)
+         call band_damp_y_impl(ms%u_face_x_layer, nx_u, ny_u, nz, i0, i1 + 1, wall_face, +1, &
+                               band, band_decay, band_cap, 3)
+         call band_damp_y_impl(ms%v_face_y_layer, nx_v, ny_v, nz, i0, i1, wall_face + 1, +1, &
+                               band, band_decay, band_cap, 3)
       end if
 
       ! ---- North edge ----
@@ -833,26 +920,45 @@ contains
          band = bc%north%sponge_width
          strength = bc%north%sponge_strength
          wall_face = grid%nghost + grid%ny_phys + 1
-         do concurrent(k=1:nz, i=i0:i1 + 1, d=0:band - 1) local(alpha, tau, decay, j)
-            alpha = 0.5_wp*(1.0_wp + cos(PI*real(d, wp)/real(band, wp)))
-            tau = strength*alpha
-            decay = exp(-tau*dt)
-            j = wall_face - d - 1
-            if (j >= 1 .and. j <= ny_u) then
-               ms%u_face_x_layer(i, j, k) = decay*ms%u_face_x_layer(i, j, k)
-            end if
-         end do
-         do concurrent(k=1:nz, i=i0:i1, d=0:band - 1) local(alpha, tau, decay, j)
-            alpha = 0.5_wp*(1.0_wp + cos(PI*real(d, wp)/real(band, wp)))
-            tau = strength*alpha
-            decay = exp(-tau*dt)
-            j = wall_face - d - 1
-            if (j >= 1 .and. j <= ny_v) then
-               ms%v_face_y_layer(i, j, k) = decay*ms%v_face_y_layer(i, j, k)
-            end if
-         end do
+         call band_decay_ensure(4, band, strength, dt)
+         call band_damp_y_impl(ms%u_face_x_layer, nx_u, ny_u, nz, i0, i1 + 1, wall_face - 1, -1, &
+                               band, band_decay, band_cap, 4)
+         call band_damp_y_impl(ms%v_face_y_layer, nx_v, ny_v, nz, i0, i1, wall_face - 1, -1, &
+                               band, band_decay, band_cap, 4)
       end if
    end subroutine ocean_sponge_apply
+
+   pure subroutine band_damp_x_impl(f, nfx, nfy, nz, jlo, jhi, i_base, i_sgn, band, &
+                                    bd, ncap, e)
+      !! Multiply `f(i, j, :)` by `bd(d, e)` for `i = i_base + i_sgn*d`,
+      !! `d = 0..band-1`, `j = jlo..jhi` (x-normal sponge band on a face
+      !! array); `i` outside `1..nfx` is skipped.
+      integer, intent(in) :: nfx, nfy, nz, jlo, jhi, i_base, i_sgn, band, ncap, e
+      real(wp), intent(inout) :: f(nfx, nfy, nz)
+      real(wp), intent(in) :: bd(0:ncap - 1, 4)
+      integer :: i, j, k, d
+      do concurrent(k=1:nz, j=jlo:jhi, d=0:band - 1) local(i)
+         i = i_base + i_sgn*d
+         if (i >= 1 .and. i <= nfx) then
+            f(i, j, k) = bd(d, e)*f(i, j, k)
+         end if
+      end do
+   end subroutine band_damp_x_impl
+
+   pure subroutine band_damp_y_impl(f, nfx, nfy, nz, ilo, ihi, j_base, j_sgn, band, &
+                                    bd, ncap, e)
+      !! Mirror of `band_damp_x_impl` for a y-normal band: `j = j_base + j_sgn*d`.
+      integer, intent(in) :: nfx, nfy, nz, ilo, ihi, j_base, j_sgn, band, ncap, e
+      real(wp), intent(inout) :: f(nfx, nfy, nz)
+      real(wp), intent(in) :: bd(0:ncap - 1, 4)
+      integer :: i, j, k, d
+      do concurrent(k=1:nz, i=ilo:ihi, d=0:band - 1) local(j)
+         j = j_base + j_sgn*d
+         if (j >= 1 .and. j <= nfy) then
+            f(i, j, k) = bd(d, e)*f(i, j, k)
+         end if
+      end do
+   end subroutine band_damp_y_impl
 
    subroutine ocean_sponge_apply_tracers(grid, bc, ms, dt)
       !! Relax tracer concentrations (c) toward per-edge targets in any
@@ -895,6 +1001,7 @@ contains
          band = bc%west%sponge_width
          strength = bc%west%sponge_strength
          wall_face = grid%nghost + 1
+         call band_decay_ensure(1, band, strength, dt)
          do it = 1, size(ms%tracers)
             if (.not. allocated(ms%tracers(it)%c)) cycle
             if (it > size(bc%west%clamped_tracer)) cycle
@@ -913,6 +1020,7 @@ contains
          band = bc%east%sponge_width
          strength = bc%east%sponge_strength
          wall_face = grid%nghost + grid%nx_phys + 1
+         call band_decay_ensure(2, band, strength, dt)
          do it = 1, size(ms%tracers)
             if (.not. allocated(ms%tracers(it)%c)) cycle
             if (it > size(bc%east%clamped_tracer)) cycle
@@ -931,6 +1039,7 @@ contains
          band = bc%south%sponge_width
          strength = bc%south%sponge_strength
          wall_face = grid%nghost + 1
+         call band_decay_ensure(3, band, strength, dt)
          do it = 1, size(ms%tracers)
             if (.not. allocated(ms%tracers(it)%c)) cycle
             if (it > size(bc%south%clamped_tracer)) cycle
@@ -949,6 +1058,7 @@ contains
          band = bc%north%sponge_width
          strength = bc%north%sponge_strength
          wall_face = grid%nghost + grid%ny_phys + 1
+         call band_decay_ensure(4, band, strength, dt)
          do it = 1, size(ms%tracers)
             if (.not. allocated(ms%tracers(it)%c)) cycle
             if (it > size(bc%north%clamped_tracer)) cycle
@@ -969,18 +1079,22 @@ contains
       type(multilayer_state_t), intent(inout) :: ms
       integer, intent(in) :: it, nx_total, ny_total, nz, j0, j1, wall_face, band, side
       real(wp), intent(in) :: strength, C_bc, dt
+      integer :: e
 
+      ! Edge column of `band_decay`: west 1 / east 2.  `dt` is carried by the
+      ! table (filled by `band_decay_ensure` for this `dt`).
+      e = merge(1, 2, side > 0)
       if (it == ms%idx_salinity) then
          call relax_band_x_impl(ms%tracers(it)%c, ms%h_layer, nx_total, ny_total, nz, &
-                                j0, j1, wall_face, band, side, strength, C_bc, dt, &
+                                j0, j1, wall_face, band, side, strength, C_bc, band_decay, band_cap, e, &
                                 budget=ms%salt_budget_sponge)
       else if (it == ms%idx_temperature) then
          call relax_band_x_impl(ms%tracers(it)%c, ms%h_layer, nx_total, ny_total, nz, &
-                                j0, j1, wall_face, band, side, strength, C_bc, dt, &
+                                j0, j1, wall_face, band, side, strength, C_bc, band_decay, band_cap, e, &
                                 budget=ms%heat_budget_sponge)
       else
          call relax_band_x_impl(ms%tracers(it)%c, ms%h_layer, nx_total, ny_total, nz, &
-                                j0, j1, wall_face, band, side, strength, C_bc, dt)
+                                j0, j1, wall_face, band, side, strength, C_bc, band_decay, band_cap, e)
       end if
    end subroutine sponge_relax_band_x_tracer
 
@@ -990,23 +1104,26 @@ contains
       type(multilayer_state_t), intent(inout) :: ms
       integer, intent(in) :: it, nx_total, ny_total, nz, i0, i1, wall_face, band, side
       real(wp), intent(in) :: strength, C_bc, dt
+      integer :: e
 
+      ! Edge column of `band_decay`: south 3 / north 4.
+      e = merge(3, 4, side > 0)
       if (it == ms%idx_salinity) then
          call relax_band_y_impl(ms%tracers(it)%c, ms%h_layer, nx_total, ny_total, nz, &
-                                i0, i1, wall_face, band, side, strength, C_bc, dt, &
+                                i0, i1, wall_face, band, side, strength, C_bc, band_decay, band_cap, e, &
                                 budget=ms%salt_budget_sponge)
       else if (it == ms%idx_temperature) then
          call relax_band_y_impl(ms%tracers(it)%c, ms%h_layer, nx_total, ny_total, nz, &
-                                i0, i1, wall_face, band, side, strength, C_bc, dt, &
+                                i0, i1, wall_face, band, side, strength, C_bc, band_decay, band_cap, e, &
                                 budget=ms%heat_budget_sponge)
       else
          call relax_band_y_impl(ms%tracers(it)%c, ms%h_layer, nx_total, ny_total, nz, &
-                                i0, i1, wall_face, band, side, strength, C_bc, dt)
+                                i0, i1, wall_face, band, side, strength, C_bc, band_decay, band_cap, e)
       end if
    end subroutine sponge_relax_band_y_tracer
 
    pure subroutine relax_band_x_impl(c, h_layer, nx_total, ny_total, nz, &
-                                     j0, j1, wall_face, band, side, strength, C_bc, dt, budget)
+                                     j0, j1, wall_face, band, side, strength, C_bc, bd, ncap, e, budget)
       !! Cosine-ramp tracer relaxation in a west/east sponge band.
       !! Explicit-shape dummies (flat-impl + outer-shim — the per-tracer
       !! slice is passed by the caller, never dereferenced inside the DC).
@@ -1023,10 +1140,11 @@ contains
       !! `present()` into two separate DC loops is the
       !! `nvhpc_split_optional_dc_codegen` trap (~25x slower); this is the
       !! one-loop fix.
-      integer, intent(in) :: nx_total, ny_total, nz, j0, j1, wall_face, band, side
+      integer, intent(in) :: nx_total, ny_total, nz, j0, j1, wall_face, band, side, ncap, e
       real(wp), intent(inout) :: c(nx_total, ny_total, nz)
       real(wp), intent(in)    :: h_layer(nx_total, ny_total, nz)
-      real(wp), intent(in)    :: strength, C_bc, dt
+      real(wp), intent(in)    :: strength, C_bc
+      real(wp), intent(in)    :: bd(0:ncap - 1, 4)
       real(wp), intent(inout), optional :: budget(nx_total, ny_total, nz)
 
       integer :: k, j, d, ii
@@ -1040,7 +1158,7 @@ contains
          else
             ii = wall_face - d - 1
          end if
-         new_val = relax_one(c(ii, j, k), C_bc, strength, d, band, dt)
+         new_val = relax_toward(c(ii, j, k), C_bc, bd(d, e))
          if (has_budget) then
             p_new = h_layer(ii, j, k)*new_val
             p_old = h_layer(ii, j, k)*c(ii, j, k)
@@ -1051,14 +1169,15 @@ contains
    end subroutine relax_band_x_impl
 
    pure subroutine relax_band_y_impl(c, h_layer, nx_total, ny_total, nz, &
-                                     i0, i1, wall_face, band, side, strength, C_bc, dt, budget)
+                                     i0, i1, wall_face, band, side, strength, C_bc, bd, ncap, e, budget)
       !! Cosine-ramp tracer relaxation in a south/north sponge band.
       !! Mirror of `relax_band_x_impl` for the y-direction; see its
       !! docstring for the optional `budget` mirror (PR-23).
-      integer, intent(in) :: nx_total, ny_total, nz, i0, i1, wall_face, band, side
+      integer, intent(in) :: nx_total, ny_total, nz, i0, i1, wall_face, band, side, ncap, e
       real(wp), intent(inout) :: c(nx_total, ny_total, nz)
       real(wp), intent(in)    :: h_layer(nx_total, ny_total, nz)
-      real(wp), intent(in)    :: strength, C_bc, dt
+      real(wp), intent(in)    :: strength, C_bc
+      real(wp), intent(in)    :: bd(0:ncap - 1, 4)
       real(wp), intent(inout), optional :: budget(nx_total, ny_total, nz)
 
       integer :: k, i, d, jj
@@ -1072,7 +1191,7 @@ contains
          else
             jj = wall_face - d - 1
          end if
-         new_val = relax_one(c(i, jj, k), C_bc, strength, d, band, dt)
+         new_val = relax_toward(c(i, jj, k), C_bc, bd(d, e))
          if (has_budget) then
             p_new = h_layer(i, jj, k)*new_val
             p_old = h_layer(i, jj, k)*c(i, jj, k)
@@ -1082,24 +1201,10 @@ contains
       end do
    end subroutine relax_band_y_impl
 
-   pure real(wp) function relax_one(c_cur, tgt, strength, d, band, dt) result(res)
-      !! Cosine-ramp implicit relaxation of one cell toward `tgt`.
-      !! `decay = exp(-strength*alpha*dt)`, alpha the cosine ramp at band
-      !! position `d`; result = c_cur*decay + tgt*(1-decay). Funnels
-      !! through `relax_toward` for the shared core algebra (§3.1 / step 10
-      !! "one home" — the map-driven kernels derive `decay` from a per-cell
-      !! `Idamp` instead of this band/strength ramp, but both land on the
-      !! same `cur*decay + tgt*(1-decay)` update).
-      !$acc routine seq
-      real(wp), intent(in) :: c_cur, tgt, strength, dt
-      integer, intent(in) :: d, band
-      real(wp) :: alpha, decay
-      real(wp), parameter :: PI = acos(-1.0_wp)
-      alpha = 0.5_wp*(1.0_wp + cos(PI*real(d, wp)/real(band, wp)))
-      decay = exp(-strength*alpha*dt)
-      res = relax_toward(c_cur, tgt, decay)
-   end function relax_one
-
 #include "rdb_tracer_conc.inc"
+
+#include "rdb_safe_math_core.inc"
+
+#include "rdb_safe_math_trig.inc"
 
 end module rdb_ocean_sponge

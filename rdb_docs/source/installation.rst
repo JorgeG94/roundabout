@@ -271,8 +271,10 @@ The options you are most likely to touch:
      - Link a real MPI and build multi-rank. ``OFF`` still uses pic-mpi,
        via its serial backend.
    * - ``RDB_CUDA_AWARE_MPI``
-     - ``OFF``
-     - GPU-direct halo exchange. See the multi-GPU warning below.
+     - ``ON`` with MPI + GPU, else ``OFF``
+     - Declares the MPI library CUDA-aware; an explicit value wins on a fresh build dir and whenever it differs from the auto default; in an existing dir a value equal to the previously auto-chosen one keeps following the default. ``ON``
+       without MPI and GPU is a configure error. See the multi-GPU warning
+       below.
    * - ``RDB_GPU_ARCH``
      - ``cc70``
      - NVIDIA ``ccNN`` under NVHPC. (Under LLVM flang it defaults to
@@ -488,6 +490,18 @@ Other routes, if the script does not suit:
      nvfortran-built, so for the GPU toolchain the MPI comes with the
      compiler and there is nothing to match.
 
+.. note::
+
+   A foreign MPI visible in the environment can defeat the match even when the
+   right wrappers are passed: FindMPI may still resolve the library names to
+   that MPI's ``libmpi``, and the link fails with ``undefined reference to
+   _mpi_f08_types_8_``. Before configuring, unset ``MPI_ROOT`` and remove the
+   foreign MPI's directories from ``LIBRARY_PATH``, ``LD_LIBRARY_PATH``,
+   ``CPATH`` and ``PATH`` (environment modules for other libraries often add
+   them), pass ``-DMPI_Fortran_COMPILER=<mpi>/bin/mpif90
+   -DMPI_C_COMPILER=<mpi>/bin/mpicc`` explicitly, and check that
+   ``MPI_mpi_LIBRARY`` in ``CMakeCache.txt`` points into the intended MPI.
+
 There is also ``environments/roundabout_env_3.13.yml``, a conda environment for
 the Python post-processing and test tooling. It deliberately **excludes**
 ``netcdf4`` and ``mpi4py``: loading conda's HDF5 into the same process as
@@ -522,7 +536,7 @@ runs the project's own suite and skips the dependency self-tests that
 Multi-GPU on one node
 =====================
 
-If you build with ``RDB_CUDA_AWARE_MPI=ON`` and run several ranks on one
+In an MPI + GPU build (CUDA-aware by default) running several ranks on one
 node, **each rank must see only its own GPU, and that must be arranged
 before ``MPI_Init``**.
 
@@ -541,5 +555,7 @@ variable before the first CUDA call:
 
 With that pinning, the solver's ``mod(node_rank, n_devices)`` clamp binds
 the single visible device and a plain ``mpirun -np N ./rdb run.nml``
-works. Host-staged MPI (``RDB_CUDA_AWARE_MPI=OFF``) never touches CUDA
-during ``MPI_Init`` and does not hit this.
+works. ``RDB_CUDA_AWARE_MPI`` only declares that the MPI library is
+CUDA-aware: a GPU build always passes device buffers to MPI, a multi-rank GPU
+run without the declaration is refused at startup, and nothing checks at run
+time that the library really is CUDA-aware.

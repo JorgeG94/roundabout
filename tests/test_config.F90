@@ -63,6 +63,7 @@ contains
                   new_unittest("bt_halo_default_is_auto_sentinel", test_bt_halo_default_sentinel), &
                   new_unittest("resolve_bt_halo", test_resolve_bt_halo), &
                   new_unittest("bt_halo_auto_exclusion", test_bt_halo_auto_exclusion), &
+                  new_unittest("chapman_bt_halo_refused", test_chapman_bt_halo_refused), &
                   new_unittest("diag_density_requires_rho_levels", test_diag_density_requires_rho_levels), &
                   new_unittest("ice_hlim_count_leading_run", test_ice_hlim_count_leading_run), &
                   new_unittest("ice_hlim_spec_validity", test_ice_hlim_spec_validity), &
@@ -74,7 +75,8 @@ contains
                   new_unittest("calendar_names_fit_and_validate", test_calendar_names), &
                   new_unittest("roquet_rho_insitu_pgf_accepted", test_roquet_rho_insitu_pgf_accepted), &
                   new_unittest("atm_forcing_prereq_codes", test_atm_forcing_prereq_codes), &
-                  new_unittest("atm_forcing_wired_accepted", test_atm_forcing_wired_accepted) &
+                  new_unittest("atm_forcing_wired_accepted", test_atm_forcing_wired_accepted), &
+                  new_unittest("inhalo_march_refusals", test_inhalo_march_refusals) &
                   ]
    end subroutine collect_config_tests
 
@@ -412,6 +414,57 @@ contains
       ! the fail-loud gate for that impossible combination, not resolution.
       call check(error, resolve_bt_halo(4, 2, .true.) == 4, "explicit width unchanged by exclusion")
    end subroutine test_resolve_bt_halo
+
+   subroutine test_chapman_bt_halo_refused(error)
+      !! A chapman OBC edge excludes the wide-halo BT march-in: AUTO resolves
+      !! to 0, an explicit `bt_halo > 0` is refused, `bt_halo = 0` accepted.
+      type(error_type), allocatable, intent(out) :: error
+      type(config_t) :: cfg
+      logical :: excluded
+      character(len=:), allocatable :: reason
+      integer :: ierr
+
+      cfg%ocean%bc%east = "chapman"
+      call bt_halo_auto_exclusion(cfg, excluded, reason)
+      call check(error, excluded, "chapman edge not detected as bt_halo exclusion")
+      if (allocated(error)) return
+
+      call read_config_from_string( &
+         "&sim_nml sim_type = 'ocean' /"//new_line('a')// &
+         "&grid_nml nx = 24, ny = 16, nghost = 3, dx = 20000.0, dy = 20000.0 /"// &
+         new_line('a')// &
+         "&ocean_bc_nml east = 'chapman' /"//new_line('a')// &
+         "&ocean_bt_nml bt_halo = 4, visc_rem_chain = .false. /"//new_line('a'), cfg, ierr=ierr)
+      call check(error, ierr == OCEAN_STATUS_OK, "chapman + bt_halo namelist must parse")
+      if (allocated(error)) return
+      call validate_config(cfg, ierr=ierr)
+      call check(error, ierr /= OCEAN_STATUS_OK, &
+                 "chapman edge with explicit bt_halo > 0 must be refused")
+      if (allocated(error)) return
+
+      ! CONTROL: the same namelist WITHOUT the chapman edge must be accepted,
+      ! so the refusal above is the Chapman rule and nothing else (the
+      ! `visc_rem_chain` default alone refuses any bt_halo > 0).
+      call read_config_from_string( &
+         "&sim_nml sim_type = 'ocean' /"//new_line('a')// &
+         "&grid_nml nx = 24, ny = 16, nghost = 3, dx = 20000.0, dy = 20000.0 /"// &
+         new_line('a')// &
+         "&ocean_bt_nml bt_halo = 4, visc_rem_chain = .false. /"//new_line('a'), cfg, ierr=ierr)
+      call validate_config(cfg, ierr=ierr)
+      call check(error, ierr == OCEAN_STATUS_OK, &
+                 "control (no chapman edge) with bt_halo = 4 must be accepted")
+      if (allocated(error)) return
+
+      call read_config_from_string( &
+         "&sim_nml sim_type = 'ocean' /"//new_line('a')// &
+         "&grid_nml nx = 24, ny = 16, nghost = 3, dx = 20000.0, dy = 20000.0 /"// &
+         new_line('a')// &
+         "&ocean_bc_nml east = 'chapman' /"//new_line('a')// &
+         "&ocean_bt_nml bt_halo = 0 /"//new_line('a'), cfg, ierr=ierr)
+      call validate_config(cfg, ierr=ierr)
+      call check(error, ierr == OCEAN_STATUS_OK, &
+                 "chapman edge with bt_halo = 0 must be accepted")
+   end subroutine test_chapman_bt_halo_refused
 
    subroutine test_bt_halo_auto_exclusion(error)
       !! The exclusion detector mirrors validate_config's explicit-bt_halo>0 set.
@@ -924,6 +977,48 @@ contains
       if (ierr == OCEAN_STATUS_OK) call validate_config(cfg, ierr=ierr)
       call check(error, ierr /= OCEAN_STATUS_OK, "calendar=noleap must be refused")
    end subroutine test_calendar_names
+
+   subroutine test_inhalo_march_refusals(error)
+      !! `&ocean_bt_nml inhalo_march` (EXPERIMENTAL) is accepted on a clean
+      !! nghost = 3 ocean namelist and refused, one fence at a time, with
+      !! `bt_halo > 0`, wet/dry, `use_cont_type`, `upstream_h_face`, tides,
+      !! psurf, a chapman edge, and a stride above `nghost - 1`.
+      type(error_type), allocatable, intent(out) :: error
+      type(config_t) :: cfg
+      integer :: ierr, k
+
+      do k = 0, 8
+         ierr = -999
+         call read_config_from_string( &
+            "&sim_nml sim_type = 'ocean' /"//new_line('a')// &
+            "&grid_nml nx = 24, ny = 16, nghost = 3, dx = 20000.0, dy = 20000.0 /"// &
+            new_line('a')// &
+            "&ocean_bt_nml inhalo_march = .true. /"//new_line('a'), cfg, ierr=ierr)
+         call check(error, ierr == OCEAN_STATUS_OK, "inhalo_march namelist must parse")
+         if (allocated(error)) return
+         select case (k)
+         case (1); cfg%ocean%bt%bt_halo = 4
+         case (2); cfg%ocean%wetdry%enable = .true.
+         case (3); cfg%ocean%bt%use_cont_type = .true.
+         case (4); cfg%ocean%bt%upstream_h_face = .true.
+         case (5); cfg%ocean%tides%enable = .true.
+         case (6); cfg%ocean%psurf%enable = .true.
+         case (7); cfg%ocean%bt%inhalo_stride = 3     ! > nghost - 1 = 2
+         case (8); cfg%ocean%bc%west = "chapman"
+         case default
+            cfg%ocean%bt%inhalo_stride = 2            ! == nghost - 1: accepted
+         end select
+         call validate_config(cfg, ierr=ierr)
+         if (k == 0) then
+            call check(error, ierr == OCEAN_STATUS_OK, &
+                       "inhalo_march with stride nghost-1 must validate")
+         else
+            call check(error, ierr /= OCEAN_STATUS_OK, &
+                       "inhalo_march fence not refused (case index in k)")
+         end if
+         if (allocated(error)) return
+      end do
+   end subroutine test_inhalo_march_refusals
 
    function atm_forcing_baseline_nml(grid_config, dataovr_block, bulk_enable) result(nml)
       !! A minimal otherwise-valid `&ocean_atm_forcing_nml` namelist

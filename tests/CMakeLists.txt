@@ -141,6 +141,7 @@ set(RDB_TESTS
     "test_ocean_cavity_flux|test_ocean_cavity_flux|collect_ocean_cavity_flux_tests|ocean_cavity_flux|ocean"
     "test_ocean_cavity_diags|test_ocean_cavity_diags|collect_ocean_cavity_diags_tests|ocean_cavity_diags|ocean"
     "test_ocean_cavity_grounded_budget|test_ocean_cavity_grounded_budget|collect_ocean_cavity_grounded_budget_tests|ocean_cavity_grounded_budget|ocean"
+    "test_ocean_cavity_engine|test_ocean_cavity_engine|collect_ocean_cavity_engine_tests|ocean_cavity_engine|ocean"
     "test_ocean_cavity_freshwater|test_ocean_cavity_freshwater|collect_ocean_cavity_freshwater_tests|ocean_cavity_freshwater|ocean"
     "test_ocean_pgf_wright|test_ocean_pgf_wright|collect_ocean_pgf_wright_tests|ocean_pgf_wright|ocean"
     "test_ocean_pgf_gprime|test_ocean_pgf_gprime|collect_ocean_pgf_gprime_tests|ocean_pgf_gprime|ocean"
@@ -332,6 +333,7 @@ set(RDB_TESTS
     "test_ocean_boundary|test_ocean_boundary|collect_ocean_boundary_tests|ocean_boundary|ocean"
     "test_ocean_periodic|test_ocean_periodic|collect_ocean_periodic_tests|ocean_periodic|ocean"
     "test_ocean_periodic_seam_file|test_ocean_periodic_seam_file|collect_ocean_periodic_seam_file_tests|ocean_periodic_seam_file|ocean"
+    "test_ocean_surface_flux_seam|test_ocean_surface_flux_seam|collect_ocean_surface_flux_seam_tests|ocean_surface_flux_seam|ocean"
     "test_ocean_fold|test_ocean_fold|collect_ocean_fold_tests|ocean_fold|ocean"
     "test_ocean_fold_plan|test_ocean_fold_plan|collect_ocean_fold_plan_tests|ocean_fold_plan|ocean"
     "test_ocean_tripolar|test_ocean_tripolar|collect_ocean_tripolar_tests|ocean_tripolar|ocean"
@@ -433,6 +435,7 @@ set(NETCDF_TESTS
     test_static_2d_reader
     test_ocean_cavity_draft_file
     test_ocean_periodic_seam_file
+    test_ocean_surface_flux_seam
     test_ocean_diag_netcdf
     test_ocean_diag_precision
     test_ocean_supergrid
@@ -458,6 +461,7 @@ set(NETCDF_REQUIRED_TESTS
     test_static_2d_reader
     test_ocean_cavity_draft_file
     test_ocean_periodic_seam_file
+    test_ocean_surface_flux_seam
     test_ocean_diag_netcdf
     test_ocean_diag_precision
     test_ocean_supergrid
@@ -700,6 +704,10 @@ if(RDB_ENABLE_MPI)
       set_tests_properties(rdb_${test} PROPERTIES ENVIRONMENT
                                                   "OMP_NUM_THREADS=1")
     endif()
+    if(${test} STREQUAL test_ocean_decomp_bitid_mpi)
+      # 2-rank leg; same 4 h TIMEOUT and rationale as the 1/4-rank legs below.
+      set_tests_properties(rdb_${test} PROPERTIES TIMEOUT 14400)
+    endif()
   endforeach()
   # The KE probe reduction must give the same digits on any rank count: the
   # registered 4-rank run covers 4x1/1x4/2x2; add the 1- and 2-rank runs.
@@ -801,9 +809,34 @@ if(RDB_ENABLE_MPI)
   add_test(NAME rdb_test_ocean_decomp_bitid_mpi_4rank
            COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 4
                    $<TARGET_FILE:test_ocean_decomp_bitid_mpi>)
+  # EXPERIMENTAL in-halo barotropic march (`&ocean_bt_nml inhalo_march`): the
+  # decomposed runs march with it (poisoned NaN ghosts between exchanges), the
+  # serial reference without; a representative subset of the families (walls +
+  # island, periodic, open/tidal OBC, tripolar fold incl. px > 1).
+  foreach(np 2 4)
+    add_test(NAME rdb_test_ocean_decomp_bitid_mpi_${np}rank_inhalo
+             COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${np}
+                     $<TARGET_FILE:test_ocean_decomp_bitid_mpi>)
+    set_tests_properties(
+      rdb_test_ocean_decomp_bitid_mpi_${np}rank_inhalo
+      PROPERTIES
+        LABELS
+        "ocean"
+        ENVIRONMENT
+        "OMP_NUM_THREADS=1;RDB_BITID_INHALO=1;RDB_BT_INHALO_POISON=2;RDB_BITID_CASES=island_basin,periodic_channel_zstar,open_obc,tripolar"
+        TIMEOUT
+        14400)
+  endforeach()
+  # TIMEOUT: the project uses enable_testing() without include(CTest), so there
+  # is NO default timeout.  This test deliberately runs a must-be-refused probe
+  # (check_cavity_grounded_refusal) in which every rank has to reach the same
+  # configure verdict; if a verdict regresses to per-tile the ranks hang in the
+  # next collective and, with no TIMEOUT, CI would wait forever.  The honest run
+  # is long (1 rank ~56 min on one V100; 4 ranks ~70 min on a loaded CPU box),
+  # so the limit is 4 h: headroom for a loaded box, still finite.
   set_tests_properties(
     rdb_test_ocean_decomp_bitid_mpi_1rank rdb_test_ocean_decomp_bitid_mpi_4rank
-    PROPERTIES LABELS "ocean" ENVIRONMENT "OMP_NUM_THREADS=1")
+    PROPERTIES LABELS "ocean" ENVIRONMENT "OMP_NUM_THREADS=1" TIMEOUT 14400)
   # OM3 C2c-3b: atm-state provider + ocean bulk-flux consumer, 1 vs 2x2
   # bit-identity (atm%tas, ss%tau_x/tau_y, sf%q_sens physical cells). Not part
   # of the generic MPI_TESTS foreach above (it needs exactly the {1,4}rank legs
@@ -830,6 +863,27 @@ if(RDB_ENABLE_MPI)
                    $<TARGET_FILE:test_ocean_atm_state_mpi>)
   set_tests_properties(
     rdb_test_ocean_atm_state_mpi_1rank rdb_test_ocean_atm_state_mpi_4rank
+    PROPERTIES LABELS "ocean" ENVIRONMENT "OMP_NUM_THREADS=1")
+
+  # Bulk-forcing wind stress under the tripolar fold: 1 rank vs 2x2 / 4x1 (the
+  # distributed fold) / 1x4, owned tau_x / tau_y / stress_mag, bitwise.
+  add_executable(test_ocean_bulk_stress_fold_mpi
+                 mpi/test_ocean_bulk_stress_fold_mpi.F90)
+  target_include_directories(
+    test_ocean_bulk_stress_fold_mpi PRIVATE "${CMAKE_BINARY_DIR}/modules"
+                                            "${RDB_SHARED_INCLUDE_DIR}")
+  target_link_libraries(
+    test_ocean_bulk_stress_fold_mpi PRIVATE rdb_analytical ${main_lib}
+                                            test-drive::test-drive)
+  add_test(NAME rdb_test_ocean_bulk_stress_fold_mpi_1rank
+           COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 1
+                   $<TARGET_FILE:test_ocean_bulk_stress_fold_mpi>)
+  add_test(NAME rdb_test_ocean_bulk_stress_fold_mpi_4rank
+           COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 4
+                   $<TARGET_FILE:test_ocean_bulk_stress_fold_mpi>)
+  set_tests_properties(
+    rdb_test_ocean_bulk_stress_fold_mpi_1rank
+    rdb_test_ocean_bulk_stress_fold_mpi_4rank
     PROPERTIES LABELS "ocean" ENVIRONMENT "OMP_NUM_THREADS=1")
 endif()
 
@@ -959,4 +1013,31 @@ else()
   set_tests_properties(
     rdb_python_tests PROPERTIES LABELS "ocean;python" ENVIRONMENT
                                 "RDB_LIB=$<TARGET_FILE:${main_lib}_shared>")
+endif()
+
+# --------------------------------------------------------------------------
+# Optional: no compiler vector-math entry points in the model objects.
+#
+# `tools/check_no_vector_math.py` runs `nm -u` over this build's src/ + app/
+# objects and fails on a glibc `_ZGV*` reference that is not in
+# `tools/vector_math_allowlist.txt` (or on a listed object that has stopped
+# referencing one).  GNU only: the allow-list is seeded from a GNU build and
+# libmvec is a glibc/gfortran mechanism.  Needs the model objects, so it is a
+# ctest and NOT a pre-commit hook.
+# --------------------------------------------------------------------------
+if(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU" AND NOT RDB_ENABLE_GPU)
+  find_package(
+    Python3
+    COMPONENTS Interpreter
+    QUIET)
+  if(Python3_Interpreter_FOUND)
+    add_test(
+      NAME rdb_check_no_vector_math
+      COMMAND
+        "${Python3_EXECUTABLE}"
+        "${PROJECT_SOURCE_DIR}/tools/check_no_vector_math.py" --build-dir
+        "${CMAKE_BINARY_DIR}" --allowlist
+        "${PROJECT_SOURCE_DIR}/tools/vector_math_allowlist.txt")
+    set_tests_properties(rdb_check_no_vector_math PROPERTIES LABELS "core")
+  endif()
 endif()

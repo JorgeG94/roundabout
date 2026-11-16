@@ -17,7 +17,9 @@ module rdb_ocean_sw_chl
    !! runs once in the configure phase BEFORE `ocean_state_enter_data`
    !! (registration opens the file and allocates the reader brackets);
    !! `sw_chl_apply` runs once per outer step right after
-   !! `ocean_data_input_update_all(t)`.  The chlorophyll destination
+   !! `ocean_data_input_update_all(t)`; it exchanges the chlorophyll seam
+   !! ghosts (MPI / periodic wrap / tripolar fold) so a decomposed run is
+   !! bitwise the one-rank run.  The chlorophyll destination
    !! (`sf%sw_chl_field`) and the opacity array are mapped by the
    !! surface-flux slot, so this slot adds no `enter_data` term.
    !!
@@ -33,6 +35,8 @@ module rdb_ocean_sw_chl
                                    ocean_data_input_register_2d, &
                                    ocean_data_input_update_2d, DATA_OOR_ERROR
    use rdb_ocean_surface_flux, only: ocean_surface_flux_t, sw_opacity_manizza
+   use rdb_ocean_boundary_types, only: ocean_bc_state_t
+   use rdb_ocean_halo_state, only: ocean_halo_exchange_centre_field
    use rdb_ocean_status, only: OCEAN_STATUS_OK, OCEAN_STATUS_ERR_SETUP
    use rdb_error_ring, only: fail
    use pic_logger, only: logger => global_logger
@@ -128,7 +132,7 @@ contains
                        trim(cfg%sw_chl_var)//"' in "//trim(cfg%sw_chl_file))
    end subroutine sw_chl_configure
 
-   subroutine sw_chl_apply(this, reader, grid, wet_mask, sf, t)
+   subroutine sw_chl_apply(this, reader, grid, wet_mask, sf, bc, t)
       !! Blend the chlorophyll bracket for time `t` into
       !! `sf%sw_chl_field` and refresh every band's opacity.  Call right
       !! after `ocean_data_input_update_all(t)`.
@@ -137,11 +141,18 @@ contains
       type(hgrid_t), intent(in) :: grid
       real(wp), intent(in) :: wet_mask(grid%nx_total, grid%ny_total)
       type(ocean_surface_flux_t), intent(inout) :: sf
+      type(ocean_bc_state_t), intent(in) :: bc
+         !! Periodic / north-fold topology for the seam-ghost exchange.
       real(wp), intent(in) :: t
 
       if (.not. this%active) return
       call ocean_data_input_update_2d(reader, this%id_chl, t, grid%nx_total, grid%ny_total, &
                                       sf%sw_chl_field)
+      ! The windowed read fills physical cells only; the deposition kernel and
+      ! the KPP/EPBL SW terms run over the full array, so the seam ghosts are
+      ! EXCHANGED (never extrapolated) before the opacities are derived.  On
+      ! one rank without periodicity this is a no-op (ghosts stay at the floor).
+      call ocean_halo_exchange_centre_field(sf%sw_chl_field, grid, bc)
       call sw_chl_fill_kappa(this, grid%nx_total, grid%ny_total, wet_mask, &
                              sf%sw_chl_field, sf%sw_kappa)
    end subroutine sw_chl_apply

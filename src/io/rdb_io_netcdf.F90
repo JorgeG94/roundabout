@@ -643,13 +643,17 @@ contains
          !! buffer sized for a CF `units` string.
       logical, intent(out) :: ok
 
-      integer :: status
+      integer :: status, p0
       character(len=1024) :: buf
 
       buf = ""
       status = nf90_get_att(ncid, varid, name, buf)
       ok = (status == nf90_noerr)
       if (ok) then
+         ! Some builds hand back the C string's terminator inside the buffer
+         ! (a trailing NUL that `trim` does not strip): cut at the first NUL.
+         p0 = index(buf, achar(0))
+         if (p0 > 0) buf(p0:) = ""
          value = trim(buf)
       else
          value = ""

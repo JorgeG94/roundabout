@@ -15,7 +15,7 @@ module test_ocean_halo_single_rank
    use rdb_constants, only: wp
    use rdb_decomp, only: decomp_t, decomp_init
    use rdb_ocean_halo, only: ocean_halo_init, ocean_halo_destroy, &
-                             ocean_halo_is_init, &
+                             ocean_halo_is_init, ocean_halo_global_extent, &
                              ocean_halo_centre, ocean_halo_face_x, &
                              ocean_halo_face_y
    use rdb_comm_env, only: comm_env_init, comm_env_setup_roles
@@ -144,7 +144,7 @@ contains
       integer, parameter :: ny = NY_PHYS + 2*NGHOST
       real(wp) :: fld(nx, ny)
       type(decomp_t) :: decomp
-      integer :: i, j, k, ng
+      integer :: i, j, k, ng, gi0, gj0, gnx, gny
       real(wp), parameter :: SENTINEL = -999.0_wp
 
       ng = NGHOST
@@ -207,7 +207,17 @@ contains
          end do
       end block checks
 
+      call ocean_halo_global_extent(gi0, gj0, gnx, gny)
+      call check(error, gnx == NX_PHYS .and. gny == NY_PHYS, &
+                 "global extent must be the decomposition while initialised")
+      if (allocated(error)) return
+
       call ocean_halo_destroy()
+
+      ! After destroy the extent is "not available" (no stale decomposition).
+      call ocean_halo_global_extent(gi0, gj0, gnx, gny)
+      call check(error, gnx == 0 .and. gny == 0, &
+                 "global extent must be 0 after ocean_halo_destroy")
    end subroutine test_nonperiodic_noop
 
 end module test_ocean_halo_single_rank

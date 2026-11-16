@@ -1,5 +1,6 @@
 submodule(rdb_config) rdb_config_validate
    !! validate_config and its helper predicates.
+   use rdb_safe_math, only: safe_exp
    implicit none
 
    real(wp), parameter :: VORTEX_F_MIN = 1.0e-6_wp
@@ -1969,10 +1970,11 @@ contains
          case ("none", "flat", "linear")
             continue
          case ("file")
-            ! Ships single-rank, through the PR-14 static-2-D reader
+            ! Reads through the PR-14 static-2-D reader
             ! (`ocean_data_input_load_static_2d`), which DOES apply the
-            ! global offset — but the cavity as a whole is single-rank
-            ! fenced below, and the loader re-asserts it.
+            ! global offset; on more than one rank `engine_setup` refuses
+            ! this source (unproven on a decomposed domain) and the seed
+            ! re-asserts it.
             if (len_trim(cfg%ocean%cavity_dyn%draft_file) == 0) then
                call logger%error("&ocean_cavity_dyn_nml draft_config='file' requires "// &
                                  "draft_file")
@@ -2664,15 +2666,6 @@ contains
                               "ice.")
             has_error = .true.
          end if
-         if (cfg%px*cfg%py > 1) then
-            call logger%error("&ocean_cavity_dyn_nml enable=.true. is single-rank in "// &
-                              "v1 (px*py = "//to_string(cfg%px*cfg%py)//").  The "// &
-                              "draft halo itself is two lines, but the grounding "// &
-                              "statistics are global reductions the v1 configure does "// &
-                              "not take, and draft_config='file' inherits the "// &
-                              "local-nx reader.  Lifting the fence is its own PR.")
-            has_error = .true.
-         end if
          ! --- mutually exclusive capabilities ---
          if (cfg%ocean%wetdry%enable) then
             call logger%error("&ocean_cavity_dyn_nml enable=.true. is mutually "// &
@@ -3128,14 +3121,6 @@ contains
                               "exclusive with &ocean_bt_nml use_cont_type / "// &
                               "upstream_h_face (all three replace the BT Pass-1 "// &
                               "face thickness; composition deferred)")
-            has_error = .true.
-         end if
-         ! v1 single-rank: the theta/mask ghost exchange lands with the
-         ! C-grid MPI halo work.
-         if (cfg%px*cfg%py > 1) then
-            call logger%error("&ocean_wetdry_nml enable=.true. is single-rank in "// &
-                              "v1 (px*py = 1); the wet-mask/limiter halo exchange "// &
-                              "is deferred to the C-grid MPI work")
             has_error = .true.
          end if
          ! Wet/dry needs the split solver: the limiter lives in the BT substep.
@@ -3837,6 +3822,18 @@ contains
                               "BT solve would silently transport on un-narrowed widths)")
             has_error = .true.
          end if
+         if (any_chapman_edge(cfg)) then
+            ! The Chapman edge mean is gathered from the NORMAL-width
+            ! `bt_eta` on the device, and the march-in's wide clone is not
+            ! bit-identical with open boundaries (the wide band evolves
+            ! under array-edge closures the OBC target does not see).
+            call logger%error("&ocean_bt_nml bt_halo > 0 is mutually exclusive "// &
+                              "with a chapman &ocean_bc_nml edge (the Chapman "// &
+                              "target is gathered from the normal-width barotropic "// &
+                              "state; the wide-halo march-in is not bit-identical "// &
+                              "with open boundaries)")
+            has_error = .true.
+         end if
          if (cfg%ocean%cavity_dyn%enable) then
             ! Same failure mode as porous, one level up: `metrics_w` is
             ! re-filled from the grid formula and carries no `z_draft`, so
@@ -3869,6 +3866,53 @@ contains
                               "no av_rem/visc_rem ghost-width statistics, like porous)")
             has_error = .true.
          end if
+      end if
+      ! ---- BT in-halo march (inhalo_march) exclusions (EXPERIMENTAL) ----
+      if (cfg%ocean%bt%inhalo_march) then
+         if (cfg%ocean%bt%bt_halo > 0) then
+            call logger%error("&ocean_bt_nml inhalo_march is mutually exclusive with "// &
+                              "bt_halo > 0 (two different ways of skipping the "// &
+                              "per-substep exchange)")
+            has_error = .true.
+         end if
+         if (cfg%ocean%wetdry%enable) then
+            call logger%error("&ocean_bt_nml inhalo_march is mutually exclusive with "// &
+                              "&ocean_wetdry_nml enable (the outflow limiter and the "// &
+                              "wet mask carry no ghost-reach analysis)")
+            has_error = .true.
+         end if
+         if (cfg%ocean%bt%use_cont_type .or. cfg%ocean%bt%upstream_h_face) then
+            call logger%error("&ocean_bt_nml inhalo_march is mutually exclusive with "// &
+                              "use_cont_type / upstream_h_face (their ghost bands are "// &
+                              "built once per stage, not proven images)")
+            has_error = .true.
+         end if
+         if (cfg%ocean%tides%enable .or. cfg%ocean%psurf%enable) then
+            call logger%error("&ocean_bt_nml inhalo_march is mutually exclusive with "// &
+                              "tides / psurf (eta_forcing ghost band not exchanged)")
+            has_error = .true.
+         end if
+         if (any_chapman_edge(cfg)) then
+            call logger%error("&ocean_bt_nml inhalo_march is mutually exclusive with "// &
+                              "a chapman &ocean_bc_nml edge (the collective edge "// &
+                              "mean inside the fast loop is untested with the "// &
+                              "skipped exchanges)")
+            has_error = .true.
+         end if
+         if (cfg%ocean%bt%inhalo_stride < 0) then
+            call logger%error("&ocean_bt_nml inhalo_stride must be >= 0")
+            has_error = .true.
+         end if
+         if (cfg%ocean%bt%inhalo_stride > cfg%nghost - 1) then
+            call logger%error("&ocean_bt_nml inhalo_stride exceeds the bound "// &
+                              "nghost - 1 (the top-level nghost): the ghost "// &
+                              "band shrinks one ring per substep, so a longer "// &
+                              "stride leaves the owned cells inexact")
+            has_error = .true.
+         end if
+      else if (cfg%ocean%bt%inhalo_stride /= 0) then
+         call logger%warning("&ocean_bt_nml inhalo_stride is set but inhalo_march "// &
+                             "= .false.; the stride is ignored")
       end if
       ! ---- Porous barriers (&ocean_porous_nml) exclusions ----
       if (cfg%ocean%porous%enable) then
@@ -3983,6 +4027,23 @@ contains
             call logger%error("&ocean_dataovr_nml evap/lprec file forcing requires "// &
                               "&ocean_forcing_nml enable_components=.true. "// &
                               "(there is no non-component freshwater slot to write into)")
+            has_error = .true.
+         end if
+
+         ! D3b: components OFF, a heat/salt file AND sea ice.  The reader
+         ! writes `Q_heat`/`Q_salt` directly every step and the ice couplers
+         ! full-overwrite the same arrays on thermo steps, so one of the two
+         ! is silently lost (the reader's next write erases the ice's heat,
+         ! brine and transmitted shortwave before the apply reads them).
+         ! With components on, each has its own slot.
+         if (dataovr_heat_salt_clobbers_ice(cfg%ocean%dataovr, &
+                                            cfg%ocean%forcing%enable_components, &
+                                            cfg%ocean%ice%enable)) then
+            call logger%error("&ocean_dataovr_nml heat/salt file forcing with "// &
+                              "&ocean_ice_nml enable=.true. requires "// &
+                              "&ocean_forcing_nml enable_components=.true. (without it the "// &
+                              "reader and the ice coupler overwrite the same Q_heat/Q_salt "// &
+                              "and the ice's heat, brine and shortwave never reach the ocean)")
             has_error = .true.
          end if
 
@@ -4131,7 +4192,7 @@ contains
       ! largest gradient at d = Hv/sqrt(2) of sqrt(2) exp(-1/2) |dT|/Hv =
       ! 0.858 |dT|/Hv (K/m); the background dT/dz must exceed it or N^2 < 0.
       if (cfg%ocean%ic%vortex_dT < 0.0_wp .and. cfg%ocean%ic%vortex_hv > 0.0_wp) then
-         dtdz_min = sqrt(2.0_wp)*exp(-0.5_wp)*abs(cfg%ocean%ic%vortex_dT)/cfg%ocean%ic%vortex_hv
+         dtdz_min = sqrt(2.0_wp)*safe_exp(-0.5_wp)*abs(cfg%ocean%ic%vortex_dT)/cfg%ocean%ic%vortex_hv
          if (cfg%ocean%ic%vortex_dT_dz <= dtdz_min) then
             call logger%error("balanced_vortex is statically UNSTABLE (N^2 < 0 in the core): "// &
                               "a cold core dT = "//to_string(cfg%ocean%ic%vortex_dT)// &
@@ -4211,6 +4272,17 @@ contains
       bad = (len_trim(cfg%evap%file) > 0 .or. len_trim(cfg%lprec%file) > 0) &
             .and. (.not. use_components)
    end function dataovr_freshwater_needs_components
+
+   pure module function dataovr_heat_salt_clobbers_ice(cfg, use_components, ice_enable) result(bad)
+      !! `.true.` when a heat/salt data file, sea ice and the component set
+      !! OFF coincide: the reader and the ice coupler then write the same
+      !! `Q_heat`/`Q_salt`.  Reports the PROBLEM (like its freshwater twin).
+      type(ocean_dataovr_config_t), intent(in) :: cfg
+      logical, intent(in) :: use_components, ice_enable
+      logical :: bad
+      bad = ice_enable .and. (.not. use_components) .and. &
+            (len_trim(cfg%heat%file) > 0 .or. len_trim(cfg%salt%file) > 0)
+   end function dataovr_heat_salt_clobbers_ice
 
    pure module function atm_forcing_prereq_code(cfg) result(code)
       !! First failing prerequisite of `&ocean_atm_forcing_nml enable` as an
@@ -4421,6 +4493,17 @@ contains
       if (compute_size < 0 .and. exclusion_active) width = 0   ! never taken; keeps the dummies referenced
    end function resolve_bt_halo
 
+   pure function any_chapman_edge(cfg) result(any_ch)
+      !! True iff any of the four `&ocean_bc_nml` edges is `chapman`.
+      use rdb_ocean_boundary_types, only: ocean_bc_type_from_string, OBC_CHAPMAN
+      type(config_t), intent(in) :: cfg
+      logical :: any_ch
+      any_ch = ocean_bc_type_from_string(cfg%ocean%bc%west) == OBC_CHAPMAN .or. &
+               ocean_bc_type_from_string(cfg%ocean%bc%east) == OBC_CHAPMAN .or. &
+               ocean_bc_type_from_string(cfg%ocean%bc%south) == OBC_CHAPMAN .or. &
+               ocean_bc_type_from_string(cfg%ocean%bc%north) == OBC_CHAPMAN
+   end function any_chapman_edge
+
    pure module subroutine bt_halo_auto_exclusion(cfg, excluded, reason)
       !! Single source of truth for the BT march-in exclusion set (mirrors the
       !! explicit-`bt_halo > 0` fail-loud checks in `validate_config`).  Reports
@@ -4446,6 +4529,8 @@ contains
          reason = "psurf enable"
       else if (cfg%ocean%porous%enable) then
          reason = "porous enable"
+      else if (any_chapman_edge(cfg)) then
+         reason = "chapman &ocean_bc_nml edge"
       else if (cfg%ocean%cavity_dyn%enable) then
          ! The wide BT clone rebuilds `metrics_w` from the grid formula and
          ! carries no `z_draft`, so its reference depth would be the BED —
