@@ -267,6 +267,7 @@ set(RDB_TESTS
     "test_cice_forcing|test_cice_forcing|collect_cice_forcing_tests|cice_forcing|ocean"
     "test_cice_closure|test_cice_closure|collect_cice_closure_tests|cice_closure|ocean"
     "test_cice_stefan_column|test_cice_stefan_column|collect_cice_stefan_column_tests|cice_stefan_column|ocean"
+    "test_cice_diags|test_cice_diags|collect_cice_diags_tests|cice_diags|ocean"
     "test_ocean_ice_evp_fold|test_ocean_ice_evp_fold|collect_ocean_ice_evp_fold_tests|ocean_ice_evp_fold|ocean"
     "test_ocean_ice_restart|test_ocean_ice_restart|collect_ocean_ice_restart_tests|ocean_ice_restart|ocean"
     "test_ocean_ice_diags|test_ocean_ice_diags|collect_ocean_ice_diags_tests|ocean_ice_diags|ocean"
@@ -456,6 +457,7 @@ set(RDB_STATIC_CORE_TESTS test_remap_pqm)
 # built thread-safe (OMP_NUM_THREADS=1 prevents crashes when the OpenMP runtime
 # is active via -mp=multicore or -fopenmp).
 set(NETCDF_TESTS
+    test_cice_diags
     test_static_2d_reader
     test_ocean_cavity_draft_file
     test_ocean_periodic_seam_file

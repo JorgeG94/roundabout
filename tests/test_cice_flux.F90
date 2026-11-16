@@ -150,6 +150,10 @@ contains
          p => fx%dvirdgdt
       case (20)
          p => fx%opening
+      case (21)
+         p => fx%aice_th
+      case (22)
+         p => fx%vice_th
       case default
          continue
       end select
@@ -278,7 +282,7 @@ contains
       call check(error, size(fx%freshn, 1) == NX .and. size(fx%freshn, 2) == NY .and. size(fx%freshn, 3) == NCAT, &
                  "per-category shape (nx,ny,ncat)")
       call check(error, all(pt2(fx, 1) == 0.0_wp) .and. all(fx%snoicen == 0.0_wp), "inited to zero")
-      want = int(NX*NY, int64)*8_int64*(int(NCELL, int64) + int(NCATF, int64)*int(NCAT, int64))
+      want = int(NX*NY, int64)*8_int64*(int(NCELL + 2, int64) + int(NCATF, int64)*int(NCAT, int64))   ! +2: aice_th, vice_th (not zeroed by ice_flux_zero)
       call check(error, fx%bytes() == want, "bytes() counts every array (closed form)")
       call fx%destroy()
       call check(error,.not. fx%is_init .and. .not. allocated(fx%fresh) .and. fx%bytes() == 0_int64, &

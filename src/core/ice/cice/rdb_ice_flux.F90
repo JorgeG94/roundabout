@@ -23,6 +23,8 @@ module rdb_ice_flux
    !!   accumulators over the cells `is:ie, js:je`; pre-existing cell values are
    !!   kept.  A non-finite contribution propagates into the cell fields (no
    !!   clamp can launder it) and ORs `ICE_ERR_NONFINITE` into `ice_err`.
+   !! - `ice_snap_thermo_impl`: the post-thermodynamics `aice, vice` snapshot the history
+   !!   tendency diagnostics difference (copy, ghosts included, ONE launch).
    !! - `ice_save_init_impl`: the start-of-step snapshots
    !!   `aicen/vicen/vsnon/Tsfcn/aice -> *_init`, ghosts included, ONE launch.
    !!
@@ -35,7 +37,7 @@ module rdb_ice_flux
    implicit none
    private
 
-   public :: ice_flux_zero_impl, ice_flux_merge_impl, ice_save_init_impl
+   public :: ice_flux_zero_impl, ice_flux_merge_impl, ice_save_init_impl, ice_snap_thermo_impl
 
 contains
 
@@ -210,5 +212,22 @@ contains
       end do
       !$acc end data
    end subroutine ice_save_init_impl
+
+   pure subroutine ice_snap_thermo_impl(nx, ny, aice, vice, aice_th, vice_th)
+      !! Copy the cell aggregates into the post-thermodynamics snapshot over the whole
+      !! ghosted extent, in one launch.
+      integer, intent(in) :: nx, ny
+      real(wp), intent(in) :: aice(nx, ny), vice(nx, ny)
+      real(wp), intent(inout) :: aice_th(nx, ny), vice_th(nx, ny)
+
+      integer :: i, j
+
+      !$acc data present(aice, vice, aice_th, vice_th)
+      do concurrent(j=1:ny, i=1:nx)
+         aice_th(i, j) = aice(i, j)
+         vice_th(i, j) = vice(i, j)
+      end do
+      !$acc end data
+   end subroutine ice_snap_thermo_impl
 
 end module rdb_ice_flux
