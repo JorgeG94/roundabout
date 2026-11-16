@@ -121,7 +121,8 @@ module rdb_ice_cice_hooks
       !! TEST SEAM of the decomposition tests' negative controls, `0` in every run: bit 1 skips the exchange of the
       !! T-cell wind stress, bit 2 the refresh of the assembled flux ghosts, bit 4 the category-state halo.  A
       !! decomposed run with one bit set must differ from the serial one (the test proves each exchange is needed).
-   integer, parameter, public :: ICE_SKIP_STRESS_HALO = 1, ICE_SKIP_FLUX_GHOSTS = 2, ICE_SKIP_STATE_HALO = 4
+   integer, parameter, public :: ICE_SKIP_STRESS_HALO = 1, ICE_SKIP_FLUX_GHOSTS = 2, ICE_SKIP_STATE_HALO = 4, &
+                                 ICE_SKIP_FOLD_SIGN = 8, ICE_SKIP_FOLD_PAIR = 16, ICE_SKIP_FOLD_FLUX = 32
 
    type(ocean_state_t), pointer, save :: S => null()
    type(hgrid_t), pointer, save :: G => null()
@@ -505,7 +506,9 @@ contains
       ! the face hand-off averages the T-cell stress across the seam: refresh its ghost ring (exchange on a split
       ! axis, the local wrap otherwise, the fold copy on the fold row)
       if (iand(ice_mr_test_skip, ICE_SKIP_STRESS_HALO) == 0) then
-         call ice_halo_centre_pair(G, S%bc, ctx%cice%nx, ctx%cice%ny, ctx%work%strair_x_T, ctx%work%strair_y_T)
+         call ice_halo_centre_pair(G, S%bc, ctx%cice%nx, ctx%cice%ny, ctx%work%strair_x_T, ctx%work%strair_y_T, &
+                                   test_fold=merge(2, merge(1, 0, iand(ice_mr_test_skip, ICE_SKIP_FOLD_SIGN) /= 0), &
+                                                   iand(ice_mr_test_skip, ICE_SKIP_FOLD_PAIR) /= 0))
       end if
       call ice_atm_stress_to_faces(ctx%cice%nx, ctx%cice%ny, is, ie, js, je, ctx%work%strair_x_T, &
                                    ctx%work%strair_y_T, S%ice_cgrid%tarea, S%ice_cgrid%earea, &
@@ -551,6 +554,8 @@ contains
       if (S%icec%tws%seam%nbatch == 0) then
          call ice_transport_seam_bind(S%icec%tws%seam, G, S%bc, S%icec%tws%fw%nbatch, S%icec%tws%ntrace)
       end if
+      ! test harness only (`ice_mr_test_skip`): the fold-row flux pairing off, a negative control of the decomposition test
+      S%icec%tws%seam%pair_fold = iand(ice_mr_test_skip, ICE_SKIP_FOLD_FLUX) == 0
       associate (cm => S%ice_cgrid, c => ctx%cice, w => ctx%work, f => ctx%flux)
          call ice_step_transport(S%icec%tws, c%p, ctx%dt, ctx%transport_post, is, ie, js, je, &
                                  S%ice%u_ice, S%ice%v_ice, cm%HTE, cm%HTN, cm%tarea, cm%dxT, cm%dyT, &

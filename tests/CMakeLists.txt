@@ -264,6 +264,7 @@ set(RDB_TESTS
     "test_cice_step_plan|test_cice_step_plan|collect_cice_step_plan_tests|cice_step_plan|ocean"
     "test_cice_coupling|test_cice_coupling|collect_cice_coupling_tests|cice_coupling|ocean"
     "test_cice_engine|test_cice_engine|collect_cice_engine_tests|cice_engine|ocean"
+    "test_cice_tripole|test_cice_tripole|collect_cice_tripole_tests|cice_tripole|ocean"
     "test_cice_forcing|test_cice_forcing|collect_cice_forcing_tests|cice_forcing|ocean"
     "test_cice_closure|test_cice_closure|collect_cice_closure_tests|cice_closure|ocean"
     "test_cice_stefan_column|test_cice_stefan_column|collect_cice_stefan_column_tests|cice_stefan_column|ocean"
