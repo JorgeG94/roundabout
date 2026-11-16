@@ -381,7 +381,7 @@ contains
          call ocean_surface_flux_assemble(grid, sf_on, ms)
 
          !$acc update self(sf_off%Q_heat, sf_off%Q_salt, sf_on%Q_heat, sf_on%Q_salt, &
-         !$acc&            sf_on%heat_added, sf_on%salt_flux)
+         !$acc&            sf_on%heat_ice, sf_on%salt_ice)
 
          call sf_on%exit_data()
          call sf_off%exit_data()
@@ -403,11 +403,11 @@ contains
                     "components on vs off must give bit-identical Q_salt under ice")
          if (allocated(error)) exit checks
 
-         call check(error, maxval(abs(sf_on%heat_added - HFLUX)) == 0.0_wp, &
-                    "components-on path must write the ice heat into the heat_added COMPONENT")
+         call check(error, maxval(abs(sf_on%heat_ice - HFLUX)) == 0.0_wp, &
+                    "components-on path must write the ice heat into the heat_ice COMPONENT")
          if (allocated(error)) exit checks
-         call check(error, maxval(abs(sf_on%salt_flux - SFLUX)) == 0.0_wp, &
-                    "components-on path must write the ice salt into the salt_flux COMPONENT")
+         call check(error, maxval(abs(sf_on%salt_ice - SFLUX)) == 0.0_wp, &
+                    "components-on path must write the ice salt into the salt_ice COMPONENT")
 
       end block checks
       call sf_on%destroy(); call sf_off%destroy(); call ice%destroy(); call ms%destroy()

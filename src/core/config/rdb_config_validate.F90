@@ -3867,6 +3867,53 @@ contains
             has_error = .true.
          end if
       end if
+      ! ---- BT in-halo march (inhalo_march) exclusions (EXPERIMENTAL) ----
+      if (cfg%ocean%bt%inhalo_march) then
+         if (cfg%ocean%bt%bt_halo > 0) then
+            call logger%error("&ocean_bt_nml inhalo_march is mutually exclusive with "// &
+                              "bt_halo > 0 (two different ways of skipping the "// &
+                              "per-substep exchange)")
+            has_error = .true.
+         end if
+         if (cfg%ocean%wetdry%enable) then
+            call logger%error("&ocean_bt_nml inhalo_march is mutually exclusive with "// &
+                              "&ocean_wetdry_nml enable (the outflow limiter and the "// &
+                              "wet mask carry no ghost-reach analysis)")
+            has_error = .true.
+         end if
+         if (cfg%ocean%bt%use_cont_type .or. cfg%ocean%bt%upstream_h_face) then
+            call logger%error("&ocean_bt_nml inhalo_march is mutually exclusive with "// &
+                              "use_cont_type / upstream_h_face (their ghost bands are "// &
+                              "built once per stage, not proven images)")
+            has_error = .true.
+         end if
+         if (cfg%ocean%tides%enable .or. cfg%ocean%psurf%enable) then
+            call logger%error("&ocean_bt_nml inhalo_march is mutually exclusive with "// &
+                              "tides / psurf (eta_forcing ghost band not exchanged)")
+            has_error = .true.
+         end if
+         if (any_chapman_edge(cfg)) then
+            call logger%error("&ocean_bt_nml inhalo_march is mutually exclusive with "// &
+                              "a chapman &ocean_bc_nml edge (the collective edge "// &
+                              "mean inside the fast loop is untested with the "// &
+                              "skipped exchanges)")
+            has_error = .true.
+         end if
+         if (cfg%ocean%bt%inhalo_stride < 0) then
+            call logger%error("&ocean_bt_nml inhalo_stride must be >= 0")
+            has_error = .true.
+         end if
+         if (cfg%ocean%bt%inhalo_stride > cfg%nghost - 1) then
+            call logger%error("&ocean_bt_nml inhalo_stride exceeds the bound "// &
+                              "nghost - 1 (the top-level nghost): the ghost "// &
+                              "band shrinks one ring per substep, so a longer "// &
+                              "stride leaves the owned cells inexact")
+            has_error = .true.
+         end if
+      else if (cfg%ocean%bt%inhalo_stride /= 0) then
+         call logger%warning("&ocean_bt_nml inhalo_stride is set but inhalo_march "// &
+                             "= .false.; the stride is ignored")
+      end if
       ! ---- Porous barriers (&ocean_porous_nml) exclusions ----
       if (cfg%ocean%porous%enable) then
          if (cfg%ocean%wetdry%enable) then
@@ -3980,6 +4027,23 @@ contains
             call logger%error("&ocean_dataovr_nml evap/lprec file forcing requires "// &
                               "&ocean_forcing_nml enable_components=.true. "// &
                               "(there is no non-component freshwater slot to write into)")
+            has_error = .true.
+         end if
+
+         ! D3b: components OFF, a heat/salt file AND sea ice.  The reader
+         ! writes `Q_heat`/`Q_salt` directly every step and the ice couplers
+         ! full-overwrite the same arrays on thermo steps, so one of the two
+         ! is silently lost (the reader's next write erases the ice's heat,
+         ! brine and transmitted shortwave before the apply reads them).
+         ! With components on, each has its own slot.
+         if (dataovr_heat_salt_clobbers_ice(cfg%ocean%dataovr, &
+                                            cfg%ocean%forcing%enable_components, &
+                                            cfg%ocean%ice%enable)) then
+            call logger%error("&ocean_dataovr_nml heat/salt file forcing with "// &
+                              "&ocean_ice_nml enable=.true. requires "// &
+                              "&ocean_forcing_nml enable_components=.true. (without it the "// &
+                              "reader and the ice coupler overwrite the same Q_heat/Q_salt "// &
+                              "and the ice's heat, brine and shortwave never reach the ocean)")
             has_error = .true.
          end if
 
@@ -4208,6 +4272,17 @@ contains
       bad = (len_trim(cfg%evap%file) > 0 .or. len_trim(cfg%lprec%file) > 0) &
             .and. (.not. use_components)
    end function dataovr_freshwater_needs_components
+
+   pure module function dataovr_heat_salt_clobbers_ice(cfg, use_components, ice_enable) result(bad)
+      !! `.true.` when a heat/salt data file, sea ice and the component set
+      !! OFF coincide: the reader and the ice coupler then write the same
+      !! `Q_heat`/`Q_salt`.  Reports the PROBLEM (like its freshwater twin).
+      type(ocean_dataovr_config_t), intent(in) :: cfg
+      logical, intent(in) :: use_components, ice_enable
+      logical :: bad
+      bad = ice_enable .and. (.not. use_components) .and. &
+            (len_trim(cfg%heat%file) > 0 .or. len_trim(cfg%salt%file) > 0)
+   end function dataovr_heat_salt_clobbers_ice
 
    pure module function atm_forcing_prereq_code(cfg) result(code)
       !! First failing prerequisite of `&ocean_atm_forcing_nml enable` as an

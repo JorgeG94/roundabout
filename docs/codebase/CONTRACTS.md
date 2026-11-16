@@ -109,12 +109,13 @@ reproducible, and `efp_real_diff` for a difference against a latched reference.
 
 The mass-flux components (`evap`, `lprec`, `fprec`, `vprec`, `lrunoff`, `frunoff`, `seaice_melt`) and
 their `heat_content_*` companions are enthalpy and salt bookkeeping only. They do not change column mass.
+The latent heat of fusion of a frozen flux is its own heat component, `q_fus` (`-L_f*fprec`, written by whoever writes `fprec`), kept apart from `heat_content_fprec` so it stays charged whatever the mass treatment does.
 
 | Path | Real column mass? |
 |---|---|
 | Ice-shelf basal melt, `&ocean_cavity_melt_nml freshwater = "mass"` | Yes. The only one. |
 | Ice-shelf basal melt, `freshwater = "virtual"` (default) | No |
-| Sea ice (`salt_flux`, `heat_added` through the coupler) | No. Virtual. |
+| Sea ice (`salt_ice`, `heat_ice`, `sw_ice` through the coupler) | No. Virtual. |
 | The seven atmospheric/river mass-flux components | No |
 
 Under `"mass"` the melt is a Boussinesq volume source, `dh = m·dt/ρ₀`, added to `h_layer(:,:,nz)` by
