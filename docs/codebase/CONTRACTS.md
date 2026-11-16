@@ -120,7 +120,7 @@ their `heat_content_*` companions are enthalpy and salt bookkeeping only. They d
 | Ice-shelf basal melt, `&ocean_cavity_melt_nml freshwater = "mass"` | Yes. The only one. |
 | Ice-shelf basal melt, `freshwater = "virtual"` (default) | No |
 | Sea ice (`salt_ice`, `heat_ice`, `sw_ice` through the coupler) | No. Virtual. |
-| The seven atmospheric/river mass-flux components | No |
+| The seven atmospheric/river mass-flux components (`&ocean_forcing_nml freshwater = "virtual"`: their net `F` is the virtual salt flux `salt_fw`, still no mass; `"mass"` is reserved and refused) | No |
 
 Under `"mass"` the melt is a Boussinesq volume source, `dh = m·dt/ρ₀`, added to `h_layer(:,:,nz)` by
 `ocean_cavity_mass_step` in the stage, at thermo cadence, just after the surface-flux apply.

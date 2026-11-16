@@ -246,6 +246,7 @@ set(RDB_TESTS
     "test_ocean_surface_flux|test_ocean_surface_flux|collect_ocean_surface_flux_tests|ocean_surface_flux|ocean"
     "test_ocean_bulk_flux|test_ocean_bulk_flux|collect_ocean_bulk_flux_tests|ocean_bulk_flux|ocean"
     "test_ocean_surface_forcing_type|test_ocean_surface_forcing_type|collect_ocean_surface_forcing_type_tests|ocean_surface_forcing_type|ocean"
+    "test_ocean_surface_freshwater|test_ocean_surface_freshwater|collect_ocean_surface_freshwater_tests|ocean_surface_freshwater|ocean"
     "test_ocean_forcing_rho_ref|test_ocean_forcing_rho_ref|collect_ocean_forcing_rho_ref_tests|ocean_forcing_rho_ref|ocean"
     "test_ocean_frazil|test_ocean_frazil|collect_ocean_frazil_tests|ocean_frazil|ocean"
     "test_ocean_ice_enthalpy|test_ocean_ice_enthalpy|collect_ocean_ice_enthalpy_tests|ocean_ice_enthalpy|ocean"
@@ -471,6 +472,7 @@ set(NETCDF_TESTS
     test_ocean_driver_diag
     test_ocean_restart
     test_ocean_restart_engine
+    test_ocean_surface_freshwater
     test_ocean_tracer_ratio_pc
     test_ocean_ice_evp
     test_ocean_ice_restart
@@ -501,6 +503,7 @@ set(NETCDF_REQUIRED_TESTS
     test_ocean_driver_diag
     test_ocean_restart
     test_ocean_restart_engine
+    test_ocean_surface_freshwater
     test_ocean_tracer_ratio_pc
     test_ocean_ice_restart
     test_driver_ocean)
@@ -631,8 +634,10 @@ foreach(row ${RDB_TESTS})
   endif()
   target_link_libraries(${test_name} PRIVATE ${_core_for_test} rdb_analytical
                                              test-drive::test-drive)
-  if(test_name STREQUAL "test_cice_forcing" OR test_name STREQUAL
-                                               "test_cice_closure")
+  if(test_name STREQUAL "test_cice_forcing"
+     OR test_name STREQUAL "test_cice_closure"
+     OR test_name STREQUAL "test_ocean_surface_freshwater"
+     OR test_name STREQUAL "test_ocean_restart_engine")
     # the synthetic prescribed atmosphere shared by the two engine tests
     target_sources(${test_name}
                    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/test_cice_synth_atm.F90)

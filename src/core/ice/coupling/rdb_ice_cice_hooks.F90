@@ -59,7 +59,8 @@ module rdb_ice_cice_hooks
    !! just felt.  The `ice_cice_stress_blend` of the adapters (a different formulation: per-ice-area
    !! stress) is not used, the face blend of the C-grid dynamics conserves the momentum of the pair
    !! exactly.  Rain through the ice (`rain_through_impl`) is removed from the window mean of `fresh`
-   !! before the hand-over: see the module docstring of `rdb_ice_cice_adapters`.
+   !! before the hand-over (unless `&ocean_forcing_nml freshwater = "virtual"`, where the open
+   !! fraction's rain dilutes too and the term stays): see the module docstring of `rdb_ice_cice_adapters`.
    use, intrinsic :: iso_fortran_env, only: int32
    use rdb_constants, only: wp
    use rdb_grid, only: hgrid_t
@@ -535,8 +536,9 @@ contains
       ! ledger closes) but the ocean's own precipitation on the open fraction carries ENTHALPY ONLY
       ! (the bulk forcing writes no salt or mass term), so the virtual-salt dilution of the hand-over
       ! must not count it either.  Prescribed atmosphere only: with the uniform atmosphere the rain is
-      ! zero and nothing runs.
-      if (S%atm%enable) then
+      ! zero and nothing runs.  Under `&ocean_forcing_nml freshwater = "virtual"` the open fraction's
+      ! rain DOES dilute (`salt_fw`), so the ice-covered share must too: the term stays in `fresh`.
+      if (S%atm%enable .and. .not. S%surface_flux%fw_virtual) then
          call rain_through_impl(ctx%work%nx, ctx%work%ny, ctx%cice%nghost + 1, &
                                 ctx%cice%nghost + ctx%cice%nx_phys, ctx%cice%nghost + 1, &
                                 ctx%cice%nghost + ctx%cice%ny_phys, ctx%dt/S%icec%avg%t_acc, &

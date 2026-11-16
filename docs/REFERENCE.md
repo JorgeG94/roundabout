@@ -535,7 +535,8 @@ closure is active in which regime, and its tunable knobs, is tabulated in
   killing thin-layer CFL blow-up.
 - **Surface forcing** — wind stress (2D `tau_x`/`tau_y`, with the MOM6
   `DIRECT_STRESS` distribution option), heat/salt flux and the
-  MOM6-shaped component set (`&ocean_forcing_nml enable_components`),
+  MOM6-shaped component set (`&ocean_forcing_nml enable_components`), its
+  virtual fresh-water salt flux (`freshwater = "virtual"`, `-S_surf*(P-E+runoff)`),
   shortwave penetration (`&ocean_thermo_nml sw_pen_frac`), surface
   buoyancy restoring (`&ocean_restore_nml`), atmospheric pressure loading
   (`&ocean_psurf_nml`), geothermal bottom heat

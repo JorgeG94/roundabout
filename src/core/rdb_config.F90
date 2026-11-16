@@ -374,6 +374,15 @@ module rdb_config
          !! `Q_heat`/`Q_salt` from it.  Individual components carry no
          !! knobs of their own — they are filled by fillers (readers,
          !! the ice coupler, ...), not by this namelist.
+      character(len=16) :: freshwater = "none"
+         !! What the surface fresh-water MASS fluxes (`lprec`, `fprec`,
+         !! `evap`, `lrunoff`, `frunoff`) do.  `"none"` (default): nothing,
+         !! they carry enthalpy only (bit-identical).  `"virtual"`: their net
+         !! `F` (kg m-2 s-1, into the ocean) becomes the virtual salt flux
+         !! `-S_surf*F` in its own component slot `salt_fw`, summed by the
+         !! assembler; no column mass moves (Griffies et al. 2001).
+         !! `"mass"` (a real Boussinesq mass source) is reserved and refused
+         !! at configure.  Requires `enable_components`.
    end type ocean_forcing_config_t
 
    type :: ocean_ice_config_t

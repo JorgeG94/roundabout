@@ -3291,6 +3291,15 @@ class OceanForcing(Group):
         default=False,
     )
 
+    freshwater = Enum(
+        'freshwater',
+        doc="Surface fresh-water mass fluxes (lprec/fprec/evap/lrunoff/frunoff): 'none' (default, enthalpy only), 'virtual' (virtual salt flux -S_surf*F, fixed column mass; needs enable_components) or 'mass' (reserved, refused at configure)",
+        units='',
+        required=False,
+        default='none',
+        allowed=('none', 'virtual', 'mass'),
+    )
+
 
 class OceanIce(Group):
     """`&ocean_ice_nml` -- Sea-ice model (SIS2 port) master switch + category/layer counts."""
@@ -8113,4 +8122,4 @@ GENERATED_GROUPS = {
 }
 
 N_GROUPS = 68
-N_KNOBS = 888
+N_KNOBS = 889

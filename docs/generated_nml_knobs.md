@@ -600,6 +600,7 @@ Surface-flux component-set gate (PR-12): allocate the q_sw/evap/heat_content_*/.
 | Knob | Default | Units | Description |
 |------|---------|-------|-------------|
 | `enable_components` | `.false.` |  | Allocate the surface-flux component set and run the assembler (default off => byte-identical) |
+| `freshwater` | `"none"` |  | Surface fresh-water mass fluxes (lprec/fprec/evap/lrunoff/frunoff): 'none' (default, enthalpy only), 'virtual' (virtual salt flux -S_surf*F, fixed column mass; needs enable_components) or 'mass' (reserved, refused at configure) |
 
 ### &ocean_ice_nml
 

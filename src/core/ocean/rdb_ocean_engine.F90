@@ -118,7 +118,9 @@ module rdb_ocean_engine
    use rdb_ocean_dyn, only: ocean_dyn_step, ocean_dyn_step_split, ocean_porous_refresh, &
                             ocean_dyn_enable_bt_wide, isopycnal_vanish_tol
    use rdb_ocean_surface_flux, only: ocean_surface_flux_assemble, &
-                                     ocean_surface_flux_refresh_sw_net
+                                     ocean_surface_flux_refresh_sw_net, &
+                                     ocean_surface_flux_fw_virtual_step, parse_surface_freshwater, &
+                                     SURF_FW_MASS, SURF_FW_INVALID, SURF_FW_VIRTUAL
    use rdb_ocean_surface_stress, only: ocean_surface_stress_set_shelf_from_ustar
    use rdb_ocean_cavity_flux, only: ocean_cavity_flux_step
    use rdb_ocean_cavity_melt, only: parse_cavity_freshwater, CAVITY_FW_MASS
@@ -766,6 +768,23 @@ contains
       ! `sf_salt_cavity`) and the carried assembly (`sf_Q_heat`/`sf_Q_salt`)
       ! once they exist -- allocated after the read they were written but
       ! never restored.
+      ! `validate_config` refuses these too; engine_setup is reached without it (library and
+      ! test callers), and a reserved value must never run as `none`.
+      select case (parse_surface_freshwater(cfg%ocean%forcing%freshwater))
+      case (SURF_FW_MASS, SURF_FW_INVALID)
+         call fail("&ocean_forcing_nml freshwater = '"//trim(adjustl(cfg%ocean%forcing%freshwater))// &
+                   "' is not implemented (shipped: none, virtual; 'mass' is reserved)", &
+                   ierr, OCEAN_STATUS_ERR_SETUP)
+         return
+      case (SURF_FW_VIRTUAL)
+         if (.not. cfg%ocean%forcing%enable_components) then
+            call fail("&ocean_forcing_nml freshwater = 'virtual' requires enable_components = .true.", &
+                      ierr, OCEAN_STATUS_ERR_SETUP)
+            return
+         end if
+      case default
+         continue
+      end select
       call engine%state%surface_flux%set_components(engine%grid, &
                                                     cfg%ocean%forcing%enable_components)
       ! The restart registry makes the ice-ocean stress tags REQUIRED under the prescribed atmosphere
@@ -866,6 +885,10 @@ contains
          engine%state%surface_flux%Q_heat = q_heat_resume
          engine%state%surface_flux%Q_salt = q_salt_resume
       end if
+      ! After the const seed (which resets has_salt): latch the virtual
+      ! fresh-water form.  `none` is a no-op, so every existing run is unchanged.
+      call engine%state%surface_flux%set_freshwater( &
+         parse_surface_freshwater(cfg%ocean%forcing%freshwater))
       call engine%state%surface_flux%set_p_surf_const( &
          cfg%ocean%psurf%p_surf_const)
       ! E3 top-of-column IN-SITU EOS pressure: seed `ms%p_top` from the
@@ -2562,6 +2585,17 @@ contains
             engine%state%surface_stress%rho0, &
             size(engine%state%surface_stress%stress_shelf, 1), &
             size(engine%state%surface_stress%stress_shelf, 2))
+      end if
+
+      ! Virtual fresh-water salt flux: its ONE writer, right before the
+      ! assembler sums it (same thermo cadence).  Owned cells only: nothing
+      ! reads the ghosts of `Q_salt`, so no seam exchange (`salt_ice`'s own
+      ! exchange in the ice adapters is likewise not needed by any reader; left as is).
+      if (engine%state%surface_flux%fw_virtual) then
+         call ocean_surface_flux_fw_virtual_step(engine%grid, engine%state%surface_flux, &
+                                                 engine%state%multilayer, &
+                                                 active=engine%state%dyn%enable_thermodynamics &
+                                                 .and. engine%state%dyn%is_thermo_step())
       end if
 
       ! Ice-shelf cover: the assembler is where the atmospheric bands and
