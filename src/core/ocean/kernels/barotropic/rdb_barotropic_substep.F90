@@ -619,7 +619,6 @@ contains
          !! Cached fold index constants (centre/v-face/u-face maps).
       integer :: i_w_face, i_e_face, j_s_face, j_n_face
       integer :: i_w_int, i_e_int, j_s_int, j_n_int
-      integer :: eta_gx_lo, eta_gx_hi
       real(wp) :: clamped_u_w, clamped_u_e, clamped_v_s, clamped_v_n
       real(wp) :: eta_target_w, eta_target_e, eta_target_s, eta_target_n
       real(wp) :: t_now
@@ -1327,12 +1326,9 @@ contains
          ! note before the periodic wrap).  Left unfilled, the η CORNER ghost
          ! feeds the downstream barotropic correction (target_h = H_ref +
          ! bt_eta_end) at the corner column, which blows up h_layer there.
-         ! x-pass runs over the FULL j extent (covers corner rows); y-pass over
-         ! the cross-extent CLIPPED to the physical span unless the adjacent
-         ! x-edge is also open — so an open×open corner is filled by the y-pass
-         ! reading the x-filled column, while a periodic/wall x-edge ghost is
-         ! never clobbered (keeps periodic+open mixed configs, e.g. the Eady
-         ! channel, bit-identical).  Must run before Pass 2b reads bt_eta(nghost).
+         ! x-pass runs over the FULL j extent (covers corner rows); the y-pass
+         ! below runs over the full i extent too, so every corner is the
+         ! y-fill of its own column.  Must run before Pass 2b reads bt_eta(nghost).
          ! WALL/PERIODIC tags are not open-ish ⇒ no DC launched ⇒ no-op.
          ! An MPI seam is not an open edge (`has_*` false): its η ghosts are
          ! the neighbour's interior, filled by the halo exchange — a
@@ -1350,23 +1346,26 @@ contains
                bt_eta(i, j) = bt_eta(i_e_int, j)
             end do
          end if
-         ! y-pass: south / north ghost rows over the corner-safe i extent
-         ! Extend into any NON-PERIODIC x-edge ghost (wall or open) so an open
-         ! south/north edge fills its η ghost CORNER even against a wall side;
-         ! only PERIODIC is excluded (owns its ghost via the wrap).
-         eta_gx_lo = i_w_int
-         eta_gx_hi = i_e_int
-         if (bc_w /= OBC_PERIODIC) eta_gx_lo = 1
-         if (bc_e /= OBC_PERIODIC) eta_gx_hi = nx
+         ! y-pass: south / north ghost rows over the FULL i extent (x-ghost
+         ! columns included), at every x tag.  The y-pass runs AFTER the
+         ! periodic-x wrap above, so a periodic x-ghost column's corner cell
+         ! is overwritten here from its own first interior row -- the value
+         ! every layout must agree on.  Excluding periodic x-ghost columns
+         ! ("the wrap owns them") left the corner at the wrap of the Pass-1
+         ! garbage in the ghost row: on one rank that is the east interior's
+         ! ghost-row value, on a decomposed periodic axis the exchange's, and
+         ! the two differ (the corner then feeds Pass 2b/2c and the owned
+         ! cells after a few substeps: u 7e-8 at 2x1, 7e-6 with a clamped
+         ! edge).  A wall x-edge ghost is still overwritten, as before.
          if (has_s .and. (bc_s == OBC_OPEN .or. bc_s == OBC_TIDAL .or. &
                           bc_s == OBC_CHAPMAN .or. bc_s == OBC_CLAMPED)) then
-            do concurrent(j=1:grid%nghost, i=eta_gx_lo:eta_gx_hi)
+            do concurrent(j=1:grid%nghost, i=1:nx)
                bt_eta(i, j) = bt_eta(i, j_s_int)
             end do
          end if
          if (has_n .and. (bc_n == OBC_OPEN .or. bc_n == OBC_TIDAL .or. &
                           bc_n == OBC_CHAPMAN .or. bc_n == OBC_CLAMPED)) then
-            do concurrent(j=j_n_int + 1:ny, i=eta_gx_lo:eta_gx_hi)
+            do concurrent(j=j_n_int + 1:ny, i=1:nx)
                bt_eta(i, j) = bt_eta(i, j_n_int)
             end do
          end if

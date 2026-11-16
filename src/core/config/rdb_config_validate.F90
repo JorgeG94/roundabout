@@ -1284,6 +1284,31 @@ contains
                               "' is not a recognised boundary type")
             has_error = .true.
          end if
+         ! A y-periodic axis needs a y-UNIFORM grid.  The first and last
+         ! corner rows of the domain are one and the same row under the wrap
+         ! but are stored twice (`ng + 1`, `ng + ny + 1`), and nothing wraps
+         ! the Coriolis parameter or the metrics across it: a beta plane has
+         ! f(y_bottom) /= f(y_top), a lon-lat sector has rows of different
+         ! length.  The two copies then compute different values for the
+         ! seam face, which one is kept depends on how the domain is split,
+         ! and a 1 x 2 split differs from one rank by 1e-4 in u (measured).
+         ! f is discontinuous across such a wrap anyway: not a well-posed
+         ! configuration.  Periodic x is unaffected (nothing varies in x).
+         if (ocean_bc_type_from_string(cfg%ocean%bc%south) == OBC_PERIODIC .or. &
+             ocean_bc_type_from_string(cfg%ocean%bc%north) == OBC_PERIODIC) then
+            if (cfg%ocean%topo%coriolis_beta /= 0.0_wp .or. &
+                trim(cfg%ocean%grid%grid_config) /= "cartesian") then
+               call logger%error("&ocean_bc_nml south/north = 'periodic' needs a "// &
+                                 "y-uniform grid: grid_config = 'cartesian' and "// &
+                                 "&ocean_topo_nml coriolis_beta = 0 (an f-plane).  "// &
+                                 "A beta plane or a lon-lat / supergrid sector has "// &
+                                 "f and metrics that differ between the south and "// &
+                                 "north edge, which the periodic wrap does not "// &
+                                 "reconcile, so the seam row is not well defined "// &
+                                 "(and a decomposed run would differ from one rank).")
+               has_error = .true.
+            end if
+         end if
 
          ! Along-coordinate tracer Laplacian (`&ocean_hdiff_nml kappa_h`):
          ! the explicit forward-Euler stability bound
