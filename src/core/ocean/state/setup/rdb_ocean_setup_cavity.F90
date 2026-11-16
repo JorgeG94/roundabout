@@ -294,6 +294,7 @@ contains
                                        CAVITY_LAW_HJ99, parse_cavity_freshwater, &
                                        parse_cavity_volume_comp, CAVITY_FW_MASS, &
                                        CAVITY_VC_UNIFORM_OPEN
+      use rdb_ocean_cavity_flux, only: ocean_cavity_set_open_area
       type(config_t), intent(in) :: cfg
       type(ocean_state_t), intent(inout) :: ocean_state
       type(hgrid_t), intent(in) :: grid
@@ -369,6 +370,26 @@ contains
 
       ! ---- per-column Coriolis for the hj99 law ----
       call fill_coriolis_centre(cfg, ocean_state%metrics, grid, ocean_state%cavity_flux%f_cor)
+      ! Real-freshwater mode: the open-ocean area the compensation sink spends
+      ! the melt volume over.  The wet mask and the v1 binary cover are static,
+      ! so it is computed ONCE here (EFP over owned cells, one collective:
+      ! exact and layout-independent).  Host data, before the device map.
+      if (ocean_state%cavity_flux%freshwater == CAVITY_FW_MASS) then
+         call ocean_cavity_set_open_area(ocean_state%cavity_flux, grid, ocean_state%metrics, &
+                                         ocean_state%multilayer%wet_mask)
+         if (ocean_state%cavity_flux%volume_comp == CAVITY_VC_UNIFORM_OPEN .and. &
+             .not. (ocean_state%cavity_flux%open_area > 0.0_wp)) then
+            ! Global verdict (the area is already the exact global sum), so
+            ! every rank refuses together.
+            call fail("&ocean_cavity_melt_nml volume_compensation = 'uniform_open_ocean' "// &
+                      "needs open (uncovered, wet) ocean to remove the melt volume from, "// &
+                      "but the global open area is 0 (the shelf covers every wet column): "// &
+                      "the sink would silently do nothing and the domain would gain "// &
+                      "mass.  Use volume_compensation = 'none' or a draft that leaves "// &
+                      "open water.", ierr, OCEAN_STATUS_ERR_SETUP)
+            return
+         end if
+      end if
       if (ocean_state%cavity_flux%par%law == CAVITY_LAW_HJ99) then
          n_zero_f = cavity_count_zero_f(ocean_state%cavity_flux%f_cor, &
                                         ocean_state%metrics%cover_frac, &
