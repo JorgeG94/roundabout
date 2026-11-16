@@ -23,7 +23,7 @@ module rdb_ocean_dyn
                                    ocean_fold_wrap_time_means, ocean_fold_wrap_visc_rem
    use rdb_ocean_halo_state, only: ocean_halo_exchange_ml_state
    use rdb_ocean_halo, only: ocean_halo_is_decomposed_x, ocean_halo_is_decomposed_y, &
-                             ocean_halo_bt_group_2d, ocean_halo_centre, &
+                             ocean_halo_bt_group_2d, ocean_halo_packed_wide, ocean_halo_centre, &
                              ocean_halo_face_x, ocean_halo_face_y
    use rdb_ocean_ghost_poison, only: ocean_poison_ghost_bands
    use rdb_ocean_sponge, only: ocean_sponge_apply, ocean_sponge_apply_tracers, &
@@ -5332,8 +5332,15 @@ contains
          ! Exit seam freshen: fresh normal-width seam ghosts of the time
          ! mean, as the bt_halo = 0 path leaves them on exit.
          call profiler_start("ocean_comms_bt")
-         call ocean_halo_bt_group_2d(dyn%bt_work%bt_eta, dyn%bt_work%bt_ubt, &
-                                     dyn%bt_work%bt_vbt)
+         ! ONE packed round for everything the wide march leaves with inexact
+         ! normal-width ghosts (the in-loop cadence reaches `nghost_wide - 2`
+         ! substeps): the time means, the end-of-loop snapshots and the
+         ! transports -- the same set the bt_halo = 0 path leaves exact.
+         call ocean_halo_packed_wide(grid%nghost, &
+                                     dyn%bt_work%bt_eta, dyn%bt_work%bt_ubt, &
+                                     dyn%bt_work%bt_vbt, eb=dyn%bt_work%bt_eta_end, &
+                                     xa=dyn%bt_work%bt_ubt_end, xb=dyn%bt_work%bt_uhbt, &
+                                     ya=dyn%bt_work%bt_vbt_end, yb=dyn%bt_work%bt_vhbt)
          call profiler_stop("ocean_comms_bt")
       else
          call barotropic_substep_nonlinear_interior(grid, metrics, dyn%bt_work, &

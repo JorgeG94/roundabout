@@ -842,6 +842,38 @@ if(RDB_ENABLE_MPI)
                  "OMP_NUM_THREADS=1;RDB_BT_INHALO_POISON=2;RDB_BITID_CASES=bth"
                  TIMEOUT 14400)
   endforeach()
+  # Where the wide march-in's cadence really breaks.  The poison hook's
+  # thousands digit stretches the exchange cadence by that many substeps (and
+  # still poisons every layer invalidated so far): `bt_wide_cycle_len` is
+  # `ng_wide - 1 - WIDE_CYCLE_MARGIN`, the proven reach `ng_wide - 1`, so +1
+  # must stay bitwise and +2 (one substep past the reach) must fail (WILL_FAIL:
+  # the poisoned ghost values reach the owned cells and the run aborts or
+  # differs).
+  foreach(np 2 4)
+    add_test(NAME rdb_test_ocean_decomp_bitid_mpi_${np}rank_btwide_cycle_limit
+             COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${np}
+                     $<TARGET_FILE:test_ocean_decomp_bitid_mpi>)
+    set_tests_properties(
+      rdb_test_ocean_decomp_bitid_mpi_${np}rank_btwide_cycle_limit
+      PROPERTIES
+        LABELS "ocean" ENVIRONMENT
+        "OMP_NUM_THREADS=1;RDB_BT_INHALO_POISON=1002;RDB_BITID_CASES=bth"
+        TIMEOUT 14400)
+  endforeach()
+  add_test(NAME rdb_test_ocean_decomp_bitid_mpi_2rank_btwide_cycle_break
+           COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 2
+                   $<TARGET_FILE:test_ocean_decomp_bitid_mpi>)
+  set_tests_properties(
+    rdb_test_ocean_decomp_bitid_mpi_2rank_btwide_cycle_break
+    PROPERTIES
+      LABELS
+      "ocean"
+      WILL_FAIL
+      TRUE
+      ENVIRONMENT
+      "OMP_NUM_THREADS=1;RDB_BT_INHALO_POISON=2002;RDB_BITID_CASES=bth_seamount_w4"
+      TIMEOUT
+      14400)
   # TIMEOUT: the project uses enable_testing() without include(CTest), so there
   # is NO default timeout.  This test deliberately runs a must-be-refused probe
   # (check_cavity_grounded_refusal) in which every rank has to reach the same

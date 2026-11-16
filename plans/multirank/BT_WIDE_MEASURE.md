@@ -222,3 +222,117 @@ Reading:
 * RC4 (vector-lane round-off): not seen on gfortran (contraction off) at tile widths 16 .. 24; nvfortran
   CPU not measured.
 * RC5 (tripolar) untouched.
+
+
+# Stage 2: packed wide exchange, cadence at the proven reach, `H_ref` once
+
+Stacked on stage 1 (`8e5691b86`).  Same bit-for-bit contract against the one-rank `bt_halo = 0` run.
+
+## What changed
+
+* `ocean_halo_packed_wide`: all arrays of an exchange in ONE message per neighbour per direction pass
+  (one X round + one Y round).  Used for the in-loop refresh (eta, ubt, vbt, + `ubt_prev`/`vbt_prev` at
+  `bebt > 0`), the per-solve entry set (eta, ubt, vbt, rem_u/v, force_u/v) and the exit set (time means,
+  `*_end` snapshots, uhbt/vhbt at normal width).  Buffers reserved by `ocean_halo_reserve`
+  (`ocean_halo_pk_grow_count()` stays 0).
+* In-loop cadence `bt_wide_cycle_len(ng_w) = ng_w - 1 - WIDE_CYCLE_MARGIN` (`WIDE_CYCLE_MARGIN = 1`), was `bt_halo/2`.
+* `ubt_prev`/`vbt_prev` dropped from the entry exchange (the loop reseeds them wholesale when `bebt > 0`,
+  never reads them otherwise); static `H_ref` copied + exchanged once.
+
+## Messages-per-solve formula (checked by the counters)
+
+Per BT solve at `bt_halo = W > 0`, `ng_w = nghost + W`, `cad = ng_w - 2`:
+
+    packed exchanges  P = 2 + floor((n_inner - 1) / cad)      (1 entry + in-loop + 1 exit)
+    Isends per rank   = P * (active X neighbours + active Y neighbours)   [np 2 wall: P]
+    bt_group = bt_u = per-array face singles = 0;  H_ref: one centre_2d per RUN
+
+Before (stage 1): `10 + 5*floor((n-1)/(W/2)) + 3` two-pass array exchanges per solve (bebt > 0); at n = 65, W = 8:
+93 rounds; now `2 + floor(64/9) = 9` rounds.  Asserted by `check_bth_counters` (`pk == 2*steps*P`, `bt_group == 0`,
+`bt_u == 0`, `c2d == 1`) in every `bth_*` / `bthx_*` case, and by the `test_ocean_dyn_mpi` canary
+(counters and np 2 rank-0 Isend count).  Observed: seamount_bt8 (n = 65) np 2: `pk=10368 = 576*2*9`;
+Isends 144 022 -> 47 255 per run.
+
+## Where the cadence limit really is (fail-without evidence)
+
+The poison hook's thousands digit stretches the cadence by that many substeps (still poisoning every layer
+invalidated so far).  `bt_wide_cycle_len = ng_w - 2` is the new cadence, the proven reach is `ng_w - 1`:
+
+| cadence | result |
+|---|---|
+| new (`ng_w - 2`), NaN-poisoned | all `bth_*` / `bthx_*` bitwise, CPU np 2/4, GPU np 2 |
+| new + 1 (`ng_w - 1`, the proven limit), poisoned | all bitwise (CPU np 2, 4; GPU np 2; TD np 2) |
+| new + 2 (`ng_w`, one substep past the reach) | breaks: NaN reaches the owned cells (ctest `*_cycle_break`, WILL_FAIL; GPU leg exit 1; `test_ocean_dyn_mpi`: owned result differs) |
+
+So the margin is exactly one substep, measured, not assumed.  It stays for what 48 x 32 closed / periodic /
+spherical cases cannot show.
+
+## Timing (V100, nvfortran 26.5, HPC-X CUDA-aware, one rank per GPU, median of 3)
+
+`final_*` = stage-1 binary, `s2_*` = this branch.  `bt8` = `seamount_bt8` (default chain), `ext` =
+`seamount_extreme_bt8`, `nk0` / `nk8` = `double_gyre_nk100_512x256` (nghost = 3, output off, `t_end = 45000 s`,
+`bt_halo` 0 / 8), `bt4` / `bt16` = `seamount_bt8` with `bt_halo = 4 / 16`.  EVERY run held both GPU locks,
+with `nvidia-smi` and the 1-min load average recorded inside the lock (`.smi` / `.load` files).  The first
+matrix (taken while the coordinator's own GPU suites overlapped the cards) and a second (machine load 30-50 from
+other projects) were DISCARDED; this third set interleaves `final`/`s2` runs, and the pairs `bt0_np1`,
+`ext_np2`, `nk8_np2` were re-taken once more (second set of 3 each, replacing the first).  The host was still
+busy (load 4 to 35 during the matrix), so absolute walls are 3 to 8 percent above the quiet-machine numbers of
+stage 1 (e.g. `bt0_np1` 43.7 s then, 45.7 s now); compare pairs, not rows from different sessions.
+
+| run | wall s (3 runs) | median wall | median `ocean_barotropic_solver` s | median `ocean_comms_bt` s (calls) | median `ocean_comms_ml` s | final `halo exch:` line |
+|---|---|---|---|---|---|---|
+| final_bt0_np1 | 45.6, 46.7, 46.6 | 46.6 | 15.59 | 3.31 (76032) | 0.04 | `halo exch: total=87558 bt_group=76033 bt_u=0 ml=3458 c2d=2 c3d=8064 fx2=1 fx3=0 fy2=0 fy3=0 msgs=0` |
+| final_bt0_np2 | 45.5, 47.1, 45.6 | 45.6 | 26.48 | 16.03 (150912) | 1.64 | `halo exch: total=170503 bt_group=76033 bt_u=74880 ml=3458 c2d=3 c3d=9216 fx2=1 fx3=3456 fy2=0 fy3=3456 msgs=339859` |
+| final_bt8_np1 | 43.8, 43.8, 43.8 | 43.8 | 13.80 | 3.08 (20736) | 0.03 | `halo exch: total=77191 bt_group=20738 bt_u=0 ml=3458 c2d=1154 c3d=8064 fx2=21889 fx3=0 fy2=21888 fy3=0 msgs=0` |
+| final_bt8_np2 | 35.4, 35.1, 34.6 | 35.1 | 15.87 | 5.20 (20736) | 1.64 | `halo exch: total=85256 bt_group=20738 bt_u=0 ml=3458 c2d=1155 c3d=9216 fx2=21889 fx3=3456 fy2=21888 fy3=3456 msgs=144022` |
+| final_ext_np1 | 33.6, 33.5, 33.6 | 33.6 | 6.75 | 1.21 (10368) | 0.01 | `halo exch: total=38599 bt_group=10370 bt_u=0 ml=1730 c2d=578 c3d=4032 fx2=10945 fx3=0 fy2=10944 fy3=0 msgs=0` |
+| final_ext_np2 | 27.4, 24.1, 23.8 | 24.1 | 8.06 | 2.73 (10368) | 1.03 | `halo exch: total=42632 bt_group=10370 bt_u=0 ml=1730 c2d=579 c3d=4608 fx2=10945 fx3=1728 fy2=10944 fy3=1728 msgs=72022` |
+| final_nk8_np2 | 50.3, 50.5, 50.5 | 50.5 | 2.09 | 0.73 (2400) | 2.32 | `halo exch: total=28808 bt_group=2402 bt_u=0 ml=3602 c2d=1203 c3d=7200 fx2=3601 fx3=3600 fy2=3600 fy3=3600 msgs=48020` |
+| s2_bt0_np1 | 46.6, 45.7, 44.8 | 45.7 | 14.98 | 3.61 (76032) | 0.03 | `halo exch: total=87558 bt_group=76033 bt_u=0 pk=0 ml=3458 c2d=2 c3d=8064 fx2=1 fx3=0 fy2=0 fy3=0 msgs=0` |
+| s2_bt0_np2 | 45.8, 45.7, 46.3 | 45.8 | 26.65 | 16.00 (150912) | 1.65 | `halo exch: total=170503 bt_group=76033 bt_u=74880 pk=0 ml=3458 c2d=3 c3d=9216 fx2=1 fx3=3456 fy2=0 fy3=3456 msgs=339859` |
+| s2_bt16_np2 | 30.7, 31.2, 30.9 | 30.9 | 11.76 | 1.12 (5760) | 1.63 | `halo exch: total=25353 bt_group=2 bt_u=0 pk=5760 ml=3458 c2d=4 c3d=9216 fx2=1 fx3=3456 fy2=0 fy3=3456 msgs=42647` |
+| s2_bt4_np2 | 32.1, 32.2, 32.5 | 32.2 | 13.05 | 2.52 (16128) | 1.65 | `halo exch: total=35721 bt_group=2 bt_u=0 pk=16128 ml=3458 c2d=4 c3d=9216 fx2=1 fx3=3456 fy2=0 fy3=3456 msgs=53015` |
+| s2_bt8_np1 | 43.1, 43.4, 43.4 | 43.4 | 13.39 | 2.31 (10368) | 0.02 | `halo exch: total=21896 bt_group=2 bt_u=0 pk=10368 ml=3458 c2d=3 c3d=8064 fx2=1 fx3=0 fy2=0 fy3=0 msgs=0` |
+| s2_bt8_np2 | 32.3, 32.6, 31.7 | 32.3 | 12.90 | 1.79 (10368) | 1.69 | `halo exch: total=29961 bt_group=2 bt_u=0 pk=10368 ml=3458 c2d=4 c3d=9216 fx2=1 fx3=3456 fy2=0 fy3=3456 msgs=47255` |
+| s2_ext_np1 | 33.6, 33.5, 33.5 | 33.5 | 6.68 | 1.30 (5184) | 0.01 | `halo exch: total=10952 bt_group=2 bt_u=0 pk=5184 ml=1730 c2d=3 c3d=4032 fx2=1 fx3=0 fy2=0 fy3=0 msgs=0` |
+| s2_ext_np2 | 23.1, 22.2, 22.3 | 22.3 | 6.30 | 0.89 (5184) | 1.04 | `halo exch: total=14985 bt_group=2 bt_u=0 pk=5184 ml=1730 c2d=4 c3d=4608 fx2=1 fx3=1728 fy2=0 fy3=1728 msgs=23639` |
+| s2_nk0_np1 | 86.2, 86.2, 86.1 | 86.2 | 1.11 | 0.26 (6000) | 0.03 | `halo exch: total=15606 bt_group=6001 bt_u=0 pk=0 ml=3602 c2d=2 c3d=6000 fx2=1 fx3=0 fy2=0 fy3=0 msgs=0` |
+| s2_nk0_np2 | 51.0, 52.4, 51.8 | 51.8 | 2.47 | 1.53 (10800) | 2.59 | `halo exch: total=28807 bt_group=6001 bt_u=4800 pk=0 ml=3602 c2d=3 c3d=7200 fx2=1 fx3=3600 fy2=0 fy3=3600 msgs=55217` |
+| s2_nk8_np1 | 89.8, 88.3, 87.4 | 88.3 | 1.74 | 0.02 (2400) | 0.04 | `halo exch: total=12008 bt_group=2 bt_u=0 pk=2400 ml=3602 c2d=3 c3d=6000 fx2=1 fx3=0 fy2=0 fy3=0 msgs=0` |
+| s2_nk8_np2 | 49.8, 50.0, 63.9 | 50.0 | 1.85 | 0.55 (2400) | 2.28 | `halo exch: total=20409 bt_group=2 bt_u=0 pk=2400 ml=3602 c2d=4 c3d=7200 fx2=1 fx3=3600 fy2=0 fy3=3600 msgs=34821` |
+
+Reading:
+
+* `bt_halo = 0` is untouched (`bt0`: `ocean_barotropic_solver` 15.6 s / 15.0 s on np 1, identical counters,
+  identical `[stats]` lines as before; only the printed `pk=0` field is new).
+* `bt_halo = 8` np 2: 35.1 -> 32.3 s (-8 %), `ocean_comms_bt` 5.20 -> 1.79 s, 20 736 -> 10 368 calls.
+  extreme: 24.1 -> 22.3 s (`ocean_comms_bt` 2.73 -> 0.89 s).  `nk100` (ML-comm bound): 50.5 -> 50.0 s.
+* Width: np 2 `seamount_bt8` namelist at `bt_halo` 4 / 8 / 16: 32.2 / 32.3 / 30.9 s, `ocean_comms_bt`
+  2.52 / 1.79 / 1.12 s, `ocean_barotropic_solver` 13.05 / 12.90 / 11.76 s: the extra wide-band compute is not
+  visible at these widths, so the optimum is at least 16 on this 256 x 256 tile (not searched past 16).
+* np 1 -> np 2 speedup (1 GPU per rank): `bt0` 1.00x (45.7 -> 45.8 s), `bt8` 1.25x -> **1.34x**
+  (43.8/35.1 -> 43.4/32.3), `ext` 1.39x -> **1.50x**, `nk100` 1.66x (`bt_halo = 0`, 86.2 -> 51.8 s) and
+  **1.77x** (`bt_halo = 8`, 88.3 -> 49.8 s).
+
+## Where the np 2 wall goes now (`seamount_bt8`, `bt_halo = 8`, median run, 32.3 s)
+
+| part | s | share |
+|---|---|---|
+| `ocean_comms_bt` | 1.8 | 5.5 % |
+| `ocean_comms_ml` | 1.7 | 5.2 % |
+| `ocean_barotropic_solver` (the fast loop and its wide copies) | 12.9 | 40 % |
+| everything else | 15.9 | 49 % |
+
+The next bottleneck is the fast loop itself, not communication: from np 1 to np 2 the other buckets scale
+(`ocean_continuity` 7.2 -> 4.3 s, `ocean_ale_remap` 5.3 -> 2.9, `ocean_vdiff_apply` 3.8 -> 2.1) while
+`ocean_barotropic_solver` stays at 13.4 -> 13.3 s: its kernels run on 2-D fields of 131 k cells (65 k per rank) and
+are launch-latency bound, so halving the tile does not halve them.  Fewer, fatter fast-loop kernels (fusing the
+Pass 1 / 2b / 2c / accumulation launches) is the lever, then the ML exchanges (`ocean_comms_ml`, 3 458 calls, flat at
+about 1.7 s).
+
+## bt_halo = 0: can the packed group serve it?
+
+Feasible and answer-preserving, not done here: the per-substep group exchange (eta, ubt, vbt: three sequential
+two-pass rounds) is exactly a `ocean_halo_packed_wide(oh_nghost, ...)` call (same strips, same order), cutting
+the per-substep rounds from 4 (3 + the mid-substep u exchange) to 2.  The mid-substep u exchange sits between
+Pass 2b and 2c and cannot join it.

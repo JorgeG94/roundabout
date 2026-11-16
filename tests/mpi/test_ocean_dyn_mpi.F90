@@ -74,7 +74,9 @@ program test_ocean_dyn_mpi
    use rdb_ocean_halo_state, only: ocean_halo_exchange_ml_state
    use rdb_ocean_halo, only: ocean_halo_init, ocean_halo_destroy, ocean_halo_reserve, &
                              ocean_halo_centre, ocean_halo_is_decomposed
-   use rdb_ocean_halo_counters, only: oh_counters_reset, oh_counters_get, oh_counters_msgs
+   use rdb_ocean_halo_counters, only: oh_counters_reset, oh_counters_get, oh_counters_msgs, &
+                                      oh_counters_packed
+   use rdb_barotropic_substep, only: bt_wide_cycle_len
    use rdb_halo, only: halo_allreduce_sum
    use rdb_comm_env, only: comm_env_init, comm_env_setup_roles, comm_env_finalize, &
                            comm_env_rank, comm_env_size, comm_env_compute_comm
@@ -1161,10 +1163,10 @@ contains
       ! exchange topology of the split-RK2 step (the RK2 step comm-topology map).
       ! Any change to the exchange set (added / removed / re-cadenced
       ! exchange) fails here and must update the expectations consciously.
-      if (n_inner_run == N_INNER) &
+      if ((n_inner_run == N_INNER .or. bt_halo_val > 0) .and. wide_poison < 1000) &
          call check_exchange_counts(nprocs > 1, periodic_run, &
                                     dyn%split_scheme == SPLIT_SCHEME_PRED_CORR, &
-                                    bt_halo_val, dyn%bt_work%bebt > 0.0_wp)
+                                    bt_halo_val, dyn%bt_work%bebt > 0.0_wp, n_inner_run)
 
       ! Pull state to host for measurement
       !$acc update self(ms%h_layer, ms%u_face_x_layer, ms%v_face_y_layer)
@@ -1258,6 +1260,25 @@ contains
       call bits_equal("wide-reach poisoned ring == unpoisoned (mass, KE, salt, heat)", &
                       [c_mN, c_ke, c_sN, c_hN], [b_mN, b_ke, b_sN, b_hN])
 
+      ! Cadence limit: one substep past the new cadence is exactly the proven
+      ! reach (`ng_wide - 1` substeps): still bitwise.  Two past it breaks.
+      call run_decomposed(c_m0, c_mN, c_ke, c_s0, c_sN, c_h0, c_hN, &
+                          use_bt_halo=BH, use_n_inner=NI, use_wide_poison=1002)
+      call bits_equal("wide-reach cadence + 1 (= proven limit), poisoned (mass, KE, salt, heat)", &
+                      [c_mN, c_ke, c_sN, c_hN], [b_mN, b_ke, b_sN, b_hN])
+      call run_decomposed(c_m0, c_mN, c_ke, c_s0, c_sN, c_h0, c_hN, &
+                          use_bt_halo=BH, use_n_inner=NI, use_wide_poison=2002)
+      block
+         logical :: same
+         same = c_ke == b_ke .and. c_mN == b_mN .and. c_sN == b_sN .and. c_hN == b_hN
+         if (same) then
+            n_fail = n_fail + 1
+            write (*, '(a,i0)') "FAIL wide-reach cadence + 2 did not break the owned result: rank ", rank
+         else if (rank == 0) then
+            write (*, '(a)') "wide-reach cadence + 2 (one past the proven limit) breaks the owned result (ok)"
+         end if
+      end block
+
       call run_decomposed(d_m0, d_mN, d_ke, d_s0, d_sN, d_h0, d_hN, &
                           use_bt_halo=BH, use_n_inner=NI, use_wide_poison=2 + 10*8)
       block
@@ -1315,7 +1336,7 @@ contains
    ! the gate runs on every rank.  Fires on each leg (wall/island/periodic —
    ! the exchange set is leg-invariant).
    ! =======================================================================
-   subroutine check_exchange_counts(decomposed, periodic, is_pc, bt_halo_in, bebt_on)
+   subroutine check_exchange_counts(decomposed, periodic, is_pc, bt_halo_in, bebt_on, n_inner_in)
       logical, intent(in) :: decomposed
          !! .true. when the run has a real multi-rank seam (px > 1)
       logical, intent(in) :: periodic
@@ -1329,21 +1350,27 @@ contains
       integer, intent(in), optional :: bt_halo_in
          !! bt_halo width; when > 0 the march-in counter schedule applies.
          !! Default 0 = v1 per-substep exchange.
+      integer, intent(in), optional :: n_inner_in
+         !! Inner substeps per stage (default `N_INNER`); the march-in schedule depends on it.
       logical, intent(in), optional :: bebt_on
          !! `bebt > 0`: the march-in in-loop exchange also carries the previous-
          !! substep velocities (one more face_x and face_y exchange per cycle).
 
+      integer :: n_in, cyc
+      integer(int64) :: c_pk
       integer(int64) :: c_bt_group, c_bt_u_mid, c_ml_state
       integer(int64) :: c_centre_2d, c_centre_3d
       integer(int64) :: c_face_x_2d, c_face_x_3d, c_face_y_2d, c_face_y_3d
       integer(int64) :: expect_ml, expect_c3d, expect_btg, expect_btu
-      integer(int64) :: expect_c2d, expect_fx2d, expect_fy2d
+      integer(int64) :: expect_c2d, expect_fx2d, expect_fy2d, expect_pk
       integer(int64) :: expect_msgs
       integer(int64) :: expect_fx3d, expect_fy3d, pc_per_stage, pc_isends_per_step
       integer(int64) :: pc_refresh_per_stage, visc_rem_per_stage
       integer :: bh
       integer(int64) :: prev_x, prev_y
 
+      n_in = N_INNER
+      if (present(n_inner_in)) n_in = n_inner_in
       bh = 0
       if (present(bt_halo_in)) bh = bt_halo_in
       ! With bebt > 0 the in-loop wide exchange also refreshes the previous-
@@ -1414,39 +1441,28 @@ contains
                            + pc_refresh_per_stage*2_int64
 
       if (bh > 0) then
-         ! Wide-halo march-in schedule (num_cycles = bh/2 = 2 for bh=4,
-         ! N_INNER=4: in-loop wide exchange fires once per stage at n=2).
-         ! Per outer step (2 stages):
-         !   bt_group: entry_exchange(1) + in-loop(1) + exit-freshen(1) = 3 per stage = 6
-         !   bt_u_mid: 0 (suppressed)
-         !   centre_2d: entry_exchange(1) per stage = 2
-         !   face_x_2d: entry_exchange(3) + (bebt > 0) in-loop prev(1) per stage
-         !   face_y_2d: entry_exchange(3) + (bebt > 0) in-loop prev(1) per stage
-         expect_btg = int(3*2*N_STEPS, int64)
+         ! Wide-halo march-in schedule.  Per BT solve (two per outer step):
+         !   1 packed entry exchange + `cyc` packed in-loop exchanges
+         !   (cyc = floor((n_inner - 1)/cadence), cadence = bt_wide_cycle_len(NG + bh))
+         !   + 1 packed exit exchange = 2 + cyc packed exchanges.
+         ! No grouped bt_group exchange, no mid-substep u exchange, no
+         ! per-array face_x / face_y wide singles: all travel in the packed
+         ! round.  The static H_ref is exchanged ONCE (first solve): one
+         ! centre_2d for the whole run.  Messages: each packed exchange posts
+         ! one Isend per active direction (np=2 wall rank 0: 1).
+         cyc = (n_in - 1)/bt_wide_cycle_len(NG + bh)
+         expect_pk = int((2 + cyc)*2*N_STEPS, int64)
+         expect_btg = 0_int64
          expect_btu = 0_int64
-         expect_c2d = int(1*2*N_STEPS, int64)
-         expect_fx2d = (3_int64 + prev_x)*2_int64*int(N_STEPS, int64)
-         expect_fy2d = (3_int64 + prev_y)*2_int64*int(N_STEPS, int64)
-         ! Msgs (np=2 wall rank 0, py=1, 1 active x-direction).  Each
-         ! exchange posts ONE Isend per PRIMITIVE per direction — a grouped
-         ! bt exchange carries 3 prims (eta, ubt, vbt) = 3 Isends, and a
-         ! face_y array still exchanges its x-seam columns (py=1 only kills
-         ! the y-direction sends, not the x-seam of v-located arrays).
-         !   ml_state + continuity: 46 Isends/step (v1's 36 + the 10 of the
-         !     post-vertical-advection ml_state refresh: 5 prims x 2 stages)
-         !   entry_exchange (per stage): bt_group_wide(3) + centre_wide(1)
-         !     + 3×face_x_wide(3) + 3×face_y_wide(3) = 10 Isends; ×2 stages = 20
-         !   in-loop wide (per stage): bt_group_wide(3) Isends; ×2 stages = 6
-         !     (+ face_x_wide + face_y_wide of the previous-substep velocities
-         !     when bebt > 0: 2 Isends per stage, 4 per step)
-         !   exit freshen (per stage): bt_group(3) Isends; ×2 stages = 6
-         !   total: 46 + 20 + 6 + 6 (+ 4) = 78 (82) Isends/step
+         expect_c2d = 1_int64
+         expect_fx2d = 0_int64
+         expect_fy2d = 0_int64
          block
             integer(int64) :: isends_per_step
-            isends_per_step = 46_int64 + 20_int64 + 6_int64 + 6_int64 &
-                              + 2_int64*2_int64*(prev_x + prev_y)/2_int64 &
-                              + pc_isends_per_step
-            expect_msgs = isends_per_step*int(N_STEPS, int64)
+            ! 46 ml_state + continuity Isends per step, + packed rounds per step,
+            ! + the pred_corr extras; + the one H_ref exchange over the run.
+            isends_per_step = 46_int64 + int((2 + cyc)*2, int64) + pc_isends_per_step
+            expect_msgs = isends_per_step*int(N_STEPS, int64) + 1_int64
          end block
       else
          ! v1 path.
@@ -1474,6 +1490,8 @@ contains
          end block
       end if
 
+      expect_pk = merge(expect_pk, 0_int64, bh > 0)
+      c_pk = oh_counters_packed()
       call oh_counters_get(c_bt_group, c_bt_u_mid, c_ml_state, &
                            c_centre_2d, c_centre_3d, &
                            c_face_x_2d, c_face_x_3d, c_face_y_2d, c_face_y_3d)
@@ -1482,6 +1500,7 @@ contains
       call assert_count("centre_3d", c_centre_3d, expect_c3d)
       call assert_count("bt_group", c_bt_group, expect_btg)
       call assert_count("bt_u_mid", c_bt_u_mid, expect_btu)
+      call assert_count("bt_packed", c_pk, expect_pk)
       call assert_count("centre_2d", c_centre_2d, expect_c2d)
       call assert_count("face_x_2d", c_face_x_2d, expect_fx2d)
       call assert_count("face_x_3d", c_face_x_3d, expect_fx3d)
