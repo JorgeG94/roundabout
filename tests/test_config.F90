@@ -64,6 +64,7 @@ contains
                   new_unittest("resolve_bt_halo", test_resolve_bt_halo), &
                   new_unittest("bt_halo_auto_exclusion", test_bt_halo_auto_exclusion), &
                   new_unittest("chapman_bt_halo_refused", test_chapman_bt_halo_refused), &
+                  new_unittest("periodic_y_needs_uniform_grid", test_periodic_y_needs_uniform_grid), &
                   new_unittest("diag_density_requires_rho_levels", test_diag_density_requires_rho_levels), &
                   new_unittest("ice_hlim_count_leading_run", test_ice_hlim_count_leading_run), &
                   new_unittest("ice_hlim_spec_validity", test_ice_hlim_spec_validity), &
@@ -414,6 +415,50 @@ contains
       ! the fail-loud gate for that impossible combination, not resolution.
       call check(error, resolve_bt_halo(4, 2, .true.) == 4, "explicit width unchanged by exclusion")
    end subroutine test_resolve_bt_halo
+
+   subroutine test_periodic_y_needs_uniform_grid(error)
+      !! A y-periodic axis is refused on a beta plane or a non-Cartesian grid
+      !! (f and the metrics differ between the south and north edge, so the
+      !! duplicated seam row is not well defined: a 1x2 split differed from one
+      !! rank by 1e-4 in u).  An f-plane Cartesian y-periodic channel, a
+      !! beta plane periodic in x only, and the beta plane with walls stay
+      !! accepted.
+      type(error_type), allocatable, intent(out) :: error
+      type(config_t) :: cfg
+      integer :: ierr
+      character(len=*), parameter :: GR = &
+                                     "&sim_nml sim_type = 'ocean' /"//new_line('a')// &
+                                     "&grid_nml nx = 24, ny = 16, nghost = 3, dx = 20000.0, dy = 20000.0 /"//new_line('a')
+
+      call read_config_from_string(GR// &
+                                   "&ocean_topo_nml coriolis_beta = 2.0e-11 /"//new_line('a')// &
+                                   "&ocean_bc_nml south = 'periodic', north = 'periodic' /"//new_line('a'), cfg, ierr=ierr)
+      call validate_config(cfg, ierr=ierr)
+      call check(error, ierr /= OCEAN_STATUS_OK, "beta plane + periodic y must be refused")
+      if (allocated(error)) return
+
+      call read_config_from_string( &
+         "&sim_nml sim_type = 'ocean' /"//new_line('a')// &
+         "&grid_nml nx = 24, ny = 16, nghost = 3, dx = 0.2, dy = 0.2 /"//new_line('a')// &
+         "&ocean_grid_nml grid_config = 'spherical', lon_west = 0.0, lat_south = 20.0 /"// &
+         new_line('a')// &
+         "&ocean_bc_nml south = 'periodic', north = 'periodic' /"//new_line('a'), cfg, ierr=ierr)
+      call validate_config(cfg, ierr=ierr)
+      call check(error, ierr /= OCEAN_STATUS_OK, "lon-lat sector + periodic y must be refused")
+      if (allocated(error)) return
+
+      call read_config_from_string(GR// &
+                                   "&ocean_bc_nml south = 'periodic', north = 'periodic' /"//new_line('a'), cfg, ierr=ierr)
+      call validate_config(cfg, ierr=ierr)
+      call check(error, ierr == OCEAN_STATUS_OK, "f-plane Cartesian periodic y must be accepted")
+      if (allocated(error)) return
+
+      call read_config_from_string(GR// &
+                                   "&ocean_topo_nml coriolis_beta = 2.0e-11 /"//new_line('a')// &
+                                   "&ocean_bc_nml west = 'periodic', east = 'periodic' /"//new_line('a'), cfg, ierr=ierr)
+      call validate_config(cfg, ierr=ierr)
+      call check(error, ierr == OCEAN_STATUS_OK, "beta plane periodic in x only must be accepted")
+   end subroutine test_periodic_y_needs_uniform_grid
 
    subroutine test_chapman_bt_halo_refused(error)
       !! A chapman OBC edge excludes the wide-halo BT march-in: AUTO resolves
