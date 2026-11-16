@@ -99,6 +99,7 @@ module rdb_ice_cice_hooks
                                  ice_atm_stress_to_faces
    use rdb_ice_dyn_c, only: ice_dyn_c_step, ice_dyn_c_cat_t
    use rdb_ice_transport_cice, only: ice_step_transport, transport_result_t, TRANSPORT_CFG_OK
+   use rdb_ice_transport_seam, only: seam_max_one
    use rdb_ice_transport_seam_comm, only: ice_transport_seam_bind, ice_halo_category_state, ice_halo_centre_pair, &
                                           ice_transport_seam_bind_reductions, ice_err_bind_comm
    use rdb_ice_cice_run, only: ICE_LCUM_NCLIP, ICE_LCUM_AREA, ICE_LCUM_VICE, ICE_LCUM_VSNO, ICE_LCUM_EICE, ICE_LCUM_ESNO
@@ -544,9 +545,11 @@ contains
       ie = ctx%cice%nghost + ctx%cice%nx_phys
       js = ctx%cice%nghost + 1
       je = ctx%cice%nghost + ctx%cice%ny_phys
-      ! the decomposition seam of the transport (collectives, fold pairing): a few pointer assignments, one rank and
-      ! no fold being the default it leaves unchanged
-      call ice_transport_seam_bind(S%icec%tws%seam, G, S%bc, S%icec%tws%fw%nbatch, S%icec%tws%ntrace)
+      ! the decomposition seam of the transport (collectives, fold pairing), bound ONCE (the first step: it takes a
+      ! min allreduce of the category batch size, which never changes); one rank and no fold is the default
+      if (S%icec%tws%seam%nbatch == 0) then
+         call ice_transport_seam_bind(S%icec%tws%seam, G, S%bc, S%icec%tws%fw%nbatch, S%icec%tws%ntrace)
+      end if
       associate (cm => S%ice_cgrid, c => ctx%cice, w => ctx%work, f => ctx%flux)
          call ice_step_transport(S%icec%tws, c%p, ctx%dt, ctx%transport_post, is, ie, js, je, &
                                  S%ice%u_ice, S%ice%v_ice, cm%HTE, cm%HTN, cm%tarea, cm%dxT, cm%dyT, &
@@ -600,6 +603,9 @@ contains
 
       status = 0
       call ice_flux_avg_accumulate(S%icec%avg, ctx%flux, ctx%dt, ierr)
+      ! the exchanges below (stress seam, window apply) are collective: decide on the reduced status.  (Its
+      ! failures are shape / not-initialised ones, rank-uniform by construction; the reduction makes it a fact.)
+      call seam_max_one(ctx%seam, ierr)
       if (ierr /= ICE_AVG_OK) then
          status = ierr
          return
@@ -618,6 +624,9 @@ contains
       call ice_ocean_stress_flux_c(S%metrics, S%surface_stress, S%ice, G, S%bc)
       if (ctx%thermo_step .and. S%dyn%enable_thermodynamics) then
          call ice_flux_avg_stash_pending(S%icec%avg)
+         ! `apply_window` returns before its exchanges only on a shape error, an empty window or a window length
+         ! different from the thermo window: all functions of the configuration and of the (rank-uniform) step
+         ! schedule, never of a rank's data, so every rank takes the same branch.
          call ice_cice_apply_window(G, S%bc, S%icec%avg, S%surface_flux, S%icec%oin%sss_ocn, ierr, &
                                     window_expected=S%dyn%therm_dt(ctx%dt))
          if (ierr /= ICE_ADAPT_OK) then

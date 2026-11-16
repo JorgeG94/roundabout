@@ -605,8 +605,16 @@ contains
          ! (`ice_halo_faces`), the tripolar fold included (`px > 1` too); the cases
          ! `sea_ice_cdyn*` of `test_ocean_decomp_bitid_mpi` pin it bitwise.
          ! The CICE-port ice (`scheme = "cice"`) runs on the ocean's decomposition on walls and periodic
-         ! edges (`cice_ice*` of `test_ocean_decomp_bitid_mpi`); its ledger and the tripolar fold are
-         ! refused in `validate_config` (`ice_config_check`).
+         ! edges (`cice_ice*` of `test_ocean_decomp_bitid_mpi`).  The tripolar fold is refused in
+         ! `validate_config` on any rank count; the named-term ledger sums per rank, and `validate_config`
+         ! only sees an explicit `px*py > 1` (an unset grid is auto-factored above), so it is refused here too,
+         ! on the ACTUAL rank count.
+         if (cfg%ocean%ice%enable .and. trim(adjustl(cfg%ocean%ice%scheme)) == "cice" .and. cfg%ocean%ice%ledger) then
+            call fail("&ocean_ice_nml ledger = .true. is single-rank ("//to_string(csize)//" ranks requested): the "// &
+                      "named-term ledger is single-rank, it sums over the owned cells of one rank and has no "// &
+                      "cross-rank reduction.  Use ledger = .false. or 1 rank.", ierr, OCEAN_STATUS_ERR_SETUP)
+            return
+         end if
          ! In-memory geometry injection (the API's staged bathymetry /
          ! supergrid arrays) hands over WHOLE-grid arrays.
          if (allocated(engine%staged_bathymetry) .or. allocated(engine%staged_metrics_x)) then
@@ -2577,6 +2585,10 @@ contains
                                           .and. engine%state%dyn%is_thermo_step())
       end if
 
+      ! TEMPORARY, scheme="cice" only: SUPERSEDED by the general refresh of the assembled fluxes (and `sw_net`)
+      ! that `fix/surface-flux-ghost-refresh` puts after the assembly for every path.  The stale-ghost read
+      ! (KPP/EPBL evaluate their surface buoyancy flux in the ghost columns) exists for any bulk forcing +
+      ! KPP/EPBL run, not only this scheme.  Delete this call and `ice_cice_refresh_flux_ghosts` when that lands.
       ! CICE-port ice on a decomposed domain: the assembled totals carry only their ice share in a seam ghost
       ! (the bulk components are written on physical cells), and KPP / EPBL read `Q_heat` / `Q_salt` in the ghost
       ! columns; refresh them from the owners (collective, gated on the same rank-uniform cadence as the assembly).

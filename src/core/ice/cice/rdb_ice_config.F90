@@ -169,6 +169,7 @@ contains
             end if
          end if
 
+         ! only an EXPLICIT process grid is visible here; `engine_setup` repeats the refusal on the actual rank count
          if (cfg%ocean%ice%ledger .and. cfg%px*cfg%py > 1) then
             call add_msg(msgs, n, "the named-term ledger is single-rank (&ocean_ice_nml ledger = .true. with px*py > 1): it "// &
                          "sums its terms over the owned cells of one rank and has no cross-rank reduction yet "// &

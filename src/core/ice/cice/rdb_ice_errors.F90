@@ -48,7 +48,7 @@ module rdb_ice_errors
    public :: ice_err_name, ice_err_fatal_set, ice_err_clear, ice_err_reduce
    public :: ice_err_is_fatal, ice_err_dump, ice_err_enforce
    public :: ice_err_counted_line, ice_err_accumulate
-   public :: ice_err_combine_iface, ice_err_set_combine
+   public :: ice_err_combine_iface, ice_err_set_combine, ice_err_combine_bound
 
    integer, parameter :: ICE_NERR = 25
       !! Number of registered bits (0 .. ICE_NERR-1).
@@ -145,10 +145,23 @@ contains
       !! Bind (or, with `null()`, unbind) the cross-rank combination of `ice_err_reduce`.  The ice core library
       !! cannot use MPI, so the main library supplies the collective (`rdb_ice_transport_seam_comm`).  Call it on
       !! every rank with the same association before the first reduction of a step.
+      !!
+      !! The binding is PROCESS-GLOBAL.  The CICE-port step binds it at the top of every step (collective when
+      !! decomposed, null on one rank) and `engine_exit_data` unbinds it, so one engine at a time is safe; two
+      !! engines alive in one process share the binding of whichever stepped last (each step rebinds, so an
+      !! engine that steps always sees its own decomposition), and an engine dropped without `engine_exit_data`
+      !! leaves the last binding in place until the next CICE step rebinds it or `ice_cice_unbind` clears it.
+      !! With nothing bound (or one rank) `ice_err_reduce` is rank-local and calls no collective.
       procedure(ice_err_combine_iface), pointer, intent(in) :: proc
 
       combine_hook => proc
    end subroutine ice_err_set_combine
+
+   function ice_err_combine_bound() result(bound)
+      !! A cross-rank combination is bound: `ice_err_reduce` summaries are GLOBAL (the same on every rank).
+      logical :: bound
+      bound = associated(combine_hook)
+   end function ice_err_combine_bound
 
    pure function ice_err_name(ibit) result(name)
       !! Registry name of bit `ibit` (0-based), or `UNKNOWN`.

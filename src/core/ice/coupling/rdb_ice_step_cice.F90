@@ -949,6 +949,11 @@ contains
       logical :: ok, led_on
 
       res%plan = ice_step_plan_build(hooks, cice%p%atm%highfreq)
+      ! The envelope refuses before the first collective of the step, on a rank-local condition.  Every term of it is
+      ! rank-uniform by construction (the stage plan, `ndtd`, the rank count, the outer step and the slot extents all
+      ! come from the configuration and the time loop, `nghost` is one value for the run, the tile extents enter only
+      ! through shapes that the engine already checked against the grid), so every rank refuses together and none is
+      ! left waiting in a halo; a collective assertion of that at setup would only repeat the engine's own checks.
       call check_envelope(cice, flux, rad, work, opts, dt, res%plan, res)
       if (res%status /= ICE_STEP_OK) return
 

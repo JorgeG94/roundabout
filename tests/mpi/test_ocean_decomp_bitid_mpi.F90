@@ -326,6 +326,8 @@ program test_ocean_decomp_bitid_mpi
       integer :: ncav(6) = 0
          !! Cavity non-vacuity counts over the OWNED cells: covered wet, open wet,
          !! grounded, melting, top-drag stress > 0, k_top < nz.
+      real(wp) :: ridge_act = 0.0_wp
+         !! Sum over the run of the ridging area-rate magnitude (`dardg1dt`) on the owned cells (CICE-port cases).
       real(wp) :: ice_tot(3) = 0.0_wp
          !! The console's global ice sums (wet area, ice-covered area, ice volume): EFP-reduced, so they
          !! must be bit-identical between the serial run and every decomposition.
@@ -348,7 +350,7 @@ program test_ocean_decomp_bitid_mpi
       !! `RDB_BITID_CASES`: run only the cases whose name contains this substring.
    type(comm_t) :: comm
    character(len=16), parameter :: SCHEMES(2) = [character(len=16) :: "pred_corr", "ssp_rk2"]
-   character(len=24), parameter :: CASES(84) = [character(len=24) :: &
+   character(len=24), parameter :: CASES(87) = [character(len=24) :: &
                                                 "island_basin", "weno7_pv", &
                                                 "periodic_channel_zstar", &
                                                 "visc_rem_zstar", &
@@ -379,6 +381,7 @@ program test_ocean_decomp_bitid_mpi
                                                 "sea_ice_cdyn", "sea_ice_cdyn_rev", "sea_ice_cdyn_island", &
                                                 "sea_ice_cdyn_fold", "sea_ice_cdyn_edge", &
                "cice_ice", "cice_ice_wall", "cice_ice_island", "cice_ice_bulk", "cice_ice_sph", "cice_ice_lat", "cice_ice_upwind", &
+                                                "cice_ice_pp", "cice_ice_r1", "cice_ice_epbl", &
                                                 "cavity_zfixed", "cavity_sigma", &
                                                 "cavity_sigma_ratio2", "cavity_gall", "cavity_melt_only", "cavity_periodic", &
                                                 "cavity_combo", "wetdry_shoal", &
@@ -1418,6 +1421,11 @@ contains
       topo = "&ocean_topo_nml topo_config = 'seamount', max_depth = 1000.0, edge_depth = 800.0, "// &
              "slope_scale = 60000.0 /"//NL
       atm = "&ocean_ice_atm_nml uni_tas = 255.0, uni_rlds = 180.0, uni_uas = 8.0, uni_vas = 2.0 /"//NL
+      if (label == "cice_ice_pp") then
+         ! periodic in BOTH directions: the corner ghosts and both wraps, on every split
+         bc = "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'periodic', north = 'periodic' /"//NL
+         topo = "&ocean_topo_nml topo_config = 'island', max_depth = 1000.0, slope_scale = 0.15 /"//NL
+      end if
       if (label == "cice_ice_wall") then
          bc = "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
          topo = "&ocean_topo_nml topo_config = 'flat', max_depth = 1000.0 /"//NL
@@ -1448,6 +1456,12 @@ contains
             "&ocean_ice_ic_nml conc_config = 'uniform', h_ice = 1.0, conc = 0.7, h_snow = 0.1, "// &
             "t_ice = -8.0 /"//NL//atm//bc// &
             "&output_nml output_to_file = .false. /"//NL
+      if (label == "cice_ice_r1") call replace_once(nml, "dt_therm_ratio = 2", "dt_therm_ratio = 1")
+      if (label == "cice_ice_epbl") then
+         ! EPBL instead of KPP (its boundary-layer reads the same surface-flux ghosts)
+         call replace_once(nml, "&ocean_vmix_nml dt_therm_ratio = 2 /", &
+                           "&ocean_vmix_nml dt_therm_ratio = 2, use_kpp = .false. /"//NL//"&ocean_epbl_nml enable = .true. /")
+      end if
       if (label == "cice_ice_upwind") call replace_once(nml, "advection = 'remap'", "advection = 'upwind'")
       if (label == "cice_ice_sph" .or. label == "cice_ice_lat") then
          ! the channel on a lon-lat grid: latitude-dependent metrics (areas, spacings) under the uniform atmosphere
@@ -1664,6 +1678,12 @@ contains
          ! enable`) between the dyn-core advance and the finalize.
          call engine_step_ice(engine, cfg, DT, t, ierr=ierr)
          if (ierr /= OCEAN_STATUS_OK) exit
+         if (engine%state%icec%is_init) then
+            !$acc update self(engine%state%icec%flux%dardg1dt)
+            snap%ridge_act = snap%ridge_act + sum(abs(engine%state%icec%flux%dardg1dt( &
+                                                      engine%grid%nghost + 1:engine%grid%nghost + engine%grid%nx_phys, &
+                                                      engine%grid%nghost + 1:engine%grid%nghost + engine%grid%ny_phys)))
+         end if
          call engine_step_finalize(engine, DT, t, ierr=ierr)
          if (ierr /= OCEAN_STATUS_OK) exit
          if (allocated(engine%state%dyn%bt_work%wd_wet_dyn)) &
@@ -1949,6 +1969,10 @@ contains
             amin, amax, vmin, vmax, ref%ice_tot(2:3), " rank ", rank
          n_fail = n_fail + 1
       end if
+      if (label == "cice_ice" .and. .not. (ref%ridge_act > 0.0_wp)) then
+         write (*, '(3a,i0)') "FAIL ", tag, ": ridging never acted (dardg1dt is zero all run), rank ", rank
+         n_fail = n_fail + 1
+      end if
       if (label == "cice_ice_island" .and. (nland_x == 0 .or. nland_y == 0)) then
          write (*, '(3a,2(1x,i0),a,i0)') "FAIL ", tag, ": no land on the rank seam lines (x, y cells):", nland_x, nland_y, &
             " rank ", rank
@@ -1962,7 +1986,7 @@ contains
       !! and the category-state halo; `cice_ice_bulk` the refresh of the assembled flux ghosts.
       type(snap_t), intent(in) :: ref
       character(len=*), intent(in) :: label, scheme
-      integer :: skips(2), nskip, is, nbad, nfin
+      integer :: skips(2), nskip, is, nbad, nfin, bit
       integer :: tot(2)
       type(snap_t) :: dec
       logical :: ok
@@ -1975,16 +1999,24 @@ contains
          skips = [ICE_SKIP_FLUX_GHOSTS, 0]
          nskip = 1
       end if
-      do is = 1, nskip
-         ice_mr_test_skip = skips(is)
-         call run_one(case_nml(label, scheme, nprocs, 1), nprocs, rank, dec, ok)
+      do is = 1, nskip + merge(1, 0, label == "cice_ice")
+         ! the last control of `cice_ice` repeats the stress skip under a y-only split (1 x nprocs)
+         bit = skips(min(is, nskip))
+         if (is > nskip) bit = ICE_SKIP_STRESS_HALO
+         ice_mr_test_skip = bit
+         if (is > nskip) then
+            call run_one(case_nml(label, scheme, 1, nprocs), nprocs, rank, dec, ok)
+         else
+            call run_one(case_nml(label, scheme, nprocs, 1), nprocs, rank, dec, ok)
+         end if
          ice_mr_test_skip = 0
          nbad = 0
          nfin = 0
          if (ok) call compare(dec, ref, nbad, nfin, "negctrl", quiet=.true.)
          tot = [nbad, merge(0, 1, ok)]
          call allreduce(comm, tot, op=MPI_SUM)
-         write (tag, '(4a,i0)') label, "/", scheme, " negative control, skip bit ", skips(is)
+         write (tag, '(4a,i0,a)') label, "/", scheme, " negative control, skip bit ", bit, &
+            merge(" (y-only split)", "               ", is > nskip)
          if (tot(1) + tot(2) == 0) then
             if (rank == 0) write (*, '(2a)') "FAIL ", trim(tag)//": the run with the exchange skipped is IDENTICAL (not detected)"
             n_fail = n_fail + 1
@@ -2017,11 +2049,11 @@ contains
       type(config_t) :: cfg
       type(ice_step_result_t) :: res
       real(wp) :: t
-      integer :: ierr, n, ng, stat(5), smin(5), smax(5), nx_save
+      integer :: ierr, n, ng, stat(5), smin(5), smax(5), nx_save, expect(1)
       character(len=48) :: what
 
       if (kind == 1) then
-         what = "NaN category area on rank 0"
+         what = "NaN category area on the last rank"
       else
          what = "ocean import refuses on the last rank"
       end if
@@ -2043,7 +2075,10 @@ contains
       end do
       ng = engine%grid%nghost
       nx_save = engine%state%icec%oin%nx
-      if (kind == 1 .and. rank == 0) then
+      expect = [0]
+      if (kind == 1 .and. rank == nprocs - 1) then
+         ! the LAST rank (a non-zero global offset), so the global first-offender index must be decoded right
+         expect = [(2 - 1)*NX_G + 2 + engine%grid%i_offset_global]
          engine%state%ice%cice%aicen(ng + 2, ng + 2, 1) = ieee_value(1.0_wp, ieee_quiet_nan)
          !$acc update device(engine%state%ice%cice%aicen)
       end if
@@ -2051,6 +2086,7 @@ contains
       call ice_cice_bind(engine%state, engine%grid)
       call ice_cice_step_result(DT, .false., 3, res)
       engine%state%icec%oin%nx = nx_save
+      call allreduce(comm, expect, op=MPI_MAX)
       stat = [res%status, res%stage, int(res%summary%mask), int(res%summary%first_idx), res%stage_status]
       smin = stat
       smax = stat
@@ -2061,7 +2097,7 @@ contains
             stat, " rank ", rank
          n_fail = n_fail + 1
       else if (kind == 1 .and. .not. (stat(1) == ICE_STEP_FATAL .and. iand(stat(3), int(ICE_ERR_NONFINITE)) /= 0 .and. &
-                                      stat(4) == (2 - 1)*NX_G + 2)) then
+                                      stat(4) == expect(1))) then
          write (*, '(3a,5(1x,i0),a,i0)') "FAIL cice fault injection (", trim(what), "): wrong verdict:", stat, " rank ", rank
          n_fail = n_fail + 1
       else if (kind == 2 .and. .not. (stat(1) == ICE_STEP_STAGE_FAILED .and. stat(2) == ICE_STAGE_OCEAN_IMPORT)) then
@@ -2086,11 +2122,11 @@ contains
 
       do pass = 1, 2
          w = 0_int32
-         if (rank == 0) w(2, 3) = ior(ICE_ERR_NONFINITE, ICE_ERR_TSN_RANGE)
+         if (rank == nprocs - 1) w(2, 3) = ior(ICE_ERR_NONFINITE, ICE_ERR_TSN_RANGE)
          p => null()
          if (pass == 1) p => ice_err_combine_collective
          call ice_err_set_combine(p)
-         call ice_err_reduce(w, N, N, 2, 3, 2, 3, 0, 0, 2, ICE_ERR_FATAL_MASK, summ)
+         call ice_err_reduce(w, N, N, 2, 3, 2, 3, 2*rank, 0, 2*nprocs, ICE_ERR_FATAL_MASK, summ)
          p => null()
          call ice_err_set_combine(p)
          stat = [int(summ%mask), int(summ%first_idx), int(summ%first_word), int(summ%count(0)) + int(summ%count(1))]
@@ -2701,7 +2737,7 @@ contains
             if ((label == "sea_ice" .or. label == "sea_ice_transport" .or. index(label, "sea_ice_cdyn") == 1 .or. &
                  label == "bulk_flux_ice" .or. label == "dtbt_reset" .or. index(label, "cice_ice") == 1 .or. &
                  label == "cavity_sigma_ratio2" .or. is_wetdry_case(label) .or. is_ice_fold_case(label)) .and. &
-                (nprocs/px == 1 .or. px == nprocs/px) .and. &
+                (nprocs/px == 1 .or. px == nprocs/px .or. (index(label, "cice_ice") == 1 .and. px == 1)) .and. &
                 (nprocs > 1 .or. label == "cavity_sigma_ratio2")) then
                ! 4x1 and 2x2 at np = 4 (and 2x1 at np = 2).
                call check_resume_leg(case_nml(label, scheme, px, nprocs/px), dec, &
@@ -3123,10 +3159,12 @@ contains
          n_fail = n_fail + 1
          return
       end if
+      call check_cice_ledger_unset_grid()
       do k = 1, 2
          nml = base
          if (k == 1) then
-            nml = nml//"&ocean_ice_nml ledger = .true. /"//NL
+            ! (the group is edited in place: a second `&ocean_ice_nml` would fail to PARSE, a vacuous refusal)
+            call replace_once(nml, "hfreeze = 10.0, dynamics", "hfreeze = 10.0, ledger = .true., dynamics")
          else
             ! the tripolar-cap sea-ice case (accepted and bitwise under the SIS2 scheme: its twin below) with
             ! only the ice groups swapped
@@ -3150,6 +3188,43 @@ contains
          end if
       end do
    end subroutine check_cice_fences
+
+   subroutine check_cice_ledger_unset_grid()
+      !! The ledger with NO `&mpi_nml` (px = py = 1 for `validate_config`, auto-factored by the engine on N ranks):
+      !! the config check cannot see the rank count, so `engine_setup` must refuse on the actual one.
+      character(len=*), parameter :: NL = new_line("a")
+      character(len=:), allocatable :: nml
+      type(config_t) :: cfg
+      type(ocean_engine_t) :: engine
+      integer :: ierr, im
+      logical :: found
+
+      nml = cice_ice_nml("cice_ice", "pred_corr", 1, 1)
+      call replace_once(nml, "hfreeze = 10.0, dynamics", "hfreeze = 10.0, ledger = .true., dynamics")
+      call read_config_from_string(nml, cfg, ierr=ierr)
+      if (ierr == OCEAN_STATUS_OK) call validate_config(cfg, ierr)
+      if (ierr /= OCEAN_STATUS_OK) then
+         write (*, '(a,i0)') "FAIL cice fence: validate_config refused the unset-grid ledger namelist (vacuous), rank ", rank
+         n_fail = n_fail + 1
+         return
+      end if
+      call error_ring_clear()
+      call engine_setup(engine, cfg, ierr, compute_rank=rank, compute_size=nprocs)
+      found = .false.
+      do im = 0, error_ring_count() - 1
+         if (index(error_ring_get(im), "ledger = .true. is single-rank") > 0) found = .true.
+      end do
+      if (ierr == OCEAN_STATUS_OK) then
+         write (*, '(a,i0)') "FAIL cice fence: ledger with an unset process grid was ACCEPTED on several ranks, rank ", rank
+         call engine_teardown(engine)
+         n_fail = n_fail + 1
+      else if (.not. found) then
+         write (*, '(a,i0)') "FAIL cice fence: unset-grid ledger refused, but not for the ledger, rank ", rank
+         n_fail = n_fail + 1
+      else if (rank == 0) then
+         write (*, '(a)') "case cice fence: ledger with an unset process grid refused by engine_setup (ok)"
+      end if
+   end subroutine check_cice_ledger_unset_grid
 
    subroutine check_single_rank_fences()
       !! The single-rank features must be REFUSED at configure on more than

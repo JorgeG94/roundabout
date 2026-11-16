@@ -88,7 +88,7 @@ module rdb_ice_dyn_c
    use rdb_halo, only: halo_allreduce_sum_i8
    use rdb_ice_column, only: ICE_RHO_ICE, ICE_RHO_SNOW
    use rdb_ice_state, only: ocean_sea_ice_t
-   use rdb_ice_errors, only: ICE_ERR_FATAL_MASK, ice_err_summary_t, ice_err_clear, ice_err_reduce, &
+   use rdb_ice_errors, only: ICE_ERR_FATAL_MASK, ice_err_summary_t, ice_err_clear, ice_err_reduce, ice_err_combine_bound, &
                              ice_err_enforce, ice_err_is_fatal
    use rdb_ice_evp_c_prep, only: ice_evp_c_const_t, ice_evp_c_constants, ice_evp_c_prep, ice_evp_c_ghost_ok, &
                                  ice_evp_c_face_fraction
@@ -304,10 +304,11 @@ contains
       if (present(err_summary)) then
          err_summary = summ
       else
-         ! Rank-uniform verdict: the per-rank summary is local (`combine_across_ranks` is not a
-         ! collective yet), so ONE sum of the fatal flags decides for every rank and a rank that is
-         ! not the offender stops too instead of waiting in the next halo.
-         if (decomposed) then
+         ! Rank-uniform verdict.  Where `ice_err_reduce` combines over the ranks (the CICE-port step binds the
+         ! collective) `summ` is already global, so every rank decides alike and stops together; where it does not
+         ! (the SIS2-state C-grid EVP) the per-rank summary is local and ONE sum of the fatal flags decides for
+         ! every rank, so a rank that is not the offender stops too instead of waiting in the next halo.
+         if (decomposed .and. .not. ice_err_combine_bound()) then
             n_fatal_loc = 0_int64
             if (ice_err_is_fatal(summ, ICE_ERR_FATAL_MASK)) n_fatal_loc = 1_int64
             call halo_allreduce_sum_i8(n_fatal_loc, n_fatal_glob)
@@ -315,6 +316,8 @@ contains
                call ice_err_enforce(summ, gnx, ICE_ERR_FATAL_MASK)
                error stop "ice_dyn_c_step: a fatal sea-ice error bit is set on another rank"
             end if
+         else if (decomposed) then
+            call ice_err_enforce(summ, gnx, ICE_ERR_FATAL_MASK)
          else
             call ice_err_enforce(summ, grid%nx_phys, ICE_ERR_FATAL_MASK)
          end if
