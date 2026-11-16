@@ -1050,8 +1050,12 @@ contains
       if (allocated(error)) return
       cfg%nghost = 3
       cfg%px = 2
-      call check(error, has_msg(cfg, "single rank"), "px*py > 1 refused")
+      call check(error,.not. has_msg(cfg, "single-rank"), "px*py > 1 is accepted (stage A: no fold, no ledger)")
       if (allocated(error)) return
+      cfg%ocean%ice%ledger = .true.
+      call check(error, has_msg(cfg, "ledger is single-rank"), "the ledger on several ranks is refused")
+      if (allocated(error)) return
+      cfg%ocean%ice%ledger = .false.
       cfg%px = 1
       call expect_refusal("&ocean_ice_nml scheme='cice' /"//new_line('a')// &
                           "&ocean_ice_dyn_nml advection='upwind', ndtd = 2 /", "ndtd /= 1", error)
@@ -1090,12 +1094,13 @@ contains
       if (allocated(error)) return
       cfg%nghost = 2
       cfg%px = 2
-      call check(error, count_msgs(cfg), 9, "envelope x5 + nghost + ndtd + dt_ice + ranks")
+      cfg%ocean%ice%ledger = .true.
+      call check(error, count_msgs(cfg), 9, "envelope x5 + nghost + ndtd + dt_ice + ledger on several ranks")
       if (allocated(error)) return
       call check(error, has_msg(cfg, "needs enable=.true."), "envelope reason")
       if (allocated(error)) return
       call check(error, has_msg(cfg, "nghost >= 3") .and. has_msg(cfg, "ndtd /= 1") .and. has_msg(cfg, "dt_ice must equal") &
-                 .and. has_msg(cfg, "single rank"), "every envelope reason")
+                 .and. has_msg(cfg, "ledger is single-rank"), "every envelope reason")
    end subroutine test_step_all_reasons
 
    subroutine test_unrepresentable(error)

@@ -701,6 +701,7 @@ contains
       type(world_t) :: wd
       type(ice_step_hooks_t) :: h
       type(ice_step_opts_t) :: opts
+      type(ice_step_opts_t) :: opts_default
       type(ice_step_result_t) :: res
       real(wp), allocatable :: before(:), after(:)
       integer :: icase
@@ -714,13 +715,13 @@ contains
       call all_doubles(h, .false.)
       before = pack_world(wd, .false.)
       do icase = 1, 4
-         opts = ice_step_opts_t()
+         opts = opts_default
          opts%allow_test_doubles = .true.
          select case (icase)
          case (1)
             opts%ndtd = 2
          case (2)
-            opts%nranks = 2
+            opts%nranks = 0
          case (3)
             opts%dt_outer = 0.5_wp*DT          ! the ice step is not the outer step
          case default
@@ -741,7 +742,7 @@ contains
       if (.not. allocated(error)) call check(error, nlog, 0, "no hook called")
       ! non-positive forcing height: refused after the input hooks, still before the first state or flux write
       if (.not. allocated(error)) then
-         opts = ice_step_opts_t()
+         opts = opts_default
          opts%allow_test_doubles = .true.
          call h%install(ICE_STAGE_ATM_PREPARE, dbl_atm_bad_height, is_double=.true.)
          call step(wd, h, opts, .false., 1, res)
@@ -758,7 +759,7 @@ contains
       ! nghost = 2: refused (the dynamics needs 3)
       call make_world(wd, 2, .true., .true., error)
       if (.not. allocated(error)) then
-         opts = ice_step_opts_t()
+         opts = opts_default
          opts%allow_test_doubles = .true.
          call all_doubles(h, .false.)
          call step(wd, h, opts, .false., 1, res)
@@ -781,7 +782,7 @@ contains
       ! wet mask never set: refused (no default of all wet)
       call make_world(wd, NG, .true., .false., error)
       if (.not. allocated(error)) then
-         opts = ice_step_opts_t()
+         opts = opts_default
          opts%allow_test_doubles = .true.
          call all_doubles(h, .false.)
          call reset_log()
