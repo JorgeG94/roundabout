@@ -19,7 +19,7 @@ module rdb_ice_flux
    !! - `ice_flux_zero_impl`: every accumulator and every per-category output,
    !!   ghosts included, in ONE launch (a single `do concurrent (j, i)` with the
    !!   category loop inside).
-   !! - `ice_flux_merge_impl`: ADDS `sum_n aicen_init*xn` into the twelve cell
+   !! - `ice_flux_merge_impl`: ADDS `sum_n aicen_init*xn` into the twelve cell (and the three history extras `thx`)
    !!   accumulators over the cells `is:ie, js:je`; pre-existing cell values are
    !!   kept.  A non-finite contribution propagates into the cell fields (no
    !!   clamp can launder it) and ORs `ICE_ERR_NONFINITE` into `ice_err`.
@@ -33,6 +33,7 @@ module rdb_ice_flux
    use, intrinsic :: iso_fortran_env, only: int32
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    use rdb_constants, only: wp
+   use rdb_ice_dims, only: ICE_NTHX
    use rdb_ice_errors, only: ICE_ERR_NONFINITE
    implicit none
    private
@@ -46,8 +47,8 @@ contains
                                       frazil_vol, meltt, meltb, meltl, congel, snoice, &
                                       dardg1dt, dardg2dt, dvirdgdt, opening, &
                                       freshn, fsaltn, fhocnn, evapn, fsensn, flatn, flwoutn, fswabsn, &
-                                      melttn, meltbn, congeln, snoicen)
-      !! Zero the 20 cell accumulators and the 12 per-category outputs over the
+                                      melttn, meltbn, congeln, snoicen, thx, thxn)
+      !! Zero the 20 cell accumulators, the history extras `thx` and the 12 per-category outputs (and `thxn`) over the
       !! whole ghosted extent, in one launch.
       integer, intent(in) :: nx, ny, ncat
       real(wp), intent(inout) :: fresh(nx, ny), fsalt(nx, ny), fhocn(nx, ny), fswthru(nx, ny)
@@ -59,14 +60,16 @@ contains
       real(wp), intent(inout) :: evapn(nx, ny, ncat), fsensn(nx, ny, ncat), flatn(nx, ny, ncat)
       real(wp), intent(inout) :: flwoutn(nx, ny, ncat), fswabsn(nx, ny, ncat), melttn(nx, ny, ncat)
       real(wp), intent(inout) :: meltbn(nx, ny, ncat), congeln(nx, ny, ncat), snoicen(nx, ny, ncat)
+      real(wp), intent(inout) :: thx(nx, ny, ICE_NTHX), thxn(nx, ny, ncat, ICE_NTHX)
 
-      integer :: i, j, n
+      integer :: i, j, n, m
 
-      !$acc data present(fresh, fsalt, fhocn, fswthru, fswthru_vis, evap, fsens, flat, flwout, fswabs) &
+      !$acc data present(thx, thxn) &
+      !$acc& present(fresh, fsalt, fhocn, fswthru, fswthru_vis, evap, fsens, flat, flwout, fswabs) &
       !$acc& present(frazil_vol, meltt, meltb, meltl, congel, snoice, dardg1dt, dardg2dt, dvirdgdt, opening) &
       !$acc& present(freshn, fsaltn, fhocnn, evapn, fsensn, flatn, flwoutn, fswabsn) &
       !$acc& present(melttn, meltbn, congeln, snoicen)
-      do concurrent(j=1:ny, i=1:nx) local(n)
+      do concurrent(j=1:ny, i=1:nx) local(n, m)
          fresh(i, j) = 0.0_wp
          fsalt(i, j) = 0.0_wp
          fhocn(i, j) = 0.0_wp
@@ -88,7 +91,15 @@ contains
          dvirdgdt(i, j) = 0.0_wp
          opening(i, j) = 0.0_wp
          !$acc loop seq
+         do m = 1, ICE_NTHX
+            thx(i, j, m) = 0.0_wp
+         end do
+         !$acc loop seq
          do n = 1, ncat
+            !$acc loop seq
+            do m = 1, ICE_NTHX
+               thxn(i, j, n, m) = 0.0_wp
+            end do
             freshn(i, j, n) = 0.0_wp
             fsaltn(i, j, n) = 0.0_wp
             fhocnn(i, j, n) = 0.0_wp
@@ -108,9 +119,9 @@ contains
 
    pure subroutine ice_flux_merge_impl(nx, ny, ncat, is, ie, js, je, emis, puny, flw, aicen_init, &
                                        freshn, fsaltn, fhocnn, evapn, fsensn, flatn, flwoutn, fswabsn, &
-                                       melttn, meltbn, congeln, snoicen, &
+                                       melttn, meltbn, congeln, snoicen, thxn, &
                                        fresh, fsalt, fhocn, evap, fsens, flat, flwout, fswabs, &
-                                       meltt, meltb, congel, snoice, ice_err)
+                                       meltt, meltb, congel, snoice, thx, ice_err)
       !! `x(i,j) = x(i,j) + sum_{n=1..ncat} aicen_init(i,j,n) * xn(i,j,n)` for the
       !! twelve merged fields, over the cells `is:ie, js:je`, with ONE exception:
       !! the outgoing longwave merges the portion that is not reflected incoming
@@ -129,16 +140,18 @@ contains
       real(wp), intent(inout) :: fresh(nx, ny), fsalt(nx, ny), fhocn(nx, ny), evap(nx, ny)
       real(wp), intent(inout) :: fsens(nx, ny), flat(nx, ny), flwout(nx, ny), fswabs(nx, ny)
       real(wp), intent(inout) :: meltt(nx, ny), meltb(nx, ny), congel(nx, ny), snoice(nx, ny)
+      real(wp), intent(in) :: thxn(nx, ny, ncat, ICE_NTHX)
+      real(wp), intent(inout) :: thx(nx, ny, ICE_NTHX)
       integer(int32), intent(inout) :: ice_err(nx, ny)
 
       integer :: i, j, n
-      real(wp) :: a, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, chk
+      real(wp) :: a, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, chk, t1, t2, t3
 
       !$acc data present(flw, aicen_init, freshn, fsaltn, fhocnn, evapn, fsensn, flatn, flwoutn, fswabsn) &
-      !$acc& present(melttn, meltbn, congeln, snoicen) &
+      !$acc& present(melttn, meltbn, congeln, snoicen, thxn, thx) &
       !$acc& present(fresh, fsalt, fhocn, evap, fsens, flat, flwout, fswabs) &
       !$acc& present(meltt, meltb, congel, snoice, ice_err)
-      do concurrent(j=js:je, i=is:ie) local(n, a, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, chk)
+      do concurrent(j=js:je, i=is:ie) local(n, a, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, chk, t1, t2, t3)
          s1 = 0.0_wp
          s2 = 0.0_wp
          s3 = 0.0_wp
@@ -151,6 +164,9 @@ contains
          s10 = 0.0_wp
          s11 = 0.0_wp
          s12 = 0.0_wp
+         t1 = 0.0_wp
+         t2 = 0.0_wp
+         t3 = 0.0_wp
          !$acc loop seq
          do n = 1, ncat
             a = aicen_init(i, j, n)
@@ -168,6 +184,9 @@ contains
             s10 = s10 + a*meltbn(i, j, n)
             s11 = s11 + a*congeln(i, j, n)
             s12 = s12 + a*snoicen(i, j, n)
+            t1 = t1 + a*thxn(i, j, n, 1)
+            t2 = t2 + a*thxn(i, j, n, 2)
+            t3 = t3 + a*thxn(i, j, n, 3)
          end do
          fresh(i, j) = fresh(i, j) + s1
          fsalt(i, j) = fsalt(i, j) + s2
@@ -181,7 +200,10 @@ contains
          meltb(i, j) = meltb(i, j) + s10
          congel(i, j) = congel(i, j) + s11
          snoice(i, j) = snoice(i, j) + s12
-         chk = ((s1 + s2) + (s3 + s4)) + ((s5 + s6) + (s7 + s8)) + ((s9 + s10) + (s11 + s12))
+         thx(i, j, 1) = thx(i, j, 1) + t1
+         thx(i, j, 2) = thx(i, j, 2) + t2
+         thx(i, j, 3) = thx(i, j, 3) + t3
+         chk = ((s1 + s2) + (s3 + s4)) + ((s5 + s6) + (s7 + s8)) + ((s9 + s10) + (s11 + s12)) + ((t1 + t2) + t3)
          if (.not. ieee_is_finite(chk)) ice_err(i, j) = ior(ice_err(i, j), ICE_ERR_NONFINITE)
       end do
       !$acc end data

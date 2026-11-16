@@ -14,6 +14,7 @@ module test_cice_atm_inputs
    use testdrive, only: new_unittest, unittest_type, error_type, check, test_failed
    use rdb_constants, only: wp
    use lcg_deterministic, only: lcg_next, lcg_unit
+   use rdb_ice_dims, only: ICE_NTHX
    use rdb_ice_errors, only: ICE_ERR_NONFINITE
    use rdb_ice_params, only: ice_params_t, ice_params_default, ICE_CONSTANTS_ICEPACK, &
                              ice_q_from_T, ice_qsno_from_T, ice_salinity_profile
@@ -600,6 +601,7 @@ contains
       integer, parameter :: NC = 3, NL = 4, NS = 1
       type(ice_params_t) :: p
       real(wp), dimension(nx, ny) :: Tf, sst, frzmlt, tau_x, tau_y, fsalt, evap, fswabs, meltt, meltb, congel, snoice
+      real(wp) :: thx(nx, ny, ICE_NTHX), thxn(nx, ny, NC, ICE_NTHX)
       real(wp), dimension(nx, ny) :: fbot, rside, wlat
       real(wp), dimension(nx, ny, NC) :: aicen_init, vsnon, fswsfcn, fswintn, fswthrun, freshn, fsaltn, fhocnn, evapn
       real(wp), dimension(nx, ny, NC) :: fsensn, flatn, flwoutn, fswabsn, melttn, meltbn, congeln, snoicen, sxn, syn
@@ -625,7 +627,7 @@ contains
       ierr_n = 0_int32
       vsnon = 0.0_wp; fswsfcn = 0.0_wp; fswintn = 0.0_wp; fswthrun = 0.0_wp; freshn = 0.0_wp; fsaltn = 0.0_wp
       fhocnn = 0.0_wp; evapn = 0.0_wp; fsensn = 0.0_wp; flatn = 0.0_wp; flwoutn = 0.0_wp; fswabsn = 0.0_wp
-      melttn = 0.0_wp; meltbn = 0.0_wp; congeln = 0.0_wp; snoicen = 0.0_wp; sxn = 0.0_wp; syn = 0.0_wp
+      melttn = 0.0_wp; meltbn = 0.0_wp; congeln = 0.0_wp; snoicen = 0.0_wp; thx = 0.0_wp; thxn = 0.0_wp; sxn = 0.0_wp; syn = 0.0_wp
       qicen = 0.0_wp; sicen = 0.0_wp; Iswabsn = 0.0_wp; qsnon = 0.0_wp; Sswabsn = 0.0_wp
       do n = 1, NC
          do j = 1, ny
@@ -650,20 +652,20 @@ contains
       !$acc enter data copyin(p, uatm, vatm, wind, potT, Qa, rhoa, flw, fsnow, uvel, vvel, Tf, sst, frzmlt, tau_x, tau_y, &
       !$acc&  fresh, fsalt, fhocn, evap, fsens, flat, flwout, fswabs, meltt, meltb, congel, snoice, sx, sy, fbot, rside, &
       !$acc&  wlat, ice_err, aicen_init, aicen, vicen, vsnon, Tsfcn, fswsfcn, fswintn, fswthrun, freshn, fsaltn, fhocnn, &
-      !$acc&  evapn, fsensn, flatn, flwoutn, fswabsn, melttn, meltbn, congeln, snoicen, sxn, syn, ierr_n, qicen, sicen, &
+      !$acc&  evapn, fsensn, flatn, flwoutn, fswabsn, melttn, meltbn, congeln, snoicen, thx, thxn, sxn, syn, ierr_n, qicen, sicen, &
       !$acc&  Iswabsn, qsnon, Sswabsn)
       call ice_step_therm1(nx, ny, NC, NL, NS, 1, nx, 1, ny, 900.0_wp, p, .false., 10.0_wp, 10.0_wp, &
                            uatm, vatm, wind, potT, Qa, rhoa, flw, fsnow, uvel, vvel, Tf, sst, frzmlt, tau_x, tau_y, &
                            aicen_init, aicen, vicen, vsnon, Tsfcn, qicen, sicen, qsnon, &
                            fswsfcn, fswintn, fswthrun, Iswabsn, Sswabsn, &
-                           fresh, fsalt, fhocn, evap, fsens, flat, flwout, fswabs, meltt, meltb, congel, snoice, &
+                           fresh, fsalt, fhocn, evap, fsens, flat, flwout, fswabs, meltt, meltb, congel, snoice, thx, &
                            freshn, fsaltn, fhocnn, evapn, fsensn, flatn, flwoutn, fswabsn, &
-                           melttn, meltbn, congeln, snoicen, sxn, syn, sx, sy, fbot, rside, wlat, ierr_n, ice_err, istat)
+                           melttn, meltbn, congeln, snoicen, thxn, sxn, syn, sx, sy, fbot, rside, wlat, ierr_n, ice_err, istat)
       !$acc update self(fresh, fsens, flat, flwout, fhocn, sx, sy, aicen, vicen, Tsfcn, ice_err)
       !$acc exit data delete(p, uatm, vatm, wind, potT, Qa, rhoa, flw, fsnow, uvel, vvel, Tf, sst, frzmlt, tau_x, tau_y, &
       !$acc&  fresh, fsalt, fhocn, evap, fsens, flat, flwout, fswabs, meltt, meltb, congel, snoice, sx, sy, fbot, rside, &
       !$acc&  wlat, ice_err, aicen_init, aicen, vicen, vsnon, Tsfcn, fswsfcn, fswintn, fswthrun, freshn, fsaltn, fhocnn, &
-      !$acc&  evapn, fsensn, flatn, flwoutn, fswabsn, melttn, meltbn, congeln, snoicen, sxn, syn, ierr_n, qicen, sicen, &
+      !$acc&  evapn, fsensn, flatn, flwoutn, fswabsn, melttn, meltbn, congeln, snoicen, thx, thxn, sxn, syn, ierr_n, qicen, sicen, &
       !$acc&  Iswabsn, qsnon, Sswabsn)
    end subroutine run_therm1
 

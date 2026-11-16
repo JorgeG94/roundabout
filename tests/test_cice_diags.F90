@@ -28,7 +28,7 @@ module test_cice_diags
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite, ieee_is_nan
    use testdrive, only: new_unittest, unittest_type, error_type, check
    use rdb_constants, only: wp
-   use rdb_config, only: config_t, read_config_from_string
+   use rdb_config, only: config_t, read_config_from_string, validate_config
    use rdb_ocean_engine, only: ocean_engine_t, engine_setup, engine_enter_data, &
                                engine_step, engine_step_ice, engine_step_finalize, &
                                engine_exit_data, engine_teardown
@@ -38,7 +38,7 @@ module test_cice_diags
    use rdb_comm_env, only: comm_env_init, comm_env_setup_roles
    use rdb_ocean_diag_ice_cice, only: cice_fill, CD_CONGEL, CD_FRAZIL, CD_SNOICE, CD_MELTT, CD_MELTB, CD_MELTL, &
                                       CD_DVIDTT, CD_DVIDTD, CD_DAIDTT, CD_DAIDTD, CD_TSFC, CD_FSWABS, CD_FLWUP, &
-                                      CD_FSENS, CD_FLAT, CD_FHOCN, CD_FSWTHRU, CD_FRESH, CD_FSALT, CD_EVAP, CD_ALBSNI
+             CD_FSENS, CD_FLAT, CD_FHOCN, CD_FSWTHRU, CD_FRESH, CD_FSALT, CD_EVAP, CD_ALBSNI, CD_EVAPI, CD_EVAPS, CD_MELTS, CD_FSWDN
    implicit none
    private
 
@@ -47,14 +47,14 @@ module test_cice_diags
    real(wp), parameter :: DT = 600.0_wp
    real(wp), parameter :: CMD = 8.64e6_wp
    real(wp), parameter :: RHOI = 917.0_wp
-   integer, parameter :: NID = 21
+   integer, parameter :: NID = 25
    integer, parameter :: MAXF = 260
    logical :: comm_inited = .false.
 
    character(len=12), parameter :: ID_NAME(NID) = [character(len=12) :: &
                           "congel", "frazil", "snoice", "meltt", "meltb", "meltl", "dvidtt", "dvidtd", "daidtt", "daidtd", "Tsfc", &
                       "fswabs_ai", "flwup_ai", "fsens_ai", "flat_ai", "fhocn_ai", "fswthru_ai", "fresh_ai", "fsalt_ai", "evap_ai", &
-                                                   "albsni"]
+                                                   "albsni", "evapi_ai", "evaps_ai", "melts", "fswdn_ai"]
       !! The diagnostic of each `CD_*` id, in id order.
 
    type :: field_t
@@ -81,6 +81,8 @@ contains
                   new_unittest("tsfc_independent", test_tsfc), &
                   new_unittest("observer_bitwise", test_observer), &
                   new_unittest("restart_fills_equal", test_restart_fills), &
+                  new_unittest("engine_reuse_odd_run", test_engine_reuse), &
+                  new_unittest("melts_snow_budget", test_melts), &
                   new_unittest("cost_report", test_cost_report) &
                   ]
    end subroutine collect_cice_diags_tests
@@ -134,9 +136,9 @@ contains
          error stop "test_cice_diags: unknown kind"
       end select
       write (sws, '(f8.1)') sw
-      dd = "dynamics = .true., transport = .true., sw_down = "//trim(adjustl(sws))
-      ! The engine runs the CICE-port dynamics, transport and ridging whatever those flags say (the
-      ! sequencer is not optional), so `dyn = .false.` means: no wind, no stress, the ice at rest.
+      dd = "dynamics = .true., transport = .true., snowfall = 0.0, sw_down = "//trim(adjustl(sws))
+      ! The CICE-port dynamics, transport and ridging always run (production REFUSES `dynamics = .false.`
+      ! under this scheme), so `dyn = .false.` means: no wind, no stress, the ice at rest.
       if (.not. dyn) then
          atm = replace(atm, "uni_uas = 5.0", "uni_uas = 0.0")
          phys = "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 0.0, wind_stress_y = 0.0 /"//NL
@@ -211,6 +213,9 @@ contains
       call ensure_comm()
       call read_config_from_string(nml, cfg, ierr=ierr)
       if (ierr /= OCEAN_STATUS_OK) return
+      ! a configuration a user could run: production validates it before setup
+      call validate_config(cfg, ierr=ierr)
+      if (ierr /= OCEAN_STATUS_OK) return
       if (present(restart_file)) then
          call engine_setup(engine, cfg, ierr, restart_file=restart_file, t_restart=t0, step_restart=step0)
       else
@@ -261,15 +266,24 @@ contains
    end subroutine advance
 
    subroutine get_fill(engine, id, a)
-      !! Run diagnostic `id`'s fill into a device-mapped buffer and bring it back: `a(nx, ny)`.
+      !! Run diagnostic `id` through the fill the DIAGNOSTIC MANAGER registered under its name (the procedure
+      !! pointer of `state%diag%vars`, exactly what a run calls every step) into a device-mapped buffer and bring
+      !! it back: `a(nx, ny)`.  Calling the kernels by id would skip the `scheme` dispatch inside the registered
+      !! fills, which is where the original all-zero bug lived.
       type(ocean_engine_t), intent(inout) :: engine
       integer, intent(in) :: id
       real(wp), allocatable, intent(out) :: a(:, :)
       real(wp), allocatable :: buf(:, :, :)
+      integer :: k, kk
 
+      kk = 0
+      do k = 1, engine%state%diag%nvars
+         if (trim(engine%state%diag%vars(k)%name) == trim(ID_NAME(id))) kk = k
+      end do
+      if (kk == 0) error stop "test_cice_diags: "//trim(ID_NAME(id))//" is not registered (the engine needs the diagnostic stream)"
       allocate (buf(size(engine%state%metrics%areaT, 1), size(engine%state%metrics%areaT, 2), 1), source=-777.0_wp)
       !$acc enter data copyin(buf)
-      call cice_fill(engine%state, id, buf)
+      call engine%state%diag%vars(kk)%fill(engine%state, buf)
       !$acc update self(buf)
       !$acc exit data delete(buf)
       a = buf(:, :, 1)
@@ -322,9 +336,9 @@ contains
          end do
          if (allocated(error)) exit
       end do
-      if (.not. allocated(error)) call check(error, nfound == NID, "every one of the 21 CICE names is registered under cice")
+      if (.not. allocated(error)) call check(error, nfound == NID, "every one of the 25 CICE names is registered under cice")
       call finish_engine(engine)
-      call rm_dir("tmp_cice_diags_reg")
+      call rm_dir("tmp_cice_diags_o*")
    end subroutine test_registered_names
 
    subroutine test_source_mapping(error)
@@ -339,7 +353,7 @@ contains
       integer :: id, ng, nx, ny, i0, j0
       character(len=:), allocatable :: nml
 
-      nml = case_nml("growth", "", .true.)
+      nml = case_nml("growth", "tmp_cice_diags_o1", .true.)
       call make_engine(engine, cfg, nml, ok)
       call check(error, ok, "engine setup failed")
       if (allocated(error)) return
@@ -367,8 +381,11 @@ contains
          f%evap = -1.5e-6_wp
          f%aice_th = 0.7_wp
          f%vice_th = 0.9_wp
+         f%thx(:, :, 1) = -1.2e-6_wp
+         f%thx(:, :, 2) = 2.0e-7_wp
+         f%thx(:, :, 3) = 5.0e-3_wp
          !$acc update device(f%congel, f%frazil_vol, f%snoice, f%meltt, f%meltb, f%meltl, f%fswabs, f%flwout)
-         !$acc update device(f%fsens, f%flat, f%fhocn, f%fswthru, f%fresh, f%fsalt, f%evap, f%aice_th, f%vice_th)
+         !$acc update device(f%fsens, f%flat, f%fhocn, f%fswthru, f%fresh, f%fsalt, f%evap, f%aice_th, f%vice_th, f%thx)
       end associate
       associate (c => engine%state%ice%cice)
          c%aice = 0.5_wp
@@ -377,6 +394,8 @@ contains
          c%vicen_init = 0.1_wp
          !$acc update device(c%aice, c%vice, c%aice_init, c%vicen_init)
       end associate
+      engine%state%icec%work%sw_down = 300.0_wp
+      !$acc update device(engine%state%icec%work%sw_down)
       engine%state%icec%rad%alv_ai = 0.6_wp
       engine%state%icec%rad%ali_ai = 0.3_wp
       !$acc update device(engine%state%icec%rad%alv_ai, engine%state%icec%rad%ali_ai)
@@ -401,9 +420,13 @@ contains
       want(CD_FRESH) = 1.3e-5_wp*CMD/1000.0_wp
       want(CD_FSALT) = 1.4e-6_wp
       want(CD_EVAP) = -1.5e-6_wp*CMD/1000.0_wp
+      want(CD_EVAPI) = -1.2e-6_wp*CMD/1000.0_wp
+      want(CD_EVAPS) = 2.0e-7_wp*CMD/1000.0_wp
+      want(CD_MELTS) = 5.0e-3_wp*r
+      want(CD_FSWDN) = 300.0_wp*0.4_wp
       want(CD_ALBSNI) = 100.0_wp*(0.52_wp*0.6_wp + 0.48_wp*0.3_wp)
       do id = 1, NID
-         if (id == CD_TSFC) cycle
+         if (id == CD_TSFC) cycle      ! `tsfc_independent`
          call get_fill(engine, id, a)
          call check(error, abs(a(i0, j0) - want(id)) <= 1.0e-12_wp*max(1.0_wp, abs(want(id))), &
                     trim(ID_NAME(id))//" reads its own source")
@@ -417,6 +440,7 @@ contains
          if (allocated(error)) exit
       end do
       call finish_engine(engine)
+      call rm_dir("tmp_cice_diags_o*")
    end subroutine test_source_mapping
 
    subroutine test_registered_filled(error)
@@ -435,7 +459,7 @@ contains
       seen = .false.
       fin = .true.
       do kind = 1, 4
-         nml = case_nml(trim(KINDS(kind)), "", .true.)
+         nml = case_nml(trim(KINDS(kind)), "tmp_cice_diags_o1", .true.)
          call make_engine(engine, cfg, nml, ok)
          call check(error, ok, "engine setup failed")
          if (allocated(error)) return
@@ -468,6 +492,7 @@ contains
       end do
       n = count(seen)
       write (*, '(a,i0,a,i0,a)') "  registered_filled: ", n, " of ", NID, " diagnostics non-zero"
+      call rm_dir("tmp_cice_diags_o*")
    end subroutine test_registered_filled
 
    subroutine budget_case(error, kind, label)
@@ -476,15 +501,15 @@ contains
       type(ocean_engine_t), target :: engine
       type(config_t) :: cfg
       logical :: ok
-      real(wp), allocatable :: dv(:, :), cg(:, :), fz(:, :), sn(:, :), mt(:, :), mb(:, :), ml(:, :), dd(:, :)
+      real(wp), allocatable :: ei(:, :), dv(:, :), cg(:, :), fz(:, :), sn(:, :), mt(:, :), mb(:, :), ml(:, :), dd(:, :)
       real(wp), allocatable :: v0(:, :), da(:, :), a0(:, :), dad(:, :)
-      real(wp) :: t, ident, resid, sub_bound, worst, worst_bound, vmax, sgrow, smelt
+      real(wp) :: t, ident, resid, worst, vmax, sgrow, smelt
       integer :: n, i, j, ng
       logical :: bad_state, bad_ident
       real(wp) :: e1, e2, e3
       character(len=:), allocatable :: nml
 
-      nml = case_nml(kind, "", .false.)
+      nml = case_nml(kind, "tmp_cice_diags_o1", .false.)
       call make_engine(engine, cfg, nml, ok)
       call check(error, ok, label//": engine setup failed")
       if (allocated(error)) return
@@ -494,7 +519,6 @@ contains
       bad_state = .false.
       bad_ident = .false.
       worst = 0.0_wp
-      worst_bound = 0.0_wp
       e1 = 0.0_wp
       e2 = 0.0_wp
       e3 = 0.0_wp
@@ -518,6 +542,7 @@ contains
          call get_fill(engine, CD_MELTT, mt)
          call get_fill(engine, CD_MELTB, mb)
          call get_fill(engine, CD_MELTL, ml)
+         call get_fill(engine, CD_EVAPI, ei)
          do j = ng + 1, ng + engine%grid%ny_phys
             do i = ng + 1, ng + engine%grid%nx_phys
                ! independent side: the volume change of the step from the states before and after
@@ -526,22 +551,13 @@ contains
                e1 = max(e1, abs(dv(i, j) - (engine%state%ice%cice%vice(i, j) - v0(i, j))*CMD/DT) - 1.000001_wp*abs(dd(i, j)))
                e2 = max(e2, abs(dd(i, j)))
                e3 = max(e3, abs(da(i, j) - (engine%state%ice%cice%aice(i, j) - a0(i, j))*CMD/DT) - 1.000001_wp*abs(dad(i, j)))
-               ! the CICE identity; the ice sublimation term (not a named history field) is bounded by |evap|
-               ident = cg(i, j) + fz(i, j) + sn(i, j) - mt(i, j) - mb(i, j) - ml(i, j)
+               ! the thermodynamic volume identity, to ROUND-OFF: the ice part of the evaporation (evapi, kg m-2 s-1 =
+               ! evapi_ai[cm/day water]*1000/CMD) is the only term besides the five rates and the frazil
+               ident = cg(i, j) + fz(i, j) + sn(i, j) - mt(i, j) - mb(i, j) - ml(i, j) &
+                       + ei(i, j)*1000.0_wp/engine%state%ice%cice%p%c%rhoi
                resid = dv(i, j) - ident
-               sub_bound = abs(engine%state%icec%flux%evap(i, j))*DT/RHOI*CMD/DT
                worst = max(worst, abs(resid))
-               worst_bound = max(worst_bound, sub_bound)
-               ! tolerance: the ice sublimation (a share of |evap|/rhoi) plus 0.5 % of the term size; the
-               ! growth and melt runs close to 1e-12, the mixed run (supercooled ocean, ice crowding at the
-               ! walls) leaves up to 0.6 % of an unexplained remainder (see the report), which a missing or
-               ! wrong-sign term (O(1) of the term itself) cannot hide behind
-               ! bare ice (no snow to take the vapour): ALL of `evap` is ice sublimation, so the identity's
-               ! remainder is exactly evap/rhoi, in cm/day; this fixes the sign and place of the sublimation term
-               if (kind == "melt") then
-                  if (abs(resid - engine%state%icec%flux%evap(i, j)/RHOI*CMD) > 1.0e-6_wp) bad_ident = .true.
-               end if
-               if (abs(resid) > 1.05_wp*sub_bound + 5.0e-3_wp*max(1.0_wp, abs(ident))) bad_ident = .true.
+               if (abs(resid) > 1.0e-9_wp*max(1.0_wp, abs(ident))) bad_ident = .true.
                sgrow = sgrow + max(cg(i, j), 0.0_wp) + max(fz(i, j), 0.0_wp)
                smelt = smelt + mt(i, j) + mb(i, j)
             end do
@@ -552,11 +568,11 @@ contains
       bad_state = bad_state .or. e2 > merge(2.0_wp, 1.0e-7_wp, kind == "mixed")
       if (.not. allocated(error)) then
          write (*, '(a,3es10.3)') "  "//label//": (|dvidtt - dV/dt| - |dvidtd|)+, |dvidtd|, |daidtt - dA/dt| max =", e1, e2, e3
-         write (*, '(a,a,a,es10.3,a,es10.3,a,es10.3,a,es10.3)') "  ", label, ": worst identity residual", worst, &
-            " cm/day vs sublimation bound", worst_bound, ";  growth sum", sgrow, " melt sum", smelt
+         write (*, '(a,a,a,es10.3,a,es10.3,a,es10.3)') "  ", label, ": worst identity residual (round-off)", worst, &
+            " cm/day;  growth sum", sgrow, " melt sum", smelt
          call check(error, .not. bad_state, label//": dvidtt is the independent state change up to the (negligible) dynamic tendency; daidtt likewise")
       end if
-      if (.not. allocated(error)) call check(error, .not. bad_ident, label//": dvidtt closes the CICE identity up to sublimation (exactly evap/rhoi on bare ice)")
+      if (.not. allocated(error)) call check(error, .not. bad_ident, label//": dvidtt closes the volume identity (rates + frazil + evapi/rhoi) to round-off")
       vmax = 0.0_wp
       if (.not. allocated(error)) then
          if (kind == "mixed") then
@@ -564,6 +580,7 @@ contains
          end if
       end if
       call finish_engine(engine)
+      call rm_dir("tmp_cice_diags_o*")
    end subroutine budget_case
 
    subroutine test_budget_thermo(error)
@@ -586,7 +603,7 @@ contains
       integer :: n, i, j, ng
       character(len=:), allocatable :: nml
 
-      nml = case_nml("growth", "", .true.)
+      nml = case_nml("growth", "tmp_cice_diags_o1", .true.)
       call make_engine(engine, cfg, nml, ok)
       call check(error, ok, "engine setup failed")
       if (allocated(error)) return
@@ -620,6 +637,7 @@ contains
       end if
       if (.not. allocated(error)) call check(error, dmax > 1.0e-3_wp, "the dynamic tendency is non-zero where the ice moves")
       call finish_engine(engine)
+      call rm_dir("tmp_cice_diags_o*")
    end subroutine test_budget_dynamics
 
    subroutine test_units_signs(error)
@@ -627,13 +645,13 @@ contains
       type(ocean_engine_t), target :: engine
       type(config_t) :: cfg
       logical :: ok
-      real(wp), allocatable :: cg(:, :), mt(:, :), mb(:, :), v0(:, :), ml(:, :), fz(:, :), sn(:, :), dv(:, :)
+      real(wp), allocatable :: cg(:, :), mt(:, :), mb(:, :), v0(:, :), ml(:, :), fz(:, :), sn(:, :), dv(:, :), ei(:, :)
       real(wp) :: t, hcm_day, mt_min, mb_min, sub_cm
       integer :: n, i, j, ng, nc
       character(len=:), allocatable :: nml
 
       ! growth column
-      nml = case_nml("column", "", .false.)
+      nml = case_nml("column", "tmp_cice_diags_o1", .false.)
       call make_engine(engine, cfg, nml, ok)
       call check(error, ok, "growth engine setup failed")
       if (allocated(error)) return
@@ -658,20 +676,21 @@ contains
       ! bare ice, aice = 1: the volume changes by congelation, by the (small) basal/top melt and by ice
       ! sublimation `evap/rhoi` (evap < 0)
       hcm_day = (engine%state%ice%cice%vice(i, j) - v0(i, j))*CMD/DT
-      sub_cm = engine%state%icec%flux%evap(i, j)/RHOI*CMD
+      call get_fill(engine, CD_EVAPI, ei)
+      sub_cm = ei(i, j)*1000.0_wp/engine%state%ice%cice%p%c%rhoi
       call check(error, cg(i, j) > 0.0_wp, "congel > 0 for a growing column")
       if (.not. allocated(error)) then
          write (*, '(a,8es11.4)') "  growth column: congel, dV/dt, dvidtt, sublimation, meltt, meltb, meltl, frazil:", &
             cg(i, j), hcm_day, dv(i, j), sub_cm, mt(i, j), mb(i, j), ml(i, j), fz(i, j)
          call check(error, abs(dv(i, j) - hcm_day) <= 1.0e-9_wp, "dvidtt is the volume change per day")
          if (.not. allocated(error)) call check(error, abs(cg(i, j) - (hcm_day - sub_cm + mt(i, j) + mb(i, j) + ml(i, j) &
-                                                                       - fz(i, j) - sn(i, j))) <= 1.0e-6_wp, &
+                                                                       - fz(i, j) - sn(i, j))) <= 1.0e-9_wp, &
                                                 "congel is the volume change per day without the other terms")
       end if
       call finish_engine(engine)
       if (allocated(error)) return
       ! melt column
-      nml = case_nml("melt", "", .false.)
+      nml = case_nml("melt", "tmp_cice_diags_o1", .false.)
       call make_engine(engine, cfg, nml, ok)
       call check(error, ok, "melt engine setup failed")
       if (allocated(error)) return
@@ -695,52 +714,137 @@ contains
       if (.not. allocated(error)) call check(error, mt(ng + 8, ng + 8) > 0.0_wp, "meltt > 0 in warm air with sunshine")
       if (.not. allocated(error)) call check(error, mb(ng + 8, ng + 8) > 0.0_wp, "meltb > 0 over a warm ocean")
       call finish_engine(engine)
+      call rm_dir("tmp_cice_diags_o*")
    end subroutine test_units_signs
 
    subroutine test_tsfc(error)
+      !! `Tsfc` is the ICE-AREA mean of the surface temperature, the freezing point only where there is no ice.  The
+      !! state is stamped with hand-computed cases (the expectations are literals, not the fill's expression):
+      !! a cell of 0.3 melting ice at 0 degC must read 0, not a blend with the open water; two categories of
+      !! different area and temperature; an ice-free cell reads the freezing point.
       type(error_type), allocatable, intent(out) :: error
       type(ocean_engine_t), target :: engine
       type(config_t) :: cfg
       logical :: ok
       real(wp), allocatable :: a(:, :)
-      real(wp) :: t, want, tsum, asum, err, spread
-      integer :: n, i, j, ng, ncat
+      integer :: ng
       character(len=:), allocatable :: nml
 
-      nml = case_nml("mixed", "", .true.)
+      nml = case_nml("growth", "tmp_cice_diags_o1", .true.)
+      call make_engine(engine, cfg, nml, ok)
+      call check(error, ok, "engine setup failed")
+      if (allocated(error)) return
+      ng = engine%grid%nghost
+      associate (c => engine%state%ice%cice)
+         c%aicen = 0.0_wp
+         c%Tsfcn = -5.0_wp
+         ! (ng+5, ng+5): 0.3 of melting ice at 0 degC in category 1
+         c%aicen(ng + 5, ng + 5, 1) = 0.3_wp
+         c%Tsfcn(ng + 5, ng + 5, 1) = 0.0_wp
+         ! (ng+6, ng+5): 0.1 at -10 and 0.2 at -2 degC: (-1 - 0.4)/0.3 = -14/3
+         c%aicen(ng + 6, ng + 5, 1) = 0.1_wp
+         c%Tsfcn(ng + 6, ng + 5, 1) = -10.0_wp
+         c%aicen(ng + 6, ng + 5, 2) = 0.2_wp
+         c%Tsfcn(ng + 6, ng + 5, 2) = -2.0_wp
+         ! (ng+7, ng+5): no ice at all
+         !$acc update device(c%aicen, c%Tsfcn)
+      end associate
+      engine%state%icec%work%Tf = -1.8_wp
+      !$acc update device(engine%state%icec%work%Tf)
+      call get_fill(engine, CD_TSFC, a)
+      call check(error, abs(a(ng + 5, ng + 5) - 0.0_wp) < 1.0e-14_wp, "0.3 of melting ice reads 0 degC (no open-water blend)")
+      if (.not. allocated(error)) call check(error, abs(a(ng + 6, ng + 5) + 14.0_wp/3.0_wp) < 1.0e-14_wp, &
+                                             "two categories: the ice-area mean -14/3")
+      if (.not. allocated(error)) call check(error, abs(a(ng + 7, ng + 5) + 1.8_wp) < 1.0e-14_wp, &
+                                             "no ice: the freezing point")
+      call finish_engine(engine)
+      call rm_dir("tmp_cice_diags_o*")
+   end subroutine test_tsfc
+
+   subroutine test_engine_reuse(error)
+      !! One engine object, an ODD-length run, then a second engine on the same object: the cadence counter
+      !! restarts with the run (it used to leak, and the ice hand-off then refused the window, status 104).
+      type(error_type), allocatable, intent(out) :: error
+      type(ocean_engine_t), target :: engine
+      type(config_t) :: cfg
+      logical :: ok
+      real(wp) :: t
+      character(len=:), allocatable :: nml
+
+      nml = case_nml("growth", "tmp_cice_diags_o1", .true.)
+      call make_engine(engine, cfg, nml, ok)
+      call check(error, ok, "first engine setup failed")
+      if (allocated(error)) return
+      t = 0.0_wp
+      call advance(engine, cfg, t, 3, ok)
+      call check(error, ok, "3 steps ran")
+      call finish_engine(engine)
+      if (allocated(error)) return
+      call make_engine(engine, cfg, nml, ok)
+      call check(error, ok, "second engine setup failed")
+      if (allocated(error)) return
+      call check(error, engine%state%dyn%outer_step_count == 0, "the cadence counter restarts with the run")
+      t = 0.0_wp
+      if (.not. allocated(error)) then
+         call advance(engine, cfg, t, 5, ok)
+         call check(error, ok, "5 steps of the reused engine ran (an odd count)")
+      end if
+      call finish_engine(engine)
+      call rm_dir("tmp_cice_diags_o*")
+   end subroutine test_engine_reuse
+
+   subroutine test_melts(error)
+      !! `melts` against the independent snow-volume change: snow-covered ice under warm air, no snowfall, the
+      !! ice at rest.  Over the warm half the cell-mean snow loss per day equals `melts` (the snow
+      !! sublimation `evaps` and the snow-ice formation are added back from their own diagnostics).
+      type(error_type), allocatable, intent(out) :: error
+      type(ocean_engine_t), target :: engine
+      type(config_t) :: cfg
+      logical :: ok
+      real(wp), allocatable :: ms(:, :), es(:, :), sn(:, :), s0(:, :)
+      real(wp) :: t, err, tot
+      integer :: n, i, j, ng
+      character(len=:), allocatable :: nml
+
+      nml = replace(case_nml("mixed", "tmp_cice_diags_o1", .false.), "h_snow = 0.03", "h_snow = 0.15")
       call make_engine(engine, cfg, nml, ok)
       call check(error, ok, "engine setup failed")
       if (allocated(error)) return
       call warm_east(engine)
       ng = engine%grid%nghost
-      ncat = engine%state%ice%cice%ncat
       t = 0.0_wp
-      call advance(engine, cfg, t, 12, ok)
-      call pull(engine)
-      call get_fill(engine, CD_TSFC, a)
       err = 0.0_wp
-      spread = 0.0_wp
-      do j = ng + 1, ng + engine%grid%ny_phys
-         do i = ng + 1, ng + engine%grid%nx_phys
-            tsum = 0.0_wp
-            asum = 0.0_wp
-            do n = 1, ncat
-               if (engine%state%ice%cice%aicen(i, j, n) > 1.0e-11_wp) then
-                  tsum = tsum + engine%state%ice%cice%aicen(i, j, n)*engine%state%ice%cice%Tsfcn(i, j, n)
-                  asum = asum + engine%state%ice%cice%aicen(i, j, n)
-               end if
+      tot = 0.0_wp
+      do n = 1, 8
+         call pull(engine)
+         !$acc update self(engine%state%ice%cice%vsno)
+         s0 = engine%state%ice%cice%vsno
+         call one_step(engine, cfg, t, ok)
+         call check(error, ok, "step ran")
+         if (allocated(error)) exit
+         !$acc update self(engine%state%ice%cice%vsno)
+         call get_fill(engine, CD_MELTS, ms)
+         call get_fill(engine, CD_EVAPS, es)
+         call get_fill(engine, CD_SNOICE, sn)
+         do j = ng + 1, ng + engine%grid%ny_phys
+            do i = ng + 1 + engine%grid%nx_phys/2 + 2, ng + engine%grid%nx_phys - 2
+               ! cm/day of snow: -dVs/dt = melts - evaps_snow/rhos + snoice*rhoi/rhos (snow converted)
+               err = max(err, abs(-(engine%state%ice%cice%vsno(i, j) - s0(i, j))*CMD/DT &
+                                  - (ms(i, j) - es(i, j)*1000.0_wp/engine%state%ice%cice%p%c%rhos &
+                                     + sn(i, j)*engine%state%ice%cice%p%c%rhoi/engine%state%ice%cice%p%c%rhos)))
+               tot = tot + ms(i, j)
             end do
-            want = tsum + max(0.0_wp, 1.0_wp - asum)*engine%state%icec%work%Tf(i, j)
-            err = max(err, abs(a(i, j) - want))
-            spread = max(spread, abs(a(i, j) - engine%state%icec%work%Tf(i, j)))
          end do
       end do
-      write (*, '(a,es10.3,a,f8.3)') "  Tsfc: max error against the test's own area-weighted sum", err, &
-         "; largest departure from the freezing point", spread
-      call check(error, err < 1.0e-12_wp, "Tsfc is the area-weighted category surface temperature plus the open water at Tf")
-    if (.not. allocated(error)) call check(error, spread > 0.5_wp, "the case has surface temperatures away from the freezing point")
+      if (.not. allocated(error)) then
+         write (*, '(a,es10.3,a,es10.3)') "  melts: snow budget error", err, " cm/day (sum melts", tot
+         call check(error, tot > 0.0_wp, "snow melts over the warm half")
+      end if
+      ! the snow budget closes except for the ice motion of the (slowly drifting) ice: bound by the dynamic share
+      if (.not. allocated(error)) call check(error, err < 0.1_wp, "melts closes the snow budget (drift noise only)")
       call finish_engine(engine)
-   end subroutine test_tsfc
+      call rm_dir("tmp_cice_diags_o*")
+   end subroutine test_melts
 
    subroutine take_snapshot(engine, snap)
       type(ocean_engine_t), intent(inout), target :: engine
@@ -857,9 +961,10 @@ contains
       logical :: ok
       integer :: ierr, step_b, id, i, j, ng, nbad
       character(len=*), parameter :: FN = "test_cice_diags_rt.nc"
-      character(len=:), allocatable :: nml
+      character(len=:), allocatable :: nml, nml_b
 
-      nml = case_nml("mixed", "", .true.)
+      nml = case_nml("mixed", "tmp_cice_diags_o1", .true.)
+      nml_b = replace(nml, "tmp_cice_diags_o1", "tmp_cice_diags_o2")
       call make_engine(ea, cfg_a, nml, ok)
       call check(error, ok, "engine A setup failed")
       if (allocated(error)) return
@@ -874,7 +979,7 @@ contains
       call advance(ea, cfg_a, t_a, 5, ok)
       call check(error, ok, "engine A failed after the checkpoint")
       if (allocated(error)) return
-      call make_engine(eb, cfg_b, nml, ok, restart_file=FN, t0=t_b, step0=step_b)
+      call make_engine(eb, cfg_b, nml_b, ok, restart_file=FN, t0=t_b, step0=step_b)
       call check(error, ok, "engine B (warm restart) setup failed")
       if (allocated(error)) return
       call warm_east(eb)
@@ -899,6 +1004,7 @@ contains
       call finish_engine(ea)
       call finish_engine(eb)
       call delete_file(FN)
+      call rm_dir("tmp_cice_diags_o*")
    end subroutine test_restart_fills
 
    subroutine test_cost_report(error)
