@@ -6569,7 +6569,7 @@ class OceanAtmForcing(Group):
         doc='Time offset applied to the rsds query time before the bracket search (sw_interp=coszen)',
         units='s',
         required=False,
-        default=-5400.0,
+        default=5400.0,
     )
 
     orb_year = Int(

@@ -102,7 +102,8 @@ module rdb_ocean_engine
    use rdb_halo, only: halo_allreduce_sum_i8, halo_allreduce_min
    use rdb_barotropic_dtbt, only: bt_dtbt_dt_max, bt_dtbt_n_inner
    use rdb_ocean_halo_state, only: ocean_halo_exchange_ml_state, ocean_halo_exchange_ice_state, &
-                                   ocean_halo_exchange_ice_fluxes
+                                   ocean_halo_exchange_ice_fluxes, &
+                                   ocean_seam_refresh_surface_flux, ocean_seam_refresh_sw_net
    use rdb_ocean_fold_exchange, only: ocean_fold_exchange_init, ocean_fold_exchange_reserve, &
                                       ocean_fold_exchange_destroy, ocean_fold_north_corner
    use rdb_ocean_periodic, only: ocean_periodic_wrap_state, ocean_periodic_wrap_centre_2d
@@ -117,7 +118,8 @@ module rdb_ocean_engine
    use rdb_eos, only: parse_ts_convention, TS_CONS_ABS
    use rdb_ocean_dyn, only: ocean_dyn_step, ocean_dyn_step_split, ocean_porous_refresh, &
                             ocean_dyn_enable_bt_wide, isopycnal_vanish_tol
-   use rdb_ocean_surface_flux, only: ocean_surface_flux_assemble
+   use rdb_ocean_surface_flux, only: ocean_surface_flux_assemble, &
+                                     ocean_surface_flux_refresh_sw_net
    use rdb_ocean_surface_stress, only: ocean_surface_stress_set_shelf_from_ustar
    use rdb_ocean_cavity_flux, only: ocean_cavity_flux_step
    use rdb_ocean_cavity_melt, only: parse_cavity_freshwater, CAVITY_FW_MASS
@@ -154,7 +156,7 @@ module rdb_ocean_engine
    use rdb_ocean_data_forcing, only: ocean_data_forcing_configure, ocean_data_forcing_apply, &
                                      ocean_data_forcing_register_sss
    use rdb_ocean_sw_chl, only: sw_chl_configure, sw_chl_apply
-   use rdb_atm_state, only: atm_state_configure, atm_state_update
+   use rdb_atm_state, only: atm_state_configure, atm_state_update, atm_sw_window
    use rdb_ocean_bulk_forcing, only: bulk_forcing_configure, bulk_forcing_apply
    use rdb_io_netcdf, only: output_rank_filename, ensure_directory_exists
 #endif
@@ -811,6 +813,12 @@ contains
       ! Under validate_only the stream is never opened, so teardown must
       ! not try to close it.
       engine%diag_enabled = cfg%ocean%diag%enabled .and. .not. no_output
+      ! The atm provider is configured later (it needs the metrics), but the
+      ! diag registry gates the `atm_*` diagnostics on `atm%enable`: pre-set it
+      ! from the namelist so they register (`atm_state_configure` re-derives it).
+#ifndef RDB_NO_NETCDF
+      engine%state%atm%enable = cfg%ocean%atm_forcing%enable
+#endif
       call engine_configure_diag(cfg, engine%state, mrank, engine%decomp, ierr=ierr, &
                                  open_stream_file=.not. no_output)
       if (setup_failed(ierr)) return
@@ -1903,6 +1911,16 @@ contains
       ! Skip it there -- the first step's own exchange opens the handles.
       if (.not. engine%warm_restart) then
          call ocean_halo_exchange_ml_state(engine%state%multilayer)
+      else
+         ! A checkpoint written before the seam-flux refresh existed carries
+         ! stale ghost bands in `Q_heat`/`Q_salt`, which KPP/EPBL would read on
+         ! the first step after the resume, before the first thermo-step
+         ! assembly repairs them.  Device-resident (the periodic wrap kernels
+         ! are device kernels on the GPU build), so after the map; a no-op
+         ! unless the component set is on and a physical-span-only filler is
+         ! latched.
+         call ocean_seam_refresh_surface_flux(engine%state%surface_flux, engine%grid, &
+                                              engine%state%bc)
       end if
       if (cfg%ocean%bt%n_inner >= 1) then
          call ocean_halo_bt_group_2d(engine%state%dyn%bt_work%bt_eta, &
@@ -2016,6 +2034,8 @@ contains
       real(wp), intent(in) :: t
       integer, intent(out), optional :: ierr
 
+      real(wp) :: sw_shift, sw_len
+
       if (present(ierr)) ierr = OCEAN_STATUS_OK
 
 #ifndef RDB_NO_NETCDF
@@ -2028,8 +2048,12 @@ contains
       ! Order vs `ocean_data_forcing_apply` above does not matter -- both
       ! read the SAME reader brackets `ocean_data_input_update_all` just
       ! refreshed, and neither writes a slot the other reads.
+      ! The shortwave is applied over the THERMO interval (N*dt at
+      ! dt_therm_ratio = N), so the coszen window must be that interval.
+      call atm_sw_window(dt, engine%state%dyn%dt_therm_ratio, engine%state%dyn%diabatic_first, &
+                         engine%state%dyn%is_thermo_step(), sw_shift, sw_len)
       call atm_state_update(engine%state%atm, engine%state%data_input, &
-                            engine%state%metrics, t)
+                            engine%state%metrics, t, dt, sw_shift, sw_len)
       ! Chlorophyll -> per-band opacities (no-op unless sw_scheme="manizza05").
       call sw_chl_apply(engine%state%sw_chl, engine%state%data_input, engine%grid, &
                         engine%state%multilayer%wet_mask, engine%state%surface_flux, &
@@ -2043,6 +2067,16 @@ contains
                               engine%state%bulk_forcing, engine%state%surface_stress, &
                               engine%state%surface_flux)
 #endif
+
+      ! `sw_source="q_sw"` consumers (penetration, KPP, EPBL) read the TOTAL
+      ! shortwave: this step's open-water `q_sw` plus the ice-transmitted
+      ! `sw_ice` (carried from the last thermo window).  No-op otherwise.
+      call ocean_surface_flux_refresh_sw_net(engine%state%surface_flux)
+      ! `q_sw` is a physical-span-only write, `sw_net` was just formed over
+      ! the full array, and the boundary-layer schemes read it in the ghost
+      ! columns: exchange its seam ghosts (no-op unless `phys_only_fill`).
+      call ocean_seam_refresh_sw_net(engine%state%surface_flux, engine%grid, &
+                                     engine%state%bc)
 
       call engine%bc_source%update(t, engine%state%bc)
 
@@ -2446,6 +2480,16 @@ contains
                                           engine%state%multilayer, &
                                           active=engine%state%dyn%enable_thermodynamics &
                                           .and. engine%state%dyn%is_thermo_step())
+      end if
+
+      ! The assembler summed components, some of which a filler wrote on
+      ! physical cells only (bulk forcing, data override): exchange the
+      ! ASSEMBLED `Q_heat`/`Q_salt` seam ghosts the boundary-layer schemes
+      ! read.  Same thermo cadence; no-op (no call cost beyond the test)
+      ! unless `use_components` and a physical-span-only filler is on.
+      if (engine%state%dyn%enable_thermodynamics .and. engine%state%dyn%is_thermo_step()) then
+         call ocean_seam_refresh_surface_flux(engine%state%surface_flux, engine%grid, &
+                                              engine%state%bc)
       end if
 
       if (engine%diag_enabled) then

@@ -29,7 +29,8 @@ module test_ocean_sw_penetration
    use rdb_eos, only: eos_t
    use rdb_ocean_surface_flux, only: ocean_surface_flux_t, &
                                      ocean_surface_flux_apply_tracers, &
-                                     ocean_surface_flux_apply_sw_penetration
+                                     ocean_surface_flux_apply_sw_penetration, &
+                                     ocean_surface_flux_refresh_sw_net
    implicit none
    private
 
@@ -54,7 +55,8 @@ contains
                   new_unittest("sw_profile_matches_two_band", test_profile), &
                   new_unittest("sw_top_weighted_monotone", test_monotone), &
                   new_unittest("sw_frac_zero_bit_identity", test_bit_identity), &
-                  new_unittest("negative_source_unreachable_via_q_sw", test_negative_source) &
+                  new_unittest("negative_source_unreachable_via_q_sw", test_negative_source), &
+                  new_unittest("q_sw_source_penetrates_open_plus_ice_shortwave", test_open_plus_ice) &
                   ]
    end subroutine collect_ocean_sw_penetration_tests
 
@@ -287,6 +289,73 @@ contains
       call sf%destroy(); call eos%destroy(); call ms%destroy()
    end subroutine test_bit_identity
 
+   subroutine pen_run(use_qsw, qsw, swice, hT)
+      !! Two-band penetration of the total shortwave `qsw + swice`, down to
+      !! the SW-only correction field `hT`.  `use_qsw`: the PR-21 `q_sw`
+      !! source with the two shares in separate components and the engine's
+      !! per-step `refresh_sw_net`; else the legacy `net_heat` source with the
+      !! total in `Q_heat` (the path the analytic tests above verify).
+      logical, intent(in) :: use_qsw
+      real(wp), intent(in) :: qsw, swice
+      real(wp), allocatable, intent(out) :: hT(:, :, :)
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      type(eos_t) :: eos
+      type(ocean_surface_flux_t) :: sf
+
+      call make_grid(grid)
+      ms%nz_ml = NZ
+      call ms%init(grid)
+      call eos%init(grid)
+      call sf%init(grid)
+      ms%h_layer = H_LAYER
+      ms%tracers(ms%idx_temperature)%c = eos%T_ref
+      ms%tracers(ms%idx_salinity)%c = eos%S_ref
+      if (use_qsw) then
+         call sf%set_components(grid, .true.)
+         call sf%set_surface_flux_const(-1.0_wp, 0.0_wp)   ! nonzero latches has_heat; not the source
+         call sf%set_sw_penetration(FRAC, R, ZETA1, ZETA2, sw_source="q_sw")
+         sf%q_sw = qsw
+         sf%sw_ice = swice
+      else
+         call sf%set_surface_flux_const(qsw + swice, 0.0_wp)
+         call sf%set_sw_penetration(FRAC, R, ZETA1, ZETA2)
+      end if
+      !$acc enter data copyin(ms, sf)
+      call ms%enter_data()
+      call sf%enter_data()
+      call ocean_surface_flux_refresh_sw_net(sf)
+      call ocean_surface_flux_apply_sw_penetration(grid, sf, ms, DT)
+      associate (c => ms%tracers(ms%idx_temperature)%c)
+         !$acc update self(c)
+      end associate
+      hT = ms%tracers(ms%idx_temperature)%c
+      call sf%exit_data()
+      call ms%exit_data()
+      !$acc exit data delete(ms, sf)
+      call sf%destroy(); call eos%destroy(); call ms%destroy()
+   end subroutine pen_run
+
+   subroutine test_open_plus_ice(error)
+      !! With `sw_source="q_sw"`, the open-water share (`q_sw`) and the
+      !! ice-transmitted share (`sw_ice`) BOTH penetrate: the subsurface
+      !! deposit is bit-identical to the `net_heat`-source run of their sum
+      !! (which the PROFILE test verifies against the two-band transmission),
+      !! and differs from the open-water-only run.
+      type(error_type), allocatable, intent(out) :: error
+      real(wp), parameter :: A = 150.0_wp, B = 40.0_wp
+      real(wp), allocatable :: t_split(:, :, :), t_sum(:, :, :), t_open(:, :, :)
+
+      call pen_run(.true., A, B, t_split)
+      call pen_run(.false., A, B, t_sum)
+      call pen_run(.true., A, 0.0_wp, t_open)
+      call check(error, maxval(abs(t_split - t_sum)) == 0.0_wp, &
+                 "q_sw + sw_ice penetrates exactly as their sum through the legacy source")
+      if (allocated(error)) return
+      call check(error, maxval(abs(t_split - t_open)) > 0.0_wp, &
+                 "the ice-transmitted share must change the subsurface deposit")
+   end subroutine test_open_plus_ice
+
    subroutine test_negative_source(error)
       !! The negative-`I0` landmine (PR-21 §2.4): `Q_heat` is the NET flux
       !! (SW + longwave + latent + sensible).  With `sw_source="net_heat"`
@@ -318,6 +387,7 @@ contains
          call sf%set_surface_flux_const(-100.0_wp, 0.0_wp)   ! net cooling
          call sf%set_sw_penetration(FRAC, R, ZETA1, ZETA2, sw_source="q_sw")
          sf%q_sw = 0.0_wp                          ! night: no sunlight
+         sf%sw_net = 0.0_wp
          allocate (hT_ic, source=ms%tracers(ms%idx_temperature)%c)
          call run_sw_only(grid, sf, ms)
          call check(error, &

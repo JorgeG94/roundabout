@@ -1100,7 +1100,7 @@ contains
       type(ocean_surface_flux_t), intent(in) :: sf
       if (sf%sw_from_qsw) then
          call vmix_kpp_overlay_impl(grid, this, ms, ss, sf, &
-                                    grid%nx_total, grid%ny_total, ms%nz_ml, sf%q_sw, &
+                                    grid%nx_total, grid%ny_total, ms%nz_ml, sf%sw_net, &
                                     ms%tracers(ms%idx_temperature)%c, &
                                     ms%tracers(ms%idx_salinity)%c, &
                                     sf%has_sw, sf%sw_pen_frac, sf%sw_band_ratio, &
