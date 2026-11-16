@@ -402,6 +402,11 @@ contains
                end do
             end do
          end if
+         ! mem:separate: every array the transport kernels touch must be device-present (the engine maps its own
+         ! state, not this test's local fields or workspace).  Host edits are all above, so the copyin carries them.
+         !$acc enter data copyin(u, v, Tf, hin_max, aice0, aicen, vicen, vsnon, Tsfcn, qicen, sicen, qsnon)
+         !$acc enter data copyin(aice, vice, vsno, Tsfc_c, qice_c, sice_c, qsno_c, fresh, fsalt, fhocn, ice_err)
+         call w%enter_data()
          call ice_halo_faces(g, bc_vel, u, v, .true.)
 
          tot = 0.0_wp
@@ -432,6 +437,7 @@ contains
             snap%worst_q = res%worst_q
             if (.not. res%stepped) then
                snap%nbad_steps = snap%nbad_steps + 1
+               !$acc update self(ice_err)
                write (*, '(a,i0,a,i0,a,z0,5(a,i0))') "  [transport refused] step ", step, " cfg ", res%cfg, " ierr 0x", res%ierr, &
                   ": n_cfl ", res%n_cfl, " n_geom ", res%n_geom, " n_nonfinite ", res%n_nonfinite, " n_neg ", res%n_neg, &
                   " n_mono ", res%n_mono
@@ -444,6 +450,8 @@ contains
             end if
             if (.not. res%stepped) exit
          end do
+         !$acc update self(aice0, aicen, vicen, vsnon, Tsfcn, qicen, sicen, qsnon)
+         !$acc update self(aice, vice, vsno, Tsfc_c, qice_c, sice_c, qsno_c, fresh, fsalt, fhocn, ice_err)
          snap%n_err_cells = count(ice_err(is:ie, js:je) /= 0_int32)
          call ice_halo_category_state(g, bc_state, nx, ny, NCAT, NIL, 1, aicen, vicen, vsnon, Tsfcn, qicen, sicen, qsnon, &
                                       aice0, .true.)
@@ -459,12 +467,18 @@ contains
          call global_sum(snap%mass0)
          call global_sum(snap%mass1)
 
+         if (fold_case .and. .not. upwind) then
+            !$acc update self(w%fw%mflx_n, w%fw%mtflx_n)
+         end if
          if (fold_case) call fold_row_stats(w, engine%state%bc%north_fold, g, ctrl, snap%anti_max, snap%flux_max, snap%anti_t, snap%flux_t, upwind)
          if (csize == 1) then
             call comm_env_pop_compute_comm()
             call self_comm%finalize()
          end if
 
+         call w%exit_data()
+         !$acc exit data delete(aice, vice, vsno, Tsfc_c, qice_c, sice_c, qsno_c, fresh, fsalt, fhocn, ice_err)
+         !$acc exit data delete(u, v, Tf, hin_max, aice0, aicen, vicen, vsnon, Tsfcn, qicen, sicen, qsnon)
          allocate (snap%aicen(snap%nxl, snap%nyl, NCAT), snap%vicen(snap%nxl, snap%nyl, NCAT))
          allocate (snap%vsnon(snap%nxl, snap%nyl, NCAT), snap%Tsfcn(snap%nxl, snap%nyl, NCAT), snap%aice0(snap%nxl, snap%nyl))
          allocate (snap%qicen(snap%nxl, snap%nyl, NCAT, NIL), snap%sicen(snap%nxl, snap%nyl, NCAT, NIL))
