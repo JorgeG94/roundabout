@@ -85,7 +85,7 @@ module rdb_ocean_engine
    !! contradiction; reachable via the API today).
    use, intrinsic :: iso_fortran_env, only: int64
    use rdb_constants, only: wp
-   use rdb_config, only: config_t, bt_dtbt_is_set, resolve_bt_halo, bt_halo_auto_exclusion, &
+   use rdb_config, only: config_t, ocean_ice_config_t, bt_dtbt_is_set, resolve_bt_halo, bt_halo_auto_exclusion, &
                          BT_HALO_AUTO_SENTINEL
    use rdb_vcoord, only: parse_remap_method
    use rdb_state, only: register_default_tracers
@@ -321,6 +321,16 @@ module rdb_ocean_engine
    end type ocean_engine_t
 
 contains
+
+   pure function ice_halo_levels(ice) result(nlev)
+      !! The widest level count one sea-ice halo / fold message batches: `ncat*nk_ice` and `ncat + 1` under
+      !! `scheme = "sis2"`; under `"cice"` the category state ring batches `ncat*nilyr` and `ncat*nslyr` levels.
+      type(ocean_ice_config_t), intent(in) :: ice
+      integer :: nlev
+
+      nlev = max(ice%ncat*ice%nk_ice, ice%ncat + 1)
+      if (trim(ice%scheme) == "cice") nlev = max(nlev, ice%ncat*ice%nilyr, ice%ncat*ice%nslyr)
+   end function ice_halo_levels
 
    ! ================================================================
    ! Setup — driver_run_ocean's exact 21-stage sequence
@@ -1253,8 +1263,8 @@ contains
       ! `ncat+1`) levels per message: reserve for the widest so the
       ! buffers never regrow mid-run (a device reallocation breaks UCX IPC
       ! handle reuse).
-      call ocean_halo_reserve(merge(max(cfg%nz_layers, cfg%ocean%ice%ncat*cfg%ocean%ice%nk_ice, &
-                                        cfg%ocean%ice%ncat + 1), cfg%nz_layers, &
+      ! `scheme = "cice"` batches `ncat*nilyr` / `ncat*nslyr` levels (`ice_halo_category_state`), not `nk_ice`.
+      call ocean_halo_reserve(merge(max(cfg%nz_layers, ice_halo_levels(cfg%ocean%ice)), cfg%nz_layers, &
                                     cfg%ocean%ice%enable), &
                               merge(engine%grid%nghost + cfg%ocean%bt%bt_halo, 0, &
                                     cfg%ocean%bt%bt_halo > 0), ierr=ierr)
@@ -1276,8 +1286,7 @@ contains
          nslab = (engine%grid%nghost + 1)*cfg%nz_layers*(3 + ntr)
          if (cfg%ocean%ice%enable) then
             nslab = max(nslab, &
-                        engine%grid%nghost*max(cfg%ocean%ice%ncat*cfg%ocean%ice%nk_ice, &
-                                               cfg%ocean%ice%ncat + 1), &
+                        engine%grid%nghost*ice_halo_levels(cfg%ocean%ice), &
                         3*engine%grid%nghost + 1)
          end if
          call ocean_fold_exchange_reserve(nslab)
