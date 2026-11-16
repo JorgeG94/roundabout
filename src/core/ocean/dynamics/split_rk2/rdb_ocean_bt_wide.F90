@@ -3,13 +3,18 @@ module rdb_ocean_bt_wide
    !! Shadow state for the wide-halo barotropic march-in.
    !! When `bt_halo > 0`, the BT fast loop runs on WIDE arrays with ghost
    !! width `ng_wide = nghost + bt_halo`.  Ghost cells outside the valid
-   !! band evolve stale data that creeps INWARD at one cell per substep (the
-   !! code budgets two, so there is slack); one grouped exchange every
-   !! `bt_halo/2` substeps keeps the physical interior clean.  With `bebt > 0`
-   !! that exchange carries `ubt_prev`/`vbt_prev` too (Pass 1 reads them in the
-   !! ghost band).  The mid-substep u exchange is absorbed.  Proof: owned cells
-   !! are bitwise equal to the one-rank run with every invalidated layer poisoned
-   !! between exchanges (`RDB_BT_INHALO_POISON`, `test_ocean_dyn_mpi`).
+   !! band evolve stale data that creeps INWARD at one cell per substep; one
+   !! PACKED exchange (a single message per neighbour per direction pass for
+   !! eta, ubt, vbt and, with `bebt > 0`, `ubt_prev`/`vbt_prev`) every
+   !! `bt_wide_cycle_len(ng_wide) = ng_wide - 2` substeps keeps the owned cells
+   !! exact (proven limit `ng_wide - 1`; one substep of margin).  The per-solve
+   !! entry set (eta, ubt, vbt, rem, force) is one packed exchange too, the
+   !! static `H_ref` is exchanged once, and the normal-width time means,
+   !! end-of-loop snapshots and transports leave in one packed exit exchange.
+   !! The mid-substep u exchange is absorbed.  Proof: owned cells are bitwise
+   !! equal to the one-rank run with every invalidated layer poisoned between
+   !! exchanges (`RDB_BT_INHALO_POISON`, `test_ocean_dyn_mpi`), and the cadence
+   !! one substep past the limit breaks them.
    !!
    !! Lifecycle:
    !!   1. `init`         — allocate wide arrays; fill the STATIC wide metrics and
@@ -22,12 +27,12 @@ module rdb_ocean_bt_wide
    use rdb_constants, only: wp
    use rdb_grid, only: hgrid_t
    use rdb_ocean_metrics, only: ocean_metrics_t
-   use rdb_ocean_halo, only: ocean_halo_bt_group_2d_wide, &
+   use rdb_ocean_halo, only: ocean_halo_packed_wide, &
                              ocean_halo_centre_2d_wide, &
                              ocean_halo_face_x_2d_wide, &
                              ocean_halo_face_y_2d_wide
    use rdb_profiler, only: profiler_start, profiler_stop
-   use rdb_barotropic_substep, only: barotropic_substep_nonlinear
+   use rdb_barotropic_substep, only: barotropic_substep_nonlinear, bt_wide_cycle_len
    use rdb_barotropic_workstate, only: barotropic_workstate_t
    use rdb_ocean_boundary_types, only: ocean_bc_state_t
    use rdb_mem_report, only: arr_bytes
@@ -44,12 +49,14 @@ module rdb_ocean_bt_wide
       !! Wide-halo shadow state for the barotropic fast loop.
       logical :: is_init = .false.
          !! True after `init`, before `destroy`.
+      logical :: h_ref_ready = .false.
+         !! `w_H_ref` has been copied in and wide-exchanged (once, first solve).
       integer :: bt_halo = 0
          !! Requested wide-halo width (cells; even, > 0).
       integer :: ng_wide = 0
          !! Effective ghost width: `nghost + bt_halo`.
       integer :: num_cycles = 0
-         !! Substeps between grouped wide exchanges: `bt_halo / 2`.
+         !! Substeps between in-loop wide exchanges (`bt_wide_cycle_len`).
 
       ! Wide grid.  Same `nx_phys/ny_phys` as the normal grid; only `nghost`
       ! differs (`ng_wide`).
@@ -235,7 +242,7 @@ contains
 
       bt_h = this%bt_halo
       this%ng_wide = grid%nghost + bt_h
-      this%num_cycles = bt_h/2
+      this%num_cycles = bt_wide_cycle_len(this%ng_wide)
       this%refresh_widths = .false.
       if (present(refresh_widths)) this%refresh_widths = refresh_widths
       this%ring_poison = 0
@@ -573,8 +580,17 @@ contains
          i_src = min(max(i - off, 1), nx)
          j_src = min(max(j - off, 1), ny)
          this%w_eta(i, j) = bt_eta(i_src, j_src)
-         this%w_H_ref(i, j) = bt_H_ref(i_src, j_src)
       end do
+      ! `H_ref` is static (the datum `b`, set at configure; the cavity, which
+      ! would move it, is refused with bt_halo > 0): copied and exchanged ONCE,
+      ! by the first `entry_exchange`, and left alone afterwards.
+      if (.not. this%h_ref_ready) then
+         do concurrent(j=1:ny + 2*off, i=1:nx + 2*off) local(i_src, j_src)
+            i_src = min(max(i - off, 1), nx)
+            j_src = min(max(j - off, 1), ny)
+            this%w_H_ref(i, j) = bt_H_ref(i_src, j_src)
+         end do
+      end if
       ! East-face arrays: wide extent (nx + 2*off + 1, ny + 2*off).
       do concurrent(j=1:ny + 2*off, i=1:nx + 2*off + 1) local(i_src, j_src)
          i_src = min(max(i - off, 1), nx + 1)
@@ -619,32 +635,43 @@ contains
       integer :: n1, n2, off, m
       off = this%bt_halo + this%ring_poison/10
       m = mod(this%ring_poison, 10)
+      ! `ubt_prev` / `vbt_prev` are NOT poisoned: they are no longer part of
+      ! the packed entry exchange (nothing refills a seam ring of them), they
+      ! are re-seeded from `ubt` / `vbt` over the whole wide array when
+      ! `bebt > 0`, and at `bebt = 0` the kernel still evaluates
+      ! `(1+bebt)*ubt - bebt*ubt_prev`, so a NaN there would be `0*NaN` in a
+      ! cell whose value is not a physical dependency.
       n1 = size(this%w_eta, 1)
       n2 = size(this%w_eta, 2)
       call poison_ring_dev(this%w_eta, n1, n2, off, m)
-      call poison_ring_dev(this%w_H_ref, n1, n2, off, m)
+      ! `H_ref` is copied and exchanged once: poison it with the first solve
+      ! only, or a later solve would garble a seam ring nothing refills.
+      if (.not. this%h_ref_ready) call poison_ring_dev(this%w_H_ref, n1, n2, off, m)
       n1 = size(this%w_ubt, 1)
       n2 = size(this%w_ubt, 2)
       call poison_ring_dev(this%w_ubt, n1, n2, off, m)
-      call poison_ring_dev(this%w_ubt_prev, n1, n2, off, m)
       call poison_ring_dev(this%w_rem_u, n1, n2, off, m)
       call poison_ring_dev(this%w_force_u, n1, n2, off, m)
       if (this%refresh_widths) call poison_ring_dev(this%w_dy_cu, n1, n2, off, m)
       n1 = size(this%w_vbt, 1)
       n2 = size(this%w_vbt, 2)
       call poison_ring_dev(this%w_vbt, n1, n2, off, m)
-      call poison_ring_dev(this%w_vbt_prev, n1, n2, off, m)
       call poison_ring_dev(this%w_rem_v, n1, n2, off, m)
       call poison_ring_dev(this%w_force_v, n1, n2, off, m)
       if (this%refresh_widths) call poison_ring_dev(this%w_dx_cv, n1, n2, off, m)
    end subroutine bt_wide_poison_dynamic_ring
 
    subroutine bt_wide_entry_exchange(this)
-      !! One wide grouped exchange (eta+ubt+vbt) + wide singles for the other
-      !! 7 input arrays (H_ref, ubt_prev, rem_u, force_u, vbt_prev, rem_v,
-      !! force_v).  Fills the entire wide ghost band before the fast loop.
-      !! Counter effect: +1 bt_group, +1 centre_2d, +3 face_x_2d, +3 face_y_2d
-      !! (+1 face_x_2d, +1 face_y_2d more under porous barriers / closed faces).
+      !! Fills the wide ghost band before the fast loop with ONE packed
+      !! exchange (eta, ubt, vbt, rem_u, force_u, rem_v, force_v).  `H_ref` is
+      !! exchanged once, at the first call.  The previous-substep velocities
+      !! are not exchanged: the fast loop re-seeds them from `ubt`/`vbt` over
+      !! the whole wide array when `bebt > 0` and never reads them otherwise
+      !! (their coefficient is 0).  Under porous barriers / closed faces the
+      !! two per-solve BT widths (`w_dy_cu`, `w_dx_cv`) follow in one wide
+      !! face exchange each (the packed set is full at three x / y arrays).
+      !! Counter effect: +1 bt_packed per call (+1 centre_2d on the first;
+      !! +1 face_x_2d, +1 face_y_2d more when the widths are refreshed).
       !! Dispatches to the non-polymorphic `_impl` body.
       class(bt_wide_t), intent(inout) :: this
       select type (this)
@@ -659,14 +686,13 @@ contains
       integer :: ng_w
       ng_w = this%ng_wide
       call profiler_start("ocean_comms_bt")
-      call ocean_halo_bt_group_2d_wide(this%w_eta, this%w_ubt, this%w_vbt, ng_w)
-      call ocean_halo_centre_2d_wide(this%w_H_ref, ng_w)
-      call ocean_halo_face_x_2d_wide(this%w_ubt_prev, ng_w)
-      call ocean_halo_face_x_2d_wide(this%w_rem_u, ng_w)
-      call ocean_halo_face_x_2d_wide(this%w_force_u, ng_w)
-      call ocean_halo_face_y_2d_wide(this%w_vbt_prev, ng_w)
-      call ocean_halo_face_y_2d_wide(this%w_rem_v, ng_w)
-      call ocean_halo_face_y_2d_wide(this%w_force_v, ng_w)
+      if (.not. this%h_ref_ready) then
+         call ocean_halo_centre_2d_wide(this%w_H_ref, ng_w)
+         this%h_ref_ready = .true.
+      end if
+      call ocean_halo_packed_wide(ng_w, this%w_eta, this%w_ubt, this%w_vbt, &
+                                  xa=this%w_rem_u, xb=this%w_force_u, &
+                                  ya=this%w_rem_v, yb=this%w_force_v)
       if (this%refresh_widths) then
          call ocean_halo_face_x_2d_wide(this%w_dy_cu, ng_w)
          call ocean_halo_face_y_2d_wide(this%w_dx_cv, ng_w)

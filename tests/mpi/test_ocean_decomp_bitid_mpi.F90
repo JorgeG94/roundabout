@@ -222,7 +222,7 @@
 !! (lon-lat sector); `W` = 2, 4 or 8; `_b0` = `bebt = 0` (default 0.1
 !! otherwise).  Every decomposed run uses `bt_halo = W` and is compared with
 !! the 1-rank `bt_halo = 0` reference (contract: N ranks at W == 1 rank at 0),
-!! on a 48 x 32 grid with `n_inner = 20` (>= 4 in-loop wide exchange cycles
+!! on a 48 x 32 grid with `n_inner = 40` (>= 4 in-loop wide exchange cycles
 !! per BT solve at every W; asserted through the halo counters so a case
 !! cannot pass vacuously).  A factorisation whose smallest tile is narrower
 !! than `nghost + W` is skipped with a line saying so.  Each mismatching
@@ -256,7 +256,9 @@ program test_ocean_decomp_bitid_mpi
    use rdb_config, only: config_t, read_config_from_string, validate_config
    use rdb_ocean_status, only: OCEAN_STATUS_OK
    use rdb_error_ring, only: error_ring_clear, error_ring_count, error_ring_get
-   use rdb_ocean_halo_counters, only: oh_counters_reset, oh_counters_format, oh_counters_get
+   use rdb_ocean_halo_counters, only: oh_counters_reset, oh_counters_format, oh_counters_get, &
+                                      oh_counters_packed
+   use rdb_barotropic_substep, only: bt_wide_cycle_len
    use rdb_ocean_engine, only: ocean_engine_t, engine_setup, engine_enter_data, &
                                engine_step, engine_step_ice, engine_step_finalize, &
                                engine_exit_data, &
@@ -282,7 +284,7 @@ program test_ocean_decomp_bitid_mpi
 #endif
    implicit none
 
-   integer, parameter :: BTH_NX = 48, BTH_NY = 32, BTH_NINNER = 20
+   integer, parameter :: BTH_NX = 48, BTH_NY = 32, BTH_NINNER = 40
       !! Wide-halo (`bth_*`) cases: global grid and the fixed `n_inner`.
    integer, parameter :: NX_G = 26
    integer, parameter :: NY_G = 18
@@ -349,7 +351,8 @@ program test_ocean_decomp_bitid_mpi
       integer :: ncav(6) = 0
          !! Cavity non-vacuity counts over the OWNED cells: covered wet, open wet,
          !! grounded, melting, top-drag stress > 0, k_top < nz.
-      integer(int64) :: cnt_bt_group = 0_int64, cnt_bt_u = 0_int64
+      integer(int64) :: cnt_bt_group = 0_int64, cnt_bt_u = 0_int64, cnt_pk = 0_int64, cnt_c2d = 0_int64, &
+                        cnt_fx2 = 0_int64, cnt_fy2 = 0_int64
          !! Halo counters of the run (`bt_group` calls, mid-substep u exchanges).
       type(conservation_budget_t) :: bud
          !! Closed-budget mass/salt/heat out+src totals at the final step —
@@ -374,7 +377,7 @@ program test_ocean_decomp_bitid_mpi
       !! of a one-rank launch) carries `bt_halo = W`, so at np = 1 the case
       !! compares `bt_halo = W` against `bt_halo = 0` (the 1-rank identity)
       !! instead of running the same namelist twice.
-   integer :: bth_nochain_env = 0, bth_steps_env = 0
+   integer :: bth_nochain_env = 0, bth_steps_env = 0, bth_poison_env = 0
       !! `RDB_BITID_BTH_NOCHAIN=1`: the `bth_*` cases run with `visc_rem_chain = .false.`.
    logical :: where_report = .false.
       !! Set per case (the `bth_*` family): `compare` also prints the `[where]` lines.
@@ -464,6 +467,7 @@ program test_ocean_decomp_bitid_mpi
    call env_int("RDB_BITID_NINNER", ninner_env)
    call env_int("RDB_BITID_BTH_NOCHAIN", bth_nochain_env)
    call env_int("RDB_BITID_BTH_STEPS", bth_steps_env)
+   call env_int("RDB_BT_INHALO_POISON", bth_poison_env)
    block
       integer :: pc
       pc = 0
@@ -1937,9 +1941,10 @@ contains
          t = t + DT
       end do
       block
-         integer(int64) :: c_ml, c_c2, c_c3, c_fx2, c_fx3, c_fy2, c_fy3
-         call oh_counters_get(snap%cnt_bt_group, snap%cnt_bt_u, c_ml, c_c2, c_c3, &
-                              c_fx2, c_fx3, c_fy2, c_fy3)
+         integer(int64) :: c_ml, c_c3, c_fx3, c_fy3
+         call oh_counters_get(snap%cnt_bt_group, snap%cnt_bt_u, c_ml, snap%cnt_c2d, c_c3, &
+                              snap%cnt_fx2, c_fx3, snap%cnt_fy2, c_fy3)
+         snap%cnt_pk = oh_counters_packed()
       end block
       cur_n_inner = cfg%ocean%bt%n_inner
       if (print_counts .and. csize > 1 .and. crank == 0) then
@@ -2766,29 +2771,65 @@ contains
       if (nbud >= 2) call compare_budget(buds(1:nbud), label, scheme)
    end subroutine run_case
 
+   pure logical function has_eta_forcing(label)
+      !! A `bthx_*` case with a body tide or surface-pressure load (the wide
+      !! `eta_forcing` is exchanged once per solve).
+      character(len=*), intent(in) :: label
+      has_eta_forcing = index(label, "bthx_tides") == 1 .or. index(label, "bthx_psurf") == 1
+   end function has_eta_forcing
+
+   pure logical function refreshes_widths(label)
+      !! A `bthx_*` case whose BT widths are recomputed per outer step (porous
+      !! barriers, closed faces): re-copied and re-exchanged every solve.
+      character(len=*), intent(in) :: label
+      refreshes_widths = index(label, "bthx_porous") == 1 .or. index(label, "bthx_zfixed") == 1
+   end function refreshes_widths
+
    subroutine check_bth_counters(dec, label, tag, nbad)
-      !! Non-vacuity of a `bth_*` case: the decomposed run must have taken the
-      !! wide march-in (no mid-substep u exchange, which only the `bt_halo = 0`
-      !! loop does) and at least four in-loop wide exchange cycles per BT solve.
-      !! Per solve the `bt_group` counter is 1 (entry) + floor((n-1)/(W/2))
-      !! (in-loop) + 1 (normal-width time-mean exit); two solves per outer step.
+      !! Non-vacuity AND message-count check of a `bth_*` case.  Per BT solve
+      !! the wide march does exactly `2 + floor((n_inner - 1)/cadence)` packed
+      !! exchanges (1 entry + the in-loop ones + 1 exit), `cadence` =
+      !! `bt_wide_cycle_len(nghost + W)` (stretched by the thousands digit of
+      !! `RDB_BT_INHALO_POISON` in the cadence-limit legs); two solves per outer
+      !! step.  It must never use the grouped `bt_group` exchange nor the
+      !! mid-substep u exchange of the `bt_halo = 0` loop, and the static
+      !! `H_ref` is exchanged once (centre_2d == 1).  At least four in-loop
+      !! cycles per solve (three in the cadence-limit legs, where the cadence is
+      !! stretched), so a stale front would have time to reach the owned cells.
       type(snap_t), intent(in) :: dec
       character(len=*), intent(in) :: label, tag
       integer, intent(inout) :: nbad
-      integer :: w, cycles
-      integer(int64) :: expect
+      integer :: w, cycles, cad, solves
+      integer(int64) :: expect, exp_c2d, exp_fx
 
       w = bth_width(label)
-      cycles = (BTH_NINNER - 1)/(w/2)
-      expect = int(2*n_steps_cur, int64)*int(2 + cycles, int64)
-      if (cycles < 4 .or. dec%cnt_bt_u /= 0_int64 .or. dec%cnt_bt_group /= expect) then
-         if (rank == 0) write (*, '(3a,i0,a,i0,a,i0,a,i0)') "FAIL ", trim(tag), &
-            ": wide march not exercised: cycles/solve=", cycles, " bt_group=", dec%cnt_bt_group, &
-            " expected=", expect, " bt_u=", dec%cnt_bt_u
+      cad = bt_wide_cycle_len(3 + w) + bth_poison_env/1000
+      cycles = (BTH_NINNER - 1)/cad
+      solves = 2*n_steps_cur
+      expect = int(solves, int64)*int(2 + cycles, int64)
+      ! Centre-2D exchanges: `H_ref` once, plus the wide `eta_forcing` once per
+      ! solve when a body tide / surface pressure is on.  Face-2D exchanges: the
+      ! two per-solve BT widths (one x-face, one y-face) when porous barriers or
+      ! closed faces refresh them; nothing else leaves the packed set.
+      exp_c2d = 1_int64
+      if (has_eta_forcing(label)) exp_c2d = exp_c2d + int(solves, int64)
+      ! The psurf load also refreshes its own seam copy once per outer step
+      ! (not wide-march traffic; the same on the `bt_halo = 0` path).
+      if (index(label, "bthx_psurf") == 1) exp_c2d = exp_c2d + int(n_steps_cur, int64)
+      exp_fx = 0_int64
+      if (refreshes_widths(label)) exp_fx = int(solves, int64)
+      if (cycles < merge(3, 4, bth_poison_env >= 1000) .or. dec%cnt_bt_u /= 0_int64 .or. dec%cnt_bt_group /= 0_int64 .or. &
+          dec%cnt_pk /= expect .or. dec%cnt_c2d /= exp_c2d .or. dec%cnt_fx2 /= exp_fx .or. &
+          dec%cnt_fy2 /= exp_fx) then
+         if (rank == 0) write (*, '(3a,i0,a,i0,a,i0,a,i0,a,i0,a,i0,a,i0,a,i0,a,i0,a,i0)') "FAIL ", trim(tag), &
+            ": wide march not exercised: cycles/solve=", cycles, " pk=", dec%cnt_pk, &
+            " expected=", expect, " bt_group=", dec%cnt_bt_group, " bt_u=", dec%cnt_bt_u, &
+            " c2d=", dec%cnt_c2d, " expected=", exp_c2d, " fx2=", dec%cnt_fx2, " fy2=", dec%cnt_fy2, &
+            " expected=", exp_fx
          nbad = nbad + 1
       else if (rank == 0) then
          write (*, '(3a,i0,a,i0,a,i0)') "case ", trim(tag), ": wide march ok, in-loop cycles/solve=", &
-            cycles, " bt_group=", dec%cnt_bt_group, " bt_u=", dec%cnt_bt_u
+            cycles, " pk=", dec%cnt_pk, " bt_u=", dec%cnt_bt_u
       end if
    end subroutine check_bth_counters
 

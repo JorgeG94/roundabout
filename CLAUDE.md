@@ -324,7 +324,8 @@ zero-gradient anomaly and the constant backend ship today), MPI
 per-feature multi-rank support for the
 single-rank closures (wet/dry with a tripolar fold, a clamped/chapman/sponge/nested/inflow/discharge
 edge, or Orlanski/full-Flather/nudging/reservoirs on an open edge, and the cavity's file draft, fold, bulk and open-edge combinations), restarts across a rank-count change,
-the barotropic march-in as the DEFAULT (it ships opt-in and bit-identical;
+the barotropic march-in as the DEFAULT (it ships opt-in and bit-identical, on packed
+one-message-per-neighbour exchanges at a cadence of `nghost + bt_halo - 2` substeps;
 AUTO stays 0 until its performance stage) — the C-grid MPI halo itself ships,
 bit-identical to one rank.
 

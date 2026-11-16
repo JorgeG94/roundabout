@@ -569,7 +569,9 @@ contains
                          "bt_halo = 0 run on walls, periodic, Flather (legacy and full) "// &
                          "and tidal edges, land (incl. land meeting an open edge), "// &
                          "lon-lat and supergrid metrics, porous barriers, z-level closed "// &
-                         "faces, body tides and surface-pressure loading. Refused with "// &
+                         "faces, body tides and surface-pressure loading; the wide exchanges are "// &
+                         "packed (one message per neighbour per direction pass, cadence "// &
+                         "nghost + bt_halo - 2 substeps). Refused with "// &
                          "wet/dry, use_cont_type, upstream_h_face, Chapman edges, the "// &
                          "ice-shelf cavity, the tripolar fold, inhalo_march, "// &
                          "dtbt_reset_period >= 0 and a tile narrower than nghost + bt_halo", &
