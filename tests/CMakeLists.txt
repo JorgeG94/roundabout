@@ -636,7 +636,8 @@ foreach(row ${RDB_TESTS})
                                              test-drive::test-drive)
   if(test_name STREQUAL "test_cice_forcing"
      OR test_name STREQUAL "test_cice_closure"
-     OR test_name STREQUAL "test_ocean_surface_freshwater")
+     OR test_name STREQUAL "test_ocean_surface_freshwater"
+     OR test_name STREQUAL "test_ocean_restart_engine")
     # the synthetic prescribed atmosphere shared by the two engine tests
     target_sources(${test_name}
                    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/test_cice_synth_atm.F90)

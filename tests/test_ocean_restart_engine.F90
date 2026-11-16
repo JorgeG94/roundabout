@@ -73,6 +73,7 @@ module test_ocean_restart_engine
    use rdb_io_netcdf, only: nc_create_file, nc_close, nc_def_dim, nc_def_var_2d, &
                             nc_def_var_3d, nc_enddef, rdb_def_var_1d, rdb_put_var_1d, nc_put_att
    use netcdf, only: nf90_put_var
+   use test_cice_synth_atm, only: write_synth_atm, remove_synth_atm
    implicit none
    private
 
@@ -120,6 +121,7 @@ contains
                                test_engine_bit_exact_fw), &
                   new_unittest("engine_freshwater_none_is_knob_absent", test_engine_fw_none_is_absent), &
                   new_unittest("engine_freshwater_virtual_composition_sis2", test_engine_fw_composition), &
+                  new_unittest("restart_engine_bit_exact_cice_bulk_freshwater", test_engine_bit_exact_cice_fw), &
                   new_unittest("engine_ice_enabled_icefree_shortwave_matches_ice_disabled", &
                                test_engine_icefree_sw), &
                   new_unittest("restart_engine_bit_exact_gm_meke_varmix_therm2", &
@@ -399,6 +401,42 @@ contains
                "edge_depth = 300.0, slope_scale = 300000.0 /"//NL// &
                "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
                "north = 'wall' /"//NL// &
+               "&output_nml output_to_file = .false. /"//NL
+      case ("cice_bulk_fw")
+         ! The CICE-port ice under the prescribed atmosphere with `freshwater = 'virtual'`, thermo every
+         ! second step: the checkpoint lands mid window, where the window mean of `fresh` carries the
+         ! rain-through term the hook keeps under the knob.
+         nml = "&sim_nml sim_type = 'ocean' /"//NL// &
+               "&time_nml t_end = 86400.0, dt_fixed = 600.0, start_date = '2000-01-01' /"//NL// &
+               "&nonhydrostatic_nml nz_layers = 3 /"//NL// &
+               "&ocean_diag_nml enabled = .false. /"//NL// &
+               "&tracer_nml initial_temperature = -1.0, initial_salinity = 34.0, "// &
+               "T_init_surface = -1.0, T_init_bottom = -1.0 /"//NL// &
+               "&ocean_bt_nml auto_n_inner = .true. /"//NL// &
+               "&ocean_hvisc_nml nu_h = 200.0 /"//NL// &
+               "&grid_nml nx = 12, ny = 10, nghost = 3, dx = 0.25, dy = 0.25 /"//NL// &
+               "&ocean_grid_nml grid_config = 'spherical', lon_west = 20.0, lat_south = 70.0, "// &
+               "rad_earth = 6.371e6, coriolis_scheme = 'planetary' /"//NL// &
+               "&physics_nml wind_stress_x = 0.0, wind_stress_y = 0.0 /"//NL// &
+               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
+               "&ocean_topo_nml topo_config = 'flat', max_depth = 100.0 /"//NL// &
+               "&ocean_thermo_nml enable_thermodynamics = .true. /"//NL// &
+               "&ocean_forcing_nml enable_components = .true., freshwater = 'virtual' /"//NL// &
+               "&ocean_vmix_nml dt_therm_ratio = 2 /"//NL// &
+               "&ocean_ice_nml enable = .true., scheme = 'cice', ncat = 5, nilyr = 4, hfreeze = 10.0, "// &
+               "dynamics = .true., transport = .true. /"//NL// &
+               "&ocean_ice_thermo_nml update_ocn_f = .true. /"//NL// &
+               "&ocean_ice_dyn_nml advection = 'upwind', ndte = 40 /"//NL// &
+               "&ocean_ice_ic_nml conc_config = 'uniform', h_ice = 1.0, conc = 0.6, h_snow = 0.1, t_ice = -8.0 /"//NL// &
+               "&ocean_atm_forcing_nml enable = .true., sw_interp = 'linear', fluxes_regrid = 'bilinear', "// &
+               "time_mode = 'interannual', wind_relative = .false., "// &
+               "filelist_tas = 'rsw_cice_atm.txt', filelist_huss = 'rsw_cice_atm.txt', "// &
+               "filelist_uas = 'rsw_cice_atm.txt', filelist_vas = 'rsw_cice_atm.txt', "// &
+               "filelist_psl = 'rsw_cice_atm.txt', filelist_rlds = 'rsw_cice_atm.txt', "// &
+               "filelist_rsds = 'rsw_cice_atm.txt', filelist_prra = 'rsw_cice_atm.txt', "// &
+               "filelist_prsn = 'rsw_cice_atm.txt' /"//NL// &
+               "&ocean_bulk_flux_nml enable = .true. /"//NL// &
+               "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL// &
                "&output_nml output_to_file = .false. /"//NL
       case ("gm_meke_varmix_therm2")
          ! Stratified seamount on z* with GM + MEKE + VarMix (the compat
@@ -1366,6 +1404,16 @@ contains
       call delete_file(ATM_FILE)
       call delete_file(ATM_LIST)
    end subroutine test_engine_bit_exact_fw
+
+   subroutine test_engine_bit_exact_cice_fw(error)
+      !! `scheme = "cice"` + `freshwater = "virtual"`, checkpoint mid thermo window (N_WRITE odd, ratio 2):
+      !! the resumed run reproduces the straight one bit for bit, ice window mean included.
+      type(error_type), allocatable, intent(out) :: error
+      integer :: n_ice
+      call write_synth_atm("mixed", "rsw_cice_atm.nc", "rsw_cice_atm.txt")
+      call run_round_trip(error, "cice_bulk_fw", 3, 4, n_ice)
+      call remove_synth_atm("rsw_cice_atm.nc", "rsw_cice_atm.txt")
+   end subroutine test_engine_bit_exact_cice_fw
 
    subroutine test_engine_fw_none_is_absent(error)
       !! `freshwater = 'none'` IS the knob absent: the whole restart registry and the carried surface fluxes

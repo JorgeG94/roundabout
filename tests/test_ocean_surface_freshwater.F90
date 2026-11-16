@@ -52,6 +52,7 @@ module test_ocean_surface_freshwater
    real(wp), parameter :: H_LAYER = 10.0_wp
    real(wp), parameter :: DT = 3600.0_wp
    character(len=*), parameter :: NL = new_line("a")
+   character(len=*), parameter :: VFW = "&ocean_forcing_nml enable_components = .true., freshwater = 'virtual' /"//NL
    character(len=*), parameter :: FN_ATM = "test_fw_cice_atm.nc"
    character(len=*), parameter :: FN_LST = "test_fw_cice_atm.txt"
    real(wp), parameter :: DT_ENGINE = 600.0_wp
@@ -68,6 +69,8 @@ contains
                   new_unittest("fw_budget_closure", test_budget_closure), &
                   new_unittest("fw_knob_off_bitident", test_knob_off_bitident), &
                   new_unittest("fw_validate", test_validate), &
+                  new_unittest("fw_cover_assembler", test_cover_assembler), &
+                  new_unittest("fw_cice_salt_closure", test_cice_salt_closure), &
                   new_unittest("fw_cice_no_double_count", test_cice_no_double_count) &
                   ]
    end subroutine collect_ocean_surface_freshwater_tests
@@ -487,6 +490,70 @@ contains
    end subroutine test_knob_off_bitident
 
    ! -----------------------------------------------------------------
+   ! 4b. the ice-shelf-cover twin of the assembler
+   ! -----------------------------------------------------------------
+
+   subroutine test_cover_assembler(error)
+      !! `salt_fw` is an ATMOSPHERIC term: under a shelf it is scaled by the open fraction `1 - cover_frac`,
+      !! like `salt_flux`/`salt_ice`, while the cavity's own `salt_cavity`/`heat_cavity` pass unmasked; the
+      !! mass enthalpy that stays (`vprec`, `seaice_melt`) is masked too.  Independent values per cell.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      type(ocean_surface_flux_t) :: sf
+      real(wp), allocatable :: cover(:, :)
+      real(wp) :: of, f, s_top, e_s, e_h, worst_s, worst_h
+      integer :: i, j, ng
+
+      call setup_column(grid, ms, sf, .true., 35.0_wp, 5.0_wp)
+      ng = grid%nghost
+      allocate (cover(grid%nx_total, grid%ny_total))
+      do j = 1, grid%ny_total
+         do i = 1, grid%nx_total
+            cover(i, j) = 0.25_wp*real(mod(i + 2*j, 5), wp)
+            ms%tracers(ms%idx_salinity)%c(i, j, NZ) = 32.0_wp + 0.3_wp*real(i, wp) + 0.1_wp*real(j, wp)
+            sf%lprec(i, j) = 2.0e-5_wp + 1.0e-6_wp*real(i, wp)
+            sf%evap(i, j) = -5.0e-6_wp*real(1 + mod(j, 2), wp)
+         end do
+      end do
+      sf%salt_flux = 1.0e-7_wp
+      sf%salt_cavity = 4.0e-7_wp
+      sf%heat_cavity = -3.0_wp
+      sf%heat_content_vprec = 8.0_wp
+      sf%heat_content_seaice_melt = 1.0_wp
+      sf%q_sw = 100.0_wp
+      sf%heat_content_lprec = 999.0_wp   ! must not enter under the knob
+
+      call map_all(ms, sf)
+      !$acc update device(sf%lprec, sf%evap, sf%salt_flux, sf%salt_cavity, sf%heat_cavity, sf%heat_content_vprec)
+      !$acc update device(sf%heat_content_seaice_melt, sf%q_sw, sf%heat_content_lprec)
+      call ocean_surface_flux_fw_virtual_step(grid, sf, ms)
+      call ocean_surface_flux_assemble(grid, sf, ms, cover_frac=cover)
+      !$acc update self(sf%Q_salt, sf%Q_heat, sf%salt_fw)
+      call unmap_all(ms, sf)
+
+      worst_s = 0.0_wp
+      worst_h = 0.0_wp
+      do j = ng + 1, grid%ny_total - ng
+         do i = ng + 1, grid%nx_total - ng
+            of = 1.0_wp - cover(i, j)
+            s_top = 32.0_wp + 0.3_wp*real(i, wp) + 0.1_wp*real(j, wp)
+            f = 2.0e-5_wp + 1.0e-6_wp*real(i, wp) - 5.0e-6_wp*real(1 + mod(j, 2), wp)
+            e_s = of*(1.0e-7_wp - s_top*f) + 4.0e-7_wp
+            e_h = of*(100.0_wp + 8.0_wp + 1.0_wp) - 3.0_wp
+            worst_s = max(worst_s, abs(sf%Q_salt(i, j) - e_s)/abs(e_s))
+            worst_h = max(worst_h, abs(sf%Q_heat(i, j) - e_h)/abs(e_h))
+         end do
+      end do
+      call check(error, maxval(cover) > 0.5_wp .and. minval(cover) == 0.0_wp, "the cover fraction is nonuniform")
+      if (allocated(error)) return
+      call check(error, worst_s < 1.0e-12_wp, "cover twin: Q_salt = (1-c)(salt_flux + salt_fw) + salt_cavity")
+      if (allocated(error)) return
+      call check(error, worst_h < 1.0e-12_wp, "cover twin: Q_heat masks the remaining mass enthalpy, keeps heat_cavity")
+      call sf%destroy(); call ms%destroy()
+   end subroutine test_cover_assembler
+
+   ! -----------------------------------------------------------------
    ! 5. configure-time refusal
    ! -----------------------------------------------------------------
 
@@ -530,6 +597,23 @@ contains
       if (allocated(error)) return
       call check(error, valid_ierr("&ocean_forcing_nml freshwater = 'virtual' /") /= OCEAN_STATUS_OK, &
                  "freshwater = 'virtual' without the component set is refused")
+      if (allocated(error)) return
+      call check(error, parse_surface_freshwater("off") == SURF_FW_INVALID .and. &
+                 parse_surface_freshwater("real") == SURF_FW_INVALID, "no aliases beyond the enum")
+      if (allocated(error)) return
+      ! SIS2-derived ice: the lumped mode and the open-water snowfall path double count
+      call check(error, valid_ierr(VFW//"&ocean_ice_nml enable = .true., ncat = 5 /") == OCEAN_STATUS_OK, &
+                 "virtual with SIS2-derived ice at ncat = 5 is accepted")
+      if (allocated(error)) return
+      call check(error, valid_ierr(VFW//"&ocean_ice_nml enable = .true., ncat = 1 /") /= OCEAN_STATUS_OK, &
+                 "virtual with SIS2-derived ice at ncat = 1 (lumped, aice0 = 1) is refused")
+      if (allocated(error)) return
+      call check(error, valid_ierr(VFW//"&ocean_ice_nml enable = .true., ncat = 5, snowfall = 2.0e-5 /") &
+                 /= OCEAN_STATUS_OK, "virtual with SIS2-derived ice snowfall /= 0 (counted twice) is refused")
+      if (allocated(error)) return
+      call check(error, valid_ierr("&ocean_forcing_nml enable_components = .true. /"//NL// &
+                                   "&ocean_ice_nml enable = .true., ncat = 1 /") == OCEAN_STATUS_OK, &
+                 "the same ice with the knob off is untouched")
    end subroutine test_validate
 
    ! -----------------------------------------------------------------
@@ -700,5 +784,116 @@ contains
       call check(error, e_tot < 1.0e-9_wp, "open and ice-covered shares of the rain add to the whole precipitation")
       if (allocated(error)) return
    end subroutine test_cice_no_double_count
+
+   subroutine test_cice_salt_closure(error)
+      !! Coupled closure under `freshwater = "virtual"` with the CICE-port ice in a CLOSED basin: the ocean
+      !! salt content changes by exactly what the surface deposit mirrored into the salt budget (the ice
+      !! hand-over incl. the kept rain-through term, plus `salt_fw`), over several outer steps; and the
+      !! knob-off run, whose rain never reaches the salt, ends measurably elsewhere.
+      type(error_type), allocatable, intent(out) :: error
+      real(wp) :: d_v, b_v, d_n, b_n, scale
+      logical :: ok
+
+      call cice_content_run("virtual", 6, ok, d_v, b_v, scale)
+      call check(error, ok, "virtual closed-basin run")
+      if (allocated(error)) return
+      call cice_content_run("none", 6, ok, d_n, b_n, scale)
+      call check(error, ok, "knob-off closed-basin run")
+      if (allocated(error)) return
+      write (output_unit, "(a,4es13.5)") "  fw cice closure: d(content) V, budget V, d(content) none, budget none:", &
+         d_v, b_v, d_n, b_n
+      call check(error, abs(d_v) > 1.0e-9_wp*scale, "the salt content changes")
+      if (allocated(error)) return
+      call check(error, abs(d_v - b_v) < 1.0e-10_wp*scale + 1.0e-8_wp*abs(d_v), &
+                 "virtual: d(salt content) = mirrored surface budget (ice hand-over + salt_fw)")
+      if (allocated(error)) return
+      call check(error, abs(d_n - b_n) < 1.0e-10_wp*scale + 1.0e-8_wp*abs(d_n), "none: the same closure")
+      if (allocated(error)) return
+      call check(error, abs(d_v - d_n) > 1.0e-3_wp*abs(d_v), "the fresh-water term moves the salt content")
+   end subroutine test_cice_salt_closure
+
+   subroutine cice_content_run(fw, nstep, ok, dcontent, budget, scale)
+      character(len=*), intent(in) :: fw
+      integer, intent(in) :: nstep
+      logical, intent(out) :: ok
+      real(wp), intent(out) :: dcontent, budget, scale
+      type(ocean_engine_t), target :: engine
+      type(config_t) :: cfg
+      real(wp) :: t, c0, c1
+      integer :: ierr, n
+
+      ok = .false.
+      dcontent = 0.0_wp
+      budget = 0.0_wp
+      scale = 1.0_wp
+      call write_synth_atm("mixed", FN_ATM, FN_LST)
+      call ensure_comm()
+      call read_config_from_string(cice_nml(fw), cfg, ierr=ierr)
+      if (ierr == OCEAN_STATUS_OK) call engine_setup(engine, cfg, ierr)
+      if (ierr /= OCEAN_STATUS_OK) then
+         call remove_synth_atm(FN_ATM, FN_LST)
+         return
+      end if
+      call engine_enter_data(engine, cfg)
+      c0 = salt_content(engine)
+      scale = abs(c0)
+      t = 0.0_wp
+      do n = 1, nstep
+         call engine_step(engine, DT_ENGINE, t, ierr=ierr)
+         if (ierr == OCEAN_STATUS_OK) call engine_step_ice(engine, cfg, DT_ENGINE, t, ierr=ierr)
+         if (ierr == OCEAN_STATUS_OK) call engine_step_finalize(engine, DT_ENGINE, t, ierr=ierr)
+         if (ierr /= OCEAN_STATUS_OK) exit
+         t = t + DT_ENGINE
+      end do
+      if (ierr == OCEAN_STATUS_OK) then
+         c1 = salt_content(engine)
+         dcontent = c1 - c0
+         budget = salt_budget(engine)
+         ok = .true.
+      end if
+      call engine_exit_data(engine)
+      call engine_teardown(engine)
+      call remove_synth_atm(FN_ATM, FN_LST)
+   end subroutine cice_content_run
+
+   function salt_content(engine) result(c)
+      !! `sum(h*S*area)` over the owned cells (device -> host first).
+      type(ocean_engine_t), intent(inout), target :: engine
+      real(wp) :: c
+      integer :: i, j, k, ng
+
+      associate (cS => engine%state%multilayer%tracers(engine%state%multilayer%idx_salinity)%c)
+         !$acc update self(cS)
+      end associate
+      !$acc update self(engine%state%multilayer%h_layer)
+      ng = engine%grid%nghost
+      c = 0.0_wp
+      do k = 1, engine%state%multilayer%nz_ml
+         do j = ng + 1, ng + engine%grid%ny_phys
+            do i = ng + 1, ng + engine%grid%nx_phys
+               c = c + engine%state%multilayer%h_layer(i, j, k) &
+                   *engine%state%multilayer%tracers(engine%state%multilayer%idx_salinity)%c(i, j, k) &
+                   *engine%state%metrics%areaT(i, j)
+            end do
+         end do
+      end do
+   end function salt_content
+
+   function salt_budget(engine) result(b)
+      type(ocean_engine_t), intent(inout), target :: engine
+      real(wp) :: b
+      integer :: i, j, k, ng
+
+      !$acc update self(engine%state%multilayer%salt_budget_surface)
+      ng = engine%grid%nghost
+      b = 0.0_wp
+      do k = 1, engine%state%multilayer%nz_ml
+         do j = ng + 1, ng + engine%grid%ny_phys
+            do i = ng + 1, ng + engine%grid%nx_phys
+               b = b + engine%state%multilayer%salt_budget_surface(i, j, k)*engine%state%metrics%areaT(i, j)
+            end do
+         end do
+      end do
+   end function salt_budget
 
 end module test_ocean_surface_freshwater

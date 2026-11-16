@@ -328,7 +328,7 @@ program test_ocean_decomp_bitid_mpi
       !! `RDB_BITID_CASES`: run only the cases whose name contains this substring.
    type(comm_t) :: comm
    character(len=16), parameter :: SCHEMES(2) = [character(len=16) :: "pred_corr", "ssp_rk2"]
-   character(len=24), parameter :: CASES(77) = [character(len=24) :: &
+   character(len=24), parameter :: CASES(79) = [character(len=24) :: &
                                                 "island_basin", "weno7_pv", &
                                                 "periodic_channel_zstar", &
                                                 "visc_rem_zstar", &
@@ -354,7 +354,8 @@ program test_ocean_decomp_bitid_mpi
                                                 "drain_ratio_weno9", "drain_ratio_fold", &
                                                 "drain_ratio_fold_h3", "eulz", "eulz_periodic", &
                                                 "eulz_tripolar", "eulz_epbl_mle", "bulk_flux", &
-                                                "bulk_flux_ice", "bulk_flux_fold", "bulk_flux_sw", "manizza", "dtbt_reset", &
+                                                "bulk_flux_ice", "bulk_flux_fold", "bulk_flux_sw", "bulk_flux_fw", &
+                                                "bulk_flux_ice_fw", "manizza", "dtbt_reset", &
                                                 "dtbt_reset_period", &
                                                 "sea_ice_cdyn", "sea_ice_cdyn_rev", "sea_ice_cdyn_island", &
                                                 "sea_ice_cdyn_fold", "sea_ice_cdyn_edge", &
@@ -1236,7 +1237,8 @@ contains
                "&ocean_ice_ic_nml conc_config = 'uniform', h_ice = 1.0, conc = 0.7 /"//NL// &
                "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
                "north = 'tripolar_fold' /"//NL
-      case ("bulk_flux", "bulk_flux_ice", "bulk_flux_fold", "bulk_flux_sw")
+      case ("bulk_flux", "bulk_flux_ice", "bulk_flux_fold", "bulk_flux_sw", "bulk_flux_fw", &
+            "bulk_flux_ice_fw")
          ! Atmosphere-driven bulk forcing (`&ocean_atm_forcing_nml` +
          ! `&ocean_bulk_flux_nml`): nine prescribed atmospheric fields from
          ! files the test writes (spatially NON-uniform, non-symmetric in
@@ -1254,6 +1256,9 @@ contains
          ! profile `exp` all feed the heating: any of them rounding by tile
          ! position shows in T.  Gate for the safe-math adoption of
          ! `rdb_atm_state`/`rdb_ocean_bulk_flux`/`rdb_ocean_surface_flux`.
+         ! `bulk_flux_fw` / `bulk_flux_ice_fw`: `bulk_flux` / `bulk_flux_ice` with
+         ! `&ocean_forcing_nml freshwater = 'virtual'` (the virtual salt flux of
+         ! P - E, rain and snow on open water, and the rain through the ice).
          nml = "&sim_nml sim_type = 'ocean' /"//NL// &
                "&mpi_nml px = "//trim(spx)//", py = "//trim(spy)//" /"//NL// &
                "&time_nml t_end = 86400.0, dt_fixed = 900.0, start_date = '2000-06-21' /"//NL// &
@@ -1270,10 +1275,12 @@ contains
             nml = nml//"&ocean_thermo_nml enable_thermodynamics = .true. /"//NL
          end if
          nml = nml// &
-               "&ocean_forcing_nml enable_components = .true. /"//NL// &
+               "&ocean_forcing_nml enable_components = .true."// &
+               merge(", freshwater = 'virtual'", repeat(" ", 24), &
+                     label == "bulk_flux_fw" .or. label == "bulk_flux_ice_fw")//" /"//NL// &
                "&ocean_bulk_flux_nml enable = .true., n_iter = 5, z_wind = 10.0, "// &
                "z_ta = 10.0 /"//NL
-         if (label == "bulk_flux_ice") then
+         if (label == "bulk_flux_ice" .or. label == "bulk_flux_ice_fw") then
             nml = nml// &
                   "&tracer_nml initial_temperature = -1.83, initial_salinity = 34.0, "// &
                   "T_init_surface = -1.82, T_init_bottom = -1.835 /"//NL// &
@@ -1331,7 +1338,7 @@ contains
                   "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
                   "&ocean_topo_nml topo_config = 'spoon', max_depth = 3000.0, "// &
                   "edge_depth = 300.0, slope_scale = 300000.0 /"//NL
-            if (label == "bulk_flux_ice") then
+            if (label == "bulk_flux_ice" .or. label == "bulk_flux_ice_fw") then
                nml = nml//"&ocean_bc_nml west = 'periodic', east = 'periodic', "// &
                      "south = 'wall', north = 'wall' /"//NL
             else
@@ -2322,7 +2329,7 @@ contains
             ! does too: a serial warm-restart defect of the melt path at
             ! `dt_therm_ratio = 1`, not a decomposition defect.
             if ((label == "sea_ice" .or. label == "sea_ice_transport" .or. index(label, "sea_ice_cdyn") == 1 .or. &
-                 label == "bulk_flux_ice" .or. label == "dtbt_reset" .or. &
+                 label == "bulk_flux_ice" .or. label == "bulk_flux_ice_fw" .or. label == "dtbt_reset" .or. &
                  label == "cavity_sigma_ratio2" .or. is_wetdry_case(label) .or. is_ice_fold_case(label)) .and. &
                 (nprocs/px == 1 .or. px == nprocs/px) .and. &
                 (nprocs > 1 .or. label == "cavity_sigma_ratio2")) then

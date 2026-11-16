@@ -535,8 +535,8 @@ module rdb_ocean_surface_flux
          !! LIVE layer's salinity.  OWNED by
          !! `ocean_surface_flux_fw_virtual_step` and nothing else, a FULL
          !! OVERWRITE of the owned cells at every thermo step right before
-         !! the assembler sums it (so not restart state), seam-exchanged by
-         !! the engine.  All zero unless `fw_virtual`.  Excluded on purpose:
+         !! the assembler sums it (so not restart state).  Its seam ghosts are NOT
+         !! exchanged: nothing reads the ghosts of `Q_salt`.  All zero unless `fw_virtual`.  Excluded on purpose:
          !! `vprec` (the restoring convention, owed to its own consumer),
          !! `seaice_melt` (the ice hand-off already carries the melt water in
          !! `salt_ice`) and every cavity term.
@@ -2031,17 +2031,17 @@ contains
 
    pure function parse_surface_freshwater(name) result(code)
       !! Translate a `&ocean_forcing_nml freshwater` string into a
-      !! `SURF_FW_*` code.  The accepted set MIRRORS the `nml_enum`
-      !! registration in `register_ocean_forcing` -- the two lists move
-      !! together.
+      !! `SURF_FW_*` code.  The accepted set is EXACTLY the `nml_enum` list of
+      !! `register_ocean_forcing` (`none`, `virtual`, `mass`) -- no aliases; the two
+      !! lists move together.
       character(len=*), intent(in) :: name
       integer :: code
       select case (trim(adjustl(name)))
-      case ("none", "NONE", "off")
+      case ("none")
          code = SURF_FW_NONE
-      case ("virtual", "VIRTUAL", "virtual_salt")
+      case ("virtual")
          code = SURF_FW_VIRTUAL
-      case ("mass", "MASS", "real", "real_mass")
+      case ("mass")
          code = SURF_FW_MASS
       case default
          code = SURF_FW_INVALID
@@ -2070,8 +2070,16 @@ contains
       !! `&ocean_forcing_nml freshwater = "virtual"`).  A full overwrite of
       !! the OWNED cells, run right before `ocean_surface_flux_assemble`
       !! every thermo step (`engine_step_finalize`), which sums it into
-      !! `Q_salt`; the engine then seam-exchanges the slot, as it does for
-      !! `salt_ice`.
+      !! `Q_salt`.  The seam ghosts are left alone: the surface deposit's
+      !! ghost cells are overwritten by the tracer halo exchange and nothing
+      !! reads the ghosts of `Q_salt` (the decomposition cases `bulk_flux_fw`
+      !! and `bulk_flux_ice_fw` are bit-identical without an exchange).
+      !!
+      !! Limits: there is no limiter in the deposit, so a very thin first live
+      !! layer under a large `F` can reach negative salinity (the same exposure as
+      !! the ice path; `&ocean_ice_nml bound_salinity` floors it); and under
+      !! `dt_therm_ratio > 1` the term is the thermo step's instantaneous P - E,
+      !! while the ice share it adds to is a window mean.
       !!
       !!   F         = lprec + fprec + evap + lrunoff + frunoff
       !!   salt_fw   = -wet * S_surf * F

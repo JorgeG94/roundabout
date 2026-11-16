@@ -102,7 +102,7 @@ module rdb_ocean_engine
    use rdb_halo, only: halo_allreduce_sum_i8, halo_allreduce_min
    use rdb_barotropic_dtbt, only: bt_dtbt_dt_max, bt_dtbt_n_inner
    use rdb_ocean_halo_state, only: ocean_halo_exchange_ml_state, ocean_halo_exchange_ice_state, &
-                                   ocean_halo_exchange_ice_fluxes, ocean_halo_exchange_centre_field
+                                   ocean_halo_exchange_ice_fluxes
    use rdb_ocean_fold_exchange, only: ocean_fold_exchange_init, ocean_fold_exchange_reserve, &
                                       ocean_fold_exchange_destroy, ocean_fold_north_corner
    use rdb_ocean_periodic, only: ocean_periodic_wrap_state, ocean_periodic_wrap_centre_2d
@@ -2587,25 +2587,23 @@ contains
             size(engine%state%surface_stress%stress_shelf, 2))
       end if
 
+      ! Virtual fresh-water salt flux: its ONE writer, right before the
+      ! assembler sums it (same thermo cadence).  Owned cells only: nothing
+      ! reads the ghosts of `Q_salt`, so no seam exchange (`salt_ice`'s own
+      ! exchange in the ice adapters is likewise not needed by any reader; left as is).
+      if (engine%state%surface_flux%fw_virtual) then
+         call ocean_surface_flux_fw_virtual_step(engine%grid, engine%state%surface_flux, &
+                                                 engine%state%multilayer, &
+                                                 active=engine%state%dyn%enable_thermodynamics &
+                                                 .and. engine%state%dyn%is_thermo_step())
+      end if
+
       ! Ice-shelf cover: the assembler is where the atmospheric bands and
       ! the cavity's own heat_cavity/salt_cavity are still separable, so
       ! it is where `1 - cover_frac` is applied — and applying it there
       ! (rather than at apply time) is also what makes the `Q_heat` /
       ! `Q_salt` that KPP and EPBL read for `B_0` the MASKED values.
       ! Cavity off ⇒ the original call, byte-identical.
-      ! Virtual fresh-water salt flux: its ONE writer, right before the
-      ! assembler sums it (same thermo cadence).  The writer fills OWNED
-      ! cells, so the seam ghosts are exchanged like `salt_ice`'s.
-      if (engine%state%surface_flux%fw_virtual) then
-         call ocean_surface_flux_fw_virtual_step(engine%grid, engine%state%surface_flux, &
-                                                 engine%state%multilayer, &
-                                                 active=engine%state%dyn%enable_thermodynamics &
-                                                 .and. engine%state%dyn%is_thermo_step())
-         if (engine%state%dyn%enable_thermodynamics .and. engine%state%dyn%is_thermo_step()) then
-            call ocean_halo_exchange_centre_field(engine%state%surface_flux%salt_fw, &
-                                                  engine%grid, engine%state%bc)
-         end if
-      end if
       if (engine%state%metrics%use_cavity) then
          call ocean_surface_flux_assemble(engine%grid, engine%state%surface_flux, &
                                           engine%state%multilayer, &
