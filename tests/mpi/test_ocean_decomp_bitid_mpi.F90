@@ -351,7 +351,7 @@ program test_ocean_decomp_bitid_mpi
       !! `RDB_BITID_CASES`: run only the cases whose name contains this substring.
    type(comm_t) :: comm
    character(len=16), parameter :: SCHEMES(2) = [character(len=16) :: "pred_corr", "ssp_rk2"]
-   character(len=24), parameter :: CASES(79) = [character(len=24) :: &
+   character(len=24), parameter :: CASES(81) = [character(len=24) :: &
                                                 "island_basin", "weno7_pv", &
                                                 "periodic_channel_zstar", &
                                                 "visc_rem_zstar", &
@@ -386,7 +386,8 @@ program test_ocean_decomp_bitid_mpi
                                                 "cavity_combo", "wetdry_shoal", &
                                                 "wetdry_periodic", "wetdry_file", "chapman_obc", "obc_epbl", &
                                                 "wetdry_tidal_flat", "wetdry_open_flat", &
-                                                "cavity_mass", "cavity_mass_comp"]
+                                                "cavity_mass", "cavity_mass_comp", &
+                                                "wave_drag_rough", "wave_drag_rough_periodic"]
 
    call comm_env_init()
    call comm_env_setup_roles(.false.)
@@ -524,6 +525,9 @@ contains
       bt_head = "auto_n_inner = .true., "
       ! Per-step (period 0) / hourly (period 3600 s) re-derivation of n_inner from
       ! the live thicknesses; the fraction sits at an n_inner threshold (see case).
+      if (index(label, "wave_drag_rough") == 1) &
+         bt_head = bt_head//"wave_drag = .true., wave_drag_form = 'roughness_proxy', "// &
+                   "wave_drag_scale = 1.0e4, "
       if (label == "dtbt_reset") bt_head = "dtbt = "//DTBT_FRAC//", dtbt_reset_period = 0.0, "
       if (label == "dtbt_reset_period") bt_head = "dtbt = "//DTBT_FRAC//", dtbt_reset_period = 3600.0, "
       if (label == "visc_rem_zstar") bt_extra = ", visc_rem_chain = .true."
@@ -737,6 +741,26 @@ contains
                "&ocean_topo_nml topo_config = 'seamount', max_depth = 2000.0, "// &
                "edge_depth = 1500.0, slope_scale = 60000.0 /"//NL
          if (label == "eulz_periodic") then
+            nml = nml//"&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
+                  "north = 'wall' /"//NL
+         else
+            nml = nml//"&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
+         end if
+      case ("wave_drag_rough", "wave_drag_rough_periodic")
+         ! Barotropic linear wave drag, form = 'roughness_proxy', over a
+         ! seamount: the h-point r_H proxy is a 2-delta bathymetry stencil,
+         ! zero on a GLOBAL ghost ring but the owner's value across a rank
+         ! seam (a seam ghost the stencil skipped fed the face average a 0).
+         ! "_periodic" = re-entrant in x (the periodic edge ghost stays 0,
+         ! as on one rank).
+         nml = common// &
+               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
+               "dx = 20000.0, dy = 20000.0 /"//NL// &
+               "&physics_nml coriolis_f = -1.0e-4, wind_stress_x = 0.1 /"//NL// &
+               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
+               "&ocean_topo_nml topo_config = 'seamount', max_depth = 2000.0, "// &
+               "edge_depth = 1500.0, slope_scale = 60000.0 /"//NL
+         if (label == "wave_drag_rough_periodic") then
             nml = nml//"&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
                   "north = 'wall' /"//NL
          else
