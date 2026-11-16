@@ -55,8 +55,8 @@ module rdb_ice_dyn_c
    !! The hand-off of `-strocn` to the ocean surface stress is
    !! `ice_ocean_stress_flux_c` (`rdb_ice_ocean_coupler`).
    !!
-   !! Any rank count (D9.4: the face pair is exchanged every subcycle, `nghost >= 3`;
-   !! under `scheme = "cice"` the whole ice step is still single rank); a tripolar north fold is
+   !! Any rank count (D9.4: the face pair is exchanged every subcycle, `nghost >= 3`; under
+   !! `scheme = "cice"` the whole ice step runs on several ranks too); a tripolar north fold is
    !! supported (D9.3, `px > 1` too).  The face halo of every
    !! subcycle is `ice_halo_faces` (`rdb_ice_cgrid_metrics`), which on a periodic
    !! axis keeps the east/north seam face the solver computes and copies it onto the

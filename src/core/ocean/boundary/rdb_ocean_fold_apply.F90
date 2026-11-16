@@ -10,6 +10,8 @@ module rdb_ocean_fold_apply
    !!
    !! Stagger map:
    !!   * h_layer, η, tracer c  → centre fold (copy, no sign flip)
+   !!   * a true-vector pair held at centres (the ice's T-cell wind stress) → `ocean_fold_wrap_centre_vector_pair`
+   !!     (centre fold, both components negated)
    !!   * u_face_x_layer, bt_ubt  → u-face fold (negate — true vector)
    !!   * v_face_y_layer, bt_vbt  → v-face fold (negate + on-row
    !!     antisymmetric projection of the fold line, storage row
@@ -53,6 +55,7 @@ module rdb_ocean_fold_apply
    public :: ocean_fold_wrap_face_pair
    public :: ocean_fold_wrap_visc_rem
    public :: ocean_fold_wrap_centre_flat
+   public :: ocean_fold_wrap_centre_vector_pair
    public :: ocean_fold_wrap_evp_stress
 
 contains
@@ -410,6 +413,41 @@ contains
 
       call fold_north_centre(fld, nxt, nyt, nz, grid%nx_phys, grid%ny_phys, grid%nghost)
    end subroutine ocean_fold_wrap_centre_flat
+
+   subroutine ocean_fold_wrap_centre_vector_pair(grid, bc, fa, fb, device_resident)
+      !! Fold the north seam of a TRUE-VECTOR pair held at cell centres (T stagger): the two components change
+      !! sign across the fold, which is a 180 degree rotation of the cap (Murray 1996).  The ice's T-cell wind
+      !! stress `(strair_x_T, strair_y_T)` is such a pair: its north ghost row is read by the face hand-off.  The
+      !! centre twin of `ocean_fold_wrap_face_pair` (no fold-line row exists at a centre stagger).  Call AFTER
+      !! the pair's halo exchange / periodic wrap.  `px = 1`: the local kernel with `negate`; `px > 1`: one
+      !! owner-routed exchange group.  No-op when `bc%north_fold` is `.false.`.
+      type(hgrid_t), intent(in) :: grid
+      type(ocean_bc_state_t), intent(in) :: bc
+      real(wp), intent(inout) :: fa(grid%nx_total, grid%ny_total)
+      real(wp), intent(inout) :: fb(grid%nx_total, grid%ny_total)
+      logical, intent(in), optional :: device_resident
+         !! px > 1 only: `.false.` for host-side calls.
+
+      integer :: nxt, nyt
+
+      if (.not. bc%north_fold) return
+      nxt = grid%nx_total
+      nyt = grid%ny_total
+
+      if (ocean_fold_is_distributed()) then
+         call ocean_fold_begin(2*grid%nghost)
+         call ocean_fold_pack(fa, nxt, nyt, FOLD_STAG_T, device_resident)
+         call ocean_fold_pack(fb, nxt, nyt, FOLD_STAG_T, device_resident)
+         call ocean_fold_exchange(device_resident)
+         call ocean_fold_unpack(fa, nxt, nyt, FOLD_STAG_T, .true., device_resident)
+         call ocean_fold_unpack(fb, nxt, nyt, FOLD_STAG_T, .true., device_resident)
+         call ocean_fold_end()
+         return
+      end if
+
+      call fold_north_centre(fa, nxt, nyt, grid%nx_phys, grid%ny_phys, grid%nghost, negate=.true.)
+      call fold_north_centre(fb, nxt, nyt, grid%nx_phys, grid%ny_phys, grid%nghost, negate=.true.)
+   end subroutine ocean_fold_wrap_centre_vector_pair
 
    subroutine ocean_fold_wrap_evp_stress(grid, bc, str_d, str_t, str_s, device_resident)
       !! Fold the EVP internal-stress invariants across the north seam as

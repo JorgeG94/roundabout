@@ -96,6 +96,7 @@ contains
                   new_unittest("deformation_nonuniform_metric_efa", test_deformation), &
                   new_unittest("one_cell_channel", test_channel), &
                   new_unittest("zero_velocity_clears_everything", test_zero), &
+                  new_unittest("degenerate_corners_device_vs_host", test_degenerate), &
                   new_unittest("cfl_bits_both_signs_and_crossing", test_cfl), &
                   new_unittest("nan_in_raises_bit", test_nan), &
                   new_unittest("zero_area_face_is_inactive", test_zero_area_face), &
@@ -1729,6 +1730,205 @@ contains
       end do
       call geo_destroy(g)
    end subroutine test_zero
+
+   ! ------------------------------------------------------------------
+   ! (6b) degenerate corners: exact zeros, round-off noise where symmetry demands a zero, points on lines
+   ! ------------------------------------------------------------------
+
+   subroutine test_degenerate(error)
+      !! The case table, device against host, on departure points that sit ON a decision line or within round-off
+      !! of one.  A corner whose velocity is exactly zero by symmetry (a bipole, the centre vertex of a symmetric
+      !! domain) is not exactly zero on a device with FMA contraction: its displacement is `+-1e-20 .. 1e-17`, so
+      !! the sign of an ordinate flips, an axis crossing lands one ulp past the corner, and an edge whose
+      !! departure point sits on a side line fell through every pinned-crossing test unadjusted
+      !! (`ICE_ERR_TRANSPORT_CONSERV`, found by the folded run of `test_cice_tripole` on the V100).  Kinds of corner:
+      !! round-off noise of both signs and five magnitudes (x only, y only, both), exact zero, displacement along
+      !! one axis only (`md = 0`), exactly half a cell, a point exactly on an axis, noise on the side line with a
+      !! large ordinate (the failing configuration), all mixed on a non-uniform metric.  For each, with the edge
+      !! flux adjustment ON at the prescribed area equal to the unadjusted swept area (and scaled by up to
+      !! +-2 %): no error bit, `sum(area)` equals the prescribed area to `1e-13` of the cell area (the check
+      !! itself, restated here), the adjustment branch of the case code is never the unadjusted one, and the
+      !! area attributed to every SOURCE CELL equals the host table's (branch-invariant: a slot may change
+      !! with the branch, the cell total may not).
+      type(error_type), allocatable, intent(out) :: error
+      type(geo_t) :: g
+      integer, parameter :: NNOISE = 6
+      real(wp), parameter :: NOISE(NNOISE) = [0.0_wp, 1.0e-300_wp, 1.0e-30_wp, 1.0e-21_wp, 1.0e-17_wp, 1.0e-12_wp]
+      integer :: ino, variant, efa, iedge, i, j, s, code, nedge, nbad_br, nactive
+      real(wp) :: fc, worst_sum, worst_cell, tolc, ea_in, h, asum, ea, w
+      real(wp) :: px(3, REMAP_NSLOT), py(3, REMAP_NSLOT), ar(REMAP_NSLOT)
+      real(wp) :: dev(9), hst(9)
+      real(wp), allocatable :: qe(:, :), qn(:, :), hdpx(:, :), hdpy(:, :), hea_e(:, :), hea_n(:, :)
+      integer(int8) :: sc(REMAP_NSLOT)
+      integer(int32) :: ic, bits
+      integer(int64) :: st
+      character(len=200) :: msg
+      logical :: nonuni
+
+      worst_sum = 0.0_wp
+      worst_cell = 0.0_wp
+      nedge = 0
+      nbad_br = 0
+      nactive = 0
+#ifdef RDB_GPU_OFFLOAD
+      tolc = 1.0e-9_wp
+#else
+      tolc = 1.0e-12_wp
+#endif
+      do variant = 0, 7
+         nonuni = mod(variant, 2) == 1
+         call geo_init(g, 11, 9, nonuni)
+         g%dt = 1.0_wp
+         allocate (qe(g%nx, g%ny), qn(g%nx, g%ny), hdpx(g%nx, g%ny), hdpy(g%nx, g%ny), &
+                   hea_e(g%nx, g%ny), hea_n(g%nx, g%ny))
+         hdpx = 0.0_wp
+         hdpy = 0.0_wp
+         do ino = 1, NNOISE
+            st = int(1000*variant + 17*ino, int64)
+            ! ---- the departure points ----
+            g%ws%dpx = 0.0_wp
+            g%ws%dpy = 0.0_wp
+            do j = g%js - 1, g%je
+               do i = g%is - 1, g%ie
+                  st = lcg_next(st)
+            call corner_kind(mod(i*7 + j*13 + variant*5 + ino, 9), NOISE(ino), st, g%dxU(i, j), g%dyU(i, j), hdpx(i, j), hdpy(i, j))
+               end do
+            end do
+            g%ws%dpx = hdpx
+            g%ws%dpy = hdpy
+            ! the unadjusted swept areas are the feasible prescribed ones
+            call geo_locate(g, 0)
+            qe = g%ws%edgearea_e
+            qn = g%ws%edgearea_n
+            do efa = 1, 2
+               g%ws%dpx = hdpx
+               g%ws%dpy = hdpy
+               do j = 1, g%ny
+                  do i = 1, g%nx
+                     st = lcg_next(st)
+                     h = merge(1.0_wp, 1.0_wp + 0.02_wp*(2.0_wp*lcg_unit(st) - 1.0_wp), efa == 1)
+                     g%ws%edgearea_e(i, j) = qe(i, j)*h
+                     st = lcg_next(st)
+                     h = merge(1.0_wp, 1.0_wp + 0.02_wp*(2.0_wp*lcg_unit(st) - 1.0_wp), efa == 1)
+                     g%ws%edgearea_n(i, j) = qn(i, j)*h
+                  end do
+               end do
+               hea_e = g%ws%edgearea_e
+               hea_n = g%ws%edgearea_n
+               g%ierr = 0_int32
+               call geo_locate(g, 1)
+               if (any(g%ierr /= 0_int32)) then
+              write (msg, "(a,i0,a,i0,a,i0,a,i0)") "degenerate: error bit, variant ", variant, " noise ", ino, " efa-scale ", efa, &
+                     " cells ", count(g%ierr /= 0_int32)
+                  call test_failed(error, trim(msg))
+                  call geo_destroy(g)
+                  return
+               end if
+               do iedge = REMAP_EDGE_NORTH, REMAP_EDGE_EAST
+                  do j = merge(g%js - 1, g%js, iedge == REMAP_EDGE_NORTH), g%je
+                     do i = merge(g%is, g%is - 1, iedge == REMAP_EDGE_NORTH), g%ie
+                        call call_table(g, iedge, i, j, 1, hdpx, hdpy, hea_e, hea_n, px, py, ar, sc, ic, asum, bits, ea)
+                        fc = merge(g%narea(i, j), g%earea(i, j), iedge == REMAP_EDGE_NORTH)
+                        if (iedge == REMAP_EDGE_NORTH) then
+                           ic = g%ws%icase_n(i, j)
+                           ea_in = hea_n(i, j)
+                           asum = sum(g%ws%area_n(i, j, :))
+                        else
+                           ic = g%ws%icase_e(i, j)
+                           ea_in = hea_e(i, j)
+                           asum = sum(g%ws%area_e(i, j, :))
+                        end if
+                        if (ic == 0_int32 .and. ea_in == 0.0_wp) cycle
+                        nedge = nedge + 1
+                        if (ic == 0_int32) cycle
+                        nactive = nactive + 1
+                        w = abs(asum - ea_in)/fc
+                        worst_sum = max(worst_sum, w)
+                        if (ic/325 == 4) nbad_br = nbad_br + 1
+                        ! the device's cell totals against the host table's
+                        dev = 0.0_wp
+                        hst = 0.0_wp
+                        do s = 1, REMAP_NSLOT
+                           if (iedge == REMAP_EDGE_NORTH) then
+                              code = int(g%ws%src_n(i, j, s))
+                              if (code /= 0) dev(code) = dev(code) + g%ws%area_n(i, j, s)
+                           else
+                              code = int(g%ws%src_e(i, j, s))
+                              if (code /= 0) dev(code) = dev(code) + g%ws%area_e(i, j, s)
+                           end if
+                           code = int(sc(s))
+                           if (code /= 0) hst(code) = hst(code) + ar(s)
+                        end do
+                        worst_cell = max(worst_cell, maxval(abs(dev - hst))/fc)
+                     end do
+                  end do
+               end do
+            end do
+         end do
+         deallocate (qe, qn, hdpx, hdpy, hea_e, hea_n)
+         call geo_destroy(g)
+      end do
+     write (error_unit, "(a,i0,a,i0,a,es9.2,a,es9.2)") "  [remap_geom] degenerate corners: ", nactive, " active edges of ", nedge, &
+         ", worst |sum - edgearea|/areafac ", worst_sum, ", worst source-cell total vs host ", worst_cell
+      if (nactive < 2000) then
+         call test_failed(error, "degenerate: too few active edges were exercised")
+      else if (nbad_br /= 0) then
+         write (msg, "(a,i0,a)") "degenerate: ", nbad_br, " edges took the unadjusted branch of the flux adjustment"
+         call test_failed(error, trim(msg))
+      else if (.not. (worst_sum <= 1.0e-13_wp)) then
+         call test_failed(error, "degenerate: area sum off the prescribed edge area")
+      else if (.not. (worst_cell <= tolc)) then
+         call test_failed(error, "degenerate: a source-cell area differs from the host table")
+      end if
+   end subroutine test_degenerate
+
+   subroutine corner_kind(kind, noise, st, dx, dy, dpx, dpy)
+      !! The displacement (m) of one corner of the degenerate field.
+      integer, intent(in) :: kind
+      real(wp), intent(in) :: noise, dx, dy
+      integer(int64), intent(inout) :: st
+      real(wp), intent(out) :: dpx, dpy
+      real(wp) :: a, b, sa, sb
+
+      st = lcg_next(st)
+      a = 0.8_wp*(lcg_unit(st) - 0.5_wp)
+      st = lcg_next(st)
+      b = 0.8_wp*(lcg_unit(st) - 0.5_wp)
+      st = lcg_next(st)
+      sa = merge(1.0_wp, -1.0_wp, lcg_unit(st) > 0.5_wp)
+      st = lcg_next(st)
+      sb = merge(1.0_wp, -1.0_wp, lcg_unit(st) > 0.5_wp)
+      select case (kind)
+      case (0, 1)
+         ! a stagnation corner with round-off where the symmetry says zero (both components, either sign)
+         dpx = sa*noise*dx
+         dpy = sb*noise*dy
+      case (2)
+         dpx = 0.0_wp
+         dpy = 0.0_wp
+      case (3)
+         ! along x only: the departure points of an edge are on its axis (md = 0)
+         dpx = a*dx
+         dpy = 0.0_wp
+      case (4)
+         dpx = 0.0_wp
+         dpy = b*dy
+      case (5)
+         ! exactly half a cell to the east / north, on the corner of the next cell
+         dpx = 0.5_wp*dx
+         dpy = b*dy
+      case (6)
+         ! on the side line of the edge frame with a large ordinate, and noise in the other component: the failing case
+         dpx = sa*noise*dx
+         dpy = b*dy
+      case (7)
+         dpx = a*dx
+         dpy = sb*noise*dy
+      case default
+         dpx = a*dx
+         dpy = b*dy
+      end select
+   end subroutine corner_kind
 
    subroutine test_cfl(error)
       !! A corner displaced by more than a cell raises the bit at that corner (+-x, +-y, both

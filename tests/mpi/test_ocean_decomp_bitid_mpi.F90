@@ -132,7 +132,8 @@
 !!     atmosphere through the bulk forcing.  Also: the console ice totals (EFP) bitwise, a checkpoint/resume
 !!     leg, a NEGATIVE CONTROL per exchange the multi-rank step added (`ice_mr_test_skip`), a fault
 !!     injection (a NaN area on one rank; the import refusing on one rank: every rank must stop with the same
-!!     verdict) and the error-word reduction bound / unbound.  The tripolar fold stays refused (stage B);
+!!     verdict) and the error-word reduction bound / unbound.  On the tripolar cap (`cice_ice_fold`, `_fold_edge`; remap advection) the fold's
+!!     own controls: the stress pair folded as a scalar, its fold skipped, the fold-row flux pairing off;
 !!   * drain_ratio / drain_ratio_h3 - windowed tracer drain (ratio 4, ppm / ppm_h3
 !!     + diabatic_first = .false.) on a periodic channel, >1 sub-cycle pass;
 !!   * drain_ratio_weno5 / _weno7 / _weno9 - the same drain with the WENO swept
@@ -270,7 +271,8 @@ program test_ocean_decomp_bitid_mpi
    use rdb_ocean_reinit, only: ocean_balance_apply
    use rdb_ocean_fold_exchange, only: ocean_fold_exchange_grow_count
    use rdb_ice_cice_hooks, only: ice_cice_bind, ice_cice_step_result, ice_mr_test_skip, &
-                                 ICE_SKIP_STRESS_HALO, ICE_SKIP_STATE_HALO
+                                 ICE_SKIP_STRESS_HALO, ICE_SKIP_STATE_HALO, &
+                                 ICE_SKIP_FOLD_SIGN, ICE_SKIP_FOLD_PAIR, ICE_SKIP_FOLD_FLUX
    use rdb_ice_step_cice, only: ice_step_result_t, ICE_STEP_OK, ICE_STEP_FATAL, ICE_STEP_STAGE_FAILED, &
                                 ICE_STAGE_OCEAN_IMPORT
    use rdb_ice_transport_seam_comm, only: ice_err_combine_collective
@@ -369,7 +371,7 @@ program test_ocean_decomp_bitid_mpi
       !! `RDB_BITID_CASES`: run only the cases whose name contains this substring.
    type(comm_t) :: comm
    character(len=16), parameter :: SCHEMES(2) = [character(len=16) :: "pred_corr", "ssp_rk2"]
-   character(len=24), parameter :: CASES(95) = [character(len=24) :: &
+   character(len=24), parameter :: CASES(98) = [character(len=24) :: &
                                                 "island_basin", "weno7_pv", &
                                                 "periodic_channel_zstar", &
                                                 "visc_rem_zstar", &
@@ -404,6 +406,7 @@ program test_ocean_decomp_bitid_mpi
                                                 "cice_ice", "cice_ice_wall", "cice_ice_island", "cice_ice_bulk", &
                                                 "cice_ice_bulk_sw", "cice_ice_sph", "cice_ice_lat", "cice_ice_upwind", &
                                                 "cice_ice_pp", "cice_ice_r1", "cice_ice_epbl", &
+                                                "cice_ice_fold", "cice_ice_fold_edge", "cice_ice_bulk_fold", &
                                                 "cavity_zfixed", "cavity_sigma", &
                                                 "cavity_sigma_ratio2", "cavity_gall", "cavity_melt_only", "cavity_periodic", &
                                                 "cavity_combo", "wetdry_shoal", &
@@ -1336,7 +1339,7 @@ contains
                "north = 'tripolar_fold' /"//NL
       case ("bulk_flux", "bulk_flux_ice", "bulk_flux_fold", "bulk_flux_sw", "bulk_flux_fw", &
             "bulk_flux_ice_fw", "bulk_flux_bl", "bulk_flux_bl_epbl", "bulk_flux_bl_sw", "bulk_flux_bl_fold", &
-            "bulk_flux_bl_ratio2")
+            "bulk_flux_bl_ratio2", "bulk_flux_ice_fold")
          ! Atmosphere-driven bulk forcing (`&ocean_atm_forcing_nml` +
          ! `&ocean_bulk_flux_nml`): nine prescribed atmospheric fields from
          ! files the test writes (spatially NON-uniform, non-symmetric in
@@ -1394,16 +1397,18 @@ contains
             nml = nml//"&ocean_vmix_nml use_kpp = .false. /"//NL// &
                   "&ocean_epbl_nml enable = .true. /"//NL
          end if
-         if (label == "bulk_flux_ice" .or. label == "bulk_flux_ice_fw") then
+         if (label == "bulk_flux_ice" .or. label == "bulk_flux_ice_fw" .or. label == "bulk_flux_ice_fold") then
+            wl = ATM_COLD_LIST
+            if (label == "bulk_flux_ice_fold") wl = ATM_CRSE_COLD_LIST
             nml = nml// &
                   "&tracer_nml initial_temperature = -1.83, initial_salinity = 34.0, "// &
                   "T_init_surface = -1.82, T_init_bottom = -1.835 /"//NL// &
                   "&ocean_atm_forcing_nml enable = .true., time_mode = 'interannual', "// &
-                  "filelist_tas = '"//ATM_COLD_LIST//"', filelist_huss = '"//ATM_COLD_LIST// &
-                  "', filelist_uas = '"//ATM_COLD_LIST//"', filelist_vas = '"//ATM_COLD_LIST// &
-                  "', filelist_psl = '"//ATM_COLD_LIST//"', filelist_rlds = '"//ATM_COLD_LIST// &
-                  "', filelist_rsds = '"//ATM_COLD_LIST//"', filelist_prra = '"//ATM_COLD_LIST// &
-                  "', filelist_prsn = '"//ATM_COLD_LIST//"' /"//NL// &
+                  "filelist_tas = '"//trim(wl)//"', filelist_huss = '"//trim(wl)// &
+                  "', filelist_uas = '"//trim(wl)//"', filelist_vas = '"//trim(wl)// &
+                  "', filelist_psl = '"//trim(wl)//"', filelist_rlds = '"//trim(wl)// &
+                  "', filelist_rsds = '"//trim(wl)//"', filelist_prra = '"//trim(wl)// &
+                  "', filelist_prsn = '"//trim(wl)//"' /"//NL// &
                   "&ocean_vmix_nml dt_therm_ratio = 2 /"//NL// &
                   "&ocean_ice_nml enable = .true., ncat = 5, nk_ice = 2, "// &
                   "restore_lambda = 20.0, dynamics = .true., evp_sub_steps = 30, "// &
@@ -1428,7 +1433,8 @@ contains
          if (label == "bulk_flux_bl_ratio2") then
             nml = nml//"&ocean_vmix_nml dt_therm_ratio = 2, diabatic_first = .false. /"//NL
          end if
-         if (label == "bulk_flux_fold" .or. label == "bulk_flux_bl_fold") then
+         if (label == "bulk_flux_fold" .or. label == "bulk_flux_bl_fold" .or. &
+             label == "bulk_flux_ice_fold") then
             ! Coarse (30 x 10 degree) atmosphere source.  The default
             ! conservative flux regrid (`fluxes_regrid` is not set) overflows
             ! its per-target-cell candidate cap (`REGRID_NMAX_CAP`) on the
@@ -1584,7 +1590,39 @@ contains
          call replace_once(nml, "conc_config = 'uniform', h_ice = 1.0, conc = 0.7", &
                            "conc_config = 'latitudes', h_ice = 1.0, conc = 0.7, arctic_edge = 59.0")
       end if
-      if (index(label, "cice_ice_bulk") == 1) then
+      if (index(label, "cice_ice_fold") == 1) then
+         ! the tripolar cap of `sea_ice_fold` (59N-83N, phi_join 74N, double-Drake land reaching the fold line, closed by
+         ! the north fold; 30 x 24, so 2x1 is 15|15 and 4x1 is 8/8/7/7) under the CICE-port ice: stage B
+         call replace_once(nml, "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)// &
+                           ", nghost = 3, dx = 20000.0, dy = 20000.0 /", &
+                           "&grid_nml nx = 30, ny = 24, nghost = 3, dx = 12.0, dy = 1.0 /"//NL// &
+                           "&ocean_grid_nml grid_config = 'tripolar', lon_west = 0.0, lat_south = 59.0, "// &
+                           "phi_join = 74.0, lon_pole = 0.0, rad_earth = 6.378e6, "// &
+                           "coriolis_scheme = 'planetary' /")
+         call replace_once(nml, "&physics_nml coriolis_f = 1.4e-4, wind_stress_x = 0.1, wind_stress_y = 0.04 /", &
+                           "&physics_nml wind_stress_x = 0.1, wind_stress_y = 0.04 /")
+         call replace_once(nml, "&ocean_topo_nml topo_config = 'seamount', max_depth = 1000.0, edge_depth = 800.0, "// &
+                           "slope_scale = 60000.0 /", "&ocean_topo_nml topo_config = 'double_drake', max_depth = 1000.0, "// &
+                           "slope_scale = 0.2 /")
+         call replace_once(nml, "south = 'wall', north = 'wall' /", "south = 'wall', north = 'tripolar_fold' /")
+         call replace_once(nml, "&ocean_thermo_nml enable_thermodynamics = .true. /", &
+                           "&ocean_thermo_nml enable_thermodynamics = .true., q_heat = -100.0 /")
+      end if
+      if (label == "cice_ice_fold_edge") then
+         ! ice only poleward of 66 N on a column at the liquidus without cooling: the southern rows carry no ice, so
+         ! on a 1x4 split a tile is ice free (an empty tile must stay empty and still take part in every exchange,
+         ! the fold's included) and the cold start seeds the cap through the fold
+         call replace_once(nml, "conc_config = 'uniform', h_ice = 1.0, conc = 0.7", &
+                           "conc_config = 'latitudes', h_ice = 1.0, conc = 0.7, arctic_edge = 66.0")
+         call replace_once(nml, "q_heat = -100.0", "q_heat = 0.0")
+      end if
+      if (label == "cice_ice_bulk_fold") then
+         ! the prescribed (regridded, non-uniform) cold atmosphere through the bulk forcing on the tripolar cap,
+         ! with the CICE-port ice: the bulk-forcing / atmosphere-prepare path across the fold
+         nml = case_nml("bulk_flux_ice_fold", scheme, px, py)
+         call swap_to_cice(nml)
+      end if
+      if (label == "cice_ice_bulk" .or. label == "cice_ice_bulk_sw") then
          ! the lon-lat re-entrant channel of `bulk_flux_ice` (non-uniform prescribed atmosphere, regridded per
          ! rank) with the CICE-port ice in place of the SIS2 one
          nml = case_nml("bulk_flux_ice", scheme, px, py)
@@ -2126,18 +2164,23 @@ contains
       !! and by `cice_ice_bulk`, which fails without it).
       type(snap_t), intent(in) :: ref
       character(len=*), intent(in) :: label, scheme
-      integer :: skips(2), nskip, is, nbad, nfin, bit
+      integer :: skips(4), nskip, is, nbad, nfin, bit
       integer :: tot(2)
       type(snap_t) :: dec
       logical :: ok
       character(len=96) :: tag
 
-      skips = [ICE_SKIP_STRESS_HALO, ICE_SKIP_STATE_HALO]
+      skips = [ICE_SKIP_STRESS_HALO, ICE_SKIP_STATE_HALO, 0, 0]
       nskip = 2
+      if (label == "cice_ice_fold") then
+         ! the fold: the stress pair's sign, its fold exchange, the fold-row flux pairing of the transport, the state halo
+         skips = [ICE_SKIP_FOLD_SIGN, ICE_SKIP_FOLD_PAIR, ICE_SKIP_FOLD_FLUX, ICE_SKIP_STATE_HALO]
+         nskip = 4
+      end if
       do is = 1, nskip + 1
          ! the last control of `cice_ice` repeats the stress skip under a y-only split (1 x nprocs)
          bit = skips(min(is, nskip))
-         if (is > nskip) bit = ICE_SKIP_STRESS_HALO
+         if (is > nskip) bit = merge(ICE_SKIP_FOLD_SIGN, ICE_SKIP_STRESS_HALO, label == "cice_ice_fold")
          ice_mr_test_skip = bit
          if (is > nskip) then
             call run_one(case_nml(label, scheme, 1, nprocs), nprocs, rank, dec, ok)
@@ -2640,7 +2683,8 @@ contains
       !! The sea-ice-on-the-tripolar-cap cases (A7).
       character(len=*), intent(in) :: label
       is_ice_fold_case = label == "sea_ice_fold" .or. label == "sea_ice_fold_nodyn" .or. &
-                         label == "sea_ice_cdyn_fold" .or. label == "sea_ice_cdyn_edge"
+                         label == "sea_ice_cdyn_fold" .or. label == "sea_ice_cdyn_edge" .or. &
+                         index(label, "cice_ice_fold") == 1 .or. label == "cice_ice_bulk_fold"
    end function is_ice_fold_case
 
    subroutine check_ice_seam(ref, tag)
@@ -2664,7 +2708,7 @@ contains
       have_v = .false.
       jf = ref%ng + ref%nyl + 1
       do e = 1, ref%n
-         if (trim(ref%f(e)%tag) == "ice_m_ice") then
+         if (trim(ref%f(e)%tag) == "ice_m_ice" .or. trim(ref%f(e)%tag) == "ice_vicen") then
             seam_mice = maxval(abs(ref%f(e)%a(ref%ng + 1:ref%ng + ref%nxl, &
                                               ref%ng + ref%nyl, :)))
          else if (trim(ref%f(e)%tag) == "ice_v_ice") then
@@ -2708,7 +2752,8 @@ contains
       ! 9 | 10 ; 5|6, 10|11, 14|15 (y), as the global face index of the seam face.
       seam_x = [14, 8, 15, 21]
       seam_y = [10, 6, 11, 15]
-      if (label == "sea_ice_cdyn_fold" .or. label == "sea_ice_cdyn_edge") then
+      if (label == "sea_ice_cdyn_fold" .or. label == "sea_ice_cdyn_edge" .or. label == "cice_ice_fold" .or. &
+          label == "cice_ice_bulk_fold") then
          ! the cap grid is 30 x 24
          seam_x = [16, 9, 17, 24]
          seam_y = [13, 7, 13, 19]
@@ -2804,7 +2849,7 @@ contains
       end if
 
       if (is_ice_fold_case(label)) call check_ice_seam(ref, trim(label)//"/"//scheme)
-      if (index(label, "sea_ice_cdyn") == 1 .or. (index(label, "cice_ice") == 1 .and. label /= "cice_ice_lat")) &
+      if (index(label, "sea_ice_cdyn") == 1 .or. (index(label, "cice_ice") == 1 .and. label /= "cice_ice_lat" .and. label /= "cice_ice_fold_edge")) &
          call check_cdyn_seams(ref, label, trim(label)//"/"//scheme)
       if (index(label, "cice_ice") == 1) call check_cice_nonvacuous(ref, label, trim(label)//"/"//scheme)
       if (is_wetdry_case(label)) then
@@ -2896,7 +2941,7 @@ contains
          end if
          if (sum(glob) > 0) n_fail = n_fail + 1
       end do
-      if (nprocs >= 2 .and. trim(scheme) == trim(SCHEMES(1)) .and. label == "cice_ice") &
+      if (nprocs >= 2 .and. trim(scheme) == trim(SCHEMES(1)) .and. (label == "cice_ice" .or. label == "cice_ice_fold")) &
          call cice_negative_controls(ref, label, scheme)
       ! The real regression gate: the single-rank reference's budget
       ! against every decomposed factorization, bit-for-bit, at whatever
@@ -3278,14 +3323,14 @@ contains
    end subroutine swap_to_cice
 
    subroutine check_cice_fences()
-      !! What stage A does NOT cover stays refused at configure on several ranks: the named-term ledger (its
-      !! sums are per rank) and the tripolar fold (stage B).  Each refused namelist is the accepted `cice_ice`
+      !! What stages A and B do NOT cover stays refused at configure on several ranks: the named-term ledger (its
+      !! sums are per rank) and the upwind advection across the tripolar fold.  Each refused namelist is the accepted `cice_ice`
       !! one plus ONE knob, so the refusal is that knob's, and the accepted twin proves the base is valid.
       character(len=*), parameter :: NL = new_line("a")
       character(len=:), allocatable :: base, nml
       type(config_t) :: cfg
       integer :: ierr, k
-      character(len=24), parameter :: WHAT(2) = [character(len=24) :: "ledger = .true.", "tripolar fold"]
+      character(len=24), parameter :: WHAT(2) = [character(len=24) :: "ledger = .true.", "upwind across the fold"]
 
       base = cice_ice_nml("cice_ice", "pred_corr", nprocs, 1)
       call read_config_from_string(base, cfg, ierr=ierr)
@@ -3302,17 +3347,17 @@ contains
             ! (the group is edited in place: a second `&ocean_ice_nml` would fail to PARSE, a vacuous refusal)
             call replace_once(nml, "hfreeze = 10.0, dynamics", "hfreeze = 10.0, ledger = .true., dynamics")
          else
-            ! the tripolar-cap sea-ice case (accepted and bitwise under the SIS2 scheme: its twin below) with
-            ! only the ice groups swapped
-            nml = case_nml("sea_ice_fold", "pred_corr", nprocs, 1)
+            ! the accepted tripolar-cap twin (`cice_ice_fold`, stage B) with ONLY the advection swapped to the upwind
+            ! scheme, whose fold-row face flux is not paired
+            nml = cice_ice_nml("cice_ice_fold", "pred_corr", nprocs, 1)
             call read_config_from_string(nml, cfg, ierr=ierr)
             if (ierr == OCEAN_STATUS_OK) call validate_config(cfg, ierr)
             if (ierr /= OCEAN_STATUS_OK) then
-               write (*, '(a,i0)') "FAIL cice fence: the SIS2 tripolar twin is refused, rank ", rank
+               write (*, '(a,i0)') "FAIL cice fence: the accepted tripolar twin is refused, rank ", rank
                n_fail = n_fail + 1
                cycle
             end if
-            call swap_to_cice(nml)
+            call replace_once(nml, "advection = 'remap'", "advection = 'upwind'")
          end if
          call read_config_from_string(nml, cfg, ierr=ierr)
          if (ierr == OCEAN_STATUS_OK) call validate_config(cfg, ierr)
