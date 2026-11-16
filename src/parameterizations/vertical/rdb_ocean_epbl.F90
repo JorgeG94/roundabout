@@ -952,7 +952,7 @@ contains
       !!          sensitivities per layer (downward pressure sum).
       !!   outer: MLD root-find (false position / bisection) —
       !!          mstar and the mixing-length shape depend on MLD.
-      !!   sweep: interfaces Ki = nz..2 downward.  Decay mech TKE
+      !!   sweep: interfaces Ki = k_sfc..2 downward (k_sfc = first live layer, nz when live).  Decay mech TKE
       !!          across the layer above; rotation-reduce the
       !!          convective reservoir; closed-form energy solve for
       !!          the largest affordable Kd (the gravity-wave
@@ -1134,57 +1134,68 @@ contains
             ! cost of homogenising that exponentially-distributed heating
             ! is `Phi(h/zeta) <= 1` of the skin cost; the skin identity
             ! `rho0²·h·dsv_dt ≡ rho0·dcolht_t` makes this division-free.
-            if (sw_ctke_active .and. sw_chl) then
-               ! Chlorophyll N-band ledger: per-band absorbed heat (same
-               ! difference form + opaque bed as the deposition kernel) and
-               ! the in-layer PE-cost shape at that band's optical depth.
-               d_bot_sw = d_top_sw + hk
-               phi_sum = 0.0_wp
-               do nb_i = 1, sw_nb
-                  ea = rdb_sm_exp(-sw_kappa(i, j, nb_i)*d_top_sw)
+            ! Dead layers above the first live one hold no water: they carry
+            ! no SW cost and do not advance the irradiance depth, so the SW
+            ! ledger starts at the live surface layer's top.
+            if (k > k_sfc) then
+               if (sw_ctke_active) this%ctke_sw%data(i, j, k) = 0.0_wp
+            else
+               if (sw_ctke_active .and. sw_chl) then
+                  ! Chlorophyll N-band ledger: per-band absorbed heat (same
+                  ! difference form + opaque bed as the deposition kernel) and
+                  ! the in-layer PE-cost shape at that band's optical depth.
+                  d_bot_sw = d_top_sw + hk
+                  phi_sum = 0.0_wp
+                  do nb_i = 1, sw_nb
+                     ea = rdb_sm_exp(-sw_kappa(i, j, nb_i)*d_top_sw)
+                     if (k > ms%k_bot(i, j)) then
+                        eb = rdb_sm_exp(-sw_kappa(i, j, nb_i)*d_bot_sw)
+                     else
+                        eb = 0.0_wp   ! opaque bed: absorb the remainder
+                     end if
+                     heat_nb = i0_col*sw_frac(nb_i)*inv_rho0_cp*dt*(ea - eb)
+                     phi_sum = phi_sum + heat_nb*sw_pe_cost_shape(hk*sw_kappa(i, j, nb_i))
+                  end do
+                  this%ctke_sw%data(i, j, k) = &
+                     -0.5_wp*GRAVITY*this%rho0*this%dcolht_t%data(i, j, k)*phi_sum
+                  if (k < ms%k_bot(i, j)) this%ctke_sw%data(i, j, k) = 0.0_wp
+                  d_top_sw = d_bot_sw
+               else if (sw_ctke_active) then
+                  d_bot_sw = d_top_sw + hk
                   if (k > ms%k_bot(i, j)) then
-                     eb = rdb_sm_exp(-sw_kappa(i, j, nb_i)*d_bot_sw)
+                     ! The layer-top transmissions are the previous layer's
+                     ! bottom ones (carried), so each interface is evaluated once.
+                     e1_bot = rdb_sm_exp(-d_bot_sw/sw_zeta1)
+                     e2_bot = rdb_sm_exp(-d_bot_sw/sw_zeta2)
+                     heat_sw1 = i0_col*sw_R*inv_rho0_cp*dt*(e1_top - e1_bot)
+                     heat_sw2 = i0_col*(1.0_wp - sw_R)*inv_rho0_cp*dt*(e2_top - e2_bot)
+                     e1_top = e1_bot
+                     e2_top = e2_bot
                   else
-                     eb = 0.0_wp   ! opaque bed: absorb the remainder
+                     ! opaque bed: absorb the whole remaining irradiance.
+                     heat_sw1 = i0_col*sw_R*inv_rho0_cp*dt*e1_top
+                     heat_sw2 = i0_col*(1.0_wp - sw_R)*inv_rho0_cp*dt*e2_top
                   end if
-                  heat_nb = i0_col*sw_frac(nb_i)*inv_rho0_cp*dt*(ea - eb)
-                  phi_sum = phi_sum + heat_nb*sw_pe_cost_shape(hk*sw_kappa(i, j, nb_i))
-               end do
-               this%ctke_sw%data(i, j, k) = &
-                  -0.5_wp*GRAVITY*this%rho0*this%dcolht_t%data(i, j, k)*phi_sum
-               if (k < ms%k_bot(i, j)) this%ctke_sw%data(i, j, k) = 0.0_wp
-               d_top_sw = d_bot_sw
-            else if (sw_ctke_active) then
-               d_bot_sw = d_top_sw + hk
-               if (k > ms%k_bot(i, j)) then
-                  ! The layer-top transmissions are the previous layer's
-                  ! bottom ones (carried), so each interface is evaluated once.
-                  e1_bot = rdb_sm_exp(-d_bot_sw/sw_zeta1)
-                  e2_bot = rdb_sm_exp(-d_bot_sw/sw_zeta2)
-                  heat_sw1 = i0_col*sw_R*inv_rho0_cp*dt*(e1_top - e1_bot)
-                  heat_sw2 = i0_col*(1.0_wp - sw_R)*inv_rho0_cp*dt*(e2_top - e2_bot)
-                  e1_top = e1_bot
-                  e2_top = e2_bot
-               else
-                  ! opaque bed: absorb the whole remaining irradiance.
-                  heat_sw1 = i0_col*sw_R*inv_rho0_cp*dt*e1_top
-                  heat_sw2 = i0_col*(1.0_wp - sw_R)*inv_rho0_cp*dt*e2_top
+                  this%ctke_sw%data(i, j, k) = &
+                     -0.5_wp*GRAVITY*this%rho0*this%dcolht_t%data(i, j, k)* &
+                     (heat_sw1*sw_pe_cost_shape(hk/sw_zeta1) + &
+                      heat_sw2*sw_pe_cost_shape(hk/sw_zeta2))
+                  ! Below the opaque bed row: nothing arrives.  `k_bot ≡ 1`
+                  ! off z_fixed, so this never fires there (bit-identical).
+                  if (k < ms%k_bot(i, j)) this%ctke_sw%data(i, j, k) = 0.0_wp
+                  d_top_sw = d_bot_sw
                end if
-               this%ctke_sw%data(i, j, k) = &
-                  -0.5_wp*GRAVITY*this%rho0*this%dcolht_t%data(i, j, k)* &
-                  (heat_sw1*sw_pe_cost_shape(hk/sw_zeta1) + &
-                   heat_sw2*sw_pe_cost_shape(hk/sw_zeta2))
-               ! Below the opaque bed row: nothing arrives.  `k_bot ≡ 1`
-               ! off z_fixed, so this never fires there (bit-identical).
-               if (k < ms%k_bot(i, j)) this%ctke_sw%data(i, j, k) = 0.0_wp
-               d_top_sw = d_bot_sw
             end if
             if (k == k_sfc) then
                dsv_dt_sfc = dsv_dt_k
                dsv_ds_sfc = dsv_ds_k
             end if
-            pres = pres + dpres
-            h_sum = h_sum + hk
+            ! The column (pressure stack, total thickness) is measured from
+            ! the first live layer; for k_sfc == nz this adds every term.
+            if (k <= k_sfc) then
+               pres = pres + dpres
+               h_sum = h_sum + hk
+            end if
          end do
          h_sum = h_sum + H_NEGLECT
 
@@ -1207,7 +1218,7 @@ contains
          ! carries only the NON-penetrating heat `q_nonpen = q_heat - I0`;
          ! the SW absorbed within the surface layer is the separately
          ! computed `ctke_sw(k_sfc)` (Phi-weighted, <= the all-skin charge).
-         ! I0 = 0 ⇒ q_nonpen = q_heat and ctke_sw(nz) = 0 ⇒ the else
+         ! I0 = 0 ⇒ q_nonpen = q_heat and ctke_sw(k_sfc) = 0 ⇒ the else
          ! branch is character-for-character the legacy line.
          if (sw_ctke_active) then
             q_nonpen_kin = inv_rho0_cp*(Q_heat_field(i, j) - i0_col)
@@ -1339,7 +1350,7 @@ contains
                   this%kd_int(i, j, ki) = 0.0_wp
                end do
 
-               ! (D) downward sweep over interfaces Ki = nz .. 2.
+               ! (D) downward sweep over interfaces Ki = k_sfc .. 2.
                ! Layer above the interface: ka = Ki; below: kb = Ki-1.
                do ki = k_sfc, 2, -1
                   ka = ki
