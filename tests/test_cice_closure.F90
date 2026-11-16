@@ -347,7 +347,7 @@ contains
 
       associate (sf => engine%state%surface_flux)
          !$acc update self(sf%heat_ice, sf%sw_ice, sf%salt_ice, sf%Q_heat, sf%Q_salt)
-         !$acc update self(sf%q_sw, sf%q_lw, sf%q_lat, sf%q_sens, sf%evap, sf%lprec, sf%fprec)
+         !$acc update self(sf%q_sw, sf%q_lw, sf%q_lat, sf%q_sens, sf%q_fus, sf%evap, sf%lprec, sf%fprec)
          !$acc update self(sf%heat_content_lprec, sf%heat_content_fprec)
       end associate
    end subroutine pull_sf
@@ -882,7 +882,7 @@ contains
    subroutine global_case(error, nml, prescribed, nsteps, label)
       !! ocean + ice on a closed basin.  The totals come from the STATE (ocean tracers, the ice's EFP sums); the
       !! flows from the flux arrays; the open-water atmosphere from the BULK-FORCING outputs (`q_sw`, `q_lw`,
-      !! `q_lat`, `q_sens`, the precipitation enthalpies, `cp T evap`), not from the assembler; the frazil clamp
+      !! `q_lat`, `q_sens`, `q_fus` (latent heat of melting the open-water snow), the precipitation enthalpies, `cp T evap`), not from the assembler; the frazil clamp
       !! from the ocean's own accumulator.  The ledger enters only through its SOURCE terms (the atmosphere
       !! exchange of the ice and the new-ice latent heat); its residual `R` is neither subtracted nor used: the
       !! vertical solver's tolerance is a BOUND on the closure.
@@ -995,7 +995,8 @@ contains
                   qs_n = qs_n + DT*area(i, j)*sf%Q_salt(i, j)
                   ! the open water's heat from the bulk-forcing outputs (the assembler's formula, rebuilt from them)
                   open_forc = open_forc + DT*area(i, j)*(sf%q_sw(i, j) + sf%q_lw(i, j) + sf%q_lat(i, j) &
-                                                         + sf%q_sens(i, j) + sf%heat_content_lprec(i, j) &
+                                                         + sf%q_sens(i, j) + sf%q_fus(i, j) &
+                                                         + sf%heat_content_lprec(i, j) &
                                                          + sf%heat_content_fprec(i, j) + cp_w*sst*sf%evap(i, j))
                   fsalt_n = fsalt_n + DT*area(i, j)*f%fsalt(i, j)
                   fresh_n = fresh_n + DT*area(i, j)*f%fresh(i, j)
