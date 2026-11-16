@@ -647,14 +647,14 @@ contains
                              trim(bt_excl_reason)//" active)")
          else
             call logger%info("BT march-in: bt_halo auto -> 0 (opt-in: set "// &
-                             "&ocean_bt_nml bt_halo = 8 explicitly; it is not "// &
-                             "bit-reproducible across decompositions)")
+                             "&ocean_bt_nml bt_halo = 8 explicitly; bitwise equal to "// &
+                             "the one-rank run on every configuration it accepts)")
          end if
       end if
       if (rank == 0 .and. bt_halo_res > 0 .and. csize > 1) then
-         call logger%warning("BT march-in ON (bt_halo = "//to_string(bt_halo_res)// &
-                             "): answers are NOT bit-identical to the serial run over "// &
-                             "variable bathymetry or with open boundaries.")
+         call logger%info("BT march-in ON (bt_halo = "//to_string(bt_halo_res)// &
+                          "): bitwise equal to the one-rank bt_halo = 0 run on every "// &
+                          "configuration validate_config accepts.")
       end if
 
       call engine%grid%init(engine%decomp%nx_local, engine%decomp%ny_local, &
@@ -1886,6 +1886,10 @@ contains
                           to_string(engine%state%dyn%bt_work%inhalo_stride)// &
                           " nghost="//to_string(engine%grid%nghost)// &
                           " n_inner="//to_string(cfg%ocean%bt%n_inner))
+         call env_int_or_zero("RDB_BT_INHALO_POISON", engine%state%dyn%bt_work%inhalo_poison)
+      end if
+      if (cfg%ocean%bt%bt_halo > 0) then
+         ! Same hook for the wide-halo march-in (see `inhalo_poison`).
          call env_int_or_zero("RDB_BT_INHALO_POISON", engine%state%dyn%bt_work%inhalo_poison)
       end if
       if (cfg%ocean%bt%bt_halo > 0) then

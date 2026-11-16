@@ -1609,17 +1609,6 @@ contains
                            "fold, once again via the linear piston law)")
          has_error = .true.
       end if
-      ! Decomposition: av_rem/bt_rem are built on the SAME normal-width
-      ! face stencil visc_rem occupies (valid after PR-1's halo refresh);
-      ! the wide-halo BT clone's metrics_w/halo-widened arrays carry no
-      ! av_rem/visc_rem ghost width yet — same posture as porous.
-      if (ocean_bt_rem_from_visc_rem_on(cfg) .and. cfg%ocean%bt%bt_halo > 0) then
-         call logger%error("&ocean_bt_nml bt_rem_from_visc_rem=.true. (or "// &
-                           "visc_rem_chain=.true.) is mutually exclusive with "// &
-                           "bt_halo > 0 (the wide-halo BT clone carries no "// &
-                           "av_rem/visc_rem ghost-width statistics, like porous)")
-         has_error = .true.
-      end if
       ! D3: BT_STRONG_DRAG / RESCALE_STRONG_DRAG are refinements OF the
       ! av_rem chain, not independent knobs.
       if (cfg%ocean%bt%strong_drag .and. .not. ocean_bt_rem_from_visc_rem_on(cfg)) then
@@ -3834,6 +3823,17 @@ contains
                               "with open boundaries)")
             has_error = .true.
          end if
+         if (any_tidal_edge(cfg)) then
+            ! `bt_wide_substep` forwards no model time to the fast loop, so a
+            ! tidal edge's eta target is evaluated at t = 0 on every substep of
+            ! every step: frozen, and O(1) wrong against the one-rank run
+            ! (measured, `bthx_tidal_*` in test_ocean_decomp_bitid_mpi).
+            call logger%error("&ocean_bt_nml bt_halo > 0 is mutually exclusive "// &
+                              "with a tidal &ocean_bc_nml edge (the wide-halo fast "// &
+                              "loop carries no model time, so the tidal eta target "// &
+                              "would stay frozen at its t = 0 value)")
+            has_error = .true.
+         end if
          if (cfg%ocean%cavity_dyn%enable) then
             ! Same failure mode as porous, one level up: `metrics_w` is
             ! re-filled from the grid formula and carries no `z_draft`, so
@@ -3853,17 +3853,6 @@ contains
                               "with grid_config='"//trim(cfg%ocean%grid%grid_config)// &
                               "' (file-based metrics cannot be re-filled on a wide grid; "// &
                               "cartesian/spherical formula fills supported)")
-            has_error = .true.
-         end if
-         if (ocean_bt_rem_from_visc_rem_on(cfg)) then
-            ! Same check as above, from the bt_halo side — belt-and-
-            ! braces so the error fires regardless of which knob a reader
-            ! finds first in the namelist.  PR-3 (D1): reads through the
-            ! helper, so visc_rem_chain = .true. is caught too.
-            call logger%error("&ocean_bt_nml bt_halo > 0 is mutually exclusive "// &
-                              "with bt_rem_from_visc_rem=.true. (or "// &
-                              "visc_rem_chain=.true.; the wide-halo BT clone carries "// &
-                              "no av_rem/visc_rem ghost-width statistics, like porous)")
             has_error = .true.
          end if
       end if
@@ -4468,10 +4457,11 @@ contains
       !! width.
       !!   requested == BT_HALO_AUTO_SENTINEL (-1, the default) => AUTO: 0.
       !!     The march-in used to switch itself on (BT_HALO_AUTO_WIDTH) on
-      !!     every compatible multi-rank run.  It is not bit-reproducible
-      !!     against the serial run over variable bathymetry or with open
-      !!     boundaries (`test_ocean_decomp_bitid_mpi`), so a default
-      !!     multi-rank run must not pick it: AUTO is off, serial or not.
+      !!     every compatible multi-rank run.  It is bitwise equal to the
+      !!     one-rank run on the configurations `validate_config` accepts
+      !!     (`bth_*` cases of `test_ocean_decomp_bitid_mpi`), but it stays
+      !!     opt-in until the remaining exclusions are lifted and the
+      !!     default is flipped on its own: AUTO is off, serial or not.
       !!   requested >= 0 (user set it explicitly) => returned UNCHANGED; the
       !!     fail-loud exclusion checks in validate_config police an explicit
       !!     bt_halo > 0 against an incompatible feature (user asked for the
@@ -4492,6 +4482,17 @@ contains
       if (requested >= 0) width = requested
       if (compute_size < 0 .and. exclusion_active) width = 0   ! never taken; keeps the dummies referenced
    end function resolve_bt_halo
+
+   pure function any_tidal_edge(cfg) result(any_td)
+      !! True iff any of the four `&ocean_bc_nml` edges is `tidal`.
+      use rdb_ocean_boundary_types, only: ocean_bc_type_from_string, OBC_TIDAL
+      type(config_t), intent(in) :: cfg
+      logical :: any_td
+      any_td = ocean_bc_type_from_string(cfg%ocean%bc%west) == OBC_TIDAL .or. &
+               ocean_bc_type_from_string(cfg%ocean%bc%east) == OBC_TIDAL .or. &
+               ocean_bc_type_from_string(cfg%ocean%bc%south) == OBC_TIDAL .or. &
+               ocean_bc_type_from_string(cfg%ocean%bc%north) == OBC_TIDAL
+   end function any_tidal_edge
 
    pure function any_chapman_edge(cfg) result(any_ch)
       !! True iff any of the four `&ocean_bc_nml` edges is `chapman`.
@@ -4531,6 +4532,8 @@ contains
          reason = "porous enable"
       else if (any_chapman_edge(cfg)) then
          reason = "chapman &ocean_bc_nml edge"
+      else if (any_tidal_edge(cfg)) then
+         reason = "tidal &ocean_bc_nml edge"
       else if (cfg%ocean%cavity_dyn%enable) then
          ! The wide BT clone rebuilds `metrics_w` from the grid formula and
          ! carries no `z_draft`, so its reference depth would be the BED —

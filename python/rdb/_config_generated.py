@@ -4107,7 +4107,7 @@ class OceanBt(Group):
 
     bt_rem_from_visc_rem = Bool(
         'bt_rem_from_visc_rem',
-        doc="bt_rem_u/v = mask*av_rem**(1/n_inner), av_rem the frhat-weighted depth mean of visc_rem (MOM6's barotropic solver); self-sufficient (the producer runs whenever this is on), mutually exclusive with substep_drag and bt_halo > 0. An equivalent subset of visc_rem_chain, kept for granular testing -- prefer visc_rem_chain.",
+        doc="bt_rem_u/v = mask*av_rem**(1/n_inner), av_rem the frhat-weighted depth mean of visc_rem (MOM6's barotropic solver); self-sufficient (the producer runs whenever this is on), mutually exclusive with substep_drag. An equivalent subset of visc_rem_chain, kept for granular testing -- prefer visc_rem_chain.",
         units='',
         required=False,
         default=False,
@@ -4284,7 +4284,7 @@ class OceanBt(Group):
 
     bt_halo = Int(
         'bt_halo',
-        doc='Wide-halo BT march-in width (-1 = auto: resolves to 0, the march-in is opt-in; 0 = explicit off, bit-identical)',
+        doc='Wide-halo BT march-in width (-1 = auto: resolves to 0, the march-in is opt-in; 0 = explicit off). > 0: bitwise equal to the one-rank bt_halo = 0 run on walls, periodic and Flather edges, land and spherical grids; refused with tides, psurf, tidal/Chapman edges, porous, cavity, wet/dry, closed faces, supergrid/tripolar',
         units='',
         required=False,
         default=-1,

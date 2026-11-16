@@ -120,7 +120,7 @@ The ocean path is **not** bound by the gravity-wave CFL. The barotropic (gravity
 | Fixed outer step | Shipped | `&time_nml dt_fixed > 0` | Required. There is no adaptive-CFL helper on this path. |
 | Barotropic sub-cycling | Shipped | `&ocean_bt_nml auto_n_inner`, `n_inner` | `n_inner` is set once at configure and is never re-derived. CFL truncation is counted, not controlled. |
 | Backward-Euler vertical viscosity and diffusion | Shipped | `&ocean_vdiff_nml implicit_drag`, `implicit_stress` | Stable for any layer thickness. Bottom drag and wind stress can be folded into the same solve. |
-| Viscous-remnant chain (MOM6 BBL glue plus barotropic damping) | Shipped, **on by default** | `&ocean_vdiff_nml hvel_mom6`, `bbl_glue`; `&ocean_bt_nml visc_rem_chain` | Refused with `substep_drag` and with `bt_halo > 0`. Setting all three knobs to `.false.` restores the old path. |
+| Viscous-remnant chain (MOM6 BBL glue plus barotropic damping) | Shipped, **on by default** | `&ocean_vdiff_nml hvel_mom6`, `bbl_glue`; `&ocean_bt_nml visc_rem_chain` | Refused with `substep_drag`. Composes with `bt_halo > 0` (the fast loop reads only the wide-exchanged `bt_rem` and force). Setting all three knobs to `.false.` restores the old path. |
 | Per-layer retro-correction of the baroclinic pressure | Shipped, opt-in | `&ocean_bt_nml correction_bc_pgf` | Refused unless the PGF is `fv_mom6`. |
 | Barotropic correction weights | Uniform increment only | – | The h-weighted fold (`correction_h_weighted`) and `correction_visc_rem` are retired and refused. `accel_visc_rem` is retired and refused. |
 | Implicit (semi-implicit) free surface | Not implemented | – | By design. The fast mode is sub-cycled explicitly. |
@@ -488,7 +488,7 @@ Under `z_fixed` plus a cavity, melt and top drag are accepted, and `kappa_h /= 0
 | Restart on a different rank count | **Not implemented** | – | – |
 | Parallel (collective) NetCDF | **Not implemented** | – | Output is per rank, merged offline by `tools/merge_output.py`. |
 | CUDA-aware halo exchange | Shipped | `-DRDB_CUDA_AWARE_MPI=ON` | A multi-GPU run needs it, and `CUDA_VISIBLE_DEVICES` pinned per rank before `MPI_Init`. A GPU build always hands device buffers to MPI, so the driver refuses a multi-rank GPU build not declared CUDA-aware. |
-| Barotropic march-in (wide halo) | Opt-in, **not bit-identical** | `&ocean_bt_nml bt_halo > 0` | See the list below. The default (`-1`, auto) resolves to 0. Refused at engine setup together with `&ocean_bt_nml dtbt` + `dtbt_reset_period >= 0` (the re-derived `n_inner` does not resize the wide-halo clone). |
+| Barotropic march-in (wide halo) | Opt-in. **Bit-identical to the one-rank `bt_halo = 0` run** on closed walls, periodic and Flather-open edges, interior land and a lon-lat sector (gfortran CPU at 2 and 4 ranks, V100 at 2 ranks; nvfortran CPU not measured); the cases and the refusal list are below | `&ocean_bt_nml bt_halo > 0` | Cases `bth_*` / `bthx_*` of `test_ocean_decomp_bitid_mpi`: `bt_halo` 2, 4, 8, both split schemes, `bebt` 0 and the default 0.1, default `visc_rem_chain`, 48 x 32, `n_inner = 20` (at least 4 in-loop wide exchanges per solve, asserted through the halo counters), each against the one-rank `bt_halo = 0` run, plus the same cases with NaN poisoning of every wide ghost layer the march has invalidated (`RDB_BT_INHALO_POISON=2`, ctest legs `*_btwide_poison`), and the one-rank identity and a poisoned-ring leg in `test_ocean_dyn_mpi`. The default (`-1`, auto) resolves to 0. Refused at configure with: tides, psurf, tidal `&ocean_bc_nml` edges, Chapman edges, porous barriers, the ice-shelf cavity, wet/dry, `use_cont_type`, `upstream_h_face`, supergrid and tripolar grids, `inhalo_march`, and a tile narrower than `nghost + bt_halo`; closed faces (`zfixed_closed_faces`). Refused at engine setup together with `&ocean_bt_nml dtbt` + `dtbt_reset_period >= 0` (the re-derived `n_inner` does not resize the wide-halo clone). |
 | OM3-style barotropic step reset | Shipped | `&ocean_bt_nml dtbt`, `dtbt_reset_period >= 0` | Bit-identical on any split with `bt_halo = 0` (global min of `dt_max` over owned cells, h ghosts refreshed first); gate: `dtbt_reset*` cases of `test_ocean_decomp_bitid_mpi`. |
 | Barotropic in-halo march | **EXPERIMENTAL**, opt-in. Verified on CPU (nvfortran, HPC-X MPI): every `test_ocean_decomp_bitid_mpi` case at 2 and 4 ranks bit-identical to the serial run, also with NaN ghost poisoning between exchanges (`RDB_BT_INHALO_POISON=2`); ctest legs `rdb_test_ocean_decomp_bitid_mpi_{2,4}rank_inhalo` run a subset. GPU: not yet verified | `&ocean_bt_nml inhalo_march` (default `.false.`; `inhalo_stride`, 0 = `nghost - 1`) | Inside the existing `nghost` halo the fast loop exchanges its ghost bands once per `nghost - 1` substeps instead of every substep, and drops the mid-substep u exchange; the force, `bt_rem`, the entry state and (with `bebt > 0`) the previous-substep velocities are exchanged once per solve or per cycle. Refused with `bt_halo > 0`, wet/dry, `use_cont_type`, `upstream_h_face`, tides, psurf and Chapman edges. Needs `nghost >= 3` for any saving. A stride above `nghost - 1` is refused at configure. The extra exchanges run only on a decomposed domain. |
 
@@ -510,13 +510,8 @@ Each check is fail-loud on every rank and names the knob. The check keys on the 
 
 ### Not refused, but not bit-identical across decompositions
 
-These are the only such paths found.
+These are the only such paths found. (The barotropic march-in, `&ocean_bt_nml bt_halo > 0`, used to be on this list: it is bit-identical on every configuration it still accepts, see the capability table.)
 
-- **The barotropic march-in** (`&ocean_bt_nml bt_halo > 0`) differs from
-  the serial run at round-off over variable bathymetry and grossly with
-  open boundaries. It is therefore OPT-IN: the default (`bt_halo = -1`,
-  AUTO) resolves to 0 on every rank count, and a multi-rank run that sets it
-  explicitly logs a warning.
 - **Owned open-boundary tendencies read open-edge ghosts** that are refilled
   once per stage (thickness and tracers only; ghost velocities never), so
   bit-identity there relies on every kernel being position-independent --

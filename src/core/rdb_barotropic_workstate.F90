@@ -235,7 +235,9 @@ module rdb_barotropic_workstate
       integer :: inhalo_poison = 0
          !! Test hook: after every SKIPPED exchange point overwrite the ghost
          !! layers the march declares invalid at MPI seams with rank-dependent
-         !! garbage (1 = large finite, 2 = NaN, +10 per extra layer).  Read
+         !! garbage (1 = large finite, 2 = NaN, +10 per extra layer).  Serves
+         !! both marches: the in-halo one and the wide-halo one (`bt_halo > 0`,
+         !! where it also covers the previous-substep velocities).  Read
          !! once from the environment variable `RDB_BT_INHALO_POISON` at
          !! enter_data; 0 = inert.
       real(wp) :: bebt = 0.1_wp

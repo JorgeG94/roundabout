@@ -3,10 +3,13 @@ module rdb_ocean_bt_wide
    !! Shadow state for the wide-halo barotropic march-in.
    !! When `bt_halo > 0`, the BT fast loop runs on WIDE arrays with ghost
    !! width `ng_wide = nghost + bt_halo`.  Ghost cells outside the valid
-   !! band evolve stale data that creeps INWARD at 2 cells/substep; one
-   !! grouped exchange every `bt_halo/2` substeps keeps the physical interior
-   !! clean.  The mid-substep u exchange is absorbed (within the 2-cell/substep
-   !! stencil budget).
+   !! band evolve stale data that creeps INWARD at one cell per substep (the
+   !! code budgets two, so there is slack); one grouped exchange every
+   !! `bt_halo/2` substeps keeps the physical interior clean.  With `bebt > 0`
+   !! that exchange carries `ubt_prev`/`vbt_prev` too (Pass 1 reads them in the
+   !! ghost band).  The mid-substep u exchange is absorbed.  Proof: owned cells
+   !! are bitwise equal to the one-rank run with every invalidated layer poisoned
+   !! between exchanges (`RDB_BT_INHALO_POISON`, `test_ocean_dyn_mpi`).
    !!
    !! Lifecycle:
    !!   1. `init`         — allocate wide arrays + wide grid/metrics/f_corner.

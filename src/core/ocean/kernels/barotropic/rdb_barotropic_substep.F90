@@ -61,6 +61,7 @@ module rdb_barotropic_substep
                                        OBC_TIDAL, OBC_CHAPMAN, OBC_PERIODIC, OBC_TRIPOLAR_FOLD
    use rdb_ocean_halo, only: ocean_halo_bt_group_2d, ocean_halo_face_x, ocean_halo_face_y, &
                              ocean_halo_bt_group_2d_wide, &
+                             ocean_halo_face_x_2d_wide, ocean_halo_face_y_2d_wide, &
                              ocean_halo_is_decomposed, &
                              ocean_halo_is_decomposed_x, ocean_halo_is_decomposed_y, &
                              ocean_halo_global_extent
@@ -1954,7 +1955,40 @@ contains
                call profiler_start("ocean_comms_bt")
                !$acc wait(1)
                call ocean_halo_bt_group_2d_wide(bt_eta, bt_ubt, bt_vbt, grid%nghost)
+               if (bebt > 0.0_wp) then
+                  ! Pass 1's BEBT projection reads `ubt_prev`/`vbt_prev` in the
+                  ! ghost band; they are stashed from the locally marched u
+                  ! (above), so without this refresh the invalid front restarts
+                  ! `num_cycles - 1` cells deeper every cycle and reaches the
+                  ! owned cells after a few cycles.  Exchanged WITH the group,
+                  ! at the same point: the stash is the pre-update u of this
+                  ! substep, the group the post-update one.
+                  call ocean_halo_face_x_2d_wide(bt_ubt_prev, grid%nghost)
+                  call ocean_halo_face_y_2d_wide(bt_vbt_prev, grid%nghost)
+               end if
                call profiler_stop("ocean_comms_bt")
+            else if (bt_work%inhalo_poison > 0) then
+               ! Test hook (`RDB_BT_INHALO_POISON`, read once at setup): prove the
+               ! march-in's reach by overwriting, between exchanges, every wide
+               ! ghost layer that one cell per substep has already invalidated
+               ! (`mod(n, num_cycles)` layers from the outer array edge) with
+               ! rank-dependent garbage.  Owned results must not change.
+               pz_w = ocean_halo_is_decomposed_x() .and. (.not. has_w .or. per_x_tag)
+               pz_e = ocean_halo_is_decomposed_x() .and. (.not. has_e .or. per_x_tag)
+               pz_s = ocean_halo_is_decomposed_y() .and. (.not. has_s .or. per_y_tag)
+               pz_n = ocean_halo_is_decomposed_y() .and. (.not. has_n .or. per_y_tag)
+               call inhalo_poison_ghosts(nx, ny, bt_eta, bt_ubt, bt_vbt, &
+                                         mod(bt_work%inhalo_poison, 10), &
+                                         mod(n, num_cycles) + bt_work%inhalo_poison/10, &
+                                         pz_w, pz_e, pz_s, pz_n, &
+                                         grid%i_offset_global, grid%j_offset_global)
+               if (bebt > 0.0_wp) then
+                  call wide_poison_prev(nx, ny, bt_ubt_prev, bt_vbt_prev, &
+                                        mod(bt_work%inhalo_poison, 10), &
+                                        mod(n, num_cycles) + bt_work%inhalo_poison/10, &
+                                        pz_w, pz_e, pz_s, pz_n, &
+                                        grid%i_offset_global, grid%j_offset_global)
+               end if
             end if
          else
             call profiler_start("ocean_comms_bt")
@@ -2155,6 +2189,35 @@ contains
       call ocean_halo_face_x(bt_work%bt_ubt_prev)
       call ocean_halo_face_y(bt_work%bt_vbt_prev)
    end subroutine inhalo_exchange_prev
+
+   subroutine wide_poison_prev(nx, ny, bt_ubt_prev, bt_vbt_prev, pmode, pz, &
+                               pz_w, pz_e, pz_s, pz_n, ioff, joff)
+      !! Wide march-in poison hook, previous-substep velocities: after `k` substeps
+      !! without an exchange `ubt_prev`/`vbt_prev` are valid from face `k + 1`
+      !! (the stash is the previous substep's u), so the outer `pz = k` layers
+      !! are overwritten with rank-dependent garbage.
+      integer, intent(in) :: nx, ny, pmode, pz, ioff, joff
+      logical, intent(in) :: pz_w, pz_e, pz_s, pz_n
+      real(wp), intent(inout) :: bt_ubt_prev(nx + 1, ny)
+      real(wp), intent(inout) :: bt_vbt_prev(nx, ny + 1)
+      integer :: i, j
+      !$acc wait(1)
+      !$acc kernels async(1) present(bt_ubt_prev, bt_vbt_prev)
+      do concurrent(j=1:ny, i=1:nx + 1)
+         if ((pz_w .and. i <= pz) .or. (pz_e .and. i > nx + 1 - pz) .or. &
+             (pz_s .and. j <= pz) .or. (pz_n .and. j > ny - pz)) then
+            bt_ubt_prev(i, j) = poison_value(pmode, i + ioff + 3000, j + joff)
+         end if
+      end do
+      do concurrent(j=1:ny + 1, i=1:nx)
+         if ((pz_w .and. i <= pz) .or. (pz_e .and. i > nx - pz) .or. &
+             (pz_s .and. j <= pz) .or. (pz_n .and. j > ny + 1 - pz)) then
+            bt_vbt_prev(i, j) = poison_value(pmode, i + ioff, j + joff + 4000)
+         end if
+      end do
+      !$acc end kernels
+      !$acc wait(1)
+   end subroutine wide_poison_prev
 
    subroutine inhalo_poison_ghosts(nx, ny, bt_eta, bt_ubt, bt_vbt, pmode, pz, &
                                    pz_w, pz_e, pz_s, pz_n, ioff, joff)

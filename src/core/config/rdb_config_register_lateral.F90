@@ -450,8 +450,8 @@ contains
                              "bt_rem_u/v = mask*av_rem**(1/n_inner), av_rem the frhat-"// &
                              "weighted depth mean of visc_rem (MOM6's barotropic "// &
                              "solver); self-sufficient (the producer runs whenever "// &
-                             "this is on), mutually exclusive with substep_drag and "// &
-                             "bt_halo > 0. An equivalent subset of visc_rem_chain, kept "// &
+                             "this is on), mutually exclusive with substep_drag. "// &
+                             "An equivalent subset of visc_rem_chain, kept "// &
                              "for granular testing -- prefer visc_rem_chain."))
       pl => cfg%ocean%bt%strong_drag
       call g%add(nml_logical("strong_drag", pl, &
@@ -565,7 +565,11 @@ contains
       call g%add(nml_int("bt_halo", pi, &
                          "Wide-halo BT march-in width "// &
                          "(-1 = auto: resolves to 0, the march-in is opt-in; "// &
-                         "0 = explicit off, bit-identical)", &
+                         "0 = explicit off). > 0: bitwise equal to the one-rank "// &
+                         "bt_halo = 0 run on walls, periodic and Flather edges, "// &
+                         "land and spherical grids; refused with tides, psurf, "// &
+                         "tidal/Chapman edges, porous, cavity, wet/dry, closed "// &
+                         "faces, supergrid/tripolar", &
                          min=BT_HALO_AUTO_SENTINEL))
       pl => cfg%ocean%bt%inhalo_march
       call g%add(nml_logical("inhalo_march", pl, &

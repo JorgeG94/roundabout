@@ -649,6 +649,9 @@ program test_ocean_dyn_mpi
                                               dec_salt0, dec_saltN, dec_heat0, dec_heatN)
    end if
 
+   ! --- Wide-halo reach legs: 1-rank identity + poisoned-ring proof ---
+   if (nprocs <= 2) call check_wide_reach_legs()
+
    ! --- Report ---
    comm = comm_env_compute_comm()
    call comm%barrier()
@@ -791,7 +794,7 @@ contains
    ! Every rank builds the SAME identical serial run.
    ! =======================================================================
    subroutine run_serial_reference(mass0, massN, ke_out, salt0, saltN, heat0, heatN, &
-                                   use_island, use_periodic)
+                                   use_island, use_periodic, use_n_inner)
       real(wp), intent(out) :: mass0, massN, ke_out
       real(wp), intent(out) :: salt0, saltN, heat0, heatN
          !! Global interior salt / heat sums (Σ hS·area / Σ hT·area) at step
@@ -803,7 +806,10 @@ contains
       logical, intent(in), optional :: use_periodic
          !! When .true., apply periodic-x boundary conditions (west <-> east wrap).
          !! Default .false. = all-wall.
+      integer, intent(in), optional :: use_n_inner
+         !! Inner substeps per stage (default `N_INNER`).
 
+      integer :: n_inner_run
       type(hgrid_t) :: grid
       type(ocean_metrics_t) :: metrics
       type(multilayer_state_t) :: ms
@@ -908,11 +914,14 @@ contains
       salt0 = interior_tracer_sum(ms%tracers(ms%idx_salinity)%c, ms%h_layer, NX_G, NY_G, ng_use, NZ, DX, DY)
       heat0 = interior_tracer_sum(ms%tracers(ms%idx_temperature)%c, ms%h_layer, NX_G, NY_G, ng_use, NZ, DX, DY)
 
+      n_inner_run = N_INNER
+      if (present(use_n_inner)) n_inner_run = use_n_inner
+
       ! Step N_STEPS
       do step = 1, N_STEPS
          call ocean_dyn_step_split( &
             grid, metrics, dyn, eos, cor, ct, pgf, hv, bd, ss, &
-            va, hd, vd, vmix, ms, DT, N_INNER, bc=bc)
+            va, hd, vd, vmix, ms, DT, n_inner_run, bc=bc)
       end do
 
       ! Pull state to host for measurement
@@ -959,7 +968,8 @@ contains
    ! On np=2 the x-seam splits NX_G=16 into two halves.
    ! =======================================================================
    subroutine run_decomposed(mass0, massN, ke_out, salt0, saltN, heat0, heatN, &
-                             use_island, use_periodic, use_poison, use_bt_halo)
+                             use_island, use_periodic, use_poison, use_bt_halo, &
+                             use_n_inner, use_wide_poison)
       real(wp), intent(out) :: mass0, massN, ke_out
       real(wp), intent(out) :: salt0, saltN, heat0, heatN
          !! Global (allreduced) interior salt / heat sums at step 0 and N.
@@ -976,6 +986,12 @@ contains
       integer, intent(in), optional :: use_bt_halo
          !! When > 0, enable the wide-halo BT march-in with this width.
          !! Default 0 = v1 per-substep exchange (bit-identical).
+      integer, intent(in), optional :: use_n_inner
+         !! Inner substeps per stage (default `N_INNER`).  Anything else skips the
+         !! exchange-count canary (its schedule is derived for `N_INNER`).
+      integer, intent(in), optional :: use_wide_poison
+         !! > 0: `RDB_BT_INHALO_POISON` value for the wide march-in poison hook
+         !! (2 = NaN; +10 per EXTRA layer beyond the proven reach).  Default 0 = off.
 
       type(hgrid_t) :: grid
       type(ocean_metrics_t) :: metrics
@@ -996,7 +1012,7 @@ contains
       type(decomp_t) :: decomp
 
       integer :: nxl, nyl, step, ng_use
-      integer :: bt_halo_val
+      integer :: bt_halo_val, n_inner_run, wide_poison
       real(wp) :: local_mass0, local_massN, local_ke
       real(wp) :: global_mass0, global_massN, global_ke
       real(wp) :: local_salt0, local_saltN, local_heat0, local_heatN
@@ -1011,6 +1027,10 @@ contains
       if (present(use_poison)) poison_run = use_poison
       bt_halo_val = 0
       if (present(use_bt_halo)) bt_halo_val = use_bt_halo
+      n_inner_run = N_INNER
+      if (present(use_n_inner)) n_inner_run = use_n_inner
+      wide_poison = 0
+      if (present(use_wide_poison)) wide_poison = use_wide_poison
 
       ! nghost = 3 on every leg: PPM 5-point seam-face stencil (see header).
       ng_use = NG
@@ -1127,10 +1147,13 @@ contains
       ! Step N_STEPS.  Counter reset AFTER the init-time ml_state fill so
       ! the expectations in check_exchange_counts cover exactly the step loop.
       call oh_counters_reset()
+      ! Wide march-in poison hook (read at engine setup in a production run;
+      ! set directly here, host-side, after the device mapping).
+      dyn%bt_work%inhalo_poison = wide_poison
       do step = 1, N_STEPS
          call ocean_dyn_step_split( &
             grid, metrics, dyn, eos, cor, ct, pgf, hv, bd, ss, &
-            va, hd, vd, vmix, ms, DT, N_INNER, bc=bc)
+            va, hd, vd, vmix, ms, DT, n_inner_run, bc=bc)
       end do
 
       ! EXCHANGE-COUNT GATE (deterministic, load-independent): the semantic
@@ -1138,9 +1161,10 @@ contains
       ! exchange topology of the split-RK2 step (the RK2 step comm-topology map).
       ! Any change to the exchange set (added / removed / re-cadenced
       ! exchange) fails here and must update the expectations consciously.
-      call check_exchange_counts(nprocs > 1, periodic_run, &
-                                 dyn%split_scheme == SPLIT_SCHEME_PRED_CORR, &
-                                 bt_halo_val)
+      if (n_inner_run == N_INNER) &
+         call check_exchange_counts(nprocs > 1, periodic_run, &
+                                    dyn%split_scheme == SPLIT_SCHEME_PRED_CORR, &
+                                    bt_halo_val, dyn%bt_work%bebt > 0.0_wp)
 
       ! Pull state to host for measurement
       !$acc update self(ms%h_layer, ms%u_face_x_layer, ms%v_face_y_layer)
@@ -1187,6 +1211,86 @@ contains
    end subroutine run_decomposed
 
    ! =======================================================================
+   ! Wide-halo march-in reach legs (n_inner = 12, bt_halo = 4: five in-loop
+   ! wide exchange cycles per stage, so a stale ghost front has time to reach
+   ! the owned cells).  Four runs on the same problem:
+   !   REF  serial, bt_halo = 0
+   !   B    bt_halo = 4
+   !   C    bt_halo = 4 with the poison hook at the PROVEN reach: between
+   !        exchanges every wide ghost layer that one cell per substep has
+   !        already invalidated is overwritten with NaN (`RDB_BT_INHALO_POISON`
+   !        semantics).  Owned results must be BIT-IDENTICAL to B.
+   !   D    as C with +8 extra layers (deeper than the band: owned cells are
+   !        hit).  Must DIFFER from B -- proves the hook is live.
+   ! On ONE rank B must equal REF bit for bit (bt_halo = W == bt_halo = 0:
+   ! the physical-edge insets re-anchor every closure at the normal edge).
+   ! =======================================================================
+   subroutine check_wide_reach_legs()
+      real(wp) :: r_m0, r_mN, r_ke, r_s0, r_sN, r_h0, r_hN
+      real(wp) :: b_m0, b_mN, b_ke, b_s0, b_sN, b_h0, b_hN
+      real(wp) :: c_m0, c_mN, c_ke, c_s0, c_sN, c_h0, c_hN
+      real(wp) :: d_m0, d_mN, d_ke, d_s0, d_sN, d_h0, d_hN
+      integer, parameter :: NI = 12, BH = 4
+
+      call run_serial_reference(r_m0, r_mN, r_ke, r_s0, r_sN, r_h0, r_hN, use_n_inner=NI)
+      call run_decomposed(b_m0, b_mN, b_ke, b_s0, b_sN, b_h0, b_hN, &
+                          use_bt_halo=BH, use_n_inner=NI)
+      call assert_finite(b_mN, "wide-reach B final mass", rank)
+      call assert_finite(b_ke, "wide-reach B final KE", rank)
+      if (nprocs == 1) then
+         ! 1-rank identity: bt_halo = W == bt_halo = 0, bitwise.
+         call bits_equal("wide-reach 1-rank identity (mass, KE, salt, heat)", &
+                         [b_mN, b_ke, b_sN, b_hN], [r_mN, r_ke, r_sN, r_hN])
+         return
+      end if
+      block
+         real(wp) :: rel
+         rel = abs(b_ke - r_ke)/max(abs(r_ke), 1.0_wp)
+         if (rank == 0) write (*, '(a,es12.4)') "MEASURED wide-reach n_inner=12 KE reldiff=", rel
+         if (rel >= AGREE_KE_TOL) then
+            n_fail = n_fail + 1
+            write (*, '(a,i0,a,es12.4)') "FAIL wide-reach KE agreement: rank ", rank, " reldiff=", rel
+         end if
+      end block
+
+      call run_decomposed(c_m0, c_mN, c_ke, c_s0, c_sN, c_h0, c_hN, &
+                          use_bt_halo=BH, use_n_inner=NI, use_wide_poison=2)
+      call bits_equal("wide-reach poisoned ring == unpoisoned (mass, KE, salt, heat)", &
+                      [c_mN, c_ke, c_sN, c_hN], [b_mN, b_ke, b_sN, b_hN])
+
+      call run_decomposed(d_m0, d_mN, d_ke, d_s0, d_sN, d_h0, d_hN, &
+                          use_bt_halo=BH, use_n_inner=NI, use_wide_poison=2 + 10*8)
+      block
+         logical :: same
+         same = d_ke == b_ke .and. d_mN == b_mN .and. d_sN == b_sN .and. d_hN == b_hN
+         if (same) then
+            n_fail = n_fail + 1
+            write (*, '(a,i0)') "FAIL wide-reach poison hook is vacuous (8 extra layers changed nothing): rank ", rank
+         else if (rank == 0) then
+            write (*, '(a)') "wide-reach poison hook live: 8 extra layers change the owned result (ok)"
+         end if
+      end block
+   end subroutine check_wide_reach_legs
+
+   subroutine bits_equal(label, got, want)
+      !! Bitwise equality of two small real vectors (NaN never equal).
+      character(len=*), intent(in) :: label
+      real(wp), intent(in) :: got(:), want(:)
+      integer :: i
+      logical :: ok
+      ok = .true.
+      do i = 1, size(got)
+         if (.not. (got(i) == want(i))) ok = .false.
+      end do
+      if (.not. ok) then
+         n_fail = n_fail + 1
+         write (*, '(3a,i0,a,4es24.16,a,4es24.16)') "FAIL ", label, ": rank ", rank, " got ", got, " want ", want
+      else if (rank == 0) then
+         write (*, '(3a)') "ok ", label, " (bitwise)"
+      end if
+   end subroutine bits_equal
+
+   ! =======================================================================
    ! Exchange-count gate: the semantic halo-exchange counters accumulated
    ! over the N_STEPS step loop must equal the hand-derived exchange
    ! topology of the split-RK2 step (the RK2 step comm-topology map):
@@ -1211,7 +1315,7 @@ contains
    ! the gate runs on every rank.  Fires on each leg (wall/island/periodic —
    ! the exchange set is leg-invariant).
    ! =======================================================================
-   subroutine check_exchange_counts(decomposed, periodic, is_pc, bt_halo_in)
+   subroutine check_exchange_counts(decomposed, periodic, is_pc, bt_halo_in, bebt_on)
       logical, intent(in) :: decomposed
          !! .true. when the run has a real multi-rank seam (px > 1)
       logical, intent(in) :: periodic
@@ -1225,6 +1329,9 @@ contains
       integer, intent(in), optional :: bt_halo_in
          !! bt_halo width; when > 0 the march-in counter schedule applies.
          !! Default 0 = v1 per-substep exchange.
+      logical, intent(in), optional :: bebt_on
+         !! `bebt > 0`: the march-in in-loop exchange also carries the previous-
+         !! substep velocities (one more face_x and face_y exchange per cycle).
 
       integer(int64) :: c_bt_group, c_bt_u_mid, c_ml_state
       integer(int64) :: c_centre_2d, c_centre_3d
@@ -1235,9 +1342,21 @@ contains
       integer(int64) :: expect_fx3d, expect_fy3d, pc_per_stage, pc_isends_per_step
       integer(int64) :: pc_refresh_per_stage, visc_rem_per_stage
       integer :: bh
+      integer(int64) :: prev_x, prev_y
 
       bh = 0
       if (present(bt_halo_in)) bh = bt_halo_in
+      ! With bebt > 0 the in-loop wide exchange also refreshes the previous-
+      ! substep velocities (one face_x + one face_y per cycle): 1 cycle per
+      ! stage at N_INNER = 4, bt_halo = 4, so 2 per step.
+      prev_x = 0_int64
+      prev_y = 0_int64
+      if (present(bebt_on)) then
+         if (bebt_on) then
+            prev_x = 1_int64
+            prev_y = 1_int64
+         end if
+      end if
 
       ! pred_corr stage-entry seam fill for the step time-means (rdb_ocean_dyn
       ! step 0b).  Coriolis-advection and hvisc are evaluated on u_av/v_av/h_av
@@ -1301,13 +1420,13 @@ contains
          !   bt_group: entry_exchange(1) + in-loop(1) + exit-freshen(1) = 3 per stage = 6
          !   bt_u_mid: 0 (suppressed)
          !   centre_2d: entry_exchange(1) per stage = 2
-         !   face_x_2d: entry_exchange(3) per stage = 6
-         !   face_y_2d: entry_exchange(3) per stage = 6
+         !   face_x_2d: entry_exchange(3) + (bebt > 0) in-loop prev(1) per stage
+         !   face_y_2d: entry_exchange(3) + (bebt > 0) in-loop prev(1) per stage
          expect_btg = int(3*2*N_STEPS, int64)
          expect_btu = 0_int64
          expect_c2d = int(1*2*N_STEPS, int64)
-         expect_fx2d = int(3*2*N_STEPS, int64)
-         expect_fy2d = int(3*2*N_STEPS, int64)
+         expect_fx2d = (3_int64 + prev_x)*2_int64*int(N_STEPS, int64)
+         expect_fy2d = (3_int64 + prev_y)*2_int64*int(N_STEPS, int64)
          ! Msgs (np=2 wall rank 0, py=1, 1 active x-direction).  Each
          ! exchange posts ONE Isend per PRIMITIVE per direction — a grouped
          ! bt exchange carries 3 prims (eta, ubt, vbt) = 3 Isends, and a
@@ -1318,11 +1437,14 @@ contains
          !   entry_exchange (per stage): bt_group_wide(3) + centre_wide(1)
          !     + 3×face_x_wide(3) + 3×face_y_wide(3) = 10 Isends; ×2 stages = 20
          !   in-loop wide (per stage): bt_group_wide(3) Isends; ×2 stages = 6
+         !     (+ face_x_wide + face_y_wide of the previous-substep velocities
+         !     when bebt > 0: 2 Isends per stage, 4 per step)
          !   exit freshen (per stage): bt_group(3) Isends; ×2 stages = 6
-         !   total: 46 + 20 + 6 + 6 = 78 Isends/step × N_STEPS = 7800
+         !   total: 46 + 20 + 6 + 6 (+ 4) = 78 (82) Isends/step
          block
             integer(int64) :: isends_per_step
             isends_per_step = 46_int64 + 20_int64 + 6_int64 + 6_int64 &
+                              + 2_int64*2_int64*(prev_x + prev_y)/2_int64 &
                               + pc_isends_per_step
             expect_msgs = isends_per_step*int(N_STEPS, int64)
          end block
