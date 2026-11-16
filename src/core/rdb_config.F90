@@ -1094,6 +1094,24 @@ module rdb_config
          !! cavity_dyn enable, supergrid/tripolar grid_config.  The set of record is
          !! `bt_halo_auto_exclusion`; keep it and the `validate_config`
          !! checks in lockstep.
+      logical :: inhalo_march = .false.
+         !! EXPERIMENTAL.  In-halo barotropic march: inside the EXISTING
+         !! `nghost`-wide halo the fast loop exchanges its ghost bands once
+         !! every `inhalo_stride` substeps instead of every substep, and
+         !! drops the mid-substep u exchange.  One substep invalidates one
+         !! more outer ghost layer, so `nghost - 1` substeps leave the owned
+         !! cells exact; the force and `bt_rem` are exchanged once per
+         !! solve and the previous-substep velocities with every skipped
+         !! exchange.  Contract: N ranks == 1 rank, bitwise, on owned cells.
+         !! Default off (bit-identical, no new work).  Mutually exclusive
+         !! with `bt_halo > 0`; refused with wet/dry, `use_cont_type`,
+         !! `upstream_h_face`, tides, psurf.  Verified bitwise against one
+         !! rank by `test_ocean_decomp_bitid_mpi` (ctest `_inhalo` variants,
+         !! with ghost poisoning); see `docs/CAPABILITIES_AND_LIMITATIONS.md`.
+      integer :: inhalo_stride = 0
+         !! Substeps per ghost exchange under `inhalo_march`.  `0` = derive
+         !! (`nghost - 1`, floored at 1).  A larger value breaks the contract
+         !! (owned cells go inexact) and is refused at configure.
    end type ocean_bt_config_t
 
    type :: ocean_debug_config_t
@@ -3641,10 +3659,12 @@ module rdb_config
          !! over its interval and modulate by a diurnal cosine-zenith
          !! factor. `"linear"`: plain time-blend like every other flux
          !! (disables the hold + the coszen kernel).
-      real(wp) :: sw_offset_s = -5400.0_wp
-         !! Time offset (s) applied to the `rsds` query time before the
-         !! bracket search -- moves an interval-centred timestamp onto
-         !! the interval start for the hold (`sw_interp = "coszen"`).
+      real(wp) :: sw_offset_s = 5400.0_wp
+         !! Time offset (s) ADDED to the `rsds` query time before the
+         !! bracket search (`sw_interp = "coszen"`): half the 3-hour
+         !! bucket, so a model time inside bucket `[3k h, 3k h + 3 h)`
+         !! finds the record stamped at that bucket's CENTRE (JRA55-do
+         !! stamps its interval means 01:30, 04:30, ...).
       integer :: orb_year = 1990
          !! Orbital-parameter year, reserved for a future Berger (1978)
          !! upgrade. The v1 coszen kernel uses the fixed Spencer (1971)

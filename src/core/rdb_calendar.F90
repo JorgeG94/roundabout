@@ -221,7 +221,7 @@ contains
       type(date_t), intent(out) :: epoch
       logical, intent(out) :: ok
       character(len=:), allocatable :: s, u
-      integer :: p
+      integer :: p, n
 
       scale = 1.0_wp
       epoch%y = 1970
@@ -232,7 +232,15 @@ contains
       epoch%s = 0.0_wp
       ok = .true.
 
-      s = trim(adjustl(units))
+      ! A text attribute read through the C library can carry a trailing NUL
+      ! (JRA55-do: 'days since 1900-01-01 00:00:00' + char(0)); `trim` removes
+      ! blanks only, so strip every trailing control character / blank here.
+      n = len_trim(units)
+      do while (n > 0)
+         if (units(n:n) > " ") exit
+         n = n - 1
+      end do
+      s = trim(adjustl(units(1:n)))
       u = to_lower(s)
       if (index(u, "second") == 1 .or. index(u, "sec") == 1) then
          scale = 1.0_wp

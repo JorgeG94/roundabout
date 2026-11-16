@@ -102,7 +102,8 @@ contains
                   new_unittest("seam_flux_shift_invariant_kpp_salt", test_shift_kpp_salt), &
                   new_unittest("seam_flux_ghost_dataovr_heat", test_ghost_dataovr_heat), &
                   new_unittest("seam_flux_shift_invariant_dataovr_heat", test_shift_dataovr_heat), &
-                  new_unittest("seam_flux_api_setters", test_api_setters) &
+                  new_unittest("seam_flux_api_setters", test_api_setters), &
+                  new_unittest("seam_flux_ghost_cavity_periodic", test_ghost_cavity) &
                   ]
    end subroutine collect_ocean_surface_flux_seam_tests
 
@@ -140,6 +141,7 @@ contains
                           "&ocean_bulk_flux_nml enable = .true., n_iter = 5, z_wind = 10.0, "// &
                           "z_ta = 10.0 /"//NL// &
                           "&ocean_atm_forcing_nml enable = .true., time_mode = 'interannual', "// &
+                          "sw_interp = 'linear', "// &
                           "filelist_tas = '"//ATM_LIST//"', filelist_huss = '"//ATM_LIST// &
                           "', filelist_uas = '"//ATM_LIST//"', filelist_vas = '"//ATM_LIST// &
                           "', filelist_psl = '"//ATM_LIST//"', filelist_rlds = '"//ATM_LIST// &
@@ -525,6 +527,108 @@ contains
                  "api: set_wind left stale ghost tau_y faces")
       status = rdb_ocean_destroy(handle)
    end subroutine test_api_setters
+
+   function cavity_nml() result(nml)
+      !! The decomposition harness's `cavity_periodic` (under `ssp_rk2`, where the
+      !! unexchanged ghost lags the owner by ~8e-2 W/m2; ~1e-7 under pred_corr): a 26 x 18, 20 km sigma
+      !! basin, re-entrant in x, under a sloping ice-shelf draft with virtual
+      !! melt, KPP live under the ice.  The shelf box sits against the wrap, so
+      !! the cavity bands (`heat_cavity`/`salt_cavity`, written on physical
+      !! cells only) differ across the seam unless the assembled flux is exchanged.
+      character(len=:), allocatable :: nml
+      nml = "&sim_nml sim_type = 'ocean' /"//NL// &
+            "&time_nml t_end = 1.0e9, dt_fixed = 900.0 /"//NL// &
+            "&nonhydrostatic_nml nz_layers = 4 /"//NL// &
+            "&tracer_nml initial_salinity = 34.5, T_init_surface = 3.0, T_init_bottom = 1.0 /"//NL// &
+            "&ocean_bt_nml auto_n_inner = .true., split_scheme = 'ssp_rk2' /"//NL// &
+            "&ocean_hvisc_nml nu_h = 200.0, lateral_closure = 'smagorinsky', smag_ah = .true. /"//NL// &
+            "&ocean_diag_nml enabled = .false. /"//NL// &
+            "&grid_nml nx = 26, ny = 18, nghost = 3, dx = 20000.0, dy = 20000.0 /"//NL// &
+            "&physics_nml coriolis_f = -1.409e-4 /"//NL// &
+            "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
+            "&ocean_topo_nml topo_config = 'seamount', max_depth = 1000.0, edge_depth = 400.0, "// &
+            "slope_scale = 80000.0, wind_config = 'constant', taux_magnitude = 0.05 /"//NL// &
+            "&ocean_cavity_dyn_nml enable = .true., draft_config = 'linear', "// &
+            "draft_depth = 500.0, draft_slope = -4.0e-4, draft_x0 = 0.0, "// &
+            "draft_x1 = 380000.0, draft_y1 = 260000.0, h_min_cavity = 100.0 /"//NL// &
+            "&ocean_forcing_nml enable_components = .true. /"//NL// &
+            "&ocean_cavity_melt_nml enable = .true., exchange_law = 'const_gamma', "// &
+            "gamma_t = 2.2e-2, gamma_s = -1.0, cdrag_top = 2.5e-3, "// &
+            "ice_conduction = 'insulating', s_ice = 0.0, far_field_depth = 10.0 /"//NL// &
+            "&ocean_tdrag_nml enable = .true., form = 'quadratic', cd = 2.5e-3 /"//NL// &
+            "&ocean_pgf_nml form = 'fv_mom6', p_top_in_bc = .true. /"//NL// &
+            "&ocean_eos_nml eos = 'linear', tfreeze_set = 'isomip' /"//NL// &
+            "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
+            "north = 'wall' /"//NL// &
+            "&output_nml output_to_file = .false. /"//NL
+   end function cavity_nml
+
+   subroutine test_ghost_cavity(error)
+      !! Ice-shelf cavity, re-entrant in x: after the steps the ghost columns of
+      !! `Q_heat`/`Q_salt` equal the wrapped interior.  Before the assembled-flux
+      !! exchange the ghost differed by ~6e-2 W/m2 (3e-4 relative): the cavity
+      !! bands are physical-span-only components and KPP reads the ghost flux.
+      type(error_type), allocatable, intent(out) :: error
+      integer, parameter :: NXC = 26, NYC = 18
+      type(c_ptr) :: handle, ptr
+      integer(c_int) :: status, nx_p, ny_p, nz_p, ng, nxt, nyt, gen
+      character(len=:), allocatable :: nml
+      real(wp), pointer :: p2(:, :)
+      real(wp) :: dh, ds, qmax, smax, hcmax
+      type(ocean_handle_t), pointer :: h
+      integer :: j, g, istep
+      character(len=200) :: msg
+
+      nml = cavity_nml()
+      handle = c_null_ptr
+      status = rdb_ocean_create_from_string(nml, len(nml, kind=c_int), handle)
+      call check(error, status == OCEAN_STATUS_OK, "cavity: the namelist must build")
+      if (allocated(error)) return
+      status = rdb_ocean_get_grid_info(handle, nx_p, ny_p, nz_p, ng)
+      call check(error, handle_check(handle, h) == HANDLE_OK, "cavity: handle")
+      if (allocated(error)) return
+      ! The ghost lags the owner by one thermo step while the melt spins up, so
+      ! the worst mismatch is early: check after EVERY one of the first steps.
+      dh = 0.0_wp
+      qmax = 0.0_wp
+      hcmax = 0.0_wp
+      do istep = 1, 24
+         status = rdb_ocean_step(handle, 1_c_int)
+         call check(error, status == OCEAN_STATUS_OK, "cavity: the run must step cleanly")
+         if (allocated(error)) return
+         status = rdb_ocean_refresh_host(handle)
+         !$acc update self(h%state%surface_flux%heat_cavity)
+         hcmax = max(hcmax, maxval(abs(h%state%surface_flux%heat_cavity(ng + 1:ng + NXC, ng + 1:ng + NYC))))
+         status = rdb_ocean_get_q_heat_ptr(handle, ptr, nxt, nyt, gen)
+         call c_f_pointer(ptr, p2, [nxt, nyt])
+         qmax = max(qmax, maxval(abs(p2(ng + 1:ng + NXC, ng + 1:ng + NYC))))
+         do j = ng + 1, ng + NYC
+            do g = 1, ng
+               dh = max(dh, abs(p2(g, j) - p2(g + NXC, j)), abs(p2(ng + NXC + g, j) - p2(ng + g, j)))
+            end do
+         end do
+      end do
+      call check(error, hcmax > 1.0_wp .and. qmax > 10.0_wp, &
+                 "cavity: the melt heat flux is not live -- the case is vacuous")
+      if (allocated(error)) return
+      write (msg, "(a,es10.3,a,es10.3,a,es10.3)") "cavity: |dQ_heat| = ", dh, "  max|Q_heat| ", qmax, &
+         "  max|heat_cavity| ", hcmax
+      call check(error, dh <= 1.0e-12_wp*qmax, trim(msg)//" -- the ghost surface flux is not the "// &
+                 "wrapped interior")
+      if (allocated(error)) return
+      status = rdb_ocean_get_q_salt_ptr(handle, ptr, nxt, nyt, gen)
+      call c_f_pointer(ptr, p2, [nxt, nyt])
+      smax = maxval(abs(p2(ng + 1:ng + NXC, ng + 1:ng + NYC)))
+      ds = 0.0_wp
+      do j = ng + 1, ng + NYC
+         do g = 1, ng
+            ds = max(ds, abs(p2(g, j) - p2(g + NXC, j)), abs(p2(ng + NXC + g, j) - p2(ng + g, j)))
+         end do
+      end do
+      call check(error, smax > 0.0_wp .and. ds <= 1.0e-12_wp*smax, &
+                 "cavity: the ghost Q_salt is not the wrapped interior (or the melt salt is zero)")
+      status = rdb_ocean_destroy(handle)
+   end subroutine test_ghost_cavity
 
    subroutine write_flux_files()
       !! The atmosphere plus the data-override heat / salt files (wavenumber 2

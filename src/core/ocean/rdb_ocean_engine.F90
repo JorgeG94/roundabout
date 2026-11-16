@@ -146,7 +146,7 @@ module rdb_ocean_engine
    use rdb_ocean_sponge, only: ocean_sponge_snapshot_reference, ocean_sponge_refresh_target
    use rdb_ocean_geothermal, only: ocean_geothermal_t
    use rdb_ocean_diag_fills, only: set_diag_remap_method, parse_diag_remap_scheme, &
-                                   set_diag_mask_vanished
+                                   set_diag_mask_vanished, diag_remap_workspace_cleanup
    use rdb_ocean_diag_derived, only: apply_diag_selection
    use rdb_ocean_diag, only: DIAG_VGRID_LAYER, DIAG_VGRID_Z_FIXED, &
                              DIAG_VGRID_SIGMA, DIAG_VGRID_ZSTAR, DIAG_VGRID_DENSITY
@@ -156,7 +156,7 @@ module rdb_ocean_engine
    use rdb_ocean_data_forcing, only: ocean_data_forcing_configure, ocean_data_forcing_apply, &
                                      ocean_data_forcing_register_sss
    use rdb_ocean_sw_chl, only: sw_chl_configure, sw_chl_apply
-   use rdb_atm_state, only: atm_state_configure, atm_state_update
+   use rdb_atm_state, only: atm_state_configure, atm_state_update, atm_sw_window
    use rdb_ocean_bulk_forcing, only: bulk_forcing_configure, bulk_forcing_apply
    use rdb_io_netcdf, only: output_rank_filename, ensure_directory_exists
 #endif
@@ -813,6 +813,12 @@ contains
       ! Under validate_only the stream is never opened, so teardown must
       ! not try to close it.
       engine%diag_enabled = cfg%ocean%diag%enabled .and. .not. no_output
+      ! The atm provider is configured later (it needs the metrics), but the
+      ! diag registry gates the `atm_*` diagnostics on `atm%enable`: pre-set it
+      ! from the namelist so they register (`atm_state_configure` re-derives it).
+#ifndef RDB_NO_NETCDF
+      engine%state%atm%enable = cfg%ocean%atm_forcing%enable
+#endif
       call engine_configure_diag(cfg, engine%state, mrank, engine%decomp, ierr=ierr, &
                                  open_stream_file=.not. no_output)
       if (setup_failed(ierr)) return
@@ -1839,6 +1845,22 @@ contains
    ! Device placement
    ! ================================================================
 
+   subroutine env_int_or_zero(name, val)
+      !! Integer from an environment variable; 0 when unset or unparsable.
+      character(len=*), intent(in) :: name
+      integer, intent(out) :: val
+      character(len=16) :: buf
+      character(len=64) :: msg
+      integer :: ios
+
+      val = 0
+      buf = ""
+      call get_environment_variable(name, buf)
+      if (len_trim(buf) == 0) return
+      read (buf, *, iostat=ios, iomsg=msg) val
+      if (ios /= 0) val = 0
+   end subroutine env_int_or_zero
+
    subroutine engine_enter_data(engine, cfg)
       !! Map the ocean state onto the device, then (when `bt_halo > 0`)
       !! allocate + attach the wide-halo BT march-in workspace, then
@@ -1850,6 +1872,22 @@ contains
 
       call ocean_state_enter_data(engine%state)
       engine%state%dyn%bt_halo = cfg%ocean%bt%bt_halo
+      engine%state%dyn%bt_work%inhalo_stride = 0
+      engine%state%dyn%bt_work%inhalo_poison = 0
+      if (cfg%ocean%bt%inhalo_march) then
+         ! One substep invalidates one more outer ghost layer, so nghost-1
+         ! substeps leave the owned cells exact (see the fast loop).
+         engine%state%dyn%bt_work%inhalo_stride = cfg%ocean%bt%inhalo_stride
+         if (cfg%ocean%bt%inhalo_stride <= 0) then
+            engine%state%dyn%bt_work%inhalo_stride = max(1, engine%grid%nghost - 1)
+         end if
+         ! Test hook (ghost poison, see `inhalo_poison`); host, once.
+         call logger%info("bt inhalo_march ON: stride="// &
+                          to_string(engine%state%dyn%bt_work%inhalo_stride)// &
+                          " nghost="//to_string(engine%grid%nghost)// &
+                          " n_inner="//to_string(cfg%ocean%bt%n_inner))
+         call env_int_or_zero("RDB_BT_INHALO_POISON", engine%state%dyn%bt_work%inhalo_poison)
+      end if
       if (cfg%ocean%bt%bt_halo > 0) then
          call ocean_dyn_enable_bt_wide(engine%state%dyn, engine%grid, &
                                        cfg%dx, cfg%dy, &
@@ -1879,8 +1917,7 @@ contains
          ! the first step after the resume, before the first thermo-step
          ! assembly repairs them.  Device-resident (the periodic wrap kernels
          ! are device kernels on the GPU build), so after the map; a no-op
-         ! unless the component set is on and a physical-span-only filler is
-         ! latched.
+         ! unless the component set is on.
          call ocean_seam_refresh_surface_flux(engine%state%surface_flux, engine%grid, &
                                               engine%state%bc)
       end if
@@ -1996,6 +2033,8 @@ contains
       real(wp), intent(in) :: t
       integer, intent(out), optional :: ierr
 
+      real(wp) :: sw_shift, sw_len
+
       if (present(ierr)) ierr = OCEAN_STATUS_OK
 
 #ifndef RDB_NO_NETCDF
@@ -2008,8 +2047,12 @@ contains
       ! Order vs `ocean_data_forcing_apply` above does not matter -- both
       ! read the SAME reader brackets `ocean_data_input_update_all` just
       ! refreshed, and neither writes a slot the other reads.
+      ! The shortwave is applied over the THERMO interval (N*dt at
+      ! dt_therm_ratio = N), so the coszen window must be that interval.
+      call atm_sw_window(dt, engine%state%dyn%dt_therm_ratio, engine%state%dyn%diabatic_first, &
+                         engine%state%dyn%is_thermo_step(), sw_shift, sw_len)
       call atm_state_update(engine%state%atm, engine%state%data_input, &
-                            engine%state%metrics, t)
+                            engine%state%metrics, t, dt, sw_shift, sw_len)
       ! Chlorophyll -> per-band opacities (no-op unless sw_scheme="manizza05").
       call sw_chl_apply(engine%state%sw_chl, engine%state%data_input, engine%grid, &
                         engine%state%multilayer%wet_mask, engine%state%surface_flux, &
@@ -2030,7 +2073,7 @@ contains
       call ocean_surface_flux_refresh_sw_net(engine%state%surface_flux)
       ! `q_sw` is a physical-span-only write, `sw_net` was just formed over
       ! the full array, and the boundary-layer schemes read it in the ghost
-      ! columns: exchange its seam ghosts (no-op unless `phys_only_fill`).
+      ! columns: exchange its seam ghosts (no-op unless `use_components` and `sw_from_qsw`).
       call ocean_seam_refresh_sw_net(engine%state%surface_flux, engine%grid, &
                                      engine%state%bc)
 
@@ -2439,10 +2482,9 @@ contains
       end if
 
       ! The assembler summed components, some of which a filler wrote on
-      ! physical cells only (bulk forcing, data override): exchange the
+      ! physical cells only (bulk forcing, data override, the cavity bands): exchange the
       ! ASSEMBLED `Q_heat`/`Q_salt` seam ghosts the boundary-layer schemes
-      ! read.  Same thermo cadence; no-op (no call cost beyond the test)
-      ! unless `use_components` and a physical-span-only filler is on.
+      ! read.  Same thermo cadence; no-op unless `use_components`.
       if (engine%state%dyn%enable_thermodynamics .and. engine%state%dyn%is_thermo_step()) then
          call ocean_seam_refresh_surface_flux(engine%state%surface_flux, engine%grid, &
                                               engine%state%bc)
@@ -2464,6 +2506,7 @@ contains
 
       call ocean_state_exit_data(engine%state)
       call ice_ocean_stress_cleanup()
+      call diag_remap_workspace_cleanup()
       engine%device_mapped = .false.
    end subroutine engine_exit_data
 
