@@ -42,7 +42,7 @@ module rdb_ice_transport_seam
    public :: transport_seam_t
    public :: seam_sum, seam_sum_efp, seam_pair_fold_flux, seam_sum_int, seam_sum_one, seam_or_bits
    public :: seam_sum_iface, seam_sum_efp_iface, seam_pair_fold_iface, seam_min_iface
-   public :: seam_min_one, seam_all_true
+   public :: seam_min_one, seam_all_true, seam_max_one
 
    integer, parameter :: ERR_WORD_BITS = 32
       !! Bits of the 32-bit error word.
@@ -168,6 +168,17 @@ contains
       if (.not. associated(seam%min_i)) error stop "transport seam: multirank without a min_i binding"
       call seam%min_i(v)
    end subroutine seam_min_one
+
+   subroutine seam_max_one(seam, v)
+      !! Global maximum of one integer, in place.  No-op on one rank.
+      type(transport_seam_t), intent(in) :: seam
+      integer, intent(inout) :: v
+
+      if (.not. seam%multirank) return
+      v = -v
+      call seam_min_one(seam, v)
+      v = -v
+   end subroutine seam_max_one
 
    function seam_all_true(seam, flag) result(all_ok)
       !! `flag` on EVERY rank (collective on `multirank`): the way a rank-local condition that gates a later

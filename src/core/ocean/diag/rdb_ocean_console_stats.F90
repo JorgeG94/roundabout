@@ -270,7 +270,7 @@ contains
                                          cfl_vanish_tol, heat_budget_frazil, &
                                          ice_aice, ice_vice, &
                                          compute_rank, reproducing_sums, &
-                                         budget_stage_weight, budget_out)
+                                         budget_stage_weight, budget_out, ice_totals_out)
       !! Compute current totals + means + max-CFL and emit a MOM6-style
       !! console block via the shared `console_stats_report` formatter.
       !!
@@ -346,6 +346,10 @@ contains
          !! tracer update fills the accumulators once per step rather than
          !! twice; without it the reported `src`/`out` are exactly half and
          !! the closed-budget residual reads ~5e-4 instead of ~1e-13.
+      real(wp), intent(out), optional :: ice_totals_out(3)
+         !! The global ice sums behind the console line, `[wet area, ice-covered area, ice volume]`
+         !! (m2, m2, m3; zero without ice arrays): the test seam that lets a decomposition test compare them
+         !! bitwise with the serial run.
       type(conservation_budget_t), intent(out), optional :: budget_out
          !! Hands the computed closed-budget totals (`mass_out`/`salt_out`/
          !! `heat_out`/`*_src`/`*_active`, section (d) below) back to the
@@ -562,6 +566,7 @@ contains
       end if
       mean_ci = 0.0_wp
       mean_hi = 0.0_wp
+      if (present(ice_totals_out)) ice_totals_out = [g_wet_area, g_ci_area, g_hi_area]
       ! `.and.` is not guaranteed to short-circuit in Fortran, so the
       ! ice-off path could read the g_* accumulators (assigned only inside
       ! the `if (ice_on)` allreduce block); they are pre-zeroed at the top
