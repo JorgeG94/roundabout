@@ -1093,9 +1093,11 @@ module rdb_config
          !! loop.  Fail-loud exclusions (apply when bt_halo is set EXPLICITLY
          !! > 0; AUTO instead silently resolves to 0): wet/dry enable,
          !! use_cont_type, upstream_h_face, Chapman edges, cavity_dyn enable,
-         !! the tripolar fold (`grid_config='tripolar'` / `north =
-         !! 'tripolar_fold'`), `inhalo_march`, `dtbt_reset_period >= 0`, a
-         !! tile narrower than `nghost + bt_halo`.  The set of record is
+         !! `inhalo_march`, `dtbt_reset_period >= 0`, a tile narrower than
+         !! `nghost + bt_halo` (one cell more across the tripolar fold, whose
+         !! band is folded every substep on a plan built for the wide ghost
+         !! width: the tripolar cap with `north = 'tripolar_fold'` composes
+         !! with the march-in at `px = 1` and `px > 1`).  The set of record is
          !! `bt_halo_auto_exclusion`; keep it and the `validate_config`
          !! checks in lockstep.
       logical :: inhalo_march = .false.

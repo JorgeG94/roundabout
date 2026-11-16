@@ -105,7 +105,8 @@ module rdb_ocean_engine
                                    ocean_halo_exchange_ice_fluxes, &
                                    ocean_seam_refresh_surface_flux, ocean_seam_refresh_sw_net
    use rdb_ocean_fold_exchange, only: ocean_fold_exchange_init, ocean_fold_exchange_reserve, &
-                                      ocean_fold_exchange_destroy, ocean_fold_north_corner
+                                      ocean_fold_exchange_destroy, ocean_fold_north_corner, &
+                                      FOLD_CTX_WIDE
    use rdb_ocean_periodic, only: ocean_periodic_wrap_state, ocean_periodic_wrap_centre_2d
    use rdb_ocean_fold_apply, only: ocean_fold_wrap_state, ocean_fold_wrap_eta_2d
    use rdb_ocean_boundary_data, only: ocean_boundary_data_constant_t
@@ -629,6 +630,26 @@ contains
                    " cells).  Reduce bt_halo (or leave it on auto) or use fewer ranks.", &
                    ierr, OCEAN_STATUS_ERR_SETUP)
          return
+      end if
+      ! Across the tripolar fold the wide band folds W + nghost rows of the
+      ! north tile (Murray 1996 bipolar cap): the fold reads that many rows
+      ! below the fold line, so the north tile must be taller than the band,
+      ! and under an east-west split (`px > 1`, owner-routed fold) every tile
+      ! must be wider than it.  The smallest tile is nx/px by ny/py (the
+      ! remainder goes to the first tiles), so the check is rank-invariant.
+      if (bt_halo_res > 0 .and. &
+          ocean_bc_type_from_string(cfg%ocean%bc%north) == OBC_TRIPOLAR_FOLD) then
+         if (cfg%nghost + bt_halo_res - mod(bt_halo_res, 2) + 1 > cfg%ny/cfg%py .or. &
+             (cfg%px > 1 .and. &
+              cfg%nghost + bt_halo_res - mod(bt_halo_res, 2) + 1 > cfg%nx/cfg%px)) then
+            call fail("&ocean_bt_nml bt_halo = "//to_string(bt_halo_res)//" across the tripolar "// &
+                      "north fold needs tiles of at least nghost + bt_halo + 1 = "// &
+                      to_string(cfg%nghost + bt_halo_res - mod(bt_halo_res, 2) + 1)// &
+                      " rows (and, with px > 1, columns); the smallest tile is "// &
+                      to_string(cfg%nx/cfg%px)//" x "//to_string(cfg%ny/cfg%py)// &
+                      ".  Reduce bt_halo or use fewer ranks.", ierr, OCEAN_STATUS_ERR_SETUP)
+            return
+         end if
       end if
       if (rank == 0 .and. bt_halo_req == BT_HALO_AUTO_SENTINEL .and. csize > 1) then
          if (bt_excluded) then
@@ -1210,7 +1231,9 @@ contains
       ! the widest ice group (one category field of `ncat*nk_ice` /
       ! `ncat+1` levels, `ng` rows; the EVP stress group is `3*ng+1`).
       call ocean_fold_exchange_init(engine%decomp, engine%grid%nghost, &
-                                    engine%state%bc%north_fold, ierr=ierr)
+                                    engine%state%bc%north_fold, ierr=ierr, &
+                                    nghost_wide=engine%grid%nghost + cfg%ocean%bt%bt_halo - &
+                                    mod(cfg%ocean%bt%bt_halo, 2))
       if (setup_failed(ierr)) return
       block
          integer :: ntr, nslab
@@ -1224,6 +1247,12 @@ contains
                         3*engine%grid%nghost + 1)
          end if
          call ocean_fold_exchange_reserve(nslab)
+         ! The wide-halo march-in folds eta + ubt (T and u, `ngw` rows each)
+         ! and then vbt (`ngw + 1` rows) on the wide plan, one group each.
+         if (cfg%ocean%bt%bt_halo > 0) then
+            call ocean_fold_exchange_reserve(2*(engine%grid%nghost + cfg%ocean%bt%bt_halo + 1), &
+                                             FOLD_CTX_WIDE)
+         end if
       end block
 
       ! Host-side seam ghost fill (D0 init-halo, O2): single-rank

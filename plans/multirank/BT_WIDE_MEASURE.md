@@ -221,7 +221,7 @@ Reading:
   closed faces / cavity.
 * RC4 (vector-lane round-off): not seen on gfortran (contraction off) at tile widths 16 .. 24; nvfortran
   CPU not measured.
-* RC5 (tripolar) untouched.
+* RC5 (tripolar): stage 4 below.
 
 ## Stage 2: static fields from their owners (fix/bt-wide-halo-static)
 
@@ -420,3 +420,43 @@ What the merge had to change:
 * New ctest legs: `*_btwide_cycle_break_<class>` (14 classes).
 
 Timing: the stage 4 tables above were measured on the packed branch before the merge; not re-measured.
+
+## Stage 4b: the tripolar north fold (fix/bt-wide-halo-fold; proven with the OLD cadence `bt_halo/2` and per-array exchanges, BEFORE the merge with the packed stage; see stage 6 for the merged result)
+
+Mechanism.  The wide fast loop already carried the fold inline (`bc%north_fold`, the fold index
+constants built from `grid%nghost`, which on the wide grid is `nghost + bt_halo`), so at `px = 1` the
+wide band is folded by the local kernels over all `nghost + W` rows with no further change.  The
+fold is applied EVERY substep, at the same two points per substep as the `bt_halo = 0` loop (eta after
+Pass 1, ubt after Pass 2b, vbt after Pass 2c), not at the wide exchange only: the fold-line row (`v`,
+storage row `ng+nj+1`) is projected from its mirror each substep (west half := minus the east half), and
+the mirror point sits in the same tile (`px = 1`) or another one (`px > 1`).  A band refreshed only at
+the wide exchange would evolve locally between exchanges, and the locally evolved mirror image is not
+bitwise the owner's value (the reflected stencil sums in the other order), so the owned fold-line row
+would differ from the one-rank run from the second substep.  At `px > 1` the pair of fold exchanges per
+substep (`bt_mid`: eta + ubt, `bt_late`: vbt with the fold-line projection) now runs on a second routing
+context of `rdb_ocean_fold_exchange`, built from `fold_plan_build(ni, px, nghost + bt_halo, rx)`: the
+same owner-routed mechanism (every value from the tile that owns the mirror point, ghost columns
+included), `FOLD_CTX_NORMAL` for every state-level fold and `FOLD_CTX_WIDE` for the march-in.  The plan,
+its device index lists and its buffers are per context (the pack / unpack kernels take them as
+explicit-shape dummies).  Only the north rank row pays the extra fold exchanges; the seams keep the
+`bt_halo/2` cadence.  The static wide fields' rows beyond the fold are not folded: every kernel that
+reads them writes results that the fold overwrites before they are read (shown by the ring poison,
+which leaves them NaN on the physical edge).  `bt_halo > 0` with the fold is refused when the north tile
+is no taller than `nghost + bt_halo` rows (or, with `px > 1`, a tile no wider).
+
+New cases `bth_trip_w{2,4,8}`, `bth_trip_w{4,8}_b0` (Murray cap above 74 N, double-drake land walls
+reaching the fold line, meridional + zonal stress driving flow into the fold row) and
+`bthx_tripsea_w{4,8}`, `bthx_tripsea_w4_b0` (a seamount in the cap): 48 x 32, nghost 3, `n_inner = 20`,
+both split schemes.
+
+| configuration | before | after |
+|---|---|---|
+| `bt_halo > 0` + tripolar fold, any layout | REFUSED at configure | accepted |
+| refusal lifted only (local fold, `px = 1`: 1x1, 1x2, 1x4) | bitwise (the inline fold already ran over the wide band) | bitwise |
+| refusal lifted only (`px > 1`: 2x1, 2x2, 4x1; plan built for `nghost`, asked for `nghost + W` rows) | FAIL: ~77 000 mismatching owned values, every field (`ml_h_layer` up to 2 m) | bitwise |
+| wide loop with the fold switched off (sabotage, the non-vacuity control) | FAIL at 1x1, 2x1, 1x2: ~76 000 mismatching values | not applicable |
+
+After: every `bth_trip_*` / `bthx_tripsea_*` case IDENTICAL at 1 rank (1x1), 2 ranks (2x1, 1x2) and 4
+ranks (4x1, 2x2, 1x4), both split schemes, W = 2, 4, 8 where the smallest tile fits (`nghost + W + 1`;
+the 1x4 layout at W = 8 is skipped), also with `RDB_BT_INHALO_POISON=2`, `RDB_BT_RING_POISON=1`,
+`RDB_BT_RING_POISON=2` and both.

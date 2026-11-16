@@ -577,7 +577,8 @@ contains
       call check(error, ierr == OCEAN_STATUS_OK, "body tide with bt_halo = 4 must be accepted")
       if (allocated(error)) return
 
-      ! Still refused: the tripolar fold, use_cont_type, upstream_h_face.
+      ! Still refused: use_cont_type, upstream_h_face.  (The tripolar fold is
+      ! accepted, with a tile-size rule: see the end of this test.)
       call read_config_from_string( &
          "&sim_nml sim_type = 'ocean' /"//new_line('a')// &
          "&grid_nml nx = 24, ny = 16, nghost = 3, dx = 20000.0, dy = 20000.0 /"// &
@@ -601,7 +602,44 @@ contains
          "&ocean_bt_nml bt_halo = 4 /"//new_line('a'), cfg, ierr=ierr)
       cfg%ocean%bc%north = "tripolar_fold"
       call validate_config(cfg, ierr=ierr)
-      call check(error, ierr /= OCEAN_STATUS_OK, "tripolar_fold with bt_halo = 4 must stay refused")
+      call check(error, ierr == OCEAN_STATUS_OK, "tripolar_fold with bt_halo = 4 must be accepted")
+      if (allocated(error)) return
+      ! The fold reads the whole wide band from the north tile: a process
+      ! grid whose tiles are no taller than nghost + bt_halo (here 12 rows
+      ! against 3 + 8 + 1) is refused, as is an east-west split of a grid
+      ! whose tiles are no wider than it.
+      call read_config_from_string( &
+         "&sim_nml sim_type = 'ocean' /"//new_line('a')// &
+         "&grid_nml nx = 48, ny = 32, nghost = 3, dx = 20000.0, dy = 20000.0 /"// &
+         new_line('a')// &
+         "&mpi_nml px = 1, py = 4 /"//new_line('a')// &
+         "&ocean_bt_nml bt_halo = 8 /"//new_line('a'), cfg, ierr=ierr)
+      cfg%ocean%bc%north = "tripolar_fold"
+      call validate_config(cfg, ierr=ierr)
+      call check(error, ierr /= OCEAN_STATUS_OK, &
+                 "tripolar_fold, bt_halo = 8 on 8-row tiles must be refused")
+      if (allocated(error)) return
+      call read_config_from_string( &
+         "&sim_nml sim_type = 'ocean' /"//new_line('a')// &
+         "&grid_nml nx = 48, ny = 32, nghost = 3, dx = 20000.0, dy = 20000.0 /"// &
+         new_line('a')// &
+         "&mpi_nml px = 4, py = 1 /"//new_line('a')// &
+         "&ocean_bt_nml bt_halo = 8 /"//new_line('a'), cfg, ierr=ierr)
+      cfg%ocean%bc%north = "tripolar_fold"
+      call validate_config(cfg, ierr=ierr)
+      call check(error, ierr == OCEAN_STATUS_OK, &
+                 "tripolar_fold, bt_halo = 8 on 12-column tiles (3 + 8 + 1) must be accepted")
+      if (allocated(error)) return
+      call read_config_from_string( &
+         "&sim_nml sim_type = 'ocean' /"//new_line('a')// &
+         "&grid_nml nx = 48, ny = 32, nghost = 3, dx = 20000.0, dy = 20000.0 /"// &
+         new_line('a')// &
+         "&mpi_nml px = 6, py = 1 /"//new_line('a')// &
+         "&ocean_bt_nml bt_halo = 8 /"//new_line('a'), cfg, ierr=ierr)
+      cfg%ocean%bc%north = "tripolar_fold"
+      call validate_config(cfg, ierr=ierr)
+      call check(error, ierr /= OCEAN_STATUS_OK, &
+                 "tripolar_fold, bt_halo = 8 on 8-column tiles under px > 1 must be refused")
    end subroutine test_tidal_edge_bt_halo_refused
 
    subroutine test_bt_halo_auto_exclusion(error)
@@ -656,9 +694,11 @@ contains
       if (allocated(error)) return
       cfg%ocean%cavity_dyn%enable = .false.
 
+      ! The tripolar fold is no longer an exclusion (the wide band folds).
       cfg%ocean%grid%grid_config = "tripolar"
+      cfg%ocean%bc%north = "tripolar_fold"
       call bt_halo_auto_exclusion(cfg, excluded, reason)
-      call check(error, excluded, "tripolar grid_config not detected as exclusion")
+      call check(error,.not. excluded, "tripolar fold wrongly flagged as an exclusion")
    end subroutine test_bt_halo_auto_exclusion
 
    subroutine test_ice_hlim_count_leading_run(error)

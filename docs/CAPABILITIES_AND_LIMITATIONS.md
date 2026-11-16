@@ -506,6 +506,7 @@ Each check is fail-loud on every rank and names the knob. The check keys on the 
 | in-memory geometry injection (the API's staged bathymetry / supergrid arrays) | they describe the whole grid, not a tile (the file readers are windowed) |
 | `nghost < 3` | the PPM stencil degrades to first order at a seam face (`ocean_halo_init`) |
 | an explicit `&ocean_bt_nml bt_halo` wider than the smallest tile | the wide ghost ring must fit inside the tile |
+| an explicit `&ocean_bt_nml bt_halo > 0` across the tripolar fold with a north tile no taller than `nghost + bt_halo` rows (`ny/py`), or, with `px > 1`, tiles no wider (`nx/px`) | the fold reads the whole `nghost + bt_halo`-row band from the rows below the fold line, so the north tile must be taller than the band (test `test_config`, `tidal_edge_bt_halo_refused`; `engine_setup` repeats it for an auto-factored grid) |
 
 ### Not refused, but not bit-identical across decompositions
 
