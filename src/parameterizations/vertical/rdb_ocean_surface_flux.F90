@@ -83,6 +83,19 @@
 !!       (`Q_heat`/`Q_salt`, `heat_content_massin/massout`) are never
 !!       registered (derived-field rule, `ocean_state_build_restart_registry`
 !!       in `ocean_state/rdb_ocean_state_restart.F90`).
+!!   (f) a filler that writes its components on PHYSICAL cells only (anything
+!!       but a full-array overwrite from already-exchanged data, which is what
+!!       the ice couplers do) sets `phys_only_fill = .true.` at configure.  The
+!!       boundary-layer schemes loop the FULL array and read the assembled
+!!       `Q_heat`/`Q_salt`/`sw_net` in the ghost columns, whose neighbour-owned
+!!       value the assembler cannot rebuild from components whose own ghosts are
+!!       stale; with the latch set the engine exchanges (MPI, periodic wrap, or
+!!       tripolar fold, scalar copy) `Q_heat`/`Q_salt` after every assembly and
+!!       `sw_net` after every formation (`ocean_seam_refresh_surface_flux`).
+!!       The refresh sits on the assembled sums, not on each component: the
+!!       sums are the only flux ghosts any shipped kernel reads (every component is consumed
+!!       column-locally by the assembler), so two exchanges per thermo step
+!!       replace one per component.
 !!
 !! **Component ownership: exactly ONE legal writer per field.**  A second
 !! writer on any row is a silent clobber, not a merge.
@@ -336,6 +349,17 @@ module rdb_ocean_surface_flux
          !! `seaice_melt`.  Cheap early-return gate for a future
          !! freshwater kernel (real-mass PR).  Same contract as
          !! `has_heat` (`:56-62`) — never set from a device reduction.
+      logical :: phys_only_fill = .false.
+         !! Host-side latch (configure time, never a device reduction): a
+         !! filler of the component set writes its components on PHYSICAL
+         !! cells only -- the atmosphere-driven bulk consumer, or a
+         !! `&ocean_dataovr_nml` heat/salt/evap/lprec reader under
+         !! `use_components`.  Then the assembled `Q_heat`/`Q_salt` (and
+         !! `sw_net` under `sw_source="q_sw"`) hold a stale ghost band, which
+         !! KPP/EPBL read in their full-array loops; the engine refreshes
+         !! the seam ghosts (`ocean_seam_refresh_surface_flux`) after the
+         !! assembler, and only when this is set, so every other
+         !! configuration is bit-identical and issues no exchange.
       logical :: has_q_sw = .false.
          !! Host-side latch — set by a filler after writing `q_sw`
          !! (e.g. an ice `sw_thru` coupler).  **Not** the same as

@@ -241,6 +241,9 @@ contains
       sf%has_heat = .true.
       sf%has_mass_flux = .true.
       sf%has_q_sw = .true.
+      ! `bulk_forcing_core_impl` writes its components on physical cells
+      ! only: the engine refreshes the assembled fluxes' seam ghosts.
+      sf%phys_only_fill = .true.
    end subroutine bulk_forcing_configure
 
    ! ======================================================================

@@ -102,7 +102,8 @@ module rdb_ocean_engine
    use rdb_halo, only: halo_allreduce_sum_i8, halo_allreduce_min
    use rdb_barotropic_dtbt, only: bt_dtbt_dt_max, bt_dtbt_n_inner
    use rdb_ocean_halo_state, only: ocean_halo_exchange_ml_state, ocean_halo_exchange_ice_state, &
-                                   ocean_halo_exchange_ice_fluxes
+                                   ocean_halo_exchange_ice_fluxes, &
+                                   ocean_seam_refresh_surface_flux, ocean_seam_refresh_sw_net
    use rdb_ocean_fold_exchange, only: ocean_fold_exchange_init, ocean_fold_exchange_reserve, &
                                       ocean_fold_exchange_destroy, ocean_fold_north_corner
    use rdb_ocean_periodic, only: ocean_periodic_wrap_state, ocean_periodic_wrap_centre_2d
@@ -2017,6 +2018,11 @@ contains
       ! shortwave: this step's open-water `q_sw` plus the ice-transmitted
       ! `sw_ice` (carried from the last thermo window).  No-op otherwise.
       call ocean_surface_flux_refresh_sw_net(engine%state%surface_flux)
+      ! `q_sw` is a physical-span-only write, `sw_net` was just formed over
+      ! the full array, and the boundary-layer schemes read it in the ghost
+      ! columns: exchange its seam ghosts (no-op unless `phys_only_fill`).
+      call ocean_seam_refresh_sw_net(engine%state%surface_flux, engine%grid, &
+                                     engine%state%bc)
 
       call engine%bc_source%update(t, engine%state%bc)
 
@@ -2420,6 +2426,16 @@ contains
                                           engine%state%multilayer, &
                                           active=engine%state%dyn%enable_thermodynamics &
                                           .and. engine%state%dyn%is_thermo_step())
+      end if
+
+      ! The assembler summed components, some of which a filler wrote on
+      ! physical cells only (bulk forcing, data override): exchange the
+      ! ASSEMBLED `Q_heat`/`Q_salt` seam ghosts the boundary-layer schemes
+      ! read.  Same thermo cadence; no-op (no call cost beyond the test)
+      ! unless `use_components` and a physical-span-only filler is on.
+      if (engine%state%dyn%enable_thermodynamics .and. engine%state%dyn%is_thermo_step()) then
+         call ocean_seam_refresh_surface_flux(engine%state%surface_flux, engine%grid, &
+                                              engine%state%bc)
       end if
 
       if (engine%diag_enabled) then

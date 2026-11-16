@@ -29,6 +29,7 @@ module rdb_ocean_halo_state
    use rdb_ocean_surface_stress, only: ocean_surface_stress_t, &
                                        ocean_surface_stress_set_derived
    use rdb_ice_state, only: ocean_sea_ice_t
+   use rdb_ocean_surface_flux, only: ocean_surface_flux_t
    use rdb_constants, only: wp
    implicit none
    private
@@ -38,6 +39,8 @@ module rdb_ocean_halo_state
    public :: ocean_halo_exchange_ice_state
    public :: ocean_halo_exchange_ice_fluxes
    public :: ocean_halo_exchange_centre_field
+   public :: ocean_seam_refresh_surface_flux
+   public :: ocean_seam_refresh_sw_net
    public :: ocean_halo_exchange_ice_transport
 
 contains
@@ -327,6 +330,52 @@ contains
                                           device_resident)
       end if
    end subroutine ocean_halo_exchange_centre_field
+
+   subroutine ocean_seam_refresh_surface_flux(sf, grid, bc, device_resident)
+      !! Seam ghosts of the ASSEMBLED `Q_heat` / `Q_salt`: one centre exchange
+      !! each (MPI, or the periodic wrap on one rank) plus the tripolar fold.
+      !!
+      !! **Why.**  The assembler sums components over the whole array, but a
+      !! physical-span-only filler (the bulk consumer, a data-override
+      !! reader; `sf%phys_only_fill`) leaves its components' ghosts stale, so
+      !! the ghost `Q_heat` lacks that part.  KPP and EPBL loop the full array
+      !! and read the flux in the ghost columns (`B_0`), set `kv` there, and
+      !! the momentum viscosity averages the ghost-column `kv` into the first
+      !! owned face: a decomposed run then differs from the serial one, and
+      !! the serial periodic seam from the interior.  Exchanged, never
+      !! extrapolated.  Call right after `ocean_surface_flux_assemble`
+      !! (same thermo cadence); a no-op unless `sf%use_components` and
+      !! `sf%phys_only_fill`.  Both fields are scalars: no sign flip at the fold.
+      type(ocean_surface_flux_t), intent(inout) :: sf
+      type(hgrid_t), intent(in) :: grid
+      type(ocean_bc_state_t), intent(in) :: bc
+      logical, intent(in), optional :: device_resident
+
+      if (.not. sf%use_components .or. .not. sf%phys_only_fill) return
+      call profiler_start("ocean_comms_flux")
+      call ocean_halo_exchange_centre_field(sf%Q_heat, grid, bc, device_resident)
+      call ocean_halo_exchange_centre_field(sf%Q_salt, grid, bc, device_resident)
+      call profiler_stop("ocean_comms_flux")
+   end subroutine ocean_seam_refresh_surface_flux
+
+   subroutine ocean_seam_refresh_sw_net(sf, grid, bc, device_resident)
+      !! Seam ghosts of `sw_net = q_sw + sw_ice`, formed over the full array
+      !! from a `q_sw` the bulk consumer wrote on physical cells only.  Read
+      !! in the ghost columns by the KPP shortwave coupling and the EPBL
+      !! penetrating-SW TKE ledger.  Call right after
+      !! `ocean_surface_flux_refresh_sw_net`; a no-op unless that routine ran
+      !! (`use_components .and. sw_from_qsw`) and `phys_only_fill`.
+      type(ocean_surface_flux_t), intent(inout) :: sf
+      type(hgrid_t), intent(in) :: grid
+      type(ocean_bc_state_t), intent(in) :: bc
+      logical, intent(in), optional :: device_resident
+
+      if (.not. sf%use_components .or. .not. sf%sw_from_qsw) return
+      if (.not. sf%phys_only_fill) return
+      call profiler_start("ocean_comms_flux")
+      call ocean_halo_exchange_centre_field(sf%sw_net, grid, bc, device_resident)
+      call profiler_stop("ocean_comms_flux")
+   end subroutine ocean_seam_refresh_sw_net
 
    subroutine ocean_halo_exchange_ice_transport(ice, grid, bc, device_resident)
       !! X4 of the sea-ice MPI plan: the seam ghosts every advective

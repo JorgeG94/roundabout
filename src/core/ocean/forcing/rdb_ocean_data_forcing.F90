@@ -42,11 +42,16 @@ module rdb_ocean_data_forcing
    !! anywhere; it exchanges the stress pair and relies on masking at
    !! true domain edges.
    !!
-   !! The thermodynamic flux tags (`heat`, `salt`, `evap`, `lprec`) get
-   !! NO ghost treatment at all, deliberately: they are applied strictly
-   !! column-locally, so no kernel ever reads them in a ghost cell.  A
-   !! future kernel that takes a horizontal gradient of one of them owns
-   !! adding the exchange.
+   !! The thermodynamic flux tags (`heat`, `salt`, `evap`, `lprec`) are
+   !! applied column-locally, but the boundary-layer schemes read the
+   !! ASSEMBLED `Q_heat`/`Q_salt` in the GHOST columns (their loops span
+   !! the full array) and the momentum vertical viscosity then averages the
+   !! ghost-column `kv` into the first owned face.  So the seam ghosts of the
+   !! flux the schemes read are exchanged: under `use_components` the
+   !! engine does it once per thermo step after the assembler (the latch
+   !! `phys_only_fill` set here), and with components off, where the
+   !! tags write `Q_heat`/`Q_salt` themselves, this module exchanges them
+   !! right after the write.
    !!
    !! **The namelist is the expert-level surface, not the intended one.**
    !! `&ocean_dataovr_nml` is a flat, fixed set of tags because that is
@@ -227,6 +232,14 @@ contains
       if (this%id_heat > 0) sf%has_heat = .true.
       if (this%id_salt > 0) sf%has_salt = .true.
       if (this%id_evap > 0 .or. this%id_lprec > 0) sf%has_mass_flux = .true.
+      ! Component destinations are written on physical cells only; the
+      ! engine refreshes the assembled fluxes' seam ghosts after the
+      ! assembler.  (Without components the heat/salt tags write `Q_heat`/
+      ! `Q_salt` directly and `ocean_data_forcing_apply` refreshes them.)
+      if (sf%use_components .and. (this%id_heat > 0 .or. this%id_salt > 0 .or. &
+                                   this%id_evap > 0 .or. this%id_lprec > 0)) then
+         sf%phys_only_fill = .true.
+      end if
 
       ! `stress_mag` must be consistent with whatever the first blend
       ! writes; the first `apply` re-derives it, but configure-time
@@ -412,12 +425,16 @@ contains
          call ocean_halo_exchange_centre_field(sf%sss_target, grid, bc)
       end if
 
-      ! --- surface fluxes (column-local; no ghost fill by design) ---
+      ! --- surface fluxes (component destinations: ghosts refreshed by the
+      ! engine after the assembler; direct Q_heat/Q_salt writes: exchanged here) ---
       if (this%id_heat > 0) then
          if (this%heat_to_component) then
             call ocean_data_input_update_2d(reader, this%id_heat, t, nx, ny, sf%heat_added)
          else
             call ocean_data_input_update_2d(reader, this%id_heat, t, nx, ny, sf%Q_heat)
+            ! Written on physical cells only and read in the ghost columns
+            ! by KPP/EPBL: exchange (never extrapolate).
+            call ocean_halo_exchange_centre_field(sf%Q_heat, grid, bc)
          end if
       end if
       if (this%id_salt > 0) then
@@ -425,6 +442,7 @@ contains
             call ocean_data_input_update_2d(reader, this%id_salt, t, nx, ny, sf%salt_flux)
          else
             call ocean_data_input_update_2d(reader, this%id_salt, t, nx, ny, sf%Q_salt)
+            call ocean_halo_exchange_centre_field(sf%Q_salt, grid, bc)
          end if
       end if
       if (this%id_evap > 0) then
