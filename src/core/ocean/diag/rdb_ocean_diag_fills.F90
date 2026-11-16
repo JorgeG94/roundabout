@@ -64,6 +64,7 @@ module rdb_ocean_diag_fills
    public :: canonical_diag_catalog_size, canonical_diag_catalog_name
    public :: set_diag_remap_method, parse_diag_remap_scheme
    public :: set_diag_mask_vanished, diag_mask_vanished_is_on
+   public :: set_diag_remap_flat, diag_remap_workspace_cleanup
 
    integer, save :: diag_remap_method = REMAP_PPM
       !! Reconstruction for the conservative diagnostic vertical remap
@@ -79,6 +80,24 @@ module rdb_ocean_diag_fills
       !! (`set_diag_mask_vanished`); read host-side and passed BY VALUE into
       !! the device `_impl`.  Default `.false.` => below-bottom cells read 0
       !! (bit-identical to the legacy remap).
+
+   logical, save :: diag_remap_flat = .true.
+      !! Route the PCM / PLM / PPM diagnostic remap through the flat,
+      !! thread-per-target-cell kernel (`remap_layer_to_vcoord_flat_impl`).
+      !! `.false.` forces the per-column `remap_column` kernel for every
+      !! scheme — the reference the flat kernel is gated against
+      !! (`set_diag_remap_flat`; test hook, no namelist knob).
+
+   ! Device-resident scratch of the flat diagnostic remap: lazily sized by
+   ! `diag_remap_workspace_ensure`, released by `diag_remap_workspace_cleanup`
+   ! (engine teardown).  Never local-allocated — a time-MEAN diagnostic on a
+   ! non-layer output grid remaps every step.
+   real(wp), allocatable, save :: diag_remap_zo(:, :, :)
+      !! Source interface depth below work layer `k` (top-down, `(nx,ny,n)`).
+   real(wp), allocatable, save :: diag_remap_zn(:, :, :)
+      !! Target interface depth below output cell `m` (`(nx,ny,nz_out)`).
+   real(wp), allocatable, save :: diag_remap_dzn(:, :, :)
+      !! Target cell thickness, clipped to the column (`(nx,ny,nz_out)`).
 
    integer, parameter :: N_CANONICAL_DIAGS = 37
    real(wp), parameter :: CM_DAY_PER_M_S = 8.64e6_wp
@@ -1101,10 +1120,8 @@ contains
 
       select type (state => state_handle)
       class is (ocean_state_t)
-         call remap_layer_to_vcoord_impl(DIAG_VGRID_Z_FIXED, state%multilayer%h_layer, &
-                                         z_out, layer_buf, output_buf, is_extensive, &
-                                         diag_remap_method, diag_mask_vanished, &
-                                         DIAG_MISSING_VALUE)
+         call remap_layer_to_vcoord(DIAG_VGRID_Z_FIXED, state%multilayer%h_layer, &
+                                    z_out, layer_buf, output_buf, is_extensive)
       end select
    end subroutine remap_layer_to_z
 
@@ -1122,10 +1139,8 @@ contains
 
       select type (state => state_handle)
       class is (ocean_state_t)
-         call remap_layer_to_vcoord_impl(DIAG_VGRID_SIGMA, state%multilayer%h_layer, &
-                                         levels, layer_buf, output_buf, is_extensive, &
-                                         diag_remap_method, diag_mask_vanished, &
-                                         DIAG_MISSING_VALUE)
+         call remap_layer_to_vcoord(DIAG_VGRID_SIGMA, state%multilayer%h_layer, &
+                                    levels, layer_buf, output_buf, is_extensive)
       end select
    end subroutine remap_layer_to_sigma
 
@@ -1146,10 +1161,8 @@ contains
 
       select type (state => state_handle)
       class is (ocean_state_t)
-         call remap_layer_to_vcoord_impl(DIAG_VGRID_ZSTAR, state%multilayer%h_layer, &
-                                         levels, layer_buf, output_buf, is_extensive, &
-                                         diag_remap_method, diag_mask_vanished, &
-                                         DIAG_MISSING_VALUE)
+         call remap_layer_to_vcoord(DIAG_VGRID_ZSTAR, state%multilayer%h_layer, &
+                                    levels, layer_buf, output_buf, is_extensive)
       end select
    end subroutine remap_layer_to_zstar
 
@@ -1173,6 +1186,355 @@ contains
          remap => null()
       end select
    end subroutine coord_remap_proc
+
+   subroutine set_diag_remap_flat(flag)
+      !! Select the flat (`.true.`, default) or the per-column reference
+      !! (`.false.`) kernel for the PCM / PLM / PPM diagnostic remap.  Test
+      !! hook: the two must agree (`test_ocean_diag_remap`).
+      logical, intent(in) :: flag
+      diag_remap_flat = flag
+   end subroutine set_diag_remap_flat
+
+   subroutine diag_remap_workspace_ensure(nx, ny, n, nz_out)
+      !! Lazily size + device-map the flat remap's scratch.  GROW-ONLY in the
+      !! vertical: a buffer at least as deep as the request is reused as is
+      !! (the kernel takes explicit shapes, so the spare levels are never
+      !! touched), which keeps a run with time-mean diagnostics on two output
+      !! grids of different depth from re-allocating + re-mapping on every
+      !! call.  A no-op once large enough: the per-step call costs four
+      !! `size` tests.
+      integer, intent(in) :: nx, ny, n, nz_out
+      integer :: n_alloc, nz_out_alloc
+      n_alloc = n
+      nz_out_alloc = nz_out
+      if (allocated(diag_remap_zo)) then
+         if (size(diag_remap_zo, 1) == nx .and. size(diag_remap_zo, 2) == ny) then
+            if (size(diag_remap_zo, 3) >= n .and. size(diag_remap_zn, 3) >= nz_out) return
+            n_alloc = max(n, size(diag_remap_zo, 3))
+            nz_out_alloc = max(nz_out, size(diag_remap_zn, 3))
+         end if
+         call diag_remap_workspace_cleanup()
+      end if
+      allocate (diag_remap_zo(nx, ny, n_alloc), diag_remap_zn(nx, ny, nz_out_alloc), &
+                diag_remap_dzn(nx, ny, nz_out_alloc))
+      diag_remap_zo = 0.0_wp
+      diag_remap_zn = 0.0_wp
+      diag_remap_dzn = 0.0_wp
+      !$acc enter data copyin(diag_remap_zo, diag_remap_zn, diag_remap_dzn)
+   end subroutine diag_remap_workspace_ensure
+
+   subroutine diag_remap_workspace_cleanup()
+      !! Release the flat remap's scratch (engine teardown; idempotent).
+      if (.not. allocated(diag_remap_zo)) return
+      !$acc exit data delete(diag_remap_zo, diag_remap_zn, diag_remap_dzn)
+      deallocate (diag_remap_zo, diag_remap_zn, diag_remap_dzn)
+   end subroutine diag_remap_workspace_cleanup
+
+   subroutine remap_layer_to_vcoord(coord_type, h_layer, levels, layer_buf, output_buf, &
+                                    is_extensive)
+      !! Host-side dispatch of the conservative layer→output-coordinate
+      !! remap.  PCM / PLM / PPM go through the flat thread-per-target-cell
+      !! kernel (`remap_layer_to_vcoord_flat_impl`); PPM_H4, a column of
+      !! fewer than three work layers, mismatched buffer shapes and
+      !! `set_diag_remap_flat(.false.)` take the per-column
+      !! `remap_layer_to_vcoord_impl`.
+      ! assumed-shape-ok: host dispatcher, no kernel here — the flat impl is explicit-shape.
+      integer, intent(in)    :: coord_type
+      real(wp), intent(in)    :: h_layer(:, :, :)
+      real(wp), intent(in)    :: levels(:)
+      real(wp), intent(in)    :: layer_buf(:, :, :)
+      real(wp), intent(inout) :: output_buf(:, :, :)
+      logical, intent(in)    :: is_extensive
+      integer :: nx, ny, nz, nz_out, n
+      logical :: flat
+      nx = size(layer_buf, 1)
+      ny = size(layer_buf, 2)
+      nz = size(layer_buf, 3)
+      nz_out = size(levels)
+      n = max(nz, nz_out)
+      flat = diag_remap_flat .and. n >= 3 .and. nz_out >= 1 .and. &
+             (diag_remap_method == REMAP_PCM .or. diag_remap_method == REMAP_PLM .or. &
+              diag_remap_method == REMAP_PPM) .and. &
+             size(h_layer, 1) == nx .and. size(h_layer, 2) == ny .and. &
+             size(h_layer, 3) == nz .and. size(output_buf, 1) == nx .and. &
+             size(output_buf, 2) == ny .and. size(output_buf, 3) == nz_out
+      if (flat) then
+         call diag_remap_workspace_ensure(nx, ny, n, nz_out)
+         call remap_layer_to_vcoord_flat_impl(coord_type, nx, ny, nz, nz_out, n, h_layer, &
+                                              levels, layer_buf, output_buf, is_extensive, &
+                                              diag_remap_method, diag_mask_vanished, &
+                                              DIAG_MISSING_VALUE, diag_remap_zo, &
+                                              diag_remap_zn, diag_remap_dzn)
+      else
+         call remap_layer_to_vcoord_impl(coord_type, h_layer, levels, layer_buf, output_buf, &
+                                         is_extensive, diag_remap_method, diag_mask_vanished, &
+                                         DIAG_MISSING_VALUE)
+      end if
+   end subroutine remap_layer_to_vcoord
+
+   pure function diag_remap_src_q(nx, ny, nz, i, j, kw, h_layer, layer_buf, is_extensive) &
+      result(q)
+      !$acc routine seq
+      !! Source value of TOP-DOWN work layer `kw` (state layer `nz-kw+1`)
+      !! as the remap sees it: 0 for a vanished layer (zero weight, its
+      !! buffer value — possibly the NaN sentinel — is never read) and for
+      !! the zero-thickness padding `kw > nz`; an extensive field is
+      !! divided by the thickness (integral → concentration).
+      !!
+      !! The cell indices are `value` dummies: nvfortran passes a
+      !! `do concurrent` index by reference as its lower bound when the index
+      !! has no other use in the loop body.
+      integer, intent(in) :: nx, ny, nz
+      integer, value :: i, j, kw
+      real(wp), intent(in) :: h_layer(nx, ny, nz)
+      real(wp), intent(in) :: layer_buf(nx, ny, nz)
+      logical, intent(in) :: is_extensive
+      real(wp) :: q, h
+      q = 0.0_wp
+      if (kw > nz) return
+      h = h_layer(i, j, nz - kw + 1)
+      if (rdb_vl_is_live(h)) then
+         q = layer_buf(i, j, nz - kw + 1)
+         if (is_extensive) then
+            if (h > 1.0e-12_wp) then
+               q = q/h
+            else
+               q = 0.0_wp
+            end if
+         end if
+      end if
+   end function diag_remap_src_q
+
+   pure subroutine remap_layer_to_vcoord_flat_impl(coord_type, nx, ny, nz, nz_out, n, h_layer, &
+                                                   levels, layer_buf, output_buf, &
+                                                   is_extensive, method, mask_vanished, &
+                                                   missing, zo, zn, dzn)
+      !! The remap of `remap_layer_to_vcoord_impl` (same source masking,
+      !! target clipping, padding to `n = max(nz, nz_out)`, intensive /
+      !! extensive and missing-value contract — read that docstring) for
+      !! PCM / PLM / PPM, restructured for the device: ONE THREAD PER TARGET
+      !! CELL over flat scratch, instead of one thread per column carrying
+      !! `NZ_STACK_MAX`-wide private column arrays through `remap_column`.
+      !!
+      !! Why it exists: a time-MEAN diagnostic on a non-layer output grid is
+      !! sampled — hence remapped — EVERY step, and the per-column kernel
+      !! cost 76 ms per field per step on a 1440x378x50 domain (70 % of the
+      !! run, 1/4-degree Southern Ocean, one output level).  Thread-private
+      !! arrays are uncoalesced device memory, and `remap_column` builds all
+      !! `n` source reconstructions whatever the target needs.  Here a
+      !! target cell reconstructs only the source cells it overlaps:
+      !! 0.24 ms for that case, 4.7 ms for 50 output levels (was 113 ms).
+      !!
+      !! Kernel 1 (per column) accumulates the source interfaces `zo` and the
+      !! clipped target interfaces `zn` / thicknesses `dzn`.  Kernel 2 (per
+      !! target cell) bisects for the first overlapping source cell, then
+      !! integrates the reconstruction of each overlapped source cell, built
+      !! in place from its <= 5-cell stencil with the SAME expressions, in
+      !! the same order, as `remap_column_{pcm,plm,ppm}` (default closures:
+      !! no boundary extrapolation, equal-thickness weights).
+      !!
+      !! **Equivalence.**  Identical to the per-column kernel except in a
+      !! target cell CLIPPED at the column bottom: the column total here is
+      !! the last source interface `zo(n)` itself, where the per-column
+      !! kernel sums it separately (and the optimiser is free to reassociate
+      !! that sum), so the clip can land an ulp of `H` apart — a relative
+      !! `ulp(H)/dz` difference in that one cell.  Gate:
+      !! `test_ocean_diag_remap` (flat vs column).
+      integer, intent(in)    :: coord_type
+      integer, intent(in)    :: nx, ny, nz, nz_out, n
+      real(wp), intent(in)    :: h_layer(nx, ny, nz)
+      real(wp), intent(in)    :: levels(nz_out)
+      real(wp), intent(in)    :: layer_buf(nx, ny, nz)
+      real(wp), intent(inout) :: output_buf(nx, ny, nz_out)
+      logical, intent(in)    :: is_extensive
+      integer, intent(in)    :: method
+      logical, intent(in)    :: mask_vanished
+      real(wp), intent(in)    :: missing
+      real(wp), intent(inout) :: zo(nx, ny, n)
+         !! Scratch: source interface below work layer `k` (top-down).
+      real(wp), intent(inout) :: zn(nx, ny, nz_out)
+         !! Scratch: target interface below output cell `m`.
+      real(wp), intent(inout) :: dzn(nx, ny, nz_out)
+         !! Scratch: clipped target thickness.
+      integer :: i, j, k, m, ko, lo, hi, mid
+      real(wp) :: href, acc, h, col_h, lvl_scale, zf_prev, zf, dz, zacc
+      real(wp) :: zn_lo, zn_hi, zo_lo, zo_hi, z_lo, z_hi, overlap, integral, dzo
+      real(wp) :: xi_lo, xi_hi, qm2, qm1, q0, qp1, qp2, e_l, e_r, q_l, q_r, q_6
+      real(wp) :: q_min, q_max, dq, dq_l, dq_r, slope, qn
+
+      href = levels(nz_out)   ! ZSTAR reference total depth (deepest interface)
+
+      ! ---- kernel 1: source + target interfaces, one thread per column ----
+      do concurrent(j=1:ny, i=1:nx) &
+         local(k, m, acc, h, col_h, lvl_scale, zf_prev, zf, dz, zacc)
+         acc = 0.0_wp
+         do k = 1, n
+            if (k <= nz) then
+               h = h_layer(i, j, nz - k + 1)
+               if (.not. rdb_vl_is_live(h)) h = 0.0_wp
+               acc = acc + h
+            end if
+            zo(i, j, k) = acc
+         end do
+         col_h = acc
+         if (coord_type == DIAG_VGRID_SIGMA) then
+            lvl_scale = col_h
+         else if (coord_type == DIAG_VGRID_ZSTAR) then
+            if (href > 1.0e-12_wp) then
+               lvl_scale = col_h/href
+            else
+               lvl_scale = 1.0_wp
+            end if
+         else   ! DIAG_VGRID_Z_FIXED: levels are absolute depths
+            lvl_scale = 1.0_wp
+         end if
+         zf_prev = 0.0_wp
+         zacc = 0.0_wp
+         do m = 1, nz_out
+            zf = min(max(levels(m)*lvl_scale, 0.0_wp), col_h)
+            dz = zf - zf_prev
+            if (dz < 0.0_wp) dz = 0.0_wp
+            dzn(i, j, m) = dz
+            zacc = zacc + dz
+            zn(i, j, m) = zacc
+            zf_prev = zf
+         end do
+      end do
+
+      ! ---- kernel 2: overlap integral + emit, one thread per target cell ----
+      do concurrent(j=1:ny, m=1:nz_out, i=1:nx) &
+         local(ko, lo, hi, mid, dz, zn_lo, zn_hi, zo_lo, zo_hi, z_lo, z_hi, overlap, integral, &
+               dzo, xi_lo, xi_hi, qm2, qm1, q0, qp1, qp2, e_l, e_r, q_l, q_r, q_6, q_min, &
+               q_max, dq, dq_l, dq_r, slope, qn)
+         dz = dzn(i, j, m)
+         qn = 0.0_wp
+         if (dz > 0.0_wp) then
+            zn_hi = zn(i, j, m)
+            zn_lo = 0.0_wp
+            if (m > 1) zn_lo = zn(i, j, m - 1)
+            ! First source cell reaching below the target's top: the smallest
+            ! ko with zo(ko) > zn_lo (n+1 if none).  Everything above it has a
+            ! non-positive overlap, which `remap_column` skips too.
+            lo = 0
+            hi = n + 1
+            do while (hi - lo > 1)
+               mid = (lo + hi)/2
+               if (zo(i, j, mid) > zn_lo) then
+                  hi = mid
+               else
+                  lo = mid
+               end if
+            end do
+            integral = 0.0_wp
+            do ko = hi, n
+               zo_hi = zo(i, j, ko)
+               zo_lo = 0.0_wp
+               if (ko > 1) zo_lo = zo(i, j, ko - 1)
+               z_lo = max(zn_lo, zo_lo)
+               z_hi = min(zn_hi, zo_hi)
+               overlap = z_hi - z_lo
+               if (overlap <= 0.0_wp) then
+                  if (zo_hi > zn_hi) exit
+                  cycle
+               end if
+               dzo = 0.0_wp
+               if (ko <= nz) then
+                  dzo = h_layer(i, j, nz - ko + 1)
+                  if (.not. rdb_vl_is_live(dzo)) dzo = 0.0_wp
+               end if
+               q0 = diag_remap_src_q(nx, ny, nz, i, j, ko, h_layer, layer_buf, is_extensive)
+               if (method == REMAP_PCM .or. .not. dzo > 0.0_wp) then
+                  integral = integral + q0*overlap
+                  cycle
+               end if
+               xi_lo = (z_lo - zo_lo)/dzo
+               xi_hi = (z_hi - zo_lo)/dzo
+               qm1 = q0
+               qp1 = q0
+               if (ko > 1) qm1 = diag_remap_src_q(nx, ny, nz, i, j, ko - 1, h_layer, &
+                                                  layer_buf, is_extensive)
+               if (ko < n) qp1 = diag_remap_src_q(nx, ny, nz, i, j, ko + 1, h_layer, &
+                                                  layer_buf, is_extensive)
+               if (method == REMAP_PLM) then
+                  ! minmod half-difference; the two end cells are PCM
+                  slope = 0.0_wp
+                  if (ko > 1 .and. ko < n) then
+                     dq_l = q0 - qm1
+                     dq_r = qp1 - q0
+                     if (dq_l*dq_r > 0.0_wp) then
+                        slope = 0.5_wp*sign(min(abs(dq_l), abs(dq_r)), dq_l)
+                     end if
+                  end if
+                  integral = integral + overlap*(q0 + slope*(xi_lo + xi_hi - 1.0_wp))
+                  cycle
+               end if
+               ! ---- PPM: unlimited edges.  Edge k|k+1 is the two-cell mean
+               ! at k = 1 and k = n-1, the 4th-order (7/12, -1/12) value
+               ! elsewhere; the column ends are PCM. ----
+               if (ko == 1) then
+                  e_l = q0
+               else if (ko == 2 .or. ko == n) then
+                  e_l = 0.5_wp*(qm1 + q0)
+               else
+                  qm2 = diag_remap_src_q(nx, ny, nz, i, j, ko - 2, h_layer, layer_buf, &
+                                         is_extensive)
+                  e_l = (7.0_wp/12.0_wp)*(qm1 + q0) - (1.0_wp/12.0_wp)*(qm2 + qp1)
+               end if
+               if (ko == n) then
+                  e_r = q0
+               else if (ko == 1 .or. ko == n - 1) then
+                  e_r = 0.5_wp*(q0 + qp1)
+               else
+                  qp2 = diag_remap_src_q(nx, ny, nz, i, j, ko + 2, h_layer, layer_buf, &
+                                         is_extensive)
+                  e_r = (7.0_wp/12.0_wp)*(q0 + qp1) - (1.0_wp/12.0_wp)*(qm1 + qp2)
+               end if
+               ! ---- Colella-Woodward monotonicity limiting ----
+               q_min = q0
+               q_max = q0
+               if (ko > 1) then
+                  q_min = min(q_min, qm1)
+                  q_max = max(q_max, qm1)
+               end if
+               if (ko < n) then
+                  q_min = min(q_min, qp1)
+                  q_max = max(q_max, qp1)
+               end if
+               q_l = max(q_min, min(q_max, e_l))
+               q_r = max(q_min, min(q_max, e_r))
+               dq = q_r - q_l
+               dq_l = q0 - q_l
+               dq_r = q_r - q0
+               if (dq_l*dq_r <= 0.0_wp) then
+                  q_l = q0
+                  q_r = q0
+               else
+                  q_6 = 6.0_wp*q0 - 3.0_wp*(q_l + q_r)
+                  if (abs(q_6) > abs(dq)) then
+                     if (q_6*dq > 0.0_wp) then
+                        q_l = 3.0_wp*q0 - 2.0_wp*q_r
+                     else
+                        q_r = 3.0_wp*q0 - 2.0_wp*q_l
+                     end if
+                  end if
+               end if
+               q_6 = 6.0_wp*q0 - 3.0_wp*(q_l + q_r)
+               integral = integral + dzo*( &
+                          (xi_hi - xi_lo)*q_l &
+                          + 0.5_wp*(xi_hi*xi_hi - xi_lo*xi_lo)*(q_r - q_l + q_6) &
+                          - (xi_hi*xi_hi*xi_hi - xi_lo*xi_lo*xi_lo)*q_6/3.0_wp)
+            end do
+            qn = integral/dz
+         end if
+         if (mask_vanished .and. dz <= VANISHED_TARGET_FLOOR) then
+            output_buf(i, j, m) = missing
+         else if (is_extensive) then
+            output_buf(i, j, m) = qn*dz
+         else
+            output_buf(i, j, m) = qn
+         end if
+      end do
+   end subroutine remap_layer_to_vcoord_flat_impl
 
    pure subroutine remap_layer_to_vcoord_impl(coord_type, h_layer, levels, layer_buf, &
                                               output_buf, is_extensive, method, &

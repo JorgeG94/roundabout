@@ -17,7 +17,7 @@
 !! ⇒ the surface (k=NZ) layer is the lightest, matching the lightest→surface
 !! density-bin convention.
 module test_ocean_diag_remap
-   use rdb_constants, only: wp, REMAP_PCM, REMAP_PPM, H_VANISHED
+   use rdb_constants, only: wp, REMAP_PCM, REMAP_PLM, REMAP_PPM, H_VANISHED
    use rdb_grid, only: hgrid_t
    use rdb_ocean_state, only: ocean_state_t, ocean_state_enter_data, ocean_state_exit_data
    use rdb_ocean_diag, only: DIAG_OP_INSTANT, DIAG_VGRID_Z_FIXED, DIAG_VGRID_DENSITY, &
@@ -28,7 +28,7 @@ module test_ocean_diag_remap
                                    remap_layer_to_sigma, remap_layer_to_zstar, &
                                    remap_layer_to_density, &
                                    set_diag_remap_method, set_diag_mask_vanished, &
-                                   coord_remap_proc
+                                   set_diag_remap_flat, coord_remap_proc
    use rdb_driver, only: diag_vgrid_from_name
    use rdb_ocean_metrics, only: metrics_fill_cartesian, metrics_finalize
    use testdrive, only: error_type, check, new_unittest, unittest_type
@@ -58,6 +58,7 @@ contains
                   new_unittest("diag_remap_mask_off_reads_zero", test_mask_off_zero), &
                   new_unittest("diag_remap_mask_on_reads_missing", test_mask_on_missing), &
                   new_unittest("diag_remap_ppm_higher_order", test_z_ppm_exact), &
+                  new_unittest("diag_remap_flat_matches_column", test_flat_matches_column), &
                   new_unittest("diag_remap_on_device_finite", test_on_device), &
                   new_unittest("diag_dispatch_honors_is_extensive", test_dispatch_extensive), &
                   new_unittest("diag_density_vgrid_from_namelist", test_density_vgrid_from_namelist), &
@@ -464,6 +465,110 @@ contains
    ! ------------------------------------------------------------------
    ! On-device (GPU) round-trip
    ! ------------------------------------------------------------------
+
+   subroutine test_flat_matches_column(error)
+      !! The flat thread-per-target-cell kernel (the default for PCM / PLM /
+      !! PPM) against the per-column `remap_column` kernel it replaced, on
+      !! columns that exercise every branch: vanished bed fillers, a
+      !! vanished layer mid-column, an all-vanished (land) column, a
+      !! shallow column the targets are clipped to, and a target grid with
+      !! fewer (1), comparable (5) and MORE (16 > nz) cells than the source
+      !! -- over the three output coordinates, intensive and extensive,
+      !! with the missing-value mask on.  The two differ only by the
+      !! rounding of the column total a bottom-clipped target is cut at, so
+      !! the tolerance is round-off, not a physical one.
+      type(error_type), allocatable, intent(out) :: error
+      integer, parameter :: NZL = 12
+      type(hgrid_t) :: grid
+      type(ocean_state_t) :: state
+      real(wp), allocatable :: layer_buf(:, :, :), out_flat(:, :, :), out_col(:, :, :)
+      real(wp), allocatable :: levels(:)
+      integer, parameter :: METHODS(3) = [REMAP_PCM, REMAP_PLM, REMAP_PPM]
+      integer, parameter :: NOUT(3) = [1, 5, 16]
+      integer :: n1, n2, i, j, k, im, io, ic, ie, m
+      real(wp) :: scale
+      logical :: ext
+      checks: block
+         call grid%init(NX, NY, 1, DX, DX)
+         state%multilayer%nz_ml = NZL
+         call state%init(grid)
+         n1 = size(state%multilayer%h_layer, 1)
+         n2 = size(state%multilayer%h_layer, 2)
+         allocate (layer_buf(n1, n2, NZL))
+         do k = 1, NZL
+            do j = 1, n2
+               do i = 1, n1
+                  ! bottom-up: thick at depth, thin near the surface, never uniform
+                  state%multilayer%h_layer(i, j, k) = &
+                     (2.0_wp + 3.0_wp*real(NZL - k, wp))*(1.0_wp + 0.11_wp*real(mod(i + 2*j + k, 5), wp))
+                  ! non-monotone so the limiter, the extremum flatten and both
+                  ! overshoot branches all fire
+                  layer_buf(i, j, k) = 4.0_wp + 1.7_wp*real(k, wp) &
+                                       + 3.0_wp*sin(1.3_wp*real(k + i, wp) + 0.7_wp*real(j, wp))
+                  if (k <= mod(i + j, 4)) state%multilayer%h_layer(i, j, k) = 0.5_wp*H_VANISHED
+               end do
+            end do
+         end do
+         state%multilayer%h_layer(2, 2, 7) = 0.0_wp                 ! vanished mid-column
+         state%multilayer%h_layer(3, 2, :) = 0.0_wp                 ! land column
+         state%multilayer%h_layer(1, 3, 1:NZL - 2) = 0.0_wp         ! shallow: two live layers
+         scale = maxval(abs(layer_buf))*maxval(state%multilayer%h_layer)
+
+         call set_diag_mask_vanished(.true.)
+         do im = 1, 3
+            call set_diag_remap_method(METHODS(im))
+            do io = 1, 3
+               if (allocated(levels)) deallocate (levels, out_flat, out_col)
+               allocate (levels(NOUT(io)), out_flat(n1, n2, NOUT(io)), out_col(n1, n2, NOUT(io)))
+               do ic = 1, 3
+                  do m = 1, NOUT(io)
+                     if (ic == 2) then    ! sigma: cumulative fractions
+                        levels(m) = (real(m, wp)/real(NOUT(io), wp))**2
+                     else                 ! z / z*: depths, deepest below most columns
+                        levels(m) = 260.0_wp*(real(m, wp)/real(NOUT(io), wp))**1.5_wp
+                     end if
+                  end do
+                  do ie = 1, 2
+                     ext = (ie == 2)
+                     out_flat = -1.0_wp
+                     out_col = -2.0_wp
+                     call set_diag_remap_flat(.true.)
+                     call remap_one(ic, state, levels, layer_buf, out_flat, ext)
+                     call set_diag_remap_flat(.false.)
+                     call remap_one(ic, state, levels, layer_buf, out_col, ext)
+                     call check(error, maxval(abs(out_flat - out_col)) <= 1.0e-11_wp*scale, &
+                                "flat diagnostic remap must match the per-column kernel")
+                     if (allocated(error)) exit checks
+                     call check(error, any(out_flat == DIAG_MISSING_VALUE) .and. &
+                                any(out_flat /= DIAG_MISSING_VALUE), &
+                                "case must hold both masked and live target cells")
+                     if (allocated(error)) exit checks
+                  end do
+               end do
+            end do
+         end do
+      end block checks
+      call set_diag_remap_flat(.true.)        ! restore module state for other tests
+      call set_diag_mask_vanished(.false.)
+      call set_diag_remap_method(REMAP_PPM)
+      call state%destroy()
+   contains
+      subroutine remap_one(icoord, st, lev, buf, out, is_ext)
+         integer, intent(in) :: icoord
+         type(ocean_state_t), intent(in) :: st
+         real(wp), intent(in) :: lev(:), buf(:, :, :)
+         real(wp), intent(inout) :: out(:, :, :)
+         logical, intent(in) :: is_ext
+         select case (icoord)
+         case (1)
+            call remap_layer_to_z(st, lev, buf, out, is_ext)
+         case (2)
+            call remap_layer_to_sigma(st, lev, buf, out, is_ext)
+         case default
+            call remap_layer_to_zstar(st, lev, buf, out, is_ext)
+         end select
+      end subroutine remap_one
+   end subroutine test_flat_matches_column
 
    subroutine test_on_device(error)
       !! Register a Z_FIXED and a DENSITY temperature diagnostic, fire both
