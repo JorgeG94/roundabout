@@ -13,8 +13,7 @@
 !! The forcing is a wind that is ODD under the rotation (`u = A sin(kx (x-xc)) cos(ky (y-yc))`,
 !! `v = A cos(kx (x-xc)) sin(ky (y-yc))`), set on the engine's per-cell atmosphere arrays, ghosts included.  The ocean is on
 !! a flat f-plane at rest, so the ocean (currents, sea-surface tilt, the blended ice-ocean stress, the surface fluxes of the
-!! hand-off) is symmetric too and enters the comparison.  On the device build the folded cases skip (open: the remap
-!! geometry check aborts at a bipole corner, see `skip_on_device`).  Cases:
+!! hand-off) is symmetric too and enters the comparison.  Cases:
 !!   * `doubled_domain_is_symmetric`   the doubled run's upper half is the rotated lower half (round-off bound), over the
 !!                                     ice state, the ice velocity, the ocean layers and the surface fluxes and stress.
 !!   * `fold_equals_doubled_lower_half`  the folded run (`north = tripolar_fold`) equals the lower half of the doubled run
@@ -67,11 +66,6 @@ module test_cice_tripole
                                                          "aiN", "npm", "strair_x_T gh", "strair_y_T gh", "v_ice row", "ocean v row"]
    integer, parameter :: MAXF = 40
    integer, parameter :: ST_T = 1, ST_U = 2, ST_V = 3
-#ifdef RDB_GPU_OFFLOAD
-   logical, parameter :: ON_DEVICE = .true.
-#else
-   logical, parameter :: ON_DEVICE = .false.
-#endif
    logical :: comm_inited = .false.
 
    type :: field_t
@@ -487,7 +481,6 @@ contains
       real(wp) :: worst, one
       character(len=24) :: nm
 
-      if (skip_on_device()) return
       call run_case(.true., nsteps_run(), sf, ok)
       call check(error, ok, "the folded run completed")
       if (allocated(error)) return
@@ -506,17 +499,6 @@ contains
       write (*, '(a,es10.3,a,a)') "  folded vs doubled lower half: worst ", worst, " in ", trim(nm)
       call check(error, worst < 1.0e-9_wp, "the folded run equals the lower half of the doubled run")
    end subroutine test_fold_equals_doubled
-
-   logical function skip_on_device()
-      !! The folded runs abort on the device build at step 2 with a fatal `ICE_ERR_TRANSPORT_CONSERV` in the remap
-      !! geometry (`n_geom = 1`: the edge-area sum of `rdb_ice_remap_geom` off by more than 1e-13 of a cell area) on the
-      !! fold-line edge of the cell next to the bipole `(ni, nj)`; the CPU builds (gfortran, FMA contraction off)
-      !! pass.  The rotation-symmetric state this test needs makes the corner velocity at a bipole exactly zero; a
-      !! production tripolar run has the same exact zero at its two bipoles every step.  Open on the GPU build
-      !! (see the report of stage B); the doubled-domain cases still run there.
-      skip_on_device = ON_DEVICE
-      if (ON_DEVICE) write (*, '(a)') "  SKIPPED on the device build: folded run aborts in the remap geometry check (known, open)"
-   end function skip_on_device
 
    function folded_one(ff, fd) result(r)
       type(field_t), intent(in) :: ff, fd
@@ -558,7 +540,6 @@ contains
       real(wp) :: worst
       character(len=24) :: nm, names(2)
 
-      if (skip_on_device()) return
       bits = [ICE_SKIP_FOLD_SIGN, ICE_SKIP_FOLD_PAIR]
       names = [character(len=24) :: "stress pair as scalar", "stress pair not folded"]
       call run_case(.false., 12, sd, ok)
@@ -767,7 +748,6 @@ contains
       real(wp) :: res(3), resd(3)
       logical :: ok
 
-      if (skip_on_device()) return
       call run_case(.true., nsteps_run(), sf, ok, res)
       call check(error, ok, "the folded run completed")
       if (allocated(error)) return
