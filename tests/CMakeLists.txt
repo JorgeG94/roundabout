@@ -359,6 +359,7 @@ set(RDB_TESTS
     "test_ocean_boundary|test_ocean_boundary|collect_ocean_boundary_tests|ocean_boundary|ocean"
     "test_ocean_periodic|test_ocean_periodic|collect_ocean_periodic_tests|ocean_periodic|ocean"
     "test_ocean_periodic_seam_file|test_ocean_periodic_seam_file|collect_ocean_periodic_seam_file_tests|ocean_periodic_seam_file|ocean"
+    "test_ocean_surface_flux_seam|test_ocean_surface_flux_seam|collect_ocean_surface_flux_seam_tests|ocean_surface_flux_seam|ocean"
     "test_ocean_fold|test_ocean_fold|collect_ocean_fold_tests|ocean_fold|ocean"
     "test_ocean_fold_plan|test_ocean_fold_plan|collect_ocean_fold_plan_tests|ocean_fold_plan|ocean"
     "test_ocean_tripolar|test_ocean_tripolar|collect_ocean_tripolar_tests|ocean_tripolar|ocean"
@@ -461,6 +462,7 @@ set(NETCDF_TESTS
     test_static_2d_reader
     test_ocean_cavity_draft_file
     test_ocean_periodic_seam_file
+    test_ocean_surface_flux_seam
     test_ocean_diag_netcdf
     test_ocean_diag_precision
     test_ocean_supergrid
@@ -487,6 +489,7 @@ set(NETCDF_REQUIRED_TESTS
     test_static_2d_reader
     test_ocean_cavity_draft_file
     test_ocean_periodic_seam_file
+    test_ocean_surface_flux_seam
     test_ocean_diag_netcdf
     test_ocean_diag_precision
     test_ocean_supergrid

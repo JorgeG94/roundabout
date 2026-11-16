@@ -102,7 +102,8 @@ module rdb_ocean_engine
    use rdb_halo, only: halo_allreduce_sum_i8, halo_allreduce_min
    use rdb_barotropic_dtbt, only: bt_dtbt_dt_max, bt_dtbt_n_inner
    use rdb_ocean_halo_state, only: ocean_halo_exchange_ml_state, ocean_halo_exchange_ice_state, &
-                                   ocean_halo_exchange_ice_fluxes
+                                   ocean_halo_exchange_ice_fluxes, &
+                                   ocean_seam_refresh_surface_flux, ocean_seam_refresh_sw_net
    use rdb_ocean_fold_exchange, only: ocean_fold_exchange_init, ocean_fold_exchange_reserve, &
                                       ocean_fold_exchange_destroy, ocean_fold_north_corner
    use rdb_ocean_periodic, only: ocean_periodic_wrap_state, ocean_periodic_wrap_centre_2d
@@ -170,7 +171,7 @@ module rdb_ocean_engine
    use rdb_ice_dyn_c, only: ice_dyn_c_step, ice_dyn_c_metrics_build
    use rdb_ice_sw_wiring, only: ice_sw_wiring_cleanup
    use rdb_ice_cice_hooks, only: ice_cice_bind, ice_cice_step, ice_cice_ic_apply, ice_cice_post_enter, &
-                                 ice_cice_unbind, ice_cice_refresh_flux_ghosts
+                                 ice_cice_unbind
    use rdb_ice_frazil, only: ice_frazil_accumulate, ice_frazil_accumulate_column
    use rdb_ice_melt_potential, only: ice_melt_potential
    use rdb_ice_frazil_uptake, only: ice_frazil_uptake
@@ -1978,6 +1979,15 @@ contains
       ! Skip it there -- the first step's own exchange opens the handles.
       if (.not. engine%warm_restart) then
          call ocean_halo_exchange_ml_state(engine%state%multilayer)
+      else
+         ! A checkpoint written before the seam-flux refresh existed carries
+         ! stale ghost bands in `Q_heat`/`Q_salt`, which KPP/EPBL would read on
+         ! the first step after the resume, before the first thermo-step
+         ! assembly repairs them.  Device-resident (the periodic wrap kernels
+         ! are device kernels on the GPU build), so after the map; a no-op
+         ! unless the component set is on.
+         call ocean_seam_refresh_surface_flux(engine%state%surface_flux, engine%grid, &
+                                              engine%state%bc)
       end if
       if (cfg%ocean%bt%n_inner >= 1) then
          call ocean_halo_bt_group_2d(engine%state%dyn%bt_work%bt_eta, &
@@ -2129,6 +2139,11 @@ contains
       ! shortwave: this step's open-water `q_sw` plus the ice-transmitted
       ! `sw_ice` (carried from the last thermo window).  No-op otherwise.
       call ocean_surface_flux_refresh_sw_net(engine%state%surface_flux)
+      ! `q_sw` is a physical-span-only write, `sw_net` was just formed over
+      ! the full array, and the boundary-layer schemes read it in the ghost
+      ! columns: exchange its seam ghosts (no-op unless `use_components` and `sw_from_qsw`).
+      call ocean_seam_refresh_sw_net(engine%state%surface_flux, engine%grid, &
+                                     engine%state%bc)
 
       call engine%bc_source%update(t, engine%state%bc)
 
@@ -2619,15 +2634,15 @@ contains
                                           .and. engine%state%dyn%is_thermo_step())
       end if
 
-      ! TEMPORARY, scheme="cice" only: SUPERSEDED by the general refresh of the assembled fluxes (and `sw_net`)
-      ! that `fix/surface-flux-ghost-refresh` puts after the assembly for every path.  The stale-ghost read
-      ! (KPP/EPBL evaluate their surface buoyancy flux in the ghost columns) exists for any bulk forcing +
-      ! KPP/EPBL run, not only this scheme.  Delete this call and `ice_cice_refresh_flux_ghosts` when that lands.
-      ! CICE-port ice on a decomposed domain: the assembled totals carry only their ice share in a seam ghost
-      ! (the bulk components are written on physical cells), and KPP / EPBL read `Q_heat` / `Q_salt` in the ghost
-      ! columns; refresh them from the owners (collective, gated on the same rank-uniform cadence as the assembly).
-      if (engine%state%icec%is_init .and. engine%state%dyn%enable_thermodynamics .and. &
-          engine%state%dyn%is_thermo_step()) call ice_cice_refresh_flux_ghosts(engine%state, engine%grid)
+      ! The assembler summed components, some of which a filler wrote on
+      ! physical cells only (bulk forcing, data override, the cavity bands): exchange the
+      ! ASSEMBLED `Q_heat`/`Q_salt` seam ghosts the boundary-layer schemes
+      ! read.  Same thermo cadence; no-op unless `use_components`.
+      if (engine%state%dyn%enable_thermodynamics .and. engine%state%dyn%is_thermo_step()) then
+         call ocean_seam_refresh_surface_flux(engine%state%surface_flux, engine%grid, &
+                                              engine%state%bc)
+      end if
+
       if (engine%diag_enabled) then
          call engine%state%diag%step(engine%state, dt, t + dt)
       end if
