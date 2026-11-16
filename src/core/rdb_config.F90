@@ -142,8 +142,9 @@ module rdb_config
    integer, parameter :: BT_HALO_AUTO_SENTINEL = -1
       !! `&ocean_bt_nml bt_halo` default: AUTO.  Resolved at configure (in the
       !! driver, where `compute_size` is known).  AUTO resolves to 0 — the
-      !! march-in is OPT-IN (set `bt_halo` explicitly) because it is not yet
-      !! bit-reproducible against the serial run.  See `resolve_bt_halo`.
+      !! march-in is OPT-IN (set `bt_halo` explicitly) until the performance
+      !! stage lands (it is bitwise equal to the one-rank run on every
+      !! configuration it accepts).  See `resolve_bt_halo`.
    integer, parameter :: BT_HALO_AUTO_WIDTH = 8
       !! The recommended EXPLICIT march-in width (the validated production
       !! width).  AUTO no longer selects it — see `resolve_bt_halo`.
@@ -964,10 +965,9 @@ module rdb_config
          !! exclusive with
          !! `substep_drag` (bed drag would be double-counted — once
          !! inside visc_rem via the glue/implicit_drag fold, once again
-         !! via the linear piston) and with `bt_halo > 0` (the wide-halo
-         !! BT clone's `metrics_w`/halo-widened arrays carry no
-         !! `av_rem`/`visc_rem` ghost width yet — same posture as
-         !! porous). Composes with `wave_drag` (multiplied in after).
+         !! via the linear piston).  Composes with `bt_halo > 0` (the wide
+         !! fast loop reads only the wide-exchanged `bt_rem` and force) and
+         !! with `wave_drag` (multiplied in after).
       logical :: strong_drag = .false.
          !! MOM6 `BT_STRONG_DRAG` (default `.false.`):
          !! replace the plain power form with the rational approximation
@@ -1078,20 +1078,24 @@ module rdb_config
          !! Reserved for PR-14 (MOM6 `BT_WAVE_DRAG_VAR`); unused today.
       integer :: bt_halo = BT_HALO_AUTO_SENTINEL
          !! Wide-halo march-in width.  `-1` (default) = AUTO, which resolves
-         !! to 0: the march-in is OPT-IN.  A decomposed run with the march-in
-         !! is not bit-identical to the serial run over variable bathymetry or
-         !! with open boundaries (measured by `test_ocean_decomp_bitid_mpi`;
-         !! flat-bottom closed / periodic / spherical cases are), so the
-         !! default keeps every decomposition bit-reproducible.  `8`
+         !! to 0: the march-in is OPT-IN.  Every configuration it accepts is
+         !! bitwise equal to the one-rank `bt_halo = 0` run
+         !! (`test_ocean_decomp_bitid_mpi`, cases `bth_*` / `bthx_*`); AUTO
+         !! stays at 0 until the performance stage lands.  `8`
          !! (`BT_HALO_AUTO_WIDTH`) is the recommended explicit width.
          !! `0` = explicit off (per-substep grouped exchange, v1 bit-identical).
          !! Even positive value: widen the BT ghost band to `nghost + bt_halo`
          !! and fire one grouped exchange every `bt_halo/2` substeps.  Odd
-         !! values are rounded DOWN to even with a warning.  Fail-loud
-         !! exclusions (apply when bt_halo is set EXPLICITLY > 0; AUTO instead
-         !! silently resolves to 0): wet/dry enable, use_cont_type,
-         !! upstream_h_face, tides enable, psurf enable, porous enable,
-         !! cavity_dyn enable, supergrid/tripolar grid_config.  The set of record is
+         !! values are rounded DOWN to even with a warning.  The wide clone's
+         !! metrics and `f_corner` are the model's OWN arrays (offset copy +
+         !! one host exchange at setup), `eta_forcing` is copied in and
+         !! exchanged once per solve, and the model time reaches the fast
+         !! loop.  Fail-loud exclusions (apply when bt_halo is set EXPLICITLY
+         !! > 0; AUTO instead silently resolves to 0): wet/dry enable,
+         !! use_cont_type, upstream_h_face, Chapman edges, cavity_dyn enable,
+         !! the tripolar fold (`grid_config='tripolar'` / `north =
+         !! 'tripolar_fold'`), `inhalo_march`, `dtbt_reset_period >= 0`, a
+         !! tile narrower than `nghost + bt_halo`.  The set of record is
          !! `bt_halo_auto_exclusion`; keep it and the `validate_config`
          !! checks in lockstep.
       logical :: inhalo_march = .false.
@@ -2697,7 +2701,7 @@ module rdb_config
       !! into the barotropic `eta_forcing` seam so an atmospheric high
       !! depresses SSH (~1 cm/hPa; Wunsch & Stammer 1997).  `enable =
       !! .false.` keeps the existing path bit-identical.  Split-solver only
-      !! and mutually exclusive with `&ocean_bt_nml bt_halo > 0`.  Requires
+      !! and composes with `&ocean_bt_nml bt_halo > 0` (wide `eta_forcing`).  Requires
       !! `&ocean_forcing_nml enable_components=.true.` (the `p_surf` field
       !! is allocated only with the component set).  ρ₀ is NOT a knob here —
       !! it is taken from `ocean_state%eos%rho0` (the single ρ₀ of record).

@@ -267,7 +267,7 @@ contains
       pl => cfg%ocean%porous%enable
       call g%add(nml_logical("enable", pl, &
                              "Master switch (ocean multilayer path only; "// &
-                             "fails loud with bt_halo > 0 or wetdry enable)"))
+                             "fails loud with wetdry enable; composes with bt_halo > 0)"))
       ps => cfg%ocean%porous%source
       call g%add(nml_enum("source", ps, &
                           "Along-face bathymetry-statistics source "// &
@@ -566,10 +566,13 @@ contains
                          "Wide-halo BT march-in width "// &
                          "(-1 = auto: resolves to 0, the march-in is opt-in; "// &
                          "0 = explicit off). > 0: bitwise equal to the one-rank "// &
-                         "bt_halo = 0 run on walls, periodic and Flather edges, "// &
-                         "land and spherical grids; refused with tides, psurf, "// &
-                         "tidal/Chapman edges, porous, cavity, wet/dry, closed "// &
-                         "faces, supergrid/tripolar", &
+                         "bt_halo = 0 run on walls, periodic, Flather (legacy and full) "// &
+                         "and tidal edges, land (incl. land meeting an open edge), "// &
+                         "lon-lat and supergrid metrics, porous barriers, z-level closed "// &
+                         "faces, body tides and surface-pressure loading. Refused with "// &
+                         "wet/dry, use_cont_type, upstream_h_face, Chapman edges, the "// &
+                         "ice-shelf cavity, the tripolar fold, inhalo_march, "// &
+                         "dtbt_reset_period >= 0 and a tile narrower than nghost + bt_halo", &
                          min=BT_HALO_AUTO_SENTINEL))
       pl => cfg%ocean%bt%inhalo_march
       call g%add(nml_logical("inhalo_march", pl, &

@@ -367,7 +367,7 @@ Porous barriers: subgrid sill/strait blocking of the C-grid face widths.
 
 | Knob | Default | Units | Description |
 |------|---------|-------|-------------|
-| `enable` | `.false.` |  | Master switch (ocean multilayer path only; fails loud with bt_halo > 0 or wetdry enable) |
+| `enable` | `.false.` |  | Master switch (ocean multilayer path only; fails loud with wetdry enable; composes with bt_halo > 0) |
 | `source` | `"resolved"` |  | Along-face bathymetry-statistics source ('resolved' is a wet-gated proxy; 'file' is deferred) |
 | `eta_interp` | `"max"` |  | Interface height at the velocity point (PORBAR_ETA_INTERP); 'max' is the LEAST blocking, 'min' the most |
 | `masking_depth` | `0.0000000000E+00` | m | Faces shallower than this stay fully open (PORBAR_MASKING_DEPTH, positive below the surface) |
@@ -760,7 +760,7 @@ Split-explicit barotropic substep controls.
 | `wave_drag_h2_max` | `0.2500000000E+05` | m^2 | Ceiling on <h^2> proxy for wave_drag_form='roughness_proxy' |
 | `wave_drag_file` | `""` |  | Reserved for PR-14 (MOM6 BT_WAVE_DRAG_FILE); unused today |
 | `wave_drag_var` | `"rH"` |  | Reserved for PR-14 (MOM6 BT_WAVE_DRAG_VAR); unused today |
-| `bt_halo` | `-1` |  | Wide-halo BT march-in width (-1 = auto: resolves to 0, the march-in is opt-in; 0 = explicit off). > 0: bitwise equal to the one-rank bt_halo = 0 run on walls, periodic and Flather edges, land and spherical grids; refused with tides, psurf, tidal/Chapman edges, porous, cavity, wet/dry, closed faces, supergrid/tripolar |
+| `bt_halo` | `-1` |  | Wide-halo BT march-in width (-1 = auto: resolves to 0, the march-in is opt-in; 0 = explicit off). > 0: bitwise equal to the one-rank bt_halo = 0 run on walls, periodic, Flather (legacy and full) and tidal edges, land (incl. land meeting an open edge), lon-lat and supergrid metrics, porous barriers, z-level closed faces, body tides and surface-pressure loading. Refused with wet/dry, use_cont_type, upstream_h_face, Chapman edges, the ice-shelf cavity, the tripolar fold, inhalo_march, dtbt_reset_period >= 0 and a tile narrower than nghost + bt_halo |
 | `inhalo_march` | `.false.` |  | EXPERIMENTAL: in-halo BT march -- exchange the fast-loop ghost bands once per (nghost-1) substeps inside the existing halo; N ranks bitwise == 1 rank; exclusive with bt_halo > 0, wet/dry, use_cont_type, upstream_h_face, tides, psurf |
 | `inhalo_stride` | `0` |  | Substeps per ghost exchange under inhalo_march (0 = derive nghost-1; refused above nghost-1, which breaks the bitwise contract) |
 

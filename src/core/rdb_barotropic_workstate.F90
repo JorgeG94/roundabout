@@ -174,8 +174,8 @@ module rdb_barotropic_workstate
          !! `frhat_k` the face layer fraction `derive_bt_from_layers`
          !! uses) instead of the linear-piston law — MOM6's barotropic
          !! solver.  Mutually exclusive with
-         !! `bt_substep_drag` (double-counted bed drag) and `bt_halo > 0`
-         !! (checked in `validate_config`).
+         !! `bt_substep_drag` (double-counted bed drag; checked in
+         !! `validate_config`).  Composes with `bt_halo > 0`.
       logical :: bt_strong_drag = .false.
          !! MOM6 `BT_STRONG_DRAG`: the rational-
          !! approximation `bt_rem` form.  Requires `bt_rem_from_visc_rem`.

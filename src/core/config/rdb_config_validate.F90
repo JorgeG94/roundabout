@@ -2649,10 +2649,9 @@ contains
          if (cfg%ocean%bt%bt_halo > 0) then
             call logger%error("&ocean_cavity_dyn_nml enable=.true. is mutually "// &
                               "exclusive with &ocean_bt_nml bt_halo > 0: the "// &
-                              "wide-halo BT clone rebuilds its own metrics from the "// &
-                              "grid formula and carries no z_draft, so its reference "// &
-                              "depth would be the bed and its solve would ignore the "// &
-                              "ice.")
+                              "wide-halo BT solve is not proven against the "// &
+                              "ice-base datum (z_draft, the ice-load eta_forcing "// &
+                              "and the shelf geometry), so it stays refused.")
             has_error = .true.
          end if
          ! --- mutually exclusive capabilities ---
@@ -3787,30 +3786,6 @@ contains
                               "with upstream_h_face (upstream h-face arrays not widened in v1)")
             has_error = .true.
          end if
-         if (cfg%ocean%tides%enable) then
-            call logger%error("&ocean_bt_nml bt_halo > 0 is mutually exclusive "// &
-                              "with &ocean_tides_nml enable (wide eta_forcing copy deferred)")
-            has_error = .true.
-         end if
-         if (cfg%ocean%psurf%enable) then
-            call logger%error("&ocean_bt_nml bt_halo > 0 is mutually exclusive "// &
-                              "with &ocean_psurf_nml enable (wide eta_forcing copy deferred)")
-            has_error = .true.
-         end if
-         if (cfg%ocean%porous%enable) then
-            ! `bt_wide` carries its OWN `metrics_w`, re-filled from the
-            ! grid formula on the widened grid.  Nothing fills its porous
-            ! statistics, so `bt_wide_substep` would hand the fast loop the
-            ! UN-narrowed `metrics_w%dy_cu` / `dx_cv` — silently reverting
-            ! the porous-aware barotropic solve and giving an answer that
-            ! is neither the porous one nor the baseline.  Fail loud until
-            ! the wide shadow carries `dy_cu_bt` / `dx_cv_bt` too.
-            call logger%error("&ocean_bt_nml bt_halo > 0 is mutually exclusive "// &
-                              "with &ocean_porous_nml enable (the wide-halo "// &
-                              "metrics shadow carries no porous statistics, so the "// &
-                              "BT solve would silently transport on un-narrowed widths)")
-            has_error = .true.
-         end if
          if (any_chapman_edge(cfg)) then
             ! The Chapman edge mean is gathered from the NORMAL-width
             ! `bt_eta` on the device, and the march-in's wide clone is not
@@ -3823,36 +3798,21 @@ contains
                               "with open boundaries)")
             has_error = .true.
          end if
-         if (any_tidal_edge(cfg)) then
-            ! `bt_wide_substep` forwards no model time to the fast loop, so a
-            ! tidal edge's eta target is evaluated at t = 0 on every substep of
-            ! every step: frozen, and O(1) wrong against the one-rank run
-            ! (measured, `bthx_tidal_*` in test_ocean_decomp_bitid_mpi).
-            call logger%error("&ocean_bt_nml bt_halo > 0 is mutually exclusive "// &
-                              "with a tidal &ocean_bc_nml edge (the wide-halo fast "// &
-                              "loop carries no model time, so the tidal eta target "// &
-                              "would stay frozen at its t = 0 value)")
-            has_error = .true.
-         end if
          if (cfg%ocean%cavity_dyn%enable) then
-            ! Same failure mode as porous, one level up: `metrics_w` is
-            ! re-filled from the grid formula and carries no `z_draft`, so
-            ! the wide fast loop would take the BED as its reference depth
-            ! and solve a column that is twice as deep as the cavity's.
-            ! (The cavity block above refuses this from its own side too —
-            ! the knob that is "wrong" depends on which one the user meant.)
+            ! The wide clone's reference depth would be the BED, not the ice
+            ! base: the cavity datum (`z_draft`) reaches the fast loop through
+            ! `bt_H_ref` and the per-solve wide copy has not been proven
+            ! bitwise against it.
             call logger%error("&ocean_bt_nml bt_halo > 0 is mutually exclusive "// &
                               "with &ocean_cavity_dyn_nml enable (the wide-halo "// &
-                              "metrics shadow carries no ice draft, so the BT solve "// &
-                              "would reference the bed instead of the ice base)")
+                              "BT solve is not proven against the ice-base datum)")
             has_error = .true.
          end if
-         if (trim(cfg%ocean%grid%grid_config) == "supergrid" .or. &
-             trim(cfg%ocean%grid%grid_config) == "tripolar") then
+         if (trim(cfg%ocean%grid%grid_config) == "tripolar" .or. &
+             trim(cfg%ocean%bc%north) == "tripolar_fold") then
             call logger%error("&ocean_bt_nml bt_halo > 0 is mutually exclusive "// &
-                              "with grid_config='"//trim(cfg%ocean%grid%grid_config)// &
-                              "' (file-based metrics cannot be re-filled on a wide grid; "// &
-                              "cartesian/spherical formula fills supported)")
+                              "with the tripolar fold (grid_config='tripolar' / "// &
+                              "north='tripolar_fold': the wide band carries no fold)")
             has_error = .true.
          end if
       end if
@@ -4483,17 +4443,6 @@ contains
       if (compute_size < 0 .and. exclusion_active) width = 0   ! never taken; keeps the dummies referenced
    end function resolve_bt_halo
 
-   pure function any_tidal_edge(cfg) result(any_td)
-      !! True iff any of the four `&ocean_bc_nml` edges is `tidal`.
-      use rdb_ocean_boundary_types, only: ocean_bc_type_from_string, OBC_TIDAL
-      type(config_t), intent(in) :: cfg
-      logical :: any_td
-      any_td = ocean_bc_type_from_string(cfg%ocean%bc%west) == OBC_TIDAL .or. &
-               ocean_bc_type_from_string(cfg%ocean%bc%east) == OBC_TIDAL .or. &
-               ocean_bc_type_from_string(cfg%ocean%bc%south) == OBC_TIDAL .or. &
-               ocean_bc_type_from_string(cfg%ocean%bc%north) == OBC_TIDAL
-   end function any_tidal_edge
-
    pure function any_chapman_edge(cfg) result(any_ch)
       !! True iff any of the four `&ocean_bc_nml` edges is `chapman`.
       use rdb_ocean_boundary_types, only: ocean_bc_type_from_string, OBC_CHAPMAN
@@ -4520,32 +4469,13 @@ contains
          reason = "use_cont_type"
       else if (cfg%ocean%bt%upstream_h_face) then
          reason = "upstream_h_face"
-      else if (cfg%ocean%tides%enable) then
-         reason = "tides enable"
-      else if (cfg%ocean%psurf%enable) then
-         ! Surface-pressure loading rides the SAME `eta_forcing` seam as
-         ! the body tide, and the wide BT clone carries no copy of it:
-         ! `run_stage_split` `error stop`s on `bt_halo > 0` with an
-         ! `eta_forcing` actual.  Must exclude alongside tides.
-         reason = "psurf enable"
-      else if (cfg%ocean%porous%enable) then
-         reason = "porous enable"
       else if (any_chapman_edge(cfg)) then
          reason = "chapman &ocean_bc_nml edge"
-      else if (any_tidal_edge(cfg)) then
-         reason = "tidal &ocean_bc_nml edge"
       else if (cfg%ocean%cavity_dyn%enable) then
-         ! The wide BT clone rebuilds `metrics_w` from the grid formula and
-         ! carries no `z_draft`, so its reference depth would be the BED —
-         ! it would solve a 1000 m ocean where the cavity has 500 m of
-         ! water under 500 m of ice.  `validate_config` refuses an EXPLICIT
-         ! `bt_halo > 0`; AUTO must resolve to 0 here or a multi-rank
-         ! cavity run manufactures a width the user never asked for and
-         ! then trips that abort.
          reason = "cavity_dyn enable"
-      else if (trim(cfg%ocean%grid%grid_config) == "supergrid" .or. &
-               trim(cfg%ocean%grid%grid_config) == "tripolar") then
-         reason = "grid_config='"//trim(cfg%ocean%grid%grid_config)//"'"
+      else if (trim(cfg%ocean%grid%grid_config) == "tripolar" .or. &
+               trim(cfg%ocean%bc%north) == "tripolar_fold") then
+         reason = "tripolar fold"
       end if
       excluded = len_trim(reason) > 0
    end subroutine bt_halo_auto_exclusion

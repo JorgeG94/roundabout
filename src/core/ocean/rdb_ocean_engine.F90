@@ -1869,7 +1869,9 @@ contains
       !! "Content-safety argument" comment, carried over unchanged).
       type(ocean_engine_t), intent(inout) :: engine
       type(config_t), intent(in) :: cfg
+      integer :: ring_poison_env
 
+      ring_poison_env = 0
       call ocean_state_enter_data(engine%state)
       engine%state%dyn%bt_halo = cfg%ocean%bt%bt_halo
       engine%state%dyn%bt_work%inhalo_stride = 0
@@ -1893,17 +1895,17 @@ contains
          call env_int_or_zero("RDB_BT_INHALO_POISON", engine%state%dyn%bt_work%inhalo_poison)
       end if
       if (cfg%ocean%bt%bt_halo > 0) then
+         ! The wide static fields (metrics, f_corner) are taken from their
+         ! owners' HOST arrays, final by now (every setup-time host editor --
+         ! land mask, closed faces, porous seed, file metrics -- ran before the
+         ! map), then copied to the device by the wide enter_data.
+         call env_int_or_zero("RDB_BT_RING_POISON", ring_poison_env)
          call ocean_dyn_enable_bt_wide(engine%state%dyn, engine%grid, &
-                                       cfg%dx, cfg%dy, &
-                                       cfg%ocean%grid%lon_west, &
-                                       cfg%ocean%grid%lat_south, &
-                                       cfg%ocean%grid%rad_earth, &
-                                       cfg%ocean%grid%grid_config, &
-                                       cfg%coriolis_f, &
-                                       cfg%ocean%topo%coriolis_beta, &
-                                       cfg%ocean%topo%coriolis_y_ref, &
-                                       cfg%ocean%grid%coriolis_scheme, &
-                                       omega=cfg%ocean%grid%omega)
+                                       engine%state%metrics, &
+                                       engine%state%coriolis_adv%f_corner, &
+                                       refresh_widths=engine%state%metrics%use_porous .or. &
+                                       engine%state%metrics%use_closed_faces, &
+                                       ring_poison=ring_poison_env)
       end if
 
       ! The prognostic exchange is a WARM-UP (it opens the device-path

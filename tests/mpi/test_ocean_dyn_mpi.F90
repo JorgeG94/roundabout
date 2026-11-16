@@ -969,7 +969,7 @@ contains
    ! =======================================================================
    subroutine run_decomposed(mass0, massN, ke_out, salt0, saltN, heat0, heatN, &
                              use_island, use_periodic, use_poison, use_bt_halo, &
-                             use_n_inner, use_wide_poison)
+                             use_n_inner, use_wide_poison, use_ring_poison)
       real(wp), intent(out) :: mass0, massN, ke_out
       real(wp), intent(out) :: salt0, saltN, heat0, heatN
          !! Global (allreduced) interior salt / heat sums at step 0 and N.
@@ -992,6 +992,11 @@ contains
       integer, intent(in), optional :: use_wide_poison
          !! > 0: `RDB_BT_INHALO_POISON` value for the wide march-in poison hook
          !! (2 = NaN; +10 per EXTRA layer beyond the proven reach).  Default 0 = off.
+      integer, intent(in), optional :: use_ring_poison
+         !! > 0: `RDB_BT_RING_POISON` value (1 finite, 2 NaN): the OUTER `bt_halo`
+         !! ring of every wide array -- the part that sits beyond a PHYSICAL edge,
+         !! where no exchange refills it -- is overwritten with garbage.  The
+         !! substep's insets must never read it.  Default 0 = off.
 
       type(hgrid_t) :: grid
       type(ocean_metrics_t) :: metrics
@@ -1012,7 +1017,7 @@ contains
       type(decomp_t) :: decomp
 
       integer :: nxl, nyl, step, ng_use
-      integer :: bt_halo_val, n_inner_run, wide_poison
+      integer :: bt_halo_val, n_inner_run, wide_poison, ring_poison
       real(wp) :: local_mass0, local_massN, local_ke
       real(wp) :: global_mass0, global_massN, global_ke
       real(wp) :: local_salt0, local_saltN, local_heat0, local_heatN
@@ -1031,6 +1036,8 @@ contains
       if (present(use_n_inner)) n_inner_run = use_n_inner
       wide_poison = 0
       if (present(use_wide_poison)) wide_poison = use_wide_poison
+      ring_poison = 0
+      if (present(use_ring_poison)) ring_poison = use_ring_poison
 
       ! nghost = 3 on every leg: PPM 5-point seam-face stencil (see header).
       ng_use = NG
@@ -1124,10 +1131,7 @@ contains
       ! Wide-halo march-in: allocate + GPU-attach bt_wide AFTER enter_data.
       ! No-op when bt_halo_val = 0.
       if (bt_halo_val > 0) then
-         call ocean_dyn_enable_bt_wide(dyn, grid, DX, DY, &
-                                       0.0_wp, 0.0_wp, 6.378e6_wp, &
-                                       "cartesian", F_0, 0.0_wp, 0.0_wp, &
-                                       "beta_plane")
+         call ocean_dyn_enable_bt_wide(dyn, grid, metrics, cor%f_corner, ring_poison=ring_poison)
       end if
 
       ! Measure initial mass + tracer sums (allreduce over ranks)
@@ -1241,6 +1245,7 @@ contains
          ! 1-rank identity: bt_halo = W == bt_halo = 0, bitwise.
          call bits_equal("wide-reach 1-rank identity (mass, KE, salt, heat)", &
                          [b_mN, b_ke, b_sN, b_hN], [r_mN, r_ke, r_sN, r_hN])
+         call check_wide_ring_legs(BH, NI, [b_mN, b_ke, b_sN, b_hN])
          return
       end if
       block
@@ -1270,7 +1275,50 @@ contains
             write (*, '(a)') "wide-reach poison hook live: 8 extra layers change the owned result (ok)"
          end if
       end block
+
+      call check_wide_ring_legs(BH, NI, [b_mN, b_ke, b_sN, b_hN])
    end subroutine check_wide_reach_legs
+
+   subroutine check_wide_ring_legs(bh, ni, clean)
+      !! `clean` = (mass, KE, salt, heat) of the unpoisoned wall run at width
+      !! `bh`.  See the block comment below.
+      integer, intent(in) :: bh, ni
+      real(wp), intent(in) :: clean(4)
+      real(wp) :: c_m0, c_mN, c_ke, c_s0, c_sN, c_h0, c_hN
+      real(wp) :: d_m0, d_mN, d_ke, d_s0, d_sN, d_h0, d_hN
+      ! Physical-edge ring: the wide band beyond a physical (non-seam,
+      ! non-periodic) edge is never refilled by an exchange.  NaN there for the
+      ! whole run (walls on all four sides at np 1; the outer sides at np 2)
+      ! must leave every owned result bitwise unchanged -- the insets never
+      ! read it.  Wall leg, island leg (land in the wide band) and periodic leg.
+      call run_decomposed(c_m0, c_mN, c_ke, c_s0, c_sN, c_h0, c_hN, &
+                          use_bt_halo=bh, use_n_inner=ni, use_ring_poison=2)
+      call bits_equal("wide-reach physical-edge ring NaN == clean (mass, KE, salt, heat)", &
+                      [c_mN, c_ke, c_sN, c_hN], clean)
+      ! Liveness control: poisoning ONE layer beyond the ring (the normal-width
+      ! ghost band, which the kernel does read at a physical edge) must change
+      ! the owned result, or the legs above prove nothing.
+      call run_decomposed(d_m0, d_mN, d_ke, d_s0, d_sN, d_h0, d_hN, &
+                          use_bt_halo=bh, use_n_inner=ni, use_ring_poison=2 + 10)
+      if (d_ke == clean(2) .and. d_mN == clean(1) .and. d_sN == clean(3) .and. d_hN == clean(4)) then
+         n_fail = n_fail + 1
+         write (*, '(a,i0)') "FAIL wide-reach ring poison hook is vacuous (one extra layer changed nothing): rank ", rank
+      else if (rank == 0) then
+         write (*, '(a)') "wide-reach ring poison hook live: one layer into the normal band changes the owned result (ok)"
+      end if
+      call run_decomposed(d_m0, d_mN, d_ke, d_s0, d_sN, d_h0, d_hN, &
+                          use_bt_halo=bh, use_n_inner=ni, use_island=.true.)
+      call run_decomposed(c_m0, c_mN, c_ke, c_s0, c_sN, c_h0, c_hN, &
+                          use_bt_halo=bh, use_n_inner=ni, use_island=.true., use_ring_poison=2)
+      call bits_equal("wide-reach island: ring NaN == clean (mass, KE, salt, heat)", &
+                      [c_mN, c_ke, c_sN, c_hN], [d_mN, d_ke, d_sN, d_hN])
+      call run_decomposed(d_m0, d_mN, d_ke, d_s0, d_sN, d_h0, d_hN, &
+                          use_bt_halo=bh, use_n_inner=ni, use_periodic=.true.)
+      call run_decomposed(c_m0, c_mN, c_ke, c_s0, c_sN, c_h0, c_hN, &
+                          use_bt_halo=bh, use_n_inner=ni, use_periodic=.true., use_ring_poison=2)
+      call bits_equal("wide-reach periodic: ring NaN == clean (mass, KE, salt, heat)", &
+                      [c_mN, c_ke, c_sN, c_hN], [d_mN, d_ke, d_sN, d_hN])
+   end subroutine check_wide_ring_legs
 
    subroutine bits_equal(label, got, want)
       !! Bitwise equality of two small real vectors (NaN never equal).

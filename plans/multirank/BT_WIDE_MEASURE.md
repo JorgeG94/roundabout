@@ -222,3 +222,22 @@ Reading:
 * RC4 (vector-lane round-off): not seen on gfortran (contraction off) at tile widths 16 .. 24; nvfortran
   CPU not measured.
 * RC5 (tripolar) untouched.
+
+## Stage 2: static fields from their owners (fix/bt-wide-halo-static)
+
+Before (stage-1 binary, same `bthx_*` cases, gfortran 15.1 CPU, `bth` family at np 1 and 2; the carried
+`hvisc_du_visc`/`hvisc_dv_visc` are now compared for the `bth*` cases):
+
+| case | np 1 (1x1, `bt_halo = W` vs 0) | np 2 (2x1, 1x2) |
+|---|---|---|
+| `bthx_coast_w4/w8/w4_b0` (land peninsulas touching the Flather east edge) | 41 000 .. 58 000 mismatching owned values (52 876 .. 57 884 with the carried tendencies compared), every field | 53 260 .. 58 400 |
+| `bthx_ffull_w4/w8` (`flather_form = 'full'`) | 4 (the carried `hvisc_dv_visc`, owned north-face row) | 4 |
+| `bthx_tidal`, `bthx_tides`, `bthx_psurf`, `bthx_super`, `bthx_porous`, `bthx_zfixed` | refused at configure | refused |
+
+After: every case above IDENTICAL, W = 4 and 8, both split schemes, `bebt` 0.1 and 0, at np 1 (1x1), 2 (2x1, 1x2)
+and 4; the whole `bth*` family 84 / 252 / 302 comparisons at np 1 / 2 / 4 (34 np 4 layouts skipped by the
+tile-fit rule: `nghost + W` wider than the tile), also with `RDB_BT_INHALO_POISON=2` and `RDB_BT_RING_POISON=2`.
+The reviewer's 31 namelists (`review_btwide/runs`) all reproduce bitwise against one rank at `bt_halo = 0`,
+except the four `wdragrp*` (`wave_drag_form = 'roughness_proxy'`), which also differ at `bt_halo = 0`
+(`wdragrp0`, `wdragrp210`): a decomposition non-identity of the roughness proxy that has nothing to do with
+the march-in.

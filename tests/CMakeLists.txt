@@ -831,16 +831,24 @@ if(RDB_ENABLE_MPI)
   # cases (the plain legs run them too) once more with NaN poisoning of every
   # wide ghost layer the march has already invalidated, between exchanges
   # (`RDB_BT_INHALO_POISON=2`): owned cells must still equal the 1-rank `bt_halo
-  # = 0` run bitwise.
-  foreach(np 2 4)
+  # = 0` run bitwise.  `RDB_BT_RING_POISON=2` also puts NaN in the whole outer
+  # `bt_halo` ring of every wide array (static metrics, `f_corner` and the
+  # per-solve inputs): at a physical edge no exchange ever refills it, so owned
+  # cells staying bitwise proves the insets never read it.  The 1-rank leg makes
+  # all four edges physical (`bt_halo = W` against `bt_halo = 0`).
+  foreach(np 1 2 4)
     add_test(NAME rdb_test_ocean_decomp_bitid_mpi_${np}rank_btwide_poison
              COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${np}
                      $<TARGET_FILE:test_ocean_decomp_bitid_mpi>)
     set_tests_properties(
       rdb_test_ocean_decomp_bitid_mpi_${np}rank_btwide_poison
-      PROPERTIES LABELS "ocean" ENVIRONMENT
-                 "OMP_NUM_THREADS=1;RDB_BT_INHALO_POISON=2;RDB_BITID_CASES=bth"
-                 TIMEOUT 14400)
+      PROPERTIES
+        LABELS
+        "ocean"
+        ENVIRONMENT
+        "OMP_NUM_THREADS=1;RDB_BT_INHALO_POISON=2;RDB_BT_RING_POISON=2;RDB_BITID_CASES=bth"
+        TIMEOUT
+        14400)
   endforeach()
   # TIMEOUT: the project uses enable_testing() without include(CTest), so there
   # is NO default timeout.  This test deliberately runs a must-be-refused probe
