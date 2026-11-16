@@ -3833,12 +3833,25 @@ contains
                               "BT solve is not proven against the ice-base datum)")
             has_error = .true.
          end if
-         if (trim(cfg%ocean%grid%grid_config) == "tripolar" .or. &
-             trim(cfg%ocean%bc%north) == "tripolar_fold") then
-            call logger%error("&ocean_bt_nml bt_halo > 0 is mutually exclusive "// &
-                              "with the tripolar fold (grid_config='tripolar' / "// &
-                              "north='tripolar_fold': the wide band carries no fold)")
-            has_error = .true.
+         if (trim(cfg%ocean%bc%north) == "tripolar_fold") then
+            ! Across the tripolar fold (Murray 1996 bipolar cap) the band folds
+            ! `nghost + bt_halo` rows of the north tile -- read from rows below
+            ! the fold line, so the north tile must be taller than the band --
+            ! and, under an east-west split (`px > 1`, the owner-routed fold),
+            ! every tile must be wider than it.  Checked here for the process
+            ! grid the namelist names; `engine_setup` repeats it for an
+            ! auto-factored one.
+            if (cfg%nghost + cfg%ocean%bt%bt_halo - mod(cfg%ocean%bt%bt_halo, 2) + 1 > &
+                cfg%ny/max(cfg%py, 1) .or. &
+                (cfg%px > 1 .and. cfg%nghost + cfg%ocean%bt%bt_halo - &
+                 mod(cfg%ocean%bt%bt_halo, 2) + 1 > cfg%nx/cfg%px)) then
+               call logger%error("&ocean_bt_nml bt_halo > 0 across north='tripolar_fold' "// &
+                                 "needs tiles of at least nghost + bt_halo + 1 rows "// &
+                                 "(and, with px > 1, columns): the fold reads the whole "// &
+                                 "wide band from the north tile.  Reduce bt_halo or use "// &
+                                 "fewer ranks.")
+               has_error = .true.
+            end if
          end if
       end if
       ! ---- BT in-halo march (inhalo_march) exclusions (EXPERIMENTAL) ----
@@ -4498,9 +4511,6 @@ contains
          reason = "chapman &ocean_bc_nml edge"
       else if (cfg%ocean%cavity_dyn%enable) then
          reason = "cavity_dyn enable"
-      else if (trim(cfg%ocean%grid%grid_config) == "tripolar" .or. &
-               trim(cfg%ocean%bc%north) == "tripolar_fold") then
-         reason = "tripolar fold"
       end if
       excluded = len_trim(reason) > 0
    end subroutine bt_halo_auto_exclusion

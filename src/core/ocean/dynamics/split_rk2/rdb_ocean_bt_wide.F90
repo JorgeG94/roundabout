@@ -11,6 +11,16 @@ module rdb_ocean_bt_wide
    !! are bitwise equal to the one-rank run with every invalidated layer poisoned
    !! between exchanges (`RDB_BT_INHALO_POISON`, `test_ocean_dyn_mpi`).
    !!
+   !! Tripolar north fold (Murray 1996 bipolar cap): the north band is NOT
+   !! an invalid-front edge.  The fast loop folds the whole `nghost + bt_halo`
+   !! row band EVERY substep, at the two points the `bt_halo = 0` loop folds
+   !! (the fold-line `v` row is projected from its mirror each substep, which
+   !! a locally evolved band could not reproduce bitwise): inline at `px = 1`,
+   !! through the owner-routed exchange on the wide plan
+   !! (`FOLD_CTX_WIDE` of `rdb_ocean_fold_exchange`) at `px > 1`.  The static
+   !! fields' rows beyond the fold are never read: every dynamic row there is
+   !! refolded before use.
+   !!
    !! Lifecycle:
    !!   1. `init`         — allocate wide arrays; fill the STATIC wide metrics and
    !!                      `f_corner` from the model's own arrays (host, once).

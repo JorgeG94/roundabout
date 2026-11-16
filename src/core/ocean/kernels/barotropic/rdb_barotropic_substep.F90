@@ -73,7 +73,8 @@ module rdb_barotropic_substep
    use rdb_ocean_fold_exchange, only: ocean_fold_is_distributed, ocean_fold_begin, &
                                       ocean_fold_pack, ocean_fold_exchange, &
                                       ocean_fold_unpack, ocean_fold_end, &
-                                      ocean_fold_north_v_face, FOLD_STAG_T, FOLD_STAG_U
+                                      ocean_fold_north_v_face, FOLD_STAG_T, FOLD_STAG_U, &
+                                      FOLD_CTX_NORMAL, FOLD_CTX_WIDE
    implicit none
    private
 
@@ -609,6 +610,10 @@ contains
       logical :: do_fold
          !! Tripolar north-fold flag cached from bc%north_fold.  Gates the
          !! inline fold DC loops in the fast loop; .false. ⇒ bit-identical.
+      integer :: fold_ctx
+         !! Context of the owner-routed fold plan this call uses: the plan
+         !! built for `grid%nghost`, which is `nghost + bt_halo` on the wide
+         !! clone (`FOLD_CTX_WIDE`) and `nghost` otherwise.
       logical :: dist_fold
          !! `do_fold` on an east-west split north row (`px > 1`): the inline
          !! fold loops are skipped and the owner-routed exchange
@@ -755,6 +760,8 @@ contains
       per_y_tag = .false.
       do_fold = .false.
       dist_fold = .false.
+      fold_ctx = FOLD_CTX_NORMAL
+      if (marchin) fold_ctx = FOLD_CTX_WIDE
       ! Fold index constants (storage maps, Appendix A).
       nf_isum = 2*grid%nghost + grid%nx_phys + 1      ! centre/v i-map sum
       nf_jsum_c = 2*grid%nghost + 2*grid%ny_phys + 1   ! T/u j-halo sum
@@ -1654,13 +1661,13 @@ contains
          if (dist_fold) then
             call profiler_start("ocean_comms_bt")
             !$acc wait(1)
-            call ocean_fold_begin(2*grid%nghost)
-            call ocean_fold_pack(bt_eta, nx, ny, FOLD_STAG_T)
-            call ocean_fold_pack(bt_ubt, nx + 1, ny, FOLD_STAG_U)
-            call ocean_fold_exchange()
-            call ocean_fold_unpack(bt_eta, nx, ny, FOLD_STAG_T, .false.)
-            call ocean_fold_unpack(bt_ubt, nx + 1, ny, FOLD_STAG_U, .true.)
-            call ocean_fold_end()
+            call ocean_fold_begin(2*grid%nghost, fold_ctx)
+            call ocean_fold_pack(bt_eta, nx, ny, FOLD_STAG_T, ctx=fold_ctx)
+            call ocean_fold_pack(bt_ubt, nx + 1, ny, FOLD_STAG_U, ctx=fold_ctx)
+            call ocean_fold_exchange(ctx=fold_ctx)
+            call ocean_fold_unpack(bt_eta, nx, ny, FOLD_STAG_T, .false., ctx=fold_ctx)
+            call ocean_fold_unpack(bt_ubt, nx + 1, ny, FOLD_STAG_U, .true., ctx=fold_ctx)
+            call ocean_fold_end(fold_ctx)
             call profiler_stop("ocean_comms_bt")
          end if
          !$acc kernels async(1) &
@@ -1884,7 +1891,7 @@ contains
             call profiler_start("ocean_comms_bt")
             !$acc wait(1)
             call ocean_fold_north_v_face(bt_vbt, nx, ny + 1, grid%nx_phys, grid%ny_phys, &
-                                         grid%nghost)
+                                         grid%nghost, ctx=fold_ctx)
             call profiler_stop("ocean_comms_bt")
          end if
          !$acc kernels async(1) &

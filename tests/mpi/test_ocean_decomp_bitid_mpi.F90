@@ -235,6 +235,13 @@
 !! interior land block in the wide band) cover configurations the march-in
 !! already accepts and was measured bitwise on; W = 4, 8.
 !!
+!! `bth_trip_w<W>[_b0]` and `bthx_tripsea_w<W>[_b0]` run the march-in across the
+!! TRIPOLAR north fold (analytic cap closed by the fold, periodic x; double-drake
+!! land walls reaching the fold line, resp. a seamount in the cap): `px = 1`
+!! layouts fold locally, `px > 1` layouts through the owner-routed fold on a plan
+!! built for `nghost + W`.  A layout is skipped when the smallest tile is not
+!! taller (and, under `px > 1`, wider) than `nghost + W`.
+!!
 !! The EXPERIMENTAL in-halo march (`&ocean_bt_nml inhalo_march`) is a dev axis
 !! of this test: `RDB_BITID_INHALO=1` turns it on for the DECOMPOSED runs only
 !! (N ranks with the march == 1 rank without), `=2` on both legs, `=3` on the
@@ -386,7 +393,7 @@ program test_ocean_decomp_bitid_mpi
       !! `RDB_BITID_CASES`: run only the cases whose name contains this substring.
    type(comm_t) :: comm
    character(len=16), parameter :: SCHEMES(2) = [character(len=16) :: "pred_corr", "ssp_rk2"]
-   character(len=24), parameter :: CASES(131) = [character(len=24) :: &
+   character(len=24), parameter :: CASES(139) = [character(len=24) :: &
                                                  "island_basin", "weno7_pv", &
                                                  "periodic_channel_zstar", &
                                                  "visc_rem_zstar", &
@@ -444,7 +451,11 @@ program test_ocean_decomp_bitid_mpi
                                                  "pery_open_west", "perxy_fplane", &
                                                  "bthx_perxo_w4", "bthx_perxo_w8", &
                                                  "bthx_perxc_w4", "bthx_perxc_w8", &
-                                                 "bthx_peryo_w4", "bthx_perxy_w4"]
+                                                 "bthx_peryo_w4", "bthx_perxy_w4", &
+                                                 "bth_trip_w2", "bth_trip_w4", "bth_trip_w8", &
+                                                 "bth_trip_w4_b0", "bth_trip_w8_b0", &
+                                                 "bthx_tripsea_w4", "bthx_tripsea_w8", &
+                                                 "bthx_tripsea_w4_b0"]
 
    call comm_env_init()
    call comm_env_setup_roles(.false.)
@@ -570,6 +581,14 @@ contains
       bth_width = 0
       if (p > 0) read (label(p + 2:p + 2), '(i1)') bth_width
    end function bth_width
+
+   pure integer function bth_fold_extra(label)
+      !! The tripolar `bth*` cases need tiles of at least nghost + W + 1 cells
+      !! (the fold reads W + nghost rows below the fold line / mirror columns).
+      character(len=*), intent(in) :: label
+      bth_fold_extra = 0
+      if (index(label, "_trip") > 0) bth_fold_extra = 1
+   end function bth_fold_extra
 
    pure logical function bth_b0(label)
       character(len=*), intent(in) :: label
@@ -882,6 +901,33 @@ contains
                "edge_depth = 1500.0, slope_scale = 60000.0, wind_config = '2gyre', "// &
                "taux_magnitude = 0.1 /"//NL// &
                "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
+      case ("bth_trip_w2", "bth_trip_w4", "bth_trip_w8", "bth_trip_w4_b0", "bth_trip_w8_b0", &
+            "bthx_tripsea_w4", "bthx_tripsea_w8", "bthx_tripsea_w4_b0")
+         ! Wide-halo march-in across the TRIPOLAR north fold (Murray 1996 bipolar
+         ! cap above 74N, closed by the fold, periodic x).  `bth_trip`: the
+         ! double-drake land walls reach the fold line at asymmetric columns
+         ! (1 and nx/4 mirror to nx and 3nx/4+1), a meridional + zonal stress
+         ! drives flow INTO the fold row.  `bthx_tripsea`: a seamount over
+         ! variable bathymetry sits in the cap, so the fold-line depths and
+         ! the wide band's static fields differ column by column.  Real-size
+         ! planet (the fixed `n_inner` must hold the gravity-wave CFL).
+         nml = common// &
+               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
+               "dx = 7.5, dy = 0.75 /"//NL// &
+               "&ocean_grid_nml grid_config = 'tripolar', lon_west = 0.0, lat_south = 59.0, "// &
+               "phi_join = 74.0, lon_pole = 0.0, rad_earth = 6.371e6, "// &
+               "coriolis_scheme = 'planetary' /"//NL// &
+               "&physics_nml wind_stress_x = 0.3, wind_stress_y = 0.3 /"//NL// &
+               "&vcoord_nml vcoord_type = 'sigma' /"//NL
+         if (index(label, "bthx_tripsea") == 1) then
+            nml = nml//"&ocean_topo_nml topo_config = 'seamount', max_depth = 2000.0, "// &
+                  "edge_depth = 1500.0, slope_scale = 600000.0 /"//NL
+         else
+            nml = nml//"&ocean_topo_nml topo_config = 'double_drake', max_depth = 1000.0, "// &
+                  "slope_scale = 0.2 /"//NL
+         end if
+         nml = nml//"&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
+               "north = 'tripolar_fold' /"//NL
       case ("bthx_flather_w4", "bthx_flather_w8", "bthx_flather_w4_b0", "bthx_flather_w8_b0")
          ! Wide march-in with a Flather open east edge over the
          ! seamount.  (A tidal west edge was measured O(1) wrong -- the wide fast
@@ -2664,10 +2710,11 @@ contains
          write (tag, '(4a,i0,a,i0)') label, "/", scheme, " ", px, "x", nprocs/px
          if (is_bth_case(label) .and. nprocs > 1) then
             ! The wide band (nghost + W) must fit the smallest tile.
-            if (3 + bth_width(label) > min(BTH_NX/px, BTH_NY/(nprocs/px))) then
+            if (3 + bth_width(label) + bth_fold_extra(label) > &
+                min(BTH_NX/px, BTH_NY/(nprocs/px))) then
                if (rank == 0) write (*, '(3a,i0,a)') "SKIP ", trim(tag), &
-                  ": bt_halo does not fit the smallest tile (nghost + W = ", &
-                  3 + bth_width(label), ")"
+                  ": bt_halo does not fit the smallest tile (nghost + W [+ 1 under the fold] = ", &
+                  3 + bth_width(label) + bth_fold_extra(label), ")"
                cycle
             end if
          end if
@@ -2705,7 +2752,10 @@ contains
                end if
             end if
             ! A7: the fold-exchange reserve must cover every ice group.
-            if (is_ice_fold_case(label) .or. index(label, "drain_ratio_fold") == 1) &
+            ! The wide-band fold groups of the `bth*_trip*` cases too (the
+            ! wide context's reserve is `2*(nghost + W + 1)` slabs).
+            if (is_ice_fold_case(label) .or. index(label, "drain_ratio_fold") == 1 .or. &
+                index(label, "_trip") > 0) &
                nbad = nbad + dec%ngrow
             glob = [nbad, nfin, 0]
 #ifndef RDB_NO_NETCDF
