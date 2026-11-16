@@ -114,7 +114,8 @@ module rdb_ocean_bt_wide
          !! Test hook (`RDB_BT_RING_POISON`, set at setup): units digit 1 =
          !! finite garbage, 2 = NaN; tens digit = EXTRA layers poisoned beyond
          !! the ring, into the normal-width ghost band the kernel does read
-         !! (a liveness control: the owned result must then change).  The
+         !! (a liveness control: the owned result must then change); hundreds
+         !! digit 1 = poison the NORTH rows only (the tripolar-fold edge).  The
          !! outer `bt_halo` ring of EVERY wide array (static and
          !! per-solve) is overwritten with it before the wide exchange, so
          !! that at a physical edge -- where no exchange refills it -- the ring
@@ -301,17 +302,17 @@ contains
       call offset_fill(this%f_corner_w, f_corner, bt_h)
 
       if (this%ring_poison > 0) then
-         call poison_ring_host(this%w_area_cu, bt_h + this%ring_poison/10, mod(this%ring_poison, 10))
-         call poison_ring_host(this%w_dx_cu, bt_h + this%ring_poison/10, mod(this%ring_poison, 10))
-         call poison_ring_host(this%w_dy_cu, bt_h + this%ring_poison/10, mod(this%ring_poison, 10))
-         call poison_ring_host(this%w_idx_cu, bt_h + this%ring_poison/10, mod(this%ring_poison, 10))
-         call poison_ring_host(this%w_area_cv, bt_h + this%ring_poison/10, mod(this%ring_poison, 10))
-         call poison_ring_host(this%w_dx_cv, bt_h + this%ring_poison/10, mod(this%ring_poison, 10))
-         call poison_ring_host(this%w_dy_cv, bt_h + this%ring_poison/10, mod(this%ring_poison, 10))
-         call poison_ring_host(this%w_idy_cv, bt_h + this%ring_poison/10, mod(this%ring_poison, 10))
-         call poison_ring_host(this%w_iarea_t, bt_h + this%ring_poison/10, mod(this%ring_poison, 10))
-         call poison_ring_host(this%w_iarea_bu, bt_h + this%ring_poison/10, mod(this%ring_poison, 10))
-         call poison_ring_host(this%f_corner_w, bt_h + this%ring_poison/10, mod(this%ring_poison, 10))
+         call poison_ring_host(this%w_area_cu, bt_h + mod(this%ring_poison/10, 10), ring_mode(this%ring_poison))
+         call poison_ring_host(this%w_dx_cu, bt_h + mod(this%ring_poison/10, 10), ring_mode(this%ring_poison))
+         call poison_ring_host(this%w_dy_cu, bt_h + mod(this%ring_poison/10, 10), ring_mode(this%ring_poison))
+         call poison_ring_host(this%w_idx_cu, bt_h + mod(this%ring_poison/10, 10), ring_mode(this%ring_poison))
+         call poison_ring_host(this%w_area_cv, bt_h + mod(this%ring_poison/10, 10), ring_mode(this%ring_poison))
+         call poison_ring_host(this%w_dx_cv, bt_h + mod(this%ring_poison/10, 10), ring_mode(this%ring_poison))
+         call poison_ring_host(this%w_dy_cv, bt_h + mod(this%ring_poison/10, 10), ring_mode(this%ring_poison))
+         call poison_ring_host(this%w_idy_cv, bt_h + mod(this%ring_poison/10, 10), ring_mode(this%ring_poison))
+         call poison_ring_host(this%w_iarea_t, bt_h + mod(this%ring_poison/10, 10), ring_mode(this%ring_poison))
+         call poison_ring_host(this%w_iarea_bu, bt_h + mod(this%ring_poison/10, 10), ring_mode(this%ring_poison))
+         call poison_ring_host(this%f_corner_w, bt_h + mod(this%ring_poison/10, 10), ring_mode(this%ring_poison))
       end if
 
       ! ONE host-side wide exchange of the static set: seam / periodic ghosts
@@ -358,12 +359,21 @@ contains
       this%is_init = .true.
    end subroutine bt_wide_init
 
+   pure function ring_mode(ring_poison) result(m)
+      !! The mode argument of the poison kernels: the units digit (1 finite,
+      !! 2 NaN) plus 100 when the hundreds digit is set (NORTH rows only: the
+      !! tripolar-fold edge, where the dynamic ring is refolded every substep).
+      integer, intent(in) :: ring_poison
+      integer :: m
+      m = mod(ring_poison, 10) + 100*mod(ring_poison/100, 10)
+   end function ring_mode
+
    pure function ring_value(mode, i, j) result(v)
       !! Garbage for the ring-poison hook: finite (mode 1) or NaN (mode 2).
       !$acc routine seq
       integer, intent(in) :: mode, i, j
       real(wp) :: v
-      if (mode == 2) then
+      if (mod(mode, 100) == 2) then
          v = ieee_value(1.0_wp, ieee_quiet_nan)
       else
          v = 1.0e3_wp*real(1 + mod(abs(7*i + 13*j), 11), wp)
@@ -379,7 +389,7 @@ contains
       n2 = size(a, 2)
       do j = 1, n2
          do i = 1, n1
-            if (i <= off .or. i > n1 - off .or. j <= off .or. j > n2 - off) then
+            if ((mode < 100 .and. (i <= off .or. i > n1 - off .or. j <= off)) .or. j > n2 - off) then
                a(i, j) = ring_value(mode, i, j)
             end if
          end do
@@ -392,7 +402,7 @@ contains
       real(wp), intent(inout) :: a(n1, n2)
       integer :: i, j
       do concurrent(j=1:n2, i=1:n1)
-         if (i <= off .or. i > n1 - off .or. j <= off .or. j > n2 - off) then
+         if ((mode < 100 .and. (i <= off .or. i > n1 - off .or. j <= off)) .or. j > n2 - off) then
             a(i, j) = ring_value(mode, i, j)
          end if
       end do
@@ -646,8 +656,8 @@ contains
       !! input (after the copy-in, before the entry exchange).
       type(bt_wide_t), intent(inout) :: this
       integer :: n1, n2, off, m
-      off = this%bt_halo + this%ring_poison/10
-      m = mod(this%ring_poison, 10)
+      off = this%bt_halo + mod(this%ring_poison/10, 10)
+      m = ring_mode(this%ring_poison)
       ! `ubt_prev` / `vbt_prev` are NOT poisoned: they are no longer part of
       ! the packed entry exchange (nothing refills a seam ring of them), they
       ! are re-seeded from `ubt` / `vbt` over the whole wide array when
@@ -747,8 +757,8 @@ contains
       end do
       if (this%ring_poison > 0) then
          call poison_ring_dev(this%w_eta_forcing, size(this%w_eta_forcing, 1), &
-                              size(this%w_eta_forcing, 2), off + this%ring_poison/10, &
-                              mod(this%ring_poison, 10))
+                              size(this%w_eta_forcing, 2), off + mod(this%ring_poison/10, 10), &
+                              ring_mode(this%ring_poison))
       end if
       call profiler_start("ocean_comms_bt")
       call ocean_halo_centre_2d_wide(this%w_eta_forcing, this%ng_wide)

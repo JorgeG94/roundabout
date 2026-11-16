@@ -1963,10 +1963,14 @@ contains
          ! End-of-substep ghost refresh.
          ! v1 path (marchin=.false.): drain async(1) then one normal grouped
          ! exchange per substep (bit-identical; D0).
-         ! March-in path (marchin=.true.): fire a WIDE grouped exchange every
-         ! num_cycles substeps (bt_halo/2); skip the last substep (n==n_steps)
-         ! since copy_out immediately follows.  The wide band absorbs the
-         ! mid-substep u exchange.
+         ! March-in path (marchin=.true.): fire ONE packed wide exchange every
+         ! num_cycles substeps (`bt_wide_cycle_len`); skip the last substep
+         ! (n==n_steps) since copy_out immediately follows.  The wide band
+         ! absorbs the mid-substep u exchange.  Across the tripolar fold the
+         ! exchange order is unchanged: this exchange (seams) -> next substep's
+         ! periodic wrap -> fold, and the fold itself runs EVERY substep, so the
+         ! rows beyond it are exact each substep and the fold edge consumes no
+         ! reach.
          if (inhalo_k > 0) then
             ! In-halo march: exchange every inhalo_k substeps and always on
             ! the last one (the stage reads exact end-state ghosts).  The

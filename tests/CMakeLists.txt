@@ -900,7 +900,11 @@ if(RDB_ENABLE_MPI)
     perxo
     perxc
     peryo
-    perxy)
+    perxy
+    tripsea
+    trip_tides
+    trip_porous
+    trip_zfixed)
     add_test(
       NAME rdb_test_ocean_decomp_bitid_mpi_2rank_btwide_cycle_break_${bcase}
       COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 2
@@ -917,6 +921,63 @@ if(RDB_ENABLE_MPI)
         TIMEOUT
         14400)
   endforeach()
+  # The same cadence break across the tripolar north fold at np = 4 too (the px
+  # > 1 layouts 4x1 / 2x2 run the owner-routed fold, every value from the tile
+  # that owns the mirror point), and the `bth_trip_*` family at both rank
+  # counts: the fold applied every substep consumes no reach of its own, so the
+  # limit (+1) holds bitwise (`btwide_cycle_limit` above) and +2 breaks.
+  foreach(np 2 4)
+    add_test(
+      NAME rdb_test_ocean_decomp_bitid_mpi_${np}rank_btwide_cycle_break_trip
+      COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${np}
+              $<TARGET_FILE:test_ocean_decomp_bitid_mpi>)
+    set_tests_properties(
+      rdb_test_ocean_decomp_bitid_mpi_${np}rank_btwide_cycle_break_trip
+      PROPERTIES
+        LABELS
+        "ocean"
+        WILL_FAIL
+        TRUE
+        ENVIRONMENT
+        "OMP_NUM_THREADS=1;RDB_BT_INHALO_POISON=2002;RDB_BITID_CASES=bth_trip_w4"
+        TIMEOUT
+        14400)
+  endforeach()
+  # North-fold ring poison (hundreds digit 1 = the NORTH rows of the wide ring
+  # only, the tripolar-fold edge).  NaN in the outer `bt_halo` rows and in the
+  # first two model ghost rows beyond them (122) leaves the owned cells bitwise:
+  # the clamped copies are never read.  One row deeper (132: all `nghost` model
+  # rows) the run breaks -- the model's own folded ghost row next to the fold
+  # line IS read (e.g. `H_ref` one row north of the fold line, as at `bt_halo =
+  # 0`): the liveness control, WILL_FAIL.
+  foreach(np 1 2 4)
+    add_test(NAME rdb_test_ocean_decomp_bitid_mpi_${np}rank_btwide_fold_ring
+             COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${np}
+                     $<TARGET_FILE:test_ocean_decomp_bitid_mpi>)
+    set_tests_properties(
+      rdb_test_ocean_decomp_bitid_mpi_${np}rank_btwide_fold_ring
+      PROPERTIES
+        LABELS
+        "ocean"
+        ENVIRONMENT
+        "OMP_NUM_THREADS=1;RDB_BT_INHALO_POISON=2;RDB_BT_RING_POISON=122;RDB_BITID_CASES=_trip"
+        TIMEOUT
+        14400)
+  endforeach()
+  add_test(NAME rdb_test_ocean_decomp_bitid_mpi_2rank_btwide_fold_ring_live
+           COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 2
+                   $<TARGET_FILE:test_ocean_decomp_bitid_mpi>)
+  set_tests_properties(
+    rdb_test_ocean_decomp_bitid_mpi_2rank_btwide_fold_ring_live
+    PROPERTIES
+      LABELS
+      "ocean"
+      WILL_FAIL
+      TRUE
+      ENVIRONMENT
+      "OMP_NUM_THREADS=1;RDB_BT_RING_POISON=132;RDB_BITID_CASES=bth_trip_w4"
+      TIMEOUT
+      14400)
   # TIMEOUT: the project uses enable_testing() without include(CTest), so there
   # is NO default timeout.  This test deliberately runs a must-be-refused probe
   # (check_cavity_grounded_refusal) in which every rank has to reach the same

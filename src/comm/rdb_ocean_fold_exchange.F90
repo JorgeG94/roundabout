@@ -110,6 +110,8 @@ module rdb_ocean_fold_exchange
    public :: ocean_fold_exchange_bytes
    public :: ocean_fold_is_distributed
    public :: ocean_fold_ctx_is_distributed
+   public :: ocean_fold_exchange_calls
+   public :: ocean_fold_exchange_calls_reset
    public :: ocean_fold_begin
    public :: ocean_fold_pack
    public :: ocean_fold_exchange
@@ -229,6 +231,9 @@ module rdb_ocean_fold_exchange
 
    type(fx_ctx_t), target, save :: fxc(NCTX)
       !! The contexts, indexed by `FOLD_CTX_*`.
+   integer(int64), save :: fx_calls(NCTX) = 0_int64
+      !! `ocean_fold_exchange` calls that moved data (active context), per
+      !! context: a test counter, one increment per owner-routed group.
 
 contains
 
@@ -433,6 +438,20 @@ contains
       logical :: flag
       flag = fxc(FOLD_CTX_NORMAL)%initialised .and. fxc(FOLD_CTX_NORMAL)%active
    end function ocean_fold_is_distributed
+
+   pure function ocean_fold_exchange_calls(ctx) result(n)
+      !! Owner-routed fold groups exchanged on `ctx` since the last reset
+      !! (0 on a rank that does not fold through the exchange).
+      integer, intent(in) :: ctx
+         !! `FOLD_CTX_NORMAL` or `FOLD_CTX_WIDE`.
+      integer(int64) :: n
+      n = fx_calls(ctx)
+   end function ocean_fold_exchange_calls
+
+   subroutine ocean_fold_exchange_calls_reset()
+      !! Zero the per-context exchange counters.
+      fx_calls = 0_int64
+   end subroutine ocean_fold_exchange_calls_reset
 
    pure function ocean_fold_ctx_is_distributed(ctx) result(flag)
       !! `ocean_fold_is_distributed` for one routing context: true iff that
@@ -653,6 +672,7 @@ contains
       ic = FOLD_CTX_NORMAL
       if (present(ctx)) ic = ctx
       if (.not. fxc(ic)%active) return
+      fx_calls(ic) = fx_calls(ic) + 1_int64
       if (.not. fxc(ic)%open .or. fxc(ic)%sent) then
          error stop "rdb_ocean_fold_exchange: ocean_fold_exchange outside an open, unsent group"
       end if

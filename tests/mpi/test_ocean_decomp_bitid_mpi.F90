@@ -281,7 +281,9 @@ program test_ocean_decomp_bitid_mpi
    use rdb_ocean_dyn, only: SPLIT_SCHEME_PRED_CORR
    use rdb_ocean_balance, only: BALANCE_GEOSTROPHIC, ocean_balance_velocity
    use rdb_ocean_reinit, only: ocean_balance_apply
-   use rdb_ocean_fold_exchange, only: ocean_fold_exchange_grow_count
+   use rdb_ocean_fold_exchange, only: ocean_fold_exchange_grow_count, ocean_fold_exchange_calls, &
+                                      ocean_fold_exchange_calls_reset, ocean_fold_ctx_is_distributed, &
+                                      FOLD_CTX_WIDE
 #ifndef RDB_NO_NETCDF
    use rdb_io_netcdf, only: nc_create_file, nc_close, nc_def_dim, nc_def_var_2d, &
                             nc_def_var_3d, nc_enddef, nc_put_var_2d, rdb_def_var_1d, &
@@ -360,6 +362,10 @@ program test_ocean_decomp_bitid_mpi
          !! grounded, melting, top-drag stress > 0, k_top < nz.
       integer(int64) :: cnt_bt_group = 0_int64, cnt_bt_u = 0_int64, cnt_pk = 0_int64, cnt_c2d = 0_int64, &
                         cnt_fx2 = 0_int64, cnt_fy2 = 0_int64
+      integer(int64) :: cnt_fold_wide = 0_int64
+         !! Owner-routed fold groups exchanged on the wide plan (this rank).
+      logical :: fold_wide_active = .false.
+         !! This rank folds through the wide owner-routed plan (north rank row, `px > 1`).
          !! Halo counters of the run (`bt_group` calls, mid-substep u exchanges).
       type(conservation_budget_t) :: bud
          !! Closed-budget mass/salt/heat out+src totals at the final step —
@@ -396,7 +402,7 @@ program test_ocean_decomp_bitid_mpi
       !! `RDB_BITID_CASES`: run only the cases whose name contains this substring.
    type(comm_t) :: comm
    character(len=16), parameter :: SCHEMES(2) = [character(len=16) :: "pred_corr", "ssp_rk2"]
-   character(len=24), parameter :: CASES(139) = [character(len=24) :: &
+   character(len=24), parameter :: CASES(142) = [character(len=24) :: &
                                                  "island_basin", "weno7_pv", &
                                                  "periodic_channel_zstar", &
                                                  "visc_rem_zstar", &
@@ -458,7 +464,9 @@ program test_ocean_decomp_bitid_mpi
                                                  "bth_trip_w2", "bth_trip_w4", "bth_trip_w8", &
                                                  "bth_trip_w4_b0", "bth_trip_w8_b0", &
                                                  "bthx_tripsea_w4", "bthx_tripsea_w8", &
-                                                 "bthx_tripsea_w4_b0"]
+                                                 "bthx_tripsea_w4_b0", &
+                                                 "bthx_trip_tides_w4", "bthx_trip_porous_w4", &
+                                                 "bthx_trip_zfixed_w4"]
 
    call comm_env_init()
    call comm_env_setup_roles(.false.)
@@ -585,6 +593,14 @@ contains
       bth_width = 0
       if (p > 0) read (label(p + 2:p + 2), '(i1)') bth_width
    end function bth_width
+
+   pure integer function bth_width_eff(label)
+      !! The width the engine actually marches: `bt_halo` rounded DOWN to an
+      !! even number (`bt_halo - mod(bt_halo, 2)`).  Tile-fit and cadence rules
+      !! use this, not the label's `W`.
+      character(len=*), intent(in) :: label
+      bth_width_eff = bth_width(label) - mod(bth_width(label), 2)
+   end function bth_width_eff
 
    pure integer function bth_fold_extra(label)
       !! The tripolar `bth*` cases need tiles of at least nghost + W + 1 cells
@@ -929,6 +945,38 @@ contains
          else
             nml = nml//"&ocean_topo_nml topo_config = 'double_drake', max_depth = 1000.0, "// &
                   "slope_scale = 0.2 /"//NL
+         end if
+         nml = nml//"&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
+               "north = 'tripolar_fold' /"//NL
+      case ("bthx_trip_tides_w4", "bthx_trip_porous_w4", "bthx_trip_zfixed_w4")
+         ! The fold composed with the per-solve wide traffic: an equilibrium body
+         ! tide (`eta_forcing` copied in and exchanged once per solve, with the
+         ! fold folding the band every substep), porous barriers and z-level
+         ! closed faces (the two BT widths re-copied and re-exchanged once per
+         ! solve).  Same tripolar cap as `bthx_tripsea` (seamount in the cap).
+         nml = common// &
+               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
+               "dx = 7.5, dy = 0.75 /"//NL// &
+               "&ocean_grid_nml grid_config = 'tripolar', lon_west = 0.0, lat_south = 59.0, "// &
+               "phi_join = 74.0, lon_pole = 0.0, rad_earth = 6.371e6, "// &
+               "coriolis_scheme = 'planetary' /"//NL// &
+               "&physics_nml wind_stress_x = 0.3, wind_stress_y = 0.3 /"//NL
+         if (index(label, "_zfixed_") > 0) then
+            nml = nml//"&vcoord_nml vcoord_type = 'z_fixed', zfixed_closed_faces = .true. /"//NL// &
+                  "&ocean_vmix_nml use_kpp = .false. /"//NL// &
+                  "&ocean_topo_nml topo_config = 'seamount', max_depth = 2000.0, "// &
+                  "edge_depth = 300.0, slope_scale = 600000.0 /"//NL
+         else if (index(label, "_porous_") > 0) then
+            nml = nml//"&vcoord_nml vcoord_type = 'zstar' /"//NL// &
+                  "&ocean_porous_nml enable = .true. /"//NL// &
+                  "&ocean_topo_nml topo_config = 'seamount', max_depth = 2000.0, "// &
+                  "edge_depth = 1500.0, slope_scale = 600000.0 /"//NL
+         else
+            nml = nml//"&vcoord_nml vcoord_type = 'sigma' /"//NL// &
+                  "&ocean_tides_nml enable = .true., constituents = 'M2,S2,K1,O1', "// &
+                  "ref_date = '2020-03-15', add_nodal = .true. /"//NL// &
+                  "&ocean_topo_nml topo_config = 'seamount', max_depth = 2000.0, "// &
+                  "edge_depth = 1500.0, slope_scale = 600000.0 /"//NL
          end if
          nml = nml//"&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
                "north = 'tripolar_fold' /"//NL
@@ -1967,6 +2015,7 @@ contains
          end if
       end if
       call oh_counters_reset()
+      call ocean_fold_exchange_calls_reset()
       t = 0.0_wp
       ierr = OCEAN_STATUS_OK
       do n = 1, n_steps_cur
@@ -1991,6 +2040,8 @@ contains
          call oh_counters_get(snap%cnt_bt_group, snap%cnt_bt_u, c_ml, snap%cnt_c2d, c_c3, &
                               snap%cnt_fx2, c_fx3, snap%cnt_fy2, c_fy3)
          snap%cnt_pk = oh_counters_packed()
+         snap%cnt_fold_wide = ocean_fold_exchange_calls(FOLD_CTX_WIDE)
+         snap%fold_wide_active = ocean_fold_ctx_is_distributed(FOLD_CTX_WIDE)
       end block
       cur_n_inner = cfg%ocean%bt%n_inner
       if (print_counts .and. csize > 1 .and. crank == 0) then
@@ -2715,11 +2766,11 @@ contains
          write (tag, '(4a,i0,a,i0)') label, "/", scheme, " ", px, "x", nprocs/px
          if (is_bth_case(label) .and. nprocs > 1) then
             ! The wide band (nghost + W) must fit the smallest tile.
-            if (3 + bth_width(label) + bth_fold_extra(label) > &
+            if (3 + bth_width_eff(label) + bth_fold_extra(label) > &
                 min(BTH_NX/px, BTH_NY/(nprocs/px))) then
                if (rank == 0) write (*, '(3a,i0,a)') "SKIP ", trim(tag), &
                   ": bt_halo does not fit the smallest tile (nghost + W [+ 1 under the fold] = ", &
-                  3 + bth_width(label) + bth_fold_extra(label), ")"
+                  3 + bth_width_eff(label) + bth_fold_extra(label), ")"
                cycle
             end if
          end if
@@ -2776,7 +2827,8 @@ contains
             if ((label == "sea_ice" .or. label == "sea_ice_transport" .or. &
                  label == "bulk_flux_ice" .or. label == "dtbt_reset" .or. &
                  label == "cavity_sigma_ratio2" .or. label == "cavity_mass" .or. &
-                 label == "cavity_mass_comp" .or. is_wetdry_case(label) .or. is_ice_fold_case(label)) .and. &
+                 label == "cavity_mass_comp" .or. is_wetdry_case(label) .or. is_ice_fold_case(label) .or. &
+                 label == "bthx_tripsea_w4") .and. &
                 (nprocs/px == 1 .or. px == nprocs/px) .and. &
                 (nprocs > 1 .or. label == "cavity_sigma_ratio2" .or. label == "cavity_mass" .or. &
                  label == "cavity_mass_comp")) then
@@ -2825,14 +2877,16 @@ contains
       !! A `bthx_*` case with a body tide or surface-pressure load (the wide
       !! `eta_forcing` is exchanged once per solve).
       character(len=*), intent(in) :: label
-      has_eta_forcing = index(label, "bthx_tides") == 1 .or. index(label, "bthx_psurf") == 1
+      has_eta_forcing = index(label, "bthx_tides") == 1 .or. index(label, "bthx_psurf") == 1 .or. &
+                        index(label, "bthx_trip_tides") == 1
    end function has_eta_forcing
 
    pure logical function refreshes_widths(label)
       !! A `bthx_*` case whose BT widths are recomputed per outer step (porous
       !! barriers, closed faces): re-copied and re-exchanged every solve.
       character(len=*), intent(in) :: label
-      refreshes_widths = index(label, "bthx_porous") == 1 .or. index(label, "bthx_zfixed") == 1
+      refreshes_widths = index(label, "bthx_porous") == 1 .or. index(label, "bthx_zfixed") == 1 .or. &
+                         index(label, "bthx_trip_porous") == 1 .or. index(label, "bthx_trip_zfixed") == 1
    end function refreshes_widths
 
    subroutine check_bth_counters(dec, label, tag, nbad)
@@ -2850,10 +2904,10 @@ contains
       character(len=*), intent(in) :: label, tag
       integer, intent(inout) :: nbad
       integer :: w, cycles, cad, solves
-      integer(int64) :: expect, exp_c2d, exp_fx
+      integer(int64) :: expect, exp_c2d, exp_fx, exp_fw
 
       w = bth_width(label)
-      cad = bt_wide_cycle_len(3 + w) + bth_poison_env/1000
+      cad = bt_wide_cycle_len(3 + bth_width_eff(label)) + bth_poison_env/1000
       cycles = (BTH_NINNER - 1)/cad
       solves = 2*n_steps_cur
       expect = int(solves, int64)*int(2 + cycles, int64)
@@ -2868,6 +2922,21 @@ contains
       if (index(label, "bthx_psurf") == 1) exp_c2d = exp_c2d + int(n_steps_cur, int64)
       exp_fx = 0_int64
       if (refreshes_widths(label)) exp_fx = int(solves, int64)
+      ! Fold traffic (the tripolar `bth*` cases).  The owner-routed fold is NOT
+      ! a halo exchange and is not in the `oh_*` counters; it has its own counter.
+      ! Well-defined: on a rank that folds through the wide plan (north rank row,
+      ! `px > 1`) exactly two groups per substep (eta + ubt, then vbt with the
+      ! fold-line projection), `BTH_NINNER` substeps per solve, two solves per
+      ! outer step, at ANY exchange cadence (the fold never rides the cadence);
+      ! on every other rank none.  The Isend/Irecv count inside a group depends
+      ! on the plan's peer list and is not asserted.
+      exp_fw = 0_int64
+      if (dec%fold_wide_active) exp_fw = int(solves, int64)*2_int64*int(BTH_NINNER, int64)
+      if (dec%cnt_fold_wide /= exp_fw) then
+         write (*, '(3a,i0,a,i0,a,i0)') "FAIL ", trim(tag), &
+            ": wide fold groups on rank ", rank, " = ", dec%cnt_fold_wide, " expected=", exp_fw
+         nbad = nbad + 1
+      end if
       if (cycles < merge(3, 4, bth_poison_env >= 1000) .or. dec%cnt_bt_u /= 0_int64 .or. dec%cnt_bt_group /= 0_int64 .or. &
           dec%cnt_pk /= expect .or. dec%cnt_c2d /= exp_c2d .or. dec%cnt_fx2 /= exp_fx .or. &
           dec%cnt_fy2 /= exp_fx) then
