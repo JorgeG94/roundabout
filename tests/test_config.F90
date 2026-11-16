@@ -421,9 +421,8 @@ contains
       !! A y-periodic axis is refused on a beta plane or a non-Cartesian grid
       !! (f and the metrics differ between the south and north edge, so the
       !! duplicated seam row is not well defined: a 1x2 split differed from one
-      !! rank by 1e-4 in u).  An f-plane Cartesian y-periodic channel, a
-      !! beta plane periodic in x only, and the beta plane with walls stay
-      !! accepted.
+      !! rank by 1e-4 in u).  An f-plane Cartesian y-periodic channel and a
+      !! beta plane periodic in x only stay accepted.
       type(error_type), allocatable, intent(out) :: error
       type(config_t) :: cfg
       integer :: ierr
