@@ -761,6 +761,8 @@ Split-explicit barotropic substep controls.
 | `wave_drag_file` | `""` |  | Reserved for PR-14 (MOM6 BT_WAVE_DRAG_FILE); unused today |
 | `wave_drag_var` | `"rH"` |  | Reserved for PR-14 (MOM6 BT_WAVE_DRAG_VAR); unused today |
 | `bt_halo` | `-1` |  | Wide-halo BT march-in width (-1 = auto: resolves to 0, the march-in is opt-in; 0 = explicit off, bit-identical) |
+| `inhalo_march` | `.false.` |  | EXPERIMENTAL: in-halo BT march -- exchange the fast-loop ghost bands once per (nghost-1) substeps inside the existing halo; N ranks bitwise == 1 rank; exclusive with bt_halo > 0, wet/dry, use_cont_type, upstream_h_face, tides, psurf |
+| `inhalo_stride` | `0` |  | Substeps per ghost exchange under inhalo_march (0 = derive nghost-1; refused above nghost-1, which breaks the bitwise contract) |
 
 ### &ocean_debug_nml
 
