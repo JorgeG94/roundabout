@@ -33,12 +33,10 @@ module rdb_ice_cice_adapters
    !! couplers' form) is not reachable from a validated namelist and is kept for the equivalence
    !! test of the adapters.  Under it the shortwave sits inside `Q_heat` and does not penetrate.
    !!
-   !! **Seam ghosts.**  The adapters write OWNED cells.  With components on, the components are only summed
-   !! by the assembler and the ghosts that anything reads (the assembled `Q_heat`/`Q_salt`, and `sw_net` under
-   !! `sw_source = 'q_sw'`) are refreshed after the assembly by `ocean_seam_refresh_surface_flux`, so
-   !! `ice_cice_apply_window` exchanges nothing of them.  With components off it ends with the centre-field halo
-   !! exchange (`ocean_halo_exchange_centre_field`: two-pass, periodic wrap, tripolar fold) of `Q_heat`/`Q_salt`
-   !! (needs `ocean_halo_init`; a no-op on one non-periodic rank).
+   !! **Seam ghosts.**  The adapters write OWNED cells; the ocean's surface-flux application
+   !! reads a seam ghost, so `ice_cice_apply_window` ends with the centre-field halo
+   !! exchange (`ocean_halo_exchange_centre_field`: two-pass, periodic wrap, tripolar fold)
+   !! of every field it wrote (needs `ocean_halo_init`; a no-op on one non-periodic rank).
    !!
    !! **Virtual-salt form (interim, until the real-mass PR).**  The ocean is
    !! volume conserving, so a fresh-water flux enters as a salt flux that has the
@@ -218,8 +216,8 @@ contains
       !! The thermo-step hand-off: adapt the window mean held by `avg`
       !! (`ice_cice_to_surface_flux` on `avg%acc_*`), optionally copy the mean
       !! `fresh` [kg m-2 s-1, + into ocean] into `fresh_mass_out(nx_total, ny_total)`,
-      !! exchange the seam ghosts of `Q_heat`/`Q_salt` when they are the written fields (components off: centre
-      !! exchange + periodic wrap + tripolar fold; with components on the general refresh after the assembly does it), then `ice_flux_avg_reset`.  An empty window
+      !! exchange the seam ghosts of every field written (centre exchange + periodic
+      !! wrap + tripolar fold), then `ice_flux_avg_reset`.  An empty window
       !! (`avg%n_acc < 1`) returns `ICE_ADAPT_ERR_EMPTY` and touches nothing.
       !! `t_window` returns the seconds the window accumulated; with `window_expected`
       !! (the thermo-window length, `dt_therm_ratio*dt`) a mismatch beyond 1e-9 relative
@@ -267,11 +265,11 @@ contains
                                  grid%nghost + 1, grid%nghost + grid%ny_phys, avg%acc_fresh, fresh_mass_out)
          call ocean_halo_exchange_centre_field(fresh_mass_out, grid, bc)
       end if
-      ! Components on: nothing to exchange.  `heat_ice`/`sw_ice`/`salt_ice` are only summed by the assembler, whose
-      ! totals (`Q_heat`, `Q_salt`, and `sw_net` under `sw_source = 'q_sw'`) get their seam ghosts from
-      ! `ocean_seam_refresh_surface_flux` after the assembly: the only readers of a ghost.  (Measured: with the three
-      ! exchanges dropped every owned field stays bitwise, and with that refresh off the bulk cases fail.)
-      if (.not. sf%use_components) then
+      if (sf%use_components) then
+         call ocean_halo_exchange_centre_field(sf%heat_ice, grid, bc)
+         call ocean_halo_exchange_centre_field(sf%sw_ice, grid, bc)
+         call ocean_halo_exchange_centre_field(sf%salt_ice, grid, bc)
+      else
          call ocean_halo_exchange_centre_field(sf%Q_heat, grid, bc)
          call ocean_halo_exchange_centre_field(sf%Q_salt, grid, bc)
       end if

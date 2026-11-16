@@ -1950,6 +1950,9 @@ contains
       call push_field(s, "img:ss_mag", engine%state%surface_stress%stress_mag)
       call push_field(s, "img:aice0", engine%state%ice%aice0)
       call push_field(s, "img:aice", engine%state%ice%aice)
+      call push_field(s, "img:heat_ice", engine%state%surface_flux%heat_ice)
+      call push_field(s, "img:salt_ice", engine%state%surface_flux%salt_ice)
+      call push_field(s, "img:sw_ice", engine%state%surface_flux%sw_ice)
       call push_field(s, "img:tau_a_x", engine%state%ice%tau_a_x)
       call push_field(s, "img:tau_a_y", engine%state%ice%tau_a_y)
    end subroutine add_cice_images
