@@ -156,7 +156,7 @@ module rdb_ocean_engine
    use rdb_ocean_data_forcing, only: ocean_data_forcing_configure, ocean_data_forcing_apply, &
                                      ocean_data_forcing_register_sss
    use rdb_ocean_sw_chl, only: sw_chl_configure, sw_chl_apply
-   use rdb_atm_state, only: atm_state_configure, atm_state_update
+   use rdb_atm_state, only: atm_state_configure, atm_state_update, atm_sw_window
    use rdb_ocean_bulk_forcing, only: bulk_forcing_configure, bulk_forcing_apply
    use rdb_io_netcdf, only: output_rank_filename, ensure_directory_exists
 #endif
@@ -813,6 +813,12 @@ contains
       ! Under validate_only the stream is never opened, so teardown must
       ! not try to close it.
       engine%diag_enabled = cfg%ocean%diag%enabled .and. .not. no_output
+      ! The atm provider is configured later (it needs the metrics), but the
+      ! diag registry gates the `atm_*` diagnostics on `atm%enable`: pre-set it
+      ! from the namelist so they register (`atm_state_configure` re-derives it).
+#ifndef RDB_NO_NETCDF
+      engine%state%atm%enable = cfg%ocean%atm_forcing%enable
+#endif
       call engine_configure_diag(cfg, engine%state, mrank, engine%decomp, ierr=ierr, &
                                  open_stream_file=.not. no_output)
       if (setup_failed(ierr)) return
@@ -1996,6 +2002,8 @@ contains
       real(wp), intent(in) :: t
       integer, intent(out), optional :: ierr
 
+      real(wp) :: sw_shift, sw_len
+
       if (present(ierr)) ierr = OCEAN_STATUS_OK
 
 #ifndef RDB_NO_NETCDF
@@ -2008,8 +2016,12 @@ contains
       ! Order vs `ocean_data_forcing_apply` above does not matter -- both
       ! read the SAME reader brackets `ocean_data_input_update_all` just
       ! refreshed, and neither writes a slot the other reads.
+      ! The shortwave is applied over the THERMO interval (N*dt at
+      ! dt_therm_ratio = N), so the coszen window must be that interval.
+      call atm_sw_window(dt, engine%state%dyn%dt_therm_ratio, engine%state%dyn%diabatic_first, &
+                         engine%state%dyn%is_thermo_step(), sw_shift, sw_len)
       call atm_state_update(engine%state%atm, engine%state%data_input, &
-                            engine%state%metrics, t)
+                            engine%state%metrics, t, dt, sw_shift, sw_len)
       ! Chlorophyll -> per-band opacities (no-op unless sw_scheme="manizza05").
       call sw_chl_apply(engine%state%sw_chl, engine%state%data_input, engine%grid, &
                         engine%state%multilayer%wet_mask, engine%state%surface_flux, &
