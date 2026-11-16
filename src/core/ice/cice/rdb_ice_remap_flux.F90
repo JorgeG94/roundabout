@@ -142,7 +142,7 @@ module rdb_ice_remap_flux
    public :: remap_flux_bytes_per_index, remap_default_nbatch
    public :: REMAP_CFG_OK, REMAP_CFG_WORKSPACE, REMAP_CFG_TABLE, REMAP_CFG_RANGE, REMAP_CFG_MASK
    public :: REMAP_QUAD_W0, REMAP_QUAD_W1, REMAP_QUAD_FRAC
-   public :: remap_ledger_t, remap_ledger_impl, remap_ledger_cells_impl, REMAP_TGROUP, REMAP_NCLIP
+   public :: remap_ledger_t, remap_ledger_impl, remap_ledger_cells_impl, remap_clip_reset, REMAP_TGROUP, REMAP_NCLIP
 
    integer, parameter :: NGV = 3
       !! Counts reduced together over the ranks at one decision point.
@@ -182,7 +182,7 @@ module rdb_ice_remap_flux
       real(wp) :: drop_vsno = 0.0_wp
          !! Snow volume likewise [m^3].
       real(wp) :: drop_eice = 0.0_wp
-         !! Ice enthalpy content `m hi q` dropped likewise [J].
+         !! Ice enthalpy content `sum_k m hi q_k/nilyr` dropped likewise [J] (the frame of the ledger's state energy).
       real(wp) :: drop_esno = 0.0_wp
          !! Snow enthalpy content (packed frame) dropped likewise [J].
    end type remap_ledger_t
@@ -590,7 +590,11 @@ contains
       !! `(i, j)`: `nclip` (1 if the new area fell in `[-puny, 0)` and was set to 0), the area created, and the
       !! content (ice and snow volume, ice enthalpy `nq1..nq2`, snow enthalpy `nqs`: `trm` indices) of the tracer
       !! products left behind where the new area is 0 or a type-2 tracer's parent is 0, times the cell area.  It
-      !! re-forms the new area from the fluxes the update read (the same expression).  The ONE statement of the
+      !! re-forms the new area from the fluxes the update read (the same expression).  THE FRAME OF THE ENERGY: the ice
+      !! enthalpy is summed over the `nq2 - nq1 + 1 = nilyr` layer tracers and divided by `nilyr` (each layer holds
+      !! `1/nilyr` of the volume), i.e. it is `sum_k q_k V/nilyr`, the SAME frame as the ledger's state energy; the
+      !! snow enthalpy is the one tracer `nqs` (`nslyr = 1`, the transport refuses more) in the packed frame (shifted
+      !! by `rhos Lfresh`).  With more than one snow layer the snow sum would need the same `1/nslyr`.  The ONE statement of the
       !! arithmetic, shared by the reducing kernel (`remap_ledger_impl`) and the per-cell record
       !! (`remap_ledger_cells_impl`).
       !$acc routine seq
@@ -650,7 +654,7 @@ contains
          else if (nt == nqs) then
             d_es = d_es + res*tar
          else
-            d_ei = d_ei + res*tar
+            d_ei = d_ei + (res*tar)/real(nq2 - nq1 + 1, wp)
          end if
       end do
    end subroutine remap_ledger_cell
@@ -695,6 +699,14 @@ contains
       end do
       !$acc end data
    end subroutine remap_ledger_impl
+
+   subroutine remap_clip_reset(fw)
+      !! Zero the per-cell clip record at the start of a transport step (no-op without the ledger), so a step that
+      !! returns before the remap leaves a ZERO record, never the previous step's.
+      type(remap_flux_workspace_t), intent(inout) :: fw
+
+      if (allocated(fw%clip)) call clip_zero(fw%nx, fw%ny, fw%clip)
+   end subroutine remap_clip_reset
 
    subroutine clip_zero(nx, ny, clip)
       !! Zero the per-cell clip record (one launch).
@@ -942,9 +954,6 @@ contains
          return
       end if
       if (nrecon > 0) return
-
-      ! the per-cell clip record starts from zero each call (ledger only)
-      if (allocated(fw%clip)) call clip_zero(ws%nx, ws%ny, fw%clip)
 
       ! fluxes and update, a category batch at a time
       nlo = 0

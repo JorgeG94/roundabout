@@ -171,8 +171,8 @@ module rdb_ice_transport_cice
    use rdb_ice_remap_recon_batch, only: remap_recon_batch_t
    use pic_logger, only: logger => global_logger
    use pic_strings, only: to_string
-   use rdb_ice_remap_flux, only: remap_flux_workspace_t, remap_ledger_t, remap_flux_bytes_per_index, remap_advect, remap_default_nbatch, REMAP_CFG_OK, &
-                                 REMAP_CFG_TABLE, REMAP_CFG_RANGE
+   use rdb_ice_remap_flux, only: remap_flux_workspace_t, remap_ledger_t, remap_flux_bytes_per_index, remap_advect, &
+                                 remap_clip_reset, remap_default_nbatch, REMAP_CFG_OK, REMAP_CFG_TABLE, REMAP_CFG_RANGE
    use rdb_ice_upwind, only: upwind_advect, upwind_empty_tsfc, upwind_table_ok, UPWIND_CFG_OK, UPWIND_CFG_DEPEND, &
                              UPWIND_THICK_FLOOR
    implicit none
@@ -482,6 +482,8 @@ contains
       nslg = w%nslyr
       ntrg = w%ntrace
       remap = p%transport%advection == ICE_ADVECT_REMAP
+      ! the conservation ledger's per-cell clip record is zero unless this step's remap writes it (an early return leaves zero)
+      call remap_clip_reset(w%fw)
       pi0 = is - 1
       pi1 = ie + 1
       pj0 = js - 1

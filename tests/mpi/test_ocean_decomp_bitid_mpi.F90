@@ -1521,6 +1521,8 @@ contains
          call swap_to_cice(nml)
       end if
       if (led) call replace_once(nml, "dynamics = .true., transport = .true. /", "dynamics = .true., transport = .true., ledger = .true. /")
+      ! the land-block ledger case carries snow thinner than `hs_min` (and cold), so the thin-snow reset term is non-zero
+      if (led .and. lbl == "cice_ice_island") call replace_once(nml, "h_snow = 0.1", "h_snow = 0.00005")
    end function cice_ice_nml
 
    function cdyn_nml(label, scheme, px, py) result(nml)
@@ -2003,7 +2005,7 @@ contains
             amin, amax, vmin, vmax, ref%ice_tot(2:3), " rank ", rank
          n_fail = n_fail + 1
       end if
-      if (ref%led_on) call check_ledger_nonvacuous(ref, tag)
+      if (ref%led_on) call check_ledger_nonvacuous(ref, tag, label == "cice_ice_island_led")
       if (label == "cice_ice" .and. .not. (ref%ridge_act > 0.0_wp)) then
          write (*, '(3a,i0)') "FAIL ", tag, ": ridging never acted (dardg1dt is zero all run), rank ", rank
          n_fail = n_fail + 1
@@ -2073,15 +2075,23 @@ contains
       if (index(label, "cice_ice") == 1 .and. n > 4) yes = label(n - 3:n) == "_led"
    end function is_led_label
 
-   subroutine check_ledger_nonvacuous(ref, tag)
+   subroutine check_ledger_nonvacuous(ref, tag, thin_snow)
       !! The serial reference's ledger report must be live: finite, steps counted, a non-zero cumulative scale in each
       !! line, and the state totals of ice (positive mass, negative enthalpy).  Layout of `take_ledger`: the three global
       !! totals, the step counter, the cumulative zap terms, snow reset, clip record, worst and scales close it.
       type(snap_t), intent(in) :: ref
       character(len=*), intent(in) :: tag
+      logical, intent(in) :: thin_snow
+         !! The case carries thin cold snow: the cumulative thin-snow reset must be non-zero.
       integer :: n
 
       n = size(ref%led)
+      if (thin_snow) then
+         if (.not. (ref%led(n - 7) > 0.0_wp)) then
+            write (*, '(3a,i0)') "FAIL ", tag, ": the thin-snow reset is zero in the serial reference (vacuous), rank ", rank
+            n_fail = n_fail + 1
+         end if
+      end if
       if (.not. all(ieee_is_finite(ref%led)) .or. .not. (ref%led(n - 3) > 0.0_wp) .or. &
           .not. all(ref%led(n - 19:n - 17) > 0.0_wp) .or. .not. (ref%led(n - 2) > 0.0_wp) .or. .not. (ref%led(n) < 0.0_wp)) then
  write (*, '(3a,i0)') "FAIL ", tag, ": the ledger report is dead (non-finite, no steps, a zero scale, or empty totals), rank ", rank

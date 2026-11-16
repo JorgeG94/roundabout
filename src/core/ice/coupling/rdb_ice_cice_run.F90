@@ -72,9 +72,9 @@ module rdb_ice_cice_run
          !! what the remap update's guards created or dropped that step (clipped cells and area,
          !! dropped volume and enthalpy content), for the conservation ledger to book.
       real(wp) :: ledger_cum(ICE_LCUM_N) = 0.0_wp
-         !! The same, summed over the whole run on THIS RANK's owned cells with plain sums (a diagnostic: with the ledger on
-         !! the GLOBAL, bitwise record is `ledger%cum_clip`, restart scalars `ice_led_clip_*`) (RESTART state: optional scalars `ice_remap_*`, so a resumed run
-         !! continues the total; a checkpoint without them restarts it at 0).  Entries `ICE_LCUM_NCLIP`
+         !! The same, summed over the whole run on THIS RANK's owned cells with plain sums: a per-rank DIAGNOSTIC, not restart
+         !! state (the old optional `ice_remap_*` scalars were dropped: decomposition-dependent numbers; the global,
+         !! bitwise record is `ledger%cum_clip`, restart scalars `ice_led_clip_*`).  Entries `ICE_LCUM_NCLIP`
          !! (clipped cells, as a real), `_AREA`, `_VICE`, `_VSNO`, `_EICE`, `_ESNO`: the fields of `remap_ledger_t`.
       type(ice_term_ledger_t) :: ledger
          !! The named-term conservation ledger (`&ocean_ice_nml ledger`; inert otherwise).
@@ -253,12 +253,6 @@ contains
       call this%work%register_restart(reg)
       call this%avg%register_restart(reg)
       call this%ledger%register_restart(reg)
-      call reg%register_scalar("ice_remap_n_clip", this%ledger_cum(ICE_LCUM_NCLIP), optional=.true.)
-      call reg%register_scalar("ice_remap_clip_area", this%ledger_cum(ICE_LCUM_AREA), optional=.true.)
-      call reg%register_scalar("ice_remap_drop_vice", this%ledger_cum(ICE_LCUM_VICE), optional=.true.)
-      call reg%register_scalar("ice_remap_drop_vsno", this%ledger_cum(ICE_LCUM_VSNO), optional=.true.)
-      call reg%register_scalar("ice_remap_drop_eice", this%ledger_cum(ICE_LCUM_EICE), optional=.true.)
-      call reg%register_scalar("ice_remap_drop_esno", this%ledger_cum(ICE_LCUM_ESNO), optional=.true.)
    end subroutine run_register_restart
 
 end module rdb_ice_cice_run

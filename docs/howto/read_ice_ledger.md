@@ -70,7 +70,16 @@ coupling. `test_cice_closure` computes its size independently and reports it.
 (booked as a sink of the `transport` stage, zero until a guard fires); `fout(:, cleanup)` (cumulative
 `ice_led_zap_*`): the ITD clean-up zaps, mass and salt positive, heat negative; `tab%snow_reset` (cumulative
 `ice_led_snow_reset`): the energy the thin-snow enthalpy reset adds inside `therm1`, REPORTED to attribute part of the
-`therm1` heat residual, not subtracted.
+`therm1` heat residual, not subtracted.  `cum_zap` is the `cleanup` stage plus the post-transport clean-up (`transport`); the post-ridging clean-up's zaps are in `fout(:, ridging)` with the ridged snow lost to the ocean and are not accumulated.  With `advection = "upwind"` no clip record exists and the scheme's own sub-`puny` loss (at most `puny` times the thickness per cell) stays in the `transport` residual, unbooked.
+
+**How big the thin-snow term is (reviewed estimate).** Per reset event the term adds at most about 70 J m-2 per kelvin
+of snow cold (snow thinner than `hs_min = 1e-4 m`), about 700 J m-2 for snow at -10 degC. In the cell concerned that is
+roughly 200 to 1300 times the solver's per-step bound, yet at most about 0.4 W m-2 spread over a step: physically negligible,
+one-signed (it only ever adds energy), and it dominates the ledger's `therm1` heat verdict wherever cold snow is thinned below
+`hs_min` (new ice diluting the snow of category 1, sublimation, transport or ridging carrying cold snow into thin-snow
+cells, ice edges). `test_cice_closure` `snow_reset_reported` shows the term at 53 times the bound only because its forced snow
+is very cold (`q = -1.5 rhos Lfresh`, about -79 degC); at -10 degC the same setup gives about 7 times. Whether the reset stays
+is the maintainer's decision; the ledger only attributes it.
 
 ## Closing the coupled budget
 

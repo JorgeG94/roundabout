@@ -1096,7 +1096,7 @@ contains
             call chk_ierr(error, res, "conservation step (driver conservation + monotonicity checks on)")
             if (allocated(error)) return
             nclip_tot = nclip_tot + res%ledger%n_clip
-            cum = cum + [res%ledger%clip_area, res%ledger%drop_vice, res%ledger%drop_vsno, res%ledger%drop_eice, &
+            cum = cum + [res%ledger%clip_area, res%ledger%drop_vice, res%ledger%drop_vsno, res%ledger%drop_eice*real(s%nil, wp), &
                          res%ledger%drop_esno - SHIFT*res%ledger%drop_vsno, 0.0_wp]
             call totals(s, q1)
             worst = max(worst, worst_change(q0, q1, 1, 6))
@@ -2569,6 +2569,7 @@ write (error_unit, "(a,es10.3)") "  [remap] non-uniform metrics, constant tracer
             end do
          end do
          drop = planes(3:6)
+         drop(3) = drop(3)*real(nq2 - nq1 + 1, wp)    ! the record is in the frame of the ledger's state energy (1/nilyr per layer)
          err = 0.0_wp
          do q = 1, 4
             err = max(err, abs((tot1(q) - tot0(q)) + drop(q))/max(abs(drop(q)), 1.0e-300_wp))

@@ -28,6 +28,8 @@ module test_cice_engine
    use rdb_ocean_state, only: ocean_state_restart_write, ocean_state_build_restart_registry
    use rdb_ocean_restart, only: restart_registry_t
    use rdb_ocean_status, only: OCEAN_STATUS_OK
+   use netcdf, only: nf90_open, nf90_redef, nf90_def_var, nf90_enddef, nf90_put_var, nf90_close, nf90_write, nf90_double, &
+                     nf90_noerr
    use rdb_comm_env, only: comm_env_init, comm_env_setup_roles
    use rdb_ice_config, only: ice_config_check, ICE_CONFIG_MSG_LEN, ICE_CONFIG_MAX_MSGS
    use rdb_ice_ledger, only: ice_ledger_mirror_t, ICE_LEDGER_WATER, ICE_LEDGER_SALT, ICE_LEDGER_HEAT
@@ -1329,11 +1331,13 @@ write (*, '(a,2es12.4,a,2es12.4)') "  basin 200 steps: total ice volume upwind/r
       call advance(ea, cfg_a, t_a, nw, ok)
       call check(error, ok, "engine A failed before the checkpoint")
       if (allocated(error)) return
-      ! a non-zero remap ledger total must survive the checkpoint (it is restart state)
-      ea%state%icec%ledger_cum(ICE_LCUM_AREA) = 1.5e-3_wp
-      ea%state%icec%ledger_cum(ICE_LCUM_NCLIP) = 3.0_wp
       call ocean_state_restart_write(ea%state, ea%grid, ea%decomp, FN, t_a, nw, ierr=ierr)
       call check(error, ierr == OCEAN_STATUS_OK, "checkpoint write failed")
+      if (allocated(error)) return
+      ! a file written BEFORE the `ice_remap_*` scalars were dropped from the registry still carries them: the resume
+      ! must ignore the present-but-unregistered tags
+      call add_old_remap_tags(FN, ok)
+      call check(error, ok, "the old-format tags were appended to the checkpoint")
       if (allocated(error)) return
       call take_snapshot(ea, sa0)
       call advance(ea, cfg_a, t_a, na, ok)
@@ -1350,9 +1354,6 @@ write (*, '(a,2es12.4,a,2es12.4)') "  basin 200 steps: total ice volume upwind/r
       call check(error, ok, "engine B (warm restart) setup failed")
       if (allocated(error)) return
       call check(error, step_b == nw .and. eb%warm_restart, "warm restart taken at the written step")
-      if (allocated(error)) return
-      call check(error, eb%state%icec%ledger_cum(ICE_LCUM_AREA) == 1.5e-3_wp .and. &
-                 eb%state%icec%ledger_cum(ICE_LCUM_NCLIP) == 3.0_wp, "the remap ledger total is restored")
       if (allocated(error)) return
       call take_snapshot(eb, sb0)
       call compare(error, sa0, sb0, "at the resume point", n_new)
@@ -1420,5 +1421,23 @@ write (*, '(a,2es12.4,a,2es12.4)') "  basin 200 steps: total ice volume upwind/r
       open (newunit=u, file=fn_, status="old", iostat=stat)
       if (stat == 0) close (u, status="delete")
    end subroutine delete_file
+
+   subroutine add_old_remap_tags(fn, ok)
+      !! Append the two scalar tags of the pre-change checkpoint format (`ice_remap_n_clip`, `ice_remap_clip_area`).
+      character(len=*), intent(in) :: fn
+      logical, intent(out) :: ok
+      integer :: nc, vid, st
+
+      ok = .false.
+      st = nf90_open(fn, nf90_write, nc)
+      if (st /= nf90_noerr) return
+      st = nf90_redef(nc)
+      if (st == nf90_noerr) st = nf90_def_var(nc, "ice_remap_n_clip", nf90_double, vid)
+      if (st == nf90_noerr) st = nf90_def_var(nc, "ice_remap_clip_area", nf90_double, vid)
+      if (st == nf90_noerr) st = nf90_enddef(nc)
+      if (st == nf90_noerr) st = nf90_put_var(nc, vid, 1.5e-3_wp)
+      ok = st == nf90_noerr
+      st = nf90_close(nc)
+   end subroutine add_old_remap_tags
 
 end module test_cice_engine

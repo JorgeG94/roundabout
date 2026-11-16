@@ -50,7 +50,9 @@ module rdb_ice_ledger_terms
    !! zaps (a category with `|aicen| <= puny`, the round-off excess `1 < aice < 1 + puny`, cells with `aice` or the ice
    !! mass below the minimum, snow outside its temperature range) hand the removed ice, snow, salt and enthalpy to the
    !! ocean through `fresh`, `fsalt`, `fhocn` with the flux slot's signs (mass and salt positive, heat negative): in the
-   !! table they are `fout(:, cleanup)` (and `fout(:, transport)`), and `cum_zap` accumulates them.
+   !! table they are `fout(:, cleanup)` (and `fout(:, transport)`), and `cum_zap` accumulates exactly those two.  The
+   !! post-ridging clean-up's zaps are in `fout(:, ridging)`, together with the ridged snow lost to the ocean, and are not in
+   !! `cum_zap`.
    !!
    !! **The thin-snow reset (REPORTED, not booked).**  The vertical-profile initialisation resets snow thinner than
    !! `hs_min` to the melting enthalpy `-rhos Lfresh` BEFORE the thermodynamics' own energy check forms its initial
@@ -117,8 +119,9 @@ module rdb_ice_ledger_terms
    !! rank restores the global value) and its cumulative report equals the one-rank report.  The alternative
    !! (per-rank partials reduced at report time) would need a collective at every report and would make the file
    !! depend on the decomposition.  A file without them (ledger off when written) restarts the accumulators at zero.
-   !! The older `ice_remap_*` scalars of `rdb_ice_cice_run` stay rank-local plain sums (the transport result's own
-   !! record, ledger on or off); the ledger's global clip record is `ice_led_clip_*`.
+   !! The older `ice_remap_*` restart scalars of `rdb_ice_cice_run` (rank-local plain partial sums, read by nothing) are no
+   !! longer registered: a file that has them is read as before (the reader visits registered tags only), the ledger's
+   !! global clip record is `ice_led_clip_*`.
    use, intrinsic :: iso_fortran_env, only: int64, real64
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite, ieee_value, ieee_quiet_nan
    use rdb_constants, only: wp
@@ -256,7 +259,10 @@ module rdb_ice_ledger_terms
       real(wp) :: cum_snow_reset = 0.0_wp
          !! Cumulative thin-snow reset energy [J] (restart state).
       real(wp) :: cum_zap(3) = 0.0_wp
-         !! Cumulative ocean-ward flux of the clean-up zaps (`cleanup` + `transport` stages) in the three lines (restart state).
+         !! Cumulative ocean-ward flux of the ITD clean-up zaps in the three lines (restart state): the `cleanup` stage
+         !! (the clean-up inside the thermodynamics) plus the `transport` stage (the post-transport clean-up).  The
+         !! post-ridging clean-up's zaps go into the `ridging` stage's flux with the ridged snow lost to the ocean and are
+         !! NOT in this sum (`tab%fout(:, ridging)` has them).
       real(wp) :: nsteps = 0.0_wp
          !! Closed steps (real so it registers as a restart scalar).
    contains
@@ -896,7 +902,12 @@ contains
                this%cum_res(q, s) = this%cum_res(q, s) + t%res(q, s)
             end do
             this%cum_scale(q) = this%cum_scale(q) + t%scale(q)
-            this%worst(q) = max(this%worst(q), worst_step(q))
+            ! (`max` with a NaN is compiler-dependent: a poisoned `worst` stays NaN explicitly)
+            if (ieee_is_finite(this%worst(q))) then
+               this%worst(q) = max(this%worst(q), worst_step(q))
+            else
+               this%worst(q) = ieee_value(1.0_wp, ieee_quiet_nan)
+            end if
             this%cum_zap(q) = this%cum_zap(q) + (t%fout(q, ICE_LT_CLEANUP) + t%fout(q, ICE_LT_TRANSPORT))
          end do
          this%cum_clip = this%cum_clip + [t%n_clip, t%clip_area, t%drop_vice, t%drop_vsno, t%drop_eice, t%drop_esno]

@@ -51,6 +51,8 @@ module test_cice_closure
    use rdb_ice_errors, only: ICE_ERR_FATAL_MASK, ICE_ERR_THERMO_CONSERV
    use rdb_ice_thickness, only: ICE_FERRMAX
    use rdb_efp, only: efp_t
+   use rdb_ice_remap_flux, only: remap_ledger_cells_impl
+   use rdb_ice_transport_pack, only: transport_pack
    use rdb_ice_flux_state, only: ice_flux_zero
    use rdb_ice_ledger_terms, only: ice_lt_ix_state, ICE_LT_NCLIP, ICE_LT_THERM1, ICE_LT_REMAP, ICE_LT_NEWICE, ICE_LT_LATERAL, ICE_LT_CLEANUP, &
                                    ICE_LT_DYNAMICS, ICE_LT_TRANSPORT, ICE_LT_RIDGING, ICE_LT_NSTAGE, &
@@ -1588,7 +1590,7 @@ contains
       type(ocean_engine_t), target :: ea, eb
       type(config_t) :: cfg_a, cfg_b
       type(snapshot_t) :: sa, sb, sa0, sb0
-      real(wp) :: t_a, t_b, cum_a(3), cum_b(3), cres_a(3, ICE_LT_NSTAGE), wa(3), extra_a(3 + ICE_LT_NCLIP + 1)
+      real(wp) :: t_a, t_b, cum_a(3), cum_b(3), cres_a(3, ICE_LT_NSTAGE), wa(3), extra_a(3 + ICE_LT_NCLIP + 1), heat_rel_net
       integer :: step_b, ierr, nw, na, n_led, q, s
       logical :: ok, same
       character(len=:), allocatable :: nml
@@ -1596,7 +1598,7 @@ contains
       nw = 7
       na = 6
       ! snow thinner than `hs_min` everywhere, so the thin-snow reset term is non-zero and the restart has something to carry
-      ! (its first-step energy is also in the heat residual: the heat closure bound below is loose by that much)
+      ! (its energy is part of the therm1 heat residual: the closure below subtracts the REPORTED term)
       nml = replace(uni_nml("basin"), "dt_therm_ratio = 1", "dt_therm_ratio = 2")
       nml = replace(nml, "h_snow = 0.1", "h_snow = 0.00005")
       call make_engine(ea, cfg_a, nml, ok)
@@ -1665,9 +1667,16 @@ contains
                                              "cumulative zap, clip record and thin-snow reset: N + restart + N == 2N, bitwise")
       if (.not. allocated(error)) call check(error, any(extra_a /= 0.0_wp), &
                                              "the restored accumulators are not all zero (the check can fail)")
+      ! the heat line net of the reported thin-snow reset (an energy the profile initialisation adds in `therm1`)
+      heat_rel_net = 0.0_wp
+      do s = 1, ICE_LT_NSTAGE
+         heat_rel_net = max(heat_rel_net, abs(eb%state%icec%ledger%cum_res(ICE_LT_HEAT, s) &
+                                              - merge(eb%state%icec%ledger%cum_snow_reset, 0.0_wp, s == ICE_LT_THERM1)))
+      end do
+      heat_rel_net = heat_rel_net/max(eb%state%icec%ledger%cum_scale(ICE_LT_HEAT), tiny(1.0_wp))
       if (.not. allocated(error)) call check(error, eb%state%icec%ledger%cum_rel(ICE_LT_WATER) < 1.0e-11_wp .and. &
                                              eb%state%icec%ledger%cum_rel(ICE_LT_SALT) < 1.0e-11_wp .and. &
-                                             eb%state%icec%ledger%cum_rel(ICE_LT_HEAT) < 5.0e-2_wp, &
+                                             heat_rel_net < 1.0e-6_wp, &
                                              "the closure holds after the restart")
       call finish_engine(eb)
       call delete_file(FN_RT)
@@ -1863,71 +1872,96 @@ contains
    end subroutine zap_expect
 
    subroutine test_clip_booked(error)
-      !! The remap transport's clip record is a named source of the `transport` stage.  The test removes a known
-      !! amount of ice and snow from one cell between `begin` and the `transport` probe (what the remap update's guards
-      !! drop where a cell's new area is 0), hands the ledger the per-cell record of it (as the remap's `clip` planes
-      !! are), and checks the stage closes to round-off and the booked terms equal the removal; the same sequence with
-      !! the record withheld (the negative control) leaves the whole drop as the stage's residual.
+      !! The remap transport's clip record is a named source of the `transport` stage, and the wiring between the remap's
+      !! per-cell record and the ledger is exercised end to end.  A category of one cell is PACKED by the transport's own
+      !! `transport_pack` (so the tracers are in the remap's frame), its area flux is set to take `0.5 puny` more than the
+      !! cell holds with no tracer flux (so the update's guards drop its whole content), and `remap_ledger_cells_impl` -- the
+      !! kernel of the production step -- writes the clip planes; the state loses the category between `begin` and the
+      !! `transport` probe; the ledger is handed `fw%clip` itself.  The stage must close to round-off, and the booked terms
+      !! must equal the independently computed removal (a factor `nilyr` in the energy frame would fail both).  The same
+      !! sequence with the record withheld (the negative control) leaves the whole drop as the stage's residual.
       type(error_type), allocatable, intent(out) :: error
       type(ocean_engine_t), target :: engine
       type(config_t) :: cfg
-      real(wp) :: t, ta, dv, ds, de_i, de_s, rhoi, rhos, lf, sref, w_exp, s_exp, h_exp, res_w(2), res_h(2)
-      real(wp), allocatable :: plane(:, :, :)
-      integer :: ng, i, j, n, k, pass
+      real(wp) :: t, ta, v, sn, de_i, de_s, rhoi, rhos, lf, sref, w_exp, s_exp, h_exp, res_w(2), res_h(2), puny, a0
+      real(wp), allocatable :: tr0(:)
+      integer :: ng, i, j, n, k, pass, nqs, nq2
+      integer(int32) :: ierr_p
       logical :: ok
 
-      call make_engine(engine, cfg, uni_nml("basin"), ok)
+      call make_engine(engine, cfg, replace(uni_nml("basin"), "advection = 'upwind'", "advection = 'remap'"), ok)
       call check(error, ok, "engine setup failed")
       if (allocated(error)) return
       t = 0.0_wp
       call advance(engine, cfg, t, 2, ok)
       call check(error, ok, "2 steps ran")
       if (allocated(error)) return
-      associate (c => engine%state%ice%cice, L => engine%state%icec%ledger, w => engine%state%icec%work)
+      associate (c => engine%state%ice%cice, L => engine%state%icec%ledger, w => engine%state%icec%work, &
+                 tw => engine%state%icec%tws)
+         call check(error, allocated(tw%fw%clip), "the clip record is allocated under the ledger with the remap")
+         if (allocated(error)) then
+            call finish_engine(engine)
+            return
+         end if
          ng = engine%grid%nghost
          i = ng + 7
          j = ng + 5
-         allocate (plane(c%nx, c%ny, ICE_LT_NCLIP), source=0.0_wp)
-         !$acc enter data copyin(plane)
          rhoi = c%p%c%rhoi
          rhos = c%p%c%rhos
          lf = c%p%c%Lfresh
          sref = c%p%thermo%ice_ref_salinity
+         puny = c%p%c%puny
+         nq2 = tw%a%tab%nt_qsno + 1
+         nqs = tw%a%tab%nt_qsno + 2
          do pass = 1, 2
             call pull_cat_all(engine)
             n = maxloc(c%aicen(i, j, :), 1)
             ta = engine%state%ice_cgrid%tarea(i, j)
+            ! the packed state by the transport's own routine, then ONLY this category of this cell kept
+            call transport_pack(tw%a, c%p%c, c%nilyr, c%nslyr, 1, c%nx, 1, c%ny, c%aice0, c%aicen, c%vicen, c%vsnon, &
+                                c%Tsfcn, c%qicen, c%sicen, c%qsnon, ierr_p)
+            !$acc update self(tw%a%aim, tw%a%trm)
+            a0 = tw%a%aim(i, j, n)
+            tr0 = tw%a%trm(i, j, :, n)
+            tw%a%aim = 0.0_wp
+            tw%a%trm = 0.0_wp
+            tw%a%aim(i, j, n) = a0
+            tw%a%trm(i, j, :, n) = tr0
+            tw%fw%mflx_e = 0.0_wp
+            tw%fw%mflx_n = 0.0_wp
+            tw%fw%mtflx_e = 0.0_wp
+            tw%fw%mtflx_n = 0.0_wp
+            tw%fw%mflx_e(i, j, 1) = (tw%a%aim(i, j, n) + 0.5_wp*puny)*ta
+            tw%fw%clip = 0.0_wp
+            !$acc update device(tw%a%aim, tw%a%trm, tw%fw%mflx_e, tw%fw%mflx_n, tw%fw%mtflx_e, tw%fw%mtflx_n, tw%fw%clip)
+            call remap_ledger_cells_impl(c%nx, c%ny, c%ncat, tw%a%tab%ntrace, tw%fw%nbatch, ng + 1, ng + engine%grid%nx_phys, &
+                                         ng + 1, ng + engine%grid%ny_phys, n, n, puny, tw%a%tab%tracer_type(1:tw%a%tab%ntrace), &
+                                         tw%a%tab%depend(1:tw%a%tab%ntrace), 4, nq2, nqs, engine%state%ice_cgrid%tarea, &
+                                         tw%a%aim, tw%a%trm, tw%fw%mflx_e, tw%fw%mflx_n, tw%fw%mtflx_e, tw%fw%mtflx_n, tw%fw%clip)
             call ice_flux_zero(engine%state%icec%flux)     ! (the sequencer zeroes the accumulators before `begin`)
             call L%begin(c, DT, w%fsnow, w%frain, w%flw, .false.)
-            ! the drop: 30 % of the ice volume and 40 % of the snow volume of the cell's main category
-            dv = 0.3_wp*c%vicen(i, j, n)
-            ds = 0.4_wp*c%vsnon(i, j, n)
+            ! the removal the remap's guards stand for: the whole category (ice, snow; the enthalpies stay behind)
+            v = c%vicen(i, j, n)
+            sn = c%vsnon(i, j, n)
             de_i = 0.0_wp
             do k = 1, c%nilyr
-               de_i = de_i + c%qicen(i, j, n, k)*dv/real(c%nilyr, wp)
+               de_i = de_i + c%qicen(i, j, n, k)*v/real(c%nilyr, wp)
             end do
             de_s = 0.0_wp
             do k = 1, c%nslyr
-               de_s = de_s + c%qsnon(i, j, n, k)*ds/real(c%nslyr, wp)
+               de_s = de_s + c%qsnon(i, j, n, k)*sn/real(c%nslyr, wp)
             end do
-            c%vicen(i, j, n) = c%vicen(i, j, n) - dv
-            c%vsnon(i, j, n) = c%vsnon(i, j, n) - ds
+            c%aicen(i, j, n) = 0.0_wp
+            c%vicen(i, j, n) = 0.0_wp
+            c%vsnon(i, j, n) = 0.0_wp
             call refresh_aggregates(c)
             call push_cat_state(engine)
-            plane = 0.0_wp
-            plane(i, j, 1) = 1.0_wp
-            plane(i, j, 2) = 2.5e-12_wp*ta
-            plane(i, j, 3) = dv*ta
-            plane(i, j, 4) = ds*ta
-            plane(i, j, 5) = de_i*ta
-            plane(i, j, 6) = de_s*ta + rhos*lf*ds*ta     ! the snow enthalpy in the packed frame (shifted by rhos Lfresh)
-            !$acc update device(plane)
-            if (pass == 1) call L%book_clip(plane)
+            if (pass == 1) call L%book_clip(tw%fw%clip)
             call L%probe(ICE_LT_TRANSPORT, c, engine%state%icec%flux)
             call L%end_step()
-            w_exp = -(rhoi*dv + rhos*ds)*ta
-            s_exp = -rhoi*dv*sref*1.0e-3_wp*ta
-            h_exp = (de_i + de_s)*ta*(-1.0_wp)
+            w_exp = -(rhoi*v + rhos*sn)*ta
+            s_exp = -rhoi*v*sref*1.0e-3_wp*ta
+            h_exp = -(de_i + de_s)*ta
             res_w(pass) = L%tab%res(1, ICE_LT_TRANSPORT)
             res_h(pass) = L%tab%res(3, ICE_LT_TRANSPORT)
             if (pass == 1) then
@@ -1938,8 +1972,8 @@ contains
                                                       "booked water equals the removal")
                if (.not. allocated(error)) call check(error, abs(L%tab%clip_s - s_exp) <= 1.0e-12_wp*abs(s_exp), &
                                                       "booked salt equals the removal")
-               if (.not. allocated(error)) call check(error, abs(L%tab%clip_h - h_exp) <= 1.0e-12_wp*abs(h_exp), &
-                                                      "booked heat equals the removal")
+               if (.not. allocated(error)) call check(error, abs(L%tab%clip_h - h_exp) <= 1.0e-9_wp*abs(h_exp), &
+                                                      "booked heat equals the removal (the remap's energy frame is the ledger's)")
                if (.not. allocated(error)) call check(error, abs(L%tab%dstate(1, ICE_LT_TRANSPORT) - w_exp) <= &
                                                       1.0e-6_wp*abs(w_exp), "the state actually lost that mass")
                if (.not. allocated(error)) call check(error, abs(L%tab%res(1, ICE_LT_TRANSPORT)) <= 1.0e-6_wp*abs(w_exp) .and. &
@@ -1954,7 +1988,6 @@ contains
             call check(error, abs(res_w(2)) > 0.5_wp*abs(w_exp) .and. abs(res_h(2)) > 0.5_wp*abs(h_exp), &
                        "withheld, the drop shows as the residual (the test can fail)")
          end if
-         !$acc exit data delete(plane)
       end associate
       call finish_engine(engine)
    end subroutine test_clip_booked
