@@ -310,9 +310,12 @@ contains
       !! Seam ghosts of ONE cell-centred 2-D forcing field a file reader
       !! filled on physical cells only: a two-pass centre exchange (MPI,
       !! or the periodic wrap on a single rank) plus the tripolar north
-      !! fold.  Used for the SSS-restoring target, whose deposit kernel
-      !! runs over the full array so a stale ghost would make the seam
-      !! tile disagree with its neighbour (decomposition dependence).
+      !! fold.  Users: the SSS-restoring target (its deposit kernel runs over
+      !! the full array, so a stale ghost would make the seam tile disagree
+      !! with its neighbour), the chlorophyll field, the data-override
+      !! `Q_heat`/`Q_salt` writes (components off), and the assembled
+      !! `Q_heat`/`Q_salt`/`sw_net` that KPP/EPBL read in the ghost columns
+      !! (`ocean_seam_refresh_surface_flux`, `ocean_seam_refresh_sw_net`).
       !! Single-rank non-periodic: a no-op; requires `ocean_halo_init`.
       real(wp), intent(inout) :: fld(:, :)
          !! Cell-centred field `(nx_total, ny_total)`.
@@ -337,24 +340,30 @@ contains
       !!
       !! **Why.**  The assembler sums components over the whole array, but a
       !! physical-span-only filler (the bulk consumer, a data-override
-      !! reader; `sf%phys_only_fill`) leaves its components' ghosts stale, so
+      !! reader; `sf%phys_only_fill`/`phys_only_fill_salt`) leaves its components' ghosts stale, so
       !! the ghost `Q_heat` lacks that part.  KPP and EPBL loop the full array
       !! and read the flux in the ghost columns (`B_0`), set `kv` there, and
       !! the momentum viscosity averages the ghost-column `kv` into the first
       !! owned face: a decomposed run then differs from the serial one, and
       !! the serial periodic seam from the interior.  Exchanged, never
       !! extrapolated.  Call right after `ocean_surface_flux_assemble`
-      !! (same thermo cadence); a no-op unless `sf%use_components` and
-      !! `sf%phys_only_fill`.  Both fields are scalars: no sign flip at the fold.
+      !! (same thermo cadence); `Q_heat` only under `phys_only_fill`, `Q_salt` only
+      !! under `phys_only_fill_salt` (the bulk consumer fills no salt component), and
+      !! a no-op unless `sf%use_components`.  Both fields are scalars: no sign flip at the fold.
       type(ocean_surface_flux_t), intent(inout) :: sf
       type(hgrid_t), intent(in) :: grid
       type(ocean_bc_state_t), intent(in) :: bc
       logical, intent(in), optional :: device_resident
 
-      if (.not. sf%use_components .or. .not. sf%phys_only_fill) return
+      if (.not. sf%use_components) return
+      if (.not. (sf%phys_only_fill .or. sf%phys_only_fill_salt)) return
       call profiler_start("ocean_comms_flux")
-      call ocean_halo_exchange_centre_field(sf%Q_heat, grid, bc, device_resident)
-      call ocean_halo_exchange_centre_field(sf%Q_salt, grid, bc, device_resident)
+      if (sf%phys_only_fill) then
+         call ocean_halo_exchange_centre_field(sf%Q_heat, grid, bc, device_resident)
+      end if
+      if (sf%phys_only_fill_salt) then
+         call ocean_halo_exchange_centre_field(sf%Q_salt, grid, bc, device_resident)
+      end if
       call profiler_stop("ocean_comms_flux")
    end subroutine ocean_seam_refresh_surface_flux
 

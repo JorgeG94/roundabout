@@ -1873,6 +1873,16 @@ contains
       ! Skip it there -- the first step's own exchange opens the handles.
       if (.not. engine%warm_restart) then
          call ocean_halo_exchange_ml_state(engine%state%multilayer)
+      else
+         ! A checkpoint written before the seam-flux refresh existed carries
+         ! stale ghost bands in `Q_heat`/`Q_salt`, which KPP/EPBL would read on
+         ! the first step after the resume, before the first thermo-step
+         ! assembly repairs them.  Device-resident (the periodic wrap kernels
+         ! are device kernels on the GPU build), so after the map; a no-op
+         ! unless the component set is on and a physical-span-only filler is
+         ! latched.
+         call ocean_seam_refresh_surface_flux(engine%state%surface_flux, engine%grid, &
+                                              engine%state%bc)
       end if
       if (cfg%ocean%bt%n_inner >= 1) then
          call ocean_halo_bt_group_2d(engine%state%dyn%bt_work%bt_eta, &

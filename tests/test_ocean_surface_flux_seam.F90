@@ -12,14 +12,23 @@
 !! (`bulk_flux_bl*` in `test_ocean_decomp_bitid_mpi`); on one rank the
 !! periodic wrap is the seam, which is what this test exercises.
 !!
+!! Cases: KPP, EPBL, KPP with `sw_source = 'q_sw'`, EPBL with `sw_source = 'q_sw'`
+!! and `epbl_sw_ctke` (the penetrating-shortwave TKE ledger reads `sw_net`),
+!! KPP with a data-override SALT file on top of the bulk forcing (a non-zero
+!! `Q_salt` exchange), and a components-OFF data-override HEAT file (the
+!! reader exchanges the `Q_heat` it writes, no bulk consumer).  Plus
+!! `api_setters`: `rdb_ocean_set_heat_flux`/`set_salt_flux`/`set_wind` write
+!! physical cells only and must leave valid ghosts.
+!!
 !! Two gates per case:
 !!   * `ghost_flux_is_the_wrapped_interior` -- after the steps, the west
 !!     ghost columns of `Q_heat` and `Q_salt` equal the east physical
 !!     columns and vice versa, over the physical rows.
+!!     Under `sw_source = 'q_sw'` the same holds for `sw_net`.
 !!   * `shift_invariant` -- the same ocean on a domain rolled by half a period
-!!     (the atmosphere has zonal wavenumber 2, so the roll is exact) gives the
-!!     same `kv`, `u`, `v`, `h` cell for cell: the answer cannot depend on
-!!     where the seam falls.
+!!     (the atmosphere and the data files have zonal wavenumber 2, so the roll
+!!     is exact) gives the same `kv`, `u`, `v`, `h`, `T`, `S`, `eta` cell for
+!!     cell: the answer cannot depend on where the seam falls.
 !!
 !! NON-VACUITY (the way this bug hid): the cold dry wind over 20 C water
 !! cools the surface so hard that the boundary layer is deeper than the top
@@ -29,15 +38,19 @@
 !!
 !! Own ctest binary: `rdb_ocean_api` keeps one live handle per process.
 module test_ocean_surface_flux_seam
-   use, intrinsic :: iso_c_binding, only: c_ptr, c_int, c_null_ptr, c_f_pointer
+   use, intrinsic :: iso_c_binding, only: c_ptr, c_int, c_double, c_null_ptr, c_f_pointer
    use rdb_constants, only: wp
    use rdb_ocean_api, only: rdb_ocean_create_from_string, rdb_ocean_step, &
                             rdb_ocean_destroy, rdb_ocean_refresh_host, &
-                            rdb_ocean_get_grid_info, &
+                            rdb_ocean_get_grid_info, rdb_ocean_get_bt_eta_ptr, &
+                            rdb_ocean_set_heat_flux, rdb_ocean_set_salt_flux, &
+                            rdb_ocean_set_wind, rdb_ocean_get_tau_x_ptr, &
+                            rdb_ocean_get_tau_y_ptr, &
                             rdb_ocean_get_u_face_x_layer_ptr, &
                             rdb_ocean_get_v_face_y_layer_ptr, rdb_ocean_get_h_layer_ptr, &
                             rdb_ocean_get_q_heat_ptr, rdb_ocean_get_q_salt_ptr, &
                             rdb_ocean_get_kv_ptr
+   use rdb_handle, only: ocean_handle_t, handle_check, HANDLE_OK
    use rdb_ocean_status, only: OCEAN_STATUS_OK
    use rdb_io_netcdf, only: nc_create_file, nc_close, nc_def_dim, nc_def_var_2d, &
                             nc_def_var_3d, nc_enddef, rdb_def_var_1d, rdb_put_var_1d, nc_put_att
@@ -57,12 +70,17 @@ module test_ocean_surface_flux_seam
    real(wp), parameter :: REL_TOL = 1.0e-10_wp
    character(len=*), parameter :: ATM_FILE = "tmp_local_artifacts/seam_flux_atm.nc"
    character(len=*), parameter :: ATM_LIST = "tmp_local_artifacts/seam_flux_atm_files.txt"
+   character(len=*), parameter :: HEAT_FILE = "tmp_local_artifacts/seam_flux_heat.nc"
+   character(len=*), parameter :: SALT_FILE = "tmp_local_artifacts/seam_flux_salt.nc"
    character(len=1), parameter :: NL = new_line("a")
 
    type :: run_out_t
       real(wp), allocatable :: qh(:, :), qs(:, :)
          !! `Q_heat` / `Q_salt`, FULL extent (ghosts included).
+      real(wp), allocatable :: sw(:, :)
+         !! `sw_net`, FULL extent (zero-size when the case has no `q_sw` source).
       real(wp), allocatable :: kv(:, :, :), u(:, :, :), v(:, :, :), h(:, :, :)
+      real(wp), allocatable :: tt(:, :, :), ss(:, :, :), eta(:, :)
          !! Physical interior (u: faces 1..NX; v: all NY+1 rows; kv: NZ+1 interfaces).
       integer :: ng = 0
    end type run_out_t
@@ -77,27 +95,65 @@ contains
                   new_unittest("seam_flux_ghost_kpp_sw", test_ghost_kpp_sw), &
                   new_unittest("seam_flux_shift_invariant_kpp", test_shift_kpp), &
                   new_unittest("seam_flux_shift_invariant_epbl", test_shift_epbl), &
-                  new_unittest("seam_flux_shift_invariant_kpp_sw", test_shift_kpp_sw) &
+                  new_unittest("seam_flux_shift_invariant_kpp_sw", test_shift_kpp_sw), &
+                  new_unittest("seam_flux_ghost_epbl_sw", test_ghost_epbl_sw), &
+                  new_unittest("seam_flux_shift_invariant_epbl_sw", test_shift_epbl_sw), &
+                  new_unittest("seam_flux_ghost_kpp_salt", test_ghost_kpp_salt), &
+                  new_unittest("seam_flux_shift_invariant_kpp_salt", test_shift_kpp_salt), &
+                  new_unittest("seam_flux_ghost_dataovr_heat", test_ghost_dataovr_heat), &
+                  new_unittest("seam_flux_shift_invariant_dataovr_heat", test_shift_dataovr_heat), &
+                  new_unittest("seam_flux_api_setters", test_api_setters) &
                   ]
    end subroutine collect_ocean_surface_flux_seam_tests
 
    function case_nml(kind, lon_west) result(nml)
-      !! Re-entrant 100 m basin on ten 10 m sigma layers under the cold dry
-      !! atmosphere file.  `kind`: "kpp", "epbl" or "kpp_sw" (KPP with
-      !! `sw_source = 'q_sw'`, `sw_pen_frac = 0.6`).
+      !! Re-entrant 100 m basin on ten 10 m sigma layers.  `kind`:
+      !!   "kpp" / "epbl"      bulk forcing (cold dry atmosphere file) + that scheme;
+      !!   "kpp_sw"/"epbl_sw"  same with `sw_source = 'q_sw'`, `sw_pen_frac = 0.6`
+      !!                       (EPBL also `epbl_sw_ctke`);
+      !!   "kpp_salt"          "kpp" plus a data-override SALT file;
+      !!   "dataovr_heat"      NO bulk forcing, components OFF, KPP, a data-override
+      !!                       HEAT file written straight into `Q_heat`;
+      !!   "api"               components OFF, nothing driving (API-setter test).
       character(len=*), intent(in) :: kind
       real(wp), intent(in) :: lon_west
       character(len=:), allocatable :: nml
       character(len=32) :: slon
-      character(len=:), allocatable :: thermo, bl
+      character(len=:), allocatable :: thermo, bl, forcing, ovr, wind
+      logical :: bulk, is_epbl, is_sw
 
-      write (slon, '(f8.2)') lon_west
+      write (slon, "(f8.2)") lon_west
+      bulk = (kind /= "dataovr_heat" .and. kind /= "api")
+      is_epbl = (index(kind, "epbl") == 1)
+      is_sw = (index(kind, "_sw") > 0)
       thermo = "&ocean_thermo_nml enable_thermodynamics = .true. /"//NL
+      if (is_sw) thermo = "&ocean_thermo_nml enable_thermodynamics = .true., "// &
+                          "sw_pen_frac = 0.6, sw_source = 'q_sw' /"//NL
+      if (is_sw .and. is_epbl) thermo = "&ocean_thermo_nml enable_thermodynamics = .true., "// &
+                                        "sw_pen_frac = 0.6, sw_source = 'q_sw', "// &
+                                        "epbl_sw_ctke = .true. /"//NL
       bl = ""
-      if (kind == "kpp_sw") thermo = "&ocean_thermo_nml enable_thermodynamics = .true., "// &
-                                     "sw_pen_frac = 0.6, sw_source = 'q_sw' /"//NL
-      if (kind == "epbl") bl = "&ocean_vmix_nml use_kpp = .false. /"//NL// &
-                               "&ocean_epbl_nml enable = .true. /"//NL
+      if (is_epbl) bl = "&ocean_vmix_nml use_kpp = .false. /"//NL// &
+                        "&ocean_epbl_nml enable = .true. /"//NL
+      forcing = ""
+      if (bulk) forcing = "&ocean_forcing_nml enable_components = .true. /"//NL// &
+                          "&ocean_bulk_flux_nml enable = .true., n_iter = 5, z_wind = 10.0, "// &
+                          "z_ta = 10.0 /"//NL// &
+                          "&ocean_atm_forcing_nml enable = .true., time_mode = 'interannual', "// &
+                          "filelist_tas = '"//ATM_LIST//"', filelist_huss = '"//ATM_LIST// &
+                          "', filelist_uas = '"//ATM_LIST//"', filelist_vas = '"//ATM_LIST// &
+                          "', filelist_psl = '"//ATM_LIST//"', filelist_rlds = '"//ATM_LIST// &
+                          "', filelist_rsds = '"//ATM_LIST//"', filelist_prra = '"//ATM_LIST// &
+                          "', filelist_prsn = '"//ATM_LIST//"' /"//NL
+      wind = ""
+      if (kind == "dataovr_heat") wind = "&physics_nml wind_stress_x = 0.2, wind_stress_y = 0.05 /"//NL
+      ovr = ""
+      if (kind == "kpp_salt") ovr = "&ocean_dataovr_nml enable = .true., time_mode = 'cyclic', "// &
+                                    "cycle_period = 1.0e6, salt_file = '"//SALT_FILE// &
+                                    "', salt_var = 'field' /"//NL
+      if (kind == "dataovr_heat") ovr = "&ocean_dataovr_nml enable = .true., time_mode = 'cyclic', "// &
+                                        "cycle_period = 1.0e6, heat_file = '"//HEAT_FILE// &
+                                        "', heat_var = 'field' /"//NL
       nml = "&sim_nml sim_type = 'ocean' /"//NL// &
             "&time_nml t_end = 1.0e9, dt_fixed = 900.0, start_date = '2000-06-21' /"//NL// &
             "&nonhydrostatic_nml nz_layers = 10 /"//NL// &
@@ -106,18 +162,9 @@ contains
             "smag_ah = .true. /"//NL// &
             "&ocean_diag_nml enabled = .false. /"//NL// &
             "&ocean_eos_nml eos = 'wright' /"//NL// &
-            thermo// &
-            "&ocean_forcing_nml enable_components = .true. /"//NL// &
-            "&ocean_bulk_flux_nml enable = .true., n_iter = 5, z_wind = 10.0, z_ta = 10.0 /"//NL// &
-            bl// &
+            thermo//forcing//ovr//bl//wind// &
             "&tracer_nml initial_temperature = 12.0, initial_salinity = 35.0, "// &
             "T_init_surface = 20.0, T_init_bottom = 19.0 /"//NL// &
-            "&ocean_atm_forcing_nml enable = .true., time_mode = 'interannual', "// &
-            "filelist_tas = '"//ATM_LIST//"', filelist_huss = '"//ATM_LIST// &
-            "', filelist_uas = '"//ATM_LIST//"', filelist_vas = '"//ATM_LIST// &
-            "', filelist_psl = '"//ATM_LIST//"', filelist_rlds = '"//ATM_LIST// &
-            "', filelist_rsds = '"//ATM_LIST//"', filelist_prra = '"//ATM_LIST// &
-            "', filelist_prsn = '"//ATM_LIST//"' /"//NL// &
             "&grid_nml nx = 16, ny = 8, nghost = 3, dx = 22.5, dy = 1.0 /"//NL// &
             "&ocean_grid_nml grid_config = 'spherical', lon_west = "//trim(adjustl(slon))// &
             ", lat_south = 30.0, rad_earth = 6.371e6, coriolis_scheme = 'planetary' /"//NL// &
@@ -137,7 +184,10 @@ contains
       integer(c_int) :: status, nx_p, ny_p, nz_p, ng, nxt, nyt, nzt, gen
       character(len=:), allocatable :: nml
       real(wp), pointer :: p2(:, :), p3(:, :, :)
+      type(ocean_handle_t), pointer :: h
+      integer :: it, nzm
 
+      call write_flux_files()
       nml = case_nml(kind, lon_west)
       handle = c_null_ptr
       status = rdb_ocean_create_from_string(nml, len(nml, kind=c_int), handle)
@@ -167,6 +217,26 @@ contains
       status = rdb_ocean_get_h_layer_ptr(handle, ptr, nxt, nyt, nzt, gen)
       call c_f_pointer(ptr, p3, [nxt, nyt, nzt])
       out%h = p3(ng + 1:ng + NX, ng + 1:ng + NY, 1:NZ)
+      status = rdb_ocean_get_bt_eta_ptr(handle, ptr, nxt, nyt, gen)
+      call c_f_pointer(ptr, p2, [nxt, nyt])
+      out%eta = p2(ng + 1:ng + NX, ng + 1:ng + NY)
+      ! Tracers and `sw_net` are not API getters: read them through the handle.
+      if (handle_check(handle, h) /= HANDLE_OK) then
+         call check(error, .false., kind//": handle lost")
+         return
+      end if
+      nzm = h%state%multilayer%nz_ml
+      it = h%state%multilayer%idx_temperature
+      !$acc update self(h%state%multilayer%tracers(it)%c)
+      out%tt = h%state%multilayer%tracers(it)%c(ng + 1:ng + NX, ng + 1:ng + NY, 1:nzm)
+      it = h%state%multilayer%idx_salinity
+      !$acc update self(h%state%multilayer%tracers(it)%c)
+      out%ss = h%state%multilayer%tracers(it)%c(ng + 1:ng + NX, ng + 1:ng + NY, 1:nzm)
+      allocate (out%sw(0, 0))
+      if (h%state%surface_flux%sw_from_qsw) then
+         !$acc update self(h%state%surface_flux%sw_net)
+         out%sw = h%state%surface_flux%sw_net
+      end if
       status = rdb_ocean_destroy(handle)
    end subroutine run_case
 
@@ -196,13 +266,14 @@ contains
                  "(kv at the first interface too small) -- the case is vacuous")
    end subroutine check_overlay_active
 
-   subroutine check_ghosts(error, o, what)
+   subroutine check_ghosts(error, o, what, want_salt)
       type(error_type), allocatable, intent(out) :: error
       type(run_out_t), intent(in) :: o
       character(len=*), intent(in) :: what
-      real(wp) :: dh, ds, qmax, smax
+      logical, intent(in) :: want_salt
+      real(wp) :: dh, ds, dw, qmax, smax
       integer :: ng, g, j
-      character(len=200) :: msg
+      character(len=240) :: msg
 
       call check_overlay_active(error, o, what)
       if (allocated(error)) return
@@ -219,9 +290,26 @@ contains
       end do
       qmax = maxval(abs(o%qh(ng + 1:ng + NX, ng + 1:ng + NY)))
       smax = maxval(abs(o%qs(ng + 1:ng + NX, ng + 1:ng + NY)))
-      write (msg, "(a,es10.3,a,es10.3,a,es10.3,a,es10.3)") ": |dQ_heat| = ", dh, &
-         " (max|Q_heat| ", qmax, ")  |dQ_salt| = ", ds, " (max|Q_salt| ", smax
-      call check(error, dh <= 1.0e-12_wp*qmax .and. ds <= 1.0e-12_wp*max(smax, tiny(1.0_wp)), &
+      dw = 0.0_wp
+      if (size(o%sw, 1) > 0) then
+         do j = ng + 1, ng + NY
+            do g = 1, ng
+               dw = max(dw, abs(o%sw(g, j) - o%sw(g + NX, j)), &
+                        abs(o%sw(ng + NX + g, j) - o%sw(ng + g, j)))
+            end do
+         end do
+         call check(error, maxval(abs(o%sw(ng + 1:ng + NX, ng + 1:ng + NY))) > 10.0_wp, &
+                    what//": sw_net is not forced (max < 10 W/m2) -- vacuous")
+         if (allocated(error)) return
+      end if
+      if (want_salt) then
+         call check(error, smax > 1.0e-6_wp, what//": Q_salt is ~0 -- the salt gate is vacuous")
+         if (allocated(error)) return
+      end if
+      write (msg, "(a,es10.3,a,es10.3,a,es10.3,a,es10.3,a,es10.3)") ": |dQ_heat| = ", dh, &
+         " (max|Q_heat| ", qmax, ")  |dQ_salt| = ", ds, " (max|Q_salt| ", smax, ")  |dsw_net| = ", dw
+      call check(error, dh <= 1.0e-12_wp*qmax .and. ds <= 1.0e-12_wp*max(smax, tiny(1.0_wp)) .and. &
+                 dw <= 1.0e-12_wp*max(1.0_wp, maxval(abs(o%sw))), &
                  what//trim(msg)//" -- the ghost surface flux is not the wrapped "// &
                  "interior: the boundary layer reads a stale ghost flux at the seam")
    end subroutine check_ghosts
@@ -231,9 +319,9 @@ contains
       type(error_type), allocatable, intent(out) :: error
       type(run_out_t), intent(in) :: a, b
       character(len=*), intent(in) :: what
-      real(wp) :: umax, kmax, du, dk, dh, dv
+      real(wp) :: umax, kmax, du, dk, dh, dv, dt, ds, de
       integer :: i, ib
-      character(len=200) :: msg
+      character(len=300) :: msg
 
       call check_overlay_active(error, a, what)
       if (allocated(error)) return
@@ -245,17 +333,26 @@ contains
       dv = 0.0_wp
       dk = 0.0_wp
       dh = 0.0_wp
+      dt = 0.0_wp
+      ds = 0.0_wp
+      de = 0.0_wp
       do i = 1, NX
          ib = modulo(i - 1 + SHIFT, NX) + 1
+         dt = max(dt, maxval(abs(a%tt(i, :, :) - b%tt(ib, :, :))))
+         ds = max(ds, maxval(abs(a%ss(i, :, :) - b%ss(ib, :, :))))
+         de = max(de, maxval(abs(a%eta(i, :) - b%eta(ib, :))))
          du = max(du, maxval(abs(a%u(i, :, :) - b%u(ib, :, :))))
          dv = max(dv, maxval(abs(a%v(i, :, :) - b%v(ib, :, :))))
          dk = max(dk, maxval(abs(a%kv(i, :, :) - b%kv(ib, :, :))))
          dh = max(dh, maxval(abs(a%h(i, :, :) - b%h(ib, :, :))))
       end do
-      write (msg, "(a,es10.3,a,es10.3,a,es10.3,a,es10.3,a,es10.3)") ": max|u| = ", umax, &
-         "  |du| = ", du, "  |dv| = ", dv, "  |dkv| = ", dk, "  |dh| = ", dh
+      write (msg, "(a,es10.3,a,es10.3,a,es10.3,a,es10.3,a,es10.3,a,3es10.3)") ": max|u| = ", umax, &
+         "  |du| = ", du, "  |dv| = ", dv, "  |dkv| = ", dk, "  |dh| = ", dh, &
+         "  |dT,dS,deta| = ", dt, ds, de
       call check(error, max(du, dv) <= REL_TOL*umax .and. dk <= REL_TOL*kmax .and. &
-                 dh <= REL_TOL*100.0_wp, what//trim(msg)//" -- the run is not "// &
+                 dh <= REL_TOL*100.0_wp .and. dt <= REL_TOL*20.0_wp .and. &
+                 ds <= REL_TOL*35.0_wp .and. de <= REL_TOL*max(1.0_wp, maxval(abs(a%eta))), &
+                 what//trim(msg)//" -- the run is not "// &
                  "shift-invariant; the periodic seam saw a stale ghost flux")
    end subroutine check_shift
 
@@ -264,10 +361,9 @@ contains
       character(len=*), intent(in) :: kind
       type(run_out_t) :: a
 
-      call write_atm_file(ATM_FILE, ATM_LIST)
       call run_case(error, kind, 0.0_wp, a)
       if (allocated(error)) return
-      call check_ghosts(error, a, kind)
+      call check_ghosts(error, a, kind, kind == "kpp_salt")
    end subroutine ghost_case
 
    subroutine shift_case(error, kind)
@@ -275,7 +371,6 @@ contains
       character(len=*), intent(in) :: kind
       type(run_out_t) :: a, b
 
-      call write_atm_file(ATM_FILE, ATM_LIST)
       call run_case(error, kind, 0.0_wp, a)
       if (allocated(error)) return
       call run_case(error, kind, 180.0_wp, b)
@@ -312,6 +407,161 @@ contains
       type(error_type), allocatable, intent(out) :: error
       call shift_case(error, "kpp_sw")
    end subroutine test_shift_kpp_sw
+
+   subroutine test_ghost_epbl_sw(error)
+      type(error_type), allocatable, intent(out) :: error
+      call ghost_case(error, "epbl_sw")
+   end subroutine test_ghost_epbl_sw
+
+   subroutine test_shift_epbl_sw(error)
+      type(error_type), allocatable, intent(out) :: error
+      call shift_case(error, "epbl_sw")
+   end subroutine test_shift_epbl_sw
+
+   subroutine test_ghost_kpp_salt(error)
+      type(error_type), allocatable, intent(out) :: error
+      call ghost_case(error, "kpp_salt")
+   end subroutine test_ghost_kpp_salt
+
+   subroutine test_shift_kpp_salt(error)
+      type(error_type), allocatable, intent(out) :: error
+      call shift_case(error, "kpp_salt")
+   end subroutine test_shift_kpp_salt
+
+   subroutine test_ghost_dataovr_heat(error)
+      type(error_type), allocatable, intent(out) :: error
+      call ghost_case(error, "dataovr_heat")
+   end subroutine test_ghost_dataovr_heat
+
+   subroutine test_shift_dataovr_heat(error)
+      type(error_type), allocatable, intent(out) :: error
+      call shift_case(error, "dataovr_heat")
+   end subroutine test_shift_dataovr_heat
+
+   subroutine test_api_setters(error)
+      !! `rdb_ocean_set_heat_flux` / `set_salt_flux` / `set_wind` write the
+      !! physical interior only; the ghost band must then be the wrapped
+      !! interior (periodic x), and the wind's `stress_mag` re-derived.
+      type(error_type), allocatable, intent(out) :: error
+      type(c_ptr) :: handle, ptr
+      integer(c_int) :: status, nx_p, ny_p, nz_p, ng, nxt, nyt, gen
+      character(len=:), allocatable :: nml
+      real(c_double) :: q(NX, NY), tx(NX + 1, NY), ty(NX, NY + 1)
+      real(wp), pointer :: p2(:, :)
+      real(wp) :: dq, ds, dtx, dty
+      integer :: i, j, g
+
+      nml = case_nml("api", 0.0_wp)
+      handle = c_null_ptr
+      status = rdb_ocean_create_from_string(nml, len(nml, kind=c_int), handle)
+      call check(error, status == OCEAN_STATUS_OK, "api: the namelist must build")
+      if (allocated(error)) return
+      status = rdb_ocean_get_grid_info(handle, nx_p, ny_p, nz_p, ng)
+      do j = 1, NY
+         do i = 1, NX
+            q(i, j) = 100.0_wp + 10.0_wp*real(i, wp) + real(j, wp)
+         end do
+      end do
+      do j = 1, NY
+         do i = 1, NX + 1
+            tx(i, j) = 0.01_wp*real(i, wp) + 0.001_wp*real(j, wp)
+         end do
+      end do
+      do j = 1, NY + 1
+         do i = 1, NX
+            ty(i, j) = 0.02_wp*real(i, wp) - 0.001_wp*real(j, wp)
+         end do
+      end do
+      status = rdb_ocean_set_heat_flux(handle, q, int(NX, c_int), int(NY, c_int))
+      call check(error, status == OCEAN_STATUS_OK, "api: set_heat_flux")
+      status = rdb_ocean_set_salt_flux(handle, 1.0e-4_wp*q, int(NX, c_int), int(NY, c_int))
+      status = rdb_ocean_set_wind(handle, tx, ty, int(NX, c_int), int(NY, c_int))
+      call check(error, status == OCEAN_STATUS_OK, "api: set_wind")
+      if (allocated(error)) return
+      status = rdb_ocean_refresh_host(handle)
+      dq = 0.0_wp
+      ds = 0.0_wp
+      dtx = 0.0_wp
+      dty = 0.0_wp
+      status = rdb_ocean_get_q_heat_ptr(handle, ptr, nxt, nyt, gen)
+      call c_f_pointer(ptr, p2, [nxt, nyt])
+      do j = ng + 1, ng + NY
+         do g = 1, ng
+            dq = max(dq, abs(p2(g, j) - p2(g + NX, j)), abs(p2(ng + NX + g, j) - p2(ng + g, j)))
+         end do
+      end do
+      call check(error, dq == 0.0_wp .and. maxval(abs(p2(ng + 1:ng + NX, ng + 1:ng + NY))) > 100.0_wp, &
+                 "api: set_heat_flux left stale ghost Q_heat")
+      if (allocated(error)) return
+      status = rdb_ocean_get_q_salt_ptr(handle, ptr, nxt, nyt, gen)
+      call c_f_pointer(ptr, p2, [nxt, nyt])
+      do j = ng + 1, ng + NY
+         do g = 1, ng
+            ds = max(ds, abs(p2(g, j) - p2(g + NX, j)), abs(p2(ng + NX + g, j) - p2(ng + g, j)))
+         end do
+      end do
+      call check(error, ds == 0.0_wp .and. maxval(abs(p2(ng + 1:ng + NX, ng + 1:ng + NY))) > 1.0e-3_wp, &
+                 "api: set_salt_flux left stale ghost Q_salt")
+      if (allocated(error)) return
+      status = rdb_ocean_get_tau_x_ptr(handle, ptr, nxt, nyt, gen)
+      call c_f_pointer(ptr, p2, [nxt, nyt])
+      do j = ng + 1, ng + NY
+         do g = 1, ng
+            dtx = max(dtx, abs(p2(g, j) - p2(g + NX, j)), &
+                      abs(p2(ng + NX + 1 + g, j) - p2(ng + 1 + g, j)))
+         end do
+      end do
+      call check(error, dtx == 0.0_wp .and. maxval(abs(p2)) > 0.01_wp, &
+                 "api: set_wind left stale ghost tau_x faces")
+      if (allocated(error)) return
+      status = rdb_ocean_get_tau_y_ptr(handle, ptr, nxt, nyt, gen)
+      call c_f_pointer(ptr, p2, [nxt, nyt])
+      do j = ng + 1, ng + NY + 1
+         do g = 1, ng
+            dty = max(dty, abs(p2(g, j) - p2(g + NX, j)), abs(p2(ng + NX + g, j) - p2(ng + g, j)))
+         end do
+      end do
+      call check(error, dty == 0.0_wp .and. maxval(abs(p2)) > 0.01_wp, &
+                 "api: set_wind left stale ghost tau_y faces")
+      status = rdb_ocean_destroy(handle)
+   end subroutine test_api_setters
+
+   subroutine write_flux_files()
+      !! The atmosphere plus the data-override heat / salt files (wavenumber 2
+      !! in x: period 8 cells, so a half-period roll leaves them unchanged).
+      call write_atm_file(ATM_FILE, ATM_LIST)
+      call write_field_file(HEAT_FILE, -800.0_wp, 0.3_wp)
+      call write_field_file(SALT_FILE, 2.0e-4_wp, 0.5_wp)
+   end subroutine write_flux_files
+
+   subroutine write_field_file(path, mean, rel)
+      !! `field(x, y, time) = mean*(1 + rel*sin(2*pi*2*(i - 1/2)/NX))*(1 + 0.02*j)`,
+      !! two records (identical), time axis 0 and 1e6 s.
+      character(len=*), intent(in) :: path
+      real(wp), intent(in) :: mean, rel
+      real(wp), parameter :: PI = 3.14159265358979323846_wp
+      real(wp) :: f(NX, NY, 2)
+      integer :: ncid, dx_, dy_, dt_, vf, vt, i, j, k, ierr
+
+      do k = 1, 2
+         do j = 1, NY
+            do i = 1, NX
+               f(i, j, k) = mean*(1.0_wp + rel*sin(2.0_wp*PI*2.0_wp*(real(i, wp) - 0.5_wp)/real(NX, wp)))* &
+                            (1.0_wp + 0.02_wp*real(j, wp))
+            end do
+         end do
+      end do
+      call nc_create_file(path, ncid)
+      call nc_def_dim(ncid, "x", NX, dx_)
+      call nc_def_dim(ncid, "y", NY, dy_)
+      call nc_def_dim(ncid, "time", 2, dt_)
+      call nc_def_var_3d(ncid, "field", [dx_, dy_, dt_], vf)
+      call rdb_def_var_1d(ncid, "time", dt_, vt)
+      call nc_enddef(ncid)
+      ierr = nf90_put_var(ncid, vf, f)
+      call rdb_put_var_1d(ncid, vt, [0.0_wp, 1.0e6_wp])
+      call nc_close(ncid)
+   end subroutine write_field_file
 
    subroutine write_atm_file(path, listname)
       !! One global 10-degree lon-lat file, two time records, the nine CMOR

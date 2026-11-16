@@ -284,6 +284,8 @@ program test_ocean_decomp_bitid_mpi
    character(len=*), parameter :: ATM_WARM_LIST = "bitid_atm_warm_files.txt"
    character(len=*), parameter :: ATM_CRSE_LIST = "bitid_atm_coarse_files.txt"
    character(len=*), parameter :: ATM_COLD_LIST = "bitid_atm_cold_files.txt"
+   character(len=*), parameter :: ATM_CRSE_COLD = "bitid_atm_coarse_cold.nc"
+   character(len=*), parameter :: ATM_CRSE_COLD_LIST = "bitid_atm_coarse_cold_files.txt"
 
    type :: field_t
       !! One compared field: a host copy of the whole local array (2-D
@@ -328,7 +330,7 @@ program test_ocean_decomp_bitid_mpi
       !! `RDB_BITID_CASES`: run only the cases whose name contains this substring.
    type(comm_t) :: comm
    character(len=16), parameter :: SCHEMES(2) = [character(len=16) :: "pred_corr", "ssp_rk2"]
-   character(len=24), parameter :: CASES(75) = [character(len=24) :: &
+   character(len=24), parameter :: CASES(77) = [character(len=24) :: &
                                                 "island_basin", "weno7_pv", &
                                                 "periodic_channel_zstar", &
                                                 "visc_rem_zstar", &
@@ -355,7 +357,8 @@ program test_ocean_decomp_bitid_mpi
                                                 "drain_ratio_fold_h3", "eulz", "eulz_periodic", &
                                                 "eulz_tripolar", "eulz_epbl_mle", "bulk_flux", &
                                                 "bulk_flux_ice", "bulk_flux_fold", "bulk_flux_sw", "bulk_flux_bl", &
-                                                "bulk_flux_bl_epbl", "bulk_flux_bl_sw", "manizza", "dtbt_reset", &
+                                                "bulk_flux_bl_epbl", "bulk_flux_bl_sw", "bulk_flux_bl_fold", &
+                                                "bulk_flux_bl_ratio2", "manizza", "dtbt_reset", &
                                                 "dtbt_reset_period", &
                                                 "cavity_zfixed", "cavity_sigma", &
                                                 "cavity_sigma_ratio2", "cavity_gall", "cavity_melt_only", "cavity_periodic", &
@@ -399,6 +402,7 @@ program test_ocean_decomp_bitid_mpi
       ! diabatic_first = .false. is refused under ssp_rk2 (validate_config).
       ! (drain_ratio_h3 pins it too.)
       if (trim(CASES(ic)) == "diabatic_end" .or. trim(CASES(ic)) == "drain_ratio_h3" .or. &
+          trim(CASES(ic)) == "bulk_flux_bl_ratio2" .or. &
           trim(CASES(ic)) == "drain_ratio_fold_h3") cycle
       call run_case(trim(CASES(ic)), trim(SCHEMES(2)))
    end do
@@ -1231,7 +1235,7 @@ contains
                "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
                "north = 'tripolar_fold' /"//NL
       case ("bulk_flux", "bulk_flux_ice", "bulk_flux_fold", "bulk_flux_sw", "bulk_flux_bl", &
-            "bulk_flux_bl_epbl", "bulk_flux_bl_sw")
+            "bulk_flux_bl_epbl", "bulk_flux_bl_sw", "bulk_flux_bl_fold", "bulk_flux_bl_ratio2")
          ! Atmosphere-driven bulk forcing (`&ocean_atm_forcing_nml` +
          ! `&ocean_bulk_flux_nml`): nine prescribed atmospheric fields from
          ! files the test writes (spatially NON-uniform, non-symmetric in
@@ -1304,6 +1308,7 @@ contains
             wl = ATM_WARM_LIST
             if (label == "bulk_flux_fold") wl = ATM_CRSE_LIST
             if (index(label, "bulk_flux_bl") == 1) wl = ATM_COLD_LIST
+            if (label == "bulk_flux_bl_fold") wl = ATM_CRSE_COLD_LIST
             nml = nml// &
                   "&tracer_nml initial_temperature = 12.0, initial_salinity = 35.0, "// &
                   "T_init_surface = 20.0, T_init_bottom = 4.0 /"//NL// &
@@ -1314,7 +1319,10 @@ contains
                   "', filelist_rsds = '"//trim(wl)//"', filelist_prra = '"//trim(wl)// &
                   "', filelist_prsn = '"//trim(wl)//"' /"//NL
          end if
-         if (label == "bulk_flux_fold") then
+         if (label == "bulk_flux_bl_ratio2") then
+            nml = nml//"&ocean_vmix_nml dt_therm_ratio = 2, diabatic_first = .false. /"//NL
+         end if
+         if (label == "bulk_flux_fold" .or. label == "bulk_flux_bl_fold") then
             ! Coarse (30 x 10 degree) atmosphere source.  The default
             ! conservative flux regrid (`fluxes_regrid` is not set) overflows
             ! its per-target-cell candidate cap (`REGRID_NMAX_CAP`) on the
@@ -1329,8 +1337,9 @@ contains
                   "lat_south = 59.0, phi_join = 74.0, lon_pole = 0.0, "// &
                   "rad_earth = 6.378e6, coriolis_scheme = 'planetary' /"//NL// &
                   "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
-                  "&ocean_topo_nml topo_config = 'double_drake', max_depth = 1000.0, "// &
-                  "slope_scale = 0.2 /"//NL// &
+                  "&ocean_topo_nml topo_config = 'double_drake', max_depth = "// &
+                  trim(merge("100.0 ", "1000.0", label == "bulk_flux_bl_fold"))// &
+                  ", slope_scale = 0.2 /"//NL// &
                   "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
                   "north = 'tripolar_fold' /"//NL
          else
@@ -3040,6 +3049,7 @@ contains
       call write_atm_file(ATM_COLD, ATM_COLD_LIST, 255.0_wp, 6.0e-4_wp, 72, 36)
       ! 30 x 10 degree source for the tripolar cap (see the bulk_flux_fold case).
       call write_atm_file(ATM_CRSE, ATM_CRSE_LIST, 288.0_wp, 4.0e-3_wp, 12, 18)
+      call write_atm_file(ATM_CRSE_COLD, ATM_CRSE_COLD_LIST, 255.0_wp, 6.0e-4_wp, 12, 18)
    end subroutine write_input_files
 
    subroutine write_atm_file(path, listname, tas0, huss0, nlon, nlat)

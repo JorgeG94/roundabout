@@ -236,10 +236,11 @@ contains
       ! engine refreshes the assembled fluxes' seam ghosts after the
       ! assembler.  (Without components the heat/salt tags write `Q_heat`/
       ! `Q_salt` directly and `ocean_data_forcing_apply` refreshes them.)
-      if (sf%use_components .and. (this%id_heat > 0 .or. this%id_salt > 0 .or. &
-                                   this%id_evap > 0 .or. this%id_lprec > 0)) then
+      if (sf%use_components .and. (this%id_heat > 0 .or. this%id_evap > 0 .or. &
+                                   this%id_lprec > 0)) then
          sf%phys_only_fill = .true.
       end if
+      if (sf%use_components .and. this%id_salt > 0) sf%phys_only_fill_salt = .true.
 
       ! `stress_mag` must be consistent with whatever the first blend
       ! writes; the first `apply` re-derives it, but configure-time
@@ -386,8 +387,12 @@ contains
       !! Only PHYSICAL cells are written here.  Stress ghosts are filled
       !! afterwards by `ocean_seam_refresh_surface_stress` (exchange /
       !! periodic wrap / fold), which also re-derives `stress_mag`.  The
-      !! flux tags get no ghost treatment at all — see the module
-      !! docstring for why that is correct rather than an omission.
+      !! flux tags' ghosts are refreshed too, because KPP/EPBL read the
+      !! assembled flux in the ghost columns: with components off the
+      !! `Q_heat`/`Q_salt` this routine writes are exchanged right after
+      !! the write; with components on the tags fill components and the
+      !! engine exchanges the ASSEMBLED `Q_heat`/`Q_salt` after the
+      !! assembler (latches `phys_only_fill`/`phys_only_fill_salt`).
       type(ocean_data_forcing_t), intent(in) :: this
       type(ocean_data_input_t), intent(in) :: reader
       type(hgrid_t), intent(in) :: grid

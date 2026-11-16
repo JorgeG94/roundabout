@@ -116,6 +116,10 @@ contains
                                test_engine_bit_exact_ice_components), &
                   new_unittest("restart_engine_bit_exact_sea_ice_components_bulk", &
                                test_engine_bit_exact_ice_components_bulk), &
+                  new_unittest("restart_engine_bit_exact_bulk_boundary_layer", &
+                               test_engine_bit_exact_bulk_bl), &
+                  new_unittest("restart_engine_old_checkpoint_stale_flux_ghosts_repaired", &
+                               test_engine_old_checkpoint), &
                   new_unittest("engine_ice_enabled_icefree_shortwave_matches_ice_disabled", &
                                test_engine_icefree_sw), &
                   new_unittest("restart_engine_bit_exact_gm_meke_varmix_therm2", &
@@ -358,6 +362,34 @@ contains
          if (label == "sea_ice_components") then
             nml = nml//"&ocean_forcing_nml enable_components = .true. /"//NL
          end if
+      case ("bulk_bl_periodic")
+         ! Bulk forcing + components + KPP under a cold dry atmosphere over a
+         ! re-entrant 100 m basin on ten layers: the boundary layer is deeper
+         ! than the top interface, so it reads the assembled `Q_heat` in the
+         ! ghost columns (the seam-flux refresh's case).
+         nml = "&sim_nml sim_type = 'ocean' /"//NL// &
+               "&time_nml t_end = 86400.0, dt_fixed = 600.0, start_date = '2000-06-21' /"//NL// &
+               "&nonhydrostatic_nml nz_layers = 10 /"//NL// &
+               "&ocean_bt_nml auto_n_inner = .true., split_scheme = 'pred_corr' /"//NL// &
+               "&ocean_hvisc_nml nu_h = 200.0, lateral_closure = 'smagorinsky', "// &
+               "smag_ah = .true. /"//NL// &
+               "&ocean_diag_nml enabled = .false. /"//NL// &
+               "&ocean_eos_nml eos = 'wright' /"//NL// &
+               "&ocean_thermo_nml enable_thermodynamics = .true. /"//NL// &
+               "&ocean_forcing_nml enable_components = .true. /"//NL// &
+               "&ocean_bulk_flux_nml enable = .true., n_iter = 5, z_wind = 10.0, "// &
+               "z_ta = 10.0 /"//NL// &
+               "&tracer_nml initial_temperature = 12.0, initial_salinity = 35.0, "// &
+               "T_init_surface = 20.0, T_init_bottom = 19.0 /"//NL// &
+               atm_group(ATM_LIST)// &
+               "&grid_nml nx = 16, ny = 8, nghost = 3, dx = 22.5, dy = 1.0 /"//NL// &
+               "&ocean_grid_nml grid_config = 'spherical', lon_west = 0.0, "// &
+               "lat_south = 30.0, rad_earth = 6.371e6, coriolis_scheme = 'planetary' /"//NL// &
+               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
+               "&ocean_topo_nml max_depth = 100.0 /"//NL// &
+               "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
+               "north = 'wall' /"//NL// &
+               "&output_nml output_to_file = .false. /"//NL
       case ("sea_ice_components_bulk")
          ! Ice + components + the atmosphere-driven bulk forcing: the path on
          ! which the ice couplers used to overwrite the bulk consumer's
@@ -1329,6 +1361,101 @@ contains
       call delete_file(ATM_LIST)
       n_ice = 0
    end subroutine test_engine_bit_exact_ice_components_bulk
+
+   subroutine test_engine_bit_exact_bulk_bl(error)
+      !! Warm restart of a bulk-forced run whose boundary layer reads the
+      !! seam-ghost flux (checkpoint after 4 steps, 4 more).
+      type(error_type), allocatable, intent(out) :: error
+      call bulk_bl_resume(error, .false.)
+   end subroutine test_engine_bit_exact_bulk_bl
+
+   subroutine test_engine_old_checkpoint(error)
+      !! See `bulk_bl_resume` with `corrupt = .true.`.
+      type(error_type), allocatable, intent(out) :: error
+      call bulk_bl_resume(error, .true.)
+   end subroutine test_engine_old_checkpoint
+
+   subroutine adopt_stress_fields(sa, sb)
+      !! Copy `surface_stress_*` from `sa` into `sb`.  The bulk consumer
+      !! rewrites the stress at the top of every step before anything reads
+      !! it and it is not a restart-registry field, so the resume-point
+      !! snapshot of a bulk-only run differs there by construction (also
+      !! with the seam-flux refresh disabled): not what this test measures.
+      type(snapshot_t), intent(in) :: sa
+      type(snapshot_t), intent(inout) :: sb
+      integer :: e
+      do e = 1, sb%n
+         if (sb%f(e)%tag(1:15) == "surface_stress_") sb%f(e)%a = sa%f(e)%a
+      end do
+   end subroutine adopt_stress_fields
+
+   subroutine bulk_bl_resume(error, corrupt)
+      !! Warm restart of the bulk + KPP periodic case, bitwise against the
+      !! straight run at the resume point and after N_AFTER more steps.
+      !! `corrupt`: emulate a checkpoint written BEFORE the seam-flux
+      !! refresh existed (stale ghost bands in `Q_heat`/`Q_salt`) by
+      !! overwriting the ghost columns of the live arrays right before the
+      !! write; the resumed engine must repair them at setup, not on its
+      !! first thermo-step assembly.
+      type(error_type), allocatable, intent(out) :: error
+      logical, intent(in) :: corrupt
+      type(ocean_engine_t), target :: es, ea, eb
+      type(config_t) :: cfg_s, cfg_a, cfg_b
+      type(snapshot_t) :: ss0, ss, sb0, sb
+      real(wp) :: t_s, t_a, t_b
+      integer :: step_b, ierr, ng, n_ice
+      logical :: ok
+      integer, parameter :: NW = 4, NA = 4
+
+      call write_atm_file(ATM_FILE, ATM_LIST, 255.0_wp, 6.0e-4_wp, -1.0_wp)
+      ! ---- straight run, snapshot at the checkpoint step and at the end ----
+      call make_engine(es, cfg_s, case_nml("bulk_bl_periodic"), ok)
+      call check(error, ok, "straight engine setup failed")
+      if (allocated(error)) return
+      t_s = 0.0_wp
+      call advance(es, cfg_s, t_s, NW, ok)
+      call take_snapshot(es, ss0)
+      call advance(es, cfg_s, t_s, NA, ok)
+      call take_snapshot(es, ss)
+      call engine_exit_data(es)
+      call engine_teardown(es)
+      ! ---- A: NW steps, corrupt the flux ghosts, write ----
+      call make_engine(ea, cfg_a, case_nml("bulk_bl_periodic"), ok)
+      call check(error, ok, "engine A setup failed")
+      if (allocated(error)) return
+      t_a = 0.0_wp
+      call advance(ea, cfg_a, t_a, NW, ok)
+      if (corrupt) then
+         ng = ea%grid%nghost
+         !$acc update self(ea%state%surface_flux%Q_heat)
+         ea%state%surface_flux%Q_heat(1:ng, :) = 0.0_wp
+         ea%state%surface_flux%Q_heat(ea%grid%nx_total - ng + 1:, :) = 0.0_wp
+         !$acc update device(ea%state%surface_flux%Q_heat)
+      end if
+      call ocean_state_restart_write(ea%state, ea%grid, ea%decomp, FN, t_a, NW, ierr=ierr)
+      call check(error, ierr == OCEAN_STATUS_OK, "checkpoint write failed")
+      if (allocated(error)) return
+      call engine_exit_data(ea)
+      call engine_teardown(ea)
+      ! ---- B: resume ----
+      call make_engine(eb, cfg_b, case_nml("bulk_bl_periodic"), ok, restart_file=FN, &
+                       t0=t_b, step0=step_b)
+      call check(error, ok .and. eb%warm_restart, "engine B did not warm-restart")
+      if (allocated(error)) return
+      call take_snapshot(eb, sb0)
+      call adopt_stress_fields(ss0, sb0)
+      call compare(error, ss0, sb0, n_ice, "bulk BL resume: at the resume point")
+      if (.not. allocated(error)) then
+         call advance(eb, cfg_b, t_b, NA, ok)
+         call take_snapshot(eb, sb)
+         call compare(error, ss, sb, n_ice, "bulk BL resume: after the resumed steps")
+      end if
+      call engine_exit_data(eb)
+      call engine_teardown(eb)
+      call delete_file(FN)
+      call delete_file(ATM_FILE)
+      call delete_file(ATM_LIST)
+   end subroutine bulk_bl_resume
 
    function probe_nml(ratio, ice_on, list) result(nml)
       !! The 6x6 spherical flat-100 m, 4-layer, 15 degC warm basin: the
