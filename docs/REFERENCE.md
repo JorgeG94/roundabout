@@ -855,8 +855,15 @@ Per-rank files merge offline via `tools/merge_output.py`.
 (aggregate surface temperature, degC; open water at the seawater freezing
 point), and the rates `congel`, `frazil`, `snoice`, `meltt`, `meltb`,
 `meltl`, `dvidtt` in **cm day⁻¹** (CICE `mps_to_cmpdy`), time-averaged over
-the output window. `meltl` is identically 0 (no lateral melt scheme). `dvidtt`
-is the thermodynamic volume tendency, not `dvidtd`. The former default
+the output window. Under `scheme = "sis2"`, `meltl` is identically 0 (no
+lateral melt scheme) and `dvidtt` is the thermodynamic volume tendency, not
+`dvidtd`. Under `scheme = "cice"` the same names are the CICE-port step's
+(per grid-cell area, CICE's units) and these are added: `dvidtd` (cm/day),
+`daidtt`, `daidtd` (%/day), `albsni` (%, ice-area weighted), and the
+cell-weighted fluxes `fswabs_ai`, `fswthru_ai`, `flwup_ai`, `fsens_ai`,
+`flat_ai`, `fhocn_ai` (W m⁻², CICE signs), `fsalt_ai` (kg m⁻² s⁻¹), `fresh_ai`,
+`evap_ai` (cm/day water equivalent); definitions and signs in the docstring
+of `rdb_ocean_diag_ice_cice`. The former default
 `ice_conc`/`ice_thick` are opt-in aliases (name them in `diags`). Derived
 `uvel`/`vvel` are the cell-centre drift velocities under the CICE names
 (CICE's own `uvel`/`vvel` sit on the U/V points).

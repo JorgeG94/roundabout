@@ -65,6 +65,15 @@ module rdb_ice_flux_state
    !! linear ITD, atmosphere BL, EVP).  All three kernels are flat `do concurrent` bodies in the
    !! ice core (`rdb_ice_flux`); the shims here only unpack the components.
    !!
+   !! **Thermodynamic snapshot (history diagnostics).**  `aice_th, vice_th` hold the cell aggregates
+   !! `aice, vice` right AFTER the thermodynamics (taken by `ice_snap_thermo` once the post-thermodynamics
+   !! aggregate is built, before dynamics, transport and ridging); with the start-of-step `aice_init` and
+   !! `sum_n vicen_init` they give CICE's thermodynamic tendencies `dvidtt = (vice_th - vice_init)/dt`,
+   !! `daidtt = (aice_th - aice_init)/dt`, and the dynamic ones (`dvidtd`, `daidtd`) against the end-of-step
+   !! aggregate.  `dt_step` is the ice step of the last snapshot [s] (the divisor of every per-step
+   !! `[m per step]` field above when the history diagnostics turn it into a rate).  Scratch like the rest of the
+   !! slot: written every step, never restart state, owned cells valid (the copy covers the whole extent).
+   !!
    !! **Coexistence.**  Nothing composes this slot into `ocean_sea_ice_t` yet (a
    !! later PR adds the guarded `flux` component, as `cice` was); under the default
    !! `scheme = "sis2"` nothing here is allocated, mapped or counted.
@@ -74,11 +83,11 @@ module rdb_ice_flux_state
    use rdb_mem_report, only: arr_bytes
    use rdb_ice_dims, only: ICE_NCAT_MAX
    use rdb_ice_cice_state, only: ice_cice_state_t
-   use rdb_ice_flux, only: ice_flux_zero_impl, ice_flux_merge_impl, ice_save_init_impl
+   use rdb_ice_flux, only: ice_flux_zero_impl, ice_flux_merge_impl, ice_save_init_impl, ice_snap_thermo_impl
    implicit none
    private
 
-   public :: ice_flux_t, ice_flux_zero, ice_flux_merge_categories, ice_save_init
+   public :: ice_flux_t, ice_flux_zero, ice_flux_merge_categories, ice_save_init, ice_snap_thermo
    public :: ICE_FLUX_INIT_OK, ICE_FLUX_INIT_BAD_NCAT, ICE_FLUX_OK, ICE_FLUX_ERR_SHAPE, ice_slots_agree
 
    integer, parameter :: ICE_FLUX_INIT_OK = 0
@@ -160,6 +169,12 @@ module rdb_ice_flux_state
          !! [m/s] ice volume ridged (diagnostic).  Producers: ridging.
       real(wp), allocatable :: opening(:, :)
          !! [1/s] lead-opening rate (diagnostic).  Producers: ridging.
+      real(wp), allocatable :: aice_th(:, :)
+         !! [1] cell ice area right after the thermodynamics of this step (`ice_snap_thermo`).
+      real(wp), allocatable :: vice_th(:, :)
+         !! [m] cell ice volume per cell area right after the thermodynamics of this step.
+      real(wp) :: dt_step = 0.0_wp
+         !! [s] the ice step of the last `ice_snap_thermo` (0 before the first step).
       real(wp), allocatable :: freshn(:, :, :)
          !! Per-category twin of `fresh` (nx,ny,ncat), per unit category area; written by the
          !! category-parallel kernels, merged by `ice_flux_merge_categories`.
@@ -251,6 +266,9 @@ contains
       allocate (this%dardg2dt(nx, ny), source=0.0_wp)
       allocate (this%dvirdgdt(nx, ny), source=0.0_wp)
       allocate (this%opening(nx, ny), source=0.0_wp)
+      allocate (this%aice_th(nx, ny), source=0.0_wp)
+      allocate (this%vice_th(nx, ny), source=0.0_wp)
+      this%dt_step = 0.0_wp
       allocate (this%freshn(nx, ny, nc), source=0.0_wp)
       allocate (this%fsaltn(nx, ny, nc), source=0.0_wp)
       allocate (this%fhocnn(nx, ny, nc), source=0.0_wp)
@@ -293,6 +311,8 @@ contains
       if (allocated(this%dardg2dt)) deallocate (this%dardg2dt)
       if (allocated(this%dvirdgdt)) deallocate (this%dvirdgdt)
       if (allocated(this%opening)) deallocate (this%opening)
+      if (allocated(this%aice_th)) deallocate (this%aice_th)
+      if (allocated(this%vice_th)) deallocate (this%vice_th)
       if (allocated(this%freshn)) deallocate (this%freshn)
       if (allocated(this%fsaltn)) deallocate (this%fsaltn)
       if (allocated(this%fhocnn)) deallocate (this%fhocnn)
@@ -333,6 +353,7 @@ contains
       !$acc enter data copyin(this%freshn, this%fsaltn, this%fhocnn, this%evapn, this%fsensn)
       !$acc enter data copyin(this%flatn, this%flwoutn, this%fswabsn, this%melttn, this%meltbn)
       !$acc enter data copyin(this%congeln, this%snoicen)
+      !$acc enter data copyin(this%aice_th, this%vice_th)
       this%mapped = .true.
    end subroutine flux_enter_data_impl
 
@@ -357,6 +378,7 @@ contains
       !$acc exit data delete(this%freshn, this%fsaltn, this%fhocnn, this%evapn, this%fsensn)
       !$acc exit data delete(this%flatn, this%flwoutn, this%fswabsn, this%melttn, this%meltbn)
       !$acc exit data delete(this%congeln, this%snoicen)
+      !$acc exit data delete(this%aice_th, this%vice_th)
       this%mapped = .false.
    end subroutine flux_exit_data_impl
 
@@ -388,6 +410,8 @@ contains
                + arr_bytes(this%dardg2dt) &
                + arr_bytes(this%dvirdgdt) &
                + arr_bytes(this%opening) &
+               + arr_bytes(this%aice_th) &
+               + arr_bytes(this%vice_th) &
                + arr_bytes(this%freshn) &
                + arr_bytes(this%fsaltn) &
                + arr_bytes(this%fhocnn) &
@@ -474,6 +498,21 @@ contains
       ok = flux%nx == cice%nx .and. flux%ny == cice%ny .and. flux%ncat == cice%ncat .and. &
            flux%nghost == cice%nghost .and. flux%nx_phys == cice%nx_phys .and. flux%ny_phys == cice%ny_phys
    end function ice_slots_agree
+
+   subroutine ice_snap_thermo(flux, cice, dt)
+      !! Copy the cell aggregates `cice%aice, cice%vice` into `flux%aice_th, flux%vice_th` (whole
+      !! extent, ONE launch) and record `flux%dt_step = dt`.  Call right after the post-thermodynamics
+      !! aggregate (`ice_update_state`), before the dynamics: it is the read-only source of the
+      !! thermodynamic / dynamic tendency diagnostics and writes nothing the model reads.  Both
+      !! slots must be mapped on an offload build; a disagreement of shape is a no-op.
+      type(ice_flux_t), intent(inout) :: flux
+      type(ice_cice_state_t), intent(in) :: cice
+      real(wp), intent(in) :: dt
+
+      if (.not. ice_slots_agree(flux, cice)) return
+      call ice_snap_thermo_impl(flux%nx, flux%ny, cice%aice, cice%vice, flux%aice_th, flux%vice_th)
+      flux%dt_step = dt
+   end subroutine ice_snap_thermo
 
    subroutine ice_save_init(cice)
       !! Snapshot `aicen, vicen, vsnon, Tsfcn, aice` into `aicen_init, vicen_init,
