@@ -48,8 +48,7 @@ module rdb_ocean_data_forcing
    !! the full array) and the momentum vertical viscosity then averages the
    !! ghost-column `kv` into the first owned face.  So the seam ghosts of the
    !! flux the schemes read are exchanged: under `use_components` the
-   !! engine does it once per thermo step after the assembler (the latch
-   !! `phys_only_fill` set here), and with components off, where the
+   !! engine does it once per thermo step after the assembler, and with components off, where the
    !! tags write `Q_heat`/`Q_salt` themselves, this module exchanges them
    !! right after the write.
    !!
@@ -232,16 +231,6 @@ contains
       if (this%id_heat > 0) sf%has_heat = .true.
       if (this%id_salt > 0) sf%has_salt = .true.
       if (this%id_evap > 0 .or. this%id_lprec > 0) sf%has_mass_flux = .true.
-      ! Component destinations are written on physical cells only; the
-      ! engine refreshes the assembled fluxes' seam ghosts after the
-      ! assembler.  (Without components the heat/salt tags write `Q_heat`/
-      ! `Q_salt` directly and `ocean_data_forcing_apply` refreshes them.)
-      if (sf%use_components .and. (this%id_heat > 0 .or. this%id_evap > 0 .or. &
-                                   this%id_lprec > 0)) then
-         sf%phys_only_fill = .true.
-      end if
-      if (sf%use_components .and. this%id_salt > 0) sf%phys_only_fill_salt = .true.
-
       ! `stress_mag` must be consistent with whatever the first blend
       ! writes; the first `apply` re-derives it, but configure-time
       ! consumers that read it before the first step should not see a
@@ -392,7 +381,7 @@ contains
       !! `Q_heat`/`Q_salt` this routine writes are exchanged right after
       !! the write; with components on the tags fill components and the
       !! engine exchanges the ASSEMBLED `Q_heat`/`Q_salt` after the
-      !! assembler (latches `phys_only_fill`/`phys_only_fill_salt`).
+      !! assembler (whenever the component set is on).
       type(ocean_data_forcing_t), intent(in) :: this
       type(ocean_data_input_t), intent(in) :: reader
       type(hgrid_t), intent(in) :: grid

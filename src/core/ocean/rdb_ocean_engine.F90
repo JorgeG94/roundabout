@@ -1917,8 +1917,7 @@ contains
          ! the first step after the resume, before the first thermo-step
          ! assembly repairs them.  Device-resident (the periodic wrap kernels
          ! are device kernels on the GPU build), so after the map; a no-op
-         ! unless the component set is on and a physical-span-only filler is
-         ! latched.
+         ! unless the component set is on.
          call ocean_seam_refresh_surface_flux(engine%state%surface_flux, engine%grid, &
                                               engine%state%bc)
       end if
@@ -2074,7 +2073,7 @@ contains
       call ocean_surface_flux_refresh_sw_net(engine%state%surface_flux)
       ! `q_sw` is a physical-span-only write, `sw_net` was just formed over
       ! the full array, and the boundary-layer schemes read it in the ghost
-      ! columns: exchange its seam ghosts (no-op unless `phys_only_fill`).
+      ! columns: exchange its seam ghosts (no-op unless `use_components` and `sw_from_qsw`).
       call ocean_seam_refresh_sw_net(engine%state%surface_flux, engine%grid, &
                                      engine%state%bc)
 
@@ -2483,10 +2482,9 @@ contains
       end if
 
       ! The assembler summed components, some of which a filler wrote on
-      ! physical cells only (bulk forcing, data override): exchange the
+      ! physical cells only (bulk forcing, data override, the cavity bands): exchange the
       ! ASSEMBLED `Q_heat`/`Q_salt` seam ghosts the boundary-layer schemes
-      ! read.  Same thermo cadence; no-op (no call cost beyond the test)
-      ! unless `use_components` and a physical-span-only filler is on.
+      ! read.  Same thermo cadence; no-op unless `use_components`.
       if (engine%state%dyn%enable_thermodynamics .and. engine%state%dyn%is_thermo_step()) then
          call ocean_seam_refresh_surface_flux(engine%state%surface_flux, engine%grid, &
                                               engine%state%bc)
