@@ -141,6 +141,7 @@ contains
                           "&ocean_bulk_flux_nml enable = .true., n_iter = 5, z_wind = 10.0, "// &
                           "z_ta = 10.0 /"//NL// &
                           "&ocean_atm_forcing_nml enable = .true., time_mode = 'interannual', "// &
+                          "sw_interp = 'linear', "// &
                           "filelist_tas = '"//ATM_LIST//"', filelist_huss = '"//ATM_LIST// &
                           "', filelist_uas = '"//ATM_LIST//"', filelist_vas = '"//ATM_LIST// &
                           "', filelist_psl = '"//ATM_LIST//"', filelist_rlds = '"//ATM_LIST// &

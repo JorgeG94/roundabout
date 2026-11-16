@@ -761,6 +761,8 @@ Split-explicit barotropic substep controls.
 | `wave_drag_file` | `""` |  | Reserved for PR-14 (MOM6 BT_WAVE_DRAG_FILE); unused today |
 | `wave_drag_var` | `"rH"` |  | Reserved for PR-14 (MOM6 BT_WAVE_DRAG_VAR); unused today |
 | `bt_halo` | `-1` |  | Wide-halo BT march-in width (-1 = auto: resolves to 0, the march-in is opt-in; 0 = explicit off, bit-identical) |
+| `inhalo_march` | `.false.` |  | EXPERIMENTAL: in-halo BT march -- exchange the fast-loop ghost bands once per (nghost-1) substeps inside the existing halo; N ranks bitwise == 1 rank; exclusive with bt_halo > 0, wet/dry, use_cont_type, upstream_h_face, tides, psurf |
+| `inhalo_stride` | `0` |  | Substeps per ghost exchange under inhalo_march (0 = derive nghost-1; refused above nghost-1, which breaks the bitwise contract) |
 
 ### &ocean_debug_nml
 
@@ -1144,7 +1146,7 @@ JRA55-do-style prescribed atmospheric state driving bulk-flux ocean/ice surface 
 | `states_regrid` | `"bilinear"` |  | Horizontal regrid for tas/huss/uas/vas/psl (only 'bilinear' is implemented) |
 | `fluxes_regrid` | `"conservative"` |  | Horizontal regrid for rlds/rsds/prra/prsn |
 | `sw_interp` | `"coszen"` |  | coszen (default, held interval + diurnal cosine-zenith factor) or linear (plain time-blend) |
-| `sw_offset_s` | `-0.5400000000E+04` | s | Time offset applied to the rsds query time before the bracket search (sw_interp=coszen) |
+| `sw_offset_s` | `0.5400000000E+04` | s | Time offset applied to the rsds query time before the bracket search (sw_interp=coszen) |
 | `orb_year` | `1990` |  | Orbital-parameter year (reserved: v1 coszen uses fixed Spencer (1971) coefficients, so a non-default value is refused) |
 | `wind_relative` | `.true.` |  | Subtract the ocean surface current from the atmospheric wind before the bulk flux |
 | `ocean_albedo` | `0.6600000000E-01` |  | Ocean surface shortwave albedo (Large & Yeager 2009) |
