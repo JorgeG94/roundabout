@@ -70,10 +70,11 @@ module rdb_ice_step_cice
    !!   into the ocean's surface fluxes only on the ocean thermo step
    !!   (`ctx%thermo_step`); the ocean is debited only through `fhocn`.
    !!
-   !! **Slot for the tendency diagnostics.**  A snapshot of the state before the
-   !! dynamics (for the dynamics/thermodynamics tendency diagnostics) belongs between
-   !! `aggregate_ghost` and `stress_to_faces`; it is not a stage yet.  A PR adding it
-   !! inserts one manifest entry there (and its id), nothing else moves.
+   !! **Tendency diagnostics.**  Right after `aggregate_ghost` (stage 10) the sequencer copies the
+   !! post-thermodynamics aggregates `aice, vice` into the flux slot's scratch (`ice_snap_thermo`, one
+   !! launch, no manifest entry: it is not a stage, it writes nothing the model reads and it never
+   !! fails).  With the start-of-step snapshot they give the history fields `dvidtt, daidtt` (thermodynamic)
+   !! and, against the end-of-step aggregate, `dvidtd, daidtd` (`rdb_ocean_diag_ice_cice`).
    !!
    !! **The freezing potential and the frazil bank (contract).**  `frzmlt` is ONE signed
    !! field.  The `ocean_import` hook forms it EVERY ice step from the CURRENT ocean-side
@@ -164,7 +165,7 @@ module rdb_ice_step_cice
    use rdb_ice_dims, only: ICE_NCAT_MAX, ICE_NILYR_MAX, ICE_NSLYR_MAX
    use rdb_ocean_restart, only: restart_registry_t
    use rdb_ice_cice_state, only: ice_cice_state_t, ice_update_state
-   use rdb_ice_flux_state, only: ice_flux_t, ice_flux_zero, ice_save_init, ice_slots_agree
+   use rdb_ice_flux_state, only: ice_flux_t, ice_flux_zero, ice_save_init, ice_slots_agree, ice_snap_thermo
    use rdb_ice_rad_state, only: ice_rad_state_t
    use rdb_ice_radiation, only: ICE_RAD_OK
    use rdb_ice_sw_wiring, only: ice_step_sw_therm1
@@ -1012,9 +1013,9 @@ contains
                                  cice%aicen_init, cice%aicen, cice%vicen, cice%vsnon, cice%Tsfcn, cice%qicen, &
                                  cice%sicen, cice%qsnon, &
                                  flux%fresh, flux%fsalt, flux%fhocn, flux%evap, flux%fsens, flux%flat, flux%flwout, &
-                                 flux%fswabs, flux%meltt, flux%meltb, flux%congel, flux%snoice, &
+                                 flux%fswabs, flux%meltt, flux%meltb, flux%congel, flux%snoice, flux%thx, &
                                  flux%freshn, flux%fsaltn, flux%fhocnn, flux%evapn, flux%fsensn, flux%flatn, &
-                                 flux%flwoutn, flux%fswabsn, flux%melttn, flux%meltbn, flux%congeln, flux%snoicen, &
+                                 flux%flwoutn, flux%fswabsn, flux%melttn, flux%meltbn, flux%congeln, flux%snoicen, flux%thxn, &
                                  work%strairxn, work%strairyn, work%strair_x_T, work%strair_y_T, &
                                  work%fbot, work%rside, work%wlat, work%ierr_n, cice%ice_err, &
                                  flux%fswthru, flux%fswthru_vis, ierr, istat)
@@ -1058,6 +1059,9 @@ contains
       if (.not. ok) return
       call note_exec(res, ICE_STAGE_AGGREGATE_GHOST)
       call ice_update_state(cice, .true.)
+      ! history diagnostics only (dvidtt/daidtt vs dvidtd/daidtd): copy of the post-thermodynamics
+      ! aggregates into the flux slot's scratch; nothing the model reads.
+      call ice_snap_thermo(flux, cice, dt)
       call run_hook(hooks%stress_to_faces, ctx, ICE_STAGE_STRESS_TO_FACES, res, ok)
       if (.not. ok) return
       call run_hook(hooks%dynamics, ctx, ICE_STAGE_DYNAMICS, res, ok)

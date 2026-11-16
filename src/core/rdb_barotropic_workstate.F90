@@ -229,6 +229,15 @@ module rdb_barotropic_workstate
          !! speed `sqrt(g_FS · H)`; else the gprime knobs net out to
          !! full `g`.
 
+      integer :: inhalo_stride = 0
+         !! In-halo march (EXPERIMENTAL): substeps per ghost exchange of the
+         !! fast loop; `0` = off (exchange every substep, mid-u exchange on).
+      integer :: inhalo_poison = 0
+         !! Test hook: after every SKIPPED exchange point overwrite the ghost
+         !! layers the march declares invalid at MPI seams with rank-dependent
+         !! garbage (1 = large finite, 2 = NaN, +10 per extra layer).  Read
+         !! once from the environment variable `RDB_BT_INHALO_POISON` at
+         !! enter_data; 0 = inert.
       real(wp) :: bebt = 0.1_wp
          !! MOM6 `BEBT` (default 0.1, as MOM6).  Continuity flux uses
          !! `ubt_trans = (1+bebt)·ubt^n − bebt·ubt^{n-1}` — the

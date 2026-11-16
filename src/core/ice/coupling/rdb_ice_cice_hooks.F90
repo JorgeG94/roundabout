@@ -39,14 +39,13 @@ module rdb_ice_cice_hooks
    !! ridging compute runs on OWNED cells from owned inputs, so a rank needs no halo for them.  What
    !! a later stage reads across a seam is refreshed before it: the category state ring (`halo_state`,
    !! `halo_state_post`: dynamics strength and transport read it), the T-cell stress (`stress_to_faces`),
-   !! the face velocities (the EVP's own per-subcycle exchange), and, at the thermo cadence, the ghosts
-   !! of the assembled `Q_heat`/`Q_salt` (`ice_cice_refresh_flux_ghosts`, called by `engine_step_finalize`
-   !! after the assembly: KPP and EPBL evaluate their surface buoyancy flux in the ghost columns, and the
-   !! bulk components that the total sums are written on physical cells only).  Every decision (a hook's
+   !! the face velocities (the EVP's own per-subcycle exchange).  The ghosts of the assembled `Q_heat`/`Q_salt`
+   !! (and `sw_net`) that KPP and EPBL read are refreshed for every path by `ocean_seam_refresh_surface_flux`
+   !! (`engine_step_finalize`), not here.  Every decision (a hook's
    !! status, the thermodynamics' verdict, the error word) is taken on a reduced value
    !! (`ice_transport_seam_bind_reductions`, `ice_err_bind_comm`), so every rank stops together.
    !! `ice_mr_test_skip` is the test seam of the negative controls: each exchange above (stress, state
-   !! halo, flux ghosts) is skipped in turn and the decomposition test must see the difference.
+   !! halo) is skipped in turn and the decomposition test must see the difference.
    !! 12. `dynamics`: the scheme-neutral aggregates are refreshed from the haloed state, then the
    !!     C-grid EVP of `ice_dyn_c_step` runs with the CATEGORY strength (`kstrength`) from the
    !!     post-thermodynamics state; `work%tau_x/y` (the persistent centre ice-ocean stress) and
@@ -83,7 +82,6 @@ module rdb_ice_cice_hooks
    use rdb_config, only: config_t
    use rdb_ocean_state, only: ocean_state_t
    use rdb_ocean_halo, only: ocean_halo_nranks
-   use rdb_ocean_halo_state, only: ocean_halo_exchange_centre_field
    use rdb_ice_state, only: ice_aggregates_fill
    use rdb_ice_cice_state, only: ice_cice_state_t, ice_update_state, ice_state_seed_uniform
    use rdb_ice_step_cice, only: ice_step_cice, ice_step_hooks_t, ice_step_opts_t, ice_step_result_t, &
@@ -115,13 +113,14 @@ module rdb_ice_cice_hooks
    private
 
    public :: ice_cice_bind, ice_cice_step, ice_cice_step_result, ice_cice_ic_apply, ice_cice_post_enter, ice_cice_ledger_report
-   public :: ice_cice_unbind, ice_cice_refresh_flux_ghosts, ice_cice_hooks_manifest
+   public :: ice_cice_unbind, ice_cice_hooks_manifest
 
    integer, save, public :: ice_mr_test_skip = 0
       !! TEST SEAM of the decomposition tests' negative controls, `0` in every run: bit 1 skips the exchange of the
-      !! T-cell wind stress, bit 2 the refresh of the assembled flux ghosts, bit 4 the category-state halo.  A
+      !! T-cell wind stress, bit 4 the category-state halo, bit 8 folds that stress pair as a SCALAR (the wrong sign), bit 16
+      !! skips its fold, bit 32 switches the transport's fold-row flux pairing off.  A
       !! decomposed run with one bit set must differ from the serial one (the test proves each exchange is needed).
-   integer, parameter, public :: ICE_SKIP_STRESS_HALO = 1, ICE_SKIP_FLUX_GHOSTS = 2, ICE_SKIP_STATE_HALO = 4, &
+   integer, parameter, public :: ICE_SKIP_STRESS_HALO = 1, ICE_SKIP_STATE_HALO = 4, &
                                  ICE_SKIP_FOLD_SIGN = 8, ICE_SKIP_FOLD_PAIR = 16, ICE_SKIP_FOLD_FLUX = 32
 
    type(ocean_state_t), pointer, save :: S => null()
@@ -229,23 +228,6 @@ contains
                         to_string(res%stage_status)//"): "//trim(res%message))
       error stop "ice_step_cice: the ice step failed (see the log)"
    end subroutine ice_cice_step
-
-   subroutine ice_cice_refresh_flux_ghosts(state, grid)
-      !! Refresh the seam ghosts of the assembled surface heat and salt totals (`Q_heat`, `Q_salt`).  The assembler
-      !! (`ocean_surface_flux_assemble`) writes them over the whole array, but the bulk components it sums are
-      !! written on physical cells only, so a ghost holds the ice share alone; KPP and EPBL evaluate their surface
-      !! buoyancy flux in the ghost columns too, and a physical cell then reads a boundary layer built on that
-      !! partial flux (measured: the first decomposed run under `&ocean_bulk_flux_nml` diverged from the serial one
-      !! at the first ocean step after the first thermo hand-off).  Two centre exchanges (periodic wrap on an axis
-      !! that is not split, tripolar fold on the fold row); called at the thermo cadence, after the assembly, by
-      !! `engine_step_finalize`, under the CICE-port scheme only.
-      type(ocean_state_t), intent(inout) :: state
-      type(hgrid_t), intent(in) :: grid
-
-      if (iand(ice_mr_test_skip, ICE_SKIP_FLUX_GHOSTS) /= 0) return
-      call ocean_halo_exchange_centre_field(state%surface_flux%Q_heat, grid, state%bc)
-      call ocean_halo_exchange_centre_field(state%surface_flux%Q_salt, grid, state%bc)
-   end subroutine ice_cice_refresh_flux_ghosts
 
    subroutine ice_cice_ledger_report(state, compute_rank)
       !! The console line of the named-term ice ledger (`&ocean_ice_nml ledger`): the cumulative

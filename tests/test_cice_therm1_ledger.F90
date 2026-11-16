@@ -131,9 +131,9 @@ contains
                               st%aicen_init, st%aicen, st%vicen, st%vsnon, st%Tsfcn, st%qicen, st%sicen, st%qsnon, &
                               fswsfcn, fswintn, fswthrun, Isw, Ssw, &
                               fx%fresh, fx%fsalt, fx%fhocn, fx%evap, fx%fsens, fx%flat, fx%flwout, fx%fswabs, fx%meltt, &
-                              fx%meltb, fx%congel, fx%snoice, &
+                              fx%meltb, fx%congel, fx%snoice, fx%thx, &
                               fx%freshn, fx%fsaltn, fx%fhocnn, fx%evapn, fx%fsensn, fx%flatn, fx%flwoutn, fx%fswabsn, &
-                              fx%melttn, fx%meltbn, fx%congeln, fx%snoicen, sxn, syn, sx, sy, fbot, rside, wlat, &
+                              fx%melttn, fx%meltbn, fx%congeln, fx%snoicen, fx%thxn, sxn, syn, sx, sy, fbot, rside, wlat, &
                               ierr_n, st%ice_err, istat)
          call check(error, istat, 0, "step accepted")
          if (allocated(error)) exit

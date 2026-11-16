@@ -494,6 +494,7 @@ contains
       !$acc update self(engine%state%surface_flux%heat_ice, engine%state%surface_flux%sw_ice)
       !$acc update self(engine%state%surface_flux%q_sw, engine%state%surface_flux%q_lw, engine%state%surface_flux%q_lat)
       !$acc update self(engine%state%surface_flux%q_sens, engine%state%surface_flux%heat_content_lprec)
+      !$acc update self(engine%state%surface_flux%q_fus)
       !$acc update self(engine%state%surface_flux%heat_content_fprec, engine%state%surface_flux%evap)
       !$acc update self(engine%state%ice%frazil_heat, engine%state%ice%frzmlt, engine%state%ice%heat_budget_frazil)
       !$acc update self(engine%state%multilayer%tracers(engine%state%multilayer%idx_temperature)%c)
@@ -584,6 +585,7 @@ contains
                   ice_asm = ice_asm + DT*area(i, j)*(sf%heat_ice(i, j) + sf%sw_ice(i, j))
                   sst = ms%tracers(ms%idx_temperature)%c(i, j, nz)
                   open_forc = open_forc + DT*area(i, j)*(sf%q_sw(i, j) + sf%q_lw(i, j) + sf%q_lat(i, j) + sf%q_sens(i, j) &
+                                                         + sf%q_fus(i, j) &
                                                          + sf%heat_content_lprec(i, j) + sf%heat_content_fprec(i, j) &
                                                          + engine%state%eos%c_p*sst*sf%evap(i, j))
                   dil_n = dil_n + DT*area(i, j)*engine%state%icec%oin%sss_ocn(i, j)*f%fresh(i, j)

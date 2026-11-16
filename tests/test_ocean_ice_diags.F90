@@ -55,7 +55,8 @@ contains
                   new_unittest("cice_rate_zero_before_window", test_cice_rate_zero_before_window), &
                   new_unittest("cice_hs_part_weighted", test_cice_hs_part_weighted), &
                   new_unittest("cice_tsfc_open_water_freezing", test_cice_tsfc_open_water_freezing), &
-                  new_unittest("cice_aliases_opt_in", test_cice_aliases_opt_in) &
+                  new_unittest("cice_aliases_opt_in", test_cice_aliases_opt_in), &
+                  new_unittest("sis2_registers_no_cice_port_names", test_sis2_registers_no_cice_port_names) &
                   ]
    end subroutine collect_ocean_ice_diags_tests
 
@@ -809,5 +810,34 @@ contains
       call st_sel%destroy()
       call st_off%destroy()
    end subroutine test_cice_aliases_opt_in
+
+   subroutine test_sis2_registers_no_cice_port_names(error)
+      !! The default `scheme = "sis2"` registers exactly the set it always did: the CICE-port-only names
+      !! (`dvidtd`, `daidtt`, `daidtd`, `albsni` and the `_ai` fluxes) are absent, the rates are there.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(ocean_state_t) :: st
+      character(len=10), parameter :: NEW_NAMES(13) = [character(len=10) :: "dvidtd", "daidtt", "daidtd", "albsni", &
+                                                                     "fswabs_ai", "fswthru_ai", "flwup_ai", "fsens_ai", "flat_ai", &
+                                                                                      "fhocn_ai", "fresh_ai", "fsalt_ai", "evap_ai"]
+      character(len=8), parameter :: OLD_NAMES(11) = [character(len=8) :: "aice", "hi", "hs", "Tsfc", "congel", &
+                                                                            "frazil", "snoice", "meltt", "meltb", "meltl", "dvidtt"]
+      integer :: i
+
+      call setup_state_ice(grid, st, ncat=1)
+      st%dyn%enable_thermodynamics = .true.
+      call register_default_diags(st, dt_out=1.0_wp)
+      do i = 1, size(OLD_NAMES)
+         call check(error, find_var(st, trim(OLD_NAMES(i))) > 0, trim(OLD_NAMES(i))//" is registered under sis2")
+         if (allocated(error)) exit
+      end do
+      if (.not. allocated(error)) then
+         do i = 1, size(NEW_NAMES)
+            call check(error, find_var(st, trim(NEW_NAMES(i))) == 0, trim(NEW_NAMES(i))//" is NOT registered under sis2")
+            if (allocated(error)) exit
+         end do
+      end if
+      call st%destroy()
+   end subroutine test_sis2_registers_no_cice_port_names
 
 end module test_ocean_ice_diags

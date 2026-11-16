@@ -38,6 +38,7 @@ module test_cice_therm1
    use testdrive, only: new_unittest, unittest_type, error_type, check, test_failed
    use rdb_constants, only: wp
    use lcg_deterministic, only: lcg_next, lcg_unit
+   use rdb_ice_dims, only: ICE_NTHX
    use rdb_ice_errors, only: ICE_ERR_NONFINITE, ICE_ERR_THERMO_CONSERV
    use rdb_ice_params, only: ice_params_t, ice_params_default, ICE_CONSTANTS_ICEPACK, ICE_CONSTANTS_CESM, &
                              ICE_CONDUCT_MU71, ice_q_from_T, ice_qsno_from_T, ice_salinity_profile
@@ -87,6 +88,7 @@ module test_cice_therm1
                                fsaltn(:, :, :), fhocnn(:, :, :), evapn(:, :, :), fsensn(:, :, :), flatn(:, :, :), &
                                flwoutn(:, :, :), fswabsn(:, :, :), melttn(:, :, :), meltbn(:, :, :), congeln(:, :, :), &
                                snoicen(:, :, :), strairxn(:, :, :), strairyn(:, :, :)
+      real(wp), allocatable :: thx(:, :, :), thxn(:, :, :, :)
       integer(int32), allocatable :: ierr_n(:, :, :)
       real(wp), allocatable :: qicen(:, :, :, :), sicen(:, :, :, :), Iswabsn(:, :, :, :), &
                                qsnon(:, :, :, :), Sswabsn(:, :, :, :)
@@ -182,6 +184,8 @@ contains
       if (allocated(w%meltbn)) deallocate (w%meltbn)
       if (allocated(w%congeln)) deallocate (w%congeln)
       if (allocated(w%snoicen)) deallocate (w%snoicen)
+      if (allocated(w%thx)) deallocate (w%thx)
+      if (allocated(w%thxn)) deallocate (w%thxn)
       if (allocated(w%strairxn)) deallocate (w%strairxn)
       if (allocated(w%strairyn)) deallocate (w%strairyn)
       if (allocated(w%ierr_n)) deallocate (w%ierr_n)
@@ -296,6 +300,9 @@ contains
       w%congeln = 0.0_wp
       allocate (w%snoicen(nx, ny, ncat))
       w%snoicen = 0.0_wp
+      allocate (w%thx(nx, ny, ICE_NTHX), w%thxn(nx, ny, ncat, ICE_NTHX))
+      w%thx = 0.0_wp
+      w%thxn = 0.0_wp
       allocate (w%strairxn(nx, ny, ncat))
       w%strairxn = 0.0_wp
       allocate (w%strairyn(nx, ny, ncat))
@@ -344,7 +351,7 @@ contains
       !$acc&  w%flat, w%flwout, w%fswabs, w%meltt, w%meltb, w%congel, w%snoice, w%strair_x_T, w%strair_y_T, &
       !$acc&  w%fbot, w%rside, w%wlat, w%ice_err, w%aicen_init, w%aicen, w%vicen, w%vsnon, w%Tsfcn, &
       !$acc&  w%fswsfcn, w%fswintn, w%fswthrun, w%freshn, w%fsaltn, w%fhocnn, w%evapn, w%fsensn, w%flatn, &
-      !$acc&  w%flwoutn, w%fswabsn, w%melttn, w%meltbn, w%congeln, w%snoicen, w%strairxn, w%strairyn, &
+      !$acc&  w%flwoutn, w%fswabsn, w%melttn, w%meltbn, w%congeln, w%snoicen, w%thx, w%thxn, w%strairxn, w%strairyn, &
       !$acc&  w%ierr_n, w%qicen, w%sicen, w%Iswabsn, w%qsnon, w%Sswabsn)
    end subroutine world_map
 
@@ -355,7 +362,7 @@ contains
       !$acc&  w%flat, w%flwout, w%fswabs, w%meltt, w%meltb, w%congel, w%snoice, w%strair_x_T, w%strair_y_T, &
       !$acc&  w%fbot, w%rside, w%wlat, w%ice_err, w%aicen_init, w%aicen, w%vicen, w%vsnon, w%Tsfcn, &
       !$acc&  w%fswsfcn, w%fswintn, w%fswthrun, w%freshn, w%fsaltn, w%fhocnn, w%evapn, w%fsensn, w%flatn, &
-      !$acc&  w%flwoutn, w%fswabsn, w%melttn, w%meltbn, w%congeln, w%snoicen, w%strairxn, w%strairyn, &
+      !$acc&  w%flwoutn, w%fswabsn, w%melttn, w%meltbn, w%congeln, w%snoicen, w%thx, w%thxn, w%strairxn, w%strairyn, &
       !$acc&  w%ierr_n, w%qicen, w%sicen, w%Iswabsn, w%qsnon, w%Sswabsn)
    end subroutine world_unmap
 
@@ -369,7 +376,7 @@ contains
       !$acc&  w%flwout, w%fswabs, w%meltt, w%meltb, w%congel, w%snoice, w%strair_x_T, w%strair_y_T, w%fbot, &
       !$acc&  w%rside, w%wlat, w%ice_err, w%aicen_init, w%aicen, w%vicen, w%vsnon, w%Tsfcn, w%fswsfcn, &
       !$acc&  w%fswintn, w%fswthrun, w%freshn, w%fsaltn, w%fhocnn, w%evapn, w%fsensn, w%flatn, w%flwoutn, &
-      !$acc&  w%fswabsn, w%melttn, w%meltbn, w%congeln, w%snoicen, w%strairxn, w%strairyn, w%ierr_n, &
+      !$acc&  w%fswabsn, w%melttn, w%meltbn, w%congeln, w%snoicen, w%thx, w%thxn, w%strairxn, w%strairyn, w%ierr_n, &
       !$acc&  w%qicen, w%sicen, w%Iswabsn, w%qsnon, w%Sswabsn)
       istat = 0
       if (w%sfc_kind == ICE_SFC_BULK .and. .not. w%manual) then
@@ -379,9 +386,9 @@ contains
                               w%aicen_init, w%aicen, w%vicen, w%vsnon, w%Tsfcn, w%qicen, w%sicen, w%qsnon, &
                               w%fswsfcn, w%fswintn, w%fswthrun, w%Iswabsn, w%Sswabsn, &
                               w%fresh, w%fsalt, w%fhocn, w%evap, w%fsens, w%flat, w%flwout, w%fswabs, w%meltt, &
-                              w%meltb, w%congel, w%snoice, &
+                              w%meltb, w%congel, w%snoice, w%thx, &
                               w%freshn, w%fsaltn, w%fhocnn, w%evapn, w%fsensn, w%flatn, w%flwoutn, w%fswabsn, &
-                              w%melttn, w%meltbn, w%congeln, w%snoicen, w%strairxn, w%strairyn, &
+                              w%melttn, w%meltbn, w%congeln, w%snoicen, w%thxn, w%strairxn, w%strairyn, &
                               w%strair_x_T, w%strair_y_T, w%fbot, w%rside, w%wlat, w%ierr_n, w%ice_err, istat)
       else
          call ice_basal_heat_step(w%nx, w%ny, w%ncat, w%nilyr, w%nslyr, w%is, w%ie, w%js, w%je, w%dt, w%p, &
@@ -395,12 +402,12 @@ contains
                               w%fbot, w%aicen_init, w%aicen, w%vicen, w%vsnon, w%Tsfcn, w%qicen, w%sicen, w%qsnon, &
                               w%fswsfcn, w%fswintn, w%fswthrun, w%Iswabsn, w%Sswabsn, &
                               w%freshn, w%fsaltn, w%fhocnn, w%evapn, w%fsensn, w%flatn, w%flwoutn, w%fswabsn, &
-                              w%melttn, w%meltbn, w%congeln, w%snoicen, w%strairxn, w%strairyn, w%ice_err, w%ierr_n)
+                              w%melttn, w%meltbn, w%congeln, w%snoicen, w%thxn, w%strairxn, w%strairyn, w%ice_err, w%ierr_n)
          call ice_flux_merge_impl(w%nx, w%ny, w%ncat, w%is, w%ie, w%js, w%je, w%p%thermo%emissivity, w%merge_puny, w%flw, &
                                   w%aicen_init, w%freshn, w%fsaltn, w%fhocnn, w%evapn, w%fsensn, w%flatn, w%flwoutn, &
-                                  w%fswabsn, w%melttn, w%meltbn, w%congeln, w%snoicen, &
+                                  w%fswabsn, w%melttn, w%meltbn, w%congeln, w%snoicen, w%thxn, &
                                   w%fresh, w%fsalt, w%fhocn, w%evap, w%fsens, w%flat, w%flwout, w%fswabs, &
-                                  w%meltt, w%meltb, w%congel, w%snoice, w%ice_err)
+                                  w%meltt, w%meltb, w%congel, w%snoice, w%thx, w%ice_err)
          call ice_therm1_merge_impl(w%nx, w%ny, w%ncat, w%is, w%ie, w%js, w%je, w%aicen_init, w%strairxn, &
                                     w%strairyn, w%ierr_n, w%strair_x_T, w%strair_y_T, w%ice_err)
       end if
@@ -409,7 +416,7 @@ contains
       !$acc&  w%flwout, w%fswabs, w%meltt, w%meltb, w%congel, w%snoice, w%strair_x_T, w%strair_y_T, w%fbot, &
       !$acc&  w%rside, w%wlat, w%ice_err, w%aicen_init, w%aicen, w%vicen, w%vsnon, w%Tsfcn, w%fswsfcn, &
       !$acc&  w%fswintn, w%fswthrun, w%freshn, w%fsaltn, w%fhocnn, w%evapn, w%fsensn, w%flatn, w%flwoutn, &
-      !$acc&  w%fswabsn, w%melttn, w%meltbn, w%congeln, w%snoicen, w%strairxn, w%strairyn, w%ierr_n, &
+      !$acc&  w%fswabsn, w%melttn, w%meltbn, w%congeln, w%snoicen, w%thx, w%thxn, w%strairxn, w%strairyn, w%ierr_n, &
       !$acc&  w%qicen, w%sicen, w%Iswabsn, w%qsnon, w%Sswabsn)
    end subroutine world_step
 
@@ -1744,7 +1751,7 @@ contains
                                  w%fbot, w%aicen_init, w%aicen, w%vicen, w%vsnon, w%Tsfcn, w%qicen, w%sicen, w%qsnon, &
                                  w%fswsfcn, w%fswintn, w%fswthrun, w%Iswabsn, w%Sswabsn, &
                                  w%freshn, w%fsaltn, w%fhocnn, w%evapn, w%fsensn, w%flatn, w%flwoutn, w%fswabsn, &
-                                 w%melttn, w%meltbn, w%congeln, w%snoicen, w%strairxn, w%strairyn, w%ice_err, w%ierr_n)
+                                 w%melttn, w%meltbn, w%congeln, w%snoicen, w%thxn, w%strairxn, w%strairyn, w%ice_err, w%ierr_n)
          end do
          !$acc wait
          call system_clock(t1)
@@ -1767,7 +1774,7 @@ contains
                                  w%fbot, w%aicen_init, w%aicen, w%vicen, w%vsnon, w%Tsfcn, w%qicen, w%sicen, w%qsnon, &
                                  w%fswsfcn, w%fswintn, w%fswthrun, w%Iswabsn, w%Sswabsn, &
                                  w%freshn, w%fsaltn, w%fhocnn, w%evapn, w%fsensn, w%flatn, w%flwoutn, w%fswabsn, &
-                                 w%melttn, w%meltbn, w%congeln, w%snoicen, w%strairxn, w%strairyn, w%ice_err, w%ierr_n)
+                                 w%melttn, w%meltbn, w%congeln, w%snoicen, w%thxn, w%strairxn, w%strairyn, w%ice_err, w%ierr_n)
          end do
          !$acc wait
          call system_clock(t1)
@@ -1803,7 +1810,7 @@ contains
                                        x%fbot, x%aicen_init, x%aicen, x%vicen, x%vsnon, x%Tsfcn, x%qicen, x%sicen, x%qsnon, &
                                        x%fswsfcn, x%fswintn, x%fswthrun, x%Iswabsn, x%Sswabsn, &
                                        x%freshn, x%fsaltn, x%fhocnn, x%evapn, x%fsensn, x%flatn, x%flwoutn, x%fswabsn, &
-                                       x%melttn, x%meltbn, x%congeln, x%snoicen, x%strairxn, x%strairyn, x%ice_err, x%ierr_n)
+                                      x%melttn, x%meltbn, x%congeln, x%snoicen, x%thxn, x%strairxn, x%strairyn, x%ice_err, x%ierr_n)
                end do
             end do
          end do

@@ -268,6 +268,7 @@ set(RDB_TESTS
     "test_cice_forcing|test_cice_forcing|collect_cice_forcing_tests|cice_forcing|ocean"
     "test_cice_closure|test_cice_closure|collect_cice_closure_tests|cice_closure|ocean"
     "test_cice_stefan_column|test_cice_stefan_column|collect_cice_stefan_column_tests|cice_stefan_column|ocean"
+    "test_cice_diags|test_cice_diags|collect_cice_diags_tests|cice_diags|ocean"
     "test_ocean_ice_evp_fold|test_ocean_ice_evp_fold|collect_ocean_ice_evp_fold_tests|ocean_ice_evp_fold|ocean"
     "test_ocean_ice_restart|test_ocean_ice_restart|collect_ocean_ice_restart_tests|ocean_ice_restart|ocean"
     "test_ocean_ice_diags|test_ocean_ice_diags|collect_ocean_ice_diags_tests|ocean_ice_diags|ocean"
@@ -359,6 +360,7 @@ set(RDB_TESTS
     "test_ocean_boundary|test_ocean_boundary|collect_ocean_boundary_tests|ocean_boundary|ocean"
     "test_ocean_periodic|test_ocean_periodic|collect_ocean_periodic_tests|ocean_periodic|ocean"
     "test_ocean_periodic_seam_file|test_ocean_periodic_seam_file|collect_ocean_periodic_seam_file_tests|ocean_periodic_seam_file|ocean"
+    "test_ocean_surface_flux_seam|test_ocean_surface_flux_seam|collect_ocean_surface_flux_seam_tests|ocean_surface_flux_seam|ocean"
     "test_ocean_fold|test_ocean_fold|collect_ocean_fold_tests|ocean_fold|ocean"
     "test_ocean_fold_plan|test_ocean_fold_plan|collect_ocean_fold_plan_tests|ocean_fold_plan|ocean"
     "test_ocean_tripolar|test_ocean_tripolar|collect_ocean_tripolar_tests|ocean_tripolar|ocean"
@@ -457,9 +459,11 @@ set(RDB_STATIC_CORE_TESTS test_remap_pqm)
 # built thread-safe (OMP_NUM_THREADS=1 prevents crashes when the OpenMP runtime
 # is active via -mp=multicore or -fopenmp).
 set(NETCDF_TESTS
+    test_cice_diags
     test_static_2d_reader
     test_ocean_cavity_draft_file
     test_ocean_periodic_seam_file
+    test_ocean_surface_flux_seam
     test_ocean_diag_netcdf
     test_ocean_diag_precision
     test_ocean_supergrid
@@ -486,6 +490,7 @@ set(NETCDF_REQUIRED_TESTS
     test_static_2d_reader
     test_ocean_cavity_draft_file
     test_ocean_periodic_seam_file
+    test_ocean_surface_flux_seam
     test_ocean_diag_netcdf
     test_ocean_diag_precision
     test_ocean_supergrid
@@ -935,6 +940,24 @@ if(RDB_ENABLE_MPI)
   add_test(NAME rdb_test_ocean_decomp_bitid_mpi_4rank
            COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 4
                    $<TARGET_FILE:test_ocean_decomp_bitid_mpi>)
+  # EXPERIMENTAL in-halo barotropic march (`&ocean_bt_nml inhalo_march`): the
+  # decomposed runs march with it (poisoned NaN ghosts between exchanges), the
+  # serial reference without; a representative subset of the families (walls +
+  # island, periodic, open/tidal OBC, tripolar fold incl. px > 1).
+  foreach(np 2 4)
+    add_test(NAME rdb_test_ocean_decomp_bitid_mpi_${np}rank_inhalo
+             COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${np}
+                     $<TARGET_FILE:test_ocean_decomp_bitid_mpi>)
+    set_tests_properties(
+      rdb_test_ocean_decomp_bitid_mpi_${np}rank_inhalo
+      PROPERTIES
+        LABELS
+        "ocean"
+        ENVIRONMENT
+        "OMP_NUM_THREADS=1;RDB_BITID_INHALO=1;RDB_BT_INHALO_POISON=2;RDB_BITID_CASES=island_basin,periodic_channel_zstar,open_obc,tripolar"
+        TIMEOUT
+        14400)
+  endforeach()
   # TIMEOUT: the project uses enable_testing() without include(CTest), so there
   # is NO default timeout.  This test deliberately runs a must-be-refused probe
   # (check_cavity_grounded_refusal) in which every rank has to reach the same
