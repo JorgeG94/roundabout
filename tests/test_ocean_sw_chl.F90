@@ -510,6 +510,7 @@ contains
       call sf%set_surface_flux_const(qcool, 0.0_wp)
       call sf%set_sw_penetration(1.0_wp, R2, ZETA1, ZETA2, sw_source="q_sw")
       sf%q_sw = qsw
+      sf%sw_net = qsw
    end subroutine seed_sf
 
    subroutine test_kpp_consistency(error)

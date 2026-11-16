@@ -909,7 +909,7 @@ contains
                                  ss, dt, &
                                  sf%Q_heat, 1.0_wp/(this%rho0*sf%cp), &
                                  sf%Q_salt, 1.0_wp/this%rho0, &
-                                 sf%q_sw, sw_ctke_active, sf%sw_pen_frac, &
+                                 sf%sw_net, sw_ctke_active, sf%sw_pen_frac, &
                                  sf%sw_band_ratio, sf%sw_zeta1, sf%sw_zeta2, &
                                  sf%sw_chl, sf%sw_nb, sf%sw_frac, sf%sw_kappa, &
                                  ms%wet_mask, this%in_eos, nx, ny)
