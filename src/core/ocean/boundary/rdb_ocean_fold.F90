@@ -142,9 +142,9 @@ contains
       integer, intent(in) :: nx_total, ny_total, nx_phys, ny_phys, nghost
       real(wp), intent(inout) :: fld(nx_total, ny_total)
       logical, intent(in), optional :: negate
-         !! `.true.`: a true-vector component held at cell centres (changes sign across the fold); absent or
-         !! `.false.`: a scalar, a plain copy (bit-identical).
-         !! Cell-centred field, shape (nx_total, ny_total).
+         !! DEFAULT `.false.` (a scalar copy, bit-identical), UNLIKE the u- and v-face folds below whose `negate`
+         !! defaults to `.true.` (a face field is a normal component).  `.true.`: a true-vector component
+         !! held at cell centres (the ice's T-cell wind stress), which changes sign across the fold.
 
       integer :: i, j, isum, jsum, j_lo
       real(wp) :: sgn

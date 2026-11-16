@@ -26,12 +26,12 @@ module rdb_ice_cice_hooks
    !!  9. and 15. `halo_state`, `halo_state_post`: `ice_halo_category_state` (the ocean's exchange, the
    !!     periodic wrap and the tripolar fold of the category state and `aice0`; a wall edge keeps its
    !!     ghosts: the C-grid metrics pin them to land).  The scheme runs on several ranks on walls and
-   !!     periodic edges (stage A, bitwise: `cice_ice*` of `test_ocean_decomp_bitid_mpi`); the tripolar
-   !!     fold is still refused at configure (stage B; the transport is gated across the fold by
-   !!     `test_cice_remap_decomp_mpi`, the rest of the step is not).
+   !!     periodic edges and across the tripolar fold (bitwise: `cice_ice*` of `test_ocean_decomp_bitid_mpi`,
+   !!     the fold as a symmetry in `test_cice_tripole`; the fold of a scalar category field is a copy).
    !! 11. `stress_to_faces`: the T wind stress (`strair_x_T/y_T`, written on owned cells by the
    !!     thermodynamics) gets its ghost ring (`ice_halo_centre_pair`: exchange on a split axis, the
-   !!     local wrap otherwise, the fold copy on the fold row; 2 exchanges), then
+   !!     local wrap otherwise, the fold on the fold row with the VECTOR sign: both components negate;
+   !!     2 exchanges), then
    !!     `ice_atm_stress_to_faces` averages it onto the dynamics slot's `strairxE/yN` (the dynamics
    !!     keeps them: `wind_on_faces`).
    !!
@@ -504,7 +504,7 @@ contains
       js = ctx%cice%nghost + 1
       je = ctx%cice%nghost + ctx%cice%ny_phys
       ! the face hand-off averages the T-cell stress across the seam: refresh its ghost ring (exchange on a split
-      ! axis, the local wrap otherwise, the fold copy on the fold row)
+      ! axis, the local wrap otherwise, the vector fold on the fold row)
       if (iand(ice_mr_test_skip, ICE_SKIP_STRESS_HALO) == 0) then
          call ice_halo_centre_pair(G, S%bc, ctx%cice%nx, ctx%cice%ny, ctx%work%strair_x_T, ctx%work%strair_y_T, &
                                    test_fold=merge(2, merge(1, 0, iand(ice_mr_test_skip, ICE_SKIP_FOLD_SIGN) /= 0), &

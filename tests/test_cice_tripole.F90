@@ -25,7 +25,16 @@
 !!                                     transport's fold-row flux pairing is NOT visible here: on one rank both sides compute
 !!                                     the same flux to round-off, so unpairing changes the answer by 1e-12; the pairing is
 !!                                     what makes a split fold row agree, and `test_ocean_decomp_bitid_mpi` detects its removal.)
-!!   * `fold_seam_conservation`        the ice ledger (water, salt, heat) of the folded run closes at round-off every step.
+!!   * `real_cap_fold_row_consistent`  the REAL tripolar cap (30 x 24, land on the fold line, grid rotation, a non-symmetric
+!!                                     geographic wind and an ocean wind, ~24 steps): every fold-row slot `i` and its mirror
+!!                                     `i' = 2 ng + ni + 1 - i` carry antisymmetric vectors (`strairyN`, `ss_tltyN`, `uocnN`,
+!!                                     `vocnN`, the fold-row `v_ice` and ocean `v`) and symmetric scalars (`fcorN`, `aiN`, `npm`),
+!!                                     and the T-pair ghost rows are exact negated images of the owned rows; the scalar-rule
+!!                                     fault (`ICE_SKIP_FOLD_SIGN`) is detected.  What the f-plane doubled domain cannot see:
+!!                                     real metrics, a rotated wind, land on the fold.
+!!   * `upwind_across_fold_refused_at_run_time`  the backstop of the configure-time refusal: a caller that skips
+!!                                     `validate_config` gets `TRANSPORT_CFG_FOLD` from the transport, not unpaired fluxes.
+!!   * `fold_seam_conservation`        the ice ledger of the folded run (water and salt; the heat line is not checked here) closes at round-off every step.
 module test_cice_tripole
    use, intrinsic :: iso_fortran_env, only: int32, int64
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
@@ -37,7 +46,9 @@ module test_cice_tripole
                                engine_exit_data, engine_teardown
    use rdb_ocean_status, only: OCEAN_STATUS_OK
    use rdb_comm_env, only: comm_env_init, comm_env_setup_roles
-   use rdb_ice_cice_hooks, only: ice_mr_test_skip, ICE_SKIP_FOLD_SIGN, ICE_SKIP_FOLD_PAIR
+   use rdb_ice_cice_hooks, only: ice_cice_bind, ice_cice_step_result, ice_mr_test_skip, ICE_SKIP_FOLD_SIGN, ICE_SKIP_FOLD_PAIR
+   use rdb_ice_step_cice, only: ice_step_result_t, ICE_STEP_OK, ICE_STAGE_TRANSPORT
+   use rdb_ice_transport_cice, only: TRANSPORT_CFG_FOLD
    use rdb_ice_ledger, only: ice_ledger_mirror_t, ICE_LEDGER_WATER, ICE_LEDGER_SALT, ICE_LEDGER_HEAT
    implicit none
    private
@@ -51,6 +62,9 @@ module test_cice_tripole
    integer, parameter :: NJ = 8
    integer, parameter :: NG = 3
    integer, parameter :: NSTEP = 60
+   integer, parameter :: NCAP = 30, NJCAP = 24, NRES = 11
+   character(len=12), parameter :: RES_NAMES(NRES) = [character(len=12) :: "strairyN", "ss_tltyN", "uocnN", "vocnN", "fcorN", &
+                                                         "aiN", "npm", "strair_x_T gh", "strair_y_T gh", "v_ice row", "ocean v row"]
    integer, parameter :: MAXF = 40
    integer, parameter :: ST_T = 1, ST_U = 2, ST_V = 3
 #ifdef RDB_GPU_OFFLOAD
@@ -81,7 +95,9 @@ contains
                   new_unittest("fold_equals_doubled_lower_half", test_fold_equals_doubled), &
                   new_unittest("asymmetry_is_detected", test_asymmetry_detected), &
                   new_unittest("fold_faults_are_detected", test_fold_faults_detected), &
-                  new_unittest("fold_seam_conservation", test_fold_conservation) &
+                  new_unittest("fold_seam_conservation", test_fold_conservation), &
+                  new_unittest("real_cap_fold_row_consistent", test_real_cap_fold_row), &
+                  new_unittest("upwind_across_fold_refused_at_run_time", test_upwind_fold_refused) &
                   ]
    end subroutine collect_cice_tripole_tests
 
@@ -468,7 +484,7 @@ contains
       type(snap_t) :: sf, sd
       logical :: ok
       integer :: e
-      real(wp) :: worst
+      real(wp) :: worst, one
       character(len=24) :: nm
 
       if (skip_on_device()) return
@@ -482,7 +498,10 @@ contains
       nm = ""
       do e = 1, sf%n
          call folded_residual(sf%f(e), sd%f(e), worst, nm)
-         write (*, '(a,a,es10.3)') "    folded vs doubled: ", sf%f(e)%tag, folded_one(sf%f(e), sd%f(e))
+         ! (a variable, not the function inside the write: `folded_residual` writes too, and a write nested in a write
+         ! deadlocks on the unit mutex, so a real fold fault would have hung the test instead of failing it)
+         one = folded_one(sf%f(e), sd%f(e))
+         write (*, '(a,a,es10.3)') "    folded vs doubled: ", sf%f(e)%tag, one
       end do
       write (*, '(a,es10.3,a,a)') "  folded vs doubled lower half: worst ", worst, " in ", trim(nm)
       call check(error, worst < 1.0e-9_wp, "the folded run equals the lower half of the doubled run")
@@ -561,6 +580,183 @@ contains
          if (allocated(error)) return
       end do
    end subroutine test_fold_faults_detected
+
+   ! ------------------------------------------------------------------
+   ! the real cap: fold-row consistency
+   ! ------------------------------------------------------------------
+
+   function cap_nml() result(nml)
+      !! The `cice_ice_fold` geometry of the decomposition test: the 30 x 24 tripolar cap (59N-83N, `phi_join` 74N),
+      !! double-Drake land reaching the fold line, a non-symmetric geographic wind and an ocean wind.
+      character(len=:), allocatable :: nml
+      character(len=*), parameter :: NL = new_line("a")
+
+      nml = tripole_nml(.true.)
+      nml = replace(nml, "&grid_nml nx = 16, ny = 8, nghost = 3, dx = 20000.0, dy = 20000.0 /", &
+                    "&grid_nml nx = 30, ny = 24, nghost = 3, dx = 12.0, dy = 1.0 /"//NL// &
+                    "&ocean_grid_nml grid_config = 'tripolar', lon_west = 0.0, lat_south = 59.0, phi_join = 74.0, "// &
+                    "lon_pole = 0.0, rad_earth = 6.378e6, coriolis_scheme = 'planetary' /")
+      nml = replace(nml, "&physics_nml coriolis_f = 1.4e-4, wind_stress_x = 0.0, wind_stress_y = 0.0 /", &
+                    "&physics_nml wind_stress_x = 0.1, wind_stress_y = 0.04 /")
+      nml = replace(nml, "&ocean_topo_nml topo_config = 'flat', max_depth = 1000.0 /", &
+                    "&ocean_topo_nml topo_config = 'double_drake', max_depth = 1000.0, slope_scale = 0.2 /")
+      nml = replace(nml, "uni_uas = 0.0, uni_vas = 0.0", "uni_uas = 8.0, uni_vas = -5.0")
+   end function cap_nml
+
+   function row_resid(a, nx, ny, j, sgn) result(r)
+      !! Largest `|a(i, j) - sgn a(i', j)|` over the owned columns (`i' = 2 NG + NCAP + 1 - i`), relative to the row's
+      !! largest absolute value (0 for an all-zero row).
+      integer, intent(in) :: nx, ny, j
+      real(wp), intent(in) :: a(nx, ny), sgn
+      real(wp) :: r, scl
+      integer :: i
+
+      r = 0.0_wp
+      scl = maxval(abs(a(NG + 1:NG + NCAP, j)))
+      if (.not. (scl > 0.0_wp)) return
+      do i = NG + 1, NG + NCAP
+         r = max(r, abs(a(i, j) - sgn*a(2*NG + NCAP + 1 - i, j)))
+      end do
+      r = r/scl
+   end function row_resid
+
+   function ghost_resid(a, nx, ny) result(r)
+      !! The T-pair ghost rows against the negated mirror image of the owned rows (the fold of a true vector at centres).
+      integer, intent(in) :: nx, ny
+      real(wp), intent(in) :: a(nx, ny)
+      real(wp) :: r, scl
+      integer :: i, d
+
+      scl = max(maxval(abs(a(NG + 1:NG + NCAP, NG + 1:NG + NJCAP))), tiny(1.0_wp))
+      r = 0.0_wp
+      do d = 1, NG
+         do i = NG + 1, NG + NCAP
+            r = max(r, abs(a(i, NG + NJCAP + d) + a(2*NG + NCAP + 1 - i, NG + NJCAP + 1 - d)))
+         end do
+      end do
+      r = r/scl
+   end function ghost_resid
+
+   subroutine cap_residuals(nsteps, res, mx, ok)
+      !! Run the cap and return the fold-row residuals (`res`, named in `RES_NAMES`) and the row maxima (`mx`, the
+      !! non-vacuity of each field).
+      integer, intent(in) :: nsteps
+      real(wp), intent(out) :: res(NRES), mx(NRES)
+      logical, intent(out) :: ok
+      type(ocean_engine_t), target :: engine
+      type(config_t) :: cfg
+      real(wp) :: t
+      integer :: n, jn, jv, nx, ny
+
+      res = 0.0_wp
+      mx = 0.0_wp
+      call make_engine(engine, cfg, cap_nml(), ok)
+      if (.not. ok) return
+      t = 0.0_wp
+      do n = 1, nsteps
+         call one_step(engine, cfg, t, ok)
+         if (.not. ok) exit
+      end do
+      if (ok) then
+         nx = engine%grid%nx_total
+         ny = engine%grid%ny_total
+         jn = NG + NJCAP
+         jv = NG + NJCAP + 1
+         associate (d => engine%state%ice%dync, w => engine%state%icec%work, ice => engine%state%ice, &
+                    cm => engine%state%ice_cgrid, ms => engine%state%multilayer)
+            !$acc update self(d%strairyN, d%ss_tltyN, d%uocnN, d%vocnN, d%fcorN, d%w%aiN, cm%npm)
+            !$acc update self(w%strair_x_T, w%strair_y_T, ice%v_ice, ms%v_face_y_layer)
+            call put(1, d%strairyN, jn, -1.0_wp)
+            call put(2, d%ss_tltyN, jn, -1.0_wp)
+            call put(3, d%uocnN, jn, -1.0_wp)
+            call put(4, d%vocnN, jn, -1.0_wp)
+            call put(5, d%fcorN, jn, 1.0_wp)
+            call put(6, d%w%aiN, jn, 1.0_wp)
+            call put(7, cm%npm, jn, 1.0_wp)
+            res(8) = ghost_resid(w%strair_x_T, nx, ny)
+            res(9) = ghost_resid(w%strair_y_T, nx, ny)
+            mx(8) = maxval(abs(w%strair_x_T(NG + 1:NG + NCAP, NG + NJCAP)))
+            mx(9) = maxval(abs(w%strair_y_T(NG + 1:NG + NCAP, NG + NJCAP)))
+            res(10) = row_resid(ice%v_ice, nx, ny + 1, jv, -1.0_wp)
+            mx(10) = maxval(abs(ice%v_ice(NG + 1:NG + NCAP, jv)))
+            res(11) = row_resid(ms%v_face_y_layer(:, :, size(ms%v_face_y_layer, 3)), nx, ny + 1, jv, -1.0_wp)
+            mx(11) = maxval(abs(ms%v_face_y_layer(NG + 1:NG + NCAP, jv, size(ms%v_face_y_layer, 3))))
+         end associate
+      end if
+      call finish_engine(engine)
+
+   contains
+
+      subroutine put(k, a, j, sgn)
+         integer, intent(in) :: k, j
+         real(wp), intent(in) :: a(:, :), sgn
+         res(k) = row_resid(a, size(a, 1), size(a, 2), j, sgn)
+         mx(k) = maxval(abs(a(NG + 1:NG + NCAP, j)))
+      end subroutine put
+
+   end subroutine cap_residuals
+
+   subroutine test_real_cap_fold_row(error)
+      type(error_type), allocatable, intent(out) :: error
+      real(wp) :: res(NRES), mx(NRES), resf(NRES), mxf(NRES)
+      logical :: ok
+      integer :: k
+
+      call cap_residuals(24, res, mx, ok)
+      call check(error, ok, "the real-cap run completed")
+      if (allocated(error)) return
+      do k = 1, NRES
+         write (*, '(a,a,2es11.3)') "  cap fold row: ", RES_NAMES(k), res(k), mx(k)
+         call check(error, res(k) < 1.0e-12_wp, "fold-row consistency of "//trim(RES_NAMES(k)))
+         if (allocated(error)) return
+      end do
+      call check(error, all(mx([1, 3, 4, 5, 6, 7, 8, 9, 10, 11]) > 0.0_wp), "the cap fields are non-trivial on the fold row")
+      if (allocated(error)) return
+      ! negative control: the stress pair folded as a scalar breaks the vector rules
+      ice_mr_test_skip = ICE_SKIP_FOLD_SIGN
+      call cap_residuals(24, resf, mxf, ok)
+      ice_mr_test_skip = 0
+      call check(error, ok, "the faulted real-cap run completed")
+      if (allocated(error)) return
+      write (*, '(a,2es11.3)') "  scalar-rule fault: strairyN and the T-pair ghost residuals ", resf(1), max(resf(8), resf(9))
+      call check(error, resf(1) > 1.0e-3_wp .or. max(resf(8), resf(9)) > 1.0e-3_wp, "the scalar rule is detected")
+   end subroutine test_real_cap_fold_row
+
+   subroutine test_upwind_fold_refused(error)
+      !! `ice_config_check` is the configure-time refusal; an engine built without `validate_config` must still get a
+      !! configuration error from the transport itself, never unpaired fold-row fluxes.
+      type(error_type), allocatable, intent(out) :: error
+      type(ocean_engine_t), target :: engine
+      type(config_t) :: cfg
+      type(ice_step_result_t) :: res
+      logical :: ok
+      real(wp) :: t
+
+      call make_engine(engine, cfg, replace(tripole_nml(.true.), "advection = 'remap'", "advection = 'upwind'"), ok)
+      call check(error, ok, "engine setup (validation skipped)")
+      if (allocated(error)) return
+      t = 0.0_wp
+      call engine_step(engine, DT, t)
+      call ice_cice_bind(engine%state, engine%grid)
+      call ice_cice_step_result(DT, .true., 1, res)
+      call check(error, res%status /= ICE_STEP_OK, "the ice step is refused")
+      if (.not. allocated(error)) call check(error, res%stage == ICE_STAGE_TRANSPORT, "at the transport stage")
+      if (.not. allocated(error)) call check(error, res%stage_status == TRANSPORT_CFG_FOLD, "with TRANSPORT_CFG_FOLD")
+      call finish_engine(engine)
+   end subroutine test_upwind_fold_refused
+
+   function replace(s, a, b) result(r)
+      character(len=*), intent(in) :: s, a, b
+      character(len=:), allocatable :: r
+      integer :: p
+
+      p = index(s, a)
+      if (p == 0) then
+         r = s
+      else
+         r = s(1:p - 1)//b//s(p + len(a):)
+      end if
+   end function replace
 
    subroutine test_fold_conservation(error)
       !! The ice ledger closes every step with the transport crossing the fold; the residual is compared with the

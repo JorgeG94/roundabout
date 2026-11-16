@@ -169,6 +169,7 @@ module rdb_ocean_engine
                                     ice_ocean_sw_flux, ice_ocean_stress_flux, ice_ocean_stress_flux_c
    use rdb_ice_dyn_c, only: ice_dyn_c_step, ice_dyn_c_metrics_build
    use rdb_ice_sw_wiring, only: ice_sw_wiring_cleanup
+   use rdb_ice_transport_seam_comm, only: ice_transport_seam_bind
    use rdb_ice_cice_hooks, only: ice_cice_bind, ice_cice_step, ice_cice_ic_apply, ice_cice_post_enter, &
                                  ice_cice_unbind, ice_cice_refresh_flux_ghosts
    use rdb_ice_frazil, only: ice_frazil_accumulate, ice_frazil_accumulate_column
@@ -606,11 +607,10 @@ contains
          ! ocean's decomposition (D9.4): the face pair is exchanged every subcycle
          ! (`ice_halo_faces`), the tripolar fold included (`px > 1` too); the cases
          ! `sea_ice_cdyn*` of `test_ocean_decomp_bitid_mpi` pin it bitwise.
-         ! The CICE-port ice (`scheme = "cice"`) runs on the ocean's decomposition on walls and periodic
-         ! edges (`cice_ice*` of `test_ocean_decomp_bitid_mpi`).  The tripolar fold is refused in
-         ! `validate_config` on any rank count; the named-term ledger sums per rank, and `validate_config`
-         ! only sees an explicit `px*py > 1` (an unset grid is auto-factored above), so it is refused here too,
-         ! on the ACTUAL rank count.
+         ! The CICE-port ice (`scheme = "cice"`) runs on the ocean's decomposition on walls, periodic edges
+         ! and the tripolar fold (`cice_ice*` of `test_ocean_decomp_bitid_mpi`).  The named-term ledger sums
+         ! per rank, and `validate_config` only sees an explicit `px*py > 1` (an unset grid is auto-factored
+         ! above), so it is refused here too, on the ACTUAL rank count.
          if (cfg%ocean%ice%enable .and. trim(adjustl(cfg%ocean%ice%scheme)) == "cice" .and. cfg%ocean%ice%ledger) then
             call fail("&ocean_ice_nml ledger = .true. is single-rank ("//to_string(csize)//" ranks requested): the "// &
                       "named-term ledger is single-rank, it sums over the owned cells of one rank and has no "// &
@@ -1275,7 +1275,8 @@ contains
          nslab = (engine%grid%nghost + 1)*cfg%nz_layers*(3 + ntr)
          if (cfg%ocean%ice%enable) then
             nslab = max(nslab, &
-                        engine%grid%nghost*max(cfg%ocean%ice%ncat*cfg%ocean%ice%nk_ice, &
+                        engine%grid%nghost*max(cfg%ocean%ice%ncat*merge(cfg%ocean%ice%nilyr, cfg%ocean%ice%nk_ice, &
+                                                                        trim(adjustl(cfg%ocean%ice%scheme)) == "cice"), &
                                                cfg%ocean%ice%ncat + 1), &
                         3*engine%grid%nghost + 1)
          end if
@@ -1434,6 +1435,11 @@ contains
       if (engine%state%icec%is_init) then
          call engine%state%icec%finalize(engine%state%ice_cgrid%hm, engine%state%metrics%angle_dx, &
                                          engine%state%ice_cgrid%tarea)
+         ! Bind the transport's decomposition seam NOW (collective, identical on every rank): it reserves the
+         ! fold-pairing group `(ng+1)*nbatch*(1+ntrace)`, the largest group of the CICE-port step, so no fold buffer
+         ! grows mid-run (the engine's reserve above cannot know the category batch).  The hook finds it bound.
+         call ice_transport_seam_bind(engine%state%icec%tws%seam, engine%grid, engine%state%bc, &
+                                      engine%state%icec%tws%fw%nbatch, engine%state%icec%tws%ntrace)
       end if
 
       ! Configure-time stability audit (viscous CFL / kappa_h diffusive

@@ -302,6 +302,8 @@ program test_ocean_decomp_bitid_mpi
    character(len=*), parameter :: ATM_CRSE = "bitid_atm_coarse.nc"
    character(len=*), parameter :: ATM_WARM_LIST = "bitid_atm_warm_files.txt"
    character(len=*), parameter :: ATM_CRSE_LIST = "bitid_atm_coarse_files.txt"
+   character(len=*), parameter :: ATM_CCLD = "bitid_atm_coarse_cold.nc"
+   character(len=*), parameter :: ATM_CCLD_LIST = "bitid_atm_coarse_cold_files.txt"
    character(len=*), parameter :: ATM_COLD_LIST = "bitid_atm_cold_files.txt"
 
    type :: field_t
@@ -352,7 +354,7 @@ program test_ocean_decomp_bitid_mpi
       !! `RDB_BITID_CASES`: run only the cases whose name contains this substring.
    type(comm_t) :: comm
    character(len=16), parameter :: SCHEMES(2) = [character(len=16) :: "pred_corr", "ssp_rk2"]
-   character(len=24), parameter :: CASES(91) = [character(len=24) :: &
+   character(len=24), parameter :: CASES(92) = [character(len=24) :: &
                                                 "island_basin", "weno7_pv", &
                                                 "periodic_channel_zstar", &
                                                 "visc_rem_zstar", &
@@ -384,7 +386,7 @@ program test_ocean_decomp_bitid_mpi
                                                 "sea_ice_cdyn", "sea_ice_cdyn_rev", "sea_ice_cdyn_island", &
                                                 "sea_ice_cdyn_fold", "sea_ice_cdyn_edge", &
                "cice_ice", "cice_ice_wall", "cice_ice_island", "cice_ice_bulk", "cice_ice_sph", "cice_ice_lat", "cice_ice_upwind", &
-                                             "cice_ice_pp", "cice_ice_r1", "cice_ice_epbl", "cice_ice_fold", "cice_ice_fold_edge", &
+                       "cice_ice_pp", "cice_ice_r1", "cice_ice_epbl", "cice_ice_fold", "cice_ice_fold_edge", "cice_ice_bulk_fold", &
                                                 "cavity_zfixed", "cavity_sigma", &
                                                 "cavity_sigma_ratio2", "cavity_gall", "cavity_melt_only", "cavity_periodic", &
                                                 "cavity_combo", "wetdry_shoal", &
@@ -419,6 +421,7 @@ program test_ocean_decomp_bitid_mpi
           trim(CASES(ic)) == "tidal_files" .or. &
           trim(CASES(ic)) == "tidal_polzin" .or. &
           index(trim(CASES(ic)), "bulk_flux") == 1 .or. trim(CASES(ic)) == "cice_ice_bulk" .or. &
+          trim(CASES(ic)) == "cice_ice_bulk_fold" .or. &
           trim(CASES(ic)) == "file_readers_zstar") cycle
 #endif
       ! Dynamic wet/dry and eulerian_z refuse pred_corr (validate_config): ssp_rk2 only.
@@ -1271,7 +1274,7 @@ contains
                "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
                "north = 'tripolar_fold' /"//NL
       case ("bulk_flux", "bulk_flux_ice", "bulk_flux_fold", "bulk_flux_sw", "bulk_flux_fw", &
-            "bulk_flux_ice_fw")
+            "bulk_flux_ice_fw", "bulk_flux_ice_fold")
          ! Atmosphere-driven bulk forcing (`&ocean_atm_forcing_nml` +
          ! `&ocean_bulk_flux_nml`): nine prescribed atmospheric fields from
          ! files the test writes (spatially NON-uniform, non-symmetric in
@@ -1313,16 +1316,18 @@ contains
                      label == "bulk_flux_fw" .or. label == "bulk_flux_ice_fw")//" /"//NL// &
                "&ocean_bulk_flux_nml enable = .true., n_iter = 5, z_wind = 10.0, "// &
                "z_ta = 10.0 /"//NL
-         if (label == "bulk_flux_ice" .or. label == "bulk_flux_ice_fw") then
+         if (label == "bulk_flux_ice" .or. label == "bulk_flux_ice_fw" .or. label == "bulk_flux_ice_fold") then
+            wl = ATM_COLD_LIST
+            if (label == "bulk_flux_ice_fold") wl = ATM_CCLD_LIST
             nml = nml// &
                   "&tracer_nml initial_temperature = -1.83, initial_salinity = 34.0, "// &
                   "T_init_surface = -1.82, T_init_bottom = -1.835 /"//NL// &
                   "&ocean_atm_forcing_nml enable = .true., time_mode = 'interannual', "// &
-                  "filelist_tas = '"//ATM_COLD_LIST//"', filelist_huss = '"//ATM_COLD_LIST// &
-                  "', filelist_uas = '"//ATM_COLD_LIST//"', filelist_vas = '"//ATM_COLD_LIST// &
-                  "', filelist_psl = '"//ATM_COLD_LIST//"', filelist_rlds = '"//ATM_COLD_LIST// &
-                  "', filelist_rsds = '"//ATM_COLD_LIST//"', filelist_prra = '"//ATM_COLD_LIST// &
-                  "', filelist_prsn = '"//ATM_COLD_LIST//"' /"//NL// &
+                  "filelist_tas = '"//trim(wl)//"', filelist_huss = '"//trim(wl)// &
+                  "', filelist_uas = '"//trim(wl)//"', filelist_vas = '"//trim(wl)// &
+                  "', filelist_psl = '"//trim(wl)//"', filelist_rlds = '"//trim(wl)// &
+                  "', filelist_rsds = '"//trim(wl)//"', filelist_prra = '"//trim(wl)// &
+                  "', filelist_prsn = '"//trim(wl)//"' /"//NL// &
                   "&ocean_vmix_nml dt_therm_ratio = 2 /"//NL// &
                   "&ocean_ice_nml enable = .true., ncat = 5, nk_ice = 2, "// &
                   "restore_lambda = 20.0, dynamics = .true., evp_sub_steps = 30, "// &
@@ -1342,7 +1347,7 @@ contains
                   "', filelist_rsds = '"//trim(wl)//"', filelist_prra = '"//trim(wl)// &
                   "', filelist_prsn = '"//trim(wl)//"' /"//NL
          end if
-         if (label == "bulk_flux_fold") then
+         if (label == "bulk_flux_fold" .or. label == "bulk_flux_ice_fold") then
             ! Coarse (30 x 10 degree) atmosphere source.  The default
             ! conservative flux regrid (`fluxes_regrid` is not set) overflows
             ! its per-target-cell candidate cap (`REGRID_NMAX_CAP`) on the
@@ -1516,6 +1521,12 @@ contains
          call replace_once(nml, "conc_config = 'uniform', h_ice = 1.0, conc = 0.7", &
                            "conc_config = 'latitudes', h_ice = 1.0, conc = 0.7, arctic_edge = 66.0")
          call replace_once(nml, "q_heat = -100.0", "q_heat = 0.0")
+      end if
+      if (label == "cice_ice_bulk_fold") then
+         ! the prescribed (regridded, non-uniform) cold atmosphere through the bulk forcing on the tripolar cap,
+         ! with the CICE-port ice: the bulk-forcing / atmosphere-prepare path across the fold
+         nml = case_nml("bulk_flux_ice_fold", scheme, px, py)
+         call swap_to_cice(nml)
       end if
       if (label == "cice_ice_bulk") then
          ! the lon-lat re-entrant channel of `bulk_flux_ice` (non-uniform prescribed atmosphere, regridded per
@@ -2544,7 +2555,8 @@ contains
       !! The sea-ice-on-the-tripolar-cap cases (A7).
       character(len=*), intent(in) :: label
       is_ice_fold_case = label == "sea_ice_fold" .or. label == "sea_ice_fold_nodyn" .or. &
-                         label == "sea_ice_cdyn_fold" .or. label == "sea_ice_cdyn_edge"
+                         label == "sea_ice_cdyn_fold" .or. label == "sea_ice_cdyn_edge" .or. &
+                         index(label, "cice_ice_fold") == 1 .or. label == "cice_ice_bulk_fold"
    end function is_ice_fold_case
 
    subroutine check_ice_seam(ref, tag)
@@ -2568,7 +2580,7 @@ contains
       have_v = .false.
       jf = ref%ng + ref%nyl + 1
       do e = 1, ref%n
-         if (trim(ref%f(e)%tag) == "ice_m_ice") then
+         if (trim(ref%f(e)%tag) == "ice_m_ice" .or. trim(ref%f(e)%tag) == "ice_vicen") then
             seam_mice = maxval(abs(ref%f(e)%a(ref%ng + 1:ref%ng + ref%nxl, &
                                               ref%ng + ref%nyl, :)))
          else if (trim(ref%f(e)%tag) == "ice_v_ice") then
@@ -2612,7 +2624,8 @@ contains
       ! 9 | 10 ; 5|6, 10|11, 14|15 (y), as the global face index of the seam face.
       seam_x = [14, 8, 15, 21]
       seam_y = [10, 6, 11, 15]
-      if (label == "sea_ice_cdyn_fold" .or. label == "sea_ice_cdyn_edge" .or. label == "cice_ice_fold") then
+      if (label == "sea_ice_cdyn_fold" .or. label == "sea_ice_cdyn_edge" .or. label == "cice_ice_fold" .or. &
+          label == "cice_ice_bulk_fold") then
          ! the cap grid is 30 x 24
          seam_x = [16, 9, 17, 24]
          seam_y = [13, 7, 13, 19]
@@ -3697,6 +3710,7 @@ contains
       call write_atm_file(ATM_COLD, ATM_COLD_LIST, 255.0_wp, 6.0e-4_wp, 72, 36)
       ! 30 x 10 degree source for the tripolar cap (see the bulk_flux_fold case).
       call write_atm_file(ATM_CRSE, ATM_CRSE_LIST, 288.0_wp, 4.0e-3_wp, 12, 18)
+      call write_atm_file(ATM_CCLD, ATM_CCLD_LIST, 255.0_wp, 6.0e-4_wp, 12, 18)
    end subroutine write_input_files
 
    subroutine write_atm_file(path, listname, tas0, huss0, nlon, nlat)
