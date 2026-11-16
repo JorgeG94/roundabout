@@ -38,7 +38,7 @@ module rdb_ocean_epbl
    !! underneath, and `epbl_merge_into_kv_kt` folds `kd_int` into
    !! `vmix%kv` / `vmix%kt` additively (MOM6 EPBL_IS_ADDITIVE) or by
    !! max, every stage; `epbl_compute` itself runs at thermo cadence.
-   use rdb_constants, only: wp, GRAVITY, H_DIV_EPS
+   use rdb_constants, only: wp, GRAVITY, H_DIV_EPS, H_VANISHED, NZ_STACK_MAX
    use rdb_grid, only: hgrid_t
    use rdb_multilayer_state, only: multilayer_state_t
    use rdb_ocean_surface_stress, only: ocean_surface_stress_t
@@ -370,6 +370,7 @@ module rdb_ocean_epbl
 
 contains
 
+#include "rdb_vanished_layer.inc"
 #include "rdb_safe_math_core.inc"
 #include "rdb_safe_math_pow.inc"
 #include "rdb_safe_math_erfc.inc"
@@ -1022,7 +1023,7 @@ contains
       logical :: have_min, have_max
       real(wp) :: mstar_val, mech_tke, conv_perel, forcing_clip
       ! sweep carried scalars
-      integer :: ki, ka, kb
+      integer :: ki, ka, kb, k_sfc
       real(wp) :: htot, z_int, pres_int, mld_output
       logical :: sfc_connected, sfc_disconnect
       real(wp) :: hp_a, dpe_t_a, dpe_s_a, dch_t_a, dch_s_a
@@ -1048,7 +1049,7 @@ contains
       nz = ms%nz_ml
 
       do concurrent(j=1:ny, i=1:nx) &
-         local(k, hk, hk_eff, t0k, s0k, dmass, dpres, p_mid, pres, &
+         local(k, k_sfc, hk, hk_eff, t0k, s0k, dmass, dpres, p_mid, pres, &
                dsv_dt_k, dsv_ds_k, dsv_dt_sfc, dsv_ds_sfc, h_sum, &
                ustar, absf, idecay, mech_in, b0, ctke_sfc, &
                obl_it, n_its, min_mld, max_mld, mld_guess, mld_found, &
@@ -1082,6 +1083,12 @@ contains
          ! argument and the PE weight `dmass*p_mid*dsv`), because they
          ! are the same pressure: the load a layer's centre of mass has
          ! to lift, ice included.
+         ! The surface layer is the first LIVE layer at or below `nz`: a
+         ! collapsed top layer (h <= H_VANISHED) holds no water, so the
+         ! surface forcing, the buoyancy flux, the TKE budget and the
+         ! mixing sweep all start on the first live layer.  `k_sfc == nz`
+         ! whenever the top layer is live (bit-identical).
+         k_sfc = rdb_vl_first_live(nx, ny, nz, ms%h_layer, i, j, nz)
          pres = 0.0_wp
          if (p_top_in_eos) pres = ms%p_top(i, j)
          h_sum = 0.0_wp
@@ -1172,7 +1179,7 @@ contains
                if (k < ms%k_bot(i, j)) this%ctke_sw%data(i, j, k) = 0.0_wp
                d_top_sw = d_bot_sw
             end if
-            if (k == nz) then
+            if (k == k_sfc) then
                dsv_dt_sfc = dsv_dt_k
                dsv_ds_sfc = dsv_ds_k
             end if
@@ -1199,16 +1206,16 @@ contains
          ! (PR-21) When penetrating SW is charged to the ledger, the skin
          ! carries only the NON-penetrating heat `q_nonpen = q_heat - I0`;
          ! the SW absorbed within the surface layer is the separately
-         ! computed `ctke_sw(nz)` (Phi-weighted, <= the all-skin charge).
+         ! computed `ctke_sw(k_sfc)` (Phi-weighted, <= the all-skin charge).
          ! I0 = 0 ⇒ q_nonpen = q_heat and ctke_sw(nz) = 0 ⇒ the else
          ! branch is character-for-character the legacy line.
          if (sw_ctke_active) then
             q_nonpen_kin = inv_rho0_cp*(Q_heat_field(i, j) - i0_col)
-            ctke_sfc = -0.5_wp*GRAVITY*this%rho0**2*ms%h_layer(i, j, nz)* &
+            ctke_sfc = -0.5_wp*GRAVITY*this%rho0**2*ms%h_layer(i, j, k_sfc)* &
                        (q_nonpen_kin*dt*dsv_dt_sfc + q_s_kin*dt*dsv_ds_sfc) &
-                       + this%ctke_sw%data(i, j, nz)
+                       + this%ctke_sw%data(i, j, k_sfc)
          else
-            ctke_sfc = -0.5_wp*GRAVITY*this%rho0**2*ms%h_layer(i, j, nz)* &
+            ctke_sfc = -0.5_wp*GRAVITY*this%rho0**2*ms%h_layer(i, j, k_sfc)* &
                        (q_t_kin*dt*dsv_dt_sfc + q_s_kin*dt*dsv_ds_sfc)
          end if
 
@@ -1310,27 +1317,31 @@ contains
                end if
 
                ! (C) sweep initialization at the surface layer.
-               h_ka = ms%h_layer(i, j, nz) + H_NEGLECT
+               h_ka = ms%h_layer(i, j, k_sfc) + H_NEGLECT
                hp_a = h_ka
-               dpe_t_a = this%dpe_t%data(i, j, nz)
-               dpe_s_a = this%dpe_s%data(i, j, nz)
-               dch_t_a = this%dcolht_t%data(i, j, nz)
-               dch_s_a = this%dcolht_s%data(i, j, nz)
-               th_a = h_ka*this%t0%data(i, j, nz)
-               sh_a = h_ka*this%s0%data(i, j, nz)
+               dpe_t_a = this%dpe_t%data(i, j, k_sfc)
+               dpe_s_a = this%dpe_s%data(i, j, k_sfc)
+               dch_t_a = this%dcolht_t%data(i, j, k_sfc)
+               dch_s_a = this%dcolht_s%data(i, j, k_sfc)
+               th_a = h_ka*this%t0%data(i, j, k_sfc)
+               sh_a = h_ka*this%s0%data(i, j, k_sfc)
                te_lag = 0.0_wp
                se_lag = 0.0_wp
                kddt_prev = 0.0_wp
-               htot = ms%h_layer(i, j, nz)
-               z_int = ms%h_layer(i, j, nz)
-               pres_int = GRAVITY*this%rho0*ms%h_layer(i, j, nz)
-               mld_output = ms%h_layer(i, j, nz)
+               htot = ms%h_layer(i, j, k_sfc)
+               z_int = ms%h_layer(i, j, k_sfc)
+               pres_int = GRAVITY*this%rho0*ms%h_layer(i, j, k_sfc)
+               mld_output = ms%h_layer(i, j, k_sfc)
                sfc_connected = .true.
-               this%kd_int(i, j, nz + 1) = 0.0_wp
+               ! interfaces at and above the first live layer's top carry no
+               ! mixing (closed surface; dead layers above hold no water).
+               do ki = k_sfc + 1, nz + 1
+                  this%kd_int(i, j, ki) = 0.0_wp
+               end do
 
                ! (D) downward sweep over interfaces Ki = nz .. 2.
                ! Layer above the interface: ka = Ki; below: kb = Ki-1.
-               do ki = nz, 2, -1
+               do ki = k_sfc, 2, -1
                   ka = ki
                   kb = ki - 1
                   h_ka = ms%h_layer(i, j, ka) + H_NEGLECT
@@ -1560,7 +1571,7 @@ contains
                   ! (9) advance the embedded forward elimination.
                   b1 = 1.0_wp/(hp_a + kddt_cur)
                   c1 = kddt_cur*b1
-                  if (ki == nz) then
+                  if (ki == k_sfc) then
                      te_lag = b1*(h_ka*this%t0%data(i, j, ka))
                      se_lag = b1*(h_ka*this%s0%data(i, j, ka))
                   else

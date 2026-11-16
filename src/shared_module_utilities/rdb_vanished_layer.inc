@@ -80,9 +80,10 @@
          !! Array extents; `k = nz` is the surface.
       real(wp), intent(in) :: h_layer(nx, ny, nz)
          !! Layer thicknesses (m).
-      integer, intent(in) :: i, j
-         !! Column.
-      integer, intent(in) :: kstart
+      integer, value :: i, j
+         !! Column (by value: a `do concurrent` index must not be passed by
+         !! reference to a device helper).
+      integer, value :: kstart
          !! Layer to start the downward scan from.
       integer :: k_fl
 

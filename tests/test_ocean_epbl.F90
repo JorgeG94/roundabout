@@ -54,7 +54,9 @@ contains
                   new_unittest("epbl_convective_deepening", test_convective), &
                   new_unittest("epbl_lf17_la_spot_values", test_lf17_spot), &
                   new_unittest("epbl_lt_enhancement_monotone", test_lt_monotone), &
-                  new_unittest("epbl_lt_deepens_wind_mixing", test_lt_deepens) &
+                  new_unittest("epbl_lt_deepens_wind_mixing", test_lt_deepens), &
+                  new_unittest("epbl_collapsed_top_layer_equals_column_without_it", &
+                               test_collapsed_top_layer) &
                   ]
    end subroutine collect_ocean_epbl_tests
 
@@ -707,5 +709,98 @@ contains
       call vd%destroy(); call sf%destroy(); call ss%destroy()
       call epbl_on%destroy(); call epbl_off%destroy(); call ms%destroy()
    end subroutine test_lt_deepens
+
+   subroutine run_epbl_once(grid, ms, epbl, ss, sf, dt)
+      !! One `epbl_compute` on device, no surface-flux apply / vdiff, then
+      !! the EPBL products home.
+      type(hgrid_t), intent(in) :: grid
+      type(multilayer_state_t), intent(inout) :: ms
+      type(ocean_epbl_t), intent(inout) :: epbl
+      type(ocean_surface_stress_t), intent(inout) :: ss
+      type(ocean_surface_flux_t), intent(inout) :: sf
+      real(wp), intent(in) :: dt
+      !$acc enter data copyin(ms, epbl, ss, sf)
+      call ms%enter_data()
+      call sf%enter_data()
+      call epbl%enter_data()
+      call epbl_compute(grid, epbl, ms, ss, dt, sf=sf)
+      !$acc update self(epbl%mld, epbl%kd_int, epbl%tke_wind, epbl%tke_conv, epbl%tke_forcing)
+      call epbl%exit_data()
+      call sf%exit_data()
+      call ms%exit_data()
+      !$acc exit data delete(ms, epbl, ss, sf)
+   end subroutine run_epbl_once
+
+   subroutine test_collapsed_top_layer(error)
+      !! Analytical: a top layer collapsed below `H_VANISHED` holds no
+      !! water, so the energetics of the column with it on top must equal
+      !! those of the same column WITHOUT it.  The surface cTKE seed
+      !! `-0.5 rho0^2 h_sfc (...)` and the mixing sweep start on the first
+      !! LIVE layer; seeded from the dead layer the convective ledger is
+      !! ~1e-6 of its value and the first interface is mixed across a
+      !! 1e-5 m "layer".  Compared: the convective and wind TKE ledgers
+      !! (independent of the MLD iterate, so to round-off), then kd_int
+      !! and the MLD (a bisection bracket that differs by the 1e-5 m of
+      !! dead thickness, hence a loose tolerance).
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms_ref, ms_dead
+      type(ocean_epbl_t) :: epbl_ref, epbl_dead
+      type(ocean_surface_stress_t) :: ss
+      type(ocean_surface_flux_t) :: sf
+      integer, parameter :: NLIVE = 8
+      real(wp), parameter :: DZ = 5.0_wp, DT = 1800.0_wp
+      real(wp) :: kd_scale, dkd, conv_ref, conv_dead
+      integer :: ip, jp
+
+      call make_grid(grid, 6, 4)
+      call ss%init(grid)
+      call ss%set_wind_stress_const(0.05_wp, 0.0_wp)
+      call sf%init(grid)
+      call sf%set_surface_flux_const(-200.0_wp, 0.0_wp)
+
+      ms_ref%nz_ml = NLIVE
+      call ms_ref%init(grid)
+      call setup_epbl(epbl_ref, grid, NLIVE)
+      call setup_stratified_T(ms_ref, NLIVE, DZ, 15.0_wp, 0.05_wp)
+      call run_epbl_once(grid, ms_ref, epbl_ref, ss, sf, DT)
+
+      ms_dead%nz_ml = NLIVE + 1
+      call ms_dead%init(grid)
+      call setup_epbl(epbl_dead, grid, NLIVE + 1)
+      call setup_stratified_T(ms_dead, NLIVE, DZ, 15.0_wp, 0.05_wp)
+      ms_dead%h_layer(:, :, NLIVE + 1) = 1.0e-5_wp
+      ms_dead%tracers(ms_dead%idx_temperature)%c(:, :, NLIVE + 1) = 40.0_wp
+      ms_dead%tracers(ms_dead%idx_salinity)%c(:, :, NLIVE + 1) = 35.0_wp
+      call run_epbl_once(grid, ms_dead, epbl_dead, ss, sf, DT)
+
+      ip = grid%nx_total/2
+      jp = grid%ny_total/2
+      conv_ref = epbl_ref%tke_conv(ip, jp)
+      conv_dead = epbl_dead%tke_conv(ip, jp)
+      kd_scale = maxval(abs(epbl_ref%kd_int(ip, jp, 2:NLIVE)))
+      dkd = maxval(abs(epbl_dead%kd_int(ip, jp, 2:NLIVE) - epbl_ref%kd_int(ip, jp, 2:NLIVE)))
+
+      call check(error, conv_ref > 0.0_wp, "test setup: cooling must seed convective TKE")
+      if (.not. allocated(error)) call check(error, abs(conv_dead - conv_ref) < 1.0e-10_wp*conv_ref, &
+                                             "convective TKE seed under a collapsed top layer differs")
+      if (.not. allocated(error)) call check(error, &
+                                             abs(epbl_dead%tke_wind(ip, jp) - epbl_ref%tke_wind(ip, jp)) &
+                                             < 1.0e-10_wp*epbl_ref%tke_wind(ip, jp), &
+                                             "wind TKE under a collapsed top layer differs")
+      if (.not. allocated(error)) call check(error, kd_scale > 0.0_wp, &
+                                             "test setup: reference must mix (kd_int non-zero)")
+      if (.not. allocated(error)) call check(error, dkd < 1.0e-3_wp*kd_scale, &
+                                             "kd_int under a collapsed top layer differs from the column without it")
+      if (.not. allocated(error)) call check(error, abs(epbl_dead%mld(ip, jp) - epbl_ref%mld(ip, jp)) < 1.0e-3_wp*DZ, &
+                                             "MLD under a collapsed top layer differs from the column without it")
+      if (.not. allocated(error)) call check(error, abs(epbl_dead%kd_int(ip, jp, NLIVE + 2)) < 1.0e-30_wp .and. &
+                                             abs(epbl_dead%kd_int(ip, jp, NLIVE + 1)) < 1.0e-30_wp, &
+                                             "interfaces above the first live layer must carry no mixing")
+
+      call sf%destroy(); call ss%destroy()
+      call epbl_dead%destroy(); call epbl_ref%destroy()
+      call ms_dead%destroy(); call ms_ref%destroy()
+   end subroutine test_collapsed_top_layer
 
 end module test_ocean_epbl
