@@ -15,10 +15,10 @@ module rdb_ice_transport_seam
    !! reach.  Each decision point of the driver therefore sums its local counts over the ranks
    !! first (`seam_sum`) and decides on the global value, so after the call `res%n_*` and
    !! `res%ierr` are GLOBAL and identical on every rank; the cell error word `ice_err` stays
-   !! per cell (the offender's own rank holds the bit).  The remap's clip ledger
-   !! (`res%ledger`) is a sum over the OWNED cells of this rank: the conservation ledger owns
-   !! its reduction.  The configuration refusals (`TRANSPORT_CFG_*`: range, workspace, table)
-   !! depend on the tile shape and the tracer table, so a decomposition whose tiles differ in
+   !! per cell (the offender's own rank holds the bit).  The remap's clip record
+   !! (`res%ledger`) is a plain sum over the OWNED cells of this rank (a diagnostic); the conservation ledger reads the
+   !! per-cell planes (`fw%clip`) and reduces them with the EFP sums through `seam_sum_efp`, once per step.
+   !! The configuration refusals (`TRANSPORT_CFG_*`: range, workspace, table) depend on the tile shape and the tracer table, so a decomposition whose tiles differ in
    !! them must be refused at configure; the land mask (`REMAP_CFG_MASK`) is checked on the
    !! read ring of each tile and IS reduced.
    !!

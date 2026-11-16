@@ -43,7 +43,8 @@ module test_cice_remap_flux
    use rdb_ice_itd_params, only: itd_category_bounds
    use rdb_ice_remap_geom, only: remap_src_di, remap_src_dj, REMAP_NSLOT, remap_locate_east, remap_locate_edge, remap_geometry
    use rdb_ice_remap_recon_batch, only: remap_recon_batch, remap_input_check
-   use rdb_ice_remap_flux, only: remap_flux_integrals, remap_update
+   use rdb_ice_remap_flux, only: remap_flux_integrals, remap_update, remap_update_impl, remap_ledger_impl, &
+                                 remap_ledger_cells_impl, REMAP_NCLIP
    use rdb_ice_transport_cice, only: transport_cice_ws_t, transport_result_t, ice_step_transport, &
                                      ICE_TRANSPORT_POST_NONE, TRANSPORT_CFG_OK, TRANSPORT_CFG_PARAMS, TRANSPORT_CFG_RANGE, &
                                      TRANSPORT_CFG_REMAP
@@ -102,6 +103,7 @@ contains
                   new_unittest("nan_raises_bit_state_untouched", test_nan), &
                   new_unittest("cfl_refused", test_cfl), &
                   new_unittest("category_batch_is_bit_identical", test_batch), &
+                  new_unittest("clip_record_per_cell_closes_the_books", test_clip_record), &
                   new_unittest("tiny_departure_closes_the_flux_adjustment", test_tiny), &
                   new_unittest("nonuniform_metrics_conserve_and_stay_monotone", test_nonuniform), &
                   new_unittest("fold_row_flux_pairing_kernel", test_fold_pairing), &
@@ -114,7 +116,7 @@ contains
    ! simulation helper
    ! ------------------------------------------------------------------
 
-   subroutine sim_init(s, nxp, nyp, ncat, nil, per_x, per_y, check_on, want_bounds, dx, nbatch, bytes_max)
+   subroutine sim_init(s, nxp, nyp, ncat, nil, per_x, per_y, check_on, want_bounds, dx, nbatch, bytes_max, ledger)
       !! Uniform Cartesian grid `dx = dy` with an `NG`-cell ghost ring, all faces open (periodic) or
       !! closed at the domain edge (the ghost band is land).  `nbatch`: category indices per flux batch.
       type(sim_t), intent(out) :: s
@@ -123,6 +125,8 @@ contains
       real(wp), intent(in), optional :: dx
       integer, intent(in), optional :: nbatch
       integer(int64), intent(in), optional :: bytes_max
+      logical, intent(in), optional :: ledger
+         !! Also allocate the remap's per-cell clip record (`fw%clip`).
       integer :: ierr, status
 
       s%nxp = nxp; s%nyp = nyp; s%ncat = ncat; s%nil = nil
@@ -141,7 +145,7 @@ contains
       else if (present(bytes_max)) then
          call s%w%init(s%nx, s%ny, ncat, nil, 1, want_bounds, ierr, remap=.true., remap_flux_bytes_max=bytes_max)
       else
-         call s%w%init(s%nx, s%ny, ncat, nil, 1, want_bounds, ierr, remap=.true.)
+         call s%w%init(s%nx, s%ny, ncat, nil, 1, want_bounds, ierr, remap=.true., ledger=ledger)
       end if
       allocate (s%u(s%nx + 1, s%ny), s%v(s%nx, s%ny + 1))
       allocate (s%HTE(s%nx, s%ny), s%HTN(s%nx, s%ny), s%tarea(s%nx, s%ny), s%dxT(s%nx, s%ny), s%dyT(s%nx, s%ny))
@@ -2462,6 +2466,121 @@ write (error_unit, "(a,es10.3)") "  [remap] non-uniform metrics, constant tracer
          if (allocated(error)) return
       end do
    end subroutine test_fold_pairing
+
+   subroutine test_clip_record(error)
+      !! The per-cell clip record behind the conservation ledger, with a clip FORCED: one cell of category 2 holds
+      !! `3e-12` of area and its east flux takes `0.5 puny` MORE than it has, so the update sets its new area to 0
+      !! (`[-puny, 0)` is clipped) and its tracer products to zero.  The record has exactly one clipped cell, the
+      !! area created is `0.5 puny` times the cell area, the planes' sums equal the plain-sum record (the same cell
+      !! arithmetic), and the books close against it independently: the change of every conserved total (ice and snow
+      !! volume, ice and snow enthalpy) over the update equals minus what the record says was dropped.
+      type(error_type), allocatable, intent(out) :: error
+      type(sim_t) :: s
+      integer :: i0, j0, b, nt, p, n, nbad, nneg, nq1, nq2, nqs, nclip, i, j, q, nlo
+      real(wp) :: fa, tar, lca, lvi, lvs, lei, les, tot0(4), tot1(4), drop(4), scale(4), planes(REMAP_NCLIP), err
+
+      call sim_init(s, 8, 8, 5, 7, .true., .true., .false., .false., ledger=.true.)
+      call sim_map(s)
+      call check(error, allocated(s%w%fw%clip), "the clip record is allocated when asked for")
+      if (allocated(error)) then
+         call sim_destroy(s)
+         return
+      end if
+      n = 2
+      nlo = n
+      b = 1
+      i0 = s%is + 3
+      j0 = s%js + 3
+      tar = s%tarea(i0, j0)
+      associate (a => s%w%a, fw => s%w%fw, wo => s%w%b)
+         nq1 = 4
+         nq2 = a%tab%nt_qsno + 1
+         nqs = a%tab%nt_qsno + 2
+         a%aim = 0.0_wp
+         a%trm = 0.0_wp
+         a%aim(i0, j0, n) = 3.0e-12_wp
+         do nt = 1, a%tab%ntrace
+            a%trm(i0, j0, nt, n) = -3.0e8_wp
+         end do
+         a%trm(i0, j0, 1, n) = 0.4_wp
+         a%trm(i0, j0, 2, n) = 0.1_wp
+         fw%mflx_e = 0.0_wp
+         fw%mflx_n = 0.0_wp
+         fw%mtflx_e = 0.0_wp
+         fw%mtflx_n = 0.0_wp
+         fa = (a%aim(i0, j0, n) + 0.5_wp*PUNY)*tar
+         fw%mflx_e(i0, j0, b) = fa
+         do nt = 1, a%tab%ntrace
+            if (a%tab%tracer_type(nt) == 1) then
+               fw%mtflx_e(i0, j0, nt, b) = fa*a%trm(i0, j0, nt, n)
+            else
+               p = a%tab%depend(nt)
+               fw%mtflx_e(i0, j0, nt, b) = fa*a%trm(i0, j0, p, n)*a%trm(i0, j0, nt, n)
+            end if
+         end do
+         !$acc update device(a%aim, a%trm, fw%mflx_e, fw%mflx_n, fw%mtflx_e, fw%mtflx_n)
+         wo%aim = 0.0_wp
+         wo%trm = 0.0_wp
+         !$acc update device(wo%aim, wo%trm)
+         call remap_update_impl(s%nx, s%ny, s%ncat, a%tab%ntrace, fw%nbatch, s%is, s%ie, s%js, s%je, nlo, nlo, PUNY, &
+                                a%tab%tracer_type(1:a%tab%ntrace), a%tab%depend(1:a%tab%ntrace), s%tarea, a%aim, a%trm, &
+                                fw%mflx_e, fw%mflx_n, fw%mtflx_e, fw%mtflx_n, wo%aim, wo%trm, nbad, nneg)
+         call remap_ledger_impl(s%nx, s%ny, s%ncat, a%tab%ntrace, fw%nbatch, s%is, s%ie, s%js, s%je, nlo, nlo, PUNY, &
+                                a%tab%tracer_type(1:a%tab%ntrace), a%tab%depend(1:a%tab%ntrace), nq1, nq2, nqs, s%tarea, &
+                                a%aim, a%trm, fw%mflx_e, fw%mflx_n, fw%mtflx_e, fw%mtflx_n, nclip, lca, lvi, lvs, lei, les)
+         fw%clip = 0.0_wp
+         !$acc update device(fw%clip)
+         call remap_ledger_cells_impl(s%nx, s%ny, s%ncat, a%tab%ntrace, fw%nbatch, s%is, s%ie, s%js, s%je, nlo, nlo, PUNY, &
+                                      a%tab%tracer_type(1:a%tab%ntrace), a%tab%depend(1:a%tab%ntrace), nq1, nq2, nqs, &
+                                      s%tarea, a%aim, a%trm, fw%mflx_e, fw%mflx_n, fw%mtflx_e, fw%mtflx_n, fw%clip)
+         !$acc update self(fw%clip, wo%aim, wo%trm)
+         call check(error, nbad == 0 .and. nneg == 0, "the update ran clean (the clip is inside [-puny, 0))")
+         ! the record: one clipped cell, the area it created, the plain-sum twin
+         do q = 1, REMAP_NCLIP
+            planes(q) = sum(fw%clip(s%is:s%ie, s%js:s%je, q))
+         end do
+         write (error_unit, "(a,6es12.4)") "  [remap] forced clip, per-cell record (n, area, vice, vsno, eice, esno):", planes
+         if (.not. allocated(error)) call check(error, nclip == 1 .and. planes(1) == 1.0_wp, "exactly one clipped cell")
+         if (.not. allocated(error)) call check(error, abs(planes(2) - 0.5_wp*PUNY*tar) <= 1.0e-9_wp*0.5_wp*PUNY*tar, &
+                                                "the area created is 0.5 puny times the cell area")
+    if (.not. allocated(error)) call check(error, abs(planes(2) - lca) <= 1.0e-12_wp*abs(lca), "area: per-cell record == plain sum")
+         scale = [abs(lvi), abs(lvs), abs(lei), abs(les)]
+         if (.not. allocated(error)) call check(error, all(scale > 0.0_wp), "the dropped content is non-zero in all four")
+         if (.not. allocated(error)) call check(error, abs(planes(3) - lvi) <= 1.0e-12_wp*scale(1) .and. &
+                                                abs(planes(4) - lvs) <= 1.0e-12_wp*scale(2) .and. &
+                                                abs(planes(5) - lei) <= 1.0e-12_wp*scale(3) .and. &
+                                                abs(planes(6) - les) <= 1.0e-12_wp*scale(4), &
+                                                "content: per-cell record == plain sum")
+         ! the books, independently: totals of the conserved packed quantities before and after the update
+         tot0 = 0.0_wp
+         tot1 = 0.0_wp
+         do j = s%js, s%je
+            do i = s%is, s%ie
+               tot0(1) = tot0(1) + a%aim(i, j, n)*a%trm(i, j, 1, n)*s%tarea(i, j)
+               tot1(1) = tot1(1) + wo%aim(i, j, n)*wo%trm(i, j, 1, n)*s%tarea(i, j)
+               tot0(2) = tot0(2) + a%aim(i, j, n)*a%trm(i, j, 2, n)*s%tarea(i, j)
+               tot1(2) = tot1(2) + wo%aim(i, j, n)*wo%trm(i, j, 2, n)*s%tarea(i, j)
+               do nt = nq1, nq2
+                  tot0(3) = tot0(3) + a%aim(i, j, n)*a%trm(i, j, a%tab%depend(nt), n)*a%trm(i, j, nt, n)*s%tarea(i, j)
+                  tot1(3) = tot1(3) + wo%aim(i, j, n)*wo%trm(i, j, a%tab%depend(nt), n)*wo%trm(i, j, nt, n)*s%tarea(i, j)
+               end do
+               tot0(4) = tot0(4) + a%aim(i, j, n)*a%trm(i, j, a%tab%depend(nqs), n)*a%trm(i, j, nqs, n)*s%tarea(i, j)
+               tot1(4) = tot1(4) + wo%aim(i, j, n)*wo%trm(i, j, a%tab%depend(nqs), n)*wo%trm(i, j, nqs, n)*s%tarea(i, j)
+            end do
+         end do
+         drop = planes(3:6)
+         err = 0.0_wp
+         do q = 1, 4
+            err = max(err, abs((tot1(q) - tot0(q)) + drop(q))/max(abs(drop(q)), 1.0e-300_wp))
+         end do
+         write (error_unit, "(a,es10.2,a,4es12.4)") "  [remap] books (change + record)/record, worst ", err, "; record:", drop
+         if (.not. allocated(error)) call check(error, err <= 1.0e-9_wp, "the change of every total equals minus the clip record")
+         ! without the record the totals do NOT close (the control that the check can fail)
+         if (.not. allocated(error)) call check(error, abs(tot1(1) - tot0(1)) > 0.5_wp*abs(drop(1)), &
+                                                "without the record the volume does not close")
+      end associate
+      call sim_destroy(s)
+   end subroutine test_clip_record
 
    subroutine test_cfg(error)
       type(error_type), allocatable, intent(out) :: error

@@ -25,7 +25,7 @@
 !! option, a non-positive `ahmax`) apply under either scheme; structure checks
 !! (layer and category counts, `hlim`) apply under `scheme="cice"`.
 !! `scheme="cice"` is runnable, on any rank count on walls and periodic edges, on the envelope the checks
-!! above spell out; the tripolar fold and (on several ranks) the named-term ledger stay refused.
+!! above spell out; the tripolar fold stays refused (the named-term ledger runs on several ranks).
 module rdb_ice_config
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    use rdb_constants, only: wp
@@ -167,13 +167,6 @@ contains
                             "&time_nml dt_fixed (the ice step is the outer step under "// &
                             "scheme='cice'; leave dt_ice unset)")
             end if
-         end if
-
-         ! only an EXPLICIT process grid is visible here; `engine_setup` repeats the refusal on the actual rank count
-         if (cfg%ocean%ice%ledger .and. cfg%px*cfg%py > 1) then
-            call add_msg(msgs, n, "the named-term ledger is single-rank (&ocean_ice_nml ledger = .true. with px*py > 1): it "// &
-                         "sums its terms over the owned cells of one rank and has no cross-rank reduction yet "// &
-                         "(use ledger = .false. with &mpi_nml px*py > 1)")
          end if
 
          ! ---- the engine envelope of the first runnable version ----

@@ -18,6 +18,14 @@
 !!     half of it is the one named exchange).
 !!   * E `restart_ledger`: N + checkpoint + N == 2N, the ledger accumulators bitwise; `restart_ledger_off_on` and
 !!     `restart_ledger_on_off`: a checkpoint written with the ledger off is read with it on and the reverse.
+!!   * F `zap_booked`: the ITD clean-up's zaps (a category below `puny`, the round-off excess `aice > 1`, a near-empty
+!!     cell) are the `cleanup` stage's ocean-ward flux: each is non-zero, has the flux slot's signs (mass and salt
+!!     positive, heat negative), equals the amount an independent host expectation removes, and the stage closes.
+!!     `clip_booked`: the remap transport's clip record (content dropped where the new area is 0) is a named source of
+!!     the `transport` stage: with it booked the stage closes, with it withheld the residual is the whole drop.
+!!     `snow_reset_reported`: the energy the profile initialisation adds by resetting snow thinner than `hs_min` is
+!!     reported (`tab%snow_reset`), equals the independent host value, and accounts for the `therm1` heat residual
+!!     to the solver's bound without being subtracted from it.
 !!   * `ledger_on_equals_off`: the ledger is an OBSERVER: the whole restart registry (excluding `ice_led_*`)
 !!     is bitwise the same after N steps with it on and off.  `ledger_nan_sticky`: a non-finite step poisons the
 !!     accumulators and the console for good.
@@ -42,7 +50,9 @@ module test_cice_closure
    use rdb_comm_env, only: comm_env_init, comm_env_setup_roles
    use rdb_ice_errors, only: ICE_ERR_FATAL_MASK, ICE_ERR_THERMO_CONSERV
    use rdb_ice_thickness, only: ICE_FERRMAX
-   use rdb_ice_ledger_terms, only: ICE_LT_THERM1, ICE_LT_REMAP, ICE_LT_NEWICE, ICE_LT_LATERAL, ICE_LT_CLEANUP, &
+   use rdb_efp, only: efp_t
+   use rdb_ice_flux_state, only: ice_flux_zero
+   use rdb_ice_ledger_terms, only: ice_lt_ix_state, ICE_LT_NCLIP, ICE_LT_THERM1, ICE_LT_REMAP, ICE_LT_NEWICE, ICE_LT_LATERAL, ICE_LT_CLEANUP, &
                                    ICE_LT_DYNAMICS, ICE_LT_TRANSPORT, ICE_LT_RIDGING, ICE_LT_NSTAGE, &
                                    ICE_LT_WATER, ICE_LT_SALT, ICE_LT_HEAT, ice_lt_stage_name, ice_lt_line_name
    use rdb_ocean_console_stats, only: compute_total_tracer
@@ -125,6 +135,9 @@ contains
                   new_unittest("ledger_off_inert", test_ledger_off_inert), &
                   new_unittest("ledger_on_equals_off", test_ledger_on_equals_off), &
                   new_unittest("ledger_nan_sticky", test_ledger_nan_sticky), &
+                  new_unittest("zap_booked", test_zap_booked), &
+                  new_unittest("clip_booked", test_clip_booked), &
+                  new_unittest("snow_reset_reported", test_snow_reset_reported), &
                   new_unittest("restart_ledger_off_on", test_restart_off_on), &
                   new_unittest("restart_ledger_on_off", test_restart_on_off) &
                   ]
@@ -1482,7 +1495,11 @@ contains
             line = L%console_line()
             call check(error,.not. has_nan(line), "finite before the poisoning")
             n0 = L%nsteps
-            L%tab%dstate(1, ICE_LT_NEWICE) = ieee_value(1.0_wp, ieee_quiet_nan)
+            ! a poisoned summand in the new-ice stage's mass total (what a NaN in the state decomposes to)
+            L%lv = efp_t()
+            L%probed = .false.
+            L%probed(ICE_LT_NEWICE) = .true.
+            L%lv(ice_lt_ix_state(1, ICE_LT_NEWICE))%poison = 1_int64
             L%is_open = .true.
             call L%end_step()
             line = L%console_line()
@@ -1571,14 +1588,17 @@ contains
       type(ocean_engine_t), target :: ea, eb
       type(config_t) :: cfg_a, cfg_b
       type(snapshot_t) :: sa, sb, sa0, sb0
-      real(wp) :: t_a, t_b, cum_a(3), cum_b(3), cres_a(3, ICE_LT_NSTAGE), wa(3)
+      real(wp) :: t_a, t_b, cum_a(3), cum_b(3), cres_a(3, ICE_LT_NSTAGE), wa(3), extra_a(3 + ICE_LT_NCLIP + 1)
       integer :: step_b, ierr, nw, na, n_led, q, s
       logical :: ok, same
       character(len=:), allocatable :: nml
 
       nw = 7
       na = 6
+      ! snow thinner than `hs_min` everywhere, so the thin-snow reset term is non-zero and the restart has something to carry
+      ! (its first-step energy is also in the heat residual: the heat closure bound below is loose by that much)
       nml = replace(uni_nml("basin"), "dt_therm_ratio = 1", "dt_therm_ratio = 2")
+      nml = replace(nml, "h_snow = 0.1", "h_snow = 0.00005")
       call make_engine(ea, cfg_a, nml, ok)
       call check(error, ok, "engine A setup failed")
       if (allocated(error)) return
@@ -1597,6 +1617,7 @@ contains
       cum_a = [ea%state%icec%ledger%cum_scale(1), ea%state%icec%ledger%cum_scale(2), ea%state%icec%ledger%cum_scale(3)]
       cres_a = ea%state%icec%ledger%cum_res
       wa = ea%state%icec%ledger%worst
+      extra_a = [ea%state%icec%ledger%cum_zap, ea%state%icec%ledger%cum_clip, ea%state%icec%ledger%cum_snow_reset]
       call finish_engine(ea)
 
       call make_engine(eb, cfg_b, nml, ok, restart_file=FN_RT, t0=t_b, step0=step_b)
@@ -1638,13 +1659,367 @@ contains
       if (.not. allocated(error)) call check(error, all([(transfer(wa(q), 0_int64) == &
                                                           transfer(eb%state%icec%ledger%worst(q), 0_int64), q=1, 3)]), &
                                              "worst per-step residuals (all three lines) bitwise")
+      if (.not. allocated(error)) call check(error, all(transfer(extra_a, 0_int64, size(extra_a)) == &
+                                                        transfer([eb%state%icec%ledger%cum_zap, eb%state%icec%ledger%cum_clip, &
+                                                                  eb%state%icec%ledger%cum_snow_reset], 0_int64, size(extra_a))), &
+                                             "cumulative zap, clip record and thin-snow reset: N + restart + N == 2N, bitwise")
+      if (.not. allocated(error)) call check(error, any(extra_a /= 0.0_wp), &
+                                             "the restored accumulators are not all zero (the check can fail)")
       if (.not. allocated(error)) call check(error, eb%state%icec%ledger%cum_rel(ICE_LT_WATER) < 1.0e-11_wp .and. &
                                              eb%state%icec%ledger%cum_rel(ICE_LT_SALT) < 1.0e-11_wp .and. &
-                                             eb%state%icec%ledger%cum_rel(ICE_LT_HEAT) < 1.0e-6_wp, &
+                                             eb%state%icec%ledger%cum_rel(ICE_LT_HEAT) < 5.0e-2_wp, &
                                              "the closure holds after the restart")
       call finish_engine(eb)
       call delete_file(FN_RT)
       if (.not. allocated(error)) call compare(error, sa, sb, "after the resumed steps", n_led)
    end subroutine test_restart_ledger
+
+   ! ------------------------------------------------------------------
+   ! F: the zaps, the transport clip record, the thin-snow reset
+   ! ------------------------------------------------------------------
+
+   subroutine push_cat_state(engine)
+      !! Host category state -> device (what a test edited).
+      type(ocean_engine_t), intent(inout) :: engine
+
+      !$acc update device(engine%state%ice%cice%aicen, engine%state%ice%cice%vicen, engine%state%ice%cice%vsnon)
+      !$acc update device(engine%state%ice%cice%qicen, engine%state%ice%cice%qsnon, engine%state%ice%cice%sicen)
+      !$acc update device(engine%state%ice%cice%aice, engine%state%ice%cice%vice, engine%state%ice%cice%vsno)
+      !$acc update device(engine%state%ice%cice%aice0)
+   end subroutine push_cat_state
+
+   subroutine pull_cat_all(engine)
+      !! Device -> host category state including the enthalpies.
+      type(ocean_engine_t), intent(inout) :: engine
+
+      call pull_cice(engine)
+      !$acc update self(engine%state%ice%cice%qicen, engine%state%ice%cice%qsnon, engine%state%ice%cice%sicen)
+   end subroutine pull_cat_all
+
+   subroutine test_zap_booked(error)
+      !! Two of the three ITD clean-up zaps, forced in an otherwise sparse ice cover, are the `cleanup` stage's ocean-ward
+      !! flux with Icepack's signs and the amounts an independent host expectation removes, and the stage closes.
+      !! Step 1: (A) a category of `0.5 puny` of area beside a healthy one, and (C) a near-empty cell (one category
+      !! of `0.3 puny`): thermodynamics leaves such categories alone, so the amounts match the host expectation to the frazil
+      !! leftovers.  The cover elsewhere is removed so the totals the ledger differences are small enough that the zaps are
+      !! far above the sums' round-off.  (The round-off excess `1 < aice < 1 + puny` cannot be forced through the engine: the
+      !! stages before the clean-up reduce it; its kernel closure is pinned by `test_cice_itd_cleanup` `aice_excess_scaling`.)
+      type(error_type), allocatable, intent(out) :: error
+      type(ocean_engine_t), target :: engine
+      type(config_t) :: cfg
+      character(len=:), allocatable :: nml
+      real(wp) :: t, puny, expm, exps, exph, hh, zap(3)
+      integer :: ng, ia, ja, ib, jb, ic, jc, n, k
+      logical :: ok
+      real(wp), parameter :: TOL = 1.0e-6_wp
+
+      ! a supercooled ocean: no lateral melt, so the removals of the clean-up are the only thing that takes a thin
+      ! category away (new ice is made in category 1: the forced categories are the thick one, 5)
+      nml = replace(uni_nml("basin"), "initial_temperature = -1.0", "initial_temperature = -1.84")
+      nml = replace(nml, "T_init_surface = -1.0, T_init_bottom = -1.0", "T_init_surface = -1.84, T_init_bottom = -1.84")
+      call make_engine(engine, cfg, nml, ok)
+      call check(error, ok, "engine setup failed")
+      if (allocated(error)) return
+      t = 0.0_wp
+      call advance(engine, cfg, t, 2, ok)
+      call check(error, ok, "2 steps ran")
+      if (allocated(error)) return
+      call pull_cat_all(engine)
+      ng = engine%grid%nghost
+      ia = ng + 6
+      ja = ng + 6
+      ib = ng + 12
+      jb = ng + 6
+      ic = ng + 18
+      jc = ng + 6
+      expm = 0.0_wp
+      exps = 0.0_wp
+      exph = 0.0_wp
+      associate (c => engine%state%ice%cice)
+         puny = c%p%c%puny
+         n = maxloc(c%aicen(ia, ja, :), 1)
+         call wipe_cover_except(c, [ia, ib, ic], [ja, jb, jc])
+         hh = 5.0_wp
+         k = c%ncat
+         ! (A) a second category of 0.5 puny beside the healthy one, with the healthy one's enthalpies
+         c%aicen(ia, ja, k) = 0.5_wp*puny
+         c%vicen(ia, ja, k) = 0.5_wp*puny*hh
+         c%vsnon(ia, ja, k) = 0.5_wp*puny*0.1_wp
+         c%qicen(ia, ja, k, :) = c%qicen(ia, ja, n, :)
+         c%qsnon(ia, ja, k, :) = c%qsnon(ia, ja, n, :)
+         call zap_expect(c, ia, ja, k, engine%state%ice_cgrid%tarea(ia, ja), 1.0_wp, expm, exps, exph)
+         ! (C) a near-empty cell: ONE category of 0.3 puny (its enthalpies from the template)
+         c%aicen(ic, jc, :) = 0.0_wp
+         c%vicen(ic, jc, :) = 0.0_wp
+         c%vsnon(ic, jc, :) = 0.0_wp
+         c%aicen(ic, jc, k) = 0.3_wp*puny
+         c%vicen(ic, jc, k) = 0.3_wp*puny*hh
+         c%vsnon(ic, jc, k) = 0.3_wp*puny*0.1_wp
+         c%qicen(ic, jc, k, :) = c%qicen(ia, ja, n, :)
+         c%qsnon(ic, jc, k, :) = c%qsnon(ia, ja, n, :)
+         call zap_expect(c, ic, jc, k, engine%state%ice_cgrid%tarea(ic, jc), 1.0_wp, expm, exps, exph)
+         call refresh_aggregates(c)
+      end associate
+      call push_cat_state(engine)
+      call one_step(engine, cfg, t, ok)
+      call check(error, ok, "the step with the forced zaps ran")
+      if (allocated(error)) then
+         call finish_engine(engine)
+         return
+      end if
+      associate (L => engine%state%icec%ledger)
+         do k = ICE_LT_REMAP, ICE_LT_CLEANUP
+            write (output_unit, "(a,a9,3es13.5)") "  ocean-ward flux of stage ", ice_lt_stage_name(k), L%tab%fout(:, k)
+         end do
+         zap = L%tab%fout(:, ICE_LT_CLEANUP)
+         write (output_unit, "(a,3es13.5)") "  independent host expectation of the zaps:                    ", expm, exps, exph
+         call check(error, expm > 0.0_wp .and. exps > 0.0_wp .and. exph < 0.0_wp, "the expectation has the flux signs")
+         if (.not. allocated(error)) call check(error, L%tab%fout(1, ICE_LT_CLEANUP) > 0.0_wp .and. &
+                                                L%tab%fout(2, ICE_LT_CLEANUP) > 0.0_wp .and. &
+                                                L%tab%fout(3, ICE_LT_CLEANUP) < 0.0_wp, &
+                                                "the zap is non-zero with mass and salt positive, heat negative")
+         ! (the booked zap holds the forced removals exactly plus the thin leftovers of the frazil of the supercooled ocean
+         ! that the same clean-up removes, a few percent: a lower bound at round-off, an upper bound at 5 %)
+         if (.not. allocated(error)) call check(error, zap(1) >= (1.0_wp - TOL)*expm .and. zap(1) <= 1.05_wp*expm, &
+                                                "zapped mass is the host expectation (+ the frazil leftovers)")
+         if (.not. allocated(error)) call check(error, zap(2) >= (1.0_wp - TOL)*exps .and. zap(2) <= 1.05_wp*exps, &
+                                                "zapped salt is the host expectation (+ the frazil leftovers)")
+         if (.not. allocated(error)) call check(error, abs(zap(3)) >= (1.0_wp - TOL)*abs(exph) .and. &
+                                                abs(zap(3)) <= 1.05_wp*abs(exph), &
+                                                "zapped heat is the host expectation (+ the frazil leftovers)")
+         ! the stage closes: the state lost what the flux slot handed over (the residual is far below the zap)
+         if (.not. allocated(error)) call check(error, abs(L%tab%res(1, ICE_LT_CLEANUP)) <= 1.0e-3_wp*expm, &
+                                                "cleanup stage: water closes against the zap")
+         if (.not. allocated(error)) call check(error, abs(L%tab%res(2, ICE_LT_CLEANUP)) <= 1.0e-3_wp*exps, &
+                                                "cleanup stage: salt closes against the zap")
+         if (.not. allocated(error)) call check(error, abs(L%tab%res(3, ICE_LT_CLEANUP)) <= 1.0e-3_wp*abs(exph), &
+                                                "cleanup stage: heat closes against the zap")
+         if (.not. allocated(error)) call check(error, L%tab%dstate(1, ICE_LT_CLEANUP) < 0.0_wp, &
+                                                "the state lost the mass the zap handed over")
+         if (.not. allocated(error)) call check(error, L%step_rel(ICE_LT_WATER, 0) < 1.0e-12_wp .and. &
+                                                L%step_rel(ICE_LT_SALT, 0) < 1.0e-12_wp, &
+                                                "the whole step closes in water and salt")
+         if (.not. allocated(error)) call check(error, L%cum_zap(1) >= L%tab%fout(1, ICE_LT_CLEANUP), &
+                                                "the cumulative zap term has it")
+      end associate
+      if (allocated(error)) then
+         call finish_engine(engine)
+         return
+      end if
+      call finish_engine(engine)
+   end subroutine test_zap_booked
+
+   subroutine wipe_cover_except(c, ik, jk)
+      !! Remove the ice everywhere but the cells `(ik, jk)`; keep their state.
+      use rdb_ice_cice_state, only: ice_cice_state_t
+      type(ice_cice_state_t), intent(inout) :: c
+      integer, intent(in) :: ik(:), jk(:)
+      integer :: i, j, m
+      logical :: keep
+
+      do j = 1, c%ny
+         do i = 1, c%nx
+            keep = .false.
+            do m = 1, size(ik)
+               if (i == ik(m) .and. j == jk(m)) keep = .true.
+            end do
+            if (keep) cycle
+            c%aicen(i, j, :) = 0.0_wp
+            c%vicen(i, j, :) = 0.0_wp
+            c%vsnon(i, j, :) = 0.0_wp
+         end do
+      end do
+   end subroutine wipe_cover_except
+
+   subroutine refresh_aggregates(c)
+      !! The host cell aggregates from the category arrays (a test edit does not leave them stale).
+      use rdb_ice_cice_state, only: ice_cice_state_t
+      type(ice_cice_state_t), intent(inout) :: c
+
+      c%aice = sum(c%aicen, dim=3)
+      c%vice = sum(c%vicen, dim=3)
+      c%vsno = sum(c%vsnon, dim=3)
+      c%aice0 = 1.0_wp - c%aice
+   end subroutine refresh_aggregates
+
+   subroutine zap_expect(c, i, j, n, ta, frac, expm, exps, exph)
+      !! ADD to the expected zap totals the removal of the fraction `frac` of category `n` of cell `(i, j)`
+      !! (mass, salt, enthalpy with the flux slot's signs), from the host arrays alone.
+      use rdb_ice_cice_state, only: ice_cice_state_t
+      type(ice_cice_state_t), intent(in) :: c
+      integer, intent(in) :: i, j, n
+      real(wp), intent(in) :: ta, frac
+      real(wp), intent(inout) :: expm, exps, exph
+      integer :: k
+
+      expm = expm + ta*frac*(c%p%c%rhoi*c%vicen(i, j, n) + c%p%c%rhos*c%vsnon(i, j, n))
+      exps = exps + ta*frac*c%p%c%rhoi*c%vicen(i, j, n)*c%p%thermo%ice_ref_salinity*1.0e-3_wp
+      do k = 1, c%nilyr
+         exph = exph + ta*frac*c%qicen(i, j, n, k)*c%vicen(i, j, n)/real(c%nilyr, wp)
+      end do
+      do k = 1, c%nslyr
+         exph = exph + ta*frac*c%qsnon(i, j, n, k)*c%vsnon(i, j, n)/real(c%nslyr, wp)
+      end do
+   end subroutine zap_expect
+
+   subroutine test_clip_booked(error)
+      !! The remap transport's clip record is a named source of the `transport` stage.  The test removes a known
+      !! amount of ice and snow from one cell between `begin` and the `transport` probe (what the remap update's guards
+      !! drop where a cell's new area is 0), hands the ledger the per-cell record of it (as the remap's `clip` planes
+      !! are), and checks the stage closes to round-off and the booked terms equal the removal; the same sequence with
+      !! the record withheld (the negative control) leaves the whole drop as the stage's residual.
+      type(error_type), allocatable, intent(out) :: error
+      type(ocean_engine_t), target :: engine
+      type(config_t) :: cfg
+      real(wp) :: t, ta, dv, ds, de_i, de_s, rhoi, rhos, lf, sref, w_exp, s_exp, h_exp, res_w(2), res_h(2)
+      real(wp), allocatable :: plane(:, :, :)
+      integer :: ng, i, j, n, k, pass
+      logical :: ok
+
+      call make_engine(engine, cfg, uni_nml("basin"), ok)
+      call check(error, ok, "engine setup failed")
+      if (allocated(error)) return
+      t = 0.0_wp
+      call advance(engine, cfg, t, 2, ok)
+      call check(error, ok, "2 steps ran")
+      if (allocated(error)) return
+      associate (c => engine%state%ice%cice, L => engine%state%icec%ledger, w => engine%state%icec%work)
+         ng = engine%grid%nghost
+         i = ng + 7
+         j = ng + 5
+         allocate (plane(c%nx, c%ny, ICE_LT_NCLIP), source=0.0_wp)
+         !$acc enter data copyin(plane)
+         rhoi = c%p%c%rhoi
+         rhos = c%p%c%rhos
+         lf = c%p%c%Lfresh
+         sref = c%p%thermo%ice_ref_salinity
+         do pass = 1, 2
+            call pull_cat_all(engine)
+            n = maxloc(c%aicen(i, j, :), 1)
+            ta = engine%state%ice_cgrid%tarea(i, j)
+            call ice_flux_zero(engine%state%icec%flux)     ! (the sequencer zeroes the accumulators before `begin`)
+            call L%begin(c, DT, w%fsnow, w%frain, w%flw, .false.)
+            ! the drop: 30 % of the ice volume and 40 % of the snow volume of the cell's main category
+            dv = 0.3_wp*c%vicen(i, j, n)
+            ds = 0.4_wp*c%vsnon(i, j, n)
+            de_i = 0.0_wp
+            do k = 1, c%nilyr
+               de_i = de_i + c%qicen(i, j, n, k)*dv/real(c%nilyr, wp)
+            end do
+            de_s = 0.0_wp
+            do k = 1, c%nslyr
+               de_s = de_s + c%qsnon(i, j, n, k)*ds/real(c%nslyr, wp)
+            end do
+            c%vicen(i, j, n) = c%vicen(i, j, n) - dv
+            c%vsnon(i, j, n) = c%vsnon(i, j, n) - ds
+            call refresh_aggregates(c)
+            call push_cat_state(engine)
+            plane = 0.0_wp
+            plane(i, j, 1) = 1.0_wp
+            plane(i, j, 2) = 2.5e-12_wp*ta
+            plane(i, j, 3) = dv*ta
+            plane(i, j, 4) = ds*ta
+            plane(i, j, 5) = de_i*ta
+            plane(i, j, 6) = de_s*ta + rhos*lf*ds*ta     ! the snow enthalpy in the packed frame (shifted by rhos Lfresh)
+            !$acc update device(plane)
+            if (pass == 1) call L%book_clip(plane)
+            call L%probe(ICE_LT_TRANSPORT, c, engine%state%icec%flux)
+            call L%end_step()
+            w_exp = -(rhoi*dv + rhos*ds)*ta
+            s_exp = -rhoi*dv*sref*1.0e-3_wp*ta
+            h_exp = (de_i + de_s)*ta*(-1.0_wp)
+            res_w(pass) = L%tab%res(1, ICE_LT_TRANSPORT)
+            res_h(pass) = L%tab%res(3, ICE_LT_TRANSPORT)
+            if (pass == 1) then
+            write (output_unit, "(a,3es13.5)") "  booked clip source (water, salt, heat):", L%tab%clip_w, L%tab%clip_s, L%tab%clip_h
+            write (output_unit, "(a,3es13.5)") "  state change in the stage (water, salt, heat):", L%tab%dstate(:, ICE_LT_TRANSPORT)
+               call check(error, L%tab%n_clip == 1.0_wp, "one clipped cell is reported")
+               if (.not. allocated(error)) call check(error, abs(L%tab%clip_w - w_exp) <= 1.0e-12_wp*abs(w_exp), &
+                                                      "booked water equals the removal")
+               if (.not. allocated(error)) call check(error, abs(L%tab%clip_s - s_exp) <= 1.0e-12_wp*abs(s_exp), &
+                                                      "booked salt equals the removal")
+               if (.not. allocated(error)) call check(error, abs(L%tab%clip_h - h_exp) <= 1.0e-12_wp*abs(h_exp), &
+                                                      "booked heat equals the removal")
+               if (.not. allocated(error)) call check(error, abs(L%tab%dstate(1, ICE_LT_TRANSPORT) - w_exp) <= &
+                                                      1.0e-6_wp*abs(w_exp), "the state actually lost that mass")
+               if (.not. allocated(error)) call check(error, abs(L%tab%res(1, ICE_LT_TRANSPORT)) <= 1.0e-6_wp*abs(w_exp) .and. &
+                                                      abs(L%tab%res(3, ICE_LT_TRANSPORT)) <= 1.0e-6_wp*abs(h_exp), &
+                                                      "the transport stage closes with the clip record booked")
+            end if
+         end do
+         ! the negative control: the same removal with the record withheld is the stage's whole residual
+         if (.not. allocated(error)) then
+   write (output_unit, "(a,2es13.5,a,es13.5)") "  transport-stage residual (water, heat) booked vs withheld:", res_w(1), res_h(1), &
+               " vs ", res_w(2)
+            call check(error, abs(res_w(2)) > 0.5_wp*abs(w_exp) .and. abs(res_h(2)) > 0.5_wp*abs(h_exp), &
+                       "withheld, the drop shows as the residual (the test can fail)")
+         end if
+         !$acc exit data delete(plane)
+      end associate
+      call finish_engine(engine)
+   end subroutine test_clip_booked
+
+   subroutine test_snow_reset_reported(error)
+      !! The thin-snow enthalpy reset is reported as its own diagnostic term.  A category's snow is made thinner than
+      !! `hs_min` with an enthalpy colder than the melting reference in two cells; the term equals the independent host
+      !! sum `A (-rhos Lfresh - q) v/nslyr`, is part of (not subtracted from) the `therm1` heat residual, and
+      !! accounts for it to within the solver's bound.
+      type(error_type), allocatable, intent(out) :: error
+      type(ocean_engine_t), target :: engine
+      type(config_t) :: cfg
+      real(wp) :: t, ta, expect, hs, rhos, lf, resid, bound
+      integer :: ng, ii(4), jj(4), m, n, k
+      logical :: ok
+
+      call make_engine(engine, cfg, uni_nml("basin"), ok)
+      call check(error, ok, "engine setup failed")
+      if (allocated(error)) return
+      t = 0.0_wp
+      call advance(engine, cfg, t, 2, ok)
+      call check(error, ok, "2 steps ran")
+      if (allocated(error)) return
+      call pull_cat_all(engine)
+      associate (c => engine%state%ice%cice)
+         ng = engine%grid%nghost
+         ii = [ng + 5, ng + 15, ng + 9, ng + 19]
+         jj = [ng + 5, ng + 9, ng + 12, ng + 4]
+         rhos = c%p%c%rhos
+         lf = c%p%c%Lfresh
+         expect = 0.0_wp
+         do m = 1, 4
+            n = maxloc(c%aicen(ii(m), jj(m), :), 1)
+            hs = 0.5_wp*c%p%c%hs_min
+            c%vsnon(ii(m), jj(m), n) = hs*c%aicen(ii(m), jj(m), n)
+            c%qsnon(ii(m), jj(m), n, :) = -1.5_wp*rhos*lf
+            ta = engine%state%ice_cgrid%tarea(ii(m), jj(m))
+            do k = 1, c%nslyr
+               expect = expect + ta*((-rhos*lf) + 1.5_wp*rhos*lf)*c%vsnon(ii(m), jj(m), n)/real(c%nslyr, wp)
+            end do
+         end do
+         call refresh_aggregates(c)
+      end associate
+      call push_cat_state(engine)
+      call one_step(engine, cfg, t, ok)
+      call check(error, ok, "the step ran")
+      if (allocated(error)) then
+         call finish_engine(engine)
+         return
+      end if
+      associate (L => engine%state%icec%ledger)
+         resid = L%tab%res(3, ICE_LT_THERM1)
+         bound = L%tab%heat_bound
+         write (output_unit, "(a,3es13.5)") "  thin-snow reset (reported, host expectation) and therm1 heat residual:", &
+            L%tab%snow_reset, expect, resid
+         call check(error, expect > 0.0_wp, "the forced reset adds energy")
+         if (.not. allocated(error)) call check(error, abs(L%tab%snow_reset - expect) <= 1.0e-9_wp*expect, &
+                                                "the reported reset equals the independent host value")
+         if (.not. allocated(error)) call check(error, abs(resid - L%tab%snow_reset) <= bound, &
+                                                "the reset accounts for the therm1 heat residual to the solver bound")
+         if (.not. allocated(error)) call check(error, L%tab%snow_reset > 20.0_wp*bound, &
+                                                "the reset is far above the solver bound (the attribution is not vacuous)")
+         if (.not. allocated(error)) call check(error, L%cum_snow_reset >= L%tab%snow_reset, "the cumulative term has it")
+      end associate
+      call finish_engine(engine)
+   end subroutine test_snow_reset_reported
 
 end module test_cice_closure

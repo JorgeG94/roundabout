@@ -131,6 +131,11 @@
 !!     leg, a NEGATIVE CONTROL per exchange the multi-rank step added (`ice_mr_test_skip`), a fault
 !!     injection (a NaN area on one rank; the import refusing on one rank: every rank must stop with the same
 !!     verdict) and the error-word reduction bound / unbound.  The tripolar fold stays refused (stage B);
+!!   * cice_ice_led / cice_ice_island_led / cice_ice_r1_led - the same with the named-term conservation ledger ON:
+!!     every number the ledger reports (the step's table, the cumulative accumulators, the clip record, the global
+!!     state totals) is bitwise the serial run's on every layout, also after the write/resume leg; the run with the
+!!     ledger OFF is bitwise the ledger-on run in every registry field (the ledger is an observer); a ledger term
+!!     left rank-local (`ice_lt_test_local`) is DETECTED; a NaN summand on one rank makes every rank read NaN;
 !!   * drain_ratio / drain_ratio_h3 - windowed tracer drain (ratio 4, ppm / ppm_h3
 !!     + diabatic_first = .false.) on a periodic channel, >1 sub-cycle pass;
 !!   * drain_ratio_weno5 / _weno7 / _weno9 - the same drain with the WENO swept
@@ -260,7 +265,9 @@ program test_ocean_decomp_bitid_mpi
                                  ICE_SKIP_STRESS_HALO, ICE_SKIP_FLUX_GHOSTS, ICE_SKIP_STATE_HALO
    use rdb_ice_step_cice, only: ice_step_result_t, ICE_STEP_OK, ICE_STEP_FATAL, ICE_STEP_STAGE_FAILED, &
                                 ICE_STAGE_OCEAN_IMPORT
-   use rdb_ice_transport_seam_comm, only: ice_err_combine_collective
+   use rdb_ice_transport_seam_comm, only: ice_err_combine_collective, ice_transport_seam_bind_reductions
+   use rdb_ice_transport_seam, only: transport_seam_t
+   use rdb_ice_ledger_terms, only: ice_lt_ix_state, ice_lt_test_local, ICE_LT_THERM1, ICE_LT_RIDGING
    use rdb_ice_errors, only: ice_err_summary_t, ice_err_reduce, ice_err_set_combine, ice_err_combine_iface, &
                              ICE_ERR_FATAL_MASK, ICE_ERR_NONFINITE, ICE_ERR_TSN_RANGE, ICE_ERR_ITD_SHIFT_RANGE
 #ifndef RDB_NO_NETCDF
@@ -328,6 +335,12 @@ program test_ocean_decomp_bitid_mpi
          !! grounded, melting, top-drag stress > 0, k_top < nz.
       real(wp) :: ridge_act = 0.0_wp
          !! Sum over the run of the ridging area-rate magnitude (`dardg1dt`) on the owned cells (CICE-port cases).
+      logical :: led_on = .false.
+         !! The named-term ice ledger was on in this run (`led` holds its report).
+      real(wp), allocatable :: led(:)
+         !! The ledger's report at the end of the run: the last closed step's table (state changes, flux terms, sources,
+         !! the clip record, the residuals and scales), the cumulative accumulators and the global state totals.  GLOBAL
+         !! values: bitwise the same on every rank, every layout and the serial run.
       real(wp) :: ice_tot(3) = 0.0_wp
          !! The console's global ice sums (wet area, ice-covered area, ice volume): EFP-reduced, so they
          !! must be bit-identical between the serial run and every decomposition.
@@ -350,7 +363,7 @@ program test_ocean_decomp_bitid_mpi
       !! `RDB_BITID_CASES`: run only the cases whose name contains this substring.
    type(comm_t) :: comm
    character(len=16), parameter :: SCHEMES(2) = [character(len=16) :: "pred_corr", "ssp_rk2"]
-   character(len=24), parameter :: CASES(89) = [character(len=24) :: &
+   character(len=24), parameter :: CASES(92) = [character(len=24) :: &
                                                 "island_basin", "weno7_pv", &
                                                 "periodic_channel_zstar", &
                                                 "visc_rem_zstar", &
@@ -383,6 +396,7 @@ program test_ocean_decomp_bitid_mpi
                                                 "sea_ice_cdyn_fold", "sea_ice_cdyn_edge", &
                "cice_ice", "cice_ice_wall", "cice_ice_island", "cice_ice_bulk", "cice_ice_sph", "cice_ice_lat", "cice_ice_upwind", &
                                                 "cice_ice_pp", "cice_ice_r1", "cice_ice_epbl", &
+                                                "cice_ice_led", "cice_ice_island_led", "cice_ice_r1_led", &
                                                 "cavity_zfixed", "cavity_sigma", &
                                                 "cavity_sigma_ratio2", "cavity_gall", "cavity_melt_only", "cavity_periodic", &
                                                 "cavity_combo", "wetdry_shoal", &
@@ -432,6 +446,7 @@ program test_ocean_decomp_bitid_mpi
    if (nprocs >= 2 .and. (len_trim(case_filter) == 0 .or. index("cice_faults", trim(case_filter)) > 0 .or. &
                           index(trim(case_filter), "cice") > 0)) call check_cice_faults()
    if (nprocs >= 2 .and. (len_trim(case_filter) == 0 .or. index(trim(case_filter), "cice") > 0)) call check_cice_fences()
+   if (nprocs >= 2 .and. (len_trim(case_filter) == 0 .or. index(trim(case_filter), "cice") > 0)) call check_cice_ledger_poison()
    if (nprocs >= 2) call check_single_rank_fences()
    if (nprocs >= 2) call check_balance_fold_refusal()
    if (len_trim(case_filter) == 0 .or. index("cavity_grounded_refused", trim(case_filter)) > 0) &
@@ -1418,8 +1433,18 @@ contains
       character(len=:), allocatable :: nml
       character(len=*), parameter :: NL = new_line("a")
       character(len=16) :: spx, spy, snx, sny
-      character(len=:), allocatable :: bc, topo, atm
+      character(len=:), allocatable :: bc, topo, atm, lbl
+      logical :: led
 
+      ! `<case>_led`: the case with the named-term ledger on
+      led = .false.
+      lbl = trim(label)
+      if (len_trim(label) > 4) then
+         if (label(len_trim(label) - 3:len_trim(label)) == "_led") then
+            led = .true.
+            lbl = label(1:len_trim(label) - 4)
+         end if
+      end if
       write (spx, '(i0)') px
       write (spy, '(i0)') py
       write (snx, '(i0)') NX_G
@@ -1428,16 +1453,16 @@ contains
       topo = "&ocean_topo_nml topo_config = 'seamount', max_depth = 1000.0, edge_depth = 800.0, "// &
              "slope_scale = 60000.0 /"//NL
       atm = "&ocean_ice_atm_nml uni_tas = 255.0, uni_rlds = 180.0, uni_uas = 8.0, uni_vas = 2.0 /"//NL
-      if (label == "cice_ice_pp") then
+      if (lbl == "cice_ice_pp") then
          ! periodic in BOTH directions: the corner ghosts and both wraps, on every split
          bc = "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'periodic', north = 'periodic' /"//NL
          topo = "&ocean_topo_nml topo_config = 'island', max_depth = 1000.0, slope_scale = 0.15 /"//NL
       end if
-      if (label == "cice_ice_wall") then
+      if (lbl == "cice_ice_wall") then
          bc = "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
          topo = "&ocean_topo_nml topo_config = 'flat', max_depth = 1000.0 /"//NL
       end if
-      if (label == "cice_ice_island") then
+      if (lbl == "cice_ice_island") then
          bc = "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
          topo = "&ocean_topo_nml topo_config = 'island', max_depth = 1000.0, slope_scale = 0.15 /"//NL
       end if
@@ -1463,14 +1488,14 @@ contains
             "&ocean_ice_ic_nml conc_config = 'uniform', h_ice = 1.0, conc = 0.7, h_snow = 0.1, "// &
             "t_ice = -8.0 /"//NL//atm//bc// &
             "&output_nml output_to_file = .false. /"//NL
-      if (label == "cice_ice_r1") call replace_once(nml, "dt_therm_ratio = 2", "dt_therm_ratio = 1")
-      if (label == "cice_ice_epbl") then
+      if (lbl == "cice_ice_r1") call replace_once(nml, "dt_therm_ratio = 2", "dt_therm_ratio = 1")
+      if (lbl == "cice_ice_epbl") then
          ! EPBL instead of KPP (its boundary-layer reads the same surface-flux ghosts)
          call replace_once(nml, "&ocean_vmix_nml dt_therm_ratio = 2 /", &
                            "&ocean_vmix_nml dt_therm_ratio = 2, use_kpp = .false. /"//NL//"&ocean_epbl_nml enable = .true. /")
       end if
-      if (label == "cice_ice_upwind") call replace_once(nml, "advection = 'remap'", "advection = 'upwind'")
-      if (label == "cice_ice_sph" .or. label == "cice_ice_lat") then
+      if (lbl == "cice_ice_upwind") call replace_once(nml, "advection = 'remap'", "advection = 'upwind'")
+      if (lbl == "cice_ice_sph" .or. lbl == "cice_ice_lat") then
          ! the channel on a lon-lat grid: latitude-dependent metrics (areas, spacings) under the uniform atmosphere
          call replace_once(nml, "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)// &
                            ", nghost = 3, dx = 20000.0, dy = 20000.0 /", &
@@ -1483,18 +1508,19 @@ contains
                            "slope_scale = 60000.0 /", "&ocean_topo_nml topo_config = 'spoon', max_depth = 3000.0, "// &
                            "edge_depth = 300.0, slope_scale = 300000.0 /")
       end if
-      if (label == "cice_ice_lat") then
+      if (lbl == "cice_ice_lat") then
          ! the `latitudes` seed: ice only poleward of 59 N, so the southern tile of a 1x2 / 1x4 split holds none
          ! (an empty tile must stay empty and still take part in every exchange)
          call replace_once(nml, "conc_config = 'uniform', h_ice = 1.0, conc = 0.7", &
                            "conc_config = 'latitudes', h_ice = 1.0, conc = 0.7, arctic_edge = 59.0")
       end if
-      if (label == "cice_ice_bulk") then
+      if (lbl == "cice_ice_bulk") then
          ! the lon-lat re-entrant channel of `bulk_flux_ice` (non-uniform prescribed atmosphere, regridded per
          ! rank) with the CICE-port ice in place of the SIS2 one
          nml = case_nml("bulk_flux_ice", scheme, px, py)
          call swap_to_cice(nml)
       end if
+      if (led) call replace_once(nml, "dynamics = .true., transport = .true. /", "dynamics = .true., transport = .true., ledger = .true. /")
    end function cice_ice_nml
 
    function cdyn_nml(label, scheme, px, py) result(nml)
@@ -1755,6 +1781,7 @@ contains
             call self_comm%finalize()
          end if
          call take_snapshot(engine, snap)
+         call take_ledger(engine, snap)
          snap%drain_iter = engine%state%continuity%drain_iter_max
          ok = .true.
       end if
@@ -1976,6 +2003,7 @@ contains
             amin, amax, vmin, vmax, ref%ice_tot(2:3), " rank ", rank
          n_fail = n_fail + 1
       end if
+      if (ref%led_on) call check_ledger_nonvacuous(ref, tag)
       if (label == "cice_ice" .and. .not. (ref%ridge_act > 0.0_wp)) then
          write (*, '(3a,i0)') "FAIL ", tag, ": ridging never acted (dardg1dt is zero all run), rank ", rank
          n_fail = n_fail + 1
@@ -2033,6 +2061,174 @@ contains
          end if
       end do
    end subroutine cice_negative_controls
+
+   pure function is_led_label(label) result(yes)
+      !! A `cice_ice*_led` case (the ledger on).
+      character(len=*), intent(in) :: label
+      logical :: yes
+      integer :: n
+
+      n = len_trim(label)
+      yes = .false.
+      if (index(label, "cice_ice") == 1 .and. n > 4) yes = label(n - 3:n) == "_led"
+   end function is_led_label
+
+   subroutine check_ledger_nonvacuous(ref, tag)
+      !! The serial reference's ledger report must be live: finite, steps counted, a non-zero cumulative scale in each
+      !! line, and the state totals of ice (positive mass, negative enthalpy).  Layout of `take_ledger`: the three global
+      !! totals, the step counter, the cumulative zap terms, snow reset, clip record, worst and scales close it.
+      type(snap_t), intent(in) :: ref
+      character(len=*), intent(in) :: tag
+      integer :: n
+
+      n = size(ref%led)
+      if (.not. all(ieee_is_finite(ref%led)) .or. .not. (ref%led(n - 3) > 0.0_wp) .or. &
+          .not. all(ref%led(n - 19:n - 17) > 0.0_wp) .or. .not. (ref%led(n - 2) > 0.0_wp) .or. .not. (ref%led(n) < 0.0_wp)) then
+ write (*, '(3a,i0)') "FAIL ", tag, ": the ledger report is dead (non-finite, no steps, a zero scale, or empty totals), rank ", rank
+         n_fail = n_fail + 1
+      end if
+   end subroutine check_ledger_nonvacuous
+
+   function tiles_differ(a, b, report) result(nbad)
+      !! Bitwise, every element of every field of two snapshots of the SAME decomposition (tile against tile, ghosts
+      !! included), and the console ice totals.  (`compare` is tile against the serial run's whole domain.)
+      type(snap_t), intent(in) :: a, b
+      character(len=*), intent(in) :: report
+      integer :: nbad
+      integer :: e, nb
+
+      nbad = 0
+      if (a%n /= b%n) then
+         write (*, '(a,i0,2a)') "  rank ", rank, " field count differs: ", report
+         nbad = 1
+         return
+      end if
+      if (any(transfer(a%ice_tot, [0_int64]) /= transfer(b%ice_tot, [0_int64]))) nbad = nbad + 1
+      do e = 1, a%n
+         if (a%f(e)%tag /= b%f(e)%tag .or. any(shape(a%f(e)%a) /= shape(b%f(e)%a))) then
+            nbad = nbad + 1
+            cycle
+         end if
+         nb = count(transfer(a%f(e)%a, 0_int64, size(a%f(e)%a)) /= transfer(b%f(e)%a, 0_int64, size(b%f(e)%a)))
+         if (nb > 0) write (*, '(a,i0,5a,i0)') "  rank ", rank, " ", report, " ", trim(a%f(e)%tag), ": mismatches=", nb
+         nbad = nbad + nb
+      end do
+   end function tiles_differ
+
+   subroutine check_ledger_observer(nml, on, tag, nbad)
+      !! The same decomposed run with the ledger OFF must equal the ledger-on run in every registry field (the whole
+      !! tile, ghosts included: the two runs share the decomposition, so the arrays are compared element by element), the
+      !! console ice totals included: the ledger only reads.
+      character(len=*), intent(in) :: nml, tag
+      type(snap_t), intent(in) :: on
+      integer, intent(out) :: nbad
+      type(snap_t) :: off
+      character(len=:), allocatable :: nml_off
+      integer :: nb, tot(2)
+      logical :: ok
+
+      nml_off = nml
+      call replace_once(nml_off, ", ledger = .true.", "")
+      call run_one(nml_off, nprocs, rank, off, ok)
+      nb = 0
+      nb = 0
+      if (ok) nb = tiles_differ(on, off, trim(tag)//" ledger on vs off")
+      tot = [nb, merge(0, 1, ok)]
+      call allreduce(comm, tot, op=MPI_SUM)
+      nbad = tot(1) + tot(2)
+      if (rank == 0 .and. nbad == 0) write (*, '(3a)') "case ", trim(tag), ": ledger on == ledger off in every field (observer)"
+      if (rank == 0 .and. nbad > 0) write (*, '(3a,i0)') "FAIL ", trim(tag), ": ledger on differs from off: ", nbad
+      if (nbad > 0) nbad = 1
+   end subroutine check_ledger_observer
+
+   subroutine cice_ledger_negative_control(ref, label, scheme)
+      !! A ledger term left RANK-LOCAL (`ice_lt_test_local`: the step's reduction discards the cross-rank sum of the mass
+      !! total after `therm1`) must make the decomposed ledger report differ from the serial one: the comparison can
+      !! tell a missing reduction.
+      type(snap_t), intent(in) :: ref
+      character(len=*), intent(in) :: label, scheme
+      type(snap_t) :: dec
+      integer :: nbad, nfin, tot(2)
+      logical :: ok
+
+      ice_lt_test_local = ice_lt_ix_state(1, ICE_LT_THERM1)
+      call run_one(case_nml(label, scheme, nprocs, 1), nprocs, rank, dec, ok)
+      ice_lt_test_local = 0
+      nbad = 0
+      nfin = 0
+      if (ok) call compare(dec, ref, nbad, nfin, "ledger negctrl", quiet=.true.)
+      tot = [nbad, merge(0, 1, ok)]
+      call allreduce(comm, tot, op=MPI_SUM)
+      if (tot(1) + tot(2) == 0) then
+         if (rank == 0) write (*, '(2a)') "FAIL ", trim(label)//": a ledger term left rank-local is IDENTICAL to the serial report (not detected)"
+         n_fail = n_fail + 1
+      else if (rank == 0) then
+         write (*, '(3a,i0,a)') "case ", trim(label), " ledger negative control (term left rank-local): DETECTED (", tot(1), " mismatching values)"
+      end if
+   end subroutine cice_ledger_negative_control
+
+   subroutine check_cice_ledger_poison()
+      !! A NaN summand on ONE rank must make EVERY rank's ledger read NaN (the EFP poison counter rides the same
+      !! collective), and nothing may hang: the step's totals are summed once, the verdict is the global one.  Control: the
+      !! same sequence on the clean state is finite on every rank.
+      type(ocean_engine_t), target :: engine
+      type(config_t) :: cfg
+      type(transport_seam_t) :: sm
+      real(wp) :: t
+      integer :: ierr, n, ng, pass, st(2), smin(2), smax(2)
+      logical :: fin
+
+      call read_config_from_string(case_nml("cice_ice_led", "pred_corr", nprocs, 1), cfg, ierr=ierr)
+      call validate_config(cfg, ierr)
+      call engine_setup(engine, cfg, ierr, compute_rank=rank, compute_size=nprocs)
+      if (ierr /= OCEAN_STATUS_OK) then
+         write (*, '(a,i0)') "FAIL cice ledger poison: setup failed on rank ", rank
+         n_fail = n_fail + 1
+         return
+      end if
+      call engine_enter_data(engine, cfg)
+      t = 0.0_wp
+      do n = 1, 3
+         call engine_step(engine, DT, t, ierr=ierr)
+         call engine_step_ice(engine, cfg, DT, t, ierr=ierr)
+         call engine_step_finalize(engine, DT, t, ierr=ierr)
+         t = t + DT
+      end do
+      ng = engine%grid%nghost
+      call ice_transport_seam_bind_reductions(sm, engine%grid, engine%state%bc)
+      do pass = 1, 2
+         associate (L => engine%state%icec%ledger, c => engine%state%ice%cice, w => engine%state%icec%work)
+            if (pass == 2 .and. rank == nprocs - 1) then
+               c%vicen(ng + 2, ng + 2, 1) = ieee_value(1.0_wp, ieee_quiet_nan)
+               !$acc update device(c%vicen)
+            end if
+            call L%begin(c, DT, w%fsnow, w%frain, w%flw, .false.)
+            call L%probe(ICE_LT_RIDGING, c, engine%state%icec%flux)
+            call L%end_step(sm)
+            fin = L%finite .and. ieee_is_finite(L%cum_scale(1)) .and. ieee_is_finite(L%tab%dstate(1, ICE_LT_RIDGING))
+            st = [merge(1, 0, fin), merge(1, 0, L%valid)]
+         end associate
+         smin = st
+         smax = st
+         call allreduce(comm, smin, op=MPI_MIN)
+         call allreduce(comm, smax, op=MPI_MAX)
+         if (any(smin /= smax)) then
+            write (*, '(a,i0,a,2(1x,i0),a,i0)') "FAIL cice ledger poison pass ", pass, ": the ranks disagree:", st, " rank ", rank
+            n_fail = n_fail + 1
+         else if (pass == 1 .and. .not. (st(1) == 1 .and. st(2) == 1)) then
+            write (*, '(a,i0)') "FAIL cice ledger poison control: the clean state is not finite on every rank, rank ", rank
+            n_fail = n_fail + 1
+         else if (pass == 2 .and. st(1) /= 0) then
+            write (*, '(a,i0)') "FAIL cice ledger poison: a NaN on one rank was not seen by every rank, rank ", rank
+            n_fail = n_fail + 1
+         else if (rank == 0) then
+            if (pass == 1) write (*, '(a)') "case cice ledger poison control: finite on every rank (ok)"
+            if (pass == 2) write (*, '(a)') "case cice ledger poison: a NaN summand on one rank reads NaN on EVERY rank (ok)"
+         end if
+      end do
+      call engine_exit_data(engine)
+      call engine_teardown(engine)
+   end subroutine check_cice_ledger_poison
 
    subroutine check_cice_faults()
       !! Fault injection on a decomposed CICE-port run: ONE rank gets a bad state and EVERY rank must come out of
@@ -2158,6 +2354,51 @@ contains
          end if
       end do
    end subroutine cice_err_reduce_case
+
+   subroutine take_ledger(engine, s)
+      !! The named-term ledger's report into `s%led` (a no-op with the ledger off): the last closed step's table, the
+      !! cumulative accumulators and the GLOBAL state totals (one collective over the real communicator when the run is
+      !! decomposed, an identity on the serial reference).  All of it is a global number: it must be the same bits on every
+      !! rank, every layout and the serial run.
+      type(ocean_engine_t), intent(inout), target :: engine
+      type(snap_t), intent(inout) :: s
+      type(transport_seam_t) :: sm
+      real(wp) :: m, sa, e
+
+      s%led_on = .false.
+      if (.not. engine%state%icec%is_init) return
+      if (.not. engine%state%icec%ledger%on) return
+      call ice_transport_seam_bind_reductions(sm, engine%grid, engine%state%bc)
+      call engine%state%icec%ledger%totals(engine%state%ice%cice, m, sa, e, sm)
+      associate (L => engine%state%icec%ledger)
+         s%led = [reshape(L%tab%dstate, [size(L%tab%dstate)]), reshape(L%tab%fout, [size(L%tab%fout)]), L%tab%fsw, &
+                  reshape(L%tab%res, [size(L%tab%res)]), L%tab%scale, &
+                  L%tab%snow, L%tab%rain, L%tab%evap, L%tab%lw_in, L%tab%snow_enth, L%tab%atm_rad, L%tab%atm_lat, &
+                  L%tab%frz_lat, L%tab%n_clip, L%tab%clip_area, L%tab%drop_vice, L%tab%drop_vsno, L%tab%drop_eice, &
+                  L%tab%drop_esno, L%tab%clip_w, L%tab%clip_s, L%tab%clip_h, L%tab%snow_reset, L%tab%heat_bound, &
+                  reshape(L%cum_res, [size(L%cum_res)]), L%cum_scale, L%worst, L%cum_clip, L%cum_snow_reset, &
+                  L%cum_zap, L%nsteps, m, sa, e]
+         s%led_on = .true.
+      end associate
+   end subroutine take_ledger
+
+   function led_differs(a, b) result(nb)
+      !! Number of bitwise-different entries of the two ledger reports (both runs have one, or both not).
+      type(snap_t), intent(in) :: a, b
+      integer :: nb
+
+      nb = 0
+      if (a%led_on .neqv. b%led_on) then
+         nb = 1
+         return
+      end if
+      if (.not. a%led_on) return
+      if (size(a%led) /= size(b%led)) then
+         nb = 1
+         return
+      end if
+      nb = count(transfer(a%led, 0_int64, size(a%led)) /= transfer(b%led, 0_int64, size(b%led)))
+   end function led_differs
 
    subroutine take_snapshot(engine, s)
       !! Host copy of every restart-registry field (device -> host first)
@@ -2294,6 +2535,7 @@ contains
                call advance(engine, cfg, t, n_steps_cur - N_CKPT, ierr)
                if (ierr == OCEAN_STATUS_OK) then
                   call take_snapshot(engine, res)
+                  call take_ledger(engine, res)
                   ok = .true.
                end if
                call engine_exit_data(engine)
@@ -2351,6 +2593,9 @@ contains
          nbad = 1
          return
       end if
+      nb = led_differs(a, b)
+      if (nb > 0) write (*, '(a,i0,3a,i0,a)') "  rank ", rank, " ", report, " write/resume ledger report: ", nb, " mismatches"
+      nbad = nbad + nb
       do e = 1, a%n
          if (a%f(e)%tag /= b%f(e)%tag .or. any(shape(a%f(e)%a) /= shape(b%f(e)%a))) then
             nbad = nbad + 1
@@ -2376,7 +2621,7 @@ contains
    end subroutine delete_file
 #endif
 
-   subroutine compare(dec, ref, nbad, nfin, report, quiet)
+   subroutine compare(dec, ref, nbad, nfin, report, quiet, skip_led)
       !! Bitwise comparison of each field's owned window.  A face array is
       !! one wider than the cell array along its stagger; its owned window
       !! then includes both edge faces of the tile.
@@ -2385,12 +2630,16 @@ contains
       character(len=*), intent(in) :: report
       logical, intent(in), optional :: quiet
          !! Count only (a negative control expects mismatches and need not print them).
+      logical, intent(in), optional :: skip_led
+         !! Leave the ledger report out (the ledger-off twin of an observer comparison has none).
       integer :: e, i, j, k, ex, ey, nb
       character(len=160) :: first
-      logical :: talk
+      logical :: talk, skip
 
       talk = .true.
       if (present(quiet)) talk = .not. quiet
+      skip = .false.
+      if (present(skip_led)) skip = skip_led
       nbad = 0
       nfin = 0
       if (dec%n /= ref%n) then
@@ -2402,6 +2651,13 @@ contains
          if (talk) write (*, '(a,i0,2a,3es24.16,a,3es24.16)') "  rank ", rank, " ", report//" console ice totals differ: ", &
             dec%ice_tot, " vs ", ref%ice_tot
          nbad = nbad + 1
+      end if
+      if (.not. skip) then
+         nb = led_differs(dec, ref)
+         if (nb > 0) then
+            if (talk) write (*, '(a,i0,2a,i0,a)') "  rank ", rank, " ", report//" ledger report differs in ", nb, " value(s)"
+            nbad = nbad + nb
+         end if
       end if
       do e = 1, dec%n
          if (dec%f(e)%tag /= ref%f(e)%tag) then
@@ -2649,7 +2905,7 @@ contains
       character(len=*), intent(in) :: label, scheme
       type(snap_t) :: ref, dec
       logical :: ok_ref, ok_dec
-      integer :: px, nbad, nfin, glob(3), nbud, nghost_bad, nb_img
+      integer :: px, nbad, nfin, glob(3), nbud, nghost_bad, nb_img, nb_obs
       character(len=96) :: tag
       character(len=16) :: steps_env
       type(conservation_budget_t) :: buds(8)
@@ -2709,6 +2965,11 @@ contains
             if (index(label, "cavity_") == 1 .or. index(label, "cice_ice") == 1) then
                call check_ghost_images(dec, ref, nb_img, trim(tag))
                nbad = nbad + nb_img
+            end if
+            if (is_led_label(label)) then
+               ! the ledger is an observer: the same run with it OFF is bitwise the ledger-on run in every field
+               call check_ledger_observer(case_nml(label, scheme, px, nprocs/px), dec, trim(tag), nb_obs)
+               nbad = nbad + nb_obs
             end if
             ! Windowed-drain cases: the sub-cycle must run >1 pass (else the
             ! pass-count reduction is never exercised) and every layout must
@@ -2770,6 +3031,8 @@ contains
       end do
       if (nprocs >= 2 .and. trim(scheme) == trim(SCHEMES(1)) .and. (label == "cice_ice" .or. label == "cice_ice_bulk")) &
          call cice_negative_controls(ref, label, scheme)
+      if (nprocs >= 2 .and. trim(scheme) == trim(SCHEMES(1)) .and. label == "cice_ice_led") &
+         call cice_ledger_negative_control(ref, label, scheme)
       ! The real regression gate: the single-rank reference's budget
       ! against every decomposed factorization, bit-for-bit, at whatever
       ! `nprocs` this launch is (1, 2, or 4 under ctest) -- see the
@@ -3150,14 +3413,15 @@ contains
    end subroutine swap_to_cice
 
    subroutine check_cice_fences()
-      !! What stage A does NOT cover stays refused at configure on several ranks: the named-term ledger (its
-      !! sums are per rank) and the tripolar fold (stage B).  Each refused namelist is the accepted `cice_ice`
-      !! one plus ONE knob, so the refusal is that knob's, and the accepted twin proves the base is valid.
+      !! What stage A does NOT cover stays refused at configure on several ranks: the tripolar fold (stage B).  The
+      !! refused namelist is the accepted `cice_ice` one with only the ice groups swapped, so the refusal is the fold's,
+      !! and the accepted twin proves the base is valid.  The named-term ledger is NOT a fence any more: its sums are EFP
+      !! values combined in one collective per step, so the same namelist with `ledger = .true.` is ACCEPTED on several
+      !! ranks, with an explicit or an unset process grid (the `cice_ice_*_led` cases pin its numbers).
       character(len=*), parameter :: NL = new_line("a")
       character(len=:), allocatable :: base, nml
       type(config_t) :: cfg
-      integer :: ierr, k
-      character(len=24), parameter :: WHAT(2) = [character(len=24) :: "ledger = .true.", "tripolar fold"]
+      integer :: ierr
 
       base = cice_ice_nml("cice_ice", "pred_corr", nprocs, 1)
       call read_config_from_string(base, cfg, ierr=ierr)
@@ -3167,70 +3431,68 @@ contains
          n_fail = n_fail + 1
          return
       end if
+      ! the ledger: accepted at configure on several ranks (explicit process grid)
+      nml = base
+      call replace_once(nml, "hfreeze = 10.0, dynamics", "hfreeze = 10.0, ledger = .true., dynamics")
+      call read_config_from_string(nml, cfg, ierr=ierr)
+      if (ierr == OCEAN_STATUS_OK) call validate_config(cfg, ierr)
+      if (ierr /= OCEAN_STATUS_OK) then
+         write (*, '(a,i0)') "FAIL cice fence: ledger = .true. is REFUSED on several ranks (it is supported now), rank ", rank
+         n_fail = n_fail + 1
+      else if (rank == 0) then
+         write (*, '(a)') "case cice fence: ledger = .true. accepted on several ranks (ok)"
+      end if
       call check_cice_ledger_unset_grid()
-      do k = 1, 2
-         nml = base
-         if (k == 1) then
-            ! (the group is edited in place: a second `&ocean_ice_nml` would fail to PARSE, a vacuous refusal)
-            call replace_once(nml, "hfreeze = 10.0, dynamics", "hfreeze = 10.0, ledger = .true., dynamics")
-         else
-            ! the tripolar-cap sea-ice case (accepted and bitwise under the SIS2 scheme: its twin below) with
-            ! only the ice groups swapped
-            nml = case_nml("sea_ice_fold", "pred_corr", nprocs, 1)
-            call read_config_from_string(nml, cfg, ierr=ierr)
-            if (ierr == OCEAN_STATUS_OK) call validate_config(cfg, ierr)
-            if (ierr /= OCEAN_STATUS_OK) then
-               write (*, '(a,i0)') "FAIL cice fence: the SIS2 tripolar twin is refused, rank ", rank
-               n_fail = n_fail + 1
-               cycle
-            end if
-            call swap_to_cice(nml)
-         end if
-         call read_config_from_string(nml, cfg, ierr=ierr)
-         if (ierr == OCEAN_STATUS_OK) call validate_config(cfg, ierr)
-         if (ierr == OCEAN_STATUS_OK) then
-            write (*, '(3a,i0)') "FAIL cice fence: ", trim(WHAT(k)), " was ACCEPTED on several ranks, rank ", rank
-            n_fail = n_fail + 1
-         else if (rank == 0) then
-            write (*, '(3a)') "case cice fence: ", trim(WHAT(k)), " refused on several ranks (ok)"
-         end if
-      end do
+      ! the tripolar-cap sea-ice case (accepted and bitwise under the SIS2 scheme: its twin below) with only the ice
+      ! groups swapped: refused
+      nml = case_nml("sea_ice_fold", "pred_corr", nprocs, 1)
+      call read_config_from_string(nml, cfg, ierr=ierr)
+      if (ierr == OCEAN_STATUS_OK) call validate_config(cfg, ierr)
+      if (ierr /= OCEAN_STATUS_OK) then
+         write (*, '(a,i0)') "FAIL cice fence: the SIS2 tripolar twin is refused, rank ", rank
+         n_fail = n_fail + 1
+         return
+      end if
+      call swap_to_cice(nml)
+      call read_config_from_string(nml, cfg, ierr=ierr)
+      if (ierr == OCEAN_STATUS_OK) call validate_config(cfg, ierr)
+      if (ierr == OCEAN_STATUS_OK) then
+         write (*, '(a,i0)') "FAIL cice fence: tripolar fold was ACCEPTED on several ranks, rank ", rank
+         n_fail = n_fail + 1
+      else if (rank == 0) then
+         write (*, '(a)') "case cice fence: tripolar fold refused on several ranks (ok)"
+      end if
    end subroutine check_cice_fences
 
    subroutine check_cice_ledger_unset_grid()
-      !! The ledger with NO `&mpi_nml` (px = py = 1 for `validate_config`, auto-factored by the engine on N ranks):
-      !! the config check cannot see the rank count, so `engine_setup` must refuse on the actual one.
-      character(len=*), parameter :: NL = new_line("a")
-      character(len=:), allocatable :: nml
+      !! The ledger with NO `&mpi_nml` (px = py = 1 for `validate_config`, auto-factored by the engine on N ranks) is
+      !! accepted by `engine_setup` on the actual rank count and comes up active.
       type(config_t) :: cfg
       type(ocean_engine_t) :: engine
-      integer :: ierr, im
-      logical :: found
+      character(len=:), allocatable :: nml
+      integer :: ierr
 
       nml = cice_ice_nml("cice_ice", "pred_corr", 1, 1)
       call replace_once(nml, "hfreeze = 10.0, dynamics", "hfreeze = 10.0, ledger = .true., dynamics")
       call read_config_from_string(nml, cfg, ierr=ierr)
       if (ierr == OCEAN_STATUS_OK) call validate_config(cfg, ierr)
       if (ierr /= OCEAN_STATUS_OK) then
-         write (*, '(a,i0)') "FAIL cice fence: validate_config refused the unset-grid ledger namelist (vacuous), rank ", rank
+         write (*, '(a,i0)') "FAIL cice fence: validate_config refused the unset-grid ledger namelist, rank ", rank
          n_fail = n_fail + 1
          return
       end if
       call error_ring_clear()
       call engine_setup(engine, cfg, ierr, compute_rank=rank, compute_size=nprocs)
-      found = .false.
-      do im = 0, error_ring_count() - 1
-         if (index(error_ring_get(im), "ledger = .true. is single-rank") > 0) found = .true.
-      end do
-      if (ierr == OCEAN_STATUS_OK) then
-         write (*, '(a,i0)') "FAIL cice fence: ledger with an unset process grid was ACCEPTED on several ranks, rank ", rank
+      if (ierr /= OCEAN_STATUS_OK) then
+         write (*, '(a,i0)') "FAIL cice fence: ledger with an unset process grid was REFUSED on several ranks, rank ", rank
+         n_fail = n_fail + 1
+      else if (.not. engine%state%icec%ledger%on) then
+         write (*, '(a,i0)') "FAIL cice fence: the ledger is not active after setup, rank ", rank
+         n_fail = n_fail + 1
          call engine_teardown(engine)
-         n_fail = n_fail + 1
-      else if (.not. found) then
-         write (*, '(a,i0)') "FAIL cice fence: unset-grid ledger refused, but not for the ledger, rank ", rank
-         n_fail = n_fail + 1
-      else if (rank == 0) then
-         write (*, '(a)') "case cice fence: ledger with an unset process grid refused by engine_setup (ok)"
+      else
+         if (rank == 0) write (*, '(a)') "case cice fence: ledger with an unset process grid accepted by engine_setup (ok)"
+         call engine_teardown(engine)
       end if
    end subroutine check_cice_ledger_unset_grid
 

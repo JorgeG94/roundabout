@@ -112,7 +112,7 @@ module rdb_ice_transport_cice
    !! of the CFL check, the pack, the entry checks, the geometry, the reconstruction
    !! input, the result checks and the unpack are summed (OR-ed) over the ranks before
    !! the step goes on or stops, so `res%ierr` and `res%cfg` are the same on every rank
-   !! (`res%ledger` stays this rank's owned sum; the ledger reduces it).  The configuration
+   !! (`res%ledger` stays this rank's owned plain sum, a diagnostic; the conservation ledger books the per-cell record `fw%clip` with the EFP sums instead).  The configuration
    !! verdict (tile range, table, workspace) and the `ok` flags of the conservation sums and
    !! the bounds are reduced too (a refusing or unable tile refuses/disables everywhere).  The
    !! counts `res%n_*` are decomposition-DEPENDENT diagnostics: the CFL check and the entry
@@ -278,7 +278,7 @@ contains
    ! workspace
    ! ------------------------------------------------------------------
 
-   subroutine tcw_init(this, nx, ny, ncat, nilyr, nslyr, want_bounds, ierr, remap, remap_nbatch, remap_flux_bytes_max)
+   subroutine tcw_init(this, nx, ny, ncat, nilyr, nslyr, want_bounds, ierr, remap, remap_nbatch, remap_flux_bytes_max, ledger)
       !! Build the table for `nilyr`/`nslyr`, allocate both packed workspaces
       !! and the check scratch.  `ierr /= 0` (a `TT_ERR_*` or
       !! `TRANSPORT_CFG_*`): nothing is left allocated.  `remap = .true.`
@@ -293,6 +293,8 @@ contains
       logical, intent(in), optional :: remap
       integer, intent(in), optional :: remap_nbatch
       integer(int64), intent(in), optional :: remap_flux_bytes_max
+      logical, intent(in), optional :: ledger
+         !! Also the remap's per-cell clip record (`fw%clip`) for the conservation ledger (default off).
       type(transport_workspace_t) :: tmp
       integer :: ierr2, nbatch
       integer(int64) :: bmax
@@ -339,7 +341,7 @@ contains
          if (present(remap_nbatch)) nbatch = remap_nbatch
          call this%gw%init(nx, ny)
          call this%rb%init(nx, ny, ncat, this%ntrace, nbatch, ierr2)
-         if (ierr2 == 0) call this%fw%init(nx, ny, ncat, this%ntrace, nbatch, ierr2)
+         if (ierr2 == 0) call this%fw%init(nx, ny, ncat, this%ntrace, nbatch, ierr2, ledger=ledger)
          if (ierr2 /= 0) then
             call this%destroy()
             ierr = TRANSPORT_CFG_REMAP

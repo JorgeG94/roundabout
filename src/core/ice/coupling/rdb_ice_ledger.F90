@@ -55,13 +55,12 @@ module rdb_ice_ledger
    !! accumulate `dt*sum A*flux` over every closed step: the left-hand side of the
    !! interface closure (what the ocean must have received).
    !!
-   !! **Reproducibility / multi-rank.**  The sums are `reduce(+)` (round-off
-   !! accurate, not order-reproducible) over the local tile.  `open` takes the rank
-   !! count; with more than one rank the ledger is INVALID (`close` leaves
-   !! `valid = .false.`, NaN residuals, `closed` false) because the tile sums would
-   !! silently under-count.  The multi-rank PR replaces `ice_ledger_reduce` (the
-   !! single collective hook) with an all-reduce of reproducing (EFP) sums and
-   !! drops the refusal.  There is no MPI here.
+   !! **Reproducibility / multi-rank.**  This whole-step MIRROR is a single-rank tool of the unit tests (plain `reduce(+)`
+   !! sums over the local tile: round-off accurate, not order-reproducible).  `open` takes the rank count; with more than
+   !! one rank the mirror is INVALID (`close` leaves `valid = .false.`, NaN residuals, `closed` false) because the tile
+   !! sums would silently under-count.  The MODEL's ledger is `rdb_ice_ledger_terms`, which runs on any rank count: its
+   !! sums are EFP values combined over the ranks in one collective per step and bitwise the one-rank numbers.  There is
+   !! no MPI here.
    !!
    !! **Non-finite input** propagates through the sums; `finite` is then
    !! `.false.`, every residual is NaN and `closed` is `.false.`.

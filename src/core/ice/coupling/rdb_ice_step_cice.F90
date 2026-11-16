@@ -999,7 +999,7 @@ contains
       call ice_save_init(cice)
       led_on = .false.
       if (associated(opts%ledger)) led_on = opts%ledger%on
-      if (led_on) call opts%ledger%begin(cice, flux, dt, work%fsnow, work%frain, work%flw, opts%nranks, &
+      if (led_on) call opts%ledger%begin(cice, dt, work%fsnow, work%frain, work%flw, &
                                          .not. opts%skip_thermo)
 
       ! ---- thermodynamics group: radiation + therm1 + through-ice shortwave are ONE call ----
@@ -1075,7 +1075,7 @@ contains
       if (.not. ok) return
       if (led_on) then
          call opts%ledger%probe(ICE_LT_RIDGING, cice, flux)
-         call opts%ledger%end_step()
+         call opts%ledger%end_step(opts%seam)
       end if
       call run_hook(hooks%halo_state_post, ctx, ICE_STAGE_HALO_STATE_POST, res, ok)
       if (.not. ok) return

@@ -250,9 +250,10 @@ contains
       !! The console line of the named-term ice ledger (`&ocean_ice_nml ledger`): the cumulative
       !! residual of each line (water, salt, heat) relative to its cumulative scale, with the stage
       !! that carries the largest one.  Called at the status cadence next to the ocean's console
-      !! block; the sums are EFP reproducing sums, so the numbers do not depend on the backend.  Inert
-      !! (prints nothing, touches nothing) under `scheme = "sis2"` and with the ledger off.  Single
-      !! rank: the ledger refuses more, so no collective is needed.
+      !! block; the sums are EFP reproducing sums combined over the ranks once per step, so the numbers do not
+      !! depend on the backend or the decomposition and every rank holds the same ones: only the console rank prints,
+      !! and no collective is needed here.  Inert (prints nothing, touches nothing) under `scheme = "sis2"` and with
+      !! the ledger off.
       type(ocean_state_t), intent(in) :: state
       integer, intent(in) :: compute_rank
 
@@ -561,6 +562,7 @@ contains
       end associate
       ! the step's clip/drop ledger of the remap update, kept for the conservation ledger (module slot)
       S%icec%tres = tres
+      if (S%icec%ledger%on .and. allocated(S%icec%tws%fw%clip)) call S%icec%ledger%book_clip(S%icec%tws%fw%clip)
       S%icec%ledger_cum(ICE_LCUM_NCLIP) = S%icec%ledger_cum(ICE_LCUM_NCLIP) + real(tres%ledger%n_clip, wp)
       S%icec%ledger_cum(ICE_LCUM_AREA) = S%icec%ledger_cum(ICE_LCUM_AREA) + tres%ledger%clip_area
       S%icec%ledger_cum(ICE_LCUM_VICE) = S%icec%ledger_cum(ICE_LCUM_VICE) + tres%ledger%drop_vice

@@ -429,7 +429,7 @@ contains
       character(len=*), parameter :: NL = new_line("a")
       character(len=64), parameter :: what(15) = [character(len=64) :: &
                                                   "transport_buffer_mib", "ndtd", "nghost", "tripolar", "wetdry", "cavity", &
-                                  "open edge", "thermodynamics", "components", "hfreeze", "ledger+px*py", "dynamics", "transport", &
+                               "open edge", "thermodynamics", "components", "hfreeze", "ledger+px*py OK", "dynamics", "transport", &
                                                   "atm forcing + uniform", "dataovr wind"]
       character(len=:), allocatable :: nml
       character(len=80) :: key(15)
@@ -448,7 +448,7 @@ contains
       end do
       key = [character(len=80) :: "transport_buffer_mib", "ndtd /= 1", "nghost >= 3", "tripolar north fold", &
              "wetdry", "cavity_dyn", "'wall' or 'periodic'", "enable_thermodynamics", "enable_components", &
-             "hfreeze > 0", "ledger is single-rank", "needs dynamics=.true.", "needs transport=.true.", &
+             "hfreeze > 0", "(accepted)", "needs dynamics=.true.", "needs transport=.true.", &
              "is ambiguous", "tau_x/tau_y files"]
       do k = 1, 15
          select case (k)
@@ -491,6 +491,12 @@ contains
             return
          end if
          call ice_config_check(cfg, msgs, n)
+         if (k == 11) then
+            ! the named-term ledger runs on several ranks (global EFP sums): NOT a refusal any more
+            call check(error, n == 0, "the ledger on px*py > 1 is accepted: "//trim(msgs(max(n, 1))))
+            if (allocated(error)) return
+            cycle
+         end if
          hit = mentions(msgs, n, trim(key(k)))
         call check(error, n > 0 .and. hit, "refusal '"//trim(what(k))//"' is reported and names its cause: "//trim(msgs(max(n, 1))))
          if (allocated(error)) return

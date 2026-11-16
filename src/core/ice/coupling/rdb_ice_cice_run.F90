@@ -72,7 +72,8 @@ module rdb_ice_cice_run
          !! what the remap update's guards created or dropped that step (clipped cells and area,
          !! dropped volume and enthalpy content), for the conservation ledger to book.
       real(wp) :: ledger_cum(ICE_LCUM_N) = 0.0_wp
-         !! The same, summed over the whole run (RESTART state: optional scalars `ice_remap_*`, so a resumed run
+         !! The same, summed over the whole run on THIS RANK's owned cells with plain sums (a diagnostic: with the ledger on
+         !! the GLOBAL, bitwise record is `ledger%cum_clip`, restart scalars `ice_led_clip_*`) (RESTART state: optional scalars `ice_remap_*`, so a resumed run
          !! continues the total; a checkpoint without them restarts it at 0).  Entries `ICE_LCUM_NCLIP`
          !! (clipped cells, as a real), `_AREA`, `_VICE`, `_VSNO`, `_EICE`, `_ESNO`: the fields of `remap_ledger_t`.
       type(ice_term_ledger_t) :: ledger
@@ -135,7 +136,8 @@ contains
       call this%oin%init(grid)
       call this%tws%init(nx, ny, cice%ncat, cice%nilyr, cice%nslyr, .false., e, &
                          remap=(cice%p%transport%advection == ICE_ADVECT_REMAP), &
-                         remap_flux_bytes_max=int(cfg%ocean%ice_dyn%transport_buffer_mib, int64)*1048576_int64)
+                         remap_flux_bytes_max=int(cfg%ocean%ice_dyn%transport_buffer_mib, int64)*1048576_int64, &
+                         ledger=cfg%ocean%ice%ledger)
       if (e /= 0) then
          ierr = 4
          return

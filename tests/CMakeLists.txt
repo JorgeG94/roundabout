@@ -266,6 +266,7 @@ set(RDB_TESTS
     "test_cice_engine|test_cice_engine|collect_cice_engine_tests|cice_engine|ocean"
     "test_cice_forcing|test_cice_forcing|collect_cice_forcing_tests|cice_forcing|ocean"
     "test_cice_closure|test_cice_closure|collect_cice_closure_tests|cice_closure|ocean"
+    "test_cice_ledger_cost|test_cice_ledger_cost|collect_cice_ledger_cost_tests|cice_ledger_cost|ocean"
     "test_cice_stefan_column|test_cice_stefan_column|collect_cice_stefan_column_tests|cice_stefan_column|ocean"
     "test_ocean_ice_evp_fold|test_ocean_ice_evp_fold|collect_ocean_ice_evp_fold_tests|ocean_ice_evp_fold|ocean"
     "test_ocean_ice_restart|test_ocean_ice_restart|collect_ocean_ice_restart_tests|ocean_ice_restart|ocean"

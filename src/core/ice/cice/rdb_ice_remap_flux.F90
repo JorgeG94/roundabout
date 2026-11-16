@@ -142,7 +142,7 @@ module rdb_ice_remap_flux
    public :: remap_flux_bytes_per_index, remap_default_nbatch
    public :: REMAP_CFG_OK, REMAP_CFG_WORKSPACE, REMAP_CFG_TABLE, REMAP_CFG_RANGE, REMAP_CFG_MASK
    public :: REMAP_QUAD_W0, REMAP_QUAD_W1, REMAP_QUAD_FRAC
-   public :: remap_ledger_t, remap_ledger_impl, REMAP_TGROUP
+   public :: remap_ledger_t, remap_ledger_impl, remap_ledger_cells_impl, REMAP_TGROUP, REMAP_NCLIP
 
    integer, parameter :: NGV = 3
       !! Counts reduced together over the ranks at one decision point.
@@ -159,6 +159,8 @@ module rdb_ice_remap_flux
       !! The window leaves no room for the three ghost cells.
    integer, parameter :: REMAP_CFG_MASK = 4
       !! The land mask holds a value other than 0 and 1.
+   integer, parameter :: REMAP_NCLIP = 6
+      !! Planes of `remap_flux_workspace_t%clip`.
 
    real(wp), parameter :: REMAP_QUAD_W0 = -9.0_wp/16.0_wp
       !! Weight of the centroid in the four-point cubic rule (Stroud 1971).
@@ -205,6 +207,12 @@ module rdb_ice_remap_flux
          !! `(nx, ny, ntrace, nbatch)`: tracer-product flux.
       integer(int32), allocatable :: gerr(:, :)
          !! `(nx, ny)` error word the geometry ORs into; zero between calls.
+      real(wp), allocatable :: clip(:, :, :)
+         !! `(nx, ny, REMAP_NCLIP)` per-cell clip record of the LAST `remap_advect` (allocated only when `init` got
+         !! `ledger = .true.`): plane 1 is 1 where a cell's new area was clipped, 2 the area created, 3/4 the
+         !! ice/snow volume and 5/6 the ice/snow enthalpy content dropped (the fields of `remap_ledger_t`, per cell,
+         !! summed over the category batches).  The conservation ledger reduces the planes with the EFP sums, which
+         !! is what makes the clip record global and bitwise decomposition-independent.
    contains
       procedure :: init => flux_ws_init
       procedure :: enter_data => flux_ws_enter_data
@@ -238,11 +246,13 @@ contains
       nb = int(min(int(ncat + 1, int64), max(1_int64, bytes_max/max(per, 1_int64))))
    end function remap_default_nbatch
 
-   subroutine flux_ws_init(this, nx, ny, ncat, ntrace, nbatch, ierr)
-      !! Allocate (zeroed).  `ierr /= 0`: invalid extents or batch, nothing allocated.
+   subroutine flux_ws_init(this, nx, ny, ncat, ntrace, nbatch, ierr, ledger)
+      !! Allocate (zeroed).  `ierr /= 0`: invalid extents or batch, nothing allocated.  `ledger`: also the
+      !! per-cell clip record `clip` (default off: nothing extra is allocated, mapped or computed).
       class(remap_flux_workspace_t), intent(inout) :: this
       integer, intent(in) :: nx, ny, ncat, ntrace, nbatch
       integer, intent(out) :: ierr
+      logical, intent(in), optional :: ledger
 
       ierr = 0
       if (nx < 3 .or. ny < 3 .or. ncat < 1 .or. ntrace < 1 .or. nbatch < 1 .or. nbatch > ncat + 1) then
@@ -263,6 +273,11 @@ contains
       this%mtflx_e = 0.0_wp
       this%mtflx_n = 0.0_wp
       this%gerr = 0_int32
+      if (present(ledger)) then
+         if (ledger) then
+            allocate (this%clip(nx, ny, REMAP_NCLIP), source=0.0_wp)
+         end if
+      end if
       this%is_init = .true.
    end subroutine flux_ws_init
 
@@ -273,6 +288,9 @@ contains
       !$acc enter data copyin(this%mflx_e, this%mflx_n)
       !$acc enter data copyin(this%mtflx_e, this%mtflx_n)
       !$acc enter data copyin(this%gerr)
+      if (allocated(this%clip)) then
+         !$acc enter data copyin(this%clip)
+      end if
       this%mapped = .true.
    end subroutine flux_ws_enter_data
 
@@ -282,6 +300,9 @@ contains
       !$acc exit data delete(this%mflx_e, this%mflx_n)
       !$acc exit data delete(this%mtflx_e, this%mtflx_n)
       !$acc exit data delete(this%gerr)
+      if (allocated(this%clip)) then
+         !$acc exit data delete(this%clip)
+      end if
       this%mapped = .false.
    end subroutine flux_ws_exit_data
 
@@ -293,6 +314,7 @@ contains
       if (allocated(this%mtflx_e)) deallocate (this%mtflx_e)
       if (allocated(this%mtflx_n)) deallocate (this%mtflx_n)
       if (allocated(this%gerr)) deallocate (this%gerr)
+      if (allocated(this%clip)) deallocate (this%clip)
       this%is_init = .false.
       this%nx = 0
       this%ny = 0
@@ -311,6 +333,7 @@ contains
       if (allocated(this%mtflx_e)) b = b + int(size(this%mtflx_e), int64)*8_int64
       if (allocated(this%mtflx_n)) b = b + int(size(this%mtflx_n), int64)*8_int64
       if (allocated(this%gerr)) b = b + int(size(this%gerr), int64)*4_int64
+      if (allocated(this%clip)) b = b + int(size(this%clip), int64)*8_int64
    end function flux_ws_bytes
 
    ! ------------------------------------------------------------------
@@ -560,16 +583,19 @@ contains
       !$acc end data
    end subroutine remap_update_impl
 
-   subroutine remap_ledger_impl(nx, ny, ncat, ntrace, nb, is, ie, js, je, nlo, nhi, puny, tracer_type, depend, &
-                                nq1, nq2, nqs, tarea, aim, trm, mflx_e, mflx_n, mtflx_e, mtflx_n, &
-                                nclip, clip_area, d_vi, d_vs, d_ei, d_es)
-      !! What the guards of `remap_update_impl` create or drop on the owned cells of the categories
-      !! `nlo..nhi`: the cells clipped from `[-puny, 0)` to 0 (count and area created), and the content
-      !! of the tracer products left behind where the new area is 0 or a type-2 tracer's parent is 0
-      !! (ice and snow volume, ice enthalpy `nq1..nq2`, snow enthalpy `nqs`: `trm` indices), times the
-      !! cell area.  One `do concurrent` with six `reduce(+)` accumulators; it reads the fluxes the
-      !! update read and recomputes the new area (the same expression).
-      integer, intent(in) :: nx, ny, ncat, ntrace, nb, is, ie, js, je, nlo, nhi, nq1, nq2, nqs
+   pure subroutine remap_ledger_cell(i, j, n, b, nx, ny, ncat, ntrace, nb, nq1, nq2, nqs, puny, tracer_type, depend, &
+                                     tarea, aim, trm, mflx_e, mflx_n, mtflx_e, mtflx_n, &
+                                     nclip, clip_area, d_vi, d_vs, d_ei, d_es)
+      !! What the guards of `remap_update_impl` create or drop in category `n` (batch slot `b`) of cell
+      !! `(i, j)`: `nclip` (1 if the new area fell in `[-puny, 0)` and was set to 0), the area created, and the
+      !! content (ice and snow volume, ice enthalpy `nq1..nq2`, snow enthalpy `nqs`: `trm` indices) of the tracer
+      !! products left behind where the new area is 0 or a type-2 tracer's parent is 0, times the cell area.  It
+      !! re-forms the new area from the fluxes the update read (the same expression).  The ONE statement of the
+      !! arithmetic, shared by the reducing kernel (`remap_ledger_impl`) and the per-cell record
+      !! (`remap_ledger_cells_impl`).
+      !$acc routine seq
+      integer, value :: i, j, n, b
+      integer, intent(in) :: nx, ny, ncat, ntrace, nb, nq1, nq2, nqs
       real(wp), intent(in) :: puny
       integer, intent(in) :: tracer_type(ntrace), depend(ntrace)
       real(wp), intent(in) :: tarea(nx, ny)
@@ -577,7 +603,7 @@ contains
       real(wp), intent(in) :: mflx_e(nx, ny, nb), mflx_n(nx, ny, nb), mtflx_e(nx, ny, ntrace, nb), mtflx_n(nx, ny, ntrace, nb)
       integer, intent(out) :: nclip
       real(wp), intent(out) :: clip_area, d_vi, d_vs, d_ei, d_es
-      integer :: i, j, b, n, nt, p
+      integer :: nt, p
       real(wp) :: mm0, dm, tar, rt, mnew, wt, wtp, res, tpn, tp0
 
       nclip = 0
@@ -586,56 +612,149 @@ contains
       d_vs = 0.0_wp
       d_ei = 0.0_wp
       d_es = 0.0_wp
+      mm0 = aim(i, j, n)
+      dm = ((mflx_e(i, j, b) - mflx_e(i - 1, j, b)) + mflx_n(i, j, b)) - mflx_n(i, j - 1, b)
+      tar = tarea(i, j)
+      rt = 0.0_wp
+      if (tar > 0.0_wp) rt = 1.0_wp/tar
+      mnew = mm0 - dm*rt
+      if (mnew < 0.0_wp .and. mnew >= -puny) then
+         nclip = 1
+         clip_area = -mnew*tar
+      end if
+      if (n < 1) return
+      do nt = 1, ntrace
+         if (.not. (nt == 1 .or. nt == 2 .or. (nt >= nq1 .and. nt <= nq2) .or. nt == nqs)) cycle
+         wt = ((mtflx_e(i, j, nt, b) - mtflx_e(i - 1, j, nt, b)) + mtflx_n(i, j, nt, b)) - mtflx_n(i, j - 1, nt, b)
+         res = 0.0_wp
+         if (.not. (mnew > 0.0_wp)) then
+            if (tracer_type(nt) == 1) then
+               res = mm0*trm(i, j, nt, n) - wt*rt
+            else
+               p = depend(nt)
+               res = (mm0*trm(i, j, p, n))*trm(i, j, nt, n) - wt*rt
+            end if
+         else if (tracer_type(nt) /= 1) then
+            p = depend(nt)
+            tp0 = trm(i, j, p, n)
+            wtp = ((mtflx_e(i, j, p, b) - mtflx_e(i - 1, j, p, b)) + mtflx_n(i, j, p, b)) - mtflx_n(i, j - 1, p, b)
+            tpn = (mm0*tp0 - wtp*rt)/mnew
+            if (tpn == 0.0_wp .and. tp0 /= 0.0_wp) then
+               res = (mm0*tp0)*trm(i, j, nt, n) - wt*rt
+            end if
+         end if
+         if (nt == 1) then
+            d_vi = d_vi + res*tar
+         else if (nt == 2) then
+            d_vs = d_vs + res*tar
+         else if (nt == nqs) then
+            d_es = d_es + res*tar
+         else
+            d_ei = d_ei + res*tar
+         end if
+      end do
+   end subroutine remap_ledger_cell
+
+   subroutine remap_ledger_impl(nx, ny, ncat, ntrace, nb, is, ie, js, je, nlo, nhi, puny, tracer_type, depend, &
+                                nq1, nq2, nqs, tarea, aim, trm, mflx_e, mflx_n, mtflx_e, mtflx_n, &
+                                nclip, clip_area, d_vi, d_vs, d_ei, d_es)
+      !! What the guards of `remap_update_impl` create or drop on the owned cells of the categories
+      !! `nlo..nhi` (`remap_ledger_cell`), summed: one `do concurrent` with six `reduce(+)` accumulators.  A
+      !! plain-FP sum over THIS rank's cells (round-off accurate, neither order- nor decomposition-reproducible):
+      !! the per-step record of `remap_ledger_t`; the conservation ledger uses the per-cell record
+      !! (`remap_ledger_cells_impl`) with the EFP sums instead.
+      integer, intent(in) :: nx, ny, ncat, ntrace, nb, is, ie, js, je, nlo, nhi, nq1, nq2, nqs
+      real(wp), intent(in) :: puny
+      integer, intent(in) :: tracer_type(ntrace), depend(ntrace)
+      real(wp), intent(in) :: tarea(nx, ny)
+      real(wp), intent(in) :: aim(nx, ny, 0:ncat), trm(nx, ny, ntrace, ncat)
+      real(wp), intent(in) :: mflx_e(nx, ny, nb), mflx_n(nx, ny, nb), mtflx_e(nx, ny, ntrace, nb), mtflx_n(nx, ny, ntrace, nb)
+      integer, intent(out) :: nclip
+      real(wp), intent(out) :: clip_area, d_vi, d_vs, d_ei, d_es
+      integer :: i, j, b, n, c1
+      real(wp) :: c2, c3, c4, c5, c6
+
+      nclip = 0
+      clip_area = 0.0_wp
+      d_vi = 0.0_wp
+      d_vs = 0.0_wp
+      d_ei = 0.0_wp
+      d_es = 0.0_wp
       !$acc data present(tracer_type, depend, tarea, aim, trm, mflx_e, mflx_n, mtflx_e, mtflx_n)
-      do concurrent(b=1:nhi - nlo + 1, j=js:je, i=is:ie) local(n, nt, p, mm0, dm, tar, rt, mnew, wt, wtp, res, tpn, tp0) &
+      do concurrent(b=1:nhi - nlo + 1, j=js:je, i=is:ie) local(n, c1, c2, c3, c4, c5, c6) &
          reduce(+:nclip, clip_area, d_vi, d_vs, d_ei, d_es)
          n = nlo + b - 1
-         mm0 = aim(i, j, n)
-         dm = ((mflx_e(i, j, b) - mflx_e(i - 1, j, b)) + mflx_n(i, j, b)) - mflx_n(i, j - 1, b)
-         tar = tarea(i, j)
-         rt = 0.0_wp
-         if (tar > 0.0_wp) rt = 1.0_wp/tar
-         mnew = mm0 - dm*rt
-         if (mnew < 0.0_wp .and. mnew >= -puny) then
-            nclip = nclip + 1
-            clip_area = clip_area - mnew*tar
-         end if
-         if (n >= 1) then
-            !$acc loop seq
-            do nt = 1, ntrace
-               if (.not. (nt == 1 .or. nt == 2 .or. (nt >= nq1 .and. nt <= nq2) .or. nt == nqs)) cycle
-               wt = ((mtflx_e(i, j, nt, b) - mtflx_e(i - 1, j, nt, b)) + mtflx_n(i, j, nt, b)) - mtflx_n(i, j - 1, nt, b)
-               res = 0.0_wp
-               if (.not. (mnew > 0.0_wp)) then
-                  if (tracer_type(nt) == 1) then
-                     res = mm0*trm(i, j, nt, n) - wt*rt
-                  else
-                     p = depend(nt)
-                     res = (mm0*trm(i, j, p, n))*trm(i, j, nt, n) - wt*rt
-                  end if
-               else if (tracer_type(nt) /= 1) then
-                  p = depend(nt)
-                  tp0 = trm(i, j, p, n)
-                  wtp = ((mtflx_e(i, j, p, b) - mtflx_e(i - 1, j, p, b)) + mtflx_n(i, j, p, b)) - mtflx_n(i, j - 1, p, b)
-                  tpn = (mm0*tp0 - wtp*rt)/mnew
-                  if (tpn == 0.0_wp .and. tp0 /= 0.0_wp) then
-                     res = (mm0*tp0)*trm(i, j, nt, n) - wt*rt
-                  end if
-               end if
-               if (nt == 1) then
-                  d_vi = d_vi + res*tar
-               else if (nt == 2) then
-                  d_vs = d_vs + res*tar
-               else if (nt == nqs) then
-                  d_es = d_es + res*tar
-               else
-                  d_ei = d_ei + res*tar
-               end if
-            end do
-         end if
+         call remap_ledger_cell(i, j, n, b, nx, ny, ncat, ntrace, nb, nq1, nq2, nqs, puny, tracer_type, depend, &
+                                tarea, aim, trm, mflx_e, mflx_n, mtflx_e, mtflx_n, c1, c2, c3, c4, c5, c6)
+         nclip = nclip + c1
+         clip_area = clip_area + c2
+         d_vi = d_vi + c3
+         d_vs = d_vs + c4
+         d_ei = d_ei + c5
+         d_es = d_es + c6
       end do
       !$acc end data
    end subroutine remap_ledger_impl
+
+   subroutine clip_zero(nx, ny, clip)
+      !! Zero the per-cell clip record (one launch).
+      integer, intent(in) :: nx, ny
+      real(wp), intent(inout) :: clip(nx, ny, REMAP_NCLIP)
+      integer :: i, j, q
+
+      !$acc data present(clip)
+      do concurrent(q=1:REMAP_NCLIP, j=1:ny, i=1:nx)
+         clip(i, j, q) = 0.0_wp
+      end do
+      !$acc end data
+   end subroutine clip_zero
+
+   subroutine remap_ledger_cells_impl(nx, ny, ncat, ntrace, nb, is, ie, js, je, nlo, nhi, puny, tracer_type, depend, &
+                                      nq1, nq2, nqs, tarea, aim, trm, mflx_e, mflx_n, mtflx_e, mtflx_n, clip)
+      !! The per-cell record behind the conservation ledger: ADDS, for every owned cell, what the guards created or
+      !! dropped in the categories `nlo..nhi` (`remap_ledger_cell`) to `clip(i, j, 1:6)` (clipped count, area
+      !! created, ice and snow volume, ice and snow enthalpy dropped).  One `do concurrent` over the cells, the
+      !! batch's categories in a sequential inner loop (a cell is written by one thread: no race, no atomics), so a
+      !! cell's value does not depend on the decomposition.  The caller zeroes `clip` before the first batch.
+      integer, intent(in) :: nx, ny, ncat, ntrace, nb, is, ie, js, je, nlo, nhi, nq1, nq2, nqs
+      real(wp), intent(in) :: puny
+      integer, intent(in) :: tracer_type(ntrace), depend(ntrace)
+      real(wp), intent(in) :: tarea(nx, ny)
+      real(wp), intent(in) :: aim(nx, ny, 0:ncat), trm(nx, ny, ntrace, ncat)
+      real(wp), intent(in) :: mflx_e(nx, ny, nb), mflx_n(nx, ny, nb), mtflx_e(nx, ny, ntrace, nb), mtflx_n(nx, ny, ntrace, nb)
+      real(wp), intent(inout) :: clip(nx, ny, REMAP_NCLIP)
+      integer :: i, j, b, n, c1
+      real(wp) :: c2, c3, c4, c5, c6, s1, s2, s3, s4, s5, s6
+
+      !$acc data present(tracer_type, depend, tarea, aim, trm, mflx_e, mflx_n, mtflx_e, mtflx_n, clip)
+      do concurrent(j=js:je, i=is:ie) local(b, n, c1, c2, c3, c4, c5, c6, s1, s2, s3, s4, s5, s6)
+         s1 = 0.0_wp
+         s2 = 0.0_wp
+         s3 = 0.0_wp
+         s4 = 0.0_wp
+         s5 = 0.0_wp
+         s6 = 0.0_wp
+         !$acc loop seq
+         do b = 1, nhi - nlo + 1
+            n = nlo + b - 1
+            call remap_ledger_cell(i, j, n, b, nx, ny, ncat, ntrace, nb, nq1, nq2, nqs, puny, tracer_type, depend, &
+                                   tarea, aim, trm, mflx_e, mflx_n, mtflx_e, mtflx_n, c1, c2, c3, c4, c5, c6)
+            s1 = s1 + real(c1, wp)
+            s2 = s2 + c2
+            s3 = s3 + c3
+            s4 = s4 + c4
+            s5 = s5 + c5
+            s6 = s6 + c6
+         end do
+         clip(i, j, 1) = clip(i, j, 1) + s1
+         clip(i, j, 2) = clip(i, j, 2) + s2
+         clip(i, j, 3) = clip(i, j, 3) + s3
+         clip(i, j, 4) = clip(i, j, 4) + s4
+         clip(i, j, 5) = clip(i, j, 5) + s5
+         clip(i, j, 6) = clip(i, j, 6) + s6
+      end do
+      !$acc end data
+   end subroutine remap_ledger_cells_impl
 
    ! ------------------------------------------------------------------
    ! geometry error word
@@ -824,6 +943,9 @@ contains
       end if
       if (nrecon > 0) return
 
+      ! the per-cell clip record starts from zero each call (ledger only)
+      if (allocated(fw%clip)) call clip_zero(ws%nx, ws%ny, fw%clip)
+
       ! fluxes and update, a category batch at a time
       nlo = 0
       do while (nlo <= ws%ncat)
@@ -851,6 +973,13 @@ contains
          ledger%drop_vsno = ledger%drop_vsno + lvs
          ledger%drop_eice = ledger%drop_eice + lei
          ledger%drop_esno = ledger%drop_esno + les
+         if (allocated(fw%clip)) then
+            call remap_ledger_cells_impl(ws%nx, ws%ny, ws%ncat, ws%ntrace, fw%nbatch, is, ie, js, je, nlo, nhi, puny, &
+                                         ws%tab%tracer_type(1:ws%ntrace), ws%tab%depend(1:ws%ntrace), 4, &
+                                         ws%tab%nt_qsno + 1, ws%tab%nt_qsno + 2, tarea, ws%aim, ws%trm, fw%mflx_e, &
+                                         fw%mflx_n, fw%mtflx_e, fw%mtflx_n, fw%clip)
+            nlaunch = nlaunch + 1
+         end if
          nlaunch = nlaunch + 5
          nlo = nhi + 1
       end do

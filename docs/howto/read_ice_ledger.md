@@ -64,6 +64,14 @@ equals minus the bank the ocean paid.
 water, so its volume never changes and the term is zero by configuration; it comes back with the real-mass
 coupling. `test_cice_closure` computes its size independently and reports it.
 
+**Several ranks.** Every number above is the GLOBAL one on every rank (one EFP collective per ice step, in
+`end_step`), bitwise the one-rank value on every `px x py` split; the console line is the same on every rank.
+**Three named diagnostics.** `tab%clip_*` / `drop_*` (cumulative `ice_led_clip_*`): what the remap's guards drop
+(booked as a sink of the `transport` stage, zero until a guard fires); `fout(:, cleanup)` (cumulative
+`ice_led_zap_*`): the ITD clean-up zaps, mass and salt positive, heat negative; `tab%snow_reset` (cumulative
+`ice_led_snow_reset`): the energy the thin-snow enthalpy reset adds inside `therm1`, REPORTED to attribute part of the
+`therm1` heat residual, not subtracted.
+
 ## Closing the coupled budget
 
 `test_cice_closure` case `global_*` is the recipe. Heat: `dH_ocean + dE_ice` (from the ocean's
@@ -82,7 +90,7 @@ the ocean today) and `H_mass_conv`.
 
 1. Add its `ICE_LT_*` id (and name) in `rdb_ice_ledger_terms`; raise `ICE_LT_NSTAGE`.
 2. Call `opts%ledger%probe(<id>, cice, flux)` after the stage in `ice_step_cice`.
-3. If it has external sources, add them to `tl_end`.
+3. If it has external sources, add them to `tl_end`.  Every value a probe keeps is an `efp_t` slot of the step vector (`ICE_LT_NV`, `ice_lt_ix_*`): a new reduced quantity needs a slot there, nothing else (the one collective carries it).
 4. The restart tags (`ice_led_res_<line>_<stage>`) follow from the stage count; mind the
    256-entry restart registry.
 5. Extend `test_cice_closure`.
