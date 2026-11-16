@@ -429,7 +429,7 @@ contains
       character(len=*), parameter :: NL = new_line("a")
       character(len=64), parameter :: what(15) = [character(len=64) :: &
                                                   "transport_buffer_mib", "ndtd", "nghost", "tripolar", "wetdry", "cavity", &
-                                         "open edge", "thermodynamics", "components", "hfreeze", "px*py", "dynamics", "transport", &
+                                  "open edge", "thermodynamics", "components", "hfreeze", "ledger+px*py", "dynamics", "transport", &
                                                   "atm forcing + uniform", "dataovr wind"]
       character(len=:), allocatable :: nml
       character(len=80) :: key(15)
@@ -448,7 +448,7 @@ contains
       end do
       key = [character(len=80) :: "transport_buffer_mib", "ndtd /= 1", "nghost >= 3", "tripolar north fold", &
              "wetdry", "cavity_dyn", "'wall' or 'periodic'", "enable_thermodynamics", "enable_components", &
-             "hfreeze > 0", "px*py > 1", "needs dynamics=.true.", "needs transport=.true.", &
+             "hfreeze > 0", "ledger is single-rank", "needs dynamics=.true.", "needs transport=.true.", &
              "is ambiguous", "tau_x/tau_y files"]
       do k = 1, 15
          select case (k)
@@ -474,7 +474,8 @@ contains
          case (10)
             nml = replace(case_nml("column"), "hfreeze = 10.0", "hfreeze = -1.0")
          case (11)
-            nml = case_nml("column", "&mpi_nml px = 2, py = 1 /"//NL)
+            nml = replace(case_nml("column", "&mpi_nml px = 2, py = 1 /"//NL), "hfreeze = 10.0, dynamics", &
+                          "hfreeze = 10.0, ledger = .true., dynamics")
          case (12)
             nml = replace(case_nml("column"), "hfreeze = 10.0, dynamics = .true.", "hfreeze = 10.0, dynamics = .false.")
          case (13)

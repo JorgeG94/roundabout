@@ -169,7 +169,8 @@ module rdb_ocean_engine
                                     ice_ocean_sw_flux, ice_ocean_stress_flux, ice_ocean_stress_flux_c
    use rdb_ice_dyn_c, only: ice_dyn_c_step, ice_dyn_c_metrics_build
    use rdb_ice_sw_wiring, only: ice_sw_wiring_cleanup
-   use rdb_ice_cice_hooks, only: ice_cice_bind, ice_cice_step, ice_cice_ic_apply, ice_cice_post_enter
+   use rdb_ice_cice_hooks, only: ice_cice_bind, ice_cice_step, ice_cice_ic_apply, ice_cice_post_enter, &
+                                 ice_cice_unbind, ice_cice_refresh_flux_ghosts
    use rdb_ice_frazil, only: ice_frazil_accumulate, ice_frazil_accumulate_column
    use rdb_ice_melt_potential, only: ice_melt_potential
    use rdb_ice_frazil_uptake, only: ice_frazil_uptake
@@ -605,14 +606,15 @@ contains
          ! ocean's decomposition (D9.4): the face pair is exchanged every subcycle
          ! (`ice_halo_faces`), the tripolar fold included (`px > 1` too); the cases
          ! `sea_ice_cdyn*` of `test_ocean_decomp_bitid_mpi` pin it bitwise.
-         ! The CICE-port ice (`scheme = "cice"`) is single-rank: its halo hooks are the local
-         ! periodic refresh, its dynamics halo is the single-rank one.  Keyed on the ACTUAL
-         ! rank count.
-         if (cfg%ocean%ice%enable .and. trim(adjustl(cfg%ocean%ice%scheme)) == "cice") then
-            call fail("&ocean_ice_nml scheme = 'cice' is single-rank for now ("// &
-                      to_string(csize)//" ranks requested): the multi-rank halo of the "// &
-                      "category state arrives in a later PR.  Use scheme = 'sis2' or 1 rank.", &
-                      ierr, OCEAN_STATUS_ERR_SETUP)
+         ! The CICE-port ice (`scheme = "cice"`) runs on the ocean's decomposition on walls and periodic
+         ! edges (`cice_ice*` of `test_ocean_decomp_bitid_mpi`).  The tripolar fold is refused in
+         ! `validate_config` on any rank count; the named-term ledger sums per rank, and `validate_config`
+         ! only sees an explicit `px*py > 1` (an unset grid is auto-factored above), so it is refused here too,
+         ! on the ACTUAL rank count.
+         if (cfg%ocean%ice%enable .and. trim(adjustl(cfg%ocean%ice%scheme)) == "cice" .and. cfg%ocean%ice%ledger) then
+            call fail("&ocean_ice_nml ledger = .true. is single-rank ("//to_string(csize)//" ranks requested): the "// &
+                      "named-term ledger is single-rank, it sums over the owned cells of one rank and has no "// &
+                      "cross-rank reduction.  Use ledger = .false. or 1 rank.", ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
          ! In-memory geometry injection (the API's staged bathymetry /
@@ -2617,6 +2619,15 @@ contains
                                           .and. engine%state%dyn%is_thermo_step())
       end if
 
+      ! TEMPORARY, scheme="cice" only: SUPERSEDED by the general refresh of the assembled fluxes (and `sw_net`)
+      ! that `fix/surface-flux-ghost-refresh` puts after the assembly for every path.  The stale-ghost read
+      ! (KPP/EPBL evaluate their surface buoyancy flux in the ghost columns) exists for any bulk forcing +
+      ! KPP/EPBL run, not only this scheme.  Delete this call and `ice_cice_refresh_flux_ghosts` when that lands.
+      ! CICE-port ice on a decomposed domain: the assembled totals carry only their ice share in a seam ghost
+      ! (the bulk components are written on physical cells), and KPP / EPBL read `Q_heat` / `Q_salt` in the ghost
+      ! columns; refresh them from the owners (collective, gated on the same rank-uniform cadence as the assembly).
+      if (engine%state%icec%is_init .and. engine%state%dyn%enable_thermodynamics .and. &
+          engine%state%dyn%is_thermo_step()) call ice_cice_refresh_flux_ghosts(engine%state, engine%grid)
       if (engine%diag_enabled) then
          call engine%state%diag%step(engine%state, dt, t + dt)
       end if
@@ -2636,6 +2647,7 @@ contains
       ! The shortwave wiring's zero snow-absorption workspace (module-level, device-mapped lazily by the
       ! first CICE-port step): released with the other ice workspaces.
       call ice_sw_wiring_cleanup()
+      call ice_cice_unbind()
       call diag_remap_workspace_cleanup()
       engine%device_mapped = .false.
    end subroutine engine_exit_data

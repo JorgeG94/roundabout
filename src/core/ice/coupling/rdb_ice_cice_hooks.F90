@@ -25,12 +25,28 @@ module rdb_ice_cice_hooks
    !!     `work%sw_down` is the surface downward shortwave.
    !!  9. and 15. `halo_state`, `halo_state_post`: `ice_halo_category_state` (the ocean's exchange, the
    !!     periodic wrap and the tripolar fold of the category state and `aice0`; a wall edge keeps its
-   !!     ghosts: the C-grid metrics pin them to land).  The whole scheme is still refused on more than
-   !!     one rank and with a fold at configure (the transport itself is gated on several ranks and
-   !!     across the fold by `test_cice_remap_decomp_mpi`; see `docs/CAPABILITIES_AND_LIMITATIONS.md`
-   !!     for what else stands between the scheme and a decomposed run).
-   !! 11. `stress_to_faces`: periodic wrap of the T wind stress, then `ice_atm_stress_to_faces`
-   !!     into the dynamics slot's `strairxE/yN` (the dynamics keeps them: `wind_on_faces`).
+   !!     ghosts: the C-grid metrics pin them to land).  The scheme runs on several ranks on walls and
+   !!     periodic edges (stage A, bitwise: `cice_ice*` of `test_ocean_decomp_bitid_mpi`); the tripolar
+   !!     fold is still refused at configure (stage B; the transport is gated across the fold by
+   !!     `test_cice_remap_decomp_mpi`, the rest of the step is not).
+   !! 11. `stress_to_faces`: the T wind stress (`strair_x_T/y_T`, written on owned cells by the
+   !!     thermodynamics) gets its ghost ring (`ice_halo_centre_pair`: exchange on a split axis, the
+   !!     local wrap otherwise, the fold copy on the fold row; 2 exchanges), then
+   !!     `ice_atm_stress_to_faces` averages it onto the dynamics slot's `strairxE/yN` (the dynamics
+   !!     keeps them: `wind_on_faces`).
+   !!
+   !! **Decomposition contract (what each exchange feeds).**  Everything the thermodynamics, ITD and
+   !! ridging compute runs on OWNED cells from owned inputs, so a rank needs no halo for them.  What
+   !! a later stage reads across a seam is refreshed before it: the category state ring (`halo_state`,
+   !! `halo_state_post`: dynamics strength and transport read it), the T-cell stress (`stress_to_faces`),
+   !! the face velocities (the EVP's own per-subcycle exchange), and, at the thermo cadence, the ghosts
+   !! of the assembled `Q_heat`/`Q_salt` (`ice_cice_refresh_flux_ghosts`, called by `engine_step_finalize`
+   !! after the assembly: KPP and EPBL evaluate their surface buoyancy flux in the ghost columns, and the
+   !! bulk components that the total sums are written on physical cells only).  Every decision (a hook's
+   !! status, the thermodynamics' verdict, the error word) is taken on a reduced value
+   !! (`ice_transport_seam_bind_reductions`, `ice_err_bind_comm`), so every rank stops together.
+   !! `ice_mr_test_skip` is the test seam of the negative controls: each exchange above (stress, state
+   !! halo, flux ghosts) is skipped in turn and the decomposition test must see the difference.
    !! 12. `dynamics`: the scheme-neutral aggregates are refreshed from the haloed state, then the
    !!     C-grid EVP of `ice_dyn_c_step` runs with the CATEGORY strength (`kstrength`) from the
    !!     post-thermodynamics state; `work%tau_x/y` (the persistent centre ice-ocean stress) and
@@ -66,7 +82,8 @@ module rdb_ice_cice_hooks
    use rdb_grid, only: hgrid_t
    use rdb_config, only: config_t
    use rdb_ocean_state, only: ocean_state_t
-   use rdb_ocean_periodic, only: ocean_periodic_wrap_centre_2d
+   use rdb_ocean_halo, only: ocean_halo_nranks
+   use rdb_ocean_halo_state, only: ocean_halo_exchange_centre_field
    use rdb_ice_state, only: ice_aggregates_fill
    use rdb_ice_cice_state, only: ice_cice_state_t, ice_update_state, ice_state_seed_uniform
    use rdb_ice_step_cice, only: ice_step_cice, ice_step_hooks_t, ice_step_opts_t, ice_step_result_t, &
@@ -75,14 +92,17 @@ module rdb_ice_cice_hooks
                                 ICE_STAGE_HALO_STATE, ICE_STAGE_STRESS_TO_FACES, ICE_STAGE_DYNAMICS, &
                                 ICE_STAGE_TRANSPORT, ICE_STAGE_RIDGING, ICE_STAGE_HALO_STATE_POST, &
                                 ICE_STAGE_OCEAN_HANDOFF
-   use rdb_ice_errors, only: ice_err_enforce, ICE_ERR_RIDGE_PASSES, ICE_ERR_FATAL_MASK
+   use rdb_ice_errors, only: ice_err_enforce, ice_err_set_combine, ice_err_combine_iface, ICE_ERR_RIDGE_PASSES, &
+                             ICE_ERR_FATAL_MASK
    use rdb_ice_melt_potential, only: ice_melt_potential
    use rdb_ice_import_ocean, only: ice_import_ocean, ICE_IMPORT_OK
    use rdb_ice_atm_inputs, only: ice_atm_prepare_cell_inputs, ice_atm_heights, ice_atm_velocity_T, &
                                  ice_atm_stress_to_faces
    use rdb_ice_dyn_c, only: ice_dyn_c_step, ice_dyn_c_cat_t
    use rdb_ice_transport_cice, only: ice_step_transport, transport_result_t, TRANSPORT_CFG_OK
-   use rdb_ice_transport_seam_comm, only: ice_transport_seam_bind, ice_halo_category_state
+   use rdb_ice_transport_seam, only: seam_max_one
+   use rdb_ice_transport_seam_comm, only: ice_transport_seam_bind, ice_halo_category_state, ice_halo_centre_pair, &
+                                          ice_transport_seam_bind_reductions, ice_err_bind_comm
    use rdb_ice_cice_run, only: ICE_LCUM_NCLIP, ICE_LCUM_AREA, ICE_LCUM_VICE, ICE_LCUM_VSNO, ICE_LCUM_EICE, ICE_LCUM_ESNO
    use rdb_ice_ridge, only: ice_step_ridge
    use rdb_ice_flux_avg, only: ice_flux_avg_accumulate, ice_flux_avg_stash_pending, ICE_AVG_OK
@@ -94,8 +114,14 @@ module rdb_ice_cice_hooks
    implicit none
    private
 
-   public :: ice_cice_bind, ice_cice_step, ice_cice_ic_apply, ice_cice_post_enter, ice_cice_ledger_report
-   public :: ice_cice_hooks_manifest
+   public :: ice_cice_bind, ice_cice_step, ice_cice_step_result, ice_cice_ic_apply, ice_cice_post_enter, ice_cice_ledger_report
+   public :: ice_cice_unbind, ice_cice_refresh_flux_ghosts, ice_cice_hooks_manifest
+
+   integer, save, public :: ice_mr_test_skip = 0
+      !! TEST SEAM of the decomposition tests' negative controls, `0` in every run: bit 1 skips the exchange of the
+      !! T-cell wind stress, bit 2 the refresh of the assembled flux ghosts, bit 4 the category-state halo.  A
+      !! decomposed run with one bit set must differ from the serial one (the test proves each exchange is needed).
+   integer, parameter, public :: ICE_SKIP_STRESS_HALO = 1, ICE_SKIP_FLUX_GHOSTS = 2, ICE_SKIP_STATE_HALO = 4
 
    type(ocean_state_t), pointer, save :: S => null()
    type(hgrid_t), pointer, save :: G => null()
@@ -131,6 +157,18 @@ contains
       end if
    end subroutine ice_cice_bind
 
+   subroutine ice_cice_unbind()
+      !! Release what `ice_cice_bind` and the step bound: the state and grid pointers and the cross-rank error
+      !! combination (a process-global procedure pointer: left bound it would make the NEXT engine's error
+      !! reductions collective).  Called by `engine_exit_data`.
+      procedure(ice_err_combine_iface), pointer :: p
+
+      p => null()
+      call ice_err_set_combine(p)
+      S => null()
+      G => null()
+   end subroutine ice_cice_unbind
+
    subroutine ice_cice_hooks_manifest(installed)
       !! Which hook slots hold an implementation (for the tests): `installed(stage)`.
       logical, intent(out) :: installed(:)
@@ -141,18 +179,24 @@ contains
       end do
    end subroutine ice_cice_hooks_manifest
 
-   subroutine ice_cice_step(dt, thermo_step, istep)
-      !! One ice step.  A refusal or a stage failure stops the run with the stage named; a fatal
-      !! cell error bit aborts through `ice_err_enforce` (first offender dumped).
+   subroutine ice_cice_step_result(dt, thermo_step, istep, res)
+      !! One ice step, returning the sequencer's result instead of stopping on a failure (`ice_cice_step` is the
+      !! production entry that stops).  On a decomposed run every decision inside is taken on a reduced value, so
+      !! `res%status`, `res%stage` and `res%summary` are the same on every rank.
       real(wp), intent(in) :: dt
       logical, intent(in) :: thermo_step
       integer, intent(in) :: istep
+      type(ice_step_result_t), intent(out) :: res
       type(ice_step_opts_t) :: opts
-      type(ice_step_result_t) :: res
       integer :: nlen, nstat
 
       opts%ndtd = 1
-      opts%nranks = 1
+      opts%nranks = ocean_halo_nranks()
+      ! the decomposition seam of the step: every decision (a hook's status, the thermodynamics' failure, the
+      ! error word) is taken on a reduced value, so every rank stops together; pointer assignments, no
+      ! collective, and nothing on one rank
+      call ice_transport_seam_bind_reductions(opts%seam, G, S%bc)
+      call ice_err_bind_comm()
       opts%dt_outer = dt
       opts%fatal_mask = ICE_ERR_FATAL_MASK
       if (S%icec%skip_thermo) then
@@ -166,13 +210,41 @@ contains
       if (S%icec%ledger%on) opts%ledger => S%icec%ledger
       call ice_step_cice(S%ice%cice, S%icec%flux, S%icec%rad, S%icec%work, HOOKS, opts, dt, thermo_step, istep, res)
       S%icec%n_steps = S%icec%n_steps + 1
+   end subroutine ice_cice_step_result
+
+   subroutine ice_cice_step(dt, thermo_step, istep)
+      !! One ice step.  A refusal or a stage failure stops the run with the stage named; a fatal cell error bit
+      !! aborts through `ice_err_enforce` (first offender dumped) on EVERY rank: the summary is the combined one.
+      real(wp), intent(in) :: dt
+      logical, intent(in) :: thermo_step
+      integer, intent(in) :: istep
+      type(ice_step_result_t) :: res
+
+      call ice_cice_step_result(dt, thermo_step, istep, res)
       if (res%status == ICE_STEP_OK) return
-      if (res%status == ICE_STEP_FATAL) call ice_err_enforce(res%summary, G%nx_phys, opts%fatal_mask)
+      if (res%status == ICE_STEP_FATAL) call ice_err_enforce(res%summary, S%ice%cice%nx_global, ICE_ERR_FATAL_MASK)
       call logger%error("ice_step_cice: step "//to_string(istep)//" stopped, status "//to_string(res%status)// &
                         ", stage '"//trim(ice_stage_name(res%stage))//"' (raw status "// &
                         to_string(res%stage_status)//"): "//trim(res%message))
       error stop "ice_step_cice: the ice step failed (see the log)"
    end subroutine ice_cice_step
+
+   subroutine ice_cice_refresh_flux_ghosts(state, grid)
+      !! Refresh the seam ghosts of the assembled surface heat and salt totals (`Q_heat`, `Q_salt`).  The assembler
+      !! (`ocean_surface_flux_assemble`) writes them over the whole array, but the bulk components it sums are
+      !! written on physical cells only, so a ghost holds the ice share alone; KPP and EPBL evaluate their surface
+      !! buoyancy flux in the ghost columns too, and a physical cell then reads a boundary layer built on that
+      !! partial flux (measured: the first decomposed run under `&ocean_bulk_flux_nml` diverged from the serial one
+      !! at the first ocean step after the first thermo hand-off).  Two centre exchanges (periodic wrap on an axis
+      !! that is not split, tripolar fold on the fold row); called at the thermo cadence, after the assembly, by
+      !! `engine_step_finalize`, under the CICE-port scheme only.
+      type(ocean_state_t), intent(inout) :: state
+      type(hgrid_t), intent(in) :: grid
+
+      if (iand(ice_mr_test_skip, ICE_SKIP_FLUX_GHOSTS) /= 0) return
+      call ocean_halo_exchange_centre_field(state%surface_flux%Q_heat, grid, state%bc)
+      call ocean_halo_exchange_centre_field(state%surface_flux%Q_salt, grid, state%bc)
+   end subroutine ice_cice_refresh_flux_ghosts
 
    subroutine ice_cice_ledger_report(state, compute_rank)
       !! The console line of the named-term ice ledger (`&ocean_ice_nml ledger`): the cumulative
@@ -416,6 +488,7 @@ contains
       integer, intent(out) :: status
 
       status = 0
+      if (iand(ice_mr_test_skip, ICE_SKIP_STATE_HALO) /= 0) return
       call wrap_category_state(ctx%cice)
    end subroutine hook_halo_state
 
@@ -429,10 +502,11 @@ contains
       ie = ctx%cice%nghost + ctx%cice%nx_phys
       js = ctx%cice%nghost + 1
       je = ctx%cice%nghost + ctx%cice%ny_phys
-      call ocean_periodic_wrap_centre_2d(ctx%work%strair_x_T, ctx%cice%nx, ctx%cice%ny, ctx%cice%nx_phys, &
-                                         ctx%cice%ny_phys, ctx%cice%nghost, S%bc%periodic_x, S%bc%periodic_y)
-      call ocean_periodic_wrap_centre_2d(ctx%work%strair_y_T, ctx%cice%nx, ctx%cice%ny, ctx%cice%nx_phys, &
-                                         ctx%cice%ny_phys, ctx%cice%nghost, S%bc%periodic_x, S%bc%periodic_y)
+      ! the face hand-off averages the T-cell stress across the seam: refresh its ghost ring (exchange on a split
+      ! axis, the local wrap otherwise, the fold copy on the fold row)
+      if (iand(ice_mr_test_skip, ICE_SKIP_STRESS_HALO) == 0) then
+         call ice_halo_centre_pair(G, S%bc, ctx%cice%nx, ctx%cice%ny, ctx%work%strair_x_T, ctx%work%strair_y_T)
+      end if
       call ice_atm_stress_to_faces(ctx%cice%nx, ctx%cice%ny, is, ie, js, je, ctx%work%strair_x_T, &
                                    ctx%work%strair_y_T, S%ice_cgrid%tarea, S%ice_cgrid%earea, &
                                    S%ice_cgrid%narea, S%ice%dync%strairxE, S%ice%dync%strairyN)
@@ -472,9 +546,11 @@ contains
       ie = ctx%cice%nghost + ctx%cice%nx_phys
       js = ctx%cice%nghost + 1
       je = ctx%cice%nghost + ctx%cice%ny_phys
-      ! the decomposition seam of the transport (collectives, fold pairing): a few pointer assignments, one rank and
-      ! no fold being the default it leaves unchanged
-      call ice_transport_seam_bind(S%icec%tws%seam, G, S%bc, S%icec%tws%fw%nbatch, S%icec%tws%ntrace)
+      ! the decomposition seam of the transport (collectives, fold pairing), bound ONCE (the first step: it takes a
+      ! min allreduce of the category batch size, which never changes); one rank and no fold is the default
+      if (S%icec%tws%seam%nbatch == 0) then
+         call ice_transport_seam_bind(S%icec%tws%seam, G, S%bc, S%icec%tws%fw%nbatch, S%icec%tws%ntrace)
+      end if
       associate (cm => S%ice_cgrid, c => ctx%cice, w => ctx%work, f => ctx%flux)
          call ice_step_transport(S%icec%tws, c%p, ctx%dt, ctx%transport_post, is, ie, js, je, &
                                  S%ice%u_ice, S%ice%v_ice, cm%HTE, cm%HTN, cm%tarea, cm%dxT, cm%dyT, &
@@ -528,6 +604,9 @@ contains
 
       status = 0
       call ice_flux_avg_accumulate(S%icec%avg, ctx%flux, ctx%dt, ierr)
+      ! the exchanges below (stress seam, window apply) are collective: decide on the reduced status.  (Its
+      ! failures are shape / not-initialised ones, rank-uniform by construction; the reduction makes it a fact.)
+      call seam_max_one(ctx%seam, ierr)
       if (ierr /= ICE_AVG_OK) then
          status = ierr
          return
@@ -547,6 +626,9 @@ contains
       call ice_ocean_stress_flux_c(S%metrics, S%surface_stress, S%ice, G, S%bc)
       if (ctx%thermo_step .and. S%dyn%enable_thermodynamics) then
          call ice_flux_avg_stash_pending(S%icec%avg)
+         ! `apply_window` returns before its exchanges only on a shape error, an empty window or a window length
+         ! different from the thermo window: all functions of the configuration and of the (rank-uniform) step
+         ! schedule, never of a rank's data, so every rank takes the same branch.
          call ice_cice_apply_window(G, S%bc, S%icec%avg, S%surface_flux, S%icec%oin%sss_ocn, ierr, &
                                     window_expected=S%dyn%therm_dt(ctx%dt))
          if (ierr /= ICE_ADAPT_OK) then

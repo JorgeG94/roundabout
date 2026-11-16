@@ -30,17 +30,20 @@ module rdb_ice_transport_seam_comm
    use rdb_ocean_boundary_types, only: ocean_bc_state_t
    use rdb_halo, only: halo_allreduce_sum_vec, halo_allreduce_efp_list, halo_allreduce_min
    use rdb_ocean_halo, only: ocean_halo_centre, ocean_halo_is_decomposed_x, ocean_halo_is_decomposed_y
-   use rdb_ocean_periodic, only: ocean_periodic_wrap_centre_3d
+   use rdb_ocean_periodic, only: ocean_periodic_wrap_centre_3d, ocean_periodic_wrap_centre_2d
    use rdb_ocean_fold_apply, only: ocean_fold_wrap_centre_flat
    use rdb_ocean_fold_exchange, only: ocean_fold_is_distributed, ocean_fold_begin, ocean_fold_pack, &
                                       ocean_fold_exchange, ocean_fold_unpack, ocean_fold_end, &
                                       ocean_fold_exchange_reserve, FOLD_STAG_V
    use rdb_ice_transport_seam, only: transport_seam_t, seam_min_one
+   use rdb_ice_errors, only: ice_err_summary_t, ice_err_set_combine, ice_err_combine_iface, ICE_NERR
    implicit none
    private
 
    public :: ice_transport_seam_bind
    public :: ice_halo_category_state
+   public :: ice_halo_centre_pair
+   public :: ice_transport_seam_bind_reductions, ice_err_bind_comm, ice_err_combine_collective
 
    integer, save :: sc_nghost = 0
       !! Ghost width of the grid the seam was bound for (the fold exchange's row count).
@@ -71,6 +74,76 @@ contains
       call seam_min_one(seam, seam%nbatch)
       if (seam%fold_dist) call ocean_fold_exchange_reserve((sc_nghost + 1)*seam%nbatch*(1 + ntrace))
    end subroutine ice_transport_seam_bind
+
+   subroutine ice_transport_seam_bind_reductions(seam, grid, bc)
+      !! The part of `ice_transport_seam_bind` that is not the fold pairing: the rank-uniform reductions
+      !! (`multirank`, `sum_i8`, `sum_efp`, `min_i`) of `seam`, no collective and no buffer reservation.  What the
+      !! step sequencer uses to make a hook's failure rank-uniform.
+      type(transport_seam_t), intent(inout) :: seam
+      type(hgrid_t), intent(in) :: grid
+      type(ocean_bc_state_t), intent(in) :: bc
+
+      sc_nghost = grid%nghost
+      seam%multirank = ocean_halo_is_decomposed_x() .or. ocean_halo_is_decomposed_y()
+      seam%fold = bc%north_fold
+      seam%fold_dist = bc%north_fold .and. ocean_fold_is_distributed()
+      seam%sum_i8 => comm_sum_i8
+      seam%sum_efp => comm_sum_efp
+      seam%min_i => comm_min_i
+   end subroutine ice_transport_seam_bind_reductions
+
+   subroutine ice_err_bind_comm()
+      !! Bind the cross-rank combination of `ice_err_reduce` on a decomposed run, unbind it on one rank (the
+      !! ice error registry cannot use MPI).  Called on every rank at the top of every ice step.
+      procedure(ice_err_combine_iface), pointer :: p
+
+      p => null()
+      if (ocean_halo_is_decomposed_x() .or. ocean_halo_is_decomposed_y()) p => ice_err_combine_collective
+      call ice_err_set_combine(p)
+   end subroutine ice_err_bind_comm
+
+   subroutine ice_err_combine_collective(summary)
+      !! Collective combination of one error summary: ONE sum allreduce carries the 32 bits of the OR'd mask, the
+      !! per-bit cell counts and the number of ranks that name a first offender; only when some rank does
+      !! (a fatal bit: the abnormal path) a min and a sum more fix the global first offender and its word.
+      !! Every rank takes the same branches because they depend on the reduced values only.
+      type(ice_err_summary_t), intent(inout) :: summary
+      integer, parameter :: NB = 32, NV = NB + ICE_NERR + 1
+      integer(int64) :: v(NV)
+      real(wp) :: xmin, ymin
+      real(wp) :: xw(1), yw(1)
+      integer :: b
+
+      do b = 0, NB - 1
+         v(b + 1) = merge(1_int64, 0_int64, btest(summary%mask, b))
+      end do
+      do b = 0, ICE_NERR - 1
+         v(NB + b + 1) = int(summary%count(b), int64)
+      end do
+      v(NV) = merge(1_int64, 0_int64, summary%first_idx > 0_int64)
+      call comm_sum_i8(NV, v)
+      summary%mask = 0_int32
+      do b = 0, NB - 1
+         if (v(b + 1) > 0_int64) summary%mask = ibset(summary%mask, b)
+      end do
+      do b = 0, ICE_NERR - 1
+         summary%count(b) = int(v(NB + b + 1), int32)
+      end do
+      if (v(NV) == 0_int64) then
+         summary%first_idx = 0_int64
+         summary%first_word = 0_int32
+         return
+      end if
+      ! global first offender: the smallest global index (below 2**53, exact in real64); its owner holds the word
+      xmin = huge(1.0_wp)
+      if (summary%first_idx > 0_int64) xmin = real(summary%first_idx, wp)
+      call halo_allreduce_min(xmin, ymin)
+      xw(1) = 0.0_wp
+      if (summary%first_idx > 0_int64 .and. real(summary%first_idx, wp) == ymin) xw(1) = real(summary%first_word, wp)
+      call halo_allreduce_sum_vec(xw, yw, 1)
+      summary%first_idx = nint(ymin, int64)
+      summary%first_word = nint(yw(1), int32)
+   end subroutine ice_err_combine_collective
 
    subroutine comm_sum_i8(n, v)
       !! Integer sum over the ranks.  Rides the exact `real64` allreduce (counts far below 2**53).
@@ -129,6 +202,37 @@ contains
 
       call ocean_fold_unpack(fld, nx, ny, nz, FOLD_STAG_V, .true., .true., row_shift=-1)
    end subroutine fold_unpack_flat
+
+   subroutine ice_halo_centre_pair(grid, bc, nx, ny, fa, fb, device_resident)
+      !! Refresh the ghost ring of two cell-centred 2-D fields (the T-cell wind stress the face hand-off
+      !! averages): the ocean's two-pass centre exchange on a split axis, the local periodic wrap on one
+      !! rank, then the tripolar fold as a plain copy on the fold row.  Collective on a split axis.
+      type(hgrid_t), intent(in) :: grid
+      type(ocean_bc_state_t), intent(in) :: bc
+      integer, intent(in) :: nx, ny
+      real(wp), intent(inout) :: fa(nx, ny), fb(nx, ny)
+      logical, intent(in), optional :: device_resident
+      logical :: split
+
+      split = ocean_halo_is_decomposed_x() .or. ocean_halo_is_decomposed_y()
+      call refresh_one(fa)
+      call refresh_one(fb)
+
+   contains
+
+      subroutine refresh_one(fld)
+         real(wp), intent(inout) :: fld(nx, ny)
+
+         if (split) then
+            call ocean_halo_centre(fld, device_resident)
+         else
+            call ocean_periodic_wrap_centre_2d(fld, nx, ny, grid%nx_phys, grid%ny_phys, grid%nghost, bc%periodic_x, &
+                                               bc%periodic_y)
+         end if
+         if (bc%north_fold) call ocean_fold_wrap_centre_flat(grid, bc, fld, nx, ny, 1, device_resident)
+      end subroutine refresh_one
+
+   end subroutine ice_halo_centre_pair
 
    subroutine ice_halo_category_state(grid, bc, nx, ny, ncat, nilyr, nslyr, aicen, vicen, vsnon, Tsfcn, qicen, sicen, &
                                       qsnon, aice0, device_resident)

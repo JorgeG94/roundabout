@@ -24,13 +24,10 @@ module rdb_ice_errors
    !! `ICE_ERR_PASS_WIDTH` bits per pass and only for chunks whose bits appear
    !! in the mask, so a clean grid costs exactly one pass.
    !!
-   !! Multi-rank: `ice_err_reduce` ends in `combine_across_ranks`, today a
-   !! no-op.  A later PR fills that one private routine with a collective
-   !! (bitwise-OR of `mask`, sum of `count`, min of the GLOBAL first-offender
-   !! index) through `pic_mpi_lib`.  The reduce already takes the owned range and
-   !! global offsets, and every caller consumes the summary, never the raw grid, so
-   !! the only caller-visible change is a communicator argument (or a module-level
-   !! one set at setup); see `combine_across_ranks` for the full contract.
+   !! Multi-rank: `ice_err_reduce` ends in `combine_across_ranks`, which calls the collective bound by
+   !! `ice_err_set_combine` (the main library binds it, `rdb_ice_transport_seam_comm`; a no-op on one rank):
+   !! bitwise OR of `mask`, sum of `count`, minimum GLOBAL first-offender index and the word of its owner,
+   !! so every rank holds the same summary.  Every rank must call the reduction the same number of times.
    use, intrinsic :: iso_fortran_env, only: int32, int64
    use pic_logger, only: global_logger
    implicit none
@@ -51,6 +48,7 @@ module rdb_ice_errors
    public :: ice_err_name, ice_err_fatal_set, ice_err_clear, ice_err_reduce
    public :: ice_err_is_fatal, ice_err_dump, ice_err_enforce
    public :: ice_err_counted_line, ice_err_accumulate
+   public :: ice_err_combine_iface, ice_err_set_combine, ice_err_combine_bound
 
    integer, parameter :: ICE_NERR = 25
       !! Number of registered bits (0 .. ICE_NERR-1).
@@ -129,7 +127,41 @@ module rdb_ice_errors
          !! The error word of that cell.
    end type ice_err_summary_t
 
+   abstract interface
+      subroutine ice_err_combine_iface(summary)
+         !! The cross-rank combination of one reduced summary (collective).
+         import :: ice_err_summary_t
+         implicit none
+         type(ice_err_summary_t), intent(inout) :: summary
+      end subroutine ice_err_combine_iface
+   end interface
+
+   procedure(ice_err_combine_iface), pointer, save :: combine_hook => null()
+      !! Bound by the main library on a decomposed run (`ice_err_set_combine`); null: one rank.
+
 contains
+
+   subroutine ice_err_set_combine(proc)
+      !! Bind (or, with `null()`, unbind) the cross-rank combination of `ice_err_reduce`.  The ice core library
+      !! cannot use MPI, so the main library supplies the collective (`rdb_ice_transport_seam_comm`).  Call it on
+      !! every rank with the same association before the first reduction of a step.
+      !!
+      !! The binding is PROCESS-GLOBAL.  The CICE-port step binds it at the top of every step (collective when
+      !! decomposed, null on one rank) and `engine_exit_data` unbinds it, so one engine at a time is safe; two
+      !! engines alive in one process share the binding of whichever stepped last (each step rebinds, so an
+      !! engine that steps always sees its own decomposition), and an engine dropped without `engine_exit_data`
+      !! leaves the last binding in place until the next CICE step rebinds it or `ice_cice_unbind` clears it.
+      !! With nothing bound (or one rank) `ice_err_reduce` is rank-local and calls no collective.
+      procedure(ice_err_combine_iface), pointer, intent(in) :: proc
+
+      combine_hook => proc
+   end subroutine ice_err_set_combine
+
+   function ice_err_combine_bound() result(bound)
+      !! A cross-rank combination is bound: `ice_err_reduce` summaries are GLOBAL (the same on every rank).
+      logical :: bound
+      bound = associated(combine_hook)
+   end function ice_err_combine_bound
 
    pure function ice_err_name(ibit) result(name)
       !! Registry name of bit `ibit` (0-based), or `UNKNOWN`.
@@ -289,22 +321,13 @@ contains
    end subroutine fetch_word
 
    subroutine combine_across_ranks(summary)
-      !! Multi-rank hook, a no-op on one rank.  The later MPI PR (through
-      !! `pic_mpi_lib`; no MPI import here) must make this the collective:
-      !!   1. BOR-allreduce `summary%mask`;
-      !!   2. SUM-allreduce `summary%count`;
-      !!   3. MINLOC-allreduce `summary%first_idx` (the global index, 0 = none
-      !!      mapped to `huge` for the min), then broadcast the OWNING rank's
-      !!      `first_word` so every rank holds the same offender.
-      !! Callers must then (a) call `ice_err_enforce` UNCONDITIONALLY on every
-      !! rank after this collective so the abort verdict is rank-uniform, and
-      !! (b) `ice_err_dump` decodes the global index with the GLOBAL `nx` and
-      !! logs on one rank only.  Signatures stay unchanged except that
-      !! `ice_err_reduce` gains a communicator argument or reads a module-level
-      !! one set at setup; that is the only caller-visible change.
+      !! The mask is the bitwise OR over the ranks, `count` the sum, `first_idx` the minimum GLOBAL index and
+      !! `first_word` the word of its owner, so after the call every rank holds the same summary and
+      !! `ice_err_is_fatal` / `ice_err_enforce` decide identically.  A no-op on one rank (no hook bound); on a
+      !! decomposed run the hook is a collective every rank calls the same number of times.
       type(ice_err_summary_t), intent(inout) :: summary
-      ! Single rank: nothing to combine; `summary` is already global (the dummy is
-      ! deliberately unused until the collective lands).
+
+      if (associated(combine_hook)) call combine_hook(summary)
    end subroutine combine_across_ranks
 
    pure function ice_err_is_fatal(summary, fatal_mask) result(fatal)

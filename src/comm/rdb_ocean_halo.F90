@@ -132,6 +132,7 @@ module rdb_ocean_halo
    public :: ocean_halo_reserve
    public :: ocean_halo_is_init
    public :: ocean_halo_is_decomposed
+   public :: ocean_halo_nranks
    public :: ocean_halo_is_decomposed_x
    public :: ocean_halo_is_decomposed_y
    public :: ocean_halo_global_extent
@@ -530,6 +531,13 @@ contains
       logical :: flag
       flag = oh_initialised .and. (oh_decomp%px > 1 .or. oh_decomp%py > 1)
    end function ocean_halo_is_decomposed
+
+   pure function ocean_halo_nranks() result(n)
+      !! Number of ranks of the current decomposition (`px*py`); 1 when the halo layer is not initialised.
+      integer :: n
+      n = 1
+      if (oh_initialised) n = max(1, oh_decomp%px*oh_decomp%py)
+   end function ocean_halo_nranks
 
    pure subroutine ocean_halo_global_extent(i_start, j_start, nx_global, ny_global)
       !! Global physical extent and this rank's 1-based global offset

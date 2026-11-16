@@ -117,7 +117,7 @@ module rdb_ice_step_cice
    !! **Refusals before anything is written.**  `ice_step_cice` checks the step
    !! envelope first and returns without writing a single state or flux value: a
    !! missing REQUIRED stage (named in `res%message`), a test double without
-   !! `opts%allow_test_doubles`, `ndtd /= 1`, more than one rank, `nghost < 3`, an ice
+   !! `opts%allow_test_doubles`, `ndtd /= 1`, a non-positive rank count, `nghost < 3`, an ice
    !! step different from the outer step, a non-finite or non-positive `dt`, layer or
    !! category counts outside the compile-time maxima, an unmapped or disagreeing slot,
    !! an unconfigured radiation slot, a wet mask never set.  The forcing heights
@@ -139,6 +139,10 @@ module rdb_ice_step_cice
    !! - `halo_state` and `halo_state_post` (halo/multi-rank PR): refresh the ghost ring
    !!   of the category state (`aicen, vicen, vsnon, Tsfcn, qicen, sicen, qsnon`) and
    !!   `aice0` (exchange on split axes, periodic wrap, fold; also on one rank).
+   !!   On several ranks every hook status is reduced (`opts%seam`, `seam_max_one`) before the step goes
+   !!   on, as is the verdict of the thermodynamics, and the error words (`enforce`) are combined over
+   !!   the ranks by the collective `ice_err_set_combine` binds: the stages after them hold collectives,
+   !!   so a rank must never stop alone.
    !! - `stress_to_faces` and `dynamics` (dynamics-coupling PR): the first maps
    !!   `work%strair_x_T/y_T` onto the faces; the second computes `ice_compute_strength`
    !!   from the post-thermodynamics, halo-refreshed category state, runs the EVP
@@ -168,6 +172,7 @@ module rdb_ice_step_cice
    use rdb_ice_ledger_terms, only: ice_term_ledger_t, ICE_LT_THERM1, ICE_LT_REMAP, ICE_LT_TRANSPORT, &
                                    ICE_LT_RIDGING
    use rdb_ice_transport_cice, only: ICE_TRANSPORT_POST_NONE
+   use rdb_ice_transport_seam, only: transport_seam_t, seam_max_one
    use rdb_ice_errors, only: ice_err_summary_t, ice_err_reduce, ice_err_is_fatal, ice_err_clear, ICE_ERR_FATAL_MASK
    implicit none
    private
@@ -317,6 +322,8 @@ module rdb_ice_step_cice
          !! The ocean thermodynamics step (`dyn%is_thermo_step()`).
       integer :: transport_post = ICE_TRANSPORT_POST_NONE
          !! Post mode the `transport` hook must pass to `ice_step_transport`.
+      type(transport_seam_t) :: seam
+         !! A copy of `opts%seam`: the reductions that make a hook's failure rank-uniform.
    end type ice_step_ctx_t
 
    abstract interface
@@ -354,7 +361,11 @@ module rdb_ice_step_cice
       integer :: ndtd = 1
          !! Dynamics substeps per ice step (must be 1).
       integer :: nranks = 1
-         !! MPI ranks (must be 1 until the multi-rank PRs).
+         !! MPI ranks of the decomposition (1: the single-rank step).  More than one needs `seam` bound.
+      type(transport_seam_t) :: seam
+         !! The decomposition seam (`rdb_ice_transport_seam`): the collectives the step uses to make every decision
+         !! rank-uniform (a hook's status, the failure of the thermodynamics).  Bound by the caller
+         !! (`ice_transport_seam_bind_reductions`); the default is one rank, where every call is a no-op.
       real(wp) :: dt_outer = -1.0_wp
          !! The outer ocean step [s]; `> 0` must equal `dt`; `<= 0` skips the comparison.
       logical :: allow_test_doubles = .false.
@@ -821,8 +832,8 @@ contains
          call refuse(res, ICE_STEP_REFUSED_ENVELOPE, 0, "ndtd /= 1 is not supported")
          return
       end if
-      if (opts%nranks /= 1) then
-         call refuse(res, ICE_STEP_REFUSED_ENVELOPE, 0, "scheme='cice' is single-rank until the multi-rank PRs")
+      if (opts%nranks < 1) then
+         call refuse(res, ICE_STEP_REFUSED_ENVELOPE, 0, "the rank count must be at least 1")
          return
       end if
       if (.not. (ieee_is_finite(dt) .and. dt > 0.0_wp)) then
@@ -886,6 +897,9 @@ contains
       st = 0
       call note_exec(res, stage)
       call proc(ctx, st)
+      ! a hook that fails on one rank must stop the step on EVERY rank (the next stage holds collectives): one
+      ! reduction of the status, a no-op on one rank
+      call seam_max_one(ctx%seam, st)
       ok = st == 0
       if (.not. ok) then
          res%stage_status = st
@@ -935,6 +949,11 @@ contains
       logical :: ok, led_on
 
       res%plan = ice_step_plan_build(hooks, cice%p%atm%highfreq)
+      ! The envelope refuses before the first collective of the step, on a rank-local condition.  Every term of it is
+      ! rank-uniform by construction (the stage plan, `ndtd`, the rank count, the outer step and the slot extents all
+      ! come from the configuration and the time loop, `nghost` is one value for the run, the tile extents enter only
+      ! through shapes that the engine already checked against the grid), so every rank refuses together and none is
+      ! left waiting in a halo; a collective assertion of that at setup would only repeat the engine's own checks.
       call check_envelope(cice, flux, rad, work, opts, dt, res%plan, res)
       if (res%status /= ICE_STEP_OK) return
 
@@ -946,6 +965,7 @@ contains
       ctx%istep = istep
       ctx%thermo_step = thermo_step
       ctx%transport_post = res%plan%transport_post
+      ctx%seam = opts%seam
       nx = cice%nx
       ny = cice%ny
       nc = cice%ncat
@@ -998,6 +1018,9 @@ contains
                                  work%strairxn, work%strairyn, work%strair_x_T, work%strair_y_T, &
                                  work%fbot, work%rside, work%wlat, work%ierr_n, cice%ice_err, &
                                  flux%fswthru, flux%fswthru_vis, ierr, istat)
+         ! decided on the reduced values: the stages after this one are collective
+         call seam_max_one(opts%seam, ierr)
+         call seam_max_one(opts%seam, istat)
          if (ierr /= ICE_RAD_OK) then
             res%stage_status = ierr
             call refuse(res, ICE_STEP_STAGE_FAILED, ICE_STAGE_RADIATION, "stage 'radiation' failed")
