@@ -81,6 +81,8 @@ module rdb_ocean_api
    ! ---- P2.5: pre-create geometry injection ----
    use rdb_ocean_halo_width, only: required_halo
    use rdb_ocean_halo, only: ocean_halo_is_decomposed
+   use rdb_ocean_halo_state, only: ocean_halo_exchange_centre_field, &
+                                   ocean_seam_refresh_surface_stress
    ! ---- P7: diagnostics discoverability + in-memory access ----
    use rdb_ocean_diag_derived, only: derived_catalog_size, derived_catalog_name
    use rdb_ocean_diag_fills, only: canonical_diag_catalog_size, canonical_diag_catalog_name
@@ -1915,6 +1917,10 @@ contains
          ty(ng + 1:ng + nx_p, ng + 1:ng + ny_p + 1) = real(tauy_data, wp)
          !$acc update device(tx, ty)
       end associate
+      ! Physical faces only were written: exchange / wrap / fold the ghost faces
+      ! and re-derive `stress_mag` (the `u_*` KPP/EPBL read).
+      call ocean_seam_refresh_surface_stress(h%state%surface_stress, h%grid, h%state%bc)
+      !$acc update self(h%state%surface_stress%tau_x, h%state%surface_stress%tau_y, h%state%surface_stress%stress_mag)
       status = int(OCEAN_STATUS_OK, c_int)
    end function rdb_ocean_set_wind
 
@@ -1945,6 +1951,10 @@ contains
          qh(ng + 1:ng + nx_p, ng + 1:ng + ny_p) = real(q_data, wp)
          !$acc update device(qh)
       end associate
+      ! Physical cells only were written; KPP/EPBL read the ghost columns.
+      ! (device-resident exchange, then the host copy follows)
+      call ocean_halo_exchange_centre_field(h%state%surface_flux%Q_heat, h%grid, h%state%bc)
+      !$acc update self(h%state%surface_flux%Q_heat)
       status = int(OCEAN_STATUS_OK, c_int)
    end function rdb_ocean_set_heat_flux
 
@@ -1975,6 +1985,8 @@ contains
          qs(ng + 1:ng + nx_p, ng + 1:ng + ny_p) = real(q_data, wp)
          !$acc update device(qs)
       end associate
+      call ocean_halo_exchange_centre_field(h%state%surface_flux%Q_salt, h%grid, h%state%bc)
+      !$acc update self(h%state%surface_flux%Q_salt)
       status = int(OCEAN_STATUS_OK, c_int)
    end function rdb_ocean_set_salt_flux
 

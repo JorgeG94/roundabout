@@ -83,6 +83,20 @@
 !!       (`Q_heat`/`Q_salt`, `heat_content_massin/massout`) are never
 !!       registered (derived-field rule, `ocean_state_build_restart_registry`
 !!       in `ocean_state/rdb_ocean_state_restart.F90`).
+!!   (f) the assembled `Q_heat`/`Q_salt` (and `sw_net`) are what the boundary-layer
+!!       schemes read, over the FULL array, so in the ghost columns too.  A filler
+!!       that writes its components on PHYSICAL cells only (the bulk consumer, a
+!!       data-override reader, the ice-shelf cavity bands) leaves the assembled
+!!       ghost band stale.  The engine therefore exchanges `Q_heat` and `Q_salt`
+!!       after every thermo-step assembly and `sw_net` after every formation
+!!       (`ocean_seam_refresh_surface_flux` / `ocean_seam_refresh_sw_net`: MPI,
+!!       periodic wrap, tripolar fold, scalar copy), whenever the component set is
+!!       on, with no per-filler flag: where every ghost already equals its
+!!       neighbour's value (sea ice alone, constants) the exchange rewrites
+!!       identical bits (measured: ghost change 0 in the sea-ice and closure
+!!       groups and every unit test), so a new filler cannot forget it.  The
+!!       refresh sits on the assembled sums, not on each component: the sums are
+!!       the only flux ghosts any shipped kernel reads.
 !!
 !! **Component ownership: exactly ONE legal writer per field.**  A second
 !! writer on any row is a silent clobber, not a merge.
