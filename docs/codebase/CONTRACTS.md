@@ -115,6 +115,7 @@ reproducible, and `efp_real_diff` for a difference against a latched reference.
 
 The mass-flux components (`evap`, `lprec`, `fprec`, `vprec`, `lrunoff`, `frunoff`, `seaice_melt`) and
 their `heat_content_*` companions are enthalpy and salt bookkeeping only. They do not change column mass.
+The latent heat of fusion of a frozen flux is its own heat component, `q_fus` (`-L_f*fprec`, written by whoever writes `fprec`), kept apart from `heat_content_fprec` so it stays charged whatever the mass treatment does.
 
 | Path | Real column mass? |
 |---|---|
