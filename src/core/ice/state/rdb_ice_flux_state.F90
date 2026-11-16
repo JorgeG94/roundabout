@@ -81,7 +81,7 @@ module rdb_ice_flux_state
    use rdb_constants, only: wp
    use rdb_grid, only: hgrid_t
    use rdb_mem_report, only: arr_bytes
-   use rdb_ice_dims, only: ICE_NCAT_MAX
+   use rdb_ice_dims, only: ICE_NCAT_MAX, ICE_NTHX
    use rdb_ice_cice_state, only: ice_cice_state_t
    use rdb_ice_flux, only: ice_flux_zero_impl, ice_flux_merge_impl, ice_save_init_impl, ice_snap_thermo_impl
    implicit none
@@ -169,6 +169,13 @@ module rdb_ice_flux_state
          !! [m/s] ice volume ridged (diagnostic).  Producers: ridging.
       real(wp), allocatable :: opening(:, :)
          !! [1/s] lead-opening rate (diagnostic).  Producers: ridging.
+      real(wp), allocatable :: thx(:, :, :)
+         !! `(nx, ny, ICE_NTHX)` history extras the thermodynamics books per cell area: slot `ICE_TH_EVAPI` evaporation
+         !! of the ICE part [kg m-2 s-1, < 0 sublimation], `ICE_TH_EVAPS` of the SNOW part [kg m-2 s-1], `ICE_TH_MELTS`
+         !! snow melt [m of snow per step].  Producers: therm1 merge.  ADDED to, zeroed by `ice_flux_zero`.
+      real(wp), allocatable :: thxn(:, :, :, :)
+         !! `(nx, ny, ncat, ICE_NTHX)` per-category twin of `thx`, per unit category area; written by therm1, merged
+         !! with `aicen_init` by the same kernel as `snoicen`.
       real(wp), allocatable :: aice_th(:, :)
          !! [1] cell ice area right after the thermodynamics of this step (`ice_snap_thermo`).
       real(wp), allocatable :: vice_th(:, :)
@@ -266,6 +273,8 @@ contains
       allocate (this%dardg2dt(nx, ny), source=0.0_wp)
       allocate (this%dvirdgdt(nx, ny), source=0.0_wp)
       allocate (this%opening(nx, ny), source=0.0_wp)
+      allocate (this%thx(nx, ny, ICE_NTHX), source=0.0_wp)
+      allocate (this%thxn(nx, ny, nc, ICE_NTHX), source=0.0_wp)
       allocate (this%aice_th(nx, ny), source=0.0_wp)
       allocate (this%vice_th(nx, ny), source=0.0_wp)
       this%dt_step = 0.0_wp
@@ -311,6 +320,8 @@ contains
       if (allocated(this%dardg2dt)) deallocate (this%dardg2dt)
       if (allocated(this%dvirdgdt)) deallocate (this%dvirdgdt)
       if (allocated(this%opening)) deallocate (this%opening)
+      if (allocated(this%thx)) deallocate (this%thx)
+      if (allocated(this%thxn)) deallocate (this%thxn)
       if (allocated(this%aice_th)) deallocate (this%aice_th)
       if (allocated(this%vice_th)) deallocate (this%vice_th)
       if (allocated(this%freshn)) deallocate (this%freshn)
@@ -353,7 +364,7 @@ contains
       !$acc enter data copyin(this%freshn, this%fsaltn, this%fhocnn, this%evapn, this%fsensn)
       !$acc enter data copyin(this%flatn, this%flwoutn, this%fswabsn, this%melttn, this%meltbn)
       !$acc enter data copyin(this%congeln, this%snoicen)
-      !$acc enter data copyin(this%aice_th, this%vice_th)
+      !$acc enter data copyin(this%aice_th, this%vice_th, this%thx, this%thxn)
       this%mapped = .true.
    end subroutine flux_enter_data_impl
 
@@ -378,7 +389,7 @@ contains
       !$acc exit data delete(this%freshn, this%fsaltn, this%fhocnn, this%evapn, this%fsensn)
       !$acc exit data delete(this%flatn, this%flwoutn, this%fswabsn, this%melttn, this%meltbn)
       !$acc exit data delete(this%congeln, this%snoicen)
-      !$acc exit data delete(this%aice_th, this%vice_th)
+      !$acc exit data delete(this%aice_th, this%vice_th, this%thx, this%thxn)
       this%mapped = .false.
    end subroutine flux_exit_data_impl
 
@@ -410,6 +421,8 @@ contains
                + arr_bytes(this%dardg2dt) &
                + arr_bytes(this%dvirdgdt) &
                + arr_bytes(this%opening) &
+               + arr_bytes(this%thx) &
+               + arr_bytes(this%thxn) &
                + arr_bytes(this%aice_th) &
                + arr_bytes(this%vice_th) &
                + arr_bytes(this%freshn) &
@@ -442,7 +455,7 @@ contains
                               flux%dardg1dt, flux%dardg2dt, flux%dvirdgdt, flux%opening, &
                               flux%freshn, flux%fsaltn, flux%fhocnn, flux%evapn, &
                               flux%fsensn, flux%flatn, flux%flwoutn, flux%fswabsn, &
-                              flux%melttn, flux%meltbn, flux%congeln, flux%snoicen)
+                              flux%melttn, flux%meltbn, flux%congeln, flux%snoicen, flux%thx, flux%thxn)
    end subroutine ice_flux_zero
 
    subroutine ice_flux_merge_categories(flux, cice, flw, ierr)
@@ -479,11 +492,11 @@ contains
                                flux%freshn, flux%fsaltn, flux%fhocnn, &
                                flux%evapn, flux%fsensn, flux%flatn, &
                                flux%flwoutn, flux%fswabsn, flux%melttn, &
-                               flux%meltbn, flux%congeln, flux%snoicen, &
+                               flux%meltbn, flux%congeln, flux%snoicen, flux%thxn, &
                                flux%fresh, flux%fsalt, flux%fhocn, &
                                flux%evap, flux%fsens, flux%flat, &
                                flux%flwout, flux%fswabs, flux%meltt, &
-                               flux%meltb, flux%congel, flux%snoice, cice%ice_err)
+                               flux%meltb, flux%congel, flux%snoice, flux%thx, cice%ice_err)
    end subroutine ice_flux_merge_categories
 
    pure function ice_slots_agree(flux, cice) result(ok)

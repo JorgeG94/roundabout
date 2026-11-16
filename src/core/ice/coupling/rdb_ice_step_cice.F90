@@ -993,9 +993,9 @@ contains
                                  cice%aicen_init, cice%aicen, cice%vicen, cice%vsnon, cice%Tsfcn, cice%qicen, &
                                  cice%sicen, cice%qsnon, &
                                  flux%fresh, flux%fsalt, flux%fhocn, flux%evap, flux%fsens, flux%flat, flux%flwout, &
-                                 flux%fswabs, flux%meltt, flux%meltb, flux%congel, flux%snoice, &
+                                 flux%fswabs, flux%meltt, flux%meltb, flux%congel, flux%snoice, flux%thx, &
                                  flux%freshn, flux%fsaltn, flux%fhocnn, flux%evapn, flux%fsensn, flux%flatn, &
-                                 flux%flwoutn, flux%fswabsn, flux%melttn, flux%meltbn, flux%congeln, flux%snoicen, &
+                                 flux%flwoutn, flux%fswabsn, flux%melttn, flux%meltbn, flux%congeln, flux%snoicen, flux%thxn, &
                                  work%strairxn, work%strairyn, work%strair_x_T, work%strair_y_T, &
                                  work%fbot, work%rside, work%wlat, work%ierr_n, cice%ice_err, &
                                  flux%fswthru, flux%fswthru_vis, ierr, istat)
