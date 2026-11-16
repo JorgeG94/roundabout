@@ -76,6 +76,25 @@ module rdb_ocean_bulk_forcing
    !! here the guard is at the CALL SITE, so the array is never even
    !! named when ice is off).
    !!
+   !! **Snow on open water (frozen precipitation).**  `fprec = ow*prsn` is
+   !! the snow that lands on the OPEN-water share `ow` (the ice-covered share
+   !! is the sea-ice model's: it accumulates on the ice as snow mass).  That
+   !! snow has to melt, which costs the ocean `L_f` per kilogram:
+   !! `q_fus = -L_f*fprec` (W/m^2, a cooling), written here as its OWN
+   !! component (`ocean_surface_flux_t%q_fus`) and summed by the assembler.
+   !! `L_f` is `ICE_LAT_FUS`, the value the ice thermodynamics, the frazil
+   !! paths and the bulk sublimation latent heat already use, so ocean and
+   !! ice agree (frozen precipitation in CORE-forced ocean models:
+   !! Large & Yeager 2009; Griffies et al. 2009).  The snow is taken at
+   !! the melting point; the sensible part is the existing mass-enthalpy
+   !! convention (`heat_content_fprec = c_p*SST*fprec`, every precipitation
+   !! arrives "at T_s"), which belongs to the mass-flux treatment and is
+   !! unchanged.  The latent heat is NOT in that term and does not depend on
+   !! what later happens to the snow's mass.  With `&ocean_ice_nml snowfall
+   !! /= 0` the ice model already delivers the open-water snow share to the
+   !! ocean at the full melt + warming enthalpy (`rdb_ice_snow`), so this
+   !! term is not charged then (`lfus = 0`): no double count.
+   !!
    !! **Component ownership.**  Every field this module writes is a
    !! PR-12 component (`q_sens`, `q_lat`, `q_sw`, `q_lw`, `evap`,
    !! `lprec`, `fprec`, `p_surf_atm`) -- never `Q_heat`/`Q_salt`
@@ -96,6 +115,7 @@ module rdb_ocean_bulk_forcing
    use rdb_ocean_boundary_types, only: ocean_bc_state_t
    use rdb_multilayer_state, only: multilayer_state_t
    use rdb_ice_state, only: ocean_sea_ice_t
+   use rdb_ice_enthalpy, only: ICE_LAT_FUS
    use rdb_atm_state, only: atm_state_t
    use rdb_teos10_convert, only: pt_from_ct
    use rdb_ocean_bulk_flux, only: bulk_flux_config_t, bulk_flux_column, &
@@ -268,6 +288,7 @@ contains
 
       integer :: nx, ny, ng, nxp, nyp, nz, idx_T, idx_Sarg
       logical :: cons_abs
+      real(wp) :: lfus
 
       if (.not. this%enable) return
       if (.not. atm%enable) return
@@ -297,6 +318,18 @@ contains
                                            ice%part_size, this%open_water)
       end if
 
+      ! Latent heat of fusion charged for snow on open water -- unless the
+      ! sea-ice model already books it: `&ocean_ice_nml snowfall /= 0`
+      ! (`has_snowfall`) makes `ice_snowfall_ocean_share` deliver the same
+      ! open-water share of `atm_fprec` to the ocean through `heat_flux_diag`
+      ! at the full enthalpy difference (melt + warming), which includes
+      ! `L_f`; charging it here too would count it twice.  Host-side scalar
+      ! decision, no ice ARRAY is named.
+      lfus = ICE_LAT_FUS
+      if (ice%enable) then
+         if (ice%has_snowfall) lfus = 0.0_wp
+      end if
+
       call bulk_forcing_core_impl(nx, ny, ng, nxp, nyp, nz, this%cfg_bulk%n_iter, &
                                   this%cfg_atm%wind_relative, this%cfg_atm%ocean_albedo, &
                                   this%cfg_bulk%z_wind, this%cfg_bulk%z_ta, this%cfg_bulk%emissivity, &
@@ -307,9 +340,9 @@ contains
                                   ms%tracers(idx_T)%c, ms%tracers(idx_Sarg)%c, ms%h_layer, ms%k_top, &
                                   cons_abs, this%open_water, &
                                   this%taux_c, this%tauy_c, &
-                                  sf%q_sens, sf%q_lat, sf%evap, sf%q_sw, sf%q_lw, &
+                                  sf%q_sens, sf%q_lat, sf%q_fus, sf%evap, sf%q_sw, sf%q_lw, &
                                   sf%lprec, sf%fprec, sf%p_surf_atm, &
-                                  sf%heat_content_lprec, sf%heat_content_fprec, sf%cp)
+                                  sf%heat_content_lprec, sf%heat_content_fprec, sf%cp, lfus)
 
       ! Scalar halo of the cell-centred stress -- see the module
       ! docstring for why this (not the vector seam refresh) runs
@@ -361,9 +394,9 @@ contains
                                           rlds, rsds, prra, prsn, &
                                           u_face_x_layer, v_face_y_layer, c_T, c_S, h_layer, k_top, &
                                           cons_abs, open_water, &
-                                          taux_c, tauy_c, q_sens, q_lat, evap, q_sw, q_lw, &
+                                          taux_c, tauy_c, q_sens, q_lat, q_fus, evap, q_sw, q_lw, &
                                           lprec, fprec, p_surf_atm, &
-                                          heat_content_lprec, heat_content_fprec, cp)
+                                          heat_content_lprec, heat_content_fprec, cp, lfus)
       !! One `bulk_flux_column` call per PHYSICAL T-cell (see the
       !! module docstring for why ghost cells are never touched here).
       !! Land / dry cells (`wet_T <= 0.5`) write explicit zero to every
@@ -383,7 +416,7 @@ contains
          !! layer at or below it (`rdb_vl_first_live`), not a literal `nz`.
       real(wp), intent(in) :: open_water(nx, ny)
       real(wp), intent(inout) :: taux_c(nx, ny), tauy_c(nx, ny)
-      real(wp), intent(inout) :: q_sens(nx, ny), q_lat(nx, ny), evap(nx, ny)
+      real(wp), intent(inout) :: q_sens(nx, ny), q_lat(nx, ny), q_fus(nx, ny), evap(nx, ny)
       real(wp), intent(inout) :: q_sw(nx, ny), q_lw(nx, ny)
       real(wp), intent(inout) :: lprec(nx, ny), fprec(nx, ny), p_surf_atm(nx, ny)
       real(wp), intent(inout) :: heat_content_lprec(nx, ny), heat_content_fprec(nx, ny)
@@ -396,6 +429,10 @@ contains
       real(wp), intent(in) :: cp
          !! Specific heat (J/kg/K) of the heat content of precipitation:
          !! `sf%cp` (`&ocean_eos_nml c_p`, default 3992).
+      real(wp), intent(in) :: lfus
+         !! Latent heat of fusion (J/kg) charged to the ocean for the snow
+         !! that falls on open water (`q_fus = -lfus*fprec`);
+         !! `ICE_LAT_FUS`, or 0 when the sea-ice model books it itself.
 
       integer :: i, j, ii, jj, kt
       real(wp) :: ow, cosA, sinA, u_g, v_g, u_c, v_c, sst, sst_f, sst_k, lw_up
@@ -448,6 +485,7 @@ contains
             q_lw(ii, jj) = ow*(rlds(ii, jj) - lw_up)
             lprec(ii, jj) = ow*prra(ii, jj)
             fprec(ii, jj) = ow*prsn(ii, jj)
+            q_fus(ii, jj) = -lfus*fprec(ii, jj)
             p_surf_atm(ii, jj) = psl(ii, jj)
             heat_content_lprec(ii, jj) = cp*sst*lprec(ii, jj)
             heat_content_fprec(ii, jj) = cp*sst*fprec(ii, jj)
@@ -461,6 +499,7 @@ contains
             q_lw(ii, jj) = 0.0_wp
             lprec(ii, jj) = 0.0_wp
             fprec(ii, jj) = 0.0_wp
+            q_fus(ii, jj) = 0.0_wp
             p_surf_atm(ii, jj) = 0.0_wp
             heat_content_lprec(ii, jj) = 0.0_wp
             heat_content_fprec(ii, jj) = 0.0_wp
