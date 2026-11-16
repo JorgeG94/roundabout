@@ -655,7 +655,9 @@ closure is active in which regime, and its tunable knobs, is tabulated in
   thermodynamics, multi-category ITD, category transport, C-grid EVP
   dynamics, snowfall, Archimedes snow-ice flooding. Single-rank,
   wall/periodic edges, or a tripolar north fold (the SIS2 EVP and the CICE
-  C-grid EVP `dyn_scheme = "cice_c"` on any rank count).
+  C-grid EVP `dyn_scheme = "cice_c"` on any rank count); the CICE-port
+  scheme `scheme = "cice"` runs on any rank count on wall/periodic edges
+  (not yet with the fold).
 
 Most new-physics knobs default off ⇒ bit-identical; KPP and the ALE remap
 are the on-by-default exceptions. Each path is guarded by an analytical
