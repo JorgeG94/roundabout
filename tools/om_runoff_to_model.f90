@@ -24,6 +24,12 @@ program om_runoff_to_model
    !! 3. moves every share that landed on a model LAND cell to the nearest wet COASTAL cell (a
    !!    wet cell with a land 4-neighbour; any wet cell if the model has none) by great-circle
    !!    distance between cell centres, the role of the coupled models' runoff-to-coast map;
+   !! 3b. spreads every cell's mass over the wet cells reachable from it through wet cells only (4-neighbour
+   !!    flood fill, periodic i-wrap, north fold) within `--spread-radius-km` (default 500) with weights
+   !!    exp(-d/`--spread-efold-km`) (default 150), normalised per source, so a river is not released into one
+   !!    thin coastal column and cannot cross a land bridge; radius 0 turns it off (bitwise the unspread
+   !!    answer).  `--spread-max-rate` (m/day) widens a source that stays above it up to `--spread-hard-km`.
+   !!    The operator is static and built once per source cell; the global total is asserted unchanged.
    !! 4. divides by the target cell area and writes `runoff(x, y, time)` (kg m-2 s-1, float64) with
    !!    the source's time axis and `units` attribute, the layout the reader requires.
    !!
@@ -56,6 +62,8 @@ program om_runoff_to_model
    real(dp), parameter :: FILL_LIMIT = 1.0e10_dp
       !! Any |value| above this (or non-finite) is a missing value, taken as zero.
    real(dp), parameter :: TOL_TOTAL = 1.0e-12_dp
+   real(dp), parameter :: RHO_FW = 1000.0_dp
+      !! Fresh-water density (kg/m3) of the m/day rates the spreading reports and limits.
 
    type :: point_index_t
       !! Nearest-neighbour index over unit vectors: a cubic bin grid (no pole or dateline
@@ -66,12 +74,31 @@ program om_runoff_to_model
       real(dp), allocatable :: v(:, :)
    end type point_index_t
 
+   integer, parameter :: NXS = 72, NYS = 32, NSX = 180, NSY = 90
+      !! The five-degree mosaic and two-degree source of the spreading self-test.
+   integer, parameter :: SPREAD_MAXLEV = 8
+      !! Radius levels of the spreading operator (level 1 = `--spread-radius-km`, each next one x1.5).
+
+   type :: spread_t
+      !! The static spreading operator, built lazily one source cell and radius level at a time and
+      !! kept: for source cell k at level l, `tgt/wgt(start(k,l) : start(k,l)+cnt(k,l)-1)` are the
+      !! wet cells it feeds and the shares (they sum to 1).
+      integer :: nl = 1
+      real(dp) :: rad(SPREAD_MAXLEV) = 0.0_dp
+      real(dp) :: efold = 100.0_dp
+      integer :: used = 0
+      integer, allocatable :: start(:, :), cnt(:, :), tgt(:), stamp(:), queue(:)
+      real(dp), allocatable :: wgt(:)
+      integer :: stampn = 0
+   end type spread_t
+
    character(len=1024) :: arg
    character(len=1024) :: p_hgrid, p_depth, p_src, p_out
    character(len=64) :: src_var, depth_var, out_var, lon_name, lat_name, time_name
    integer :: msub, iarg, nargs
    real(dp) :: min_depth
    logical :: strict_global
+   real(dp) :: spread_r, spread_e, spread_max, spread_hard
 
    nargs = command_argument_count()
    depth_var = "depth"
@@ -82,6 +109,10 @@ program om_runoff_to_model
    msub = 4
    min_depth = 0.0_dp
    strict_global = .false.
+   spread_r = 500.0_dp
+   spread_e = 150.0_dp
+   spread_max = 0.0_dp
+   spread_hard = 1500.0_dp
 
    if (nargs == 1) then
       call get_command_argument(1, arg)
@@ -93,7 +124,8 @@ program om_runoff_to_model
    if (nargs < 5) then
       write (error_unit, "(a)") "usage: om_runoff_to_model hgrid.nc depth.nc src.nc src_var out.nc "// &
          "[--depth-var NAME] [--out-var NAME] [--lon-name NAME] [--lat-name NAME] [--time-name NAME] "// &
-         "[--msub N] [--min-depth M] [--global] | --selftest"
+         "[--msub N] [--min-depth M] [--global] [--spread-radius-km R] [--spread-efold-km L] "// &
+         "[--spread-max-rate M_PER_DAY] [--spread-hard-km R] | --selftest"
       stop 1
    end if
    call get_command_argument(1, p_hgrid)
@@ -128,6 +160,22 @@ program om_runoff_to_model
          call get_command_argument(iarg + 1, arg)
          read (arg, *) min_depth
          iarg = iarg + 2
+      case ("--spread-radius-km")
+         call get_command_argument(iarg + 1, arg)
+         read (arg, *) spread_r
+         iarg = iarg + 2
+      case ("--spread-efold-km")
+         call get_command_argument(iarg + 1, arg)
+         read (arg, *) spread_e
+         iarg = iarg + 2
+      case ("--spread-max-rate")
+         call get_command_argument(iarg + 1, arg)
+         read (arg, *) spread_max
+         iarg = iarg + 2
+      case ("--spread-hard-km")
+         call get_command_argument(iarg + 1, arg)
+         read (arg, *) spread_hard
+         iarg = iarg + 2
       case ("--global")
          strict_global = .true.
          iarg = iarg + 1
@@ -142,7 +190,8 @@ program om_runoff_to_model
    end if
    call convert(trim(p_hgrid), trim(p_depth), trim(depth_var), trim(p_src), trim(src_var), &
                 trim(p_out), trim(out_var), trim(lon_name), trim(lat_name), trim(time_name), msub, &
-                min_depth, strict_global)
+                min_depth, strict_global, spread_radius_km=spread_r, spread_efold_km=spread_e, &
+                spread_max_rate=spread_max, spread_hard_km=spread_hard)
 
 contains
 
@@ -415,7 +464,8 @@ contains
    ! ====================================================================
 
    subroutine convert(p_hgrid, p_depth, depth_var, p_src, src_var, p_out, out_var, lon_name, lat_name, time_name, msub, &
-                      min_depth, strict_global, discarded, n_redirected, max_redirect_km)
+                      min_depth, strict_global, discarded, n_redirected, max_redirect_km, &
+                      spread_radius_km, spread_efold_km, spread_max_rate, spread_hard_km)
       character(len=*), intent(in) :: p_hgrid, p_depth, depth_var, p_src, src_var, p_out, out_var
       character(len=*), intent(in) :: lon_name, lat_name, time_name
       integer, intent(in) :: msub
@@ -429,6 +479,8 @@ contains
          !! Land cells that carried mass in some record and were moved to the coast.
       real(dp), intent(out), optional :: max_redirect_km
          !! The farthest such move (great-circle, centre to centre).
+      real(dp), intent(in), optional :: spread_radius_km, spread_efold_km, spread_max_rate, spread_hard_km
+         !! Spreading (see the program docstring); radius 0 or absent = none.
 
       integer :: nx, ny, nxp, nyp, nlon, nlat, nt
       real(dp), allocatable :: sg_x(:, :), sg_y(:, :), area_sg(:, :), area_t(:, :), depth(:, :)
@@ -438,6 +490,12 @@ contains
       logical, allocatable :: wet(:, :), hit(:), coastal(:, :), moved(:)
       real(dp) :: dkm, dkm_max, moved_mass, d_dot
       integer :: n_moved_used, k_far
+      type(spread_t) :: sp
+      real(dp), allocatable :: mass2(:), rate(:)
+      integer, allocatable :: lev(:)
+      real(dp) :: sp_r, sp_hard, sp_max, rate_b, rate_a, tot_after_spread
+      integer :: iter, m, n_b, n_a, k_b, k_a, n_recv_b, n_recv_a, n_over
+      logical :: do_spread, changed
       character(len=256) :: tunits, tcal
       logical :: has_cal
       type(point_index_t) :: cidx, ridx
@@ -581,6 +639,35 @@ contains
          end do
       end do
 
+      ! the spreading operator (static, built lazily per source cell)
+      sp_r = 0.0_dp
+      sp_hard = 1500.0_dp
+      sp_max = 0.0_dp
+      sp%efold = 100.0_dp
+      if (present(spread_radius_km)) sp_r = spread_radius_km
+      if (present(spread_efold_km)) sp%efold = spread_efold_km
+      if (present(spread_max_rate)) sp_max = spread_max_rate
+      if (present(spread_hard_km)) sp_hard = spread_hard_km
+      do_spread = sp_r > 0.0_dp
+      if (sp_r < 0.0_dp .or. sp%efold <= 0.0_dp .or. sp_max < 0.0_dp) call fail("bad spreading option")
+      if (do_spread) then
+         sp%nl = 1
+         sp%rad(1) = sp_r
+         if (sp_max > 0.0_dp) then
+            do while (sp%nl < SPREAD_MAXLEV .and. sp%rad(sp%nl)*1.5_dp <= max(sp_hard, sp_r))
+               sp%rad(sp%nl + 1) = sp%rad(sp%nl)*1.5_dp
+               sp%nl = sp%nl + 1
+            end do
+         end if
+         allocate (sp%start(nx*ny, sp%nl), sp%cnt(nx*ny, sp%nl), sp%stamp(nx*ny), sp%queue(nx*ny))
+         sp%start = 0
+         sp%cnt = 0
+         sp%stamp = 0
+         allocate (sp%tgt(1024), sp%wgt(1024), mass2(nx*ny), rate(nx*ny), lev(nx*ny))
+         write (output_unit, "(a,f7.1,a,f7.1,a)") "spreading: radius ", sp_r, " km, e-folding ", sp%efold, &
+            " km, through wet cells only"
+      end if
+
       ! the records
       allocate (f(nlon, nlat), mass(nx*ny), out(nx, ny, max(nt, 1)))
       if (present(discarded)) allocate (discarded(max(nt, 1)))
@@ -614,6 +701,70 @@ contains
                end do
             end do
          end do
+         if (do_spread) then
+            rate_b = 0.0_dp
+            k_b = 0
+            n_recv_b = count(mass /= 0.0_dp)
+            do k = 1, nx*ny
+               if (mass(k) /= 0.0_dp) then
+                  rate_a = mass(k)/area_t(mod(k - 1, nx) + 1, (k - 1)/nx + 1)/RHO_FW*86400.0_dp
+                  if (rate_a > rate_b) then
+                     rate_b = rate_a
+                     k_b = k
+                  end if
+               end if
+            end do
+            n_b = count_over(mass, area_t, nx, ny, 1.0_dp)
+            lev = 1
+            do iter = 1, 30
+               call spread_apply(sp, mass, mass2, lev, wet, cv, nx, ny, periodic, fold)
+               if (sp_max <= 0.0_dp) exit
+               rate = 0.0_dp
+               do k = 1, nx*ny
+                  rate(k) = mass2(k)/area_t(mod(k - 1, nx) + 1, (k - 1)/nx + 1)/RHO_FW*86400.0_dp
+               end do
+               changed = .false.
+               do k = 1, nx*ny
+                  if (mass(k) == 0.0_dp .or. lev(k) >= sp%nl) cycle
+                  do m = 0, sp%cnt(k, lev(k)) - 1
+                     if (rate(sp%tgt(sp%start(k, lev(k)) + m)) > sp_max) then
+                        lev(k) = lev(k) + 1
+                        changed = .true.
+                        exit
+                     end if
+                  end do
+               end do
+               if (.not. changed) exit
+            end do
+            tot_after_spread = sum(mass2)
+            if (abs(tot_after_spread - sum(mass)) > TOL_TOTAL*max(abs(sum(mass)), tiny(1.0_dp))) then
+               call fail("spreading did not conserve the global runoff")
+            end if
+            rate_a = 0.0_dp
+            k_a = 0
+            do k = 1, nx*ny
+               if (mass2(k) /= 0.0_dp) then
+                  rate = 0.0_dp
+                  rate(1) = mass2(k)/area_t(mod(k - 1, nx) + 1, (k - 1)/nx + 1)/RHO_FW*86400.0_dp
+                  if (rate(1) > rate_a) then
+                     rate_a = rate(1)
+                     k_a = k
+                  end if
+               end if
+            end do
+            n_recv_a = count(mass2 /= 0.0_dp)
+            n_a = count_over(mass2, area_t, nx, ny, 1.0_dp)
+            n_over = 0
+            if (sp_max > 0.0_dp) n_over = count_over(mass2, area_t, nx, ny, sp_max)
+            write (output_unit, "(a,i0,a,i0,a,f9.3,a,i0,a,i0,a,f9.3,a,i0,a,i0,a,i0)") &
+               "    spread: cells with runoff ", n_recv_b, " -> ", n_recv_a, "; max fresh-water rate ", rate_b, &
+               " m/day (cell ", mod(k_b - 1, nx) + 1, ",", (k_b - 1)/nx + 1, ") -> ", rate_a, " m/day (cell ", &
+               mod(k_a - 1, nx) + 1, ",", (k_a - 1)/nx + 1
+            write (output_unit, "(a,i0,a,i0,a,i0)") "    spread: cells above 1 m/day ", n_b, " -> ", n_a, &
+               "; sources widened beyond level 1: ", count(lev > 1 .and. mass /= 0.0_dp)
+            if (sp_max > 0.0_dp) write (output_unit, "(a,es10.3,a,i0)") "    spread: cells still above ", sp_max, " m/day: ", n_over
+            mass = mass2
+         end if
          after = 0.0_dp
          do j = 1, ny
             do i = 1, nx
@@ -664,6 +815,138 @@ contains
    ! ====================================================================
    ! I/O
    ! ====================================================================
+
+   pure integer function count_over(mass, area_t, nx, ny, lim) result(n)
+      !! Cells whose fresh-water rate (m/day) exceeds `lim`.
+      integer, intent(in) :: nx, ny
+      real(dp), intent(in) :: lim
+      real(dp), intent(in) :: mass(nx*ny), area_t(nx, ny)
+      integer :: k
+      n = 0
+      do k = 1, nx*ny
+         if (mass(k) /= 0.0_dp) then
+            if (mass(k)/area_t(mod(k - 1, nx) + 1, (k - 1)/nx + 1)/RHO_FW*86400.0_dp > lim) n = n + 1
+         end if
+      end do
+   end function count_over
+
+   pure subroutine spread_nbrs(i, j, nx, ny, periodic, fold, n, ni, nj)
+      !! The 4-neighbours of (i,j) a flood fill may step to: wrapping in i on a periodic mosaic and
+      !! mirrored (i -> nx+1-i, same row) across a north fold; no wrap otherwise.
+      integer, intent(in) :: i, j, nx, ny
+      logical, intent(in) :: periodic, fold
+      integer, intent(out) :: n
+      integer, intent(out) :: ni(4), nj(4)
+      n = 0
+      if (i > 1) then
+         n = n + 1
+         ni(n) = i - 1
+         nj(n) = j
+      else if (periodic) then
+         n = n + 1
+         ni(n) = nx
+         nj(n) = j
+      end if
+      if (i < nx) then
+         n = n + 1
+         ni(n) = i + 1
+         nj(n) = j
+      else if (periodic) then
+         n = n + 1
+         ni(n) = 1
+         nj(n) = j
+      end if
+      if (j > 1) then
+         n = n + 1
+         ni(n) = i
+         nj(n) = j - 1
+      end if
+      if (j < ny) then
+         n = n + 1
+         ni(n) = i
+         nj(n) = j + 1
+      else if (fold) then
+         n = n + 1
+         ni(n) = nx + 1 - i
+         nj(n) = j
+      end if
+   end subroutine spread_nbrs
+
+   subroutine spread_build(sp, k, l, wet, cv, nx, ny, periodic, fold)
+      !! Flood fill from wet cell k through WET cells only, within the great-circle radius of level l,
+      !! weights exp(-d/efold) normalised to sum to 1.  A land bridge therefore cannot be crossed.
+      type(spread_t), intent(inout) :: sp
+      integer, intent(in) :: k, l, nx, ny
+      logical, intent(in) :: periodic, fold
+      logical, intent(in) :: wet(nx, ny)
+      real(dp), intent(in) :: cv(3, nx*ny)
+      integer :: head, tail, c, ci, cj, n, q, m
+      integer :: ni(4), nj(4)
+      integer, allocatable :: itmp(:)
+      real(dp), allocatable :: rtmp(:)
+      real(dp) :: d, wsum, dd
+      sp%stampn = sp%stampn + 1
+      head = 1
+      tail = 1
+      sp%queue(1) = k
+      sp%stamp(k) = sp%stampn
+      do while (head <= tail)
+         c = sp%queue(head)
+         head = head + 1
+         ci = mod(c - 1, nx) + 1
+         cj = (c - 1)/nx + 1
+         call spread_nbrs(ci, cj, nx, ny, periodic, fold, n, ni, nj)
+         do m = 1, n
+            q = ni(m) + (nj(m) - 1)*nx
+            if (.not. wet(ni(m), nj(m)) .or. sp%stamp(q) == sp%stampn) cycle
+            dd = min(1.0_dp, max(-1.0_dp, dot_product(cv(:, k), cv(:, q))))
+            if (6371.0_dp*acos(dd) > sp%rad(l)) cycle
+            sp%stamp(q) = sp%stampn
+            tail = tail + 1
+            sp%queue(tail) = q
+         end do
+      end do
+      if (sp%used + tail > size(sp%tgt)) then
+         allocate (itmp(2*(sp%used + tail)), rtmp(2*(sp%used + tail)))
+         itmp(1:sp%used) = sp%tgt(1:sp%used)
+         rtmp(1:sp%used) = sp%wgt(1:sp%used)
+         call move_alloc(itmp, sp%tgt)
+         call move_alloc(rtmp, sp%wgt)
+      end if
+      wsum = 0.0_dp
+      do m = 1, tail
+         dd = min(1.0_dp, max(-1.0_dp, dot_product(cv(:, k), cv(:, sp%queue(m)))))
+         d = 6371.0_dp*acos(dd)
+         sp%tgt(sp%used + m) = sp%queue(m)
+         sp%wgt(sp%used + m) = exp(-d/sp%efold)
+         wsum = wsum + sp%wgt(sp%used + m)
+      end do
+      sp%wgt(sp%used + 1:sp%used + tail) = sp%wgt(sp%used + 1:sp%used + tail)/wsum
+      sp%start(k, l) = sp%used + 1
+      sp%cnt(k, l) = tail
+      sp%used = sp%used + tail
+   end subroutine spread_build
+
+   subroutine spread_apply(sp, mass, mass2, lev, wet, cv, nx, ny, periodic, fold)
+      !! mass2 = the spreading operator applied to mass (kg/s per cell), source cell k at radius level lev(k).
+      type(spread_t), intent(inout) :: sp
+      integer, intent(in) :: nx, ny
+      integer, intent(in) :: lev(nx*ny)
+      real(dp), intent(in) :: mass(nx*ny), cv(3, nx*ny)
+      real(dp), intent(out) :: mass2(nx*ny)
+      logical, intent(in) :: periodic, fold
+      logical, intent(in) :: wet(nx, ny)
+      integer :: k, m, l
+      mass2 = 0.0_dp
+      do k = 1, nx*ny
+         if (mass(k) == 0.0_dp) cycle
+         l = lev(k)
+         if (sp%start(k, l) == 0) call spread_build(sp, k, l, wet, cv, nx, ny, periodic, fold)
+         do m = sp%start(k, l), sp%start(k, l) + sp%cnt(k, l) - 1
+            mass2(sp%tgt(m)) = mass2(sp%tgt(m)) + mass(k)*sp%wgt(m)
+         end do
+      end do
+   end subroutine spread_apply
 
    subroutine read_supergrid(path, nx, ny, sg_x, sg_y, area_sg)
       character(len=*), intent(in) :: path
@@ -961,6 +1244,124 @@ contains
       write (output_unit, "(a)") "selftest placement passed (open ocean, coast, regional discard)"
    end subroutine placement_selftest
 
+   subroutine spread_case(depth, isrc, jsrc, rad, efold, max_rate, out, area_t)
+      !! One spreading case on the 72 x 32 five-degree mosaic: a single 2-degree source cell inside model
+      !! cell (isrc, jsrc), converted with the given spreading options; returns the model-grid runoff
+      !! and the cell areas.
+      real(dp), intent(in) :: depth(NXS, NYS)
+      real(dp), intent(in) :: rad, efold, max_rate
+      integer, intent(in) :: isrc, jsrc
+      real(dp), intent(out) :: out(NXS, NYS), area_t(NXS, NYS)
+      character(len=*), parameter :: F_HG = "om_runoff_selftest_hgrid.nc"
+      character(len=*), parameter :: F_DP = "om_runoff_selftest_depth.nc"
+      character(len=*), parameter :: F_SR = "om_runoff_selftest_src.nc"
+      character(len=*), parameter :: F_OUT = "om_runoff_selftest_out.nc"
+      real(dp) :: slon(NSX), slat(NSY), src(NSX, NSY, 1)
+      real(dp), allocatable :: o3(:, :, :)
+      integer :: i, j
+      do i = 1, NSX
+         slon(i) = (real(i, dp) - 0.5_dp)*2.0_dp
+      end do
+      do j = 1, NSY
+         slat(j) = -90.0_dp + (real(j, dp) - 0.5_dp)*2.0_dp
+      end do
+      src = 0.0_dp
+      src((isrc - 1)*5/2 + 2, ((jsrc - 1)*5 + 10)/2 + 2, 1) = 1.0e-5_dp
+      ! (isrc-1)*5/2 and the latitude index are integer divisions: the 2-degree cell lies inside the 5-degree one
+      call write_mosaic(F_HG, NXS, NYS, 0.0_dp, -80.0_dp, 5.0_dp)
+      call write_depth(F_DP, depth)
+      call write_source(F_SR, slon, slat, [15.0_dp], src)
+      call convert(F_HG, F_DP, "depth", F_SR, "friver", F_OUT, "runoff", "lon", "lat", "time", 4, 0.0_dp, .true., &
+                   spread_radius_km=rad, spread_efold_km=efold, spread_max_rate=max_rate, spread_hard_km=3000.0_dp)
+      call read_out(F_OUT, NXS, NYS, 1, o3)
+      out = o3(:, :, 1)
+      do j = 1, NYS
+         do i = 1, NXS
+            area_t(i, j) = R_EARTH**2*(5.0_dp*DEG)*(sin((-80.0_dp + 5.0_dp*real(j, dp))*DEG) &
+                                                    - sin((-80.0_dp + 5.0_dp*real(j - 1, dp))*DEG))
+         end do
+      end do
+   end subroutine spread_case
+
+   subroutine spread_selftest()
+      !! Spreading: an open coast spreads symmetrically and conserves; a full land wall is not crossed;
+      !! a closed one-cell bay keeps everything; the periodic seam is crossed; radius 0 is the unspread
+      !! answer bit for bit; the max-rate option widens; the flood-fill neighbours wrap and fold.
+      real(dp) :: m0, m1, m2
+      real(dp) :: depth(NXS, NYS), o0(NXS, NYS), o1(NXS, NYS), a(NXS, NYS)
+      integer :: n
+      integer :: ni(4), nj(4)
+      logical :: ok
+
+      ! A: coast at i = 11 (land i <= 10); source in (11,16)
+      depth = 4000.0_dp
+      depth(1:10, :) = 0.0_dp
+      call spread_case(depth, 11, 16, 0.0_dp, 300.0_dp, 0.0_dp, o0, a)
+      call spread_case(depth, 11, 16, 1500.0_dp, 300.0_dp, 0.0_dp, o1, a)
+      m0 = sum(o0*a)
+      m1 = sum(o1*a)
+      if (abs(m1 - m0) > TOL_TOTAL*m0) call fail("selftest spread: the total changed")
+      if (count(o1 /= 0.0_dp) < 5) call fail("selftest spread: the open-coast source did not spread")
+      if (abs(o1(11, 15)*a(11, 15) - o1(11, 17)*a(11, 17)) > 1.0e-9_dp*m0) then
+         call fail("selftest spread: the coastal spread is not symmetric")
+      end if
+      if (o1(11, 16) >= o0(11, 16)) call fail("selftest spread: the source cell was not relieved")
+      if (any(o1(1:10, :) /= 0.0_dp)) call fail("selftest spread: mass reached land")
+
+      ! radius 0 is bitwise the unspread answer (the option absent)
+      call spread_case(depth, 11, 16, 0.0_dp, 300.0_dp, 0.0_dp, o0, a)
+      call spread_case(depth, 11, 16, -0.0_dp, 123.0_dp, 0.0_dp, o1, a)
+      if (any(o0 /= o1)) call fail("selftest spread: radius 0 is not the unspread answer")
+
+      ! B: full land walls at i = 20 and i = 60 (the world is periodic): the 21..59 basin is a separate sea
+      depth = 4000.0_dp
+      depth(20, :) = 0.0_dp
+      depth(60, :) = 0.0_dp
+      call spread_case(depth, 19, 16, 3000.0_dp, 400.0_dp, 0.0_dp, o1, a)
+      if (any(o1(21:59, :) /= 0.0_dp)) call fail("selftest spread: runoff crossed a land wall")
+      if (o1(18, 16) <= 0.0_dp) call fail("selftest spread: no spread on the source's own side of the wall")
+
+      ! C: a closed one-cell bay keeps its runoff
+      depth = 4000.0_dp
+      depth(39, 16) = 0.0_dp
+      depth(41, 16) = 0.0_dp
+      depth(40, 15) = 0.0_dp
+      depth(40, 17) = 0.0_dp
+      call spread_case(depth, 40, 16, 0.0_dp, 300.0_dp, 0.0_dp, o0, a)
+      call spread_case(depth, 40, 16, 2000.0_dp, 300.0_dp, 0.0_dp, o1, a)
+      if (count(o1 /= 0.0_dp) /= 1) call fail("selftest spread: a closed bay leaked")
+      m0 = o0(40, 16)*a(40, 16)
+      if (abs(o1(40, 16)*a(40, 16) - m0) > TOL_TOTAL*m0) call fail("selftest spread: the bay lost mass")
+
+      ! D: the periodic seam: a source in column 1 feeds column 72 as it feeds column 2
+      depth = 4000.0_dp
+      call spread_case(depth, 1, 16, 1000.0_dp, 300.0_dp, 0.0_dp, o1, a)
+      if (o1(72, 16) <= 0.0_dp) call fail("selftest spread: no spread across the periodic seam")
+      if (abs(o1(72, 16) - o1(2, 16)) > 1.0e-9_dp*o1(2, 16)) call fail("selftest spread: the seam is not symmetric")
+
+      ! E: the max-rate option widens a source until the peak falls
+      depth = 4000.0_dp
+      depth(1:10, :) = 0.0_dp
+      call spread_case(depth, 11, 16, 600.0_dp, 800.0_dp, 0.0_dp, o0, a)
+      call spread_case(depth, 11, 16, 600.0_dp, 800.0_dp, maxval(o0)*86400.0_dp/RHO_FW*0.25_dp, o1, a)
+      if (maxval(o1) >= 0.9_dp*maxval(o0)) call fail("selftest spread: --spread-max-rate did not widen")
+      m1 = sum(o1*a)
+      m2 = sum(o0*a)
+      if (abs(m1 - m2) > TOL_TOTAL*m2) call fail("selftest spread: widening changed the total")
+
+      ! F: flood-fill neighbours: wrap in i only when periodic, mirror at the north row only with a fold
+      call spread_nbrs(1, 5, 10, 8, .true., .false., n, ni, nj)
+      ok = any(ni(1:n) == 10 .and. nj(1:n) == 5)
+      call spread_nbrs(1, 5, 10, 8, .false., .false., n, ni, nj)
+      ok = ok .and. .not. any(ni(1:n) == 10)
+      call spread_nbrs(3, 8, 10, 8, .true., .true., n, ni, nj)
+      ok = ok .and. any(ni(1:n) == 8 .and. nj(1:n) == 8)
+      call spread_nbrs(3, 8, 10, 8, .true., .false., n, ni, nj)
+      ok = ok .and. n == 3
+      if (.not. ok) call fail("selftest spread: wrong flood-fill neighbours")
+      write (output_unit, "(a)") "selftest spreading passed"
+   end subroutine spread_selftest
+
    subroutine selftest()
       !! A synthetic 5-degree mosaic (lon 0..360, lat -80..80) with a continent and an island, a
       !! 2-degree source that puts runoff on the continent, on its coast, in the open ocean and in
@@ -1052,6 +1453,7 @@ contains
       end do
       if (count(out(:, :, 1) > 0.0_dp) < 20) call fail("selftest: the runoff reached suspiciously few cells")
       call placement_selftest()
+      call spread_selftest()
       write (output_unit, "(a)") "selftest passed"
    end subroutine selftest
 

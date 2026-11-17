@@ -1040,7 +1040,7 @@ D=$RDB_DATA_DIR/OM_1deg
 ./om_runoff_to_model $D/ocean_hgrid.nc $D/bathy_om1deg.nc licalvf_1958.nc licalvf $D/runoff_frozen_om1deg.nc --global
 ```
 
-`--global` makes any discarded mass fatal. The tool prints, per record, the source and
+`--global` makes any discarded mass fatal. By default rivers are spread over the coastal ocean (`--spread-radius-km 500`, see the howto; `0` turns it off). The tool prints, per record, the source and
 model-grid totals and the mass moved from land to the coast, and at the end the number of
 land cells that carried mass and the farthest move. It takes about one minute for a 0.25
 degree source on the 360 x 320 mosaic (the point map is built once, not per record).
