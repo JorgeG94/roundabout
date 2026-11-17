@@ -614,3 +614,17 @@ wherever the tile holds `nghost + 2` (+1 under the fold), prints the totals and 
 `island_basin`, `spherical` and `tripolar` write/resume under AUTO on both legs; `island_basin` and `tripolar` also write
 at `bt_halo = 0` and resume under AUTO and the reverse (owned cells against the one-rank reference: the ghosts of the
 two marches legitimately differ).  The non-trivial widths this exercises include 6 / 4 / 2 shrunk by the odd 26 x 18 tiles.
+
+### Gate counts on the final tree (gfortran 15.1 + OpenMPI 5.0.5 CPU unless stated)
+
+| leg | result |
+|---|---|
+| whole unfiltered `test_ocean_decomp_bitid_mpi`, np 2 | all checks PASSED; 864 IDENTICAL lines, 0 FAIL; AUTO wide on 182 of 314 decomposed runs (91 of 157 cases) |
+| same, np 4 | all checks PASSED; 1134 IDENTICAL lines, 0 FAIL; AUTO wide on 190 of 471 runs (91 of 157 cases) |
+| serial `ctest -R rdb -j 6` | 290 / 290 (the python test needs the netcdf-fortran `LD_LIBRARY_PATH` of the gfortran toolchain) |
+| `ctest -R mpi`, minus the three plain whole-suite legs (run by hand above) | 61 / 61 (the two `*_inhalo` legs failed once on a test-assertion bug, fixed, re-run: pass) |
+| compat matrix (`--mpi-build-dir`, DECOMP leg through AUTO) | 50 PASS, 34 XFAIL, 0 XPASS, 0 FAIL; leg decomp PASS 59 |
+| GPU np 2 (V100, GPUs 2 + 3), filter `bth,island,periodic,spherical,tripolar,sea_ice,open_obc,_t0` | all checks PASSED, 478 IDENTICAL, 0 FAIL; 36 of 66 decomposed runs AUTO wide |
+
+An earlier first run of the whole test failed only on my own new assertion (zero-step `_t0` cases have no packed exchange
+to count; then an operator-precedence slip in the fix); no bitwise mismatch appeared in any run.

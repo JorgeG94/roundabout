@@ -3017,12 +3017,16 @@ contains
       end if
       bad = 0
       ! (a zero-step `_t0` case never marches: no packed exchange to count)
-      if (n_steps_cur > 0 .and. (dec%cnt_pk > 0_int64) .neqv. (dec%bt_halo > 0)) bad = bad + 1
+      if (n_steps_cur > 0) then
+         if ((dec%cnt_pk > 0_int64) .neqv. (dec%bt_halo > 0)) bad = bad + 1
+      end if
       if (auto_must_stay_zero(label) .and. dec%bt_halo /= 0) bad = bad + 1
       tile = min(NX_G/px, NY_G/(nprocs/px))
       need = 3 + 2 + merge(1, 0, index(label, "tripolar") > 0)
       fits = tile >= need
-      if (auto_must_be_wide(label) .and. fits .and. dec%bt_halo == 0) bad = bad + 1
+      ! (the in-halo legs, RDB_BITID_INHALO = 1 / 2, switch inhalo_march on: an AUTO exclusion)
+      if (auto_must_be_wide(label) .and. fits .and. dec%bt_halo == 0 .and. &
+          inhalo_mode /= 1 .and. inhalo_mode /= 2) bad = bad + 1
       if (bad > 0) then
          write (*, '(3a,i0,a,i0,a,l1,a)') "FAIL ", trim(tag), ": AUTO bt_halo resolved to ", dec%bt_halo, &
             " pk=", dec%cnt_pk, " (wide expected: ", auto_must_be_wide(label) .and. fits, ")"
