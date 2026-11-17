@@ -515,3 +515,59 @@ Not verified: nvfortran CPU; GPU np 4; GPU cycle-break and fold-ring legs; GPU `
 accepted combinations (sponge, Orlanski, nudged edges, wave drag) with the fold; timing of the merged result (stage 4 numbers
 were measured without the fold); `bt_halo` odd values across the fold beyond the rounding rule.  Nothing new is refused: the
 fold stays accepted with every tested combination; AUTO still resolves to 0.
+
+
+## Stage 7: the `bt_halo = 0` loop on the packed machinery (`perf/bt-substep-packed`)
+
+Before: the ordinary fast loop ended every substep with `ocean_halo_bt_group_2d(eta, ubt, vbt)` (three
+sequential two-pass exchanges) and ran one more two-pass `ocean_halo_face_x(bt_ubt)` between the u and the v
+update, so a decomposed run paid FOUR two-pass rounds per substep (3 + 1) and `4 N + 3` per solve (the exit
+freshen of the time means is a fourth-group round).  After: the end-of-substep and exit exchanges are ONE
+`ocean_halo_packed_wide(nghost, eta, ubt, vbt)` (the packed machinery at the model's own width), so TWO rounds
+per substep (`2 N + 1` per solve).  `ocean_halo_reserve` now sizes the packed buffers at `nghost` always (it
+only did so for `bt_halo > 0`), so there is no mid-run growth.  The in-halo march (`inhalo_march`, opt-in) also
+packs: its entry set (eta, ubt, vbt + `F_bt_*_fast` + `bt_rem_*`) is one round instead of five, its in-loop
+exchange carries `ubt_prev` / `vbt_prev` in the same round.
+
+Left alone, and why:
+* the mid-substep `bt_ubt` x exchange: the v update reads the u it just wrote, and at `px > 1` the tripolar fold
+  sits between that exchange and the end-of-substep one (exchange -> wrap -> fold, twice per substep); it cannot
+  join the end-of-substep message without changing which values the v stencil reads.
+* `ubt` in the end-of-substep message is NOT dropped even though the mid exchange already refreshed it: at `px > 1`
+  the fold rewrites the north ghost rows between the two, and the end exchange then refreshes the x-ghosts of those
+  rows; dropping it would save bytes, not rounds, and change the ghost state.
+* the inhalo exit `bt_uhbt` / `bt_vhbt` exchange (the packed call needs eta / ubt / vbt in every set).
+* `bt_group` still counts the one setup-time exchange (`engine_setup`).
+
+Counters (gfortran 15.1 + OpenMPI 5.0.5, np 2, rank 0, `RDB_BITID_COUNTS=1`; `msgs` = Isends of the whole run
+including the ml-state / continuity traffic, which is unchanged):
+
+| case (2x1, pred_corr, 48 steps) | `n_inner` | before | after |
+|---|---|---|---|
+| island_basin | 10 | `bt_group=1056 bt_u=960 pk=0 msgs=6720` | `bt_group=0 bt_u=960 pk=1056 msgs=4608` (-31 %) |
+| periodic_channel_zstar | 14 | `bt_group=1440 bt_u=1344 pk=0 msgs=16512` | `bt_group=0 bt_u=1344 pk=1440 msgs=10752` (-35 %) |
+
+GPU seamount bench (`bench_scaling/seamount_bt0.nml`, 512 x 256, 576 steps x 2 stages, `n_inner` = 65, V100, HPC-X
+CUDA-aware, GPUs 2 + 3, both locks held):
+`halo exch` np 2 rank 0: `bt_group=76033 bt_u=74880 msgs=339859` -> `bt_group=1 pk=76032 bt_u=74880 msgs=187795`
+(-45 % Isends: rank 0 of a 2 x 1 split posts 4 -> 2 Isends per substep).
+Timings (single runs, interleaved base / new, same two GPUs; 1-min host load 5 to 35 from other projects, rising
+during the later runs, so these are noisy and only indicative).  `base` = 0facac1f4, `new` = this branch:
+
+| run | wall s | `ocean_barotropic_solver` s | `ocean_comms_bt` s (150912 calls at np 2) |
+|---|---|---|---|
+| base np 1 (a, b) | 44.1, 44.3 | 14.2, 14.3 | 3.58, 3.99 |
+| new np 1 (a, b) | 43.9, 44.3 | 14.1, 14.2 | 4.13, 3.38 |
+| base np 2 (a, b, c, d) | 45.7, 47.2, 52.4, 48.2 | 26.6, 27.9, 32.1, 28.5 | 15.8, 17.2, 20.1, 17.1 |
+| new np 2 (a, b, c, d) | 43.5, 49.5, 49.7, 46.4 | 24.3, 29.0, 29.2, 26.6 | 13.2, 16.9, 17.1, 15.1 |
+
+np 1: no change (no messages; the packed call is a no-op there, as the group exchange was).  np 2: medians of the
+BT comms timer 17.1 s -> 16.0 s (about 6 %), of the total wall 47.7 s -> 48.0 s, i.e. a gain in the BT comms timer
+that is visible but of the size of the run-to-run scatter, and no measurable gain in the total wall on this bench.
+The message count halving is exact; the time is dominated by the mid-substep exchange, the per-round synchronisation
+and the pack / unpack kernels, which this change does not remove.
+
+Gates on the final code: see the commit message of the stage / the report; the whole `test_ocean_decomp_bitid_mpi`
+passes at np 2 (850 identical) and np 4 (1106 identical), serial `ctest -R rdb` 290 / 290,
+`test_ocean_dyn_mpi` np 1 / 2 pass (its v1 count formulas now expect `bt_group = 0`, `pk = (N + 1) * 2 * steps`,
+`msgs = 48 + 4 N` per step per direction instead of `52 + 8 N`).
