@@ -122,6 +122,10 @@ contains
                   new_unittest("engine_freshwater_none_is_knob_absent", test_engine_fw_none_is_absent), &
                   new_unittest("engine_freshwater_virtual_composition_sis2", test_engine_fw_composition), &
                   new_unittest("restart_engine_bit_exact_cice_bulk_freshwater", test_engine_bit_exact_cice_fw), &
+                  new_unittest("restart_engine_bit_exact_fw_mass_ratio1", test_engine_bit_exact_fw_mass_r1), &
+                  new_unittest("restart_engine_bit_exact_fw_mass_ssp_rk2", test_engine_bit_exact_fw_mass_ssp), &
+                  new_unittest("restart_engine_bit_exact_fw_mass_ratio2", test_engine_bit_exact_fw_mass_r2), &
+                  new_unittest("restart_engine_bit_exact_fw_mass_deferred", test_engine_bit_exact_fw_mass_def), &
                   new_unittest("restart_engine_bit_exact_bulk_boundary_layer", &
                                test_engine_bit_exact_bulk_bl), &
                   new_unittest("restart_engine_old_checkpoint_stale_flux_ghosts_repaired", &
@@ -470,6 +474,41 @@ contains
                "&ocean_bulk_flux_nml enable = .true. /"//NL// &
                "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL// &
                "&output_nml output_to_file = .false. /"//NL
+      case ("fw_mass_r1", "fw_mass_ssp", "fw_mass_r2", "fw_mass_def")
+         ! Real fresh-water MASS (`freshwater = 'mass'`) under the prescribed atmosphere, no ice: rain,
+         ! snow and evaporation move real volume.  `_r1` = every step a thermo step (pred_corr), `_ssp` =
+         ! ssp_rk2, `_r2` = `dt_therm_ratio = 2` in-stage, `_def` = the deferred order (`diabatic_first
+         ! = .false.`, pred_corr).  The checkpoint of the ratio-2 cases lands mid thermo interval, where
+         ! the assembled `fw_net` / `Q_salt_tracer` snapshot is pending and must come out of the registry.
+         nml = "&sim_nml sim_type = 'ocean' /"//NL// &
+               "&time_nml t_end = 86400.0, dt_fixed = 600.0, start_date = '2000-01-01' /"//NL// &
+               "&nonhydrostatic_nml nz_layers = 3 /"//NL// &
+               "&ocean_diag_nml enabled = .false. /"//NL// &
+               "&tracer_nml initial_temperature = 4.0, initial_salinity = 34.0, "// &
+               "T_init_surface = 5.0, T_init_bottom = 3.0 /"//NL// &
+               "&ocean_bt_nml auto_n_inner = .true., split_scheme = '"// &
+               merge("ssp_rk2  ", "pred_corr", label == "fw_mass_ssp")//"' /"//NL// &
+               "&ocean_hvisc_nml nu_h = 200.0 /"//NL// &
+               "&grid_nml nx = 12, ny = 10, nghost = 3, dx = 0.25, dy = 0.25 /"//NL// &
+               "&ocean_grid_nml grid_config = 'spherical', lon_west = 20.0, lat_south = 60.0, "// &
+               "rad_earth = 6.371e6, coriolis_scheme = 'planetary' /"//NL// &
+               "&physics_nml wind_stress_x = 0.0, wind_stress_y = 0.0 /"//NL// &
+               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
+               "&ocean_topo_nml topo_config = 'flat', max_depth = 100.0 /"//NL// &
+               "&ocean_thermo_nml enable_thermodynamics = .true. /"//NL// &
+               "&ocean_forcing_nml enable_components = .true., freshwater = 'mass' /"//NL// &
+               "&ocean_atm_forcing_nml enable = .true., sw_interp = 'linear', fluxes_regrid = 'bilinear', "// &
+               "time_mode = 'interannual', wind_relative = .false., "// &
+               "filelist_tas = 'rsw_cice_atm.txt', filelist_huss = 'rsw_cice_atm.txt', "// &
+               "filelist_uas = 'rsw_cice_atm.txt', filelist_vas = 'rsw_cice_atm.txt', "// &
+               "filelist_psl = 'rsw_cice_atm.txt', filelist_rlds = 'rsw_cice_atm.txt', "// &
+               "filelist_rsds = 'rsw_cice_atm.txt', filelist_prra = 'rsw_cice_atm.txt', "// &
+               "filelist_prsn = 'rsw_cice_atm.txt' /"//NL// &
+               "&ocean_bulk_flux_nml enable = .true. /"//NL// &
+               "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL// &
+               "&output_nml output_to_file = .false. /"//NL
+         if (label == "fw_mass_r2") nml = nml//"&ocean_vmix_nml dt_therm_ratio = 2 /"//NL
+         if (label == "fw_mass_def") nml = nml//"&ocean_vmix_nml dt_therm_ratio = 2, diabatic_first = .false. /"//NL
       case ("gm_meke_varmix_therm2")
          ! Stratified seamount on z* with GM + MEKE + VarMix (the compat
          ! matrix's `gm_meke` overlay), thermo every second step.
@@ -702,7 +741,7 @@ contains
       call push(snap, tag, reshape(a, [size(a, 1), size(a, 2), 1]))
    end subroutine push2
 
-   subroutine compare(error, sa, sb, n_ice, when)
+   subroutine compare(error, sa, sb, n_ice, when, skip_stress)
       !! Bitwise, every element of every field (ghosts included).  Reports
       !! every mismatching field (first cell each) before failing.
       type(error_type), allocatable, intent(out) :: error
@@ -711,6 +750,11 @@ contains
       integer, intent(out) :: n_ice
          !! How many `ice_*` registry fields were compared (a guard that
          !! the ice variants really reach the ice state).
+      logical, intent(in), optional :: skip_stress
+         !! `.true.`: leave the `surface_stress_*` snapshot rows out.  The bulk consumer without sea ice
+         !! recomputes the wind stress at the top of every step and nothing carries it, so a freshly
+         !! resumed engine holds zero there until its first step; the cases that set this assert
+         !! the carried state at the resume point and the whole state after the resumed steps.
       integer :: e, i, j, k, nbad_fields, nb
       character(len=:), allocatable :: msg
       character(len=200) :: line
@@ -721,6 +765,9 @@ contains
       call check(error, sa%n == sb%n, "registry field count differs "//when)
       if (allocated(error)) return
       do e = 1, sa%n
+         if (present(skip_stress)) then
+            if (skip_stress .and. index(sa%f(e)%tag, "surface_stress_") == 1) cycle
+         end if
          if (sa%f(e)%tag /= sb%f(e)%tag) then
             call check(error, .false., "registry field order differs: "//trim(sa%f(e)%tag)// &
                        " vs "//trim(sb%f(e)%tag))
@@ -824,7 +871,8 @@ contains
       call check(error, eb%warm_restart, "engine B did not take the warm-restart path")
       if (allocated(error)) return
       call take_snapshot(eb, sb0)
-      call compare(error, sa0, sb0, n_ice, trim(label)//" nw="//itoa(n_write)//": at the resume point")
+      call compare(error, sa0, sb0, n_ice, trim(label)//" nw="//itoa(n_write)//": at the resume point", &
+                   skip_stress=(index(label, "fw_mass_") == 1))
       if (allocated(error) .or. point_only) then
          call engine_exit_data(eb)
          call engine_teardown(eb)
@@ -1446,6 +1494,42 @@ contains
       call run_round_trip(error, "cice_bulk_fw", 3, 4, n_ice)
       call remove_synth_atm("rsw_cice_atm.nc", "rsw_cice_atm.txt")
    end subroutine test_engine_bit_exact_cice_fw
+
+   subroutine fw_mass_round_trip(error, label, n_write)
+      !! Straight vs checkpoint + warm restart, `freshwater = 'mass'`, every registry field bitwise (the
+      !! carried `sf_fw_net` / `sf_Q_salt_tracer` included), with a guard that the volume really moved.
+      type(error_type), allocatable, intent(out) :: error
+      character(len=*), intent(in) :: label
+      integer, intent(in) :: n_write
+      integer :: n_ice
+
+      call write_synth_atm("mixed", "rsw_cice_atm.nc", "rsw_cice_atm.txt")
+      call run_round_trip(error, label, n_write, 4, n_ice)
+      call remove_synth_atm("rsw_cice_atm.nc", "rsw_cice_atm.txt")
+   end subroutine fw_mass_round_trip
+
+   subroutine test_engine_bit_exact_fw_mass_r1(error)
+      type(error_type), allocatable, intent(out) :: error
+      call fw_mass_round_trip(error, "fw_mass_r1", 3)
+   end subroutine test_engine_bit_exact_fw_mass_r1
+
+   subroutine test_engine_bit_exact_fw_mass_ssp(error)
+      type(error_type), allocatable, intent(out) :: error
+      call fw_mass_round_trip(error, "fw_mass_ssp", 3)
+   end subroutine test_engine_bit_exact_fw_mass_ssp
+
+   subroutine test_engine_bit_exact_fw_mass_r2(error)
+      !! Ratio 2, checkpoint mid thermo window (odd).
+      type(error_type), allocatable, intent(out) :: error
+      call fw_mass_round_trip(error, "fw_mass_r2", 3)
+   end subroutine test_engine_bit_exact_fw_mass_r2
+
+   subroutine test_engine_bit_exact_fw_mass_def(error)
+      !! The deferred order (`diabatic_first = .false.`), checkpoint mid interval (odd): the snapshot assembled
+      !! after step 3 is spent at step 4, so it must come out of the checkpoint.
+      type(error_type), allocatable, intent(out) :: error
+      call fw_mass_round_trip(error, "fw_mass_def", 3)
+   end subroutine test_engine_bit_exact_fw_mass_def
 
    subroutine test_engine_fw_none_is_absent(error)
       !! `freshwater = 'none'` IS the knob absent: the whole restart registry and the carried surface fluxes
