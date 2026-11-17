@@ -1091,6 +1091,28 @@ if(Python3_EXECUTABLE)
   endif()
 endif()
 
+# tools/om_runoff_to_model.f90 self-test: builds a synthetic mosaic, depth map
+# and lon-lat runoff product in the (scratch) working directory, runs the
+# conservative remap + land-to-coast move, and asserts the global total is
+# preserved and no land cell is non-zero, both inside the tool and from an
+# independent re-read of its output. Plain host Fortran + NetCDF, so it needs no
+# core library.
+if(RDB_ENABLE_NETCDF)
+  add_executable(om_runoff_to_model
+                 "${PROJECT_SOURCE_DIR}/tools/om_runoff_to_model.f90")
+  target_link_libraries(om_runoff_to_model PRIVATE netCDF::netcdff)
+  set_target_properties(
+    om_runoff_to_model PROPERTIES Fortran_MODULE_DIRECTORY
+                                  ${CMAKE_CURRENT_BINARY_DIR}/om_runoff_mod)
+  add_test(
+    NAME rdb_om_runoff_to_model_selftest
+    COMMAND om_runoff_to_model --selftest
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/tmp_local_artifacts)
+  set_tests_properties(
+    rdb_om_runoff_to_model_selftest PROPERTIES LABELS "ocean" ENVIRONMENT
+                                               "OMP_NUM_THREADS=1")
+endif()
+
 # [C1] tools/vgrid_to_dz.py self-test: builds a synthetic MOM6 vgrid in memory
 # (known 75-level thickness profile), converts it through both input paths --
 # the stdlib-only --text-interfaces fallback (always exercised) and the netCDF4
