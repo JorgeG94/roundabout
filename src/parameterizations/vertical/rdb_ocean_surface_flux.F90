@@ -146,7 +146,8 @@
 !!     only `evap`, `lprec`, `fprec` (+ `heat_content_lprec/fprec`) have a
 !!     writer, plus the `&ocean_dataovr_nml lrunoff/frunoff` reader (which writes no
 !!     `heat_content_*`: runoff enters at the layer temperature under `"mass"` and is
-!!     refused under `"none"`); nothing writes `vprec`, `seaice_melt`.
+!!     refused under `"none"`); nothing writes `vprec`, and `seaice_melt` is written only by the
+!!     CICE-port hand-off under `freshwater = "mass"` (`ice_cice_to_surface_flux`).
 !!   * `salt_fw` (positive SALINIFIES): `ocean_surface_flux_fw_virtual_step`
 !!     (`&ocean_forcing_nml freshwater = "virtual"` or `"mass"`) and nothing else.  The
 !!     virtual salt flux `-S_surf*F` of the open-ocean fresh-water mass flux
@@ -172,7 +173,9 @@
 !!     step (`massin = massout = 0` in `Q_heat`).
 !!   * `p_surf_atm` (Pa): a reader, a configure seed, or the bulk consumer
 !!     (`= psl`); `p_surf` is the assembled total and is NOT open-water
-!!     weighted (a pressure-loading term, not a flux).
+!!     weighted (a pressure-loading term, not a flux).  `p_surf` joins `p_surf_atm`
+!!     ONLY under `&ocean_psurf_nml atm_load`; otherwise its atmospheric part is the
+!!     configure seed `p_surf_seed` whatever the bulk forcing writes into `p_surf_atm`.
 !!
 !! Which of these change real column MASS is in `docs/codebase/CONTRACTS.md`.
 module rdb_ocean_surface_flux
@@ -425,6 +428,13 @@ module rdb_ocean_surface_flux
          !! `&ocean_psurf_nml ice_load`: `p_surf` carries the sea-ice + snow weight
          !! (`ocean_surface_flux_apply_ice_load`).  Host-side gate, latched by
          !! `set_ice_load`, which also allocates `p_ice_load`.
+      logical :: atm_load = .false.
+         !! `&ocean_psurf_nml atm_load`: `p_surf` carries the bulk forcing's `p_surf_atm`
+         !! (ghosts exchanged by the engine before the assembly).  Host-side gate, latched by
+         !! `set_atm_load`.  `.false.`: the atmospheric part of `p_surf` is `p_surf_seed`.
+      real(wp) :: p_surf_seed = 0.0_wp
+         !! The configure-time uniform pressure (`&ocean_psurf_nml p_surf_const`) that `p_surf`
+         !! held before the loads existed, kept so the per-step assembly can rebuild it.
       integer :: fw_mode = SURF_FW_NONE
          !! `SURF_FW_*` code latched by `set_freshwater` (the assembler's
          !! by-value selector).  `fw_virtual` / `fw_mass` are its logical views.
@@ -640,18 +650,18 @@ module rdb_ocean_surface_flux
          !! Ships zeroed with no consumer in this PR (the inverse-
          !! barometer PGF fold is a same-release-cycle follow-up).
       real(wp), allocatable :: p_surf(:, :)
-         !! **Assembled total** (Pa, >= 0) — `p_surf_atm` plus any ice
-         !! mass-loading term, **full overwrite, never `+=`** (a `+=`
-         !! ratchets the load across outer steps with no bound).  No
-         !! consumer in this PR; ships zeroed alongside `p_surf_atm` so
-         !! the follow-up PGF fold needs no further plumbing.
+         !! **Assembled total** (Pa, >= 0) — the atmospheric part (`p_surf_atm` under
+         !! `atm_load`, else the configure seed) plus the ice mass-loading term, **full
+         !! overwrite, never `+=`** (a `+=` ratchets the load across outer steps with no
+         !! bound).  Read by the `eta_forcing` seam and by the ice dynamics' tilt; valid in
+         !! the ghosts on every path.
 
       real(wp), allocatable :: p_ice_load(:, :)
          !! **Input component of the ice loading** (Pa, >= 0): the weight of the ice and snow
          !! the OCEAN has been told about, `g*(rho_i*vice + rho_s*vsno)` of the ice state at the
          !! last delivery (`ocean_engine` refreshes it after the thermo-cadence mass delivery,
          !! so the load and the water the ice took change together).  Allocated only under
-         !! `ice_load`.  `p_surf = p_surf_atm + p_ice_load` is the full overwrite.  Carried
+         !! `ice_load`.  `p_surf = (seed or p_surf_atm) + p_ice_load` is the full overwrite.  Carried
          !! between steps, so it is restart state (`sf_p_ice_load`, `sf_p_ice_valid`).
       real(wp) :: p_ice_valid = 0.0_wp
          !! Host scalar: 1 once `p_ice_load` holds a refreshed load (the restart carries it, so
@@ -659,6 +669,7 @@ module rdb_ocean_surface_flux
          !! that is ahead of the delivery).
    contains
       procedure, non_overridable :: set_ice_load => ocean_surfflux_set_ice_load
+      procedure, non_overridable :: set_atm_load => ocean_surfflux_set_atm_load
       procedure, non_overridable :: init => ocean_surfflux_init
       procedure, non_overridable :: destroy => ocean_surfflux_destroy
       procedure, non_overridable :: enter_data => ocean_surfflux_enter_data
@@ -1029,16 +1040,16 @@ contains
       !! the no-op.  Host only — call `enter_data` afterwards (or `!$acc
       !! update device` if already mapped) to sync to the GPU.
       !!
-      !! Also seeds the assembled total `p_surf` to the same value — with no
-      !! ice mass-loading `p_surf == p_surf_atm` and the atmospheric base is
-      !! static, so this configure-time seed IS the assembly (PR-17 reads
-      !! `p_surf` read-only in the dyn step).  PR-18's ice path overwrites
-      !! `p_surf` per outer step via its own `inout` access.
+      !! Also seeds the assembled total `p_surf` (and `p_surf_seed`) to the same value: with
+      !! neither `ice_load` nor `atm_load` this configure-time seed IS the assembly and
+      !! `p_surf` is never rewritten, whatever the bulk forcing puts into `p_surf_atm`.
+      !! Otherwise `ocean_surface_flux_assemble_p_surf` rebuilds it every outer step.
       class(ocean_surface_flux_t), intent(inout) :: this
       real(wp), intent(in) :: p_surf_val
       if (.not. allocated(this%p_surf_atm)) return
       this%p_surf_atm = p_surf_val
       this%p_surf = p_surf_val
+      this%p_surf_seed = p_surf_val
    end subroutine ocean_surfflux_set_p_surf_const
 
    subroutine ocean_surfflux_set_components(this, grid, enable)
@@ -2222,24 +2233,66 @@ contains
       sf%p_ice_valid = 1.0_wp
    end subroutine ocean_surface_flux_apply_ice_load
 
+   subroutine ocean_surfflux_set_atm_load(this, enable)
+      !! Latch `&ocean_psurf_nml atm_load`.  Host; a no-op without the component set (the
+      !! `p_surf_atm` field lives there), so the knob is inert exactly where `validate_config`
+      !! would have refused it.
+      class(ocean_surface_flux_t), intent(inout) :: this
+      logical, intent(in) :: enable
+      if (.not. enable) return
+      if (.not. allocated(this%p_surf_atm)) return
+      this%atm_load = .true.
+   end subroutine ocean_surfflux_set_atm_load
+
    subroutine ocean_surface_flux_assemble_p_surf(sf)
-      !! `p_surf = p_surf_atm + p_ice_load` over the FULL array (ghosts included: the seam
-      !! ghosts of `p_ice_load` were exchanged first), a full overwrite of the assembled total.
+      !! Rebuild the assembled surface pressure from its parts, a full overwrite over the FULL
+      !! array (ghosts included): `p_surf = base + p_ice_load`, with `base = p_surf_atm` under
+      !! `atm_load` and the configure-time seed `p_surf_seed` otherwise.  The caller has
+      !! exchanged the seam ghosts of every part it uses (`p_ice_load`, and `p_surf_atm` under
+      !! `atm_load`: the bulk forcing writes owned cells only), so the ghosts of `p_surf` are
+      !! valid on every path.  No-op when neither knob is on (`p_surf` is the seed, untouched).
       type(ocean_surface_flux_t), intent(inout) :: sf
-      if (.not. sf%ice_load) return
-      call ocean_surface_flux_assemble_p_surf_impl(size(sf%p_surf, 1), size(sf%p_surf, 2), &
-                                                   sf%p_surf_atm, sf%p_ice_load, sf%p_surf)
+      integer :: nx, ny
+      if (.not. (sf%ice_load .or. sf%atm_load)) return
+      nx = size(sf%p_surf, 1)
+      ny = size(sf%p_surf, 2)
+      if (sf%atm_load) then
+         call ocean_surface_flux_p_surf_copy_impl(nx, ny, sf%p_surf_atm, sf%p_surf)
+      else
+         call ocean_surface_flux_p_surf_const_impl(nx, ny, sf%p_surf_seed, sf%p_surf)
+      end if
+      if (sf%ice_load) call ocean_surface_flux_p_surf_add_impl(nx, ny, sf%p_ice_load, sf%p_surf)
    end subroutine ocean_surface_flux_assemble_p_surf
 
-   pure subroutine ocean_surface_flux_assemble_p_surf_impl(nx, ny, p_atm, p_ice, p_surf)
+   pure subroutine ocean_surface_flux_p_surf_copy_impl(nx, ny, p_atm, p_surf)
       integer, intent(in) :: nx, ny
-      real(wp), intent(in) :: p_atm(nx, ny), p_ice(nx, ny)
+      real(wp), intent(in) :: p_atm(nx, ny)
       real(wp), intent(inout) :: p_surf(nx, ny)
       integer :: i, j
       do concurrent(j=1:ny, i=1:nx)
-         p_surf(i, j) = p_atm(i, j) + p_ice(i, j)
+         p_surf(i, j) = p_atm(i, j)
       end do
-   end subroutine ocean_surface_flux_assemble_p_surf_impl
+   end subroutine ocean_surface_flux_p_surf_copy_impl
+
+   pure subroutine ocean_surface_flux_p_surf_const_impl(nx, ny, p0, p_surf)
+      integer, intent(in) :: nx, ny
+      real(wp), intent(in) :: p0
+      real(wp), intent(inout) :: p_surf(nx, ny)
+      integer :: i, j
+      do concurrent(j=1:ny, i=1:nx)
+         p_surf(i, j) = p0
+      end do
+   end subroutine ocean_surface_flux_p_surf_const_impl
+
+   pure subroutine ocean_surface_flux_p_surf_add_impl(nx, ny, p_ice, p_surf)
+      integer, intent(in) :: nx, ny
+      real(wp), intent(in) :: p_ice(nx, ny)
+      real(wp), intent(inout) :: p_surf(nx, ny)
+      integer :: i, j
+      do concurrent(j=1:ny, i=1:nx)
+         p_surf(i, j) = p_surf(i, j) + p_ice(i, j)
+      end do
+   end subroutine ocean_surface_flux_p_surf_add_impl
 
    pure subroutine ocean_surface_flux_ice_load_impl(nx, ny, is, ie, js, je, g_rho_ice, g_rho_snow, vice, vsno, p_ice)
       !! `p_ice = g*rho_ice*vice + g*rho_snow*vsno` over the owned cells (full overwrite).
@@ -2331,9 +2384,11 @@ contains
       !!   * `vprec`: the SSS-restoring convention, owed to whatever
       !!     converts it (its own consumer); counting it here would apply a
       !!     restoring flux twice.
-      !!   * `seaice_melt`: the sea-ice hand-off carries its melt and growth
-      !!     water in `salt_ice` already (CICE-port `1000*fsalt - S_surf*fresh`;
-      !!     SIS2-derived brine/melt flux), and no filler writes the slot.
+      !!   * `seaice_melt` under `"virtual"`: the sea-ice hand-off carries its melt and
+      !!     growth water in `salt_ice` already (CICE-port `1000*fsalt - S_surf*fresh`;
+      !!     SIS2-derived brine/melt flux), and no filler writes the slot.  Under `"mass"`
+      !!     the CICE-port hand-off DOES fill it (`seaice_melt = fresh`, the window mean, with
+      !!     `salt_ice = 1000*fsalt` alone): it is then part of `F` (above) and of `fw_net`.
       !!   * the ice-shelf cavity (`salt_cavity`, separate slot, untouched).
       !! Open-ocean precipitation and evaporation are weighted by the
       !! open-water fraction at the source (`rdb_ocean_bulk_forcing`), and

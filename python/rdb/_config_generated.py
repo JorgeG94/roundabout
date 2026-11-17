@@ -2180,10 +2180,26 @@ class OceanPsurf(Group):
 
     ice_load = Bool(
         'ice_load',
-        doc="Sea-ice + snow mass loading p_surf = p_surf_atm + g*(rho_i*vice + rho_s*vsno) (CICE-port ice only; REQUIRED by freshwater='mass' with sea ice, refused without it; requires enable=.true.)",
+        doc="Sea-ice + snow mass loading: p_surf = p_surf_const + g*(rho_i*vice + rho_s*vsno) (CICE-port ice only; REQUIRED by freshwater='mass' with sea ice, refused without it; requires enable=.true.)",
         units='',
         required=False,
         default=False,
+    )
+
+    atm_load = Bool(
+        'atm_load',
+        doc="Add the bulk forcing's sea-level pressure (p_surf_atm = psl) to p_surf: the atmosphere's inverse barometer, seam ghosts exchanged every step (requires enable=.true. and &ocean_bulk_flux_nml enable). Off: p_surf stays the p_surf_const seed",
+        units='',
+        required=False,
+        default=False,
+    )
+
+    ice_load_balance_ic = Bool(
+        'ice_load_balance_ic',
+        doc='Cold start with ice_load: lower the initial sea surface under the ice by (rho_i*vice+rho_s*vsno)/rho_0 so the start is in balance with the load (never on a warm restart)',
+        units='',
+        required=False,
+        default=True,
     )
 
     p_surf_const = Real(
@@ -8224,4 +8240,4 @@ GENERATED_GROUPS = {
 }
 
 N_GROUPS = 68
-N_KNOBS = 901
+N_KNOBS = 903

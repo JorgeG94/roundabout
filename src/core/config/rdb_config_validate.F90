@@ -1793,6 +1793,21 @@ contains
             has_error = .true.
          end if
       end if
+      ! The atmosphere's pressure joins `p_surf` only on request (`atm_load`): the bulk forcing's
+      ! `psl` is the one writer of `p_surf_atm`, so without it the knob would add a uniform seed.
+      if (cfg%ocean%psurf%atm_load) then
+         if (.not. cfg%ocean%psurf%enable) then
+            call logger%error("&ocean_psurf_nml atm_load=.true. requires enable=.true. "// &
+                              "(the load rides the eta_forcing seam)")
+            has_error = .true.
+         end if
+         if (.not. cfg%ocean%bulk_flux%enable) then
+            call logger%error("&ocean_psurf_nml atm_load=.true. requires "// &
+                              "&ocean_bulk_flux_nml enable=.true.: the bulk forcing's sea-level "// &
+                              "pressure is the only writer of the atmospheric pressure field.")
+            has_error = .true.
+         end if
+      end if
       ! ---- Top-of-column pressure in the IN-SITU EOS arguments (E3) ----
       ! `in_eos` offsets the EOS's IN-SITU pressure arguments by
       ! `ms%p_top`.  v1 ports exactly one: the FV_WRIGHT Picard column

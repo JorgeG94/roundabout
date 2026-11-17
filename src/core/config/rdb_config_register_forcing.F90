@@ -65,10 +65,22 @@ contains
                              "unported pressure builders)"))
       pl => cfg%ocean%psurf%ice_load
       call g%add(nml_logical("ice_load", pl, &
-                             "Sea-ice + snow mass loading p_surf = p_surf_atm + "// &
+                             "Sea-ice + snow mass loading: p_surf = p_surf_const + "// &
                              "g*(rho_i*vice + rho_s*vsno) (CICE-port ice only; "// &
                              "REQUIRED by freshwater='mass' with sea ice, refused "// &
                              "without it; requires enable=.true.)"))
+      pl => cfg%ocean%psurf%atm_load
+      call g%add(nml_logical("atm_load", pl, &
+                             "Add the bulk forcing's sea-level pressure (p_surf_atm = psl) "// &
+                             "to p_surf: the atmosphere's inverse barometer, seam ghosts "// &
+                             "exchanged every step (requires enable=.true. and "// &
+                             "&ocean_bulk_flux_nml enable). Off: p_surf stays the "// &
+                             "p_surf_const seed"))
+      pl => cfg%ocean%psurf%ice_load_balance_ic
+      call g%add(nml_logical("ice_load_balance_ic", pl, &
+                             "Cold start with ice_load: lower the initial sea surface "// &
+                             "under the ice by (rho_i*vice+rho_s*vsno)/rho_0 so the start "// &
+                             "is in balance with the load (never on a warm restart)"))
       pr => cfg%ocean%psurf%p_surf_const
       call g%add(nml_real("p_surf_const", pr, &
                           "Uniform atmospheric surface pressure (Pa) seeded "// &

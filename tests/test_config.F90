@@ -1135,6 +1135,14 @@ contains
                                      "&ocean_psurf_nml ice_load = .true. /") == REFUSED, &
                  "refused: ice_load without &ocean_psurf_nml enable")
       if (allocated(error)) return
+      call check(error, fw_mass_ierr("zstar", "pred_corr", "use_kpp = .true.", FW, .true., &
+                                     "&ocean_psurf_nml enable = .true., atm_load = .true. /") == REFUSED, &
+                 "refused: atm_load without the bulk forcing (its only writer)")
+      if (allocated(error)) return
+      call check(error, fw_mass_ierr("zstar", "pred_corr", "use_kpp = .true.", FW, .true., &
+                                     "&ocean_psurf_nml atm_load = .true. /") == REFUSED, &
+                 "refused: atm_load without &ocean_psurf_nml enable")
+      if (allocated(error)) return
       call check(error, fw_mass_ierr("zstar", "pred_corr", "use_kpp = .true.", FW//", fw_evap_cfl_limit = 0.0", &
                                      .true., "") == REFUSED, "refused: fw_evap_cfl_limit = 0")
       if (allocated(error)) return

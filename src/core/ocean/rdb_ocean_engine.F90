@@ -125,6 +125,7 @@ module rdb_ocean_engine
                                      SURF_FW_MASS, SURF_FW_INVALID, SURF_FW_VIRTUAL, &
                                      ocean_surface_flux_apply_ice_load, ocean_surface_flux_assemble_p_surf
    use rdb_ocean_surface_stress, only: ocean_surface_stress_set_shelf_from_ustar
+   use rdb_ocean_p_surf, only: p_surf_balance_ic_impl
    use rdb_ocean_cavity_flux, only: ocean_cavity_flux_step
    use rdb_ocean_vcoord, only: parse_ocean_vcoord_type, VCOORD_LAGRANGIAN
    use rdb_ocean_setup, only: configure_ocean_metrics, configure_ocean_land_mask, &
@@ -263,6 +264,8 @@ module rdb_ocean_engine
          !! can gate its `state%diag%step` call without needing `cfg`.
       logical :: device_mapped = .false.
          !! True between `engine_enter_data` and `engine_exit_data`.
+      logical :: ice_load_balance_ic = .false.
+         !! `&ocean_psurf_nml ice_load_balance_ic` as latched at setup (cold start only).
       logical :: warm_restart = .false.
          !! Latched by `engine_setup`: the prognostic state came from a
          !! checkpoint, ghosts included, so no setup pass may re-derive its
@@ -788,6 +791,8 @@ contains
       ! Ice mass loading: allocates the carried `p_ice_load` BEFORE the restart read, so the
       ! registry walk sees it (inert, nothing allocated, unless `&ocean_psurf_nml ice_load`).
       call engine%state%surface_flux%set_ice_load(cfg%ocean%psurf%ice_load)
+      call engine%state%surface_flux%set_atm_load(cfg%ocean%psurf%atm_load)
+      engine%ice_load_balance_ic = cfg%ocean%psurf%ice_load_balance_ic
       ! `freshwater = "mass"` latched HERE as well (idempotent, re-latched after the constant
       ! seed below): the restart registry reads `fw_mass` to register the carried `fw_net` /
       ! `Q_salt_tracer` snapshot, and the registry is built before the seed runs.
@@ -2146,6 +2151,7 @@ contains
       integer, intent(out), optional :: ierr
 
       real(wp) :: sw_shift, sw_len
+      logical :: delivered
 
       if (present(ierr)) ierr = OCEAN_STATUS_OK
 
@@ -2207,9 +2213,20 @@ contains
       if (engine%dtbt_dynamic) call engine_refresh_n_inner(engine, dt, t)
 
       ! The assembled surface pressure is rebuilt from its parts once per outer step, before
-      ! the seam reads it (`p_surf = p_surf_atm + p_ice_load`, full overwrite).  No-op unless
-      ! `&ocean_psurf_nml ice_load`.
+      ! the seam reads it (`p_surf = (seed | p_surf_atm) + p_ice_load`, full overwrite).  The
+      ! bulk forcing wrote `p_surf_atm` on owned cells only, so under `atm_load` its seam ghosts
+      ! (periodic wrap, MPI, the tripolar fold: a scalar) are made valid first.  No-op unless
+      ! `&ocean_psurf_nml ice_load` or `atm_load`.
+      if (engine%state%surface_flux%atm_load) then
+         call ocean_halo_exchange_centre_field(engine%state%surface_flux%p_surf_atm, engine%grid, &
+                                               engine%state%bc)
+      end if
       call ocean_surface_flux_assemble_p_surf(engine%state%surface_flux)
+
+      ! Does THIS step deliver the thermo-cadence fresh-water mass?  Latched BEFORE the dynamics
+      ! advance the cadence counter (the delivery is gated on the pre-increment counter in
+      ! `ocean_dyn_step_split`); reading it afterwards would name the previous step.
+      delivered = engine%state%dyn%enable_thermodynamics .and. engine%state%dyn%is_thermo_step()
 
       if (engine%n_inner >= 1) then
          call ocean_dyn_step_split(engine%grid, engine%state%metrics, engine%state%dyn, &
@@ -2253,12 +2270,10 @@ contains
                              cav=engine%state%cavity_flux)
          call profiler_stop("ocean_dyn_step")
       end if
-      ! The step has delivered the thermo-cadence fresh-water mass (`ocean_surface_fw_mass_step`):
-      ! the ice's weight on the ocean follows it now, so the load and the water the ice took
-      ! change together (see `engine_ice_load_refresh`).
-      if (engine%state%surface_flux%ice_load .and. engine%state%dyn%is_thermo_step()) then
-         call engine_ice_load_refresh(engine)
-      end if
+      ! The step delivered the fresh-water mass the ice handed over (`ocean_surface_fw_mass_step`):
+      ! the ice's weight follows it now, from the ice state that water came from (see
+      ! `engine_ice_load_refresh`).
+      if (engine%state%surface_flux%ice_load .and. delivered) call engine_ice_load_refresh(engine)
    end subroutine engine_step
 
    subroutine engine_ice_load_refresh(engine)
@@ -2266,16 +2281,23 @@ contains
       !! volumes, `p_ice_load = g_bt*(rho_i*vice + rho_s*vsno)` (cell means; Campin et al. 2008;
       !! Adcroft et al. 2019), exchange its seam ghosts, and reassemble `p_surf`.
       !!
-      !! **Timing is the whole point.**  Called at the END of `engine_step`, after the dynamics
-      !! delivered the fresh water of the previous thermo hand-off and BEFORE the ice step of
-      !! this outer step.  The ice state it reads is therefore exactly the one whose growth or
-      !! melt the ocean has just been given (or lost): freezing removes `rho_i*dV/rho_0` of water
-      !! and adds `rho_i*dV*g_bt` to the load on the SAME outer step, so `eta_ib` and the
-      !! layer sum move together and a resting ocean stays at rest.  Refreshing at the hand-off
-      !! instead (before the water is delivered) would lead the water by one thermo interval
-      !! and drive a flow of `g*d(eta)/dx*dt`.  Only at thermo-cadence steps (when the water is
-      !! delivered), so under `dt_therm_ratio > 1` the load follows the deliveries, not the
-      !! ice thermodynamics; between deliveries the ice DRIFT does not move the load.
+      !! **Timing is the whole point.**  Called at the END of `engine_step` of a step that
+      !! DELIVERED the fresh-water mass (`delivered`, latched before the dynamics advanced the
+      !! cadence counter), and BEFORE that outer step's ice step.  The ice state it reads is
+      !! therefore the one the delivered water came from, on both orders: the in-stage order
+      !! delivers at step `kN` the hand-off made by the ice step `kN-1`, the deferred order
+      !! (`diabatic_first = .false.`) delivers at step `kN-1` the hand-off of the ice step
+      !! `kN-2`; either way no ice step has run since the hand-off.  Freezing removes
+      !! `rho_i*dV/rho_0` of water and adds `rho_i*dV*g_bt` to the load on the SAME outer step,
+      !! so `eta_ib` and the layer sum move together and a resting ocean stays at rest.  Testing
+      !! `is_thermo_step()` AFTER the dynamics (the counter already advanced) would refresh one
+      !! outer step before the delivery, from the ice state before its own hand-off: the load
+      !! would lead the water by a step (and, at `dt_therm_ratio = N`, miss the whole interval's
+      !! growth).  Between deliveries the load is held, so ice DRIFT (which moves ice, and its
+      !! weight, every step) reaches the load at the next delivery only: a bounded lag, not
+      !! a leak (the ice's tilt reads `p_surf/(rho0 g)` as well, so the sheet does not slide off
+      !! its own dent).  `p_surf` is reassembled here so the ice step that follows sees the load
+      !! that goes with the layers it reads.
       type(ocean_engine_t), intent(inout) :: engine
       if (.not. engine%state%ice%cice%is_init) return
       associate (ice => engine%state%ice)
@@ -2286,19 +2308,33 @@ contains
       end associate
       call ocean_halo_exchange_centre_field(engine%state%surface_flux%p_ice_load, engine%grid, &
                                             engine%state%bc)
+      call ocean_surface_flux_assemble_p_surf(engine%state%surface_flux)
    end subroutine engine_ice_load_refresh
 
    subroutine engine_ice_load_start(engine)
       !! Configure / warm-restart seed of the ice load (device resident, after `ice_cice_post_enter`
       !! rebuilt the aggregates).  A restart that carried `sf_p_ice_load` (`p_ice_valid`) resumes
-      !! it unchanged -- it is the load of the last DELIVERY, one ice step behind the restored ice
-      !! state, so it cannot be rebuilt from that state -- and only reassembles `p_surf`.  A cold
-      !! start builds it from the initial ice.  A cold start with ice present therefore starts
-      !! the ocean out of equilibrium with the load (`eta` flat under a loaded ice sheet): a
-      !! one-time gravity-wave adjustment, as for any initial ice without a matching sea level.
+      !! it unchanged -- it is the load of the last DELIVERY, up to a thermo interval behind the
+      !! restored ice state, so it cannot be rebuilt from that state -- and only reassembles
+      !! `p_surf`.  A cold start builds it from the initial ice and, with
+      !! `&ocean_psurf_nml ice_load_balance_ic` (default), lowers the initial sea surface by the
+      !! water that load displaces (`p_surf_balance_ic_impl`: proportional thinning of every layer
+      !! of the column, ghosts too, from the seam-exchanged load) so the ocean starts in balance
+      !! with the ice instead of launching a gravity-wave adjustment.  NEVER on a warm restart
+      !! (`engine%warm_restart`: the layers already are balanced, or are the user's): a restart
+      !! from a checkpoint older than the load rebuilds the load but leaves the layers alone.
       type(ocean_engine_t), intent(inout) :: engine
+      integer :: nx, ny, nz
       if (.not. engine%state%surface_flux%ice_load) return
       if (engine%state%surface_flux%p_ice_valid < 0.5_wp) call engine_ice_load_refresh(engine)
+      if (engine%ice_load_balance_ic .and. .not. engine%warm_restart) then
+         nx = engine%grid%nx_total
+         ny = engine%grid%ny_total
+         nz = size(engine%state%multilayer%h_layer, 3)
+         call p_surf_balance_ic_impl(nx, ny, nz, 1.0_wp/(engine%state%eos%rho0*engine%state%dyn%bt_work%g_bt), &
+                                     engine%state%surface_flux%p_ice_load, engine%state%multilayer%wet_mask, &
+                                     engine%state%multilayer%h_layer)
+      end if
       call ocean_surface_flux_assemble_p_surf(engine%state%surface_flux)
    end subroutine engine_ice_load_start
 

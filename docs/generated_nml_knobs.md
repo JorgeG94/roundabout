@@ -411,7 +411,9 @@ Atmospheric surface-pressure loading / inverse barometer (PR-17).
 |------|---------|-------|-------------|
 | `enable` | `.false.` |  | Master switch (split-solver only; requires &ocean_forcing_nml enable_components=.true.) |
 | `in_eos` | `.false.` |  | Also feed the surface load to the equation of state as the top-of-column pressure p_top (requires enable=.true.; refused with the unported pressure builders) |
-| `ice_load` | `.false.` |  | Sea-ice + snow mass loading p_surf = p_surf_atm + g*(rho_i*vice + rho_s*vsno) (CICE-port ice only; REQUIRED by freshwater='mass' with sea ice, refused without it; requires enable=.true.) |
+| `ice_load` | `.false.` |  | Sea-ice + snow mass loading: p_surf = p_surf_const + g*(rho_i*vice + rho_s*vsno) (CICE-port ice only; REQUIRED by freshwater='mass' with sea ice, refused without it; requires enable=.true.) |
+| `atm_load` | `.false.` |  | Add the bulk forcing's sea-level pressure (p_surf_atm = psl) to p_surf: the atmosphere's inverse barometer, seam ghosts exchanged every step (requires enable=.true. and &ocean_bulk_flux_nml enable). Off: p_surf stays the p_surf_const seed |
+| `ice_load_balance_ic` | `.true.` |  | Cold start with ice_load: lower the initial sea surface under the ice by (rho_i*vice+rho_s*vsno)/rho_0 so the start is in balance with the load (never on a warm restart) |
 | `p_surf_const` | `0.0000000000E+00` |  | Uniform atmospheric surface pressure (Pa) seeded into p_surf_atm (uniform => provably inert) |
 
 ### &ocean_cavity_dyn_nml

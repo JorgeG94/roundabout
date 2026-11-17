@@ -3016,17 +3016,38 @@ module rdb_config
          !! machinery.
       logical :: ice_load = .false.
          !! Sea-ice + snow MASS loading of the surface pressure:
-         !! `p_surf = p_surf_atm + g*(rho_i*vice + rho_s*vsno)` (cell-mean ice and snow
-         !! volumes of the CICE-port aggregates; Campin et al. 2008 "levitating" sea ice with
-         !! its weight on the ocean, Adcroft et al. 2019).  A FULL OVERWRITE of `sf%p_surf` once
-         !! per outer step, after the thermo-cadence mass delivery of that step (so the
-         !! load and the water the ice took change together; see `ocean_ice_load_refresh`), sent
-         !! through the `eta_forcing` seam.  Required `.true.` by `&ocean_forcing_nml
-         !! freshwater = "mass"` with `scheme = "cice"` (otherwise growing ice removes its water
-         !! from under the ice only and drives a spurious flow), and refused WITHOUT mass
-         !! (under `"none"`/`"virtual"` no water leaves, so a load would depress the sea
-         !! surface under the ice for nothing).  Requires `enable = .true.` and
-         !! `&ocean_ice_nml scheme = "cice"`.  Default off => bit-identical.
+         !! `p_surf = (the configure-time seed, p_surf_const) + g*(rho_i*vice + rho_s*vsno)`
+         !! (cell-mean ice and snow volumes of the CICE-port aggregates; Campin et al. 2008
+         !! "levitating" sea ice with its weight on the ocean, Adcroft et al. 2019).  A FULL
+         !! OVERWRITE of `sf%p_surf` once per outer step, sent through the `eta_forcing` seam.  The
+         !! load follows the DELIVERY of the fresh water the ice exchanged with the ocean (thermo
+         !! cadence), so the load and the water change on the same outer step.  Required `.true.`
+         !! by `&ocean_forcing_nml freshwater = "mass"` with `scheme = "cice"` (otherwise growing ice
+         !! removes its water from under the ice only and drives a spurious flow), and refused
+         !! WITHOUT mass (under `"none"`/`"virtual"` no water leaves, so a load would depress the
+         !! sea surface under the ice for nothing).  Requires `enable = .true.` and
+         !! `&ocean_ice_nml scheme = "cice"`.  It adds ONLY the ice weight: the atmosphere's
+         !! pressure joins `p_surf` solely through `atm_load`.  Default off => bit-identical.
+      logical :: atm_load = .false.
+         !! Add the bulk forcing's sea-level pressure (`p_surf_atm = psl`, Pa) to `p_surf`:
+         !! `p_surf = p_surf_atm [+ ice weight]`, i.e. the atmosphere's inverse barometer (~1 cm per
+         !! hPa; Wunsch & Stammer 1997) and its gradient force.  Its seam ghosts are exchanged
+         !! (periodic wrap and the tripolar fold, as a scalar) every outer step before the
+         !! assembly, because the bulk forcing writes owned cells only.  Requires `enable = .true.`
+         !! and `&ocean_bulk_flux_nml enable` (its only writer).  Default off: `p_surf` stays the
+         !! configure-time seed (`p_surf_const`) whatever the bulk forcing computes, which is what
+         !! every run did before `ice_load` existed => bit-identical.
+      logical :: ice_load_balance_ic = .true.
+         !! COLD start only, with `ice_load`: lower the initial sea surface under the ice by the
+         !! water its weight displaces, `(rho_i*vice + rho_s*vsno)/rho_0`, taken proportionally
+         !! from the layers (the column total, hence `eta`, drops by exactly that; the ALE remap
+         !! then re-places the interfaces), so a start under an ice sheet is in hydrostatic
+         !! balance with its load rather than launching a gravity-wave adjustment (a flat `eta`
+         !! under a loaded sheet is a sea-surface step at the ice edge).  Default on because the
+         !! alternative is a transient that depends on the ice IC; set `.false.` to start from
+         !! the layers as given.  Never applied on a warm restart (the layers are already
+         !! balanced), and decomposition-independent (a local per-column operation on the
+         !! seam-exchanged load).  Ignored without `ice_load`.
    end type ocean_psurf_config_t
    type :: ocean_cavity_dyn_config_t
       !! Static ice-shelf cavity GEOMETRY (`&ocean_cavity_dyn_nml`,
