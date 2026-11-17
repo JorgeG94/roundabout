@@ -130,6 +130,37 @@ contains
       c = safe_cos(modulo(phase, TWO_PI))
    end function tidal_cos
 
+   pure function bc_fuse_mode(tag, has_edge, is_north) result(m)
+      !! How one physical edge's barotropic face BC can be folded into Pass 2b / 2c:
+      !! 0 nothing to do (seam, periodic, fold), 1 hard zero (the select-case
+      !! `default`), 2 clamped constant, 3 radiation (reads a neighbour written by the
+      !! same pass: needs the stand-alone sweep).  Mirrors the select-cases there.
+      integer, intent(in) :: tag
+         !! OBC tag of the edge
+      logical, intent(in) :: has_edge
+         !! Edge is a physical (not MPI seam) edge
+      logical, intent(in) :: is_north
+         !! North edge (tripolar fold is a no-op there, `default` zero elsewhere)
+      integer :: m
+
+      if (.not. has_edge) then
+         m = 0
+         return
+      end if
+      select case (tag)
+      case (OBC_OPEN, OBC_TIDAL, OBC_CHAPMAN)
+         m = 3
+      case (OBC_CLAMPED)
+         m = 2
+      case (OBC_PERIODIC)
+         m = 0
+      case (OBC_TRIPOLAR_FOLD)
+         m = merge(0, 1, is_north)
+      case default
+         m = 1
+      end select
+   end function bc_fuse_mode
+
    subroutine chapman_workspace_ensure(n)
       !! Lazy-allocate the persistent Chapman line buffers (host + device
       !! mirror for `ch_lbuf`, host-only `ch_gbuf`) to at least `n` entries.
@@ -677,6 +708,12 @@ contains
       ! gfortran 15.1 corrupts do-concurrent locals reassigned across
       ! if/else branches — hence merge() single-write forms below).
       logical :: wd_on
+      logical :: fuse_u, fuse_v, uzw, uze, ucw, uce, vzs, vzn, vcs, vcn
+         !! Wall-BC fusion switches (see the `bc_fuse_mode` block): the physical
+         !! west/east (south/north) wall treatment folded into Pass 2b (2c) and the
+         !! outer-edge zeros into the eta-swap (sum) sweep, so the stand-alone
+         !! BC sweep is not launched.  `*zw/e` zero a wall face, `*cw/e` clamp it.
+      integer :: mode_w, mode_e, mode_s, mode_n
       integer :: ng_k, nxp_k, nyp_k
          !! Loop-invariant copies of grid%nghost / nx_phys / ny_phys: a kernel that
          !! reads the `grid` aggregate gets a per-region present_or_copyin of it.
@@ -1029,6 +1066,29 @@ contains
       ihi_c = nx - ins_e
       jlo_c = 1 + ins_s
       jhi_c = ny - ins_n
+
+      ! Wall-BC fusion.  Per edge: 0 = nothing to do, 1 = hard zero (the select
+      ! `case default`), 2 = clamped constant, 3 = needs the stand-alone sweep
+      ! (Flather / tidal / Chapman read neighbours written by the same pass).
+      mode_w = bc_fuse_mode(bc_w, has_w, .false.)
+      mode_e = bc_fuse_mode(bc_e, has_e, .false.)
+      mode_s = bc_fuse_mode(bc_s, has_s, .false.)
+      mode_n = bc_fuse_mode(bc_n, has_n, .true.)
+      ! u: the outer-edge column zeros move ahead of Pass 2b (which neither reads
+      ! nor writes columns 1 and nx + 1); needs the un-marched array edge.
+      fuse_u = ilo_c == 1 .and. ihi_c == nx .and. mode_w < 3 .and. mode_e < 3
+      ! v: Pass 2b READS the outer v rows, so their zeros wait for the sum sweep;
+      ! any wrap or fold between Pass 2c and the sum would copy the unzeroed rows.
+      fuse_v = jlo_c == 1 .and. jhi_c == ny .and. mode_s < 3 .and. mode_n < 3 .and. &
+               .not. per_x .and. .not. per_y .and. .not. do_fold
+      uzw = fuse_u .and. mode_w == 1
+      uze = fuse_u .and. mode_e == 1
+      ucw = fuse_u .and. mode_w == 2
+      uce = fuse_u .and. mode_e == 2
+      vzs = fuse_v .and. mode_s == 1
+      vzn = fuse_v .and. mode_n == 1
+      vcs = fuse_v .and. mode_s == 2
+      vcn = fuse_v .and. mode_n == 2
 
       ! One structured data region enclosing the setup kernels, the whole
       ! `do n = 1, n_steps` substep loop, and the end-of-loop time-mean pass so
@@ -1420,6 +1480,9 @@ contains
                if (j <= ny .and. (i == 1 .or. i == nx + 1)) bt_ubt_prev(i, j) = bt_ubt(i, j)
                if (i <= nx .and. (j == 1 .or. j == ny + 1)) bt_vbt_prev(i, j) = bt_vbt(i, j)
             end if
+            ! Fused wall BC (u): outer-edge face columns zero (the stand-alone BC sweep's
+            ! first statements); nothing before Pass 2b reads them after this point.
+            if (fuse_u .and. j <= ny .and. (i == 1 .or. i == nx + 1)) bt_ubt(i, j) = 0.0_wp
             ! ζ outer ring → 0 (free-slip); physical walls → 0 so (ζ+f)·v
             ! reduces to f·v there.
             ! §3 (v2): zero ζ at boundary corner line for ALL non-PERIODIC tags
@@ -1603,6 +1666,13 @@ contains
                bt_work%wd_open_u(i, j) = open_f
                bt_ubt(i, j) = bt_ubt(i, j)*open_f
             end if
+            ! Fused wall BC (u): the select-case's `default` (zero) / CLAMPED (constant)
+            ! legs, applied after the wet/dry gate exactly where the stand-alone sweep
+            ! applied them.  Branch-free selects; all flags false unless fuse_u.
+            bt_ubt(i, j) = merge(0.0_wp, bt_ubt(i, j), &
+                                 (uzw .and. i == i_w_face) .or. (uze .and. i == i_e_face))
+            bt_ubt(i, j) = merge(clamped_u_w, bt_ubt(i, j), ucw .and. i == i_w_face)
+            bt_ubt(i, j) = merge(clamped_u_e, bt_ubt(i, j), uce .and. i == i_e_face)
          end do
          ! BC dispatch for west and east u-faces.  has_w/has_e wrap the
          ! ENTIRE select-case: at an MPI seam (has_*=.false.) no physical-BC
@@ -1615,131 +1685,133 @@ contains
          ! kernels region; has_* are loop-invariant scalars cached above.
          ! Array outer-ring zeros (i=1, i=nx+1) are decomposition-invariant
          ! and must stay UNGATED — they are written unconditionally above.
-         do concurrent(j=1:ny) &
-            local(D_int_w, Cg_w, cfl_w, u_inlet_w, ssh_in_w, &
-                  D_int_e, Cg_e, cfl_e, u_inlet_e, ssh_in_e)
-            ! Effective array-edge face zeros (ilo_c = 1, ihi_c + 1 = nx + 1
-            ! at bt_halo = 0 — bit-identical).  Under march-in these land on
-            ! the NORMAL array-edge faces at physical edges, exactly where v1
-            ! zeroes them.
-            bt_ubt(ilo_c, j) = 0.0_wp
-            bt_ubt(ihi_c + 1, j) = 0.0_wp
-            ! Physical-wall closure — dispatch on bc tag.  Default
-            ! (OBC_WALL) keeps the Phase 3 hard zero; OBC_OPEN applies
-            ! Flather radiation with η_ext = 0.  Outward-normal sign
-            ! convention: west wall outward = -x (so u_wall < 0 for
-            ! a west-going wave with η > 0); east wall outward = +x.
-            ! OBC_PERIODIC: leave the computed face values from Pass 2b
-            ! interior update and wrap ghost faces inline below.
-            ! Full-Flather form (§4, v2; Flather 1976, half-characteristic):
-            !   cfl     = dt_inner · Cg / dx,   Cg = sqrt(G · D_int)
-            !   u_inlet = cfl·ubt(I-1,j) + (1-cfl)·ubt(I,j)
-            !   ssh_in  = η(i_int,j) + (0.5-cfl)·(η(i_int,j) - η(i_int-1,j))
-            !   u_b = 0.5·[(u_inlet + u_ext) + (Cg/D_int)·(ssh_in - η_target)]
-            !
-            ! Sign convention (outward-normal):
-            !   West: outward = -x.  Legacy form: u = -sqrt(G/D)·(η-η_tgt).
-            !         Full form: for u_ext=0, cfl→0, ssh_in→η_int:
-            !           u_b = 0.5·[u(I,j) + (-Cg/D)·(η_int - η_tgt)]
-            !         Factor-½ vs legacy is expected (the half-characteristic form;
-            !         the full form is the physically correct one, legacy is an
-            !         approximation that doubles the response — this is why the
-            !         knob defaults to legacy: changing it alters existing results).
-            !   East: outward = +x.  Legacy: u = +sqrt(G/D)·(η-η_tgt).
-            !         Full form gives u_b = 0.5·[u(I,j) + (+Cg/D)·(η_int - η_tgt)].
-            !   South/North: analogous with v and ±y.
-            if (has_w) then
-               select case (bc_w)
-               case (OBC_OPEN)
-                  if (use_ff) then
-                     D_int_w = max(bt_H_ref(i_w_int, j) + bt_eta(i_w_int, j), 1.0e-6_wp)
-                     Cg_w = sqrt(G*D_int_w)
-                     cfl_w = min(dt_inner*Cg_w*idx_cu(i_w_face, j), 1.0_wp)
-                     u_inlet_w = cfl_w*bt_ubt(i_w_int + 1, j) + &
-                                 (1.0_wp - cfl_w)*bt_ubt(i_w_face, j)
-                     ssh_in_w = bt_eta(i_w_int, j) + &
-                                (0.5_wp - cfl_w)*(bt_eta(i_w_int, j) - &
-                                                  bt_eta(i_w_int + 1, j))
-                     bt_ubt(i_w_face, j) = 0.5_wp*( &
-                                           (u_inlet_w + ext_u_w) - (Cg_w/D_int_w)*ssh_in_w)
-                  else
-                     bt_ubt(i_w_face, j) = &
-                        -sqrt(G/max(bt_H_ref(i_w_int, j) + bt_eta(i_w_int, j), 1.0e-6_wp))* &
-                        bt_eta(i_w_int, j)
-                  end if
-               case (OBC_TIDAL, OBC_CHAPMAN)
-                  if (use_ff) then
-                     D_int_w = max(bt_H_ref(i_w_int, j) + bt_eta(i_w_int, j), 1.0e-6_wp)
-                     Cg_w = sqrt(G*D_int_w)
-                     cfl_w = min(dt_inner*Cg_w*idx_cu(i_w_face, j), 1.0_wp)
-                     u_inlet_w = cfl_w*bt_ubt(i_w_int + 1, j) + &
-                                 (1.0_wp - cfl_w)*bt_ubt(i_w_face, j)
-                     ssh_in_w = bt_eta(i_w_int, j) + &
-                                (0.5_wp - cfl_w)*(bt_eta(i_w_int, j) - &
-                                                  bt_eta(i_w_int + 1, j))
-                     bt_ubt(i_w_face, j) = 0.5_wp*( &
-                                           (u_inlet_w + ext_u_w) - (Cg_w/D_int_w)*(ssh_in_w - eta_target_w))
-                  else
-                     bt_ubt(i_w_face, j) = &
-                        -sqrt(G/max(bt_H_ref(i_w_int, j) + bt_eta(i_w_int, j), 1.0e-6_wp))* &
-                        (bt_eta(i_w_int, j) - eta_target_w)
-                  end if
-               case (OBC_CLAMPED)
-                  bt_ubt(i_w_face, j) = clamped_u_w
-               case (OBC_PERIODIC)
-                  ! Leave the computed value — it will be overwritten by the
-                  ! ghost wrap below; kept here to not write zero over it.
-                  continue
-               case default
-                  bt_ubt(i_w_face, j) = 0.0_wp
-               end select
-            end if
-            if (has_e) then
-               select case (bc_e)
-               case (OBC_OPEN)
-                  if (use_ff) then
-                     D_int_e = max(bt_H_ref(i_e_int, j) + bt_eta(i_e_int, j), 1.0e-6_wp)
-                     Cg_e = sqrt(G*D_int_e)
-                     cfl_e = min(dt_inner*Cg_e*idx_cu(i_e_face, j), 1.0_wp)
-                     u_inlet_e = cfl_e*bt_ubt(i_e_int, j) + &
-                                 (1.0_wp - cfl_e)*bt_ubt(i_e_face, j)
-                     ssh_in_e = bt_eta(i_e_int, j) + &
-                                (0.5_wp - cfl_e)*(bt_eta(i_e_int, j) - &
-                                                  bt_eta(i_e_int - 1, j))
-                     bt_ubt(i_e_face, j) = 0.5_wp*( &
-                                           (u_inlet_e + ext_u_e) + (Cg_e/D_int_e)*ssh_in_e)
-                  else
-                     bt_ubt(i_e_face, j) = &
-                        +sqrt(G/max(bt_H_ref(i_e_int, j) + bt_eta(i_e_int, j), 1.0e-6_wp))* &
-                        bt_eta(i_e_int, j)
-                  end if
-               case (OBC_TIDAL, OBC_CHAPMAN)
-                  if (use_ff) then
-                     D_int_e = max(bt_H_ref(i_e_int, j) + bt_eta(i_e_int, j), 1.0e-6_wp)
-                     Cg_e = sqrt(G*D_int_e)
-                     cfl_e = min(dt_inner*Cg_e*idx_cu(i_e_face, j), 1.0_wp)
-                     u_inlet_e = cfl_e*bt_ubt(i_e_int, j) + &
-                                 (1.0_wp - cfl_e)*bt_ubt(i_e_face, j)
-                     ssh_in_e = bt_eta(i_e_int, j) + &
-                                (0.5_wp - cfl_e)*(bt_eta(i_e_int, j) - &
-                                                  bt_eta(i_e_int - 1, j))
-                     bt_ubt(i_e_face, j) = 0.5_wp*( &
-                                           (u_inlet_e + ext_u_e) + (Cg_e/D_int_e)*(ssh_in_e - eta_target_e))
-                  else
-                     bt_ubt(i_e_face, j) = &
-                        +sqrt(G/max(bt_H_ref(i_e_int, j) + bt_eta(i_e_int, j), 1.0e-6_wp))* &
-                        (bt_eta(i_e_int, j) - eta_target_e)
-                  end if
-               case (OBC_CLAMPED)
-                  bt_ubt(i_e_face, j) = clamped_u_e
-               case (OBC_PERIODIC)
-                  ! Leave the computed value.
-                  continue
-               case default
-                  bt_ubt(i_e_face, j) = 0.0_wp
-               end select
-            end if
-         end do
+         if (.not. fuse_u) then
+            do concurrent(j=1:ny) &
+               local(D_int_w, Cg_w, cfl_w, u_inlet_w, ssh_in_w, &
+                     D_int_e, Cg_e, cfl_e, u_inlet_e, ssh_in_e)
+               ! Effective array-edge face zeros (ilo_c = 1, ihi_c + 1 = nx + 1
+               ! at bt_halo = 0 — bit-identical).  Under march-in these land on
+               ! the NORMAL array-edge faces at physical edges, exactly where v1
+               ! zeroes them.
+               bt_ubt(ilo_c, j) = 0.0_wp
+               bt_ubt(ihi_c + 1, j) = 0.0_wp
+               ! Physical-wall closure — dispatch on bc tag.  Default
+               ! (OBC_WALL) keeps the Phase 3 hard zero; OBC_OPEN applies
+               ! Flather radiation with η_ext = 0.  Outward-normal sign
+               ! convention: west wall outward = -x (so u_wall < 0 for
+               ! a west-going wave with η > 0); east wall outward = +x.
+               ! OBC_PERIODIC: leave the computed face values from Pass 2b
+               ! interior update and wrap ghost faces inline below.
+               ! Full-Flather form (§4, v2; Flather 1976, half-characteristic):
+               !   cfl     = dt_inner · Cg / dx,   Cg = sqrt(G · D_int)
+               !   u_inlet = cfl·ubt(I-1,j) + (1-cfl)·ubt(I,j)
+               !   ssh_in  = η(i_int,j) + (0.5-cfl)·(η(i_int,j) - η(i_int-1,j))
+               !   u_b = 0.5·[(u_inlet + u_ext) + (Cg/D_int)·(ssh_in - η_target)]
+               !
+               ! Sign convention (outward-normal):
+               !   West: outward = -x.  Legacy form: u = -sqrt(G/D)·(η-η_tgt).
+               !         Full form: for u_ext=0, cfl→0, ssh_in→η_int:
+               !           u_b = 0.5·[u(I,j) + (-Cg/D)·(η_int - η_tgt)]
+               !         Factor-½ vs legacy is expected (the half-characteristic form;
+               !         the full form is the physically correct one, legacy is an
+               !         approximation that doubles the response — this is why the
+               !         knob defaults to legacy: changing it alters existing results).
+               !   East: outward = +x.  Legacy: u = +sqrt(G/D)·(η-η_tgt).
+               !         Full form gives u_b = 0.5·[u(I,j) + (+Cg/D)·(η_int - η_tgt)].
+               !   South/North: analogous with v and ±y.
+               if (has_w) then
+                  select case (bc_w)
+                  case (OBC_OPEN)
+                     if (use_ff) then
+                        D_int_w = max(bt_H_ref(i_w_int, j) + bt_eta(i_w_int, j), 1.0e-6_wp)
+                        Cg_w = sqrt(G*D_int_w)
+                        cfl_w = min(dt_inner*Cg_w*idx_cu(i_w_face, j), 1.0_wp)
+                        u_inlet_w = cfl_w*bt_ubt(i_w_int + 1, j) + &
+                                    (1.0_wp - cfl_w)*bt_ubt(i_w_face, j)
+                        ssh_in_w = bt_eta(i_w_int, j) + &
+                                   (0.5_wp - cfl_w)*(bt_eta(i_w_int, j) - &
+                                                     bt_eta(i_w_int + 1, j))
+                        bt_ubt(i_w_face, j) = 0.5_wp*( &
+                                              (u_inlet_w + ext_u_w) - (Cg_w/D_int_w)*ssh_in_w)
+                     else
+                        bt_ubt(i_w_face, j) = &
+                           -sqrt(G/max(bt_H_ref(i_w_int, j) + bt_eta(i_w_int, j), 1.0e-6_wp))* &
+                           bt_eta(i_w_int, j)
+                     end if
+                  case (OBC_TIDAL, OBC_CHAPMAN)
+                     if (use_ff) then
+                        D_int_w = max(bt_H_ref(i_w_int, j) + bt_eta(i_w_int, j), 1.0e-6_wp)
+                        Cg_w = sqrt(G*D_int_w)
+                        cfl_w = min(dt_inner*Cg_w*idx_cu(i_w_face, j), 1.0_wp)
+                        u_inlet_w = cfl_w*bt_ubt(i_w_int + 1, j) + &
+                                    (1.0_wp - cfl_w)*bt_ubt(i_w_face, j)
+                        ssh_in_w = bt_eta(i_w_int, j) + &
+                                   (0.5_wp - cfl_w)*(bt_eta(i_w_int, j) - &
+                                                     bt_eta(i_w_int + 1, j))
+                        bt_ubt(i_w_face, j) = 0.5_wp*( &
+                                              (u_inlet_w + ext_u_w) - (Cg_w/D_int_w)*(ssh_in_w - eta_target_w))
+                     else
+                        bt_ubt(i_w_face, j) = &
+                           -sqrt(G/max(bt_H_ref(i_w_int, j) + bt_eta(i_w_int, j), 1.0e-6_wp))* &
+                           (bt_eta(i_w_int, j) - eta_target_w)
+                     end if
+                  case (OBC_CLAMPED)
+                     bt_ubt(i_w_face, j) = clamped_u_w
+                  case (OBC_PERIODIC)
+                     ! Leave the computed value — it will be overwritten by the
+                     ! ghost wrap below; kept here to not write zero over it.
+                     continue
+                  case default
+                     bt_ubt(i_w_face, j) = 0.0_wp
+                  end select
+               end if
+               if (has_e) then
+                  select case (bc_e)
+                  case (OBC_OPEN)
+                     if (use_ff) then
+                        D_int_e = max(bt_H_ref(i_e_int, j) + bt_eta(i_e_int, j), 1.0e-6_wp)
+                        Cg_e = sqrt(G*D_int_e)
+                        cfl_e = min(dt_inner*Cg_e*idx_cu(i_e_face, j), 1.0_wp)
+                        u_inlet_e = cfl_e*bt_ubt(i_e_int, j) + &
+                                    (1.0_wp - cfl_e)*bt_ubt(i_e_face, j)
+                        ssh_in_e = bt_eta(i_e_int, j) + &
+                                   (0.5_wp - cfl_e)*(bt_eta(i_e_int, j) - &
+                                                     bt_eta(i_e_int - 1, j))
+                        bt_ubt(i_e_face, j) = 0.5_wp*( &
+                                              (u_inlet_e + ext_u_e) + (Cg_e/D_int_e)*ssh_in_e)
+                     else
+                        bt_ubt(i_e_face, j) = &
+                           +sqrt(G/max(bt_H_ref(i_e_int, j) + bt_eta(i_e_int, j), 1.0e-6_wp))* &
+                           bt_eta(i_e_int, j)
+                     end if
+                  case (OBC_TIDAL, OBC_CHAPMAN)
+                     if (use_ff) then
+                        D_int_e = max(bt_H_ref(i_e_int, j) + bt_eta(i_e_int, j), 1.0e-6_wp)
+                        Cg_e = sqrt(G*D_int_e)
+                        cfl_e = min(dt_inner*Cg_e*idx_cu(i_e_face, j), 1.0_wp)
+                        u_inlet_e = cfl_e*bt_ubt(i_e_int, j) + &
+                                    (1.0_wp - cfl_e)*bt_ubt(i_e_face, j)
+                        ssh_in_e = bt_eta(i_e_int, j) + &
+                                   (0.5_wp - cfl_e)*(bt_eta(i_e_int, j) - &
+                                                     bt_eta(i_e_int - 1, j))
+                        bt_ubt(i_e_face, j) = 0.5_wp*( &
+                                              (u_inlet_e + ext_u_e) + (Cg_e/D_int_e)*(ssh_in_e - eta_target_e))
+                     else
+                        bt_ubt(i_e_face, j) = &
+                           +sqrt(G/max(bt_H_ref(i_e_int, j) + bt_eta(i_e_int, j), 1.0e-6_wp))* &
+                           (bt_eta(i_e_int, j) - eta_target_e)
+                     end if
+                  case (OBC_CLAMPED)
+                     bt_ubt(i_e_face, j) = clamped_u_e
+                  case (OBC_PERIODIC)
+                     ! Leave the computed value.
+                     continue
+                  case default
+                     bt_ubt(i_e_face, j) = 0.0_wp
+                  end select
+               end if
+            end do
+         end if
          ! Periodic u ghost-wrap + belt-and-braces seam copy (design §1.5 step 4).
          ! Inline DC inside async(1) — wraps ghost faces and ensures
          ! u(i_w_face) == u(i_e_face) bit-for-bit.  Generic in nghost: the
@@ -1881,6 +1953,11 @@ contains
                bt_work%wd_open_v(i, j) = open_f
                bt_vbt(i, j) = bt_vbt(i, j)*open_f
             end if
+            ! Fused wall BC (v), mirror of the u legs in Pass 2b.
+            bt_vbt(i, j) = merge(0.0_wp, bt_vbt(i, j), &
+                                 (vzs .and. j == j_s_face) .or. (vzn .and. j == j_n_face))
+            bt_vbt(i, j) = merge(clamped_v_s, bt_vbt(i, j), vcs .and. j == j_s_face)
+            bt_vbt(i, j) = merge(clamped_v_n, bt_vbt(i, j), vcn .and. j == j_n_face)
          end do
          ! BC dispatch for south and north v-faces.  has_s/has_n wrap the
          ! ENTIRE select-case (same rationale as the west/east comment
@@ -1889,104 +1966,106 @@ contains
          ! do concurrent to stay on the async(1) ACC kernels region; has_*
          ! are loop-invariant scalars cached above.  Array outer-ring zeros
          ! (j=1, j=ny+1) are decomposition-invariant and stay UNGATED.
-         do concurrent(i=1:nx) &
-            local(D_int_s, Cg_s, cfl_s, v_inlet_s, ssh_in_s, &
-                  D_int_n, Cg_n, cfl_n, v_inlet_n, ssh_in_n)
-            ! Effective array-edge face zeros (jlo_c = 1, jhi_c + 1 = ny + 1
-            ! at bt_halo = 0 — bit-identical; see the u-side comment).
-            bt_vbt(i, jlo_c) = 0.0_wp
-            bt_vbt(i, jhi_c + 1) = 0.0_wp
-            if (has_s) then
-               select case (bc_s)
-               case (OBC_OPEN)
-                  if (use_ff) then
-                     D_int_s = max(bt_H_ref(i, j_s_int) + bt_eta(i, j_s_int), 1.0e-6_wp)
-                     Cg_s = sqrt(G*D_int_s)
-                     cfl_s = min(dt_inner*Cg_s*idy_cv(i, j_s_face), 1.0_wp)
-                     v_inlet_s = cfl_s*bt_vbt(i, j_s_int + 1) + &
-                                 (1.0_wp - cfl_s)*bt_vbt(i, j_s_face)
-                     ssh_in_s = bt_eta(i, j_s_int) + &
-                                (0.5_wp - cfl_s)*(bt_eta(i, j_s_int) - &
-                                                  bt_eta(i, j_s_int + 1))
-                     bt_vbt(i, j_s_face) = 0.5_wp*( &
-                                           (v_inlet_s + ext_v_s) - (Cg_s/D_int_s)*ssh_in_s)
-                  else
-                     bt_vbt(i, j_s_face) = &
-                        -sqrt(G/max(bt_H_ref(i, j_s_int) + bt_eta(i, j_s_int), 1.0e-6_wp))* &
-                        bt_eta(i, j_s_int)
-                  end if
-               case (OBC_TIDAL, OBC_CHAPMAN)
-                  if (use_ff) then
-                     D_int_s = max(bt_H_ref(i, j_s_int) + bt_eta(i, j_s_int), 1.0e-6_wp)
-                     Cg_s = sqrt(G*D_int_s)
-                     cfl_s = min(dt_inner*Cg_s*idy_cv(i, j_s_face), 1.0_wp)
-                     v_inlet_s = cfl_s*bt_vbt(i, j_s_int + 1) + &
-                                 (1.0_wp - cfl_s)*bt_vbt(i, j_s_face)
-                     ssh_in_s = bt_eta(i, j_s_int) + &
-                                (0.5_wp - cfl_s)*(bt_eta(i, j_s_int) - &
-                                                  bt_eta(i, j_s_int + 1))
-                     bt_vbt(i, j_s_face) = 0.5_wp*( &
-                                           (v_inlet_s + ext_v_s) - (Cg_s/D_int_s)*(ssh_in_s - eta_target_s))
-                  else
-                     bt_vbt(i, j_s_face) = &
-                        -sqrt(G/max(bt_H_ref(i, j_s_int) + bt_eta(i, j_s_int), 1.0e-6_wp))* &
-                        (bt_eta(i, j_s_int) - eta_target_s)
-                  end if
-               case (OBC_CLAMPED)
-                  bt_vbt(i, j_s_face) = clamped_v_s
-               case (OBC_PERIODIC)
-                  continue
-               case default
-                  bt_vbt(i, j_s_face) = 0.0_wp
-               end select
-            end if
-            if (has_n) then
-               select case (bc_n)
-               case (OBC_OPEN)
-                  if (use_ff) then
-                     D_int_n = max(bt_H_ref(i, j_n_int) + bt_eta(i, j_n_int), 1.0e-6_wp)
-                     Cg_n = sqrt(G*D_int_n)
-                     cfl_n = min(dt_inner*Cg_n*idy_cv(i, j_n_face), 1.0_wp)
-                     v_inlet_n = cfl_n*bt_vbt(i, j_n_int) + &
-                                 (1.0_wp - cfl_n)*bt_vbt(i, j_n_face)
-                     ssh_in_n = bt_eta(i, j_n_int) + &
-                                (0.5_wp - cfl_n)*(bt_eta(i, j_n_int) - &
-                                                  bt_eta(i, j_n_int - 1))
-                     bt_vbt(i, j_n_face) = 0.5_wp*( &
-                                           (v_inlet_n + ext_v_n) + (Cg_n/D_int_n)*ssh_in_n)
-                  else
-                     bt_vbt(i, j_n_face) = &
-                        +sqrt(G/max(bt_H_ref(i, j_n_int) + bt_eta(i, j_n_int), 1.0e-6_wp))* &
-                        bt_eta(i, j_n_int)
-                  end if
-               case (OBC_TIDAL, OBC_CHAPMAN)
-                  if (use_ff) then
-                     D_int_n = max(bt_H_ref(i, j_n_int) + bt_eta(i, j_n_int), 1.0e-6_wp)
-                     Cg_n = sqrt(G*D_int_n)
-                     cfl_n = min(dt_inner*Cg_n*idy_cv(i, j_n_face), 1.0_wp)
-                     v_inlet_n = cfl_n*bt_vbt(i, j_n_int) + &
-                                 (1.0_wp - cfl_n)*bt_vbt(i, j_n_face)
-                     ssh_in_n = bt_eta(i, j_n_int) + &
-                                (0.5_wp - cfl_n)*(bt_eta(i, j_n_int) - &
-                                                  bt_eta(i, j_n_int - 1))
-                     bt_vbt(i, j_n_face) = 0.5_wp*( &
-                                           (v_inlet_n + ext_v_n) + (Cg_n/D_int_n)*(ssh_in_n - eta_target_n))
-                  else
-                     bt_vbt(i, j_n_face) = &
-                        +sqrt(G/max(bt_H_ref(i, j_n_int) + bt_eta(i, j_n_int), 1.0e-6_wp))* &
-                        (bt_eta(i, j_n_int) - eta_target_n)
-                  end if
-               case (OBC_CLAMPED)
-                  bt_vbt(i, j_n_face) = clamped_v_n
-               case (OBC_PERIODIC, OBC_TRIPOLAR_FOLD)
-                  ! Seam, not a wall: the fold-line face is an interior
-                  ! face (projected antisymmetric by the fold below).
-                  continue
-               case default
-                  bt_vbt(i, j_n_face) = 0.0_wp
-               end select
-            end if
-         end do
+         if (.not. fuse_v) then
+            do concurrent(i=1:nx) &
+               local(D_int_s, Cg_s, cfl_s, v_inlet_s, ssh_in_s, &
+                     D_int_n, Cg_n, cfl_n, v_inlet_n, ssh_in_n)
+               ! Effective array-edge face zeros (jlo_c = 1, jhi_c + 1 = ny + 1
+               ! at bt_halo = 0 — bit-identical; see the u-side comment).
+               bt_vbt(i, jlo_c) = 0.0_wp
+               bt_vbt(i, jhi_c + 1) = 0.0_wp
+               if (has_s) then
+                  select case (bc_s)
+                  case (OBC_OPEN)
+                     if (use_ff) then
+                        D_int_s = max(bt_H_ref(i, j_s_int) + bt_eta(i, j_s_int), 1.0e-6_wp)
+                        Cg_s = sqrt(G*D_int_s)
+                        cfl_s = min(dt_inner*Cg_s*idy_cv(i, j_s_face), 1.0_wp)
+                        v_inlet_s = cfl_s*bt_vbt(i, j_s_int + 1) + &
+                                    (1.0_wp - cfl_s)*bt_vbt(i, j_s_face)
+                        ssh_in_s = bt_eta(i, j_s_int) + &
+                                   (0.5_wp - cfl_s)*(bt_eta(i, j_s_int) - &
+                                                     bt_eta(i, j_s_int + 1))
+                        bt_vbt(i, j_s_face) = 0.5_wp*( &
+                                              (v_inlet_s + ext_v_s) - (Cg_s/D_int_s)*ssh_in_s)
+                     else
+                        bt_vbt(i, j_s_face) = &
+                           -sqrt(G/max(bt_H_ref(i, j_s_int) + bt_eta(i, j_s_int), 1.0e-6_wp))* &
+                           bt_eta(i, j_s_int)
+                     end if
+                  case (OBC_TIDAL, OBC_CHAPMAN)
+                     if (use_ff) then
+                        D_int_s = max(bt_H_ref(i, j_s_int) + bt_eta(i, j_s_int), 1.0e-6_wp)
+                        Cg_s = sqrt(G*D_int_s)
+                        cfl_s = min(dt_inner*Cg_s*idy_cv(i, j_s_face), 1.0_wp)
+                        v_inlet_s = cfl_s*bt_vbt(i, j_s_int + 1) + &
+                                    (1.0_wp - cfl_s)*bt_vbt(i, j_s_face)
+                        ssh_in_s = bt_eta(i, j_s_int) + &
+                                   (0.5_wp - cfl_s)*(bt_eta(i, j_s_int) - &
+                                                     bt_eta(i, j_s_int + 1))
+                        bt_vbt(i, j_s_face) = 0.5_wp*( &
+                                              (v_inlet_s + ext_v_s) - (Cg_s/D_int_s)*(ssh_in_s - eta_target_s))
+                     else
+                        bt_vbt(i, j_s_face) = &
+                           -sqrt(G/max(bt_H_ref(i, j_s_int) + bt_eta(i, j_s_int), 1.0e-6_wp))* &
+                           (bt_eta(i, j_s_int) - eta_target_s)
+                     end if
+                  case (OBC_CLAMPED)
+                     bt_vbt(i, j_s_face) = clamped_v_s
+                  case (OBC_PERIODIC)
+                     continue
+                  case default
+                     bt_vbt(i, j_s_face) = 0.0_wp
+                  end select
+               end if
+               if (has_n) then
+                  select case (bc_n)
+                  case (OBC_OPEN)
+                     if (use_ff) then
+                        D_int_n = max(bt_H_ref(i, j_n_int) + bt_eta(i, j_n_int), 1.0e-6_wp)
+                        Cg_n = sqrt(G*D_int_n)
+                        cfl_n = min(dt_inner*Cg_n*idy_cv(i, j_n_face), 1.0_wp)
+                        v_inlet_n = cfl_n*bt_vbt(i, j_n_int) + &
+                                    (1.0_wp - cfl_n)*bt_vbt(i, j_n_face)
+                        ssh_in_n = bt_eta(i, j_n_int) + &
+                                   (0.5_wp - cfl_n)*(bt_eta(i, j_n_int) - &
+                                                     bt_eta(i, j_n_int - 1))
+                        bt_vbt(i, j_n_face) = 0.5_wp*( &
+                                              (v_inlet_n + ext_v_n) + (Cg_n/D_int_n)*ssh_in_n)
+                     else
+                        bt_vbt(i, j_n_face) = &
+                           +sqrt(G/max(bt_H_ref(i, j_n_int) + bt_eta(i, j_n_int), 1.0e-6_wp))* &
+                           bt_eta(i, j_n_int)
+                     end if
+                  case (OBC_TIDAL, OBC_CHAPMAN)
+                     if (use_ff) then
+                        D_int_n = max(bt_H_ref(i, j_n_int) + bt_eta(i, j_n_int), 1.0e-6_wp)
+                        Cg_n = sqrt(G*D_int_n)
+                        cfl_n = min(dt_inner*Cg_n*idy_cv(i, j_n_face), 1.0_wp)
+                        v_inlet_n = cfl_n*bt_vbt(i, j_n_int) + &
+                                    (1.0_wp - cfl_n)*bt_vbt(i, j_n_face)
+                        ssh_in_n = bt_eta(i, j_n_int) + &
+                                   (0.5_wp - cfl_n)*(bt_eta(i, j_n_int) - &
+                                                     bt_eta(i, j_n_int - 1))
+                        bt_vbt(i, j_n_face) = 0.5_wp*( &
+                                              (v_inlet_n + ext_v_n) + (Cg_n/D_int_n)*(ssh_in_n - eta_target_n))
+                     else
+                        bt_vbt(i, j_n_face) = &
+                           +sqrt(G/max(bt_H_ref(i, j_n_int) + bt_eta(i, j_n_int), 1.0e-6_wp))* &
+                           (bt_eta(i, j_n_int) - eta_target_n)
+                     end if
+                  case (OBC_CLAMPED)
+                     bt_vbt(i, j_n_face) = clamped_v_n
+                  case (OBC_PERIODIC, OBC_TRIPOLAR_FOLD)
+                     ! Seam, not a wall: the fold-line face is an interior
+                     ! face (projected antisymmetric by the fold below).
+                     continue
+                  case default
+                     bt_vbt(i, j_n_face) = 0.0_wp
+                  end select
+               end if
+            end do
+         end if
          ! Periodic-x wrap of the v GHOST COLUMNS.  vbt is centre-type in
          ! x (columns 1..nghost and nx_phys+nghost+1..nx are ghosts).
          ! Mirror of the ubt ghost-row wrap above: without it, next
@@ -2067,6 +2146,8 @@ contains
          ! fused over the staggered union (η centres, u/v faces) with
          ! per-array index guards; one launch instead of three.
          do concurrent(j=1:ny + 1, i=1:nx + 1)
+            ! Fused wall BC (v): outer-edge face rows zero, after Pass 2b has read them.
+            if (fuse_v .and. i <= nx .and. (j == 1 .or. j == ny + 1)) bt_vbt(i, j) = 0.0_wp
             if (i <= nx .and. j <= ny) then
                eta_sum(i, j) = eta_sum(i, j) + bt_eta(i, j)
             end if
