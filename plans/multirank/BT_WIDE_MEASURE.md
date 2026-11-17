@@ -439,9 +439,7 @@ same owner-routed mechanism (every value from the tile that owns the mirror poin
 included), `FOLD_CTX_NORMAL` for every state-level fold and `FOLD_CTX_WIDE` for the march-in.  The plan,
 its device index lists and its buffers are per context (the pack / unpack kernels take them as
 explicit-shape dummies).  Only the north rank row pays the extra fold exchanges; the seams keep the
-`bt_halo/2` cadence.  The static wide fields' rows beyond the fold are not folded: every kernel that
-reads them writes results that the fold overwrites before they are read (shown by the ring poison,
-which leaves them NaN on the physical edge).  `bt_halo > 0` with the fold is refused when the north tile
+`bt_halo/2` cadence.  Static wide fields beyond the fold are not folded: the outer `bt_halo` rows are clamped copies never read (ring poison), the first `nghost` rows are the model's own folded ghost rows and ARE read (corrected in stage 6); every dynamic row there is refolded each substep.  `bt_halo > 0` with the fold is refused when the north tile
 is no taller than `nghost + bt_halo` rows (or, with `px > 1`, a tile no wider).
 
 New cases `bth_trip_w{2,4,8}`, `bth_trip_w{4,8}_b0` (Murray cap above 74 N, double-drake land walls
@@ -460,3 +458,60 @@ After: every `bth_trip_*` / `bthx_tripsea_*` case IDENTICAL at 1 rank (1x1), 2 r
 ranks (4x1, 2x2, 1x4), both split schemes, W = 2, 4, 8 where the smallest tile fits (`nghost + W + 1`;
 the 1x4 layout at W = 8 is skipped), also with `RDB_BT_INHALO_POISON=2`, `RDB_BT_RING_POISON=1`,
 `RDB_BT_RING_POISON=2` and both.
+
+
+## Stage 6: the fold on the packed cadence (`feat/bt-wide-halo-all`)
+
+Merge of `fix/bt-wide-halo-fold` (stage 4b: fold every substep, second owner-routed plan `FOLD_CTX_WIDE`) into the
+packed static stage (stage 5).  gfortran 15.1 + OpenMPI 5.0.5 CPU, V100 where stated; 48 x 32, `n_inner = 40`, `nghost = 3`.
+
+Interactions, and the evidence:
+
+* **Reach across the fold.**  The fold runs every substep at the same two points as `bt_halo = 0` (eta after Pass 1,
+  u after Pass 2b, v after Pass 2c), after the substep's periodic wrap, and the packed in-loop exchange only touches
+  seams (the north fold edge has no Y neighbour), so the order is exchange -> wrap -> fold.  Every row beyond the
+  fold is refreshed from owned mirror values every substep, so the fold edge consumes no reach.  Evidence: cadence + 1
+  (`RDB_BT_INHALO_POISON=1002`) is bitwise over every `bth_trip_*` case at np 2 (30 identical) and np 4 (36), and
+  cadence + 2 (`2002`) breaks on `bth_trip_w4` at np 2 and np 4 (NaN-catch, 286 / 572 hits) and on `bthx_tripsea`,
+  `bthx_trip_{tides,porous,zfixed}` and `bth_trip_w2` at np 2 and 4 (run one by one), like every other family.  The
+  in-loop poison does not poison the fold edge itself: those rows are expected valid.
+* **Entry / exit sets, `H_ref` once.**  Packed entry and exit sets are exchanged at the seams only; the north rows
+  beyond the fold are the model's own folded ghost rows (offset-copied; `H_ref` once) or are refolded.  The
+  fold-line `v` update reads `H_ref` one row north of the fold line: with the north rows of the outer ring poisoned to
+  depth `W` + 2 (`RDB_BT_RING_POISON=122`, new hundreds digit = north rows only) the owned cells stay bitwise at
+  np 1, 2 and 4; at depth `W` + 3 = all `nghost` model rows (`132`) the run breaks (NaN-catch at every np), so the
+  innermost model ghost row IS read, as at `bt_halo = 0`.  Rows 2 and 3 are not read in this configuration.  The exit
+  set (time means, `*_end`, uhbt / vhbt ghost rows) is NOT compared directly against the reference (the comparison is
+  owned cells); it is verified through the following steps (the pred_corr corrector reads them) and the write / resume
+  leg (below), not row by row.
+* **Counters.**  `oh_*` counters are unchanged by the fold (it is not a halo exchange): `pk = 2*steps*(2 +
+  floor((n_inner-1)/(ng_w-2)))`, `bt_group = bt_u = 0`, `H_ref` centre-2D once, as for every `bth` case.  New: a
+  per-context fold-group counter (`ocean_fold_exchange_calls`): on a rank that folds through the wide plan
+  (north rank row, `px > 1`) exactly `2*steps*2*n_inner` groups (eta + ubt, then vbt with the projection, per substep,
+  per solve), on every other rank 0, independent of the cadence.  Isend / Irecv counts inside a group depend on the plan's
+  peers and are not asserted.
+* **Ring poison, north edge.**  `RDB_BT_RING_POISON=2` (all edges) holds over the fold cases; see the `122` / `132` result above.
+* **New cases.**  `bthx_trip_{tides,porous,zfixed}_w4` (fold + body tide, porous barriers, closed faces) are accepted and
+  bitwise at np 2 and 4 (their per-solve `eta_forcing` / width exchanges are asserted by the counters); `bthx_tripsea_w4`
+  also runs a checkpoint / resume leg with `bt_halo = 4` (2x1 at np 2; 4x1 and 2x2 at np 4), bitwise against the straight
+  run, ghosts included.
+* **Guard.**  The substep `error stop`s if the march-in meets a distributed fold without the wide plan.
+
+Gate counts on the final code (identical = IDENTICAL lines; skips are tile-fit skips):
+
+| leg | np 1 | np 2 | np 4 |
+|---|---|---|---|
+| `bth` plain | 118 | 356 | 432 (44 skipped) |
+| `RDB_BT_INHALO_POISON=2` + `RDB_BT_RING_POISON=2` | 118 | 356 | 432 |
+| cadence + 1 (`1002`) | - | 356 | 432 |
+| whole unfiltered `test_ocean_decomp_bitid_mpi` | - | 838 | 1090 |
+
+`test_ocean_dyn_mpi` np 1, 2 pass; ctest `-R mpi` (excluding the plain whole-suite legs): 59 / 59 (includes the btwide poison,
+limit, break (WILL_FAIL), fold-ring legs); serial gfortran `ctest -R rdb -j 6`: 290 / 290; compat slice vs `origin/beta`: 50 PASS, 0 FAIL,
+0 XPASS; `tools/check_closure_matrix.py` OK.  GPU (V100, GPUs 2 and 3, np 1 and 2): `bth` plain, poison and cadence + 1 all identical (np 1: 118 / 118 / 118;
+np 2: 356 / 356 / 356), and the `tripolar` / `drain_ratio_fold` cases (np 1: 6, np 2: 18 identical).
+
+Not verified: nvfortran CPU; GPU np 4; GPU cycle-break and fold-ring legs; GPU `test_ocean_dyn_mpi`; ice-on-fold or other
+accepted combinations (sponge, Orlanski, nudged edges, wave drag) with the fold; timing of the merged result (stage 4 numbers
+were measured without the fold); `bt_halo` odd values across the fold beyond the rounding rule.  Nothing new is refused: the
+fold stays accepted with every tested combination; AUTO still resolves to 0.
