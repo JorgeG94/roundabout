@@ -32,7 +32,7 @@ module test_cice_thickness_changes
    real(wp), parameter :: HPOW2 = 0.5_wp !! 2**-1: layer sums and ratios are exact in binary
    integer, parameter :: NIL_SET(5) = [1, 2, 4, 7, 8]
 
-#ifdef RDB_GPU_OFFLOAD
+#if defined(RDB_GPU_OFFLOAD) || defined(RDB_FP_REASSOC)
    real(wp), parameter :: CRT = 1.0e-11_wp
       !! Closed-form relative tolerance of the leftover-energy bookkeeping, GPU build (FMA on).
    real(wp), parameter :: GRTOL = 1.0e-12_wp

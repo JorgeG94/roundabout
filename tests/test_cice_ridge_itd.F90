@@ -37,7 +37,7 @@ module test_cice_ridge_itd
    real(wp), parameter :: HIN_MAX(0:NCAT) = [0.0_wp, 0.6445072168194258_wp, 1.3914334975763036_wp, &
                                              2.4701793819598885_wp, 4.567287918850491_wp, 999.9_wp]
       !! Category bounds (kcatbound = 0, ncat = 5; the D5.1 oracle table).
-#ifdef RDB_GPU_OFFLOAD
+#if defined(RDB_GPU_OFFLOAD) || defined(RDB_FP_REASSOC)
    ! FMA is on for host code too on the offload build: scale-aware tolerances, relative plus an
    ! absolute floor of the O(1) participation scale.  Measured worst on the offload build (V100,
    ! nvfortran): 1.9e-15 relative on the ncat 1/7 oracle tables.

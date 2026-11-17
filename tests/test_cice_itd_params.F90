@@ -525,7 +525,7 @@ contains
             call check(error, (g0 == 0.0_wp .or. abs(g0) > 1.0e10_wp) .and. (g1 == 0.0_wp .or. abs(g1) > 1.0e10_wp), &
                        trim(lab)//" degenerate g: exactly 0 (support collapsed) or the upstream blow-up, never NaN")
          else
-#ifdef RDB_GPU_OFFLOAD
+#if defined(RDB_GPU_OFFLOAD) || defined(RDB_FP_REASSOC)
             tol = 1.0e-12_wp   ! FMA contraction in host code compiled with -fast
 #else
             tol = 0.0_wp       ! same operations as upstream (one-third multiplied): bitwise
@@ -737,7 +737,7 @@ contains
       integer(int32) :: ierr
       character(len=80) :: lab
 
-#ifdef RDB_GPU_OFFLOAD
+#if defined(RDB_GPU_OFFLOAD) || defined(RDB_FP_REASSOC)
       tol = 1.0e-12_wp
 #else
       tol = 0.0_wp
@@ -785,7 +785,7 @@ contains
       integer :: ncat, il, nilyr, nslyr, ntr, col, n, it, d, k
       integer(int64) :: st
 
-#ifdef RDB_GPU_OFFLOAD
+#if defined(RDB_GPU_OFFLOAD) || defined(RDB_FP_REASSOC)
       tolb = 5.0e-12_wp   ! measured 4e-13 on the offload build: host code is FMA-contracted (-fast)
 #else
       tolb = 1.0e-14_wp

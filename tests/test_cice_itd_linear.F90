@@ -51,7 +51,7 @@ module test_cice_itd_linear
    real(wp), parameter :: SCL(16) = [0.1_wp, 0.3_wp, 0.7_wp, 1.5_wp, 3.0_wp, 0.5_wp, 0.2_wp, 1.0_wp, 2.0_wp, &
                                      0.4_wp, 0.15_wp, 1.2_wp, 2.5_wp, 0.6_wp, 0.25_wp, 1.8_wp]
       !! Growth-rate scales of the random cells (slow ... wild).
-#ifdef RDB_GPU_OFFLOAD
+#if defined(RDB_GPU_OFFLOAD) || defined(RDB_FP_REASSOC)
    logical, parameter :: GPU_BUILD = .true.
    real(wp), parameter :: TOL_GOLD = 1.0e-12_wp
       !! Oracle and cell-vs-packed tolerance: FMA is on for host code on the offload build.

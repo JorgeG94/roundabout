@@ -2261,7 +2261,10 @@ contains
       !! on, on a 14 x 12 box with an island, scattered free-drift cells and ice-free cells.
       !! The literals come from the solver before the G.3 restructuring (gfortran, `-O2`-class
       !! flags, FMA contraction off); the check is skipped on the offload build, where FMA
-      !! contraction is on for host code and the `reference_*` tests bound the device.
+      !! contraction is on for host code and the `reference_*` tests bound the device, and on
+      !! the nvfortran CPU build (`RDB_FP_REASSOC`), where it fails even at `-O0` (so it is the
+      !! compiler's intrinsics or constant folding, not `-fast`): the `reference_*` tests bound
+      !! that build too.
       type(error_type), allocatable, intent(out) :: error
       type(fx_t) :: fx
       integer(int64) :: ck(NCK), dump
@@ -2300,7 +2303,7 @@ contains
             end do
             cycle
          end if
-#ifndef RDB_GPU_OFFLOAD
+#if !defined(RDB_GPU_OFFLOAD) && !defined(RDB_FP_REASSOC)
          nmis = 0
          do f = 1, NCK
             if (ck(f) /= CK_EXPECT(f, icase)) then

@@ -55,7 +55,7 @@ module test_cice_therm1
 
    real(wp), parameter :: TWOPI = 6.283185307179586_wp
 
-#ifdef RDB_GPU_OFFLOAD
+#if defined(RDB_GPU_OFFLOAD) || defined(RDB_FP_REASSOC)
    real(wp), parameter :: DRTOL = 1.0e-12_wp
       !! Device-vs-host (and cell-vs-column) relative tolerance, GPU build (FMA on, host code too).
    real(wp), parameter :: SUMTOL = 1.0e-13_wp

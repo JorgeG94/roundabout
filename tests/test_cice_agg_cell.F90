@@ -247,7 +247,7 @@ contains
       integer(int32) :: ierr_p, ierr_c(nx, ny)
       integer :: i, j, it, nbad_err
 
-#ifdef RDB_GPU_OFFLOAD
+#if defined(RDB_GPU_OFFLOAD) || defined(RDB_FP_REASSOC)
       tol = 1.0e-12_wp
 #else
       tol = 0.0_wp
@@ -310,7 +310,7 @@ contains
       integer(int32) :: ierr_p, ierr_d(nx, ny)
       integer :: i, j, it
 
-#ifdef RDB_GPU_OFFLOAD
+#if defined(RDB_GPU_OFFLOAD) || defined(RDB_FP_REASSOC)
       tol = 1.0e-12_wp
 #else
       tol = 0.0_wp

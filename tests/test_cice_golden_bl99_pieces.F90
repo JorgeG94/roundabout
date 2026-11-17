@@ -37,7 +37,7 @@ module test_cice_golden_bl99_pieces
 
    public :: collect_cice_golden_bl99_pieces_tests
 
-#ifdef RDB_GPU_OFFLOAD
+#if defined(RDB_GPU_OFFLOAD) || defined(RDB_FP_REASSOC)
    real(wp), parameter :: TOL = 1.0e-12_wp
 #else
    real(wp), parameter :: TOL = 0.0_wp

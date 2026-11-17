@@ -42,7 +42,7 @@ use rdb_ice_errors, only: ICE_ERR_FATAL_MASK, ICE_ERR_NONFINITE, ICE_ERR_RIDGE_N
    integer, parameter :: NR = 60
    real(wp), parameter :: HIN(0:NCAT) = [0.0_wp, 0.6445072168194258_wp, 1.3914334975763036_wp, &
                                          2.4701793819598885_wp, 4.567287918850491_wp, 999.9_wp]
-#ifdef RDB_GPU_OFFLOAD
+#if defined(RDB_GPU_OFFLOAD) || defined(RDB_FP_REASSOC)
    logical, parameter :: GPU_BUILD = .true.
    real(wp), parameter :: TOL_GOLD = 1.0e-12_wp
    real(wp), parameter :: TOL_EXT = 2.0e-14_wp

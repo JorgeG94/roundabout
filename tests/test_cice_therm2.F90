@@ -48,7 +48,7 @@ module test_cice_therm2
    real(wp), parameter :: HIN(0:NCAT) = [0.0_wp, 0.6445072168194258_wp, 1.3914334975763036_wp, &
                                          2.4701793819598885_wp, 4.567287918850491_wp, 999.9_wp]
    real(wp), parameter :: SCL(8) = [0.3_wp, 1.0_wp, 2.0_wp, 4.0_wp, 6.0_wp, 0.6_wp, 3.0_wp, 8.0_wp]
-#ifdef RDB_GPU_OFFLOAD
+#if defined(RDB_GPU_OFFLOAD) || defined(RDB_FP_REASSOC)
    logical, parameter :: GPU_BUILD = .true.
    real(wp), parameter :: TOL_GOLD = 1.0e-12_wp
    real(wp), parameter :: TOL_EXT = 7.0e-12_wp

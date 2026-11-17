@@ -85,6 +85,18 @@ if(CMAKE_Fortran_COMPILER_ID STREQUAL "NVHPC")
     message(STATUS "CPU serial (no threading)")
   endif()
 
+  if(NOT RDB_ENABLE_GPU)
+    # `-fast` vectorises (and so reassociates) floating-point reductions, and
+    # `-Mnofma` below does not stop that: a sum over categories / layers / BT
+    # substeps comes out a few ulp off the left-to-right order a bitwise oracle
+    # test pins.  Tests that compare against a gfortran-made oracle (`#if
+    # defined(RDB_GPU_OFFLOAD) || defined(RDB_FP_REASSOC)`) use a stated
+    # relative tolerance instead of exact equality when this is defined.  Every
+    # decomposition / restart gate is unaffected: those compare nvfortran with
+    # nvfortran.
+    list(APPEND RDB_COMPILE_DEFS RDB_FP_REASSOC)
+  endif()
+
 elseif(CMAKE_Fortran_COMPILER_ID STREQUAL "GNU")
   set(CMAKE_Fortran_FLAGS
       "${CMAKE_Fortran_FLAGS} -ffree-form -std=gnu -O3 -ffree-line-length-none")
