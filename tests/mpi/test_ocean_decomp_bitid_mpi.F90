@@ -423,7 +423,7 @@ program test_ocean_decomp_bitid_mpi
       !! `RDB_BITID_CASES`: run only the cases whose name contains this substring.
    type(comm_t) :: comm
    character(len=16), parameter :: SCHEMES(2) = [character(len=16) :: "pred_corr", "ssp_rk2"]
-   character(len=24), parameter :: CASES(160) = [character(len=24) :: &
+   character(len=24), parameter :: CASES(170) = [character(len=24) :: &
                                                  "island_basin", "weno7_pv", &
                                                  "periodic_channel_zstar", &
                                                  "visc_rem_zstar", &
@@ -494,7 +494,12 @@ program test_ocean_decomp_bitid_mpi
                                                  "bthx_tripsea_w4_b0", &
                                                  "bthx_trip_tides_w4", "bthx_trip_porous_w4", &
                                                  "bthx_trip_zfixed_w4", &
-                                                 "wave_drag_rough", "wave_drag_rough_periodic"]
+                                                 "wave_drag_rough", "wave_drag_rough_periodic", &
+                                                 "sea_ice+w2", "sea_ice+w4", "sea_ice_transport+w2", &
+                                                 "sea_ice_transport+w4", "sea_ice_transport+w8", &
+                                                 "sea_ice_fold+w2", "sea_ice_fold+w4", &
+                                                 "sea_ice_fold_nodyn+w2", "sea_ice_fold_nodyn+w4", &
+                                                 "bulk_flux_ice+w4"]
 
    call comm_env_init()
    call comm_env_setup_roles(.false.)
@@ -3038,6 +3043,15 @@ contains
                ! A restart is independent of the march-in the previous leg used:
                ! written per-substep (bt_halo = 0) and resumed AUTO (wide), and
                ! the other way round, owned cells against the one-rank reference.
+               if (case_force > 0) then
+                  ! Sea ice with a pinned width: a restart written per-substep resumes wide
+                  ! and the other way round (the two marches leave different ghosts, which
+                  ! the ice state must not depend on), owned cells against the one-rank run.
+                  call check_resume_leg(case_nml(label, scheme, px, nprocs/px), dec, &
+                                        trim(tag)//" [0 -> wide]", ref, bth1=0, bth2=case_force)
+                  call check_resume_leg(case_nml(label, scheme, px, nprocs/px), dec, &
+                                        trim(tag)//" [wide -> 0]", ref, bth1=case_force, bth2=0)
+               end if
                if (label == "island_basin" .or. label == "tripolar") then
                   call check_resume_leg(case_nml(label, scheme, px, nprocs/px), dec, &
                                         trim(tag)//" [0 -> auto]", ref, bth1=0, bth2=BT_HALO_AUTO_SENTINEL)
@@ -3107,11 +3121,11 @@ contains
       !! (no passing `bth*` case proves them): the feature is on, so a wide
       !! halo here means the exclusion leaked.
       character(len=*), intent(in) :: label
-      auto_must_stay_zero = index(label, "sea_ice") == 1 .or. index(label, "wetdry_") == 1 .or. &
+      auto_must_stay_zero = index(label, "wetdry_") == 1 .or. &
                             index(label, "cavity_") == 1 .or. index(label, "dtbt_reset") == 1 .or. &
                             label == "chapman_obc" .or. &
                             label == "obc_sponge_east" .or. label == "obc_radiation_sponge" .or. &
-                            label == "periodic_sponge" .or. index(label, "bulk_flux_ice") == 1
+                            label == "periodic_sponge"
    end function auto_must_stay_zero
 
    pure logical function auto_must_be_wide(label)

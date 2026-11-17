@@ -4559,8 +4559,6 @@ contains
          reason = "inhalo_march"
       else if (bt_dtbt_is_set(cfg%ocean%bt) .and. cfg%ocean%bt%dtbt_reset_period >= 0.0_wp) then
          reason = "dtbt_reset_period >= 0 (n_inner re-derived mid-run)"
-      else if (cfg%ocean%ice%enable) then
-         reason = "&ocean_ice_nml enable (sea ice)"
       else if (cfg%ocean%cavity_melt%enable) then
          reason = "cavity_melt enable"
       else if (cfg%ocean%sponge%enable) then

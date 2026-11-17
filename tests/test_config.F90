@@ -800,9 +800,10 @@ contains
       cfg%ocean%bc%east = "wall"
 
       ! Features without a wide-halo case: each flips the flag on its own.
+      ! Sea ice has wide-halo cases (`sea_ice*+w<W>`): it is NOT excluded.
       cfg%ocean%ice%enable = .true.
       call bt_halo_auto_exclusion(cfg, excluded, reason)
-      call check(error, excluded .and. index(reason, "ice") > 0, "sea ice not excluded")
+      call check(error, excluded .eqv. .false., "sea ice excluded despite its wide-halo cases")
       if (allocated(error)) return
       cfg%ocean%ice%enable = .false.
       cfg%ocean%sponge%enable = .true.
