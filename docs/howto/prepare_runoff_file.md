@@ -24,7 +24,9 @@ discarded total (kg/s) and sub-cell count are printed per record. Use
 model land cells (`depth <= --min-depth`, default 0, in `topog.nc`) move to the
 nearest wet coastal cell. It prints the totals for every record and aborts if
 in-domain + discarded differs from the source by more than 1e-12 relative or if
-any land cell is non-zero. Missing values (fill, NaN, above 1e10) count as zero and are
+any land cell is non-zero. It also reports, per record, the mass moved from land to the coast, and at the end
+how many land cells carried mass and the farthest centre-to-centre move in km: a large
+value is a river put on the wrong coast, so look at it. Missing values (fill, NaN, above 1e10) count as zero and are
 reported. The output keeps the source time axis and its `units`; point
 `lrunoff_file` / `frunoff_file` at it with `lrunoff_var = "runoff"` and the
 `time_mode` you want (`linear`, `cyclic`, `static`). It needs

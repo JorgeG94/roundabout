@@ -415,7 +415,7 @@ contains
    ! ====================================================================
 
    subroutine convert(p_hgrid, p_depth, depth_var, p_src, src_var, p_out, out_var, lon_name, lat_name, time_name, msub, &
-                      min_depth, strict_global, discarded)
+                      min_depth, strict_global, discarded, n_redirected, max_redirect_km)
       character(len=*), intent(in) :: p_hgrid, p_depth, depth_var, p_src, src_var, p_out, out_var
       character(len=*), intent(in) :: lon_name, lat_name, time_name
       integer, intent(in) :: msub
@@ -425,13 +425,19 @@ contains
          !! Any out-of-domain source mass is fatal.
       real(dp), allocatable, intent(out), optional :: discarded(:)
          !! Per record, the discarded out-of-domain mass (kg/s).
+      integer, intent(out), optional :: n_redirected
+         !! Land cells that carried mass in some record and were moved to the coast.
+      real(dp), intent(out), optional :: max_redirect_km
+         !! The farthest such move (great-circle, centre to centre).
 
       integer :: nx, ny, nxp, nyp, nlon, nlat, nt
       real(dp), allocatable :: sg_x(:, :), sg_y(:, :), area_sg(:, :), area_t(:, :), depth(:, :)
       real(dp), allocatable :: slon(:), slat(:), stime(:), asrc(:, :), f(:, :), mass(:), out(:, :, :)
       real(dp), allocatable :: cv(:, :), wetv(:, :)
-      integer, allocatable :: tidx(:, :, :), redir(:), coast_id(:)
-      logical, allocatable :: wet(:, :), hit(:), coastal(:, :)
+      integer, allocatable :: tidx(:, :, :), tidx0(:, :, :), redir(:), coast_id(:)
+      logical, allocatable :: wet(:, :), hit(:), coastal(:, :), moved(:)
+      real(dp) :: dkm, dkm_max, moved_mass, d_dot
+      integer :: n_moved_used, k_far
       character(len=256) :: tunits, tcal
       logical :: has_cal
       type(point_index_t) :: cidx, ridx
@@ -564,6 +570,9 @@ contains
             nmoved_cells = nmoved_cells + 1
          end if
       end do
+      allocate (tidx0(msub*msub, nlon, nlat), moved(nx*ny))
+      tidx0 = tidx
+      moved = .false.
       do j = 1, nlat
          do i = 1, nlon
             do a = 1, msub*msub
@@ -579,19 +588,24 @@ contains
       w_sub = 1.0_dp/real(msub*msub, dp)
       write (output_unit, "(a,i0,a,i0,a,i0,a,i0,a,i0)") "target ", nx, " x ", ny, " (", nwet, " wet, ", ncoast, &
          " coastal); source ", nlon
-      write (output_unit, "(a,i0,a,i0,a,i0)") "  x ", nlat, ", records ", nt, "; land cells receiving mass moved to the coast: ", &
+      write (output_unit, "(a,i0,a,i0,a,i0)") "  x ", nlat, ", records ", nt, "; land cells hit by any source cell moved to the coast: ", &
          nmoved_cells
       do t = 1, max(nt, 1)
          call read_source_record(p_src, src_var, nlon, nlat, nt, t, f, nmiss)
          mass = 0.0_dp
          before = 0.0_dp
          disc = 0.0_dp
+         moved_mass = 0.0_dp
          do j = 1, nlat
             do i = 1, nlon
                if (f(i, j) == 0.0_dp) cycle
                before = before + f(i, j)*asrc(i, j)
                do a = 1, msub*msub
                   k = tidx(a, i, j)
+                  if (tidx0(a, i, j) /= k) then
+                     moved(tidx0(a, i, j)) = .true.
+                     moved_mass = moved_mass + f(i, j)*asrc(i, j)*w_sub
+                  end if
                   if (k == 0) then
                      disc = disc + f(i, j)*asrc(i, j)*w_sub
                   else
@@ -613,6 +627,7 @@ contains
             after, " kg/s  (", nmiss, " missing values taken as zero)"
          write (output_unit, "(a,es22.14,a,i0,a)") "    discarded (outside the model domain): ", disc, " kg/s in ", &
             n_out_sub, " source sub-cells"
+         write (output_unit, "(a,es22.14,a)") "    redirected from land to the coast: ", moved_mass, " kg/s"
          if (present(discarded)) discarded(t) = disc
          if (strict_global .and. disc /= 0.0_dp) then
             call fail("--global: record "//itoa(t)//" has source mass outside the model domain")
@@ -621,6 +636,27 @@ contains
             call fail("the total was not preserved: in-domain + discarded /= source")
          end if
       end do
+      ! how far did the mass travel?  Only land cells that actually carried mass in some record.
+      n_moved_used = count(moved)
+      dkm_max = 0.0_dp
+      k_far = 0
+      do k = 1, nx*ny
+         if (.not. moved(k)) cycle
+         d_dot = min(1.0_dp, max(-1.0_dp, dot_product(cv(:, k), cv(:, redir(k)))))
+         dkm = 6371.0_dp*acos(d_dot)
+         if (dkm > dkm_max) then
+            dkm_max = dkm
+            k_far = k
+         end if
+      end do
+      if (present(n_redirected)) n_redirected = n_moved_used
+      if (present(max_redirect_km)) max_redirect_km = dkm_max
+      write (output_unit, "(a,i0,a,f8.1,a)") "land cells that carried mass and were redirected: ", n_moved_used, &
+         "; farthest redirect ", dkm_max, " km"
+      if (k_far > 0) then
+        write (output_unit, "(a,i0,a,i0,a,i0,a,i0,a)") "  farthest: land cell (", mod(k_far - 1, nx) + 1, ",", (k_far - 1)/nx + 1, &
+            ") -> coast cell (", mod(redir(k_far) - 1, nx) + 1, ",", (redir(k_far) - 1)/nx + 1, ")"
+      end if
       write (output_unit, "(a)") "ok: in-domain total + discarded = source total, no land cell non-zero"
       call write_output(p_out, out_var, nx, ny, max(nt, 1), stime, tunits, tcal, has_cal, out, p_src)
    end subroutine convert
@@ -939,7 +975,8 @@ contains
       real(dp), allocatable :: depth(:, :), area_t(:, :)
       real(dp), allocatable :: slon(:), slat(:), stime(:), src(:, :, :), out(:, :, :), disc(:)
       real(dp) :: before, after, a_src, cap
-      integer :: i, j, t
+      integer :: i, j, t, n_redir
+      real(dp) :: redir_km
       logical :: land
 
       call write_mosaic(F_HG, NX, NY, 0.0_dp, -80.0_dp, 5.0_dp)
@@ -977,7 +1014,12 @@ contains
       src(10, 20, 2) = 1.0e30_dp
       call write_source(F_SR, slon, slat, stime, src)
 
-      call convert(F_HG, F_DP, "depth", F_SR, "friver", F_OUT, "runoff", "lon", "lat", "time", 4, 0.0_dp, .false., disc)
+      call convert(F_HG, F_DP, "depth", F_SR, "friver", F_OUT, "runoff", "lon", "lat", "time", 4, 0.0_dp, .false., disc, &
+                   n_redir, redir_km)
+      ! the continent carries mass, so land cells were redirected; the nearest coast of a 5-degree mosaic's
+      ! continent is never farther than the continent is wide (about 40 degrees = 4500 km), and is not zero
+      if (n_redir < 10) call fail("selftest: too few land cells were redirected")
+      if (redir_km <= 0.0_dp .or. redir_km > 4500.0_dp) call fail("selftest: implausible farthest redirect distance")
 
       ! independent verification from the files
       call read_out(F_OUT, NX, NY, NT, out)
