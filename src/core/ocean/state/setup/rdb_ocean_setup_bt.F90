@@ -175,7 +175,11 @@ contains
             call wave_drag_roughness_proxy(ocean_state%barotropic%b, &
                                            ocean_state%metrics%wet_T, &
                                            nx, ny, grid%nghost, bcfg%wave_drag_kappa, &
-                                           bcfg%wave_drag_n_bot, bcfg%wave_drag_h2_max, r_h)
+                                           bcfg%wave_drag_n_bot, bcfg%wave_drag_h2_max, r_h, &
+                                           has_west=ocean_state%bc%has_west, &
+                                           has_east=ocean_state%bc%has_east, &
+                                           has_south=ocean_state%bc%has_south, &
+                                           has_north=ocean_state%bc%has_north)
          case default
             ! Unreachable: validate_config fails loud on any other tag
             ! (including "file", registered but not yet implemented).
@@ -211,7 +215,8 @@ contains
       if (present(ierr)) ierr = OCEAN_STATUS_OK
    end subroutine configure_ocean_wave_drag
 
-   module subroutine wave_drag_roughness_proxy(b, wet_T, nx, ny, nghost, kappa, n_bot, h2_max, r_h)
+   module subroutine wave_drag_roughness_proxy(b, wet_T, nx, ny, nghost, kappa, n_bot, h2_max, r_h, &
+                                               has_west, has_east, has_south, has_north)
       !! `form="roughness_proxy"` filler — a DOCUMENTED PLACEHOLDER for
       !! Jayne & St Laurent (2001)'s subgrid `<h^2>`, not a substitute for
       !! it (that needs PR-14's file reader or PR-30's field-valued
@@ -225,16 +230,44 @@ contains
       !! formula-bathymetry path that leaves ghosts unfilled would
       !! otherwise manufacture a spurious cliff at the ghost seam — CLAUDE.md
       !! "Formula bathymetry setters must fill ghost rows").
+      !!
+      !! MPI: the zero ghost ring is a GLOBAL-edge statement.  On a side
+      !! that is a rank seam (`has_* = .false.`) the ghost cells hold the
+      !! neighbour's OWNED cells, whose proxy the owner computes with its
+      !! real stencil, and the h->face average at the first owned face reads
+      !! the innermost of them -- so that side evaluates the stencil over the
+      !! ghost cells too (down to index 2 / up to n-1; `b` and `wet_T` seam
+      !! ghosts are halo-filled before this runs and `nghost >= 3`), making
+      !! every rank's value the owner's, bit for bit.  Absent flags mean
+      !! "global edge" on all four sides (the one-rank behaviour).
       integer, intent(in) :: nx, ny, nghost
       real(wp), intent(in) :: b(nx, ny), wet_T(nx, ny)
       real(wp), intent(in) :: kappa, n_bot, h2_max
       real(wp), intent(inout) :: r_h(nx, ny)
-      integer :: i, j
+      logical, intent(in), optional :: has_west, has_east, has_south, has_north
+         !! This rank sits on the global west/east/south/north domain edge.
+      integer :: i, j, i0, i1, j0, j1
       real(wp) :: h2
 
       r_h = 0.0_wp
-      do j = nghost + 1, ny - nghost
-         do i = nghost + 1, nx - nghost
+      i0 = nghost + 1
+      i1 = nx - nghost
+      j0 = nghost + 1
+      j1 = ny - nghost
+      if (present(has_west)) then
+         if (.not. has_west) i0 = 2
+      end if
+      if (present(has_east)) then
+         if (.not. has_east) i1 = nx - 1
+      end if
+      if (present(has_south)) then
+         if (.not. has_south) j0 = 2
+      end if
+      if (present(has_north)) then
+         if (.not. has_north) j1 = ny - 1
+      end if
+      do j = j0, j1
+         do i = i0, i1
             if (wet_T(i, j) <= 0.0_wp) cycle
             h2 = 0.25_wp*((b(i + 1, j) - b(i - 1, j))**2 + (b(i, j + 1) - b(i, j - 1))**2)
             r_h(i, j) = 0.5_wp*kappa*min(h2, h2_max)*n_bot
