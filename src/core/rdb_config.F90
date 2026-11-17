@@ -92,6 +92,7 @@ module rdb_config
    public :: diag_density_levels_ok
    public :: dataovr_entry_is_valid, dataovr_time_is_valid
    public :: dataovr_freshwater_needs_components, dataovr_any_tag_set
+   public :: dataovr_runoff_needs_freshwater
    public :: dataovr_heat_salt_clobbers_ice
    public :: build_rdb_schema
    public :: resolve_bt_halo
@@ -381,8 +382,17 @@ module rdb_config
          !! `F` (kg m-2 s-1, into the ocean) becomes the virtual salt flux
          !! `-S_surf*F` in its own component slot `salt_fw`, summed by the
          !! assembler; no column mass moves (Griffies et al. 2001).
-         !! `"mass"` (a real Boussinesq mass source) is reserved and refused
-         !! at configure.  Requires `enable_components`.
+         !! `"mass"`: the same flux moves REAL Boussinesq volume into / out of the
+         !! first live layer with the evaporation pass-down, dilutes / concentrates
+         !! every dissolved tracer, and keeps the virtual salt flux only for the
+         !! boundary-layer buoyancy (`rdb_ocean_surface_fw_mass`).  Open-ocean fluxes
+         !! only; refused with sea ice, `eulerian_z`/`lagrangian` vcoords, wet/dry,
+         !! the ice-shelf cavity and `dt_tracer_advect_ratio > 1` with
+         !! `diabatic_first = .true.`.  Requires `enable_components`.
+      real(wp) :: fw_evap_cfl_limit = 0.8_wp
+         !! `freshwater = "mass"` only: the largest fraction of a live layer's
+         !! thickness one evaporative withdrawal may take (MOM6 `EVAP_CFL_LIMIT`);
+         !! the unmet remainder is passed down the column.  Range (0, 1].
    end type ocean_forcing_config_t
 
    type :: ocean_ice_config_t
@@ -3848,6 +3858,16 @@ module rdb_config
       type(dataovr_entry_config_t) :: salt
          !! Surface salt flux (kg salt/m^2/s, positive salinifies) ->
          !! `surface_flux%salt_flux`.
+      type(dataovr_entry_config_t) :: lrunoff
+         !! Liquid runoff mass flux (kg/m^2/s, >= 0, INTO the ocean) ->
+         !! `surface_flux%lrunoff`.  Already on the model grid, non-zero only on
+         !! WET cells (a value on a land cell aborts); see
+         !! `tools/om_runoff_to_model.f90`.  Needs `&ocean_forcing_nml freshwater`
+         !! `"virtual"` or `"mass"` (inert, hence refused, under `"none"`).
+      type(dataovr_entry_config_t) :: frunoff
+         !! Frozen runoff / calving mass flux (kg/m^2/s, >= 0) ->
+         !! `surface_flux%frunoff`, and its latent heat of fusion
+         !! `q_fus_rof = -L_f*frunoff` is written alongside.  Same contract as `lrunoff`.
    end type ocean_dataovr_config_t
 
    type :: ocean_atm_forcing_config_t
@@ -4916,6 +4936,14 @@ module rdb_config
          logical, intent(in) :: use_components
          logical :: bad
       end function dataovr_freshwater_needs_components
+
+      pure module function dataovr_runoff_needs_freshwater(cfg, fw_mode) result(bad)
+            !! See submodule [[rdb_config_validate]].
+         implicit none
+         type(ocean_dataovr_config_t), intent(in) :: cfg
+         integer, intent(in) :: fw_mode
+         logical :: bad
+      end function dataovr_runoff_needs_freshwater
 
       pure module function dataovr_heat_salt_clobbers_ice(cfg, use_components, ice_enable) result(bad)
             !! See submodule [[rdb_config_validate]].

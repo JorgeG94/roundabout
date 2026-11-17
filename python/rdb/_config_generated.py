@@ -3293,11 +3293,19 @@ class OceanForcing(Group):
 
     freshwater = Enum(
         'freshwater',
-        doc="Surface fresh-water mass fluxes (lprec/fprec/evap/lrunoff/frunoff): 'none' (default, enthalpy only), 'virtual' (virtual salt flux -S_surf*F, fixed column mass; needs enable_components) or 'mass' (reserved, refused at configure)",
+        doc="Surface fresh-water mass fluxes (lprec/fprec/evap/lrunoff/frunoff): 'none' (default, enthalpy only), 'virtual' (virtual salt flux -S_surf*F, fixed column mass; needs enable_components) or 'mass' (real volume with the evaporation pass-down; open-ocean fluxes, needs enable_components)",
         units='',
         required=False,
         default='none',
         allowed=('none', 'virtual', 'mass'),
+    )
+
+    fw_evap_cfl_limit = Real(
+        'fw_evap_cfl_limit',
+        doc="freshwater='mass': largest fraction of a live layer one evaporative withdrawal may take, range (0,1) (OM3/MOM6 EVAP_CFL_LIMIT); the unmet remainder is passed down the column",
+        units='',
+        required=False,
+        default=0.8,
     )
 
 
@@ -7121,6 +7129,74 @@ class OceanDataovr(Group):
         default=0.0,
     )
 
+    lrunoff_file = Str(
+        'lrunoff_file',
+        doc='Path to the liquid runoff mass flux (>= 0, on wet cells only) NetCDF (blank ⇒ tag not file-driven)',
+        units='',
+        required=False,
+        default='',
+        max_len=256,
+    )
+
+    lrunoff_var = Str(
+        'lrunoff_var',
+        doc='Variable name inside lrunoff_file (required when it is set)',
+        units='',
+        required=False,
+        default='',
+        max_len=64,
+    )
+
+    lrunoff_scale = Real(
+        'lrunoff_scale',
+        doc='Multiplier applied to the liquid runoff mass flux (>= 0, on wet cells only) slab at read',
+        units='kg m-2 s-1',
+        required=False,
+        default=1.0,
+    )
+
+    lrunoff_add = Real(
+        'lrunoff_add',
+        doc='Offset added to the liquid runoff mass flux (>= 0, on wet cells only) slab after scale',
+        units='kg m-2 s-1',
+        required=False,
+        default=0.0,
+    )
+
+    frunoff_file = Str(
+        'frunoff_file',
+        doc='Path to the frozen runoff / calving mass flux (>= 0, on wet cells only) NetCDF (blank ⇒ tag not file-driven)',
+        units='',
+        required=False,
+        default='',
+        max_len=256,
+    )
+
+    frunoff_var = Str(
+        'frunoff_var',
+        doc='Variable name inside frunoff_file (required when it is set)',
+        units='',
+        required=False,
+        default='',
+        max_len=64,
+    )
+
+    frunoff_scale = Real(
+        'frunoff_scale',
+        doc='Multiplier applied to the frozen runoff / calving mass flux (>= 0, on wet cells only) slab at read',
+        units='kg m-2 s-1',
+        required=False,
+        default=1.0,
+    )
+
+    frunoff_add = Real(
+        'frunoff_add',
+        doc='Offset added to the frozen runoff / calving mass flux (>= 0, on wet cells only) slab after scale',
+        units='kg m-2 s-1',
+        required=False,
+        default=0.0,
+    )
+
 
 class OceanAtmForcing(Group):
     """`&ocean_atm_forcing_nml` -- JRA55-do-style prescribed atmospheric state driving bulk-flux ocean/ice surface forcing (PR-C2c)."""
@@ -8140,4 +8216,4 @@ GENERATED_GROUPS = {
 }
 
 N_GROUPS = 68
-N_KNOBS = 891
+N_KNOBS = 900

@@ -76,7 +76,8 @@ contains
                   new_unittest("roquet_rho_insitu_pgf_accepted", test_roquet_rho_insitu_pgf_accepted), &
                   new_unittest("atm_forcing_prereq_codes", test_atm_forcing_prereq_codes), &
                   new_unittest("atm_forcing_wired_accepted", test_atm_forcing_wired_accepted), &
-                  new_unittest("inhalo_march_refusals", test_inhalo_march_refusals) &
+                  new_unittest("inhalo_march_refusals", test_inhalo_march_refusals), &
+                  new_unittest("freshwater_mass_envelope", test_freshwater_mass_envelope) &
                   ]
    end subroutine collect_config_tests
 
@@ -1019,6 +1020,113 @@ contains
          if (allocated(error)) return
       end do
    end subroutine test_inhalo_march_refusals
+
+   function fw_mass_ierr(vcoord, scheme, vmix_keys, forcing_keys, thermo_on, extra, bt_keys) result(ierr)
+      !! `validate_config` verdict of an otherwise-valid `freshwater = 'mass'` namelist; every group
+      !! appears ONCE (the schema parser refuses a duplicate), the knobs under test are arguments.
+      character(len=*), intent(in) :: vcoord, scheme, vmix_keys, forcing_keys, extra
+      logical, intent(in) :: thermo_on
+      character(len=*), intent(in), optional :: bt_keys
+         !! Replaces the default `auto_n_inner = .true.` of the `&ocean_bt_nml` group.
+      integer :: ierr
+      type(config_t) :: cfg
+      integer :: ierr_read
+      character(len=:), allocatable :: bt_s
+      character(len=*), parameter :: NL = new_line('a')
+
+      bt_s = "auto_n_inner = .true."
+      if (present(bt_keys)) bt_s = bt_keys
+      call read_config_from_string("&sim_nml sim_type = 'ocean' /"//NL// &
+                                   "&ocean_thermo_nml enable_thermodynamics = "// &
+                                   merge(".true. ", ".false.", thermo_on)//" /"//NL// &
+                                   "&vcoord_nml vcoord_type = '"//vcoord//"' /"//NL// &
+                                   "&ocean_bt_nml split_scheme = '"//scheme//"', "//bt_s//" /"//NL// &
+                                   "&ocean_vmix_nml "//vmix_keys//" /"//NL// &
+                                   "&ocean_forcing_nml "//forcing_keys//" /"//NL// &
+                                   extra//NL// &
+                                   "&ocean_diag_nml enabled = .false. /"//NL// &
+                                   "&output_nml output_to_file = .false. /"//NL, cfg, ierr=ierr_read)
+      if (ierr_read /= OCEAN_STATUS_OK) then
+         ierr = -ierr_read - 1000
+         return
+      end if
+      call validate_config(cfg, ierr)
+   end function fw_mass_ierr
+
+   subroutine test_freshwater_mass_envelope(error)
+      !! `&ocean_forcing_nml freshwater = 'mass'`: what `validate_config` accepts and the holes it
+      !! refuses by name.  Every refused case differs from the accepted baseline by ONE knob, and is
+      !! refused by `validate_config` itself (a parse failure would not count).
+      type(error_type), allocatable, intent(out) :: error
+      integer, parameter :: REFUSED = OCEAN_STATUS_ERR_CONFIG_VALIDATE
+      character(len=*), parameter :: FW = "enable_components = .true., freshwater = 'mass'"
+
+      call check(error, fw_mass_ierr("zstar", "pred_corr", "use_kpp = .true.", FW, .true., "") == OCEAN_STATUS_OK, &
+                 "baseline (zstar, pred_corr, components) accepted")
+      if (allocated(error)) return
+      call check(error, fw_mass_ierr("sigma", "ssp_rk2", "use_kpp = .true.", FW, .true., "") == OCEAN_STATUS_OK, &
+                 "ssp_rk2 + sigma accepted")
+      if (allocated(error)) return
+      call check(error, fw_mass_ierr("zstar", "pred_corr", "dt_therm_ratio = 2, diabatic_first = .false., "// &
+                                     "dt_tracer_advect_ratio = 2", FW, .true., "") == OCEAN_STATUS_OK, &
+                 "the deferred thermo order (with windowed tracer advection) accepted")
+      if (allocated(error)) return
+      call check(error, fw_mass_ierr("zstar", "pred_corr", "dt_therm_ratio = 2", FW, .true., "") == OCEAN_STATUS_OK, &
+                 "dt_therm_ratio 2 in-stage accepted")
+      if (allocated(error)) return
+      call check(error, fw_mass_ierr("zstar", "pred_corr", "dt_tracer_advect_ratio = 2", FW, .true., "") == REFUSED, &
+                 "refused: windowed tracer advection without the deferred order")
+      if (allocated(error)) return
+      call check(error, fw_mass_ierr("zstar", "pred_corr", "dt_therm_ratio = 2, dt_tracer_advect_ratio = 2", FW, &
+                                     .true., "") == REFUSED, "refused: windowed advection with diabatic_first = .true.")
+      if (allocated(error)) return
+      call check(error, fw_mass_ierr("sigma", "ssp_rk2", "use_kpp = .true.", FW, .true., &
+                                     "&ocean_wetdry_nml enable = .true. /") == REFUSED, "refused: dynamic wet/dry")
+      if (allocated(error)) return
+      call check(error, fw_mass_ierr("zstar", "pred_corr", "use_kpp = .true.", FW, .true., &
+                                     "&ocean_ice_nml enable = .true. /") == REFUSED, &
+                 "refused: sea ice (no mass slot in the hand-off yet)")
+      if (allocated(error)) return
+      call check(error, fw_mass_ierr("zstar", "pred_corr", "use_kpp = .true.", FW, .true., &
+                                     "&ocean_ice_nml enable = .true., scheme = 'cice' /") == REFUSED, &
+                 "refused: CICE-port sea ice")
+      if (allocated(error)) return
+      call check(error, fw_mass_ierr("zstar", "pred_corr", "use_kpp = .true.", FW//", fw_evap_cfl_limit = 0.0", &
+                                     .true., "") == REFUSED, "refused: fw_evap_cfl_limit = 0")
+      if (allocated(error)) return
+      call check(error, fw_mass_ierr("zstar", "pred_corr", "use_kpp = .true.", FW//", fw_evap_cfl_limit = 1.01", &
+                                     .true., "") == REFUSED, "refused: fw_evap_cfl_limit > 1")
+      if (allocated(error)) return
+      call check(error, fw_mass_ierr("zstar", "pred_corr", "use_kpp = .true.", FW//", fw_evap_cfl_limit = 1.0", &
+                                     .true., "") == REFUSED, "refused: fw_evap_cfl_limit = 1 (it could empty a layer)")
+      if (allocated(error)) return
+      call check(error, fw_mass_ierr("zstar", "pred_corr", "use_kpp = .true.", FW//", fw_evap_cfl_limit = 0.99", &
+                                     .true., "") == OCEAN_STATUS_OK, "fw_evap_cfl_limit = 0.99 accepted")
+      if (allocated(error)) return
+      call check(error, fw_mass_ierr("zstar", "pred_corr", "use_kpp = .true.", FW, .true., "", &
+                                     bt_keys="n_inner = 0") == REFUSED, &
+                 "refused: the unsplit solver (no remap, no bt_eta re-derive)")
+      if (allocated(error)) return
+      call check(error, fw_mass_ierr("zstar", "pred_corr", "use_kpp = .true.", FW, .true., "", &
+                                     bt_keys="n_inner = 4") == OCEAN_STATUS_OK, "accepted: an explicit n_inner >= 1")
+      if (allocated(error)) return
+      call check(error, fw_mass_ierr("eulerian_z", "ssp_rk2", "use_kpp = .true.", FW, .true., "") == REFUSED, &
+                 "refused: eulerian_z (the remap cannot return the volume)")
+      if (allocated(error)) return
+      call check(error, fw_mass_ierr("lagrangian", "ssp_rk2", "use_kpp = .true.", FW, .true., "") == REFUSED, &
+                 "refused: lagrangian (no remap, the top layer would grow without bound)")
+      if (allocated(error)) return
+      call check(error, fw_mass_ierr("zstar", "pred_corr", "use_kpp = .true.", FW, .false., "") == REFUSED, &
+                 "refused: thermodynamics off")
+      if (allocated(error)) return
+      call check(error, fw_mass_ierr("zstar", "pred_corr", "use_kpp = .true.", "freshwater = 'mass'", .true., "") &
+                 == REFUSED, "refused: without the component set")
+      if (allocated(error)) return
+      call check(error, fw_mass_ierr("zstar", "pred_corr", "use_kpp = .true.", FW, .true., &
+                                     "&ocean_cavity_dyn_nml enable = .true., draft_config = 'linear', "// &
+                                     "draft_depth = 100.0, draft_slope = -1.0e-3, draft_x0 = 0.0, "// &
+                                     "h_min_cavity = 50.0 /") == REFUSED, "refused: the ice-shelf cavity")
+   end subroutine test_freshwater_mass_envelope
 
    function atm_forcing_baseline_nml(grid_config, dataovr_block, bulk_enable) result(nml)
       !! A minimal otherwise-valid `&ocean_atm_forcing_nml` namelist

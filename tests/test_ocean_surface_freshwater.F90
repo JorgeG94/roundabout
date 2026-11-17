@@ -17,7 +17,7 @@
 !!      far from closing, so the check would catch a missing source term.
 !!   4. `knob_off_bitident`: with the knob off the slot is neither read nor written and the assembler
 !!      reproduces the legacy sums (`Q_salt`, `Q_heat` incl. the mass enthalpy).
-!!   5. `validate`: `none`/`virtual` accepted, `mass` and unknown values refused, `virtual` needs the
+!!   5. `validate`: `none`/`virtual` accepted, `mass` needs a remapped coordinate, unknown values refused, `virtual` needs the
 !!      component set.
 !!   6. `cice_no_double_count`: the CICE-port sea ice under the prescribed atmosphere through the
 !!      production engine: the ice-covered share of the rain dilutes through `salt_ice`, the open
@@ -592,8 +592,19 @@ contains
       call check(error, valid_ierr("&ocean_forcing_nml enable_components = .true., freshwater = 'virtual' /") &
                  == OCEAN_STATUS_OK, "freshwater = 'virtual' is accepted")
       if (allocated(error)) return
+      ! 'mass' ships (test_ocean_surface_fw_mass): the default sigma coordinate remaps, so it is
+      ! accepted; `eulerian_z` cannot give the volume back to a remap target and stays refused.
+      call check(error, valid_ierr("&ocean_forcing_nml enable_components = .true., freshwater = 'mass' /"//NL// &
+                                   "&ocean_bt_nml auto_n_inner = .true. /") &
+                 == OCEAN_STATUS_OK, "freshwater = 'mass' is accepted (default sigma coordinate)")
+      if (allocated(error)) return
       call check(error, valid_ierr("&ocean_forcing_nml enable_components = .true., freshwater = 'mass' /") &
-                 /= OCEAN_STATUS_OK, "freshwater = 'mass' is refused")
+                 /= OCEAN_STATUS_OK, "freshwater = 'mass' is refused on the unsplit solver (no remap)")
+      if (allocated(error)) return
+      call check(error, valid_ierr("&ocean_forcing_nml enable_components = .true., freshwater = 'mass' /"//NL// &
+                                   "&ocean_bt_nml auto_n_inner = .true. /"//NL// &
+                                   "&vcoord_nml vcoord_type = 'eulerian_z' /") /= OCEAN_STATUS_OK, &
+                 "freshwater = 'mass' is refused with eulerian_z")
       if (allocated(error)) return
       call check(error, valid_ierr("&ocean_forcing_nml freshwater = 'virtual' /") /= OCEAN_STATUS_OK, &
                  "freshwater = 'virtual' without the component set is refused")

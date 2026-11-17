@@ -320,6 +320,12 @@ program test_ocean_decomp_bitid_mpi
    character(len=*), parameter :: ATM_WARM = "bitid_atm_warm.nc"
    character(len=*), parameter :: ATM_COLD = "bitid_atm_cold.nc"
    character(len=*), parameter :: ATM_CRSE = "bitid_atm_coarse.nc"
+   character(len=*), parameter :: FW_THIN_CFL = "1.0e-6"
+      !! `fw_evap_cfl_limit` of `fw_mass_thin` (ten sigma layers over 300-3000 m): the top layer gives at most
+      !! 1e-6 of its thickness (3e-5 m over the 300 m rim), so every evaporating column of the rim passes the rest
+      !! down, while the whole stack (>= 3e-4 m) still covers the largest withdrawal (~1.3e-4 m): no column runs dry.
+   character(len=*), parameter :: RUNOFF_BASIN = "bitid_runoff_isle.nc"
+   character(len=*), parameter :: RUNOFF_FOLD = "bitid_runoff_fold.nc"
    character(len=*), parameter :: ATM_WARM_LIST = "bitid_atm_warm_files.txt"
    character(len=*), parameter :: ATM_CRSE_LIST = "bitid_atm_coarse_files.txt"
    character(len=*), parameter :: ATM_COLD_LIST = "bitid_atm_cold_files.txt"
@@ -352,6 +358,13 @@ program test_ocean_decomp_bitid_mpi
          !! (m^3/step) and of the compensating withdrawal `dw` (m).
       integer :: mvol_nvar = 0, dw_nvar = 0
          !! Number of steps on which each changed (non-vacuity: varying, non-zero).
+      integer(int64) :: fw_pd_total = 0_int64
+         !! `freshwater='mass'` cases: running count of owned columns that passed an evaporative
+         !! withdrawal down the column (the pass-down non-vacuity).
+      real(wp) :: fw_net_absmax = 0.0_wp
+         !! Largest |`fw_net`| over the owned cells of the last step (host-read, non-vacuity).
+      real(wp) :: fw_h_total0 = 0.0_wp, fw_h_total1 = 0.0_wp
+         !! Owned-cell sum of the layer thickness at the start and at the end of the run (mass moved).
       integer :: ncav(6) = 0
          !! Cavity non-vacuity counts over the OWNED cells: covered wet, open wet,
          !! grounded, melting, top-drag stress > 0, k_top < nz.
@@ -377,6 +390,9 @@ program test_ocean_decomp_bitid_mpi
    logical :: wd_edge_e = .false., wd_edge_s = .false.
       !! The wet/dry case under way has an open east / south edge (open-edge flip bands).
    integer :: n_steps_cur = N_STEPS
+   integer :: n_ckpt_cur = N_CKPT
+      !! Checkpoint step of the resume leg (`N_CKPT`; the windowed deferred case needs a window-aligned one:
+      !! the restart writer flushes the tracer window, which a mid-window straight run does not do).
    character(len=16) :: balance_ref = ""
       !! Non-empty: `run_one` calls `ocean_balance_apply` with this `ref_level`
       !! after `engine_enter_data` (the `balance_*` cases).
@@ -389,7 +405,7 @@ program test_ocean_decomp_bitid_mpi
       !! `RDB_BITID_CASES`: run only the cases whose name contains this substring.
    type(comm_t) :: comm
    character(len=16), parameter :: SCHEMES(2) = [character(len=16) :: "pred_corr", "ssp_rk2"]
-   character(len=24), parameter :: CASES(106) = [character(len=24) :: &
+   character(len=24), parameter :: CASES(113) = [character(len=24) :: &
                                                  "island_basin", "weno7_pv", &
                                                  "periodic_channel_zstar", &
                                                  "visc_rem_zstar", &
@@ -432,7 +448,10 @@ program test_ocean_decomp_bitid_mpi
                                                  "wetdry_periodic", "wetdry_file", "chapman_obc", "obc_epbl", &
                                                  "wetdry_tidal_flat", "wetdry_open_flat", &
                                                  "cavity_mass", "cavity_mass_comp", &
-                                                 "wave_drag_rough", "wave_drag_rough_periodic"]
+                                                 "wave_drag_rough", "wave_drag_rough_periodic", &
+                                                 "bulk_flux_fw_mass", "bulk_flux_fw_mass_fold", &
+                                                 "fw_mass_deferred", "fw_mass_deferred_nowin", "fw_mass_thin", &
+                                                 "runoff_mass", "runoff_mass_fold"]
 
    call comm_env_init()
    call comm_env_setup_roles(.false.)
@@ -479,7 +498,8 @@ program test_ocean_decomp_bitid_mpi
       ! diabatic_first = .false. is refused under ssp_rk2 (validate_config).
       ! (drain_ratio_h3 pins it too.)
       if (trim(CASES(ic)) == "diabatic_end" .or. trim(CASES(ic)) == "drain_ratio_h3" .or. &
-          trim(CASES(ic)) == "bulk_flux_bl_ratio2" .or. &
+          trim(CASES(ic)) == "bulk_flux_bl_ratio2" .or. trim(CASES(ic)) == "fw_mass_deferred" .or. &
+          trim(CASES(ic)) == "fw_mass_deferred_nowin" .or. &
           trim(CASES(ic)) == "drain_ratio_fold_h3") cycle
       call run_case(trim(CASES(ic)), trim(SCHEMES(2)))
    end do
@@ -564,6 +584,23 @@ contains
       end if
       if (index(label, "cice_ice") == 1) then
          nml = cice_ice_nml(label, scheme, px, py)
+         return
+      end if
+      if (label == "runoff_mass" .or. label == "runoff_mass_fold") then
+         ! File-driven RUNOFF (`&ocean_dataovr_nml lrunoff / frunoff`, static record) spent as real
+         ! volume (`freshwater = 'mass'`) on the island basin / the tripolar cap.  The point sources
+         ! (see `write_runoff_files`) sit on both sides of the x and y rank seams, and on the fold row
+         ! across the tripolar fold (columns that mirror each other, one liquid, one frozen), so the
+         ! reader's per-rank windows, `q_fus_rof`, the seam-exchanged `fw_net` snapshot, the layer
+         ! growth and the console mass source all cross a seam.
+         nml = case_nml(merge("island_basin", "tripolar    ", label == "runoff_mass"), scheme, px, py)// &
+               "&ocean_thermo_nml enable_thermodynamics = .true. /"//NL// &
+               "&ocean_forcing_nml enable_components = .true., freshwater = 'mass' /"//NL// &
+               "&ocean_dataovr_nml enable = .true., time_mode = 'static', "// &
+               "lrunoff_file = '"//merge(RUNOFF_BASIN, RUNOFF_FOLD, label == "runoff_mass")// &
+               "', lrunoff_var = 'lrunoff', "// &
+               "frunoff_file = '"//merge(RUNOFF_BASIN, RUNOFF_FOLD, label == "runoff_mass")// &
+               "', frunoff_var = 'frunoff' /"//NL
          return
       end if
 
@@ -1384,7 +1421,8 @@ contains
                "north = 'tripolar_fold' /"//NL
       case ("bulk_flux", "bulk_flux_ice", "bulk_flux_fold", "bulk_flux_sw", "bulk_flux_fw", &
             "bulk_flux_ice_fw", "bulk_flux_bl", "bulk_flux_bl_epbl", "bulk_flux_bl_sw", "bulk_flux_bl_fold", &
-            "bulk_flux_bl_ratio2", "bulk_flux_ice_fold")
+            "bulk_flux_bl_ratio2", "bulk_flux_ice_fold", "bulk_flux_fw_mass", "bulk_flux_fw_mass_fold", &
+            "fw_mass_deferred", "fw_mass_deferred_nowin", "fw_mass_thin")
          ! Atmosphere-driven bulk forcing (`&ocean_atm_forcing_nml` +
          ! `&ocean_bulk_flux_nml`): nine prescribed atmospheric fields from
          ! files the test writes (spatially NON-uniform, non-symmetric in
@@ -1405,6 +1443,16 @@ contains
          ! `bulk_flux_fw` / `bulk_flux_ice_fw`: `bulk_flux` / `bulk_flux_ice` with
          ! `&ocean_forcing_nml freshwater = 'virtual'` (the virtual salt flux of
          ! P - E, rain and snow on open water, and the rain through the ice).
+         ! `bulk_flux_fw_mass` / `bulk_flux_fw_mass_fold`: `bulk_flux` / `bulk_flux_fold` with
+         ! `freshwater = 'mass'`: the real Boussinesq P - E on the spoon basin / across the tripolar
+         ! north fold (px = 1 and px > 1), so the top layer's thickness, the diluted tracers, the
+         ! tracked mass source and the seam-exchanged `fw_net` / `Q_salt_tracer` snapshot all cross
+         ! the rank seams.  `fw_mass_deferred`: the same on the OM3 interval order (pred_corr,
+         ! `dt_therm_ratio = 2`, `diabatic_first = .false.`, windowed tracer advection), the mass
+         ! step spending the carried snapshot once per interval (checkpoint mid-window).
+         ! `fw_mass_thin`: `bulk_flux_fw_mass` with `fw_evap_cfl_limit` so small that the
+         ! evaporative withdrawal is passed DOWN the column in every evaporating column (the
+         ! pass-down count is asserted non-zero on the reference).
          ! `bulk_flux_bl`, `bulk_flux_bl_epbl`, `bulk_flux_bl_sw`: the BOUNDARY-LAYER
          ! gate.  A re-entrant (periodic-x) 100 m basin on ten 10 m sigma layers under
          ! cold dry wind over 20 C water: the surface cooling is destabilising and
@@ -1420,7 +1468,7 @@ contains
                "&mpi_nml px = "//trim(spx)//", py = "//trim(spy)//" /"//NL// &
                "&time_nml t_end = 86400.0, dt_fixed = 900.0, start_date = '2000-06-21' /"//NL// &
                "&nonhydrostatic_nml nz_layers = "//merge("10", "4 ", &
-                                                         index(label, "bulk_flux_bl") == 1)//" /"//NL// &
+                                                       index(label, "bulk_flux_bl") == 1 .or. label == "fw_mass_thin")//" /"//NL// &
                "&ocean_bt_nml auto_n_inner = .true., split_scheme = '"//scheme//"' /"//NL// &
                "&ocean_hvisc_nml nu_h = 200.0, lateral_closure = 'smagorinsky', "// &
                "smag_ah = .true. /"//NL// &
@@ -1435,7 +1483,8 @@ contains
          nml = nml// &
                "&ocean_forcing_nml enable_components = .true."// &
                merge(", freshwater = 'virtual'", repeat(" ", 24), &
-                     label == "bulk_flux_fw" .or. label == "bulk_flux_ice_fw")//" /"//NL// &
+                     label == "bulk_flux_fw" .or. label == "bulk_flux_ice_fw")// &
+               fw_mass_keys(label)//" /"//NL// &
                "&ocean_bulk_flux_nml enable = .true., n_iter = 5, z_wind = 10.0, "// &
                "z_ta = 10.0 /"//NL
          if (label == "bulk_flux_bl_epbl") then
@@ -1462,7 +1511,7 @@ contains
                   "&ocean_ice_ic_nml conc_config = 'uniform', h_ice = 1.0, conc = 0.7 /"//NL
          else
             wl = ATM_WARM_LIST
-            if (label == "bulk_flux_fold") wl = ATM_CRSE_LIST
+            if (label == "bulk_flux_fold" .or. label == "bulk_flux_fw_mass_fold") wl = ATM_CRSE_LIST
             if (index(label, "bulk_flux_bl") == 1) wl = ATM_COLD_LIST
             if (label == "bulk_flux_bl_fold") wl = ATM_CRSE_COLD_LIST
             nml = nml// &
@@ -1478,8 +1527,15 @@ contains
          if (label == "bulk_flux_bl_ratio2") then
             nml = nml//"&ocean_vmix_nml dt_therm_ratio = 2, diabatic_first = .false. /"//NL
          end if
+         if (label == "fw_mass_deferred") then
+            nml = nml//"&ocean_vmix_nml dt_therm_ratio = 2, diabatic_first = .false., "// &
+                  "dt_tracer_advect_ratio = 2 /"//NL
+         end if
+         if (label == "fw_mass_deferred_nowin") then
+            nml = nml//"&ocean_vmix_nml dt_therm_ratio = 2, diabatic_first = .false. /"//NL
+         end if
          if (label == "bulk_flux_fold" .or. label == "bulk_flux_bl_fold" .or. &
-             label == "bulk_flux_ice_fold") then
+             label == "bulk_flux_ice_fold" .or. label == "bulk_flux_fw_mass_fold") then
             ! Coarse (30 x 10 degree) atmosphere source.  The default
             ! conservative flux regrid (`fluxes_regrid` is not set) overflows
             ! its per-target-cell candidate cap (`REGRID_NMAX_CAP`) on the
@@ -1900,12 +1956,17 @@ contains
          end if
       end if
       call oh_counters_reset()
+      if (engine%state%surface_flux%fw_mass) then
+         snap%fw_h_total0 = sum(engine%state%multilayer%h_layer( &
+                                engine%grid%nghost + 1:engine%grid%nghost + engine%grid%nx_phys, &
+                                engine%grid%nghost + 1:engine%grid%nghost + engine%grid%ny_phys, :))
+      end if
       t = 0.0_wp
       ierr = OCEAN_STATUS_OK
       do n = 1, n_steps_cur
          call engine_step(engine, DT, t, ierr=ierr)
          if (ierr /= OCEAN_STATUS_OK) exit
-         if (index(nml, "freshwater = 'mass'") > 0) then
+         if (engine%state%cavity_flux%enable .and. index(nml, "freshwater = 'mass'") > 0) then
             call track_mass_range(snap, engine%state%cavity_flux%melt_volume_step, &
                                   engine%state%cavity_flux%comp_withdrawal_step, n)
          end if
@@ -1925,6 +1986,16 @@ contains
             call count_wd_flips(engine, wd_prev, snap%flips)
          t = t + DT
       end do
+      if (engine%state%surface_flux%fw_mass .and. ierr == OCEAN_STATUS_OK) then
+         !$acc update self(engine%state%multilayer%h_layer, engine%state%surface_flux%fw_net)
+         snap%fw_pd_total = engine%state%multilayer%fw_n_passdown_total
+         snap%fw_h_total1 = sum(engine%state%multilayer%h_layer( &
+                                engine%grid%nghost + 1:engine%grid%nghost + engine%grid%nx_phys, &
+                                engine%grid%nghost + 1:engine%grid%nghost + engine%grid%ny_phys, :))
+         snap%fw_net_absmax = maxval(abs(engine%state%surface_flux%fw_net( &
+                                         engine%grid%nghost + 1:engine%grid%nghost + engine%grid%nx_phys, &
+                                         engine%grid%nghost + 1:engine%grid%nghost + engine%grid%ny_phys)))
+      end if
       if (print_counts .and. csize > 1 .and. crank == 0) then
          write (*, '(a,i0,a,i0,a,i0,a,l1,a,a)') "COUNTS n_inner=", cfg%ocean%bt%n_inner, &
             " steps=", n_steps_cur, " stride=", engine%state%dyn%bt_work%inhalo_stride, &
@@ -2755,10 +2826,10 @@ contains
       if (ierr == OCEAN_STATUS_OK) then
          call engine_enter_data(engine, cfg)
          t = 0.0_wp
-         call advance(engine, cfg, t, N_CKPT, ierr)
+         call advance(engine, cfg, t, n_ckpt_cur, ierr)
          if (ierr == OCEAN_STATUS_OK) &
             call ocean_state_restart_write(engine%state, engine%grid, engine%decomp, &
-                                           trim(fname), t, N_CKPT, ierr=ierr)
+                                           trim(fname), t, n_ckpt_cur, ierr=ierr)
          call engine_exit_data(engine)
          call engine_teardown(engine)
       end if
@@ -2772,9 +2843,9 @@ contains
             call engine_setup(engine, cfg, ierr, compute_rank=rank, compute_size=nprocs, &
                               restart_file=RST_DIR, t_restart=t, step_restart=step0)
          if (ierr == OCEAN_STATUS_OK) then
-            if (step0 == N_CKPT .and. engine%warm_restart) then
+            if (step0 == n_ckpt_cur .and. engine%warm_restart) then
                call engine_enter_data(engine, cfg)
-               call advance(engine, cfg, t, n_steps_cur - N_CKPT, ierr)
+               call advance(engine, cfg, t, n_steps_cur - n_ckpt_cur, ierr)
                if (ierr == OCEAN_STATUS_OK) then
                   call take_snapshot(engine, res)
                   call take_ledger(engine, res)
@@ -3000,6 +3071,23 @@ contains
       end do
    end subroutine compare_ghosts
 
+   pure function fw_mass_keys(label) result(keys)
+      !! The `&ocean_forcing_nml` keys the fresh-water MASS cases add (empty elsewhere).
+      character(len=*), intent(in) :: label
+      character(len=:), allocatable :: keys
+      keys = ""
+      if (is_fw_mass_label(label)) keys = ", freshwater = 'mass'"
+      if (label == "fw_mass_thin") keys = keys//", fw_evap_cfl_limit = "//FW_THIN_CFL
+   end function fw_mass_keys
+
+   pure logical function is_fw_mass_label(label)
+      !! The surface fresh-water MASS cases (`freshwater = 'mass'`).
+      character(len=*), intent(in) :: label
+      is_fw_mass_label = label == "bulk_flux_fw_mass" .or. label == "bulk_flux_fw_mass_fold" .or. &
+                         label == "fw_mass_deferred" .or. label == "fw_mass_deferred_nowin" .or. &
+                         label == "fw_mass_thin" .or. label == "runoff_mass" .or. label == "runoff_mass_fold"
+   end function is_fw_mass_label
+
    pure logical function is_wetdry_case(label)
       !! The dynamic wet/dry cases (`wetdry_*`).
       character(len=*), intent(in) :: label
@@ -3155,6 +3243,8 @@ contains
       type(conservation_budget_t) :: buds(8)
 
       n_steps_cur = N_STEPS
+      n_ckpt_cur = N_CKPT
+      if (label == "fw_mass_deferred") n_ckpt_cur = N_CKPT - 1
       call get_environment_variable("RDB_BITID_STEPS", steps_env)
       if (len_trim(steps_env) > 0) read (steps_env, *) n_steps_cur
       balance_ref = ""
@@ -3191,6 +3281,7 @@ contains
          end if
       end if
       if (index(label, "cavity_") == 1) call check_cavity_counters(ref, label, trim(label)//"/"//scheme)
+      if (is_fw_mass_label(label)) call check_fw_mass_nonvacuous(ref, label, trim(label)//"/"//scheme)
 
       nbud = 0
       do px = nprocs, 1, -1
@@ -3223,7 +3314,7 @@ contains
             ! drain at all (ref >= 1) with the same count on every layout; the
             ! windowed accumulation is compared bitwise.)
             if (index(case_nml(label, scheme, 1, 1), "dt_tracer_advect_ratio") > 0) then
-               if (ref%drain_iter < merge(1, 2, label == "cavity_combo") .or. &
+               if (ref%drain_iter < merge(1, 2, label == "cavity_combo" .or. label == "fw_mass_deferred") .or. &
                    dec%drain_iter /= ref%drain_iter) then
                   write (*, '(3a,i0,a,i0)') "FAIL ", trim(tag), ": drain passes ref=", &
                      ref%drain_iter, " dec=", dec%drain_iter
@@ -3250,10 +3341,12 @@ contains
                  label == "bulk_flux_ice" .or. label == "bulk_flux_ice_fw" .or. label == "dtbt_reset" .or. &
                  index(label, "cice_ice") == 1 .or. &
                  label == "cavity_sigma_ratio2" .or. label == "cavity_mass" .or. &
-                 label == "cavity_mass_comp" .or. is_wetdry_case(label) .or. is_ice_fold_case(label)) .and. &
-                (nprocs/px == 1 .or. px == nprocs/px .or. (index(label, "cice_ice") == 1 .and. px == 1)) .and. &
+                 label == "cavity_mass_comp" .or. is_wetdry_case(label) .or. is_ice_fold_case(label) .or. &
+                 is_fw_mass_label(label)) .and. &
+                (nprocs/px == 1 .or. px == nprocs/px .or. (index(label, "cice_ice") == 1 .and. px == 1) .or. &
+                 (is_fw_mass_label(label) .and. (label == "bulk_flux_fw_mass_fold" .or. label == "runoff_mass_fold"))) .and. &
                 (nprocs > 1 .or. label == "cavity_sigma_ratio2" .or. label == "cavity_mass" .or. &
-                 label == "cavity_mass_comp")) then
+                 label == "cavity_mass_comp" .or. is_fw_mass_label(label))) then
                ! 4x1 and 2x2 at np = 4 (and 2x1 at np = 2).
                call check_resume_leg(case_nml(label, scheme, px, nprocs/px), dec, &
                                      trim(tag))
@@ -3355,6 +3448,37 @@ contains
          snap%dw_min = min(snap%dw_min, dw)
       end if
    end subroutine track_mass_range
+
+   subroutine check_fw_mass_nonvacuous(ref, label, tag)
+      !! Non-vacuity of a `freshwater='mass'` case on the serial reference: the flux snapshot is
+      !! non-zero, the column mass actually changed, the tracked source is non-zero, and (the thin
+      !! case) the evaporative pass-down fired.  A case where nothing moved would pass bitwise
+      !! trivially.
+      type(snap_t), intent(in) :: ref
+      character(len=*), intent(in) :: label, tag
+
+      if (rank == 0) write (*, '(3a,3(1x,es12.4),1x,i0)') "case ", tag, &
+         ": fw mass (|fw_net|max, h0, h1, pass-down columns) =", ref%fw_net_absmax, ref%fw_h_total0, &
+         ref%fw_h_total1, ref%fw_pd_total
+      if (.not. (ref%fw_net_absmax > 0.0_wp)) then
+         write (*, '(3a)') "FAIL ", tag, ": fw_net is zero (vacuous mass case)"
+         n_fail = n_fail + 1
+      end if
+      if (.not. (abs(ref%fw_h_total1 - ref%fw_h_total0) > 1.0e-9_wp*abs(ref%fw_h_total0))) then
+         write (*, '(3a)') "FAIL ", tag, ": the column mass did not change (vacuous mass case)"
+         n_fail = n_fail + 1
+      end if
+      if (.not. (ref%bud%mass_src /= 0.0_wp)) then
+         write (*, '(3a)') "FAIL ", tag, ": the console mass source is zero (vacuous mass case)"
+         n_fail = n_fail + 1
+      end if
+      if (label == "fw_mass_thin" .and. ref%fw_pd_total <= 0_int64) then
+         write (*, '(3a)') "FAIL ", tag, ": the evaporative pass-down never fired (vacuous thin case)"
+         n_fail = n_fail + 1
+      end if
+      if (label /= "fw_mass_thin" .and. rank == 0) &
+         write (*, '(3a,i0)') "case ", tag, ": pass-down columns (informational) = ", ref%fw_pd_total
+   end subroutine check_fw_mass_nonvacuous
 
    subroutine check_cavity_counters(ref, label, tag)
       !! Non-vacuity of a cavity case on the serial reference: every count the
@@ -3561,7 +3685,8 @@ contains
 
       ! `cavity_mass*`: the console's mass `src` must be the GLOBAL source once
       ! (not once per rank), i.e. equal to the serial reference's.
-      if (trim(label) /= "periodic_sponge" .and. index(label, "cavity_mass") /= 1) return
+      if (trim(label) /= "periodic_sponge" .and. index(label, "cavity_mass") /= 1 .and. &
+          .not. is_fw_mass_label(label)) return
 
       if (.not. ref_bud%mass_active) then
          n_fail = n_fail + 1
@@ -3585,7 +3710,7 @@ contains
       end if
 
       nbad = 0
-      if (rank == 0 .and. index(label, "cavity_mass") == 1) then
+      if (rank == 0 .and. (index(label, "cavity_mass") == 1 .or. is_fw_mass_label(label))) then
          write (*, '(4a,es22.14)') "  budget mass_src ", trim(label), "/", trim(scheme), ref_bud%mass_src
          do k = 1, size(dec_buds)
             write (*, '(a,i0,a,es22.14)') "     layout ", k, " mass_src ", dec_buds(k)%mass_src
@@ -4218,12 +4343,60 @@ contains
       ierr = nf90_put_var(ncid, v1, tt)
       call rdb_put_var_1d(ncid, v2, [0.0_wp, 172800.0_wp])
       call nc_close(ncid)
+      call write_runoff_files()
       call write_atm_file(ATM_WARM, ATM_WARM_LIST, 288.0_wp, 4.0e-3_wp, 72, 36)
       call write_atm_file(ATM_COLD, ATM_COLD_LIST, 255.0_wp, 6.0e-4_wp, 72, 36)
       ! 30 x 10 degree source for the tripolar cap (see the bulk_flux_fold case).
       call write_atm_file(ATM_CRSE, ATM_CRSE_LIST, 288.0_wp, 4.0e-3_wp, 12, 18)
       call write_atm_file(ATM_CRSE_COLD, ATM_CRSE_COLD_LIST, 255.0_wp, 6.0e-4_wp, 12, 18)
    end subroutine write_input_files
+
+   subroutine write_runoff_file(path, nx, ny, pts, nfrozen)
+      !! One static (two identical records) model-grid runoff file with `lrunoff` and `frunoff`:
+      !! `pts(:, 1:2)` are the physical cell indices of the point sources, the first `nfrozen` of
+      !! them frozen (`frunoff`), the others liquid.  Rates differ per point; zero elsewhere.
+      character(len=*), intent(in) :: path
+      integer, intent(in) :: nx, ny, nfrozen, pts(:, :)
+      real(wp), allocatable :: lr(:, :, :), fr(:, :, :)
+      integer :: ncid, dx_, dy_, dt_, v1, v2, v3, ierr, k
+
+      allocate (lr(nx, ny, 2), fr(nx, ny, 2))
+      lr = 0.0_wp
+      fr = 0.0_wp
+      do k = 1, size(pts, 1)
+         if (k <= nfrozen) then
+            fr(pts(k, 1), pts(k, 2), :) = 2.0e-3_wp*(1.0_wp + 0.25_wp*real(k, wp))
+         else
+            lr(pts(k, 1), pts(k, 2), :) = 3.0e-3_wp*(1.0_wp + 0.5_wp*real(k, wp))
+         end if
+      end do
+      call nc_create_file(path, ncid)
+      call nc_def_dim(ncid, "x", nx, dx_)
+      call nc_def_dim(ncid, "y", ny, dy_)
+      call nc_def_dim(ncid, "time", 2, dt_)
+      call nc_def_var_3d(ncid, "lrunoff", [dx_, dy_, dt_], v1)
+      call nc_def_var_3d(ncid, "frunoff", [dx_, dy_, dt_], v2)
+      call rdb_def_var_1d(ncid, "time", dt_, v3)
+      call nc_enddef(ncid)
+      ierr = nf90_put_var(ncid, v1, lr)
+      ierr = nf90_put_var(ncid, v2, fr)
+      call rdb_put_var_1d(ncid, v3, [0.0_wp, 1.0e9_wp])
+      call nc_close(ncid)
+   end subroutine write_runoff_file
+
+   subroutine write_runoff_files()
+      !! The `runoff_mass` / `runoff_mass_fold` inputs.  Basin (26 x 18, island in the middle): frozen
+      !! at (14,3) (a seam cell of every x split) and (4,10); liquid at (13,3), (7,3), (8,3), (4,9) and
+      !! (20,16) -- both sides of the x seams (np 2: 13|14, np 4: 7|8) and of the y seam (9|10), on
+      !! wet cells only.  Fold (30 x 24, fold row j = 24, mirror of column i is 31 - i): frozen at
+      !! (16,24) (the mirror partner of the liquid (15,24), and the x seam of np 2 is 15|16) and
+      !! (12,23); liquid at (15,24), (17,12), (8,12) and (9,12) (np 4: 8|9 seam).
+      integer, parameter :: PB(7, 2) = reshape([14, 4, 13, 7, 8, 20, 4, 3, 10, 3, 3, 3, 16, 9], [7, 2])
+      integer, parameter :: PF(6, 2) = reshape([16, 12, 15, 17, 8, 9, 24, 23, 24, 12, 12, 12], [6, 2])
+
+      call write_runoff_file(RUNOFF_BASIN, NX_G, NY_G, PB, 2)
+      call write_runoff_file(RUNOFF_FOLD, 30, 24, PF, 2)
+   end subroutine write_runoff_files
 
    subroutine write_atm_file(path, listname, tas0, huss0, nlon, nlat)
       !! One global lon-lat file (5 degrees, NT three-hourly records stamped at

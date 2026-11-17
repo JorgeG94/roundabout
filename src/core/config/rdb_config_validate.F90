@@ -4025,15 +4025,13 @@ contains
             end if
          end if
       case (SURF_FW_MASS)
-         call logger%error("&ocean_forcing_nml freshwater='mass' is not implemented "// &
-                           "yet (the real Boussinesq fresh-water mass flux is a "// &
-                           "follow-up); use 'virtual' (fixed column mass, virtual "// &
-                           "salt flux) or 'none'")
-         has_error = .true.
+         ! Real Boussinesq fresh-water MASS (`rdb_ocean_surface_fw_mass`).  Needs the component
+         ! set (`fw_net`, `Q_salt_tracer` are components).  Envelope holes are refused BY NAME:
+         call fw_mass_validate(cfg, has_error)
       case default
          call logger%error("&ocean_forcing_nml freshwater = '"// &
                            trim(adjustl(cfg%ocean%forcing%freshwater))// &
-                           "' is not recognised (shipped: none, virtual; reserved: mass)")
+                           "' is not recognised (shipped: none, virtual, mass)")
          has_error = .true.
       end select
 
@@ -4083,6 +4081,14 @@ contains
             call logger%error("&ocean_dataovr_nml salt_file is set but salt_var is blank")
             has_error = .true.
          end if
+         if (.not. dataovr_entry_is_valid(cfg%ocean%dataovr%lrunoff)) then
+            call logger%error("&ocean_dataovr_nml lrunoff_file is set but lrunoff_var is blank")
+            has_error = .true.
+         end if
+         if (.not. dataovr_entry_is_valid(cfg%ocean%dataovr%frunoff)) then
+            call logger%error("&ocean_dataovr_nml frunoff_file is set but frunoff_var is blank")
+            has_error = .true.
+         end if
 
          ! D2: cyclic climatology with no period is undecidable, not
          ! defaultable — there is no sane fallback for "one year".
@@ -4095,7 +4101,7 @@ contains
          ! component set; without it there is no slot to write into.
          if (dataovr_freshwater_needs_components(cfg%ocean%dataovr, &
                                                  cfg%ocean%forcing%enable_components)) then
-            call logger%error("&ocean_dataovr_nml evap/lprec file forcing requires "// &
+            call logger%error("&ocean_dataovr_nml evap/lprec/lrunoff/frunoff file forcing requires "// &
                               "&ocean_forcing_nml enable_components=.true. "// &
                               "(there is no non-component freshwater slot to write into)")
             has_error = .true.
@@ -4133,6 +4139,36 @@ contains
          call check_dataovr_file(cfg%ocean%dataovr%evap, "evap", has_error)
          call check_dataovr_file(cfg%ocean%dataovr%lprec, "lprec", has_error)
          call check_dataovr_file(cfg%ocean%dataovr%salt, "salt", has_error)
+         call check_dataovr_file(cfg%ocean%dataovr%lrunoff, "lrunoff", has_error)
+         call check_dataovr_file(cfg%ocean%dataovr%frunoff, "frunoff", has_error)
+
+         ! D3c: runoff is a mass flux that only a fresh-water mode spends.  Under
+         ! `freshwater = "none"` the slot is read by nothing (the assembler's legacy sums
+         ! never see it), so the file would be silently inert: refuse it by name.  `"virtual"`
+         ! accepts it (it enters the virtual salt flux `salt_fw`, the dilution without volume);
+         ! `"mass"` spends it as real volume.  No atmosphere prerequisite: the runoff tags
+         ! are not among the ones `&ocean_atm_forcing_nml` conflicts with (it writes none).
+         if (dataovr_runoff_needs_freshwater(cfg%ocean%dataovr, &
+                                             parse_surface_freshwater(cfg%ocean%forcing%freshwater))) then
+            call logger%error("&ocean_dataovr_nml lrunoff/frunoff file forcing requires "// &
+                              "&ocean_forcing_nml freshwater = 'virtual' or 'mass' (under 'none' "// &
+                              "no consumer reads the runoff slots, so the file would be silently inert)")
+            has_error = .true.
+         end if
+
+         ! D3d: runoff with an ice-shelf cavity.  The assembler's cover twin scales `fw_net`,
+         ! `salt_fw` and `q_fus_rof` by the open-ocean fraction, so runoff on a covered cell would
+         ! be dropped without a word under 'virtual' ('mass' refuses the cavity outright), and the
+         ! runoff check only tests the wet mask.  Refused by name until a cavity-aware runoff
+         ! (a sub-shelf outflow) exists.
+         if ((len_trim(cfg%ocean%dataovr%lrunoff%file) > 0 .or. len_trim(cfg%ocean%dataovr%frunoff%file) > 0) .and. &
+             (cfg%ocean%cavity_dyn%enable .or. cfg%ocean%cavity_melt%enable)) then
+            call logger%error("&ocean_dataovr_nml lrunoff/frunoff file forcing is refused with an "// &
+                              "ice-shelf cavity (&ocean_cavity_dyn_nml / &ocean_cavity_melt_nml): the "// &
+                              "assembler's open-fraction twin would drop the runoff on covered cells "// &
+                              "silently")
+            has_error = .true.
+         end if
 
          ! D5: enabled but nothing driven is a wordless no-op — the
          ! house "silent no-op => fail loud" rule (cf. V2/V3 above).
@@ -4188,6 +4224,92 @@ contains
       if (present(ierr)) ierr = OCEAN_STATUS_OK
 
    end subroutine validate_config
+
+   subroutine fw_mass_validate(cfg, has_error)
+      !! Configure-time envelope of `&ocean_forcing_nml freshwater = "mass"` (real Boussinesq
+      !! fresh-water volume, `rdb_ocean_surface_fw_mass`).  Every refusal names its reason: a
+      !! silent composition here would be a wrong answer, not a crash.
+      use rdb_vcoord, only: parse_vcoord_type
+      use rdb_constants, only: VCOORD_EULERIAN_Z, VCOORD_LAGRANGIAN
+      use rdb_ice_config, only: ice_scheme_is_cice
+      type(config_t), intent(in) :: cfg
+      logical, intent(inout) :: has_error
+      integer :: vc
+      logical :: deferred
+
+      if (.not. cfg%ocean%forcing%enable_components) then
+         call logger%error("&ocean_forcing_nml freshwater='mass' requires enable_components=.true. "// &
+                           "(fw_net and Q_salt_tracer are assembler outputs of the component set)")
+         has_error = .true.
+      end if
+      if (.not. cfg%ocean%thermo%enable_thermodynamics) then
+         call logger%error("&ocean_forcing_nml freshwater='mass' requires "// &
+                           "&ocean_thermo_nml enable_thermodynamics=.true. (the mass step rides "// &
+                           "the thermo-cadence surface-flux application)")
+         has_error = .true.
+      end if
+      if (.not. (cfg%ocean%forcing%fw_evap_cfl_limit > 0.0_wp .and. &
+                 cfg%ocean%forcing%fw_evap_cfl_limit < 1.0_wp)) then
+         call logger%error("&ocean_forcing_nml fw_evap_cfl_limit must lie in (0, 1): a "// &
+                           "limit of 1 would let one withdrawal empty a layer and take its "// &
+                           "dissolved content with it")
+         has_error = .true.
+      end if
+      if (cfg%ocean%bt%n_inner < 1 .and. .not. bt_split_derived(cfg%ocean%bt)) then
+         call logger%error("&ocean_forcing_nml freshwater='mass' requires the split-explicit "// &
+                           "solver (&ocean_bt_nml n_inner >= 1 or auto_n_inner=.true.): the "// &
+                           "unsplit stepper has no ALE remap and no bt_eta re-derive, so the "// &
+                           "added volume would pile up in the top layer for ever")
+         has_error = .true.
+      end if
+      vc = parse_vcoord_type(cfg%vcoord_type, VCOORD_EULERIAN_Z)
+      if (vc == VCOORD_EULERIAN_Z) then
+         call logger%error("&ocean_forcing_nml freshwater='mass' is refused with the 'eulerian_z' "// &
+                           "vertical coordinate: its remap returns early and its target ignores "// &
+                           "eta, so the added volume would pile up in the top layer for ever.  "// &
+                           "Use sigma, zstar, zstar_full, zstar_sigma, z_fixed, rho or hycom.")
+         has_error = .true.
+      end if
+      if (vc == VCOORD_LAGRANGIAN) then
+         call logger%error("&ocean_forcing_nml freshwater='mass' is refused with the 'lagrangian' "// &
+                           "vertical coordinate: it has no remap, so the top layer would grow "// &
+                           "without bound under a persistent P - E.  Use sigma, zstar, zstar_full, "// &
+                           "zstar_sigma, z_fixed, rho or hycom.")
+         has_error = .true.
+      end if
+      if (cfg%ocean%wetdry%enable) then
+         call logger%error("&ocean_forcing_nml freshwater='mass' is refused with &ocean_wetdry_nml "// &
+                           "enable=.true.: its positive-definite outflow limiter is the other "// &
+                           "writer of the top-layer thickness and would have to see the volume.")
+         has_error = .true.
+      end if
+      if (cfg%ocean%cavity_dyn%enable .or. cfg%ocean%cavity_melt%enable) then
+         call logger%error("&ocean_forcing_nml freshwater='mass' is refused with the ice-shelf "// &
+                           "cavity (&ocean_cavity_dyn_nml / &ocean_cavity_melt_nml): the "// &
+                           "cover-masked mass twin is untested.")
+         has_error = .true.
+      end if
+      if (cfg%ocean%ice%enable) then
+         if (ice_scheme_is_cice(cfg)) then
+            call logger%error("&ocean_forcing_nml freshwater='mass' is refused with sea ice "// &
+                              "(&ocean_ice_nml scheme='cice'): the ice hand-off still delivers "// &
+                              "its fresh water as a virtual salt flux and the ice mass loading is "// &
+                              "not wired, so the coupled water ledger could not close.")
+         else
+            call logger%error("&ocean_forcing_nml freshwater='mass' is refused with sea ice: the "// &
+                              "SIS2-derived scheme's brine coupler has no mass slot.")
+         end if
+         has_error = .true.
+      end if
+      deferred = cfg%ocean%vmix%dt_therm_ratio > 1 .and. .not. cfg%ocean%vmix%diabatic_first
+      if (cfg%ocean%vmix%dt_tracer_advect_ratio > 1 .and. .not. deferred) then
+         call logger%error("&ocean_forcing_nml freshwater='mass' with &ocean_vmix_nml "// &
+                           "dt_tracer_advect_ratio > 1 requires the deferred thermo order "// &
+                           "(dt_therm_ratio > 1 and diabatic_first=.false.): an in-window source "// &
+                           "on a frozen tracer breaks the window drain's thickness reconstruction.")
+         has_error = .true.
+      end if
+   end subroutine fw_mass_validate
 
    subroutine validate_balanced_vortex(cfg, has_error)
       !! Config conflicts of `ic_config = "balanced_vortex"`.  The IC is
@@ -4340,9 +4462,22 @@ contains
       type(ocean_dataovr_config_t), intent(in) :: cfg
       logical, intent(in) :: use_components
       logical :: bad
-      bad = (len_trim(cfg%evap%file) > 0 .or. len_trim(cfg%lprec%file) > 0) &
+      bad = (len_trim(cfg%evap%file) > 0 .or. len_trim(cfg%lprec%file) > 0 .or. &
+             len_trim(cfg%lrunoff%file) > 0 .or. len_trim(cfg%frunoff%file) > 0) &
             .and. (.not. use_components)
    end function dataovr_freshwater_needs_components
+
+   pure module function dataovr_runoff_needs_freshwater(cfg, fw_mode) result(bad)
+      !! `.true.` when a runoff tag is file-driven under `freshwater = "none"` (the legacy
+      !! sums never read `lrunoff`/`frunoff`).  Reports the PROBLEM, like its siblings.
+      use rdb_ocean_surface_flux, only: SURF_FW_NONE
+      type(ocean_dataovr_config_t), intent(in) :: cfg
+      integer, intent(in) :: fw_mode
+         !! `parse_surface_freshwater` of `&ocean_forcing_nml freshwater`.
+      logical :: bad
+      bad = (len_trim(cfg%lrunoff%file) > 0 .or. len_trim(cfg%frunoff%file) > 0) &
+            .and. fw_mode == SURF_FW_NONE
+   end function dataovr_runoff_needs_freshwater
 
    pure module function dataovr_heat_salt_clobbers_ice(cfg, use_components, ice_enable) result(bad)
       !! `.true.` when a heat/salt data file, sea ice and the component set
@@ -4446,7 +4581,8 @@ contains
       logical :: any_set
       any_set = len_trim(cfg%tau_x%file) > 0 .or. len_trim(cfg%tau_y%file) > 0 .or. &
                 len_trim(cfg%heat%file) > 0 .or. len_trim(cfg%evap%file) > 0 .or. &
-                len_trim(cfg%lprec%file) > 0 .or. len_trim(cfg%salt%file) > 0
+                len_trim(cfg%lprec%file) > 0 .or. len_trim(cfg%salt%file) > 0 .or. &
+                len_trim(cfg%lrunoff%file) > 0 .or. len_trim(cfg%frunoff%file) > 0
    end function dataovr_any_tag_set
 
    pure module function ice_hlim_count(hlim) result(n)

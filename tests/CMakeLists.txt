@@ -156,6 +156,8 @@ set(RDB_TESTS
     "test_ocean_cavity_grounded_budget|test_ocean_cavity_grounded_budget|collect_ocean_cavity_grounded_budget_tests|ocean_cavity_grounded_budget|ocean"
     "test_ocean_cavity_engine|test_ocean_cavity_engine|collect_ocean_cavity_engine_tests|ocean_cavity_engine|ocean"
     "test_ocean_cavity_freshwater|test_ocean_cavity_freshwater|collect_ocean_cavity_freshwater_tests|ocean_cavity_freshwater|ocean"
+    "test_ocean_surface_fw_mass|test_ocean_surface_fw_mass|collect_ocean_surface_fw_mass_tests|ocean_surface_fw_mass|ocean"
+    "test_ocean_runoff|test_ocean_runoff|collect_ocean_runoff_tests|ocean_runoff|ocean"
     "test_ocean_pgf_wright|test_ocean_pgf_wright|collect_ocean_pgf_wright_tests|ocean_pgf_wright|ocean"
     "test_ocean_pgf_gprime|test_ocean_pgf_gprime|collect_ocean_pgf_gprime_tests|ocean_pgf_gprime|ocean"
     "test_ocean_pgf_gfs_scale|test_ocean_pgf_gfs_scale|collect_ocean_pgf_gfs_scale_tests|ocean_pgf_gfs_scale|ocean"
@@ -472,6 +474,7 @@ set(NETCDF_TESTS
     test_ocean_zinit
     test_ocean_data_input
     test_ocean_data_forcing
+    test_ocean_runoff
     test_ocean_sss_restore
     test_ocean_sw_chl
     test_ocean_atm_state
@@ -503,6 +506,7 @@ set(NETCDF_REQUIRED_TESTS
     test_ocean_zinit
     test_ocean_data_input
     test_ocean_data_forcing
+    test_ocean_runoff
     test_ocean_sss_restore
     test_ocean_sw_chl
     test_ocean_atm_state
@@ -1088,6 +1092,28 @@ if(Python3_EXECUTABLE)
       rdb_validate_only PROPERTIES LABELS "ocean;python" ENVIRONMENT
                                    "OMP_NUM_THREADS=1")
   endif()
+endif()
+
+# tools/om_runoff_to_model.f90 self-test: builds a synthetic mosaic, depth map
+# and lon-lat runoff product in the (scratch) working directory, runs the
+# conservative remap + land-to-coast move, and asserts the global total is
+# preserved and no land cell is non-zero, both inside the tool and from an
+# independent re-read of its output. Plain host Fortran + NetCDF, so it needs no
+# core library.
+if(RDB_ENABLE_NETCDF)
+  add_executable(om_runoff_to_model
+                 "${PROJECT_SOURCE_DIR}/tools/om_runoff_to_model.f90")
+  target_link_libraries(om_runoff_to_model PRIVATE netCDF::netcdff)
+  set_target_properties(
+    om_runoff_to_model PROPERTIES Fortran_MODULE_DIRECTORY
+                                  ${CMAKE_CURRENT_BINARY_DIR}/om_runoff_mod)
+  add_test(
+    NAME rdb_om_runoff_to_model_selftest
+    COMMAND om_runoff_to_model --selftest
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/tmp_local_artifacts)
+  set_tests_properties(
+    rdb_om_runoff_to_model_selftest PROPERTIES LABELS "ocean" ENVIRONMENT
+                                               "OMP_NUM_THREADS=1")
 endif()
 
 # [C1] tools/vgrid_to_dz.py self-test: builds a synthetic MOM6 vgrid in memory

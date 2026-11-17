@@ -260,6 +260,7 @@ contains
       type(nml_schema_t), intent(inout) :: schema
       type(nml_group_t) :: g
       logical, pointer :: pl
+      real(wp), pointer :: pr
       character(len=:), pointer :: ps
 
       g%name = "ocean_forcing"
@@ -275,9 +276,16 @@ contains
                           "Surface fresh-water mass fluxes (lprec/fprec/evap/"// &
                           "lrunoff/frunoff): 'none' (default, enthalpy only), "// &
                           "'virtual' (virtual salt flux -S_surf*F, fixed column "// &
-                          "mass; needs enable_components) or 'mass' (reserved, "// &
-                          "refused at configure)", &
+                          "mass; needs enable_components) or 'mass' (real "// &
+                          "volume with the evaporation pass-down; open-ocean "// &
+                          "fluxes, needs enable_components)", &
                           allowed=[character(len=8) :: "none", "virtual", "mass"]))
+      pr => cfg%ocean%forcing%fw_evap_cfl_limit
+      call g%add(nml_real("fw_evap_cfl_limit", pr, &
+                          "freshwater='mass': largest fraction of a live layer "// &
+                          "one evaporative withdrawal may take, range (0,1) "// &
+                          "(OM3/MOM6 EVAP_CFL_LIMIT); the unmet remainder is "// &
+                          "passed down the column"))
       call schema%add_group(g)
    end subroutine register_ocean_forcing
 

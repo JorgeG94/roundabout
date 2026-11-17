@@ -52,6 +52,18 @@ module rdb_ocean_data_forcing
    !! tags write `Q_heat`/`Q_salt` themselves, this module exchanges them
    !! right after the write.
    !!
+   !! **Runoff** (`lrunoff`, `frunoff`; kg m-2 s-1, into the ocean).  The files must already be
+   !! on the model grid with every value on a WET cell (`tools/om_runoff_to_model.f90`
+   !! builds them: conservative remap of a lon-lat product, then land values moved to the
+   !! nearest wet coastal cell, global total preserved; Tsujino et al. 2018 for the
+   !! JRA55-do runoff).  They land in `surface_flux%lrunoff/frunoff`, which the assembler
+   !! folds into `fw_net` (real volume under `freshwater = "mass"`) or into the virtual
+   !! salt flux (`"virtual"`); `"none"` refuses them.  `frunoff` also writes
+   !! `q_fus_rof = -L_f*frunoff` (this routine is its only writer).  Runoff enthalpy follows
+   !! the mass step's layer-temperature rule, so no `heat_content_*` is written.  A non-zero
+   !! value on a land cell is FATAL (`check_runoff_on_land`, rank-uniform; run at the first
+   !! read and whenever a new record has been read).
+   !!
    !! **The namelist is the expert-level surface, not the intended one.**
    !! `&ocean_dataovr_nml` is a flat, fixed set of tags because that is
    !! what the strict schema can express; it is not the ergonomic way to
@@ -68,8 +80,12 @@ module rdb_ocean_data_forcing
    !! `resolve_flux_targets`.  `ocean_surface_flux_assemble` fully
    !! overwrites `Q_heat`/`Q_salt` from the component set every thermo
    !! step, so under components the file must feed a component instead.
+   use, intrinsic :: iso_fortran_env, only: int64
+   use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    use rdb_constants, only: wp
    use rdb_grid, only: hgrid_t
+   use rdb_grid_reduce, only: grid_allreduce_sum_i8
+   use rdb_ice_enthalpy, only: ICE_LAT_FUS
    use rdb_config, only: ocean_dataovr_config_t, dataovr_entry_config_t, &
                          ocean_restore_config_t
    use rdb_ocean_data_input, only: ocean_data_input_t, &
@@ -92,6 +108,9 @@ module rdb_ocean_data_forcing
    public :: ocean_data_forcing_configure
    public :: ocean_data_forcing_register_sss
    public :: ocean_data_forcing_apply
+   public :: runoff_on_land_is_fatal
+   public :: runoff_land_count_impl
+   public :: runoff_latent_heat_impl
 
    type :: ocean_data_forcing_t
       !! Registration bookkeeping for the file-driven surface tags.  A
@@ -107,6 +126,15 @@ module rdb_ocean_data_forcing
       integer :: id_evap = 0
       integer :: id_lprec = 0
       integer :: id_salt = 0
+      integer :: id_lrunoff = 0
+         !! `lrunoff` (liquid runoff, kg m-2 s-1) -> `surface_flux%lrunoff`.
+      integer :: id_frunoff = 0
+         !! `frunoff` (frozen runoff / calving) -> `surface_flux%frunoff`, and
+         !! `q_fus_rof = -L_f*frunoff` is derived from it each step.
+      integer :: land_checked_l = -1
+         !! `nreads` of the `lrunoff` field when `check_runoff_on_land` last ran (`-1` = never).
+      integer :: land_checked_f = -1
+         !! Same for `frunoff`.  The check runs only when a new record has been read.
       integer :: id_sss = 0
          !! File-based SSS restoring target (`&ocean_restore_nml sss_file`)
          !! -> `surface_flux%sss_target`; 0 = scalar target.  Registered by
@@ -214,9 +242,21 @@ contains
          if (ierr /= OCEAN_STATUS_OK) return
       end if
 
+      call register_tag(cfg, cfg%lrunoff, "lrunoff", reader, grid, oor, &
+                        nx, ny, ng + 1, ng + 1, this%id_lrunoff, ierr=ierr)
+      if (present(ierr)) then
+         if (ierr /= OCEAN_STATUS_OK) return
+      end if
+      call register_tag(cfg, cfg%frunoff, "frunoff", reader, grid, oor, &
+                        nx, ny, ng + 1, ng + 1, this%id_frunoff, ierr=ierr)
+      if (present(ierr)) then
+         if (ierr /= OCEAN_STATUS_OK) return
+      end if
+
       this%active = (this%id_tau_x > 0 .or. this%id_tau_y > 0 .or. &
                      this%id_heat > 0 .or. this%id_evap > 0 .or. &
-                     this%id_lprec > 0 .or. this%id_salt > 0)
+                     this%id_lprec > 0 .or. this%id_salt > 0 .or. &
+                     this%id_lrunoff > 0 .or. this%id_frunoff > 0)
 
       if (.not. this%active) then
          call logger%warning("ocean_dataovr: enable = .true. but no tag has a file — "// &
@@ -230,7 +270,8 @@ contains
       ! Registration is for the whole run, so the latch is too.
       if (this%id_heat > 0) sf%has_heat = .true.
       if (this%id_salt > 0) sf%has_salt = .true.
-      if (this%id_evap > 0 .or. this%id_lprec > 0) sf%has_mass_flux = .true.
+      if (this%id_evap > 0 .or. this%id_lprec > 0 .or. &
+          this%id_lrunoff > 0 .or. this%id_frunoff > 0) sf%has_mass_flux = .true.
       ! `stress_mag` must be consistent with whatever the first blend
       ! writes; the first `apply` re-derives it, but configure-time
       ! consumers that read it before the first step should not see a
@@ -314,8 +355,9 @@ contains
 
       if (sf%use_components) return
 
-      if (len_trim(cfg%evap%file) > 0 .or. len_trim(cfg%lprec%file) > 0) then
-         call fail("&ocean_dataovr_nml: evap/lprec file forcing needs the surface-flux "// &
+      if (len_trim(cfg%evap%file) > 0 .or. len_trim(cfg%lprec%file) > 0 .or. &
+          len_trim(cfg%lrunoff%file) > 0 .or. len_trim(cfg%frunoff%file) > 0) then
+         call fail("&ocean_dataovr_nml: evap/lprec/lrunoff/frunoff file forcing needs the surface-flux "// &
                    "component set — set &ocean_forcing_nml enable_components = .true. "// &
                    "(there is no non-component freshwater slot to write into)", &
                    ierr, OCEAN_STATUS_ERR_SETUP)
@@ -368,7 +410,7 @@ contains
    ! Per-step apply (immediately after ocean_data_input_update_all)
    ! ======================================================================
 
-   subroutine ocean_data_forcing_apply(this, reader, grid, ss, sf, bc, t)
+   subroutine ocean_data_forcing_apply(this, reader, grid, ss, sf, bc, t, wet_mask)
       !! Blend every active tag's current bracket into its slot.  `t` must
       !! be the same model time `ocean_data_input_update_all` was just
       !! called with — the reader enforces this and aborts otherwise.
@@ -382,7 +424,8 @@ contains
       !! the write; with components on the tags fill components and the
       !! engine exchanges the ASSEMBLED `Q_heat`/`Q_salt` after the
       !! assembler (whenever the component set is on).
-      type(ocean_data_forcing_t), intent(in) :: this
+      type(ocean_data_forcing_t), intent(inout) :: this
+         !! `inout` only for the runoff land-check read counters.
       type(ocean_data_input_t), intent(in) :: reader
       type(hgrid_t), intent(in) :: grid
       type(ocean_surface_stress_t), intent(inout) :: ss
@@ -390,8 +433,11 @@ contains
       type(ocean_bc_state_t), intent(in) :: bc
          !! Supplies the periodic / north-fold topology to the seam refresh.
       real(wp), intent(in) :: t
+      real(wp), intent(in), optional :: wet_mask(grid%nx_total, grid%ny_total)
+         !! `multilayer_state_t%wet_mask`.  Present, with a runoff tag registered, it
+         !! arms the land-cell check (see below); the engine always passes it.
 
-      integer :: nx, ny
+      integer :: nx, ny, n_rl, n_rf
 
       if (.not. this%active) return
 
@@ -445,6 +491,111 @@ contains
       if (this%id_lprec > 0) then
          call ocean_data_input_update_2d(reader, this%id_lprec, t, nx, ny, sf%lprec)
       end if
+
+      ! --- runoff: model-grid mass fluxes (kg m-2 s-1, into the ocean).  Read on physical
+      ! cells; the assembler snapshots them into `fw_net` (whose ghosts are exchanged), so no
+      ! halo work belongs here.  `frunoff` also owes the latent heat of fusion `q_fus_rof`
+      ! (its ONE owner is this routine).
+      if (this%id_lrunoff > 0) then
+         call ocean_data_input_update_2d(reader, this%id_lrunoff, t, nx, ny, sf%lrunoff)
+      end if
+      if (this%id_frunoff > 0) then
+         call ocean_data_input_update_2d(reader, this%id_frunoff, t, nx, ny, sf%frunoff)
+         call runoff_latent_heat_impl(nx, ny, ICE_LAT_FUS, sf%frunoff, sf%q_fus_rof)
+      end if
+      ! The land check reads the blended slot, whose land-ness is that of the two bracketing
+      ! records, so it runs only when a record has been (re)read since the last check -- and
+      ! once at the start (counters at -1).  The read counts are identical on every rank, so
+      ! every rank takes the same branch and the collective inside stays matched.
+      if ((this%id_lrunoff > 0 .or. this%id_frunoff > 0) .and. present(wet_mask)) then
+         n_rl = -2
+         n_rf = -2
+         if (this%id_lrunoff > 0) n_rl = reader%fields(this%id_lrunoff)%nreads
+         if (this%id_frunoff > 0) n_rf = reader%fields(this%id_frunoff)%nreads
+         if (n_rl /= this%land_checked_l .or. n_rf /= this%land_checked_f) then
+            call check_runoff_on_land(this, grid, sf, wet_mask)
+            this%land_checked_l = n_rl
+            this%land_checked_f = n_rf
+         end if
+      end if
    end subroutine ocean_data_forcing_apply
+
+   subroutine check_runoff_on_land(this, grid, sf, wet_mask)
+      !! Fatal, rank-uniform check, run at the first read and whenever a new record has been read: a runoff value on a LAND cell would vanish
+      !! silently (`fw_net` is wet-masked, so the mass never enters the ocean and the global
+      !! mass budget still "closes" against a source that was never spent).  The offline tool
+      !! `tools/om_runoff_to_model.f90` moves such values to the nearest wet coastal cell;
+      !! a file that skipped it is a setup error, not something to clip silently.  Counts
+      !! over OWNED cells and sums once (int64), so every rank takes the same branch.
+      type(ocean_data_forcing_t), intent(in) :: this
+      type(hgrid_t), intent(in) :: grid
+      type(ocean_surface_flux_t), intent(in) :: sf
+      real(wp), intent(in) :: wet_mask(grid%nx_total, grid%ny_total)
+      integer :: n_loc, n_f
+      integer(int64) :: n_glob
+
+      n_loc = 0
+      if (this%id_lrunoff > 0) then
+         call runoff_land_count_impl(grid%nx_total, grid%ny_total, grid%nghost, wet_mask, &
+                                     sf%lrunoff, n_loc)
+      end if
+      if (this%id_frunoff > 0) then
+         call runoff_land_count_impl(grid%nx_total, grid%ny_total, grid%nghost, wet_mask, &
+                                     sf%frunoff, n_f)
+         n_loc = n_loc + n_f
+      end if
+      call grid_allreduce_sum_i8(grid, int(n_loc, int64), n_glob)
+      if (runoff_on_land_is_fatal(n_glob)) then
+         call logger%error("ocean_dataovr: "//to_string(int(n_glob))// &
+                           " land cell(s) carry a non-zero (or non-finite) lrunoff/frunoff")
+         call fail("&ocean_dataovr_nml lrunoff/frunoff: "//to_string(int(n_glob))// &
+                   " land cell(s) carry runoff.  That mass would vanish silently (the "// &
+                   "assembled fresh-water flux is wet-masked).  Move it to the nearest wet "// &
+                   "coastal cell offline with tools/om_runoff_to_model.f90.", &
+                   code=OCEAN_STATUS_ERR_SETUP)
+      end if
+   end subroutine check_runoff_on_land
+
+   pure function runoff_on_land_is_fatal(n_land) result(is_fatal)
+      !! The verdict on the global count of land cells carrying runoff: any is fatal.
+      integer(int64), intent(in) :: n_land
+      logical :: is_fatal
+      is_fatal = (n_land > 0_int64)
+   end function runoff_on_land_is_fatal
+
+   pure subroutine runoff_land_count_impl(nx, ny, nghost, wet_mask, runoff, n_land)
+      !! Number of OWNED land cells (`wet_mask <= 0.5`) whose `runoff` is non-zero or
+      !! non-finite.  One accumulator, no inner loop (reduction-kernel rule).
+      integer, intent(in) :: nx, ny, nghost
+      real(wp), intent(in) :: wet_mask(nx, ny), runoff(nx, ny)
+      integer, intent(out) :: n_land
+      integer :: i, j, c
+
+      c = 0
+      do concurrent(j=nghost + 1:ny - nghost, i=nghost + 1:nx - nghost) reduce(+:c)
+         if (wet_mask(i, j) <= 0.5_wp) then
+            if (.not. ieee_is_finite(runoff(i, j))) then
+               c = c + 1
+            else if (runoff(i, j) /= 0.0_wp) then
+               c = c + 1
+            end if
+         end if
+      end do
+      n_land = c
+   end subroutine runoff_land_count_impl
+
+   pure subroutine runoff_latent_heat_impl(nx, ny, lfus, frunoff, q_fus_rof)
+      !! `q_fus_rof = -L_f * frunoff` (W m-2, <= 0, positive down): the latent heat owed
+      !! by frozen runoff / calving, over the whole array (the ghosts hold zero runoff).
+      integer, intent(in) :: nx, ny
+      real(wp), intent(in) :: lfus
+      real(wp), intent(in) :: frunoff(nx, ny)
+      real(wp), intent(out) :: q_fus_rof(nx, ny)
+      integer :: i, j
+
+      do concurrent(j=1:ny, i=1:nx)
+         q_fus_rof(i, j) = -lfus*frunoff(i, j)
+      end do
+   end subroutine runoff_latent_heat_impl
 
 end module rdb_ocean_data_forcing

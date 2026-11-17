@@ -25,7 +25,7 @@ module rdb_ocean_console_stats
    use rdb_halo, only: halo_allreduce_sum, halo_allreduce_max, halo_allreduce_efp_list
    use rdb_ocean_halo_counters, only: oh_counters_format
    use rdb_efp, only: efp_t, EFP_DIGITS, EFP_PREC_WIDTH, EFP_MAX_SUMMANDS, &
-                      efp_carry, efp_to_real, efp_from_real
+                      efp_carry, efp_to_real, efp_from_real, efp_plus
    use pic_logger, only: logger => global_logger
    use pic_strings, only: to_string
    implicit none
@@ -381,6 +381,8 @@ contains
       real(wp) :: mean_ci, mean_hi
       character(len=256) :: ice_line
       real(wp) :: g_mass_out, g_mass_src
+      type(efp_t) :: src_efp_v
+      logical :: src_efp_on
       ! PR-32 EFP local/global lists — fixed NVAL=9 layout regardless of
       ! gating (ice-off slots stay zero-valued efp_t) so the collective's
       ! size never depends on a per-rank branch.
@@ -457,6 +459,14 @@ contains
             efp_local(IX_MOUT) = efp_from_real(real(ms%mass_out, real64))
          end if
          efp_local(IX_MSRC) = efp_from_real(real(ms%mass_src, real64))
+         ! The surface fresh-water mass step books its source per call in EFP bins
+         ! (owned cells, no collective); folded in only when it ran, so every other
+         ! path prints exactly what it printed before.
+         if (any(ms%mass_src_efp /= 0_int64) .or. ms%mass_src_efp_poison /= 0_int64) then
+            src_efp_v%v = ms%mass_src_efp
+            src_efp_v%poison = ms%mass_src_efp_poison
+            efp_local(IX_MSRC) = efp_plus(efp_local(IX_MSRC), src_efp_v)
+         end if
 
          call halo_allreduce_efp_list(efp_local, efp_global, NVAL_EFP)
 
@@ -589,6 +599,12 @@ contains
          tmp = ms%mass_out
          call halo_allreduce_sum(tmp, g_mass_out)
          tmp = ms%mass_src
+         src_efp_on = any(ms%mass_src_efp /= 0_int64) .or. ms%mass_src_efp_poison /= 0_int64
+         if (src_efp_on) then
+            src_efp_v%v = ms%mass_src_efp
+            src_efp_v%poison = ms%mass_src_efp_poison
+            tmp = tmp + real(efp_to_real(src_efp_v), wp)
+         end if
          call halo_allreduce_sum(tmp, g_mass_src)
       end if
       bud%mass_out = g_mass_out

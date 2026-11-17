@@ -536,12 +536,12 @@ closure is active in which regime, and its tunable knobs, is tabulated in
 - **Surface forcing** — wind stress (2D `tau_x`/`tau_y`, with the MOM6
   `DIRECT_STRESS` distribution option), heat/salt flux and the
   MOM6-shaped component set (`&ocean_forcing_nml enable_components`), its
-  virtual fresh-water salt flux (`freshwater = "virtual"`, `-S_surf*(P-E+runoff)`),
+  virtual fresh-water salt flux (`freshwater = "virtual"`, `-S_surf*(P-E+runoff)`) or its real-mass form (`freshwater = "mass"`: `dh = (P-E+runoff)·dt/ρ₀` into / out of the first live layer, evaporation passed down the column at `fw_evap_cfl_limit`, Griffies et al. 2001; Campin et al. 2008),
   shortwave penetration (`&ocean_thermo_nml sw_pen_frac`), surface
   buoyancy restoring (`&ocean_restore_nml`), atmospheric pressure loading
   (`&ocean_psurf_nml`), geothermal bottom heat
   (`&ocean_geothermal_nml`), and time-varying NetCDF forcing
-  (`&ocean_dataovr_nml`, off the shared `rdb_ocean_data_input` reader).
+  (`&ocean_dataovr_nml`, off the shared `rdb_ocean_data_input` reader; wind stress, heat, salt, `evap`, `lprec`, and the runoff mass fluxes `lrunoff`/`frunoff`, kg m-2 s-1 on wet cells of the model grid, with `frunoff` also charging its latent heat `q_fus_rof = -L_f*frunoff`; `tools/om_runoff_to_model.f90` builds such a file from a lon-lat product: conservative remap, land values moved to the nearest wet coastal cell, total preserved; Tsujino et al. 2018).
 - **Tides** — equilibrium body forcing + scalar SAL
   (`&ocean_tides_nml`), the boundary-tide nodal correction, and
   barotropic linear wave drag (`&ocean_bt_nml wave_drag`).

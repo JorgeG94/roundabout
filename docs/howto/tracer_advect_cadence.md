@@ -120,3 +120,14 @@ law-of-the-wall BBL `kd_int` are checkpointed (`tidal_kd_int`, `bbl_kd_int`),
 since under `.false.` a resume always falls between their refreshes.  With
 `&ocean_hdiff_nml kappa_h > 0` the single full-dt explicit step is checked at
 configure (warning above half the diffusive-number limit, error above it).
+
+## Known gaps
+
+- **`freshwater = "mass"` with the deferred order plus windowed advection.** The mass step
+  (`rdb_ocean_surface_fw_mass`) is accepted under `diabatic_first = .false.` with
+  `dt_tracer_advect_ratio > 1`, where it is a SECOND writer of `h` between windows beside the
+  ALE remap. It is exact only when the window drain carries no leftover transport into the next
+  window (the drain's thickness reconstruction assumes `h` moves only through the drained
+  fluxes); a drain that does carry transport across a window edge sees the added volume as a
+  thickness it never transported. The in-stage order with windowed advection is refused for this
+  reason.

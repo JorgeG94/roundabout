@@ -600,7 +600,8 @@ Surface-flux component-set gate (PR-12): allocate the q_sw/evap/heat_content_*/.
 | Knob | Default | Units | Description |
 |------|---------|-------|-------------|
 | `enable_components` | `.false.` |  | Allocate the surface-flux component set and run the assembler (default off => byte-identical) |
-| `freshwater` | `"none"` |  | Surface fresh-water mass fluxes (lprec/fprec/evap/lrunoff/frunoff): 'none' (default, enthalpy only), 'virtual' (virtual salt flux -S_surf*F, fixed column mass; needs enable_components) or 'mass' (reserved, refused at configure) |
+| `freshwater` | `"none"` |  | Surface fresh-water mass fluxes (lprec/fprec/evap/lrunoff/frunoff): 'none' (default, enthalpy only), 'virtual' (virtual salt flux -S_surf*F, fixed column mass; needs enable_components) or 'mass' (real volume with the evaporation pass-down; open-ocean fluxes, needs enable_components) |
+| `fw_evap_cfl_limit` | `0.8000000000E+00` |  | freshwater='mass': largest fraction of a live layer one evaporative withdrawal may take, range (0,1) (OM3/MOM6 EVAP_CFL_LIMIT); the unmet remainder is passed down the column |
 
 ### &ocean_ice_nml
 
@@ -1230,6 +1231,14 @@ File-backed surface forcing (PR-15): wind stress, heat, freshwater.
 | `salt_var` | `""` |  | Variable name inside salt_file (required when it is set) |
 | `salt_scale` | `0.1000000000E+01` | kg m-2 s-1 | Multiplier applied to the surface salt flux (positive salinifies) slab at read |
 | `salt_add` | `0.0000000000E+00` | kg m-2 s-1 | Offset added to the surface salt flux (positive salinifies) slab after scale |
+| `lrunoff_file` | `""` |  | Path to the liquid runoff mass flux (>= 0, on wet cells only) NetCDF (blank ⇒ tag not file-driven) |
+| `lrunoff_var` | `""` |  | Variable name inside lrunoff_file (required when it is set) |
+| `lrunoff_scale` | `0.1000000000E+01` | kg m-2 s-1 | Multiplier applied to the liquid runoff mass flux (>= 0, on wet cells only) slab at read |
+| `lrunoff_add` | `0.0000000000E+00` | kg m-2 s-1 | Offset added to the liquid runoff mass flux (>= 0, on wet cells only) slab after scale |
+| `frunoff_file` | `""` |  | Path to the frozen runoff / calving mass flux (>= 0, on wet cells only) NetCDF (blank ⇒ tag not file-driven) |
+| `frunoff_var` | `""` |  | Variable name inside frunoff_file (required when it is set) |
+| `frunoff_scale` | `0.1000000000E+01` | kg m-2 s-1 | Multiplier applied to the frozen runoff / calving mass flux (>= 0, on wet cells only) slab at read |
+| `frunoff_add` | `0.0000000000E+00` | kg m-2 s-1 | Offset added to the frozen runoff / calving mass flux (>= 0, on wet cells only) slab after scale |
 
 ### &ocean_atm_forcing_nml
 

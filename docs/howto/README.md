@@ -47,6 +47,7 @@ the kernel; the guide's job is to tell you *where the seam is and what to edit*.
 | Guide | For |
 |---|---|
 | [Deploy without netcdf-c](deploy_without_netcdf.md) | a machine with a compiler and HDF5 but no usable netcdf-c (e.g. NERSC Perlmutter): `tools/build_netcdf.sh` |
+| [Prepare a runoff file](prepare_runoff_file.md) | `tools/om_runoff_to_model.f90`: remap a lon-lat runoff product onto the model grid for `&ocean_dataovr_nml lrunoff / frunoff` |
 
 ## Two-minute orientation
 
