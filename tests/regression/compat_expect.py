@@ -319,6 +319,11 @@ ROWS = [
     _phys("fw_mass_cavity", ("fw_mass", "cavity"),
           "the ice-shelf cover twin of the fresh-water mass step is untested.",
           r"freshwater='mass' is refused with the ice-shelf cavity"),
+    _phys("runoff_cavity", ("fw_mass", "cavity"),
+          "the assembler's open-fraction twin scales fw_net / salt_fw / q_fus_rof by the shelf "
+          "cover, so runoff on a covered wet cell would be dropped silently (the matrix's fw_mass "
+          "value carries a runoff file).",
+          r"lrunoff/frunoff file forcing is refused with an ice-shelf cavity"),
     _phys("cavity_dataovr", ("cavity", "dataovr"),
           "file-backed surface forcing rewrites tau / Q_heat per time bracket with no ice-cover "
           "mask, so it is refused alongside a cavity (the matrix's fw_mass value feeds P - E "
