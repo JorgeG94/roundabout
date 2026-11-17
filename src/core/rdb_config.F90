@@ -3014,6 +3014,19 @@ module rdb_config
          !! tags (tau_x, tau_y, heat, salt, evap, lprec) yet, so a
          !! file-driven load needs a `register_tag` entry, not new reader
          !! machinery.
+      logical :: ice_load = .false.
+         !! Sea-ice + snow MASS loading of the surface pressure:
+         !! `p_surf = p_surf_atm + g*(rho_i*vice + rho_s*vsno)` (cell-mean ice and snow
+         !! volumes of the CICE-port aggregates; Campin et al. 2008 "levitating" sea ice with
+         !! its weight on the ocean, Adcroft et al. 2019).  A FULL OVERWRITE of `sf%p_surf` once
+         !! per outer step, after the thermo-cadence mass delivery of that step (so the
+         !! load and the water the ice took change together; see `ocean_ice_load_refresh`), sent
+         !! through the `eta_forcing` seam.  Required `.true.` by `&ocean_forcing_nml
+         !! freshwater = "mass"` with `scheme = "cice"` (otherwise growing ice removes its water
+         !! from under the ice only and drives a spurious flow), and refused WITHOUT mass
+         !! (under `"none"`/`"virtual"` no water leaves, so a load would depress the sea
+         !! surface under the ice for nothing).  Requires `enable = .true.` and
+         !! `&ocean_ice_nml scheme = "cice"`.  Default off => bit-identical.
    end type ocean_psurf_config_t
    type :: ocean_cavity_dyn_config_t
       !! Static ice-shelf cavity GEOMETRY (`&ocean_cavity_dyn_nml`,

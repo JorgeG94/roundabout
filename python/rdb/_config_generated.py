@@ -2178,6 +2178,14 @@ class OceanPsurf(Group):
         default=False,
     )
 
+    ice_load = Bool(
+        'ice_load',
+        doc="Sea-ice + snow mass loading p_surf = p_surf_atm + g*(rho_i*vice + rho_s*vsno) (CICE-port ice only; REQUIRED by freshwater='mass' with sea ice, refused without it; requires enable=.true.)",
+        units='',
+        required=False,
+        default=False,
+    )
+
     p_surf_const = Real(
         'p_surf_const',
         doc='Uniform atmospheric surface pressure (Pa) seeded into p_surf_atm (uniform => provably inert)',
@@ -8216,4 +8224,4 @@ GENERATED_GROUPS = {
 }
 
 N_GROUPS = 68
-N_KNOBS = 900
+N_KNOBS = 901

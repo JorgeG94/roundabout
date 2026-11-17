@@ -63,6 +63,12 @@ contains
                              "state as the top-of-column pressure p_top "// &
                              "(requires enable=.true.; refused with the "// &
                              "unported pressure builders)"))
+      pl => cfg%ocean%psurf%ice_load
+      call g%add(nml_logical("ice_load", pl, &
+                             "Sea-ice + snow mass loading p_surf = p_surf_atm + "// &
+                             "g*(rho_i*vice + rho_s*vsno) (CICE-port ice only; "// &
+                             "REQUIRED by freshwater='mass' with sea ice, refused "// &
+                             "without it; requires enable=.true.)"))
       pr => cfg%ocean%psurf%p_surf_const
       call g%add(nml_real("p_surf_const", pr, &
                           "Uniform atmospheric surface pressure (Pa) seeded "// &

@@ -1769,6 +1769,30 @@ contains
             end if
          end if
       end if
+      ! Sea-ice mass loading of the surface pressure.  It owns `sf%p_surf`'s ice part, so it
+      ! needs the seam (`enable`), the CICE-port ice that supplies the volumes, and real
+      ! fresh-water mass: under "none"/"virtual" no water leaves the ocean when ice grows, so
+      ! the load would depress the sea surface under the ice with nothing to balance it.
+      if (cfg%ocean%psurf%ice_load) then
+         if (.not. cfg%ocean%psurf%enable) then
+            call logger%error("&ocean_psurf_nml ice_load=.true. requires enable=.true. "// &
+                              "(the load rides the eta_forcing seam)")
+            has_error = .true.
+         end if
+         if (.not. (cfg%ocean%ice%enable .and. ice_scheme_is_cice(cfg))) then
+            call logger%error("&ocean_psurf_nml ice_load=.true. requires sea ice with "// &
+                              "&ocean_ice_nml scheme='cice' (the CICE-port aggregates supply "// &
+                              "the ice and snow volumes)")
+            has_error = .true.
+         end if
+         if (parse_surface_freshwater(cfg%ocean%forcing%freshwater) /= SURF_FW_MASS) then
+            call logger%error("&ocean_psurf_nml ice_load=.true. requires "// &
+                              "&ocean_forcing_nml freshwater='mass': without real fresh-water "// &
+                              "mass the growing ice takes no water from the ocean, so its "// &
+                              "weight would depress the sea surface under the ice for nothing.")
+            has_error = .true.
+         end if
+      end if
       ! ---- Top-of-column pressure in the IN-SITU EOS arguments (E3) ----
       ! `in_eos` offsets the EOS's IN-SITU pressure arguments by
       ! `ms%p_top`.  v1 ports exactly one: the FV_WRIGHT Picard column
@@ -4290,16 +4314,41 @@ contains
          has_error = .true.
       end if
       if (cfg%ocean%ice%enable) then
-         if (ice_scheme_is_cice(cfg)) then
+         if (.not. ice_scheme_is_cice(cfg)) then
             call logger%error("&ocean_forcing_nml freshwater='mass' is refused with sea ice "// &
-                              "(&ocean_ice_nml scheme='cice'): the ice hand-off still delivers "// &
-                              "its fresh water as a virtual salt flux and the ice mass loading is "// &
-                              "not wired, so the coupled water ledger could not close.")
+                              "scheme='sis2': the SIS2-derived brine coupler has no mass slot.")
+            has_error = .true.
          else
-            call logger%error("&ocean_forcing_nml freshwater='mass' is refused with sea ice: the "// &
-                              "SIS2-derived scheme's brine coupler has no mass slot.")
+            ! The CICE-port hand-off under real mass: the ocean takes the ice's fresh water as
+            ! `seaice_melt` and loses it when ice grows, so (a) the frazil mass and salt must
+            ! reach the hand-off at all (`update_ocn_f`), else the ice gains water the ocean
+            ! does not lose and the coupled ledger cannot close, and (b) the ice's weight
+            ! rides the surface pressure (`ice_load`), else the ocean loses the water from
+            ! under the ice only and a metre-scale sea-surface step at the ice edge drives a
+            ! spurious barotropic flow (Campin et al. 2008; Adcroft et al. 2019).
+            if (.not. cfg%ocean%ice_thermo%update_ocn_f) then
+               call logger%error("&ocean_forcing_nml freshwater='mass' with sea ice requires "// &
+                                 "&ocean_ice_thermo_nml update_ocn_f=.true.: with .false. the "// &
+                                 "frazil water and salt never reach the hand-off, so the ice "// &
+                                 "gains mass the ocean does not lose and the coupled water "// &
+                                 "ledger cannot close.")
+               has_error = .true.
+            end if
+            if (.not. cfg%ocean%psurf%enable) then
+               call logger%error("&ocean_forcing_nml freshwater='mass' with sea ice requires "// &
+                                 "&ocean_psurf_nml enable=.true. (the ice mass loading rides the "// &
+                                 "surface-pressure seam).")
+               has_error = .true.
+            end if
+            if (.not. cfg%ocean%psurf%ice_load) then
+               call logger%error("&ocean_forcing_nml freshwater='mass' with sea ice requires "// &
+                                 "&ocean_psurf_nml ice_load=.true.: without the ice's weight on "// &
+                                 "the surface pressure the water frozen out is removed from "// &
+                                 "under the ice only, a sea-surface step of the ice thickness "// &
+                                 "that drives a spurious barotropic flow.")
+               has_error = .true.
+            end if
          end if
-         has_error = .true.
       end if
       deferred = cfg%ocean%vmix%dt_therm_ratio > 1 .and. .not. cfg%ocean%vmix%diabatic_first
       if (cfg%ocean%vmix%dt_tracer_advect_ratio > 1 .and. .not. deferred) then
