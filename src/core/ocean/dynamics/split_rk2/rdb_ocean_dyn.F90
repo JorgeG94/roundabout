@@ -3854,8 +3854,9 @@ contains
       ! diffused) state: the slow column solves refresh here, and the kv
       ! assembled is what the next interval's dynamics carry (the stage
       ! chain no longer rebuilds it).  The EPBL sees the surface fluxes
-      ! assembled after step N-1 -- the coupling-interval mean (Reichl &
-      ! Hallberg 2018).
+      ! assembled after step N-1: ONE snapshot of the fluxes, held over the whole
+      ! interval (at dt_therm_ratio > 1 it is not an interval mean; Reichl &
+      ! Hallberg 2018 use the coupling-interval mean).
       if (vmix%use_closure) then
          call vmix_build_coefficients(grid, dyn, vmix, vd, ss, ms, dt, dyn%enable_thermodynamics, &
                                       sf, epbl, kshear, vmix_tidal, metrics)
