@@ -122,9 +122,10 @@ The latent heat of fusion of a frozen flux is its own heat component, `q_fus` (`
 |---|---|
 | Ice-shelf basal melt, `&ocean_cavity_melt_nml freshwater = "mass"` | Yes. The only one. |
 | Ice-shelf basal melt, `freshwater = "virtual"` (default) | No |
-| Sea ice (`salt_ice`, `heat_ice`, `sw_ice` through the coupler) | No. Virtual. |
+| Sea ice (`salt_ice`, `heat_ice`, `sw_ice` through the coupler), `freshwater = "none"`/`"virtual"` | No. Virtual. |
+| Sea ice, CICE-port, `freshwater = "mass"` (`seaice_melt = fresh`, `salt_ice = 1000*fsalt`; weight on `p_surf` via `&ocean_psurf_nml ice_load`) | Yes (same step as the atmosphere's; named terms: the ice's salt mass, `H_mass_conv`) |
 | The seven atmospheric/river mass-flux components, `&ocean_forcing_nml freshwater = "virtual"`: their net `F` is the virtual salt flux `salt_fw`, no mass | No |
-| The same components, `freshwater = "mass"` (open-ocean `lprec`, `fprec`, `evap`, and `lrunoff`/`frunoff` from `&ocean_dataovr_nml`; the `seaice_melt` / `vprec` slots are in the sum but have no filler yet) | Yes (`ocean_surface_fw_mass_step`, module `rdb_ocean_surface_fw_mass`) |
+| The same components, `freshwater = "mass"` (open-ocean `lprec`, `fprec`, `evap`, and `lrunoff`/`frunoff` from `&ocean_dataovr_nml`; `seaice_melt` is written by the CICE-port hand-off; `vprec` has no filler) | Yes (`ocean_surface_fw_mass_step`, module `rdb_ocean_surface_fw_mass`) |
 
 **Surface fresh-water mass (`&ocean_forcing_nml freshwater = "mass"`).** Ownership and order, all in the
 module header of `src/parameterizations/vertical/rdb_ocean_surface_fw_mass.F90`:
@@ -140,6 +141,13 @@ module header of `src/parameterizations/vertical/rdb_ocean_surface_fw_mass.F90`:
   accumulator `ms%mass_src_efp` over owned cells; the console adds it to `ms%mass_src`.
 - `Q_salt` (incl. the virtual `salt_fw`) stays what KPP/EPBL read for `B_0`; only the tracer deposit reads
   `Q_salt_tracer`.
+- Sea ice (CICE-port): `ice_cice_to_surface_flux` is the one writer of `seaice_melt` (= window-mean `fresh`) and
+  `salt_ice` (= `1000*fsalt`, no dilution) under mass; `seaice_melt` reaches the ocean ONLY through `fw_net` (and
+  `salt_fw` for the buoyancy), never a second consumer. The engine hook keeps the rain-through term in `fresh`.
+  `sf%p_ice_load` is written ONLY by `ocean_surface_flux_apply_ice_load` (full overwrite, owned cells, called by
+  `engine_ice_load_refresh` at the end of `engine_step` on thermo-cadence steps, i.e. AFTER the dynamics delivered the
+  previous hand-off's water) and `sf%p_surf = p_surf_atm + p_ice_load` is rebuilt (full overwrite) before the dyn step;
+  restart state `sf_p_ice_load`/`sf_p_ice_valid`. `ice_dyn_c_step` adds `p_surf/(rho0 g)` to the ssh its tilt reads.
 - `ocean_dyn_step_split` re-derives `bt_eta = Σh − bt_H_ref` right before the ALE remap (which takes
   `h_ref = Σh − bt_eta`); without it the z*/z_fixed target is built on `H + dh`.
 
