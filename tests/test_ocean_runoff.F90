@@ -207,7 +207,7 @@ contains
       type(ocean_surface_stress_t), intent(inout) :: ss
       real(wp), intent(in) :: at(grid%nx_total, grid%ny_total)
       type(ocean_data_input_t), intent(inout) :: reader
-      type(ocean_data_forcing_t), intent(in) :: df
+      type(ocean_data_forcing_t), intent(inout) :: df
       real(wp), intent(in) :: t
       type(ocean_bc_state_t) :: bc
 
@@ -559,6 +559,12 @@ contains
                                            "&ocean_dataovr_nml enable = .true., time_mode = 'static', "// &
                                            "lrunoff_file = 'fwb_no_such_file.nc', lrunoff_var = 'field' /"//NL, "")) == REFUSED, &
                  "refused: a runoff file that does not exist")
+      if (allocated(error)) return
+      call check(error, nml_ierr(basin_nml("virtual", LR, &
+                                           "&ocean_cavity_dyn_nml enable = .true., draft_config = 'linear', "// &
+                                           "draft_depth = 100.0, draft_slope = -1.0e-3, draft_x0 = 0.0, "// &
+                                           "h_min_cavity = 50.0 /"//NL)) == REFUSED, &
+                 "refused: runoff with an ice-shelf cavity under 'virtual' (the cover twin would drop it)")
       if (allocated(error)) return
 
       ! Not an atmosphere-forcing prerequisite: the runoff tags are exempt from the

@@ -4156,6 +4156,20 @@ contains
             has_error = .true.
          end if
 
+         ! D3d: runoff with an ice-shelf cavity.  The assembler's cover twin scales `fw_net`,
+         ! `salt_fw` and `q_fus_rof` by the open-ocean fraction, so runoff on a covered cell would
+         ! be dropped without a word under 'virtual' ('mass' refuses the cavity outright), and the
+         ! runoff check only tests the wet mask.  Refused by name until a cavity-aware runoff
+         ! (a sub-shelf outflow) exists.
+         if ((len_trim(cfg%ocean%dataovr%lrunoff%file) > 0 .or. len_trim(cfg%ocean%dataovr%frunoff%file) > 0) .and. &
+             (cfg%ocean%cavity_dyn%enable .or. cfg%ocean%cavity_melt%enable)) then
+            call logger%error("&ocean_dataovr_nml lrunoff/frunoff file forcing is refused with an "// &
+                              "ice-shelf cavity (&ocean_cavity_dyn_nml / &ocean_cavity_melt_nml): the "// &
+                              "assembler's open-fraction twin would drop the runoff on covered cells "// &
+                              "silently")
+            has_error = .true.
+         end if
+
          ! D5: enabled but nothing driven is a wordless no-op — the
          ! house "silent no-op => fail loud" rule (cf. V2/V3 above).
          if (.not. dataovr_any_tag_set(cfg%ocean%dataovr)) then

@@ -61,7 +61,8 @@ module rdb_ocean_data_forcing
    !! salt flux (`"virtual"`); `"none"` refuses them.  `frunoff` also writes
    !! `q_fus_rof = -L_f*frunoff` (this routine is its only writer).  Runoff enthalpy follows
    !! the mass step's layer-temperature rule, so no `heat_content_*` is written.  A non-zero
-   !! value on a land cell is FATAL at every read (`check_runoff_on_land`, rank-uniform).
+   !! value on a land cell is FATAL (`check_runoff_on_land`, rank-uniform; run at the first
+   !! read and whenever a new record has been read).
    !!
    !! **The namelist is the expert-level surface, not the intended one.**
    !! `&ocean_dataovr_nml` is a flat, fixed set of tags because that is
@@ -130,6 +131,10 @@ module rdb_ocean_data_forcing
       integer :: id_frunoff = 0
          !! `frunoff` (frozen runoff / calving) -> `surface_flux%frunoff`, and
          !! `q_fus_rof = -L_f*frunoff` is derived from it each step.
+      integer :: land_checked_l = -1
+         !! `nreads` of the `lrunoff` field when `check_runoff_on_land` last ran (`-1` = never).
+      integer :: land_checked_f = -1
+         !! Same for `frunoff`.  The check runs only when a new record has been read.
       integer :: id_sss = 0
          !! File-based SSS restoring target (`&ocean_restore_nml sss_file`)
          !! -> `surface_flux%sss_target`; 0 = scalar target.  Registered by
@@ -419,7 +424,8 @@ contains
       !! the write; with components on the tags fill components and the
       !! engine exchanges the ASSEMBLED `Q_heat`/`Q_salt` after the
       !! assembler (whenever the component set is on).
-      type(ocean_data_forcing_t), intent(in) :: this
+      type(ocean_data_forcing_t), intent(inout) :: this
+         !! `inout` only for the runoff land-check read counters.
       type(ocean_data_input_t), intent(in) :: reader
       type(hgrid_t), intent(in) :: grid
       type(ocean_surface_stress_t), intent(inout) :: ss
@@ -431,7 +437,7 @@ contains
          !! `multilayer_state_t%wet_mask`.  Present, with a runoff tag registered, it
          !! arms the land-cell check (see below); the engine always passes it.
 
-      integer :: nx, ny
+      integer :: nx, ny, n_rl, n_rf
 
       if (.not. this%active) return
 
@@ -497,13 +503,25 @@ contains
          call ocean_data_input_update_2d(reader, this%id_frunoff, t, nx, ny, sf%frunoff)
          call runoff_latent_heat_impl(nx, ny, ICE_LAT_FUS, sf%frunoff, sf%q_fus_rof)
       end if
+      ! The land check reads the blended slot, whose land-ness is that of the two bracketing
+      ! records, so it runs only when a record has been (re)read since the last check -- and
+      ! once at the start (counters at -1).  The read counts are identical on every rank, so
+      ! every rank takes the same branch and the collective inside stays matched.
       if ((this%id_lrunoff > 0 .or. this%id_frunoff > 0) .and. present(wet_mask)) then
-         call check_runoff_on_land(this, grid, sf, wet_mask)
+         n_rl = -2
+         n_rf = -2
+         if (this%id_lrunoff > 0) n_rl = reader%fields(this%id_lrunoff)%nreads
+         if (this%id_frunoff > 0) n_rf = reader%fields(this%id_frunoff)%nreads
+         if (n_rl /= this%land_checked_l .or. n_rf /= this%land_checked_f) then
+            call check_runoff_on_land(this, grid, sf, wet_mask)
+            this%land_checked_l = n_rl
+            this%land_checked_f = n_rf
+         end if
       end if
    end subroutine ocean_data_forcing_apply
 
    subroutine check_runoff_on_land(this, grid, sf, wet_mask)
-      !! Fatal, rank-uniform check at EVERY read: a runoff value on a LAND cell would vanish
+      !! Fatal, rank-uniform check, run at the first read and whenever a new record has been read: a runoff value on a LAND cell would vanish
       !! silently (`fw_net` is wet-masked, so the mass never enters the ocean and the global
       !! mass budget still "closes" against a source that was never spent).  The offline tool
       !! `tools/om_runoff_to_model.f90` moves such values to the nearest wet coastal cell;
