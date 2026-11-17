@@ -1383,13 +1383,9 @@ contains
          call ocean_cavity_mass_step(grid, metrics, cav, ms, therm_dt, 0.5_wp, &
                                      active=therm_active)
       end if
-      ! Surface fresh-water MASS (&ocean_forcing_nml freshwater='mass'): the same
-      ! stage, the same weight, right after the surface-flux apply that deposited the
-      ! tracer salt flux at the old thickness.  Absent / not 'mass' => immediate return.
-      if (present(sf)) then
-         call ocean_surface_fw_mass_step(grid, sf, ms, metrics%areaT, therm_dt, 0.5_wp, &
-                                         active=therm_active)
-      end if
+      ! Surface fresh-water MASS is NOT stepped here: `freshwater='mass'` is refused at
+      ! configure on the unsplit solver (no ALE remap, no bt_eta re-derive), so this
+      ! stage never runs it; the split stages and the deferred block do.
       call apply_sw_and_restore(grid, metrics, sf, ms, therm_dt, therm_active)
       call ocean_geothermal_apply_tracers(grid, geo, ms, therm_dt, active=therm_active)
       ! Ideal-age interior aging only (PR-7): thermo-cadence gated, mirrors

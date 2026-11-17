@@ -13,11 +13,12 @@
 !!
 !! * `dh > 0` (rain, snow, runoff, ice melt): `h(kt) += dh`, `kt` the first LIVE layer at or
 !!   below `k_top` (`rdb_vl_first_live`).
-!! * `dh < 0` (evaporation, freezing): take `min(left, f*h_k)` from each live layer going DOWN
+!! * `dh < 0` (evaporation, freezing): take `min(left, f*h_k, h_k - 2*H_VANISHED)` from each live layer going DOWN
 !!   from `kt`, `f = fw_evap_cfl_limit` (0.8), until the request is met.  The unmet remainder of a
 !!   thin top layer is thus passed down the column ("the unused mass loss is passed down through
-!!   the column", the usual `EVAP_CFL_LIMIT` rule).  A column whose whole live stack cannot supply
-!!   the request is CLAMPED (every live layer left at `(1-f)*h`), COUNTED, and the count makes the
+!!   the column", the usual `EVAP_CFL_LIMIT` rule).  Each layer also keeps at least `2*H_VANISHED` (`fw_mass_take`), so no
+!!   withdrawal empties a layer and strands its dissolved content.  A column whose whole live
+!!   stack cannot supply the request is CLAMPED (every live layer left at `(1-f)*h` or `2*H_VANISHED`), COUNTED, and the count makes the
 !!   step fail loud, rank-uniformly (one int64 reduction), because a clamped withdrawal no longer
 !!   matches the tracked mass source.  A non-finite `dh` is counted the same way.
 !! * The mass step reads `fw_net`, never the raw components: bulk forcing rewrites `lprec`/`evap`
@@ -234,7 +235,7 @@ contains
                do k = kt, 1, -1
                   h0 = h_layer(i, j, k)
                   if (h0 > H_VANISHED) then
-                     take = min(left, cfl*h0)
+                     take = fw_mass_take(left, cfl, h0)
                      if (take > 0.0_wp) then
                         h_layer(i, j, k) = h0 - take
                         heat_budget(i, j, k) = heat_budget(i, j, k) - take*c_T(i, j, k)
@@ -255,6 +256,20 @@ contains
       n_thin = c_thin
       n_pd = c_pd
    end subroutine fw_mass_column_impl
+
+   pure function fw_mass_take(left, cfl, h0) result(take)
+      !! The thickness one withdrawal takes from a live layer of thickness `h0`:
+      !! `min(left, cfl*h0, h0 - 2*H_VANISHED)`, never negative.  The last bound keeps the layer
+      !! LIVE after the withdrawal, so `c <- c*h0/hn` always runs with `hn > H_VANISHED` and the
+      !! dissolved content `h*c` stays in the column: evaporation removes fresh water only, and a
+      !! layer emptied to `hn <= H_DIV_EPS` would keep its `c` and lose `h0*c` (the reason
+      !! `fw_evap_cfl_limit = 1` is refused).  A layer thinner than `2*H_VANISHED` gives nothing and
+      !! the request passes down.  `fw_mass_column_impl` and `fw_mass_dilute_impl` both call it.
+      !$acc routine seq
+      real(wp), intent(in) :: left, cfl, h0
+      real(wp) :: take
+      take = max(0.0_wp, min(left, cfl*h0, h0 - 2.0_wp*H_VANISHED))
+   end function fw_mass_take
 
    pure subroutine fw_mass_dilute_impl(nx, ny, nz, dt_over_rho0, cfl, fw_net, wet_mask, k_top, &
                                        h_layer, c)
@@ -286,7 +301,7 @@ contains
                do k = kt, 1, -1
                   h0 = h_layer(i, j, k)
                   if (h0 > H_VANISHED) then
-                     take = min(left, cfl*h0)
+                     take = fw_mass_take(left, cfl, h0)
                      if (take > 0.0_wp) then
                         c(i, j, k) = rdb_conc_add_source_mass(c(i, j, k), h0, h0 - take, 0.0_wp)
                         left = left - take

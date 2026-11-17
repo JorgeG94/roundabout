@@ -78,6 +78,7 @@ contains
                   new_unittest("fwm_evap_concentrates_salt_t_unchanged", test_evap_concentrates), &
                   new_unittest("fwm_evap_cfl_passdown", test_evap_cfl_passdown), &
                   new_unittest("fwm_column_exhaustion_is_fatal", test_column_exhaustion_is_fatal), &
+                  new_unittest("fwm_evap_keeps_salt_at_top_of_cfl_range", test_evap_keeps_salt), &
                   new_unittest("fwm_passive_and_age_diluted", test_passive_and_age_diluted), &
                   new_unittest("fwm_pseudo_salt_matches_salinity_bitwise", test_pseudo_salt_bitwise), &
                   new_unittest("fwm_b0_identical_virtual_vs_mass", test_b0_identical), &
@@ -339,7 +340,7 @@ contains
       type(multilayer_state_t) :: ms
       type(ocean_surface_flux_t) :: sf
       real(wp), allocatable :: at(:, :)
-      real(wp), parameter :: H_TOP = 1.0e-3_wp
+      real(wp), parameter :: H_TOP = 2.0e-3_wp
       real(wp), parameter :: REQ = 0.5_wp
       real(wp) :: e_flux, left, h2_expect, c_ini, c_fin, sum_before, sum_after
       integer :: i, j, k
@@ -414,7 +415,7 @@ contains
       type(multilayer_state_t) :: ms
       type(ocean_surface_flux_t) :: sf
       real(wp), allocatable :: at(:, :)
-      real(wp), parameter :: H_THIN = 1.0e-3_wp
+      real(wp), parameter :: H_THIN = 2.0e-3_wp
       integer :: n_thin, n_pd, nx, ny
 
       call setup_column(grid, ms, sf, at, SURF_FW_MASS)
@@ -447,6 +448,60 @@ contains
    end subroutine test_column_exhaustion_is_fatal
 
    ! -----------------------------------------------------------------
+   ! -----------------------------------------------------------------
+   ! 4b. no accepted limit may lose dissolved content
+   ! -----------------------------------------------------------------
+
+   subroutine test_evap_keeps_salt(error)
+      !! A thin top layer, an evaporation larger than it, a limit at the very top of the range (and
+      !! at 1.0, which `validate_config` refuses but the kernel must survive): the layer must stay
+      !! live, the pass-down must supply the rest, the column's salt is exact and its volume falls
+      !! by exactly the request.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      type(ocean_surface_flux_t) :: sf
+      real(wp), allocatable :: at(:, :)
+      real(wp), parameter :: H_TOP = 1.0e-3_wp
+      real(wp), parameter :: REQ = 0.5_wp
+      real(wp), parameter :: LIMITS(2) = [1.0_wp - 1.0e-9_wp, 1.0_wp]
+      real(wp) :: salt0, salt1, vol0
+      integer :: i, j, ic
+
+      do ic = 1, size(LIMITS)
+         call setup_column(grid, ms, sf, at, SURF_FW_MASS)
+         ms%h_layer(:, :, NZ) = H_TOP
+         sf%fw_evap_cfl_limit = LIMITS(ic)
+         sf%evap = -REQ*sf%rho0/DT
+         sf%has_mass_flux = .true.
+         i = NGHOST + 3
+         j = NGHOST + 2
+         salt0 = sum(ms%h_layer(i, j, :)*ms%tracers(ms%idx_salinity)%c(i, j, :))
+         vol0 = sum(ms%h_layer(i, j, :))
+         call map_all(ms, sf, at)
+         !$acc update device(ms%h_layer)
+         !$acc update device(sf%evap)
+         call one_thermo_step(grid, ms, sf, at)
+         call pull_state(ms, sf)
+         call unmap_all(ms, sf, at)
+
+         salt1 = sum(ms%h_layer(i, j, :)*ms%tracers(ms%idx_salinity)%c(i, j, :))
+         call check(error, abs(salt1 - salt0) < 1.0e-13_wp*salt0, "the column's salt content is exact")
+         if (allocated(error)) return
+         call check(error, abs((vol0 - sum(ms%h_layer(i, j, :))) - REQ) < 1.0e-13_wp, &
+                    "the column loses exactly E*dt (the request)")
+         if (allocated(error)) return
+         call check(error, ms%h_layer(i, j, NZ) > H_VANISHED, "the thin top layer stays live")
+         if (allocated(error)) return
+         call check(error, ms%tracers(ms%idx_salinity)%c(i, j, NZ) < 1.0e4_wp, &
+                    "its salinity stays physical (no emptied-layer blow-up)")
+         if (allocated(error)) return
+         call check(error, ms%fw_n_thin_step == 0_int64, "no column ran dry")
+         if (allocated(error)) return
+         call sf%destroy(); call ms%destroy()
+      end do
+   end subroutine test_evap_keeps_salt
+
    ! 5. passive tracers, age, pseudo-salt
    ! -----------------------------------------------------------------
 
@@ -1270,7 +1325,7 @@ contains
       if (allocated(error)) return
       call check(error, nml_ierr(mass_nml("pred_corr", 1, .false., "zstar", 6.0_wp, "", &
                                           forcing_keys=", fw_evap_cfl_limit = 1.5")) == REFUSED, &
-                 "refused: fw_evap_cfl_limit outside (0, 1]")
+                 "refused: fw_evap_cfl_limit outside (0, 1)")
       if (allocated(error)) return
       call check(error, nml_ierr(mass_nml("pred_corr", 1, .false., "zstar", 6.0_wp, &
                                           "&ocean_cavity_dyn_nml enable = .true., draft_config = 'linear', "// &

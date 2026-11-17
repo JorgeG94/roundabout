@@ -3302,7 +3302,7 @@ class OceanForcing(Group):
 
     fw_evap_cfl_limit = Real(
         'fw_evap_cfl_limit',
-        doc="freshwater='mass': largest fraction of a live layer one evaporative withdrawal may take, range (0,1] (OM3/MOM6 EVAP_CFL_LIMIT); the unmet remainder is passed down the column",
+        doc="freshwater='mass': largest fraction of a live layer one evaporative withdrawal may take, range (0,1) (OM3/MOM6 EVAP_CFL_LIMIT); the unmet remainder is passed down the column",
         units='',
         required=False,
         default=0.8,

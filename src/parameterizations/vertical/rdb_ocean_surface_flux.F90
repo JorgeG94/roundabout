@@ -425,7 +425,7 @@ module rdb_ocean_surface_flux
       real(wp) :: fw_evap_cfl_limit = 0.8_wp
          !! Largest fraction of a live layer's thickness one evaporative
          !! withdrawal may take (`&ocean_forcing_nml fw_evap_cfl_limit`, range
-         !! (0, 1]); the unmet remainder is passed down the column.
+         !! (0, 1) -- 1 is refused, it could empty a layer); the unmet remainder is passed down the column.
       logical :: has_q_sw = .false.
          !! Host-side latch — set by a filler after writing `q_sw`
          !! (e.g. an ice `sw_thru` coupler).  **Not** the same as

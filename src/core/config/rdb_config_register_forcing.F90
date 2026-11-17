@@ -283,7 +283,7 @@ contains
       pr => cfg%ocean%forcing%fw_evap_cfl_limit
       call g%add(nml_real("fw_evap_cfl_limit", pr, &
                           "freshwater='mass': largest fraction of a live layer "// &
-                          "one evaporative withdrawal may take, range (0,1] "// &
+                          "one evaporative withdrawal may take, range (0,1) "// &
                           "(OM3/MOM6 EVAP_CFL_LIMIT); the unmet remainder is "// &
                           "passed down the column"))
       call schema%add_group(g)

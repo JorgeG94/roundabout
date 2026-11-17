@@ -4235,8 +4235,17 @@ contains
          has_error = .true.
       end if
       if (.not. (cfg%ocean%forcing%fw_evap_cfl_limit > 0.0_wp .and. &
-                 cfg%ocean%forcing%fw_evap_cfl_limit <= 1.0_wp)) then
-         call logger%error("&ocean_forcing_nml fw_evap_cfl_limit must lie in (0, 1]")
+                 cfg%ocean%forcing%fw_evap_cfl_limit < 1.0_wp)) then
+         call logger%error("&ocean_forcing_nml fw_evap_cfl_limit must lie in (0, 1): a "// &
+                           "limit of 1 would let one withdrawal empty a layer and take its "// &
+                           "dissolved content with it")
+         has_error = .true.
+      end if
+      if (cfg%ocean%bt%n_inner < 1 .and. .not. bt_split_derived(cfg%ocean%bt)) then
+         call logger%error("&ocean_forcing_nml freshwater='mass' requires the split-explicit "// &
+                           "solver (&ocean_bt_nml n_inner >= 1 or auto_n_inner=.true.): the "// &
+                           "unsplit stepper has no ALE remap and no bt_eta re-derive, so the "// &
+                           "added volume would pile up in the top layer for ever")
          has_error = .true.
       end if
       vc = parse_vcoord_type(cfg%vcoord_type, VCOORD_EULERIAN_Z)
