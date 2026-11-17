@@ -320,8 +320,10 @@ program test_ocean_decomp_bitid_mpi
    character(len=*), parameter :: ATM_WARM = "bitid_atm_warm.nc"
    character(len=*), parameter :: ATM_COLD = "bitid_atm_cold.nc"
    character(len=*), parameter :: ATM_CRSE = "bitid_atm_coarse.nc"
-   character(len=*), parameter :: FW_THIN_CFL = "1.0e-5"
-      !! `fw_evap_cfl_limit` of `fw_mass_thin`: a withdrawal larger than 1e-5 of the top layer is passed down.
+   character(len=*), parameter :: FW_THIN_CFL = "1.0e-6"
+      !! `fw_evap_cfl_limit` of `fw_mass_thin` (ten sigma layers over 300-3000 m): the top layer gives at most
+      !! 1e-6 of its thickness (3e-5 m over the 300 m rim), so every evaporating column of the rim passes the rest
+      !! down, while the whole stack (>= 3e-4 m) still covers the largest withdrawal (~1.3e-4 m): no column runs dry.
    character(len=*), parameter :: ATM_WARM_LIST = "bitid_atm_warm_files.txt"
    character(len=*), parameter :: ATM_CRSE_LIST = "bitid_atm_coarse_files.txt"
    character(len=*), parameter :: ATM_COLD_LIST = "bitid_atm_cold_files.txt"
@@ -386,6 +388,9 @@ program test_ocean_decomp_bitid_mpi
    logical :: wd_edge_e = .false., wd_edge_s = .false.
       !! The wet/dry case under way has an open east / south edge (open-edge flip bands).
    integer :: n_steps_cur = N_STEPS
+   integer :: n_ckpt_cur = N_CKPT
+      !! Checkpoint step of the resume leg (`N_CKPT`; the windowed deferred case needs a window-aligned one:
+      !! the restart writer flushes the tracer window, which a mid-window straight run does not do).
    character(len=16) :: balance_ref = ""
       !! Non-empty: `run_one` calls `ocean_balance_apply` with this `ref_level`
       !! after `engine_enter_data` (the `balance_*` cases).
@@ -398,7 +403,7 @@ program test_ocean_decomp_bitid_mpi
       !! `RDB_BITID_CASES`: run only the cases whose name contains this substring.
    type(comm_t) :: comm
    character(len=16), parameter :: SCHEMES(2) = [character(len=16) :: "pred_corr", "ssp_rk2"]
-   character(len=24), parameter :: CASES(110) = [character(len=24) :: &
+   character(len=24), parameter :: CASES(111) = [character(len=24) :: &
                                                  "island_basin", "weno7_pv", &
                                                  "periodic_channel_zstar", &
                                                  "visc_rem_zstar", &
@@ -443,7 +448,7 @@ program test_ocean_decomp_bitid_mpi
                                                  "cavity_mass", "cavity_mass_comp", &
                                                  "wave_drag_rough", "wave_drag_rough_periodic", &
                                                  "bulk_flux_fw_mass", "bulk_flux_fw_mass_fold", &
-                                                 "fw_mass_deferred", "fw_mass_thin"]
+                                                 "fw_mass_deferred", "fw_mass_deferred_nowin", "fw_mass_thin"]
 
    call comm_env_init()
    call comm_env_setup_roles(.false.)
@@ -491,6 +496,7 @@ program test_ocean_decomp_bitid_mpi
       ! (drain_ratio_h3 pins it too.)
       if (trim(CASES(ic)) == "diabatic_end" .or. trim(CASES(ic)) == "drain_ratio_h3" .or. &
           trim(CASES(ic)) == "bulk_flux_bl_ratio2" .or. trim(CASES(ic)) == "fw_mass_deferred" .or. &
+          trim(CASES(ic)) == "fw_mass_deferred_nowin" .or. &
           trim(CASES(ic)) == "drain_ratio_fold_h3") cycle
       call run_case(trim(CASES(ic)), trim(SCHEMES(2)))
    end do
@@ -1396,7 +1402,7 @@ contains
       case ("bulk_flux", "bulk_flux_ice", "bulk_flux_fold", "bulk_flux_sw", "bulk_flux_fw", &
             "bulk_flux_ice_fw", "bulk_flux_bl", "bulk_flux_bl_epbl", "bulk_flux_bl_sw", "bulk_flux_bl_fold", &
             "bulk_flux_bl_ratio2", "bulk_flux_ice_fold", "bulk_flux_fw_mass", "bulk_flux_fw_mass_fold", &
-            "fw_mass_deferred", "fw_mass_thin")
+            "fw_mass_deferred", "fw_mass_deferred_nowin", "fw_mass_thin")
          ! Atmosphere-driven bulk forcing (`&ocean_atm_forcing_nml` +
          ! `&ocean_bulk_flux_nml`): nine prescribed atmospheric fields from
          ! files the test writes (spatially NON-uniform, non-symmetric in
@@ -1442,7 +1448,7 @@ contains
                "&mpi_nml px = "//trim(spx)//", py = "//trim(spy)//" /"//NL// &
                "&time_nml t_end = 86400.0, dt_fixed = 900.0, start_date = '2000-06-21' /"//NL// &
                "&nonhydrostatic_nml nz_layers = "//merge("10", "4 ", &
-                                                         index(label, "bulk_flux_bl") == 1)//" /"//NL// &
+                                                       index(label, "bulk_flux_bl") == 1 .or. label == "fw_mass_thin")//" /"//NL// &
                "&ocean_bt_nml auto_n_inner = .true., split_scheme = '"//scheme//"' /"//NL// &
                "&ocean_hvisc_nml nu_h = 200.0, lateral_closure = 'smagorinsky', "// &
                "smag_ah = .true. /"//NL// &
@@ -1458,8 +1464,7 @@ contains
                "&ocean_forcing_nml enable_components = .true."// &
                merge(", freshwater = 'virtual'", repeat(" ", 24), &
                      label == "bulk_flux_fw" .or. label == "bulk_flux_ice_fw")// &
-               merge(", freshwater = 'mass'", repeat(" ", 22), is_fw_mass_label(label))// &
-               merge(", fw_evap_cfl_limit = "//FW_THIN_CFL, "", label == "fw_mass_thin")//" /"//NL// &
+               fw_mass_keys(label)//" /"//NL// &
                "&ocean_bulk_flux_nml enable = .true., n_iter = 5, z_wind = 10.0, "// &
                "z_ta = 10.0 /"//NL
          if (label == "bulk_flux_bl_epbl") then
@@ -1505,6 +1510,9 @@ contains
          if (label == "fw_mass_deferred") then
             nml = nml//"&ocean_vmix_nml dt_therm_ratio = 2, diabatic_first = .false., "// &
                   "dt_tracer_advect_ratio = 2 /"//NL
+         end if
+         if (label == "fw_mass_deferred_nowin") then
+            nml = nml//"&ocean_vmix_nml dt_therm_ratio = 2, diabatic_first = .false. /"//NL
          end if
          if (label == "bulk_flux_fold" .or. label == "bulk_flux_bl_fold" .or. &
              label == "bulk_flux_ice_fold" .or. label == "bulk_flux_fw_mass_fold") then
@@ -2798,10 +2806,10 @@ contains
       if (ierr == OCEAN_STATUS_OK) then
          call engine_enter_data(engine, cfg)
          t = 0.0_wp
-         call advance(engine, cfg, t, N_CKPT, ierr)
+         call advance(engine, cfg, t, n_ckpt_cur, ierr)
          if (ierr == OCEAN_STATUS_OK) &
             call ocean_state_restart_write(engine%state, engine%grid, engine%decomp, &
-                                           trim(fname), t, N_CKPT, ierr=ierr)
+                                           trim(fname), t, n_ckpt_cur, ierr=ierr)
          call engine_exit_data(engine)
          call engine_teardown(engine)
       end if
@@ -2815,9 +2823,9 @@ contains
             call engine_setup(engine, cfg, ierr, compute_rank=rank, compute_size=nprocs, &
                               restart_file=RST_DIR, t_restart=t, step_restart=step0)
          if (ierr == OCEAN_STATUS_OK) then
-            if (step0 == N_CKPT .and. engine%warm_restart) then
+            if (step0 == n_ckpt_cur .and. engine%warm_restart) then
                call engine_enter_data(engine, cfg)
-               call advance(engine, cfg, t, n_steps_cur - N_CKPT, ierr)
+               call advance(engine, cfg, t, n_steps_cur - n_ckpt_cur, ierr)
                if (ierr == OCEAN_STATUS_OK) then
                   call take_snapshot(engine, res)
                   call take_ledger(engine, res)
@@ -3043,11 +3051,21 @@ contains
       end do
    end subroutine compare_ghosts
 
+   pure function fw_mass_keys(label) result(keys)
+      !! The `&ocean_forcing_nml` keys the fresh-water MASS cases add (empty elsewhere).
+      character(len=*), intent(in) :: label
+      character(len=:), allocatable :: keys
+      keys = ""
+      if (is_fw_mass_label(label)) keys = ", freshwater = 'mass'"
+      if (label == "fw_mass_thin") keys = keys//", fw_evap_cfl_limit = "//FW_THIN_CFL
+   end function fw_mass_keys
+
    pure logical function is_fw_mass_label(label)
       !! The surface fresh-water MASS cases (`freshwater = 'mass'`).
       character(len=*), intent(in) :: label
       is_fw_mass_label = label == "bulk_flux_fw_mass" .or. label == "bulk_flux_fw_mass_fold" .or. &
-                         label == "fw_mass_deferred" .or. label == "fw_mass_thin"
+                         label == "fw_mass_deferred" .or. label == "fw_mass_deferred_nowin" .or. &
+                         label == "fw_mass_thin"
    end function is_fw_mass_label
 
    pure logical function is_wetdry_case(label)
@@ -3205,6 +3223,8 @@ contains
       type(conservation_budget_t) :: buds(8)
 
       n_steps_cur = N_STEPS
+      n_ckpt_cur = N_CKPT
+      if (label == "fw_mass_deferred") n_ckpt_cur = N_CKPT - 1
       call get_environment_variable("RDB_BITID_STEPS", steps_env)
       if (len_trim(steps_env) > 0) read (steps_env, *) n_steps_cur
       balance_ref = ""
@@ -3274,7 +3294,7 @@ contains
             ! drain at all (ref >= 1) with the same count on every layout; the
             ! windowed accumulation is compared bitwise.)
             if (index(case_nml(label, scheme, 1, 1), "dt_tracer_advect_ratio") > 0) then
-               if (ref%drain_iter < merge(1, 2, label == "cavity_combo") .or. &
+               if (ref%drain_iter < merge(1, 2, label == "cavity_combo" .or. label == "fw_mass_deferred") .or. &
                    dec%drain_iter /= ref%drain_iter) then
                   write (*, '(3a,i0,a,i0)') "FAIL ", trim(tag), ": drain passes ref=", &
                      ref%drain_iter, " dec=", dec%drain_iter
