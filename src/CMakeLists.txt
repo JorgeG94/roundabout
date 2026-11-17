@@ -78,6 +78,7 @@ set(CORE_SOURCES
     # below the ice base, not "layer nz") and the per-thermo-step driver that
     # fills the owned heat_cavity/salt_cavity components.
     ${CMAKE_CURRENT_SOURCE_DIR}/parameterizations/vertical/rdb_ocean_cavity_flux.F90
+    ${CMAKE_CURRENT_SOURCE_DIR}/parameterizations/vertical/rdb_ocean_surface_fw_mass.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/parameterizations/vertical/rdb_ocean_vdiff.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/parameterizations/lateral/rdb_ocean_lateral_mix.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/parameterizations/lateral/rdb_ocean_isopycnal_slopes.F90
