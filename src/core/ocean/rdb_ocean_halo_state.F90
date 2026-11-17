@@ -350,6 +350,7 @@ contains
       !! (same thermo cadence); a no-op unless `sf%use_components`, and unconditional
       !! beyond that (no per-filler flag: where the ghosts are already right it
       !! rewrites identical bits).  Both fields are scalars: no sign flip at the fold.
+      !! Under `freshwater = "mass"` the assembled `fw_net` and `Q_salt_tracer` ride along.
       type(ocean_surface_flux_t), intent(inout) :: sf
       type(hgrid_t), intent(in) :: grid
       type(ocean_bc_state_t), intent(in) :: bc
@@ -359,6 +360,13 @@ contains
       call profiler_start("ocean_comms_flux")
       call ocean_halo_exchange_centre_field(sf%Q_heat, grid, bc, device_resident)
       call ocean_halo_exchange_centre_field(sf%Q_salt, grid, bc, device_resident)
+      if (sf%fw_mass) then
+         ! The real fresh-water mass step spends `fw_net` over the FULL array (ghost `h`
+         ! must equal the neighbour's owned `h`), and the tracer deposit reads
+         ! `Q_salt_tracer` there too: both snapshots need their seam ghosts.
+         call ocean_halo_exchange_centre_field(sf%fw_net, grid, bc, device_resident)
+         call ocean_halo_exchange_centre_field(sf%Q_salt_tracer, grid, bc, device_resident)
+      end if
       call profiler_stop("ocean_comms_flux")
    end subroutine ocean_seam_refresh_surface_flux
 

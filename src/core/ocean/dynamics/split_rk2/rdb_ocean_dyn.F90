@@ -109,6 +109,7 @@ module rdb_ocean_dyn
    use rdb_ocean_geothermal, only: ocean_geothermal_t, &
                                    ocean_geothermal_apply_tracers
    use rdb_ocean_cavity_flux, only: ocean_cavity_flux_t, ocean_cavity_mass_step
+   use rdb_ocean_surface_fw_mass, only: ocean_surface_fw_mass_step, fw_mass_rederive_bt_eta
    use rdb_ocean_ideal_age, only: ocean_ideal_age_apply, ocean_ideal_age_reset_surface, &
                                   ocean_ideal_age_young_val
    use rdb_ocean_vertical_advection, only: ocean_vertical_advection_t, &
@@ -1381,6 +1382,13 @@ contains
       if (present(cav)) then
          call ocean_cavity_mass_step(grid, metrics, cav, ms, therm_dt, 0.5_wp, &
                                      active=therm_active)
+      end if
+      ! Surface fresh-water MASS (&ocean_forcing_nml freshwater='mass'): the same
+      ! stage, the same weight, right after the surface-flux apply that deposited the
+      ! tracer salt flux at the old thickness.  Absent / not 'mass' => immediate return.
+      if (present(sf)) then
+         call ocean_surface_fw_mass_step(grid, sf, ms, metrics%areaT, therm_dt, 0.5_wp, &
+                                         active=therm_active)
       end if
       call apply_sw_and_restore(grid, metrics, sf, ms, therm_dt, therm_active)
       call ocean_geothermal_apply_tracers(grid, geo, ms, therm_dt, active=therm_active)
@@ -3705,6 +3713,15 @@ contains
       ! layer grid, and restart checkpoints carry `outer_step_count` so a
       ! mid-Lagrangian resume re-aligns the cadence bit-exactly.
       if (present(vcoord) .and. dyn%is_remap_step()) then
+         ! Real fresh-water mass moved the column sum: the remap builds its target from
+         ! `h_ref = sum(h) - bt_eta`, so give it the free surface that matches the layers
+         ! (after the stage average, which would otherwise leave it dh/2 off).
+         if (present(sf)) then
+            if (sf%fw_mass) then
+               call fw_mass_rederive_bt_eta(grid%nx_total, grid%ny_total, ms%nz_ml, ms%h_layer, &
+                                            dyn%bt_work%bt_H_ref, dyn%bt_work%bt_eta)
+            end if
+         end if
          call profiler_start("ocean_ale_remap")
          ! The grid time-filter relaxes once per thermo interval, so it
          ! must see the aggregate thermo dt (= dt at dt_therm_ratio=1, the
@@ -3852,6 +3869,12 @@ contains
                                                wet_dyn=dyn%bt_work%wd_wet_dyn)
       else
          call ocean_surface_flux_apply_tracers(grid, sf, ms, therm_dt, active=.true.)
+      end if
+      ! Surface fresh-water MASS: once per interval, weight 1 (pred_corr only), after the
+      ! deposit; `bt_eta` is re-derived before the remap in `ocean_dyn_step_split`.
+      if (present(sf)) then
+         call ocean_surface_fw_mass_step(grid, sf, ms, metrics%areaT, therm_dt, 1.0_wp, &
+                                         active=.true.)
       end if
       call apply_sw_and_restore(grid, metrics, sf, ms, therm_dt, .true.)
       call ocean_geothermal_apply_tracers(grid, geo, ms, therm_dt, active=.true.)
@@ -5639,6 +5662,14 @@ contains
       if (present(cav)) then
          call ocean_cavity_mass_step(grid, metrics, cav, ms, therm_dt, chain_weight, &
                                      active=therm_active)
+      end if
+      ! Surface fresh-water MASS (`freshwater='mass'`), same weight as the cavity's.  Gated
+      ! on `flux_active`, not `therm_active`: with `diabatic_first = .false.` the deposit
+      ! (and so this) runs once per interval in `apply_deferred_thermo`; the pred_corr
+      ! predictor never runs it (`therm_active` is false there).
+      if (present(sf)) then
+         call ocean_surface_fw_mass_step(grid, sf, ms, metrics%areaT, therm_dt, chain_weight, &
+                                         active=flux_active)
       end if
       call apply_sw_and_restore(grid, metrics, sf, ms, therm_dt, flux_active)
       call ocean_geothermal_apply_tracers(grid, geo, ms, therm_dt, active=flux_active)

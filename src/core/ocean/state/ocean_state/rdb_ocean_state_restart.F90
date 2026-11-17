@@ -507,6 +507,19 @@ contains
                               size(state%surface_flux%Q_salt, 2), optional=.true.)
          call reg%register_scalar("sf_q_assembled", state%surface_flux%q_assembled, &
                                   optional=.true.)
+         ! Real fresh-water mass (`freshwater="mass"`): the assembled snapshot the mass step
+         ! spends and the tracer salt flux the deposit reads are carried between thermo steps
+         ! exactly like `Q_heat`/`Q_salt` (the deferred path spends the one assembled after
+         ! step N-1 at step N), so a warm restart needs both.  Registered only under the mode,
+         ! so every other restart file is unchanged.
+         if (state%surface_flux%fw_mass) then
+            call reg%register_2d("sf_fw_net", state%surface_flux%fw_net, 0, &
+                                 size(state%surface_flux%fw_net, 1), &
+                                 size(state%surface_flux%fw_net, 2), optional=.true.)
+            call reg%register_2d("sf_Q_salt_tracer", state%surface_flux%Q_salt_tracer, 0, &
+                                 size(state%surface_flux%Q_salt_tracer, 1), &
+                                 size(state%surface_flux%Q_salt_tracer, 2), optional=.true.)
+         end if
          ! CICE-port ice: the shortwave through the ice (`sw_ice`, window mean of `fswthru`) is
          ! refreshed only at the thermo hand-off yet read EVERY step through `sw_net`, so a
          ! checkpoint inside a window must carry it.  The SIS2-derived scheme's `sw_ice` is NOT

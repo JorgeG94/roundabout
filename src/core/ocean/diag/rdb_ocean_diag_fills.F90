@@ -61,6 +61,7 @@ module rdb_ocean_diag_fills
    public :: fill_ice_fresh, fill_ice_fsalt, fill_ice_evap, fill_ice_evapi, fill_ice_evaps, fill_ice_melts, fill_ice_fswdn
    public :: fill_atm_tas, fill_atm_huss, fill_atm_uas, fill_atm_vas, fill_atm_psl
    public :: fill_atm_rlds, fill_atm_rsds, fill_atm_prra, fill_atm_prsn, fill_atm_cosz
+   public :: fill_fw_net, fill_fw_evap, fill_fw_lprec, fill_fw_fprec, fill_fw_passdown
    public :: remap_layer_to_z
    public :: remap_layer_to_sigma, remap_layer_to_zstar
    public :: remap_layer_to_density
@@ -106,7 +107,7 @@ module rdb_ocean_diag_fills
    real(wp), allocatable, save :: diag_remap_dzn(:, :, :)
       !! Target cell thickness, clipped to the column (`(nx,ny,nz_out)`).
 
-   integer, parameter :: N_CANONICAL_DIAGS = 54
+   integer, parameter :: N_CANONICAL_DIAGS = 59
    real(wp), parameter :: CM_DAY_PER_M_S = 8.64e6_wp
       !! Unit conversion for the CICE thickness-rate diagnostics: m/s -> cm/day
       !! (86400 s/day x 100 cm/m). CICE writes every thickness-tendency field
@@ -124,7 +125,8 @@ module rdb_ocean_diag_fills
                                     "atm_rlds", "atm_rsds", "atm_prra", "atm_prsn", "atm_cosz", &
                                     "dvidtd", "daidtt", "daidtd", "albsni", "fswabs_ai", "fswthru_ai", &
                                     "flwup_ai", "fsens_ai", "flat_ai", "fhocn_ai", "fresh_ai", &
-                                    "fsalt_ai", "evap_ai", "evapi_ai", "evaps_ai", "melts", "fswdn_ai"]
+                                    "fsalt_ai", "evap_ai", "evapi_ai", "evaps_ai", "melts", "fswdn_ai", &
+                                    "net_fw", "evap", "lprec", "fprec", "fw_passdown"]
       !! New names are APPENDED: the C-ABI catalog indices of the existing ones never move.
       !! The single source of truth for `is_canonical_diag_name` AND the
       !! P7 discoverability getters (`canonical_diag_catalog_size`/
@@ -1023,6 +1025,69 @@ contains
 #endif
       end select
    end subroutine fill_atm_cosz
+
+   subroutine fill_fw_net(state_handle, buf)
+      !! Net open-ocean fresh-water mass flux the real-mass step spends (`sf%fw_net`, kg m-2 s-1,
+      !! positive INTO the ocean; the assembled snapshot, MOM6 `PRCmE`).  Registered only under
+      !! `&ocean_forcing_nml freshwater = "mass"`.
+      class(*), intent(in) :: state_handle
+      real(wp), intent(inout) :: buf(:, :, :)
+      select type (state => state_handle)
+      class is (ocean_state_t)
+         call fill_atm_field_impl(size(state%surface_flux%fw_net, 1), &
+                                  size(state%surface_flux%fw_net, 2), state%surface_flux%fw_net, buf)
+      end select
+   end subroutine fill_fw_net
+
+   subroutine fill_fw_evap(state_handle, buf)
+      !! `sf%evap` (kg m-2 s-1, <= 0 out of the ocean), the component the filler wrote.
+      !! Registered only under `freshwater = "mass"`.
+      class(*), intent(in) :: state_handle
+      real(wp), intent(inout) :: buf(:, :, :)
+      select type (state => state_handle)
+      class is (ocean_state_t)
+         call fill_atm_field_impl(size(state%surface_flux%evap, 1), &
+                                  size(state%surface_flux%evap, 2), state%surface_flux%evap, buf)
+      end select
+   end subroutine fill_fw_evap
+
+   subroutine fill_fw_lprec(state_handle, buf)
+      !! `sf%lprec` (kg m-2 s-1, >= 0), the open-water liquid precipitation component.
+      !! Registered only under `freshwater = "mass"`.
+      class(*), intent(in) :: state_handle
+      real(wp), intent(inout) :: buf(:, :, :)
+      select type (state => state_handle)
+      class is (ocean_state_t)
+         call fill_atm_field_impl(size(state%surface_flux%lprec, 1), &
+                                  size(state%surface_flux%lprec, 2), state%surface_flux%lprec, buf)
+      end select
+   end subroutine fill_fw_lprec
+
+   subroutine fill_fw_fprec(state_handle, buf)
+      !! `sf%fprec` (kg m-2 s-1, >= 0), the open-water frozen precipitation component.
+      !! Registered only under `freshwater = "mass"`.
+      class(*), intent(in) :: state_handle
+      real(wp), intent(inout) :: buf(:, :, :)
+      select type (state => state_handle)
+      class is (ocean_state_t)
+         call fill_atm_field_impl(size(state%surface_flux%fprec, 1), &
+                                  size(state%surface_flux%fprec, 2), state%surface_flux%fprec, buf)
+      end select
+   end subroutine fill_fw_fprec
+
+   subroutine fill_fw_passdown(state_handle, buf)
+      !! Number of layers below the first live one that supplied part of the last evaporative
+      !! withdrawal (`ms%fw_passdown`; 0 where the top layer sufficed).  Registered only under
+      !! `freshwater = "mass"`.
+      class(*), intent(in) :: state_handle
+      real(wp), intent(inout) :: buf(:, :, :)
+      select type (state => state_handle)
+      class is (ocean_state_t)
+         call fill_atm_field_impl(size(state%multilayer%fw_passdown, 1), &
+                                  size(state%multilayer%fw_passdown, 2), &
+                                  state%multilayer%fw_passdown, buf)
+      end select
+   end subroutine fill_fw_passdown
 
    pure subroutine fill_atm_field_impl(nx, ny, src, buf)
       !! Shared device kernel for the ten `atm_*` diagnostics: a plain
@@ -2305,6 +2370,23 @@ contains
                                         "incoming_shortwave_on_ice_cell_mean")
          end if
       end if
+      if (state%surface_flux%fw_mass) then
+         call register_one_canonical(state, specs, dcoord, dtout, "net_fw", "kg m-2 s-1", &
+                                     fill_fw_net, 1, DIAG_OP_MEAN, &
+                                     "net_fresh_water_flux_into_ocean_spent_by_the_mass_step")
+         call register_one_canonical(state, specs, dcoord, dtout, "evap", "kg m-2 s-1", &
+                                     fill_fw_evap, 1, DIAG_OP_MEAN, &
+                                     "evaporative_mass_flux_into_ocean_open_water")
+         call register_one_canonical(state, specs, dcoord, dtout, "lprec", "kg m-2 s-1", &
+                                     fill_fw_lprec, 1, DIAG_OP_MEAN, &
+                                     "liquid_precipitation_mass_flux_open_water")
+         call register_one_canonical(state, specs, dcoord, dtout, "fprec", "kg m-2 s-1", &
+                                     fill_fw_fprec, 1, DIAG_OP_MEAN, &
+                                     "frozen_precipitation_mass_flux_open_water")
+         call register_one_canonical(state, specs, dcoord, dtout, "fw_passdown", "1", &
+                                     fill_fw_passdown, 1, DIAG_OP_MEAN, &
+                                     "layers_below_the_surface_that_supplied_evaporation")
+      end if
 #ifndef RDB_NO_NETCDF
       if (state%atm%enable) then
          call register_one_canonical(state, specs, dcoord, dtout, "atm_tas", "K", &
@@ -2504,6 +2586,8 @@ contains
       case ("atm_tas", "atm_huss", "atm_uas", "atm_vas", "atm_psl", &
             "atm_rlds", "atm_rsds", "atm_prra", "atm_prsn", "atm_cosz")
          hint = "&ocean_atm_forcing_nml enable"
+      case ("net_fw", "evap", "lprec", "fprec", "fw_passdown")
+         hint = "&ocean_forcing_nml freshwater = 'mass'"
       case default
          hint = ""
       end select

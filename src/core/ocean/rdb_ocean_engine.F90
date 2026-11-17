@@ -385,7 +385,7 @@ contains
       integer :: step_restart_local
       logical :: did_restart
       logical :: resume_q
-      real(wp), allocatable :: q_heat_resume(:, :), q_salt_resume(:, :)
+      real(wp), allocatable :: q_heat_resume(:, :), q_salt_resume(:, :), q_salt_tr_resume(:, :)
       logical :: bt_excluded
       character(len=:), allocatable :: bt_excl_reason
       integer :: bt_halo_req, bt_halo_res
@@ -766,14 +766,15 @@ contains
       ! `validate_config` refuses these too; engine_setup is reached without it (library and
       ! test callers), and a reserved value must never run as `none`.
       select case (parse_surface_freshwater(cfg%ocean%forcing%freshwater))
-      case (SURF_FW_MASS, SURF_FW_INVALID)
+      case (SURF_FW_INVALID)
          call fail("&ocean_forcing_nml freshwater = '"//trim(adjustl(cfg%ocean%forcing%freshwater))// &
-                   "' is not implemented (shipped: none, virtual; 'mass' is reserved)", &
+                   "' is not implemented (shipped: none, virtual, mass)", &
                    ierr, OCEAN_STATUS_ERR_SETUP)
          return
-      case (SURF_FW_VIRTUAL)
+      case (SURF_FW_VIRTUAL, SURF_FW_MASS)
          if (.not. cfg%ocean%forcing%enable_components) then
-            call fail("&ocean_forcing_nml freshwater = 'virtual' requires enable_components = .true.", &
+            call fail("&ocean_forcing_nml freshwater = '"//trim(adjustl(cfg%ocean%forcing%freshwater))// &
+                      "' requires enable_components = .true.", &
                       ierr, OCEAN_STATUS_ERR_SETUP)
             return
          end if
@@ -782,6 +783,12 @@ contains
       end select
       call engine%state%surface_flux%set_components(engine%grid, &
                                                     cfg%ocean%forcing%enable_components)
+      ! `freshwater = "mass"` latched HERE as well (idempotent, re-latched after the constant
+      ! seed below): the restart registry reads `fw_mass` to register the carried `fw_net` /
+      ! `Q_salt_tracer` snapshot, and the registry is built before the seed runs.
+      call engine%state%surface_flux%set_freshwater( &
+         parse_surface_freshwater(cfg%ocean%forcing%freshwater), &
+         cfg%ocean%forcing%fw_evap_cfl_limit)
       ! The restart registry makes the ice-ocean stress tags REQUIRED under the prescribed atmosphere
       ! under this scheme: latch the flag before the read (`bulk_forcing_configure` sets it again).
       engine%state%bulk_forcing%cice_wind = bulk_forcing_wants_cice_wind(cfg)
@@ -873,17 +880,20 @@ contains
       if (resume_q) then
          q_heat_resume = engine%state%surface_flux%Q_heat
          q_salt_resume = engine%state%surface_flux%Q_salt
+         if (engine%state%surface_flux%fw_mass) q_salt_tr_resume = engine%state%surface_flux%Q_salt_tracer
       end if
       call engine%state%surface_flux%set_surface_flux_const( &
          cfg%ocean%thermo%q_heat, cfg%ocean%thermo%q_salt)
       if (resume_q) then
          engine%state%surface_flux%Q_heat = q_heat_resume
          engine%state%surface_flux%Q_salt = q_salt_resume
+         if (engine%state%surface_flux%fw_mass) engine%state%surface_flux%Q_salt_tracer = q_salt_tr_resume
       end if
       ! After the const seed (which resets has_salt): latch the virtual
       ! fresh-water form.  `none` is a no-op, so every existing run is unchanged.
       call engine%state%surface_flux%set_freshwater( &
-         parse_surface_freshwater(cfg%ocean%forcing%freshwater))
+         parse_surface_freshwater(cfg%ocean%forcing%freshwater), &
+         cfg%ocean%forcing%fw_evap_cfl_limit)
       call engine%state%surface_flux%set_p_surf_const( &
          cfg%ocean%psurf%p_surf_const)
       ! E3 top-of-column IN-SITU EOS pressure: seed `ms%p_top` from the
@@ -2636,7 +2646,7 @@ contains
       ! assembler sums it (same thermo cadence).  Owned cells only: nothing
       ! reads the ghosts of `Q_salt`, so no seam exchange (`salt_ice`'s own
       ! exchange in the ice adapters is likewise not needed by any reader; left as is).
-      if (engine%state%surface_flux%fw_virtual) then
+      if (engine%state%surface_flux%fw_virtual .or. engine%state%surface_flux%fw_mass) then
          call ocean_surface_flux_fw_virtual_step(engine%grid, engine%state%surface_flux, &
                                                  engine%state%multilayer, &
                                                  active=engine%state%dyn%enable_thermodynamics &

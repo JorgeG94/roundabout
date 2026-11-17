@@ -381,8 +381,17 @@ module rdb_config
          !! `F` (kg m-2 s-1, into the ocean) becomes the virtual salt flux
          !! `-S_surf*F` in its own component slot `salt_fw`, summed by the
          !! assembler; no column mass moves (Griffies et al. 2001).
-         !! `"mass"` (a real Boussinesq mass source) is reserved and refused
-         !! at configure.  Requires `enable_components`.
+         !! `"mass"`: the same flux moves REAL Boussinesq volume into / out of the
+         !! first live layer with the evaporation pass-down, dilutes / concentrates
+         !! every dissolved tracer, and keeps the virtual salt flux only for the
+         !! boundary-layer buoyancy (`rdb_ocean_surface_fw_mass`).  Open-ocean fluxes
+         !! only; refused with sea ice, `eulerian_z`/`lagrangian` vcoords, wet/dry,
+         !! the ice-shelf cavity and `dt_tracer_advect_ratio > 1` with
+         !! `diabatic_first = .true.`.  Requires `enable_components`.
+      real(wp) :: fw_evap_cfl_limit = 0.8_wp
+         !! `freshwater = "mass"` only: the largest fraction of a live layer's
+         !! thickness one evaporative withdrawal may take (MOM6 `EVAP_CFL_LIMIT`);
+         !! the unmet remainder is passed down the column.  Range (0, 1].
    end type ocean_forcing_config_t
 
    type :: ocean_ice_config_t

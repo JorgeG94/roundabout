@@ -4025,15 +4025,13 @@ contains
             end if
          end if
       case (SURF_FW_MASS)
-         call logger%error("&ocean_forcing_nml freshwater='mass' is not implemented "// &
-                           "yet (the real Boussinesq fresh-water mass flux is a "// &
-                           "follow-up); use 'virtual' (fixed column mass, virtual "// &
-                           "salt flux) or 'none'")
-         has_error = .true.
+         ! Real Boussinesq fresh-water MASS (`rdb_ocean_surface_fw_mass`).  Needs the component
+         ! set (`fw_net`, `Q_salt_tracer` are components).  Envelope holes are refused BY NAME:
+         call fw_mass_validate(cfg, has_error)
       case default
          call logger%error("&ocean_forcing_nml freshwater = '"// &
                            trim(adjustl(cfg%ocean%forcing%freshwater))// &
-                           "' is not recognised (shipped: none, virtual; reserved: mass)")
+                           "' is not recognised (shipped: none, virtual, mass)")
          has_error = .true.
       end select
 
@@ -4188,6 +4186,83 @@ contains
       if (present(ierr)) ierr = OCEAN_STATUS_OK
 
    end subroutine validate_config
+
+   subroutine fw_mass_validate(cfg, has_error)
+      !! Configure-time envelope of `&ocean_forcing_nml freshwater = "mass"` (real Boussinesq
+      !! fresh-water volume, `rdb_ocean_surface_fw_mass`).  Every refusal names its reason: a
+      !! silent composition here would be a wrong answer, not a crash.
+      use rdb_vcoord, only: parse_vcoord_type
+      use rdb_constants, only: VCOORD_EULERIAN_Z, VCOORD_LAGRANGIAN
+      use rdb_ice_config, only: ice_scheme_is_cice
+      type(config_t), intent(in) :: cfg
+      logical, intent(inout) :: has_error
+      integer :: vc
+      logical :: deferred
+
+      if (.not. cfg%ocean%forcing%enable_components) then
+         call logger%error("&ocean_forcing_nml freshwater='mass' requires enable_components=.true. "// &
+                           "(fw_net and Q_salt_tracer are assembler outputs of the component set)")
+         has_error = .true.
+      end if
+      if (.not. cfg%ocean%thermo%enable_thermodynamics) then
+         call logger%error("&ocean_forcing_nml freshwater='mass' requires "// &
+                           "&ocean_thermo_nml enable_thermodynamics=.true. (the mass step rides "// &
+                           "the thermo-cadence surface-flux application)")
+         has_error = .true.
+      end if
+      if (.not. (cfg%ocean%forcing%fw_evap_cfl_limit > 0.0_wp .and. &
+                 cfg%ocean%forcing%fw_evap_cfl_limit <= 1.0_wp)) then
+         call logger%error("&ocean_forcing_nml fw_evap_cfl_limit must lie in (0, 1]")
+         has_error = .true.
+      end if
+      vc = parse_vcoord_type(cfg%vcoord_type, VCOORD_EULERIAN_Z)
+      if (vc == VCOORD_EULERIAN_Z) then
+         call logger%error("&ocean_forcing_nml freshwater='mass' is refused with the 'eulerian_z' "// &
+                           "vertical coordinate: its remap returns early and its target ignores "// &
+                           "eta, so the added volume would pile up in the top layer for ever.  "// &
+                           "Use sigma, zstar, zstar_full, zstar_sigma, z_fixed, rho or hycom.")
+         has_error = .true.
+      end if
+      if (vc == VCOORD_LAGRANGIAN) then
+         call logger%error("&ocean_forcing_nml freshwater='mass' is refused with the 'lagrangian' "// &
+                           "vertical coordinate: it has no remap, so the top layer would grow "// &
+                           "without bound under a persistent P - E.  Use sigma, zstar, zstar_full, "// &
+                           "zstar_sigma, z_fixed, rho or hycom.")
+         has_error = .true.
+      end if
+      if (cfg%ocean%wetdry%enable) then
+         call logger%error("&ocean_forcing_nml freshwater='mass' is refused with &ocean_wetdry_nml "// &
+                           "enable=.true.: its positive-definite outflow limiter is the other "// &
+                           "writer of the top-layer thickness and would have to see the volume.")
+         has_error = .true.
+      end if
+      if (cfg%ocean%cavity_dyn%enable .or. cfg%ocean%cavity_melt%enable) then
+         call logger%error("&ocean_forcing_nml freshwater='mass' is refused with the ice-shelf "// &
+                           "cavity (&ocean_cavity_dyn_nml / &ocean_cavity_melt_nml): the "// &
+                           "cover-masked mass twin is untested.")
+         has_error = .true.
+      end if
+      if (cfg%ocean%ice%enable) then
+         if (ice_scheme_is_cice(cfg)) then
+            call logger%error("&ocean_forcing_nml freshwater='mass' is refused with sea ice "// &
+                              "(&ocean_ice_nml scheme='cice'): the ice hand-off still delivers "// &
+                              "its fresh water as a virtual salt flux and the ice mass loading is "// &
+                              "not wired, so the coupled water ledger could not close.")
+         else
+            call logger%error("&ocean_forcing_nml freshwater='mass' is refused with sea ice: the "// &
+                              "SIS2-derived scheme's brine coupler has no mass slot.")
+         end if
+         has_error = .true.
+      end if
+      deferred = cfg%ocean%vmix%dt_therm_ratio > 1 .and. .not. cfg%ocean%vmix%diabatic_first
+      if (cfg%ocean%vmix%dt_tracer_advect_ratio > 1 .and. .not. deferred) then
+         call logger%error("&ocean_forcing_nml freshwater='mass' with &ocean_vmix_nml "// &
+                           "dt_tracer_advect_ratio > 1 requires the deferred thermo order "// &
+                           "(dt_therm_ratio > 1 and diabatic_first=.false.): an in-window source "// &
+                           "on a frozen tracer breaks the window drain's thickness reconstruction.")
+         has_error = .true.
+      end if
+   end subroutine fw_mass_validate
 
    subroutine validate_balanced_vortex(cfg, has_error)
       !! Config conflicts of `ic_config = "balanced_vortex"`.  The IC is
