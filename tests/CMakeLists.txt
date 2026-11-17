@@ -827,6 +827,27 @@ if(RDB_ENABLE_MPI)
         TIMEOUT
         14400)
   endforeach()
+  # The per-substep decomposed path (`bt_halo = 0` on several ranks).  Since
+  # every case that leaves `bt_halo` unset runs AUTO (wide where proven), the
+  # plain legs no longer cover width 0 except on excluded cases: this leg pins
+  # `bt_halo = 0` on the decomposed runs of the WHOLE case list
+  # (`RDB_BITID_BT_HALO=0`; asserted per run through the halo counters, so it
+  # cannot pass with AUTO resolving wide). Each leg runs in its own directory:
+  # the checkpoint / resume legs write `bitid_resume_rst/` in the working
+  # directory, which two rank counts must not share.
+  foreach(np 2 4)
+    set(_bt0_dir "${CMAKE_CURRENT_BINARY_DIR}/bitid_bt0_${np}rank")
+    file(MAKE_DIRECTORY "${_bt0_dir}")
+    add_test(
+      NAME rdb_test_ocean_decomp_bitid_mpi_${np}rank_bt0
+      COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${np}
+              $<TARGET_FILE:test_ocean_decomp_bitid_mpi>
+      WORKING_DIRECTORY "${_bt0_dir}")
+    set_tests_properties(
+      rdb_test_ocean_decomp_bitid_mpi_${np}rank_bt0
+      PROPERTIES LABELS "ocean" ENVIRONMENT
+                 "OMP_NUM_THREADS=1;RDB_BITID_BT_HALO=0" TIMEOUT 14400)
+  endforeach()
   # Wide-halo barotropic march-in (`&ocean_bt_nml bt_halo > 0`): the `bth*`
   # cases (the plain legs run them too) once more with NaN poisoning of every
   # wide ghost layer the march has already invalidated, between exchanges
