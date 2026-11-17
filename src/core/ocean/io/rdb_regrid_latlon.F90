@@ -28,12 +28,15 @@ module rdb_regrid_latlon
    public :: regrid_apply_2d
    public :: regrid_window
 
-   integer, parameter :: REGRID_NMAX_CAP = 64
-      !! Fail-loud ceiling on the per-cell stencil size `nmax`: a 4-degree
-      !! target on a TL319-like (~0.5625-degree) source needs ~64 source
-      !! cells inside one conservative polygon's bounding box; a 1-degree
-      !! target needs 9-12. Exceeding it is always `ierr`, never a silent
-      !! truncation of the accumulated area.
+   integer, parameter :: REGRID_NMAX_CAP = 512
+      !! Fail-loud ceiling on the per-cell stencil size `nmax` (and the size
+      !! of the builder's per-cell candidate list): a 4-degree target on a
+      !! TL319-like (~0.5625-degree) source needs ~64 source cells inside one
+      !! conservative polygon's bounding box, a 1-degree target 9-12, but a
+      !! tripolar-cap target cell that reaches the pole spans tens of
+      !! degrees of longitude and needs a few hundred (the 1-degree OM_1deg
+      !! mosaic against TL319: up to ~250).  Exceeding it is always `ierr`,
+      !! never a silent truncation of the accumulated area.
 
    integer, parameter :: REGRID_POLY_MAXV = 24
       !! Max vertex count carried through the Sutherland-Hodgman clip
@@ -498,7 +501,7 @@ contains
       integer, intent(out) :: ierr
       integer, intent(in), optional :: nmax_cap_override
 
-      integer, parameter :: LOCAL_MAXCAND = 512
+      integer, parameter :: LOCAL_MAXCAND = REGRID_NMAX_CAP
 
       integer :: cap, i, j, ip, jp, k, kc
       integer :: ncur, nmax_used, jmin_g, jmax_g
@@ -693,6 +696,8 @@ contains
                         cand_i(n_cand) = i_cur
                         cand_j(n_cand) = j_orig
                         cand_area(n_cand) = 0.5_wp*abs(poly_area2(ncur, qx, qy))
+                     else
+                        ierr = 1   ! a candidate that does not fit: never a silent truncation
                      end if
                   end if
                end do
