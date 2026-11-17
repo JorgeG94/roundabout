@@ -603,7 +603,11 @@ contains
       !! `areasum` and the error bits `ibits`.  On `ibits /= 0` the other
       !! outputs are unspecified.
       !$acc routine seq
-      integer, value :: iedge, efa
+      ! `iedge`/`efa` are plain `intent(in)`, NOT `value`: under nvfortran 26.5 `-O2`+ on the CPU, once this routine is
+      ! inlined into `remap_edge_one` (which is itself `value`-dummied and inlined into the `do concurrent` caller) the
+      ! copy-in of its `value` dummies is dropped and `iedge`/`efa` read stack garbage, so every edge returned
+      ! ICE_ERR_TRANSPORT_CFL.  (`remap_edge_one`'s `value` dummies are the `do concurrent` indices and stay.)
+      integer, intent(in) :: iedge, efa
       real(wp), intent(in) :: puny, dlx, dly, drx, dry, fc, f_tl, f_bl, f_tr, f_br, f_l, f_r, edgearea
       real(wp), intent(out) :: areasum
       real(wp), intent(out) :: px(3, REMAP_NSLOT), py(3, REMAP_NSLOT), ar(REMAP_NSLOT)

@@ -151,7 +151,10 @@ contains
       !! bounds are `hlo = hin_max(nr-1)` and `hhi = hin_max(nr)` (the top category's `hhi` is replaced by
       !! `RIDGE_BIG` here).  Over `nr = 1..ncat` each sums to 1.
       !$acc routine seq
-      integer, value :: kredist, nr, ncat
+      ! plain `intent(in)`, not `value`: nvfortran 26.5 `-O2`+ on the CPU drops the copy-in of `value` dummies of a
+      ! routine that is inlined into its caller AND itself inlines another function (`rdb_sm_exp`), so
+      ! `kredist`/`nr`/`ncat` read garbage here and ridging never converged (ICE_ERR_RIDGE_NOCONV).
+      integer, intent(in) :: kredist, nr, ncat
       real(wp), intent(in) :: hrmin, hrmax, hrexp, hlo, hhi
       real(wp), intent(out) :: farea, fvol
       real(wp) :: hL, hR, dhr, dhr2, hi1, hexp, expL, expR, expL_arg, expR_arg, hb
