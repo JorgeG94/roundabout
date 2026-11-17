@@ -541,7 +541,7 @@ closure is active in which regime, and its tunable knobs, is tabulated in
   buoyancy restoring (`&ocean_restore_nml`), atmospheric pressure loading
   (`&ocean_psurf_nml`), geothermal bottom heat
   (`&ocean_geothermal_nml`), and time-varying NetCDF forcing
-  (`&ocean_dataovr_nml`, off the shared `rdb_ocean_data_input` reader).
+  (`&ocean_dataovr_nml`, off the shared `rdb_ocean_data_input` reader; wind stress, heat, salt, `evap`, `lprec`, and the runoff mass fluxes `lrunoff`/`frunoff`, kg m-2 s-1 on wet cells of the model grid, with `frunoff` also charging its latent heat `q_fus_rof = -L_f*frunoff`; `tools/om_runoff_to_model.f90` builds such a file from a lon-lat product: conservative remap, land values moved to the nearest wet coastal cell, total preserved; Tsujino et al. 2018).
 - **Tides** — equilibrium body forcing + scalar SAL
   (`&ocean_tides_nml`), the boundary-tide nodal correction, and
   barotropic linear wave drag (`&ocean_bt_nml wave_drag`).

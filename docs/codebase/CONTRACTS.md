@@ -116,7 +116,7 @@ reproducible, and `efp_real_diff` for a difference against a latched reference.
 
 The mass-flux components (`evap`, `lprec`, `fprec`, `vprec`, `lrunoff`, `frunoff`, `seaice_melt`) and
 their `heat_content_*` companions are enthalpy and salt bookkeeping only. They do not change column mass.
-The latent heat of fusion of a frozen flux is its own heat component, `q_fus` (`-L_f*fprec`, written by whoever writes `fprec`), kept apart from `heat_content_fprec` so it stays charged whatever the mass treatment does.
+The latent heat of fusion of a frozen flux is its own heat component, `q_fus` (`-L_f*fprec`, written by whoever writes `fprec`) or `q_fus_rof` (`-L_f*frunoff`, written by the runoff reader, `&ocean_dataovr_nml frunoff`), kept apart from `heat_content_fprec` so it stays charged whatever the mass treatment does.
 
 | Path | Real column mass? |
 |---|---|
@@ -124,7 +124,7 @@ The latent heat of fusion of a frozen flux is its own heat component, `q_fus` (`
 | Ice-shelf basal melt, `freshwater = "virtual"` (default) | No |
 | Sea ice (`salt_ice`, `heat_ice`, `sw_ice` through the coupler) | No. Virtual. |
 | The seven atmospheric/river mass-flux components, `&ocean_forcing_nml freshwater = "virtual"`: their net `F` is the virtual salt flux `salt_fw`, no mass | No |
-| The same components, `freshwater = "mass"` (open-ocean `lprec`, `fprec`, `evap`; the runoff / `seaice_melt` / `vprec` slots are in the sum but have no filler yet) | Yes (`ocean_surface_fw_mass_step`, module `rdb_ocean_surface_fw_mass`) |
+| The same components, `freshwater = "mass"` (open-ocean `lprec`, `fprec`, `evap`, and `lrunoff`/`frunoff` from `&ocean_dataovr_nml`; the `seaice_melt` / `vprec` slots are in the sum but have no filler yet) | Yes (`ocean_surface_fw_mass_step`, module `rdb_ocean_surface_fw_mass`) |
 
 **Surface fresh-water mass (`&ocean_forcing_nml freshwater = "mass"`).** Ownership and order, all in the
 module header of `src/parameterizations/vertical/rdb_ocean_surface_fw_mass.F90`:
