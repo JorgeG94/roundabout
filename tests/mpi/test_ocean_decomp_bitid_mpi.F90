@@ -324,6 +324,8 @@ program test_ocean_decomp_bitid_mpi
       !! `fw_evap_cfl_limit` of `fw_mass_thin` (ten sigma layers over 300-3000 m): the top layer gives at most
       !! 1e-6 of its thickness (3e-5 m over the 300 m rim), so every evaporating column of the rim passes the rest
       !! down, while the whole stack (>= 3e-4 m) still covers the largest withdrawal (~1.3e-4 m): no column runs dry.
+   character(len=*), parameter :: RUNOFF_BASIN = "bitid_runoff_isle.nc"
+   character(len=*), parameter :: RUNOFF_FOLD = "bitid_runoff_fold.nc"
    character(len=*), parameter :: ATM_WARM_LIST = "bitid_atm_warm_files.txt"
    character(len=*), parameter :: ATM_CRSE_LIST = "bitid_atm_coarse_files.txt"
    character(len=*), parameter :: ATM_COLD_LIST = "bitid_atm_cold_files.txt"
@@ -403,7 +405,7 @@ program test_ocean_decomp_bitid_mpi
       !! `RDB_BITID_CASES`: run only the cases whose name contains this substring.
    type(comm_t) :: comm
    character(len=16), parameter :: SCHEMES(2) = [character(len=16) :: "pred_corr", "ssp_rk2"]
-   character(len=24), parameter :: CASES(111) = [character(len=24) :: &
+   character(len=24), parameter :: CASES(113) = [character(len=24) :: &
                                                  "island_basin", "weno7_pv", &
                                                  "periodic_channel_zstar", &
                                                  "visc_rem_zstar", &
@@ -448,7 +450,8 @@ program test_ocean_decomp_bitid_mpi
                                                  "cavity_mass", "cavity_mass_comp", &
                                                  "wave_drag_rough", "wave_drag_rough_periodic", &
                                                  "bulk_flux_fw_mass", "bulk_flux_fw_mass_fold", &
-                                                 "fw_mass_deferred", "fw_mass_deferred_nowin", "fw_mass_thin"]
+                                                 "fw_mass_deferred", "fw_mass_deferred_nowin", "fw_mass_thin", &
+                                                 "runoff_mass", "runoff_mass_fold"]
 
    call comm_env_init()
    call comm_env_setup_roles(.false.)
@@ -581,6 +584,23 @@ contains
       end if
       if (index(label, "cice_ice") == 1) then
          nml = cice_ice_nml(label, scheme, px, py)
+         return
+      end if
+      if (label == "runoff_mass" .or. label == "runoff_mass_fold") then
+         ! File-driven RUNOFF (`&ocean_dataovr_nml lrunoff / frunoff`, static record) spent as real
+         ! volume (`freshwater = 'mass'`) on the island basin / the tripolar cap.  The point sources
+         ! (see `write_runoff_files`) sit on both sides of the x and y rank seams, and on the fold row
+         ! across the tripolar fold (columns that mirror each other, one liquid, one frozen), so the
+         ! reader's per-rank windows, `q_fus_rof`, the seam-exchanged `fw_net` snapshot, the layer
+         ! growth and the console mass source all cross a seam.
+         nml = case_nml(merge("island_basin", "tripolar    ", label == "runoff_mass"), scheme, px, py)// &
+               "&ocean_thermo_nml enable_thermodynamics = .true. /"//NL// &
+               "&ocean_forcing_nml enable_components = .true., freshwater = 'mass' /"//NL// &
+               "&ocean_dataovr_nml enable = .true., time_mode = 'static', "// &
+               "lrunoff_file = '"//merge(RUNOFF_BASIN, RUNOFF_FOLD, label == "runoff_mass")// &
+               "', lrunoff_var = 'lrunoff', "// &
+               "frunoff_file = '"//merge(RUNOFF_BASIN, RUNOFF_FOLD, label == "runoff_mass")// &
+               "', frunoff_var = 'frunoff' /"//NL
          return
       end if
 
@@ -3065,7 +3085,7 @@ contains
       character(len=*), intent(in) :: label
       is_fw_mass_label = label == "bulk_flux_fw_mass" .or. label == "bulk_flux_fw_mass_fold" .or. &
                          label == "fw_mass_deferred" .or. label == "fw_mass_deferred_nowin" .or. &
-                         label == "fw_mass_thin"
+                         label == "fw_mass_thin" .or. label == "runoff_mass" .or. label == "runoff_mass_fold"
    end function is_fw_mass_label
 
    pure logical function is_wetdry_case(label)
@@ -3324,7 +3344,7 @@ contains
                  label == "cavity_mass_comp" .or. is_wetdry_case(label) .or. is_ice_fold_case(label) .or. &
                  is_fw_mass_label(label)) .and. &
                 (nprocs/px == 1 .or. px == nprocs/px .or. (index(label, "cice_ice") == 1 .and. px == 1) .or. &
-                 (is_fw_mass_label(label) .and. label == "bulk_flux_fw_mass_fold")) .and. &
+                 (is_fw_mass_label(label) .and. (label == "bulk_flux_fw_mass_fold" .or. label == "runoff_mass_fold"))) .and. &
                 (nprocs > 1 .or. label == "cavity_sigma_ratio2" .or. label == "cavity_mass" .or. &
                  label == "cavity_mass_comp" .or. is_fw_mass_label(label))) then
                ! 4x1 and 2x2 at np = 4 (and 2x1 at np = 2).
@@ -4323,12 +4343,60 @@ contains
       ierr = nf90_put_var(ncid, v1, tt)
       call rdb_put_var_1d(ncid, v2, [0.0_wp, 172800.0_wp])
       call nc_close(ncid)
+      call write_runoff_files()
       call write_atm_file(ATM_WARM, ATM_WARM_LIST, 288.0_wp, 4.0e-3_wp, 72, 36)
       call write_atm_file(ATM_COLD, ATM_COLD_LIST, 255.0_wp, 6.0e-4_wp, 72, 36)
       ! 30 x 10 degree source for the tripolar cap (see the bulk_flux_fold case).
       call write_atm_file(ATM_CRSE, ATM_CRSE_LIST, 288.0_wp, 4.0e-3_wp, 12, 18)
       call write_atm_file(ATM_CRSE_COLD, ATM_CRSE_COLD_LIST, 255.0_wp, 6.0e-4_wp, 12, 18)
    end subroutine write_input_files
+
+   subroutine write_runoff_file(path, nx, ny, pts, nfrozen)
+      !! One static (two identical records) model-grid runoff file with `lrunoff` and `frunoff`:
+      !! `pts(:, 1:2)` are the physical cell indices of the point sources, the first `nfrozen` of
+      !! them frozen (`frunoff`), the others liquid.  Rates differ per point; zero elsewhere.
+      character(len=*), intent(in) :: path
+      integer, intent(in) :: nx, ny, nfrozen, pts(:, :)
+      real(wp), allocatable :: lr(:, :, :), fr(:, :, :)
+      integer :: ncid, dx_, dy_, dt_, v1, v2, v3, ierr, k
+
+      allocate (lr(nx, ny, 2), fr(nx, ny, 2))
+      lr = 0.0_wp
+      fr = 0.0_wp
+      do k = 1, size(pts, 1)
+         if (k <= nfrozen) then
+            fr(pts(k, 1), pts(k, 2), :) = 2.0e-3_wp*(1.0_wp + 0.25_wp*real(k, wp))
+         else
+            lr(pts(k, 1), pts(k, 2), :) = 3.0e-3_wp*(1.0_wp + 0.5_wp*real(k, wp))
+         end if
+      end do
+      call nc_create_file(path, ncid)
+      call nc_def_dim(ncid, "x", nx, dx_)
+      call nc_def_dim(ncid, "y", ny, dy_)
+      call nc_def_dim(ncid, "time", 2, dt_)
+      call nc_def_var_3d(ncid, "lrunoff", [dx_, dy_, dt_], v1)
+      call nc_def_var_3d(ncid, "frunoff", [dx_, dy_, dt_], v2)
+      call rdb_def_var_1d(ncid, "time", dt_, v3)
+      call nc_enddef(ncid)
+      ierr = nf90_put_var(ncid, v1, lr)
+      ierr = nf90_put_var(ncid, v2, fr)
+      call rdb_put_var_1d(ncid, v3, [0.0_wp, 1.0e9_wp])
+      call nc_close(ncid)
+   end subroutine write_runoff_file
+
+   subroutine write_runoff_files()
+      !! The `runoff_mass` / `runoff_mass_fold` inputs.  Basin (26 x 18, island in the middle): frozen
+      !! at (14,3) (a seam cell of every x split) and (4,10); liquid at (13,3), (7,3), (8,3), (4,9) and
+      !! (20,16) -- both sides of the x seams (np 2: 13|14, np 4: 7|8) and of the y seam (9|10), on
+      !! wet cells only.  Fold (30 x 24, fold row j = 24, mirror of column i is 31 - i): frozen at
+      !! (16,24) (the mirror partner of the liquid (15,24), and the x seam of np 2 is 15|16) and
+      !! (12,23); liquid at (15,24), (17,12), (8,12) and (9,12) (np 4: 8|9 seam).
+      integer, parameter :: PB(7, 2) = reshape([14, 4, 13, 7, 8, 20, 4, 3, 10, 3, 3, 3, 16, 9], [7, 2])
+      integer, parameter :: PF(6, 2) = reshape([16, 12, 15, 17, 8, 9, 24, 23, 24, 12, 12, 12], [6, 2])
+
+      call write_runoff_file(RUNOFF_BASIN, NX_G, NY_G, PB, 2)
+      call write_runoff_file(RUNOFF_FOLD, 30, 24, PF, 2)
+   end subroutine write_runoff_files
 
    subroutine write_atm_file(path, listname, tas0, huss0, nlon, nlat)
       !! One global lon-lat file (5 degrees, NT three-hourly records stamped at
