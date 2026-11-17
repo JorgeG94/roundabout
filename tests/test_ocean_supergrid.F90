@@ -265,7 +265,7 @@ contains
       g = make_grid(NI, NJ, DLON, DLAT)
       ng = NGHOST
 
-      write (fname, '(a)') "/tmp/test_supergrid_roundtrip.nc"
+      write (fname, '(a)') "test_supergrid_roundtrip.nc"
       call write_analytic_supergrid(fname, NI, NJ, LON_W, LAT_S, DLON, DLAT, RAD_EARTH)
 
       call m_sg%init(g)
@@ -401,7 +401,7 @@ contains
       real(wp), parameter :: DLON = 1.0_wp, DLAT = 1.0_wp
       character(len=256) :: fname
 
-      write (fname, '(a)') "/tmp/test_supergrid_mismatch.nc"
+      write (fname, '(a)') "test_supergrid_mismatch.nc"
       call write_analytic_supergrid(fname, NI, NJ, LON_W, LAT_S, DLON, DLAT, RAD_EARTH)
 
       ! Correct query → ok
@@ -442,7 +442,7 @@ contains
       nx_tot = g%nx_total
       ny_tot = g%ny_total
 
-      write (fname, '(a)') "/tmp/test_supergrid_ghost.nc"
+      write (fname, '(a)') "test_supergrid_ghost.nc"
       call write_analytic_supergrid(fname, NI, NJ, LON_W, LAT_S, DLON, DLAT, RAD_EARTH)
 
       call m%init(g)
@@ -604,7 +604,7 @@ contains
       g = make_grid(NI, NJ, DLON, DLAT)
       ng = NGHOST
 
-      write (fname, '(a)') "/tmp/test_supergrid_nonuniform.nc"
+      write (fname, '(a)') "test_supergrid_nonuniform.nc"
       call write_nonuniform_supergrid(fname, NI, NJ, LON_W, LAT_S, DLON, DLAT, RAD_EARTH)
 
       call m%init(g)
@@ -660,7 +660,7 @@ contains
       g = make_grid(NI, NJ, DLON, DLAT)
       ng = NGHOST
 
-      write (fname, '(a)') "/tmp/test_supergrid_areaBu.nc"
+      write (fname, '(a)') "test_supergrid_areaBu.nc"
       call write_analytic_supergrid(fname, NI, NJ, LON_W, LAT_S, DLON, DLAT, RAD_EARTH)
 
       call m%init(g)
@@ -756,7 +756,7 @@ contains
          call grid%init(NI, NJ, NGHOST, DLON, DLAT)
 
          ! ---- configure metrics from the supergrid file ----
-         write (fname, '(a)') "/tmp/test_supergrid_quiescent.nc"
+         write (fname, '(a)') "test_supergrid_quiescent.nc"
          call write_analytic_supergrid(fname, NI, NJ, LON_W, LAT_S, &
                                        DLON, DLAT, RAD_EARTH)
          call metrics%init(grid)
