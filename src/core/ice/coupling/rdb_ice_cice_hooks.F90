@@ -513,8 +513,15 @@ contains
       cat%aice_init => ctx%cice%aice_init
       cat%aicen => ctx%cice%aicen
       cat%vicen => ctx%cice%vicen
-      call ice_dyn_c_step(G, S%metrics, S%coriolis_adv%f_corner, S%barotropic%b, S%ice_cgrid, S%ice, &
-                          S%multilayer, S%bc, ctx%dt, cat=cat)
+      if (S%surface_flux%ice_load) then
+         ! the ice's weight is on the surface pressure: its tilt is that of the pressure-loaded surface
+         call ice_dyn_c_step(G, S%metrics, S%coriolis_adv%f_corner, S%barotropic%b, S%ice_cgrid, S%ice, &
+                             S%multilayer, S%bc, ctx%dt, cat=cat, p_surf=S%surface_flux%p_surf, &
+                             inv_rho0_g=1.0_wp/(S%eos%rho0*S%dyn%bt_work%g_bt))
+      else
+         call ice_dyn_c_step(G, S%metrics, S%coriolis_adv%f_corner, S%barotropic%b, S%ice_cgrid, S%ice, &
+                             S%multilayer, S%bc, ctx%dt, cat=cat)
+      end if
       call copy2_impl(nx, ny, S%ice%dync%strocnT_x, ctx%work%tau_x)
       call copy2_impl(nx, ny, S%ice%dync%strocnT_y, ctx%work%tau_y)
       call copy2_impl(nx, ny, S%ice%dync%w%rdg_conv, ctx%work%rdg_conv)
@@ -606,7 +613,10 @@ contains
       ! must not count it either.  Prescribed atmosphere only: with the uniform atmosphere the rain is
       ! zero and nothing runs.  Under `&ocean_forcing_nml freshwater = "virtual"` the open fraction's
       ! rain DOES dilute (`salt_fw`), so the ice-covered share must too: the term stays in `fresh`.
-      if (S%atm%enable .and. .not. S%surface_flux%fw_virtual) then
+      ! Under `"mass"` the open share is real volume (`lprec`) and the covered share arrives as
+      ! `seaice_melt = fresh`: the term stays in `fresh` there as well, so together the two shares
+      ! are the whole precipitation exactly once.
+      if (S%atm%enable .and. .not. (S%surface_flux%fw_virtual .or. S%surface_flux%fw_mass)) then
          call rain_through_impl(ctx%work%nx, ctx%work%ny, ctx%cice%nghost + 1, &
                                 ctx%cice%nghost + ctx%cice%nx_phys, ctx%cice%nghost + 1, &
                                 ctx%cice%nghost + ctx%cice%ny_phys, ctx%dt/S%icec%avg%t_acc, &

@@ -76,7 +76,8 @@ module rdb_ice_dyn_c
    !! Open ocean boundaries are land for the ice (the dynamics envelope allows
    !! wall or periodic edges only).  `strocnT_x/y` is restart state with no
    !! consumer until the basal-heat wiring.  When the ice mass loads the
-   !! surface the tilt must use the pressure-loaded surface, not `sum h - b`.
+   !! surface (`&ocean_psurf_nml ice_load`) the tilt uses the pressure-loaded surface
+   !! `sum h - b + p_surf/(rho0 g)` (`p_surf`, `inv_rho0_g` of `ice_dyn_c_step`), not `sum h - b`.
    use, intrinsic :: iso_fortran_env, only: int32, int64
    use rdb_constants, only: wp, H_VANISHED
    use rdb_grid, only: hgrid_t
@@ -157,7 +158,7 @@ contains
       call cm%init(grid, metrics, bc, ierr)
    end subroutine ice_dyn_c_metrics_build
 
-   subroutine ice_dyn_c_step(grid, metrics, f_corner, b, cm, ice, ms, bc, dt, err_summary, cat)
+   subroutine ice_dyn_c_step(grid, metrics, f_corner, b, cm, ice, ms, bc, dt, err_summary, cat, p_surf, inv_rho0_g)
       !! One outer dynamics step (see the module note).  Aborts on a fatal
       !! error bit.
       type(hgrid_t), intent(in) :: grid
@@ -178,6 +179,14 @@ contains
          !! (the test seam of the velocity guard); absent: a fatal bit stops the
          !! run through `ice_err_enforce`.
       type(ice_dyn_c_cat_t), intent(in), optional :: cat
+      real(wp), intent(in), optional :: p_surf(:, :)
+         !! `&ocean_psurf_nml ice_load`: the assembled surface pressure `sf%p_surf` [Pa], which carries
+         !! the ice's own weight.  The tilt the ice feels is then that of the PRESSURE-LOADED surface,
+         !! `ssh + p_surf/(rho0 g) = ssh - eta_ib`: a floating ice sheet sits in the depression it makes,
+         !! and the tilt of that depression (zero in the inverse-barometer equilibrium) is not a force on
+         !! it.  Without this the ice slides off its own dent.  Absent: `ssh = sum h - b` unchanged.
+      real(wp), intent(in), optional :: inv_rho0_g
+         !! `1/(rho0 g_bt)` of the surface-pressure seam; required with `p_surf`.
          !! The category-state hand-over of `scheme = "cice"` (additive; absent =
          !! the SIS2-derived state, bitwise the previous behaviour): the category areas
          !! and volumes the strength is computed from (`ice_compute_strength`, per
@@ -217,6 +226,9 @@ contains
 
       call ice_err_clear(ice%dync%ice_err, nx, ny)
       call dync_ssh_impl(nx, ny, nz, ms%h_layer, b, metrics%wet_T, ice%dync%ssh)
+      if (present(p_surf) .and. present(inv_rho0_g)) then
+         call dync_ssh_load_impl(nx, ny, metrics%wet_T, p_surf, inv_rho0_g, ice%dync%ssh)
+      end if
       keep_air = .false.
       if (present(cat)) keep_air = cat%wind_on_faces
       call dync_inputs_impl(nx, ny, nz, is, ie, js, je, ms%h_layer, ms%u_face_x_layer, ms%v_face_y_layer, &
@@ -374,6 +386,19 @@ contains
          end if
       end do
    end function live_v
+
+   pure subroutine dync_ssh_load_impl(nx, ny, wet_T, p_surf, inv_rho0_g, ssh)
+      !! `ssh += p_surf/(rho0 g)` on wet cells: the pressure-loaded surface the ice's tilt force reads.
+      integer, intent(in) :: nx, ny
+      real(wp), intent(in) :: inv_rho0_g
+      real(wp), intent(in) :: wet_T(nx, ny), p_surf(nx, ny)
+      real(wp), intent(inout) :: ssh(nx, ny)
+      integer :: i, j
+
+      do concurrent(j=1:ny, i=1:nx)
+         if (wet_T(i, j) > 0.5_wp) ssh(i, j) = ssh(i, j) + p_surf(i, j)*inv_rho0_g
+      end do
+   end subroutine dync_ssh_load_impl
 
    subroutine dync_ssh_impl(nx, ny, nz, h_layer, b, wet_T, ssh)
       !! Sea-surface height at T, `ssh = sum_k h_layer - b` on wet cells (the

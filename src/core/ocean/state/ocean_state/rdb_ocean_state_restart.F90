@@ -520,6 +520,15 @@ contains
                                  size(state%surface_flux%Q_salt_tracer, 1), &
                                  size(state%surface_flux%Q_salt_tracer, 2), optional=.true.)
          end if
+         ! Ice mass loading: the load the ocean was last told about is carried (it is the ice
+         ! state at the last DELIVERY of the fresh water, one ice step behind the restored ice
+         ! state, so it cannot be rebuilt from it).  `p_surf` itself is reassembled at resume.
+         if (state%surface_flux%ice_load .and. allocated(state%surface_flux%p_ice_load)) then
+            call reg%register_2d("sf_p_ice_load", state%surface_flux%p_ice_load, 0, &
+                                 size(state%surface_flux%p_ice_load, 1), &
+                                 size(state%surface_flux%p_ice_load, 2), optional=.true.)
+            call reg%register_scalar("sf_p_ice_valid", state%surface_flux%p_ice_valid, optional=.true.)
+         end if
          ! CICE-port ice: the shortwave through the ice (`sw_ice`, window mean of `fswthru`) is
          ! refreshed only at the thermo hand-off yet read EVERY step through `sw_net`, so a
          ! checkpoint inside a window must carry it.  The SIS2-derived scheme's `sw_ice` is NOT

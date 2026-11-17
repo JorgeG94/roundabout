@@ -205,6 +205,8 @@ module rdb_ocean_surface_flux
    public :: sw_pe_cost_shape
    public :: sw_source_is_implemented
    public :: ocean_surface_flux_fw_virtual_step
+   public :: ocean_surface_flux_apply_ice_load, ocean_surface_flux_ice_load_impl
+   public :: ocean_surface_flux_assemble_p_surf
    public :: parse_surface_freshwater
    public :: SURF_FW_NONE, SURF_FW_VIRTUAL, SURF_FW_MASS, SURF_FW_INVALID
 
@@ -419,6 +421,10 @@ module rdb_ocean_surface_flux
          !! still assembled into `Q_salt` (the boundary-layer buoyancy forcing)
          !! and is excluded from `Q_salt_tracer`, which the tracer deposit
          !! reads.  Host-side gate, latched by `set_freshwater`.
+      logical :: ice_load = .false.
+         !! `&ocean_psurf_nml ice_load`: `p_surf` carries the sea-ice + snow weight
+         !! (`ocean_surface_flux_apply_ice_load`).  Host-side gate, latched by
+         !! `set_ice_load`, which also allocates `p_ice_load`.
       integer :: fw_mode = SURF_FW_NONE
          !! `SURF_FW_*` code latched by `set_freshwater` (the assembler's
          !! by-value selector).  `fw_virtual` / `fw_mass` are its logical views.
@@ -640,7 +646,19 @@ module rdb_ocean_surface_flux
          !! consumer in this PR; ships zeroed alongside `p_surf_atm` so
          !! the follow-up PGF fold needs no further plumbing.
 
+      real(wp), allocatable :: p_ice_load(:, :)
+         !! **Input component of the ice loading** (Pa, >= 0): the weight of the ice and snow
+         !! the OCEAN has been told about, `g*(rho_i*vice + rho_s*vsno)` of the ice state at the
+         !! last delivery (`ocean_engine` refreshes it after the thermo-cadence mass delivery,
+         !! so the load and the water the ice took change together).  Allocated only under
+         !! `ice_load`.  `p_surf = p_surf_atm + p_ice_load` is the full overwrite.  Carried
+         !! between steps, so it is restart state (`sf_p_ice_load`, `sf_p_ice_valid`).
+      real(wp) :: p_ice_valid = 0.0_wp
+         !! Host scalar: 1 once `p_ice_load` holds a refreshed load (the restart carries it, so
+         !! a warm restart resumes the carried load rather than rebuilding it from an ice state
+         !! that is ahead of the delivery).
    contains
+      procedure, non_overridable :: set_ice_load => ocean_surfflux_set_ice_load
       procedure, non_overridable :: init => ocean_surfflux_init
       procedure, non_overridable :: destroy => ocean_surfflux_destroy
       procedure, non_overridable :: enter_data => ocean_surfflux_enter_data
@@ -731,6 +749,7 @@ contains
       if (allocated(this%Q_salt_tracer)) deallocate (this%Q_salt_tracer)
       if (allocated(this%p_surf_atm)) deallocate (this%p_surf_atm)
       if (allocated(this%p_surf)) deallocate (this%p_surf)
+      if (allocated(this%p_ice_load)) deallocate (this%p_ice_load)
    end subroutine ocean_surfflux_dealloc_components
 
    subroutine ocean_surfflux_enter_data(this)
@@ -780,6 +799,10 @@ contains
          !$acc&               this%fw_net, this%Q_salt_tracer, &
          !$acc&               this%p_surf_atm, this%p_surf)
       end if
+      if (allocated(this%p_ice_load)) then
+         !$acc enter data copyin(this%p_ice_load)
+         !$acc update device(this%p_ice_load)
+      end if
    end subroutine ocean_surfflux_enter_data_impl
 
    subroutine ocean_surfflux_exit_data(this)
@@ -805,6 +828,9 @@ contains
          !$acc&                 this%salt_flux, this%salt_cavity, this%salt_fw, &
          !$acc&                 this%fw_net, this%Q_salt_tracer, &
          !$acc&                 this%p_surf_atm, this%p_surf)
+      end if
+      if (allocated(this%p_ice_load)) then
+         !$acc exit data delete(this%p_ice_load)
       end if
       if (allocated(this%sss_target)) then
          !$acc exit data delete(this%sss_target)
@@ -2104,7 +2130,8 @@ contains
                + arr_bytes(this%salt_flux) &
                + arr_bytes(this%salt_cavity) + arr_bytes(this%salt_fw) &
                + arr_bytes(this%fw_net) + arr_bytes(this%Q_salt_tracer) &
-               + arr_bytes(this%p_surf_atm) + arr_bytes(this%p_surf)
+               + arr_bytes(this%p_surf_atm) + arr_bytes(this%p_surf) &
+               + arr_bytes(this%p_ice_load)
    end function ocean_surface_flux_bytes
 
    pure subroutine ocean_surface_flux_apply_cover_const(sf, cover_frac)
@@ -2157,6 +2184,74 @@ contains
          Q_salt(i, j) = Q_salt(i, j)*open_f
       end do
    end subroutine ocean_surfflux_cover_const_impl
+
+   subroutine ocean_surfflux_set_ice_load(this, enable)
+      !! Latch `&ocean_psurf_nml ice_load` and allocate the carried ice load (zero).  Host,
+      !! after `set_components` (it needs the extents of `p_surf`).  `.false.` is a no-op, so
+      !! every other configuration allocates, maps and registers nothing.
+      class(ocean_surface_flux_t), intent(inout) :: this
+      logical, intent(in) :: enable
+      if (.not. enable) return
+      if (.not. allocated(this%p_surf)) return
+      this%ice_load = .true.
+      if (allocated(this%p_ice_load)) deallocate (this%p_ice_load)
+      allocate (this%p_ice_load(size(this%p_surf, 1), size(this%p_surf, 2)), source=0.0_wp)
+   end subroutine ocean_surfflux_set_ice_load
+
+   subroutine ocean_surface_flux_apply_ice_load(sf, vice, vsno, rho_ice, rho_snow, g, nghost, nx_phys, ny_phys)
+      !! Refresh the carried ice load from the ice and snow volumes:
+      !! `p_ice_load = g*(rho_ice*vice + rho_snow*vsno)` over the OWNED cells (cell means, Pa;
+      !! Campin et al. 2008 -- sea ice that floats still weighs on the ocean -- with the
+      !! levitating-load convention of Adcroft et al. 2019), a FULL OVERWRITE (never `+=`: it
+      !! would ratchet the load).  `g` is the barotropic gravity the seam divides by
+      !! (`bt_work%g_bt`), so `eta_ib = -p_surf/(rho0 g)` is exactly
+      !! `-(rho_ice*vice + rho_snow*vsno)/rho0`, the column of water the ice displaces.  The
+      !! caller then exchanges the seam ghosts of `p_ice_load` and calls
+      !! `ocean_surface_flux_assemble_p_surf`.  Host shim over the flat kernel; the volumes
+      !! are the device-resident ice aggregates.
+      type(ocean_surface_flux_t), intent(inout) :: sf
+      real(wp), intent(in) :: vice(:, :), vsno(:, :)
+      real(wp), intent(in) :: rho_ice, rho_snow, g
+      integer, intent(in) :: nghost, nx_phys, ny_phys
+      integer :: nx, ny
+      if (.not. sf%ice_load) return
+      nx = size(sf%p_ice_load, 1)
+      ny = size(sf%p_ice_load, 2)
+      call ocean_surface_flux_ice_load_impl(nx, ny, nghost + 1, nghost + nx_phys, nghost + 1, nghost + ny_phys, &
+                                            g*rho_ice, g*rho_snow, vice, vsno, sf%p_ice_load)
+      sf%p_ice_valid = 1.0_wp
+   end subroutine ocean_surface_flux_apply_ice_load
+
+   subroutine ocean_surface_flux_assemble_p_surf(sf)
+      !! `p_surf = p_surf_atm + p_ice_load` over the FULL array (ghosts included: the seam
+      !! ghosts of `p_ice_load` were exchanged first), a full overwrite of the assembled total.
+      type(ocean_surface_flux_t), intent(inout) :: sf
+      if (.not. sf%ice_load) return
+      call ocean_surface_flux_assemble_p_surf_impl(size(sf%p_surf, 1), size(sf%p_surf, 2), &
+                                                   sf%p_surf_atm, sf%p_ice_load, sf%p_surf)
+   end subroutine ocean_surface_flux_assemble_p_surf
+
+   pure subroutine ocean_surface_flux_assemble_p_surf_impl(nx, ny, p_atm, p_ice, p_surf)
+      integer, intent(in) :: nx, ny
+      real(wp), intent(in) :: p_atm(nx, ny), p_ice(nx, ny)
+      real(wp), intent(inout) :: p_surf(nx, ny)
+      integer :: i, j
+      do concurrent(j=1:ny, i=1:nx)
+         p_surf(i, j) = p_atm(i, j) + p_ice(i, j)
+      end do
+   end subroutine ocean_surface_flux_assemble_p_surf_impl
+
+   pure subroutine ocean_surface_flux_ice_load_impl(nx, ny, is, ie, js, je, g_rho_ice, g_rho_snow, vice, vsno, p_ice)
+      !! `p_ice = g*rho_ice*vice + g*rho_snow*vsno` over the owned cells (full overwrite).
+      integer, intent(in) :: nx, ny, is, ie, js, je
+      real(wp), intent(in) :: g_rho_ice, g_rho_snow
+      real(wp), intent(in) :: vice(nx, ny), vsno(nx, ny)
+      real(wp), intent(inout) :: p_ice(nx, ny)
+      integer :: i, j
+      do concurrent(j=js:je, i=is:ie)
+         p_ice(i, j) = g_rho_ice*vice(i, j) + g_rho_snow*vsno(i, j)
+      end do
+   end subroutine ocean_surface_flux_ice_load_impl
 
    pure function parse_surface_freshwater(name) result(code)
       !! Translate a `&ocean_forcing_nml freshwater` string into a
