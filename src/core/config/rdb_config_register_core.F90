@@ -1016,6 +1016,10 @@ contains
                              "liquid precipitation (>= 0)", "kg m-2 s-1")
       call add_dataovr_entry(g, cfg%ocean%dataovr%salt, "salt", &
                              "surface salt flux (positive salinifies)", "kg m-2 s-1")
+      call add_dataovr_entry(g, cfg%ocean%dataovr%lrunoff, "lrunoff", &
+                             "liquid runoff mass flux (>= 0, on wet cells only)", "kg m-2 s-1")
+      call add_dataovr_entry(g, cfg%ocean%dataovr%frunoff, "frunoff", &
+                             "frozen runoff / calving mass flux (>= 0, on wet cells only)", "kg m-2 s-1")
 
       call schema%add_group(g)
    end subroutine register_ocean_dataovr

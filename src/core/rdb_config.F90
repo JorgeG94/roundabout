@@ -92,6 +92,7 @@ module rdb_config
    public :: diag_density_levels_ok
    public :: dataovr_entry_is_valid, dataovr_time_is_valid
    public :: dataovr_freshwater_needs_components, dataovr_any_tag_set
+   public :: dataovr_runoff_needs_freshwater
    public :: dataovr_heat_salt_clobbers_ice
    public :: build_rdb_schema
    public :: resolve_bt_halo
@@ -3857,6 +3858,16 @@ module rdb_config
       type(dataovr_entry_config_t) :: salt
          !! Surface salt flux (kg salt/m^2/s, positive salinifies) ->
          !! `surface_flux%salt_flux`.
+      type(dataovr_entry_config_t) :: lrunoff
+         !! Liquid runoff mass flux (kg/m^2/s, >= 0, INTO the ocean) ->
+         !! `surface_flux%lrunoff`.  Already on the model grid, non-zero only on
+         !! WET cells (a value on a land cell aborts); see
+         !! `tools/om_runoff_to_model.f90`.  Needs `&ocean_forcing_nml freshwater`
+         !! `"virtual"` or `"mass"` (inert, hence refused, under `"none"`).
+      type(dataovr_entry_config_t) :: frunoff
+         !! Frozen runoff / calving mass flux (kg/m^2/s, >= 0) ->
+         !! `surface_flux%frunoff`, and its latent heat of fusion
+         !! `q_fus_rof = -L_f*frunoff` is written alongside.  Same contract as `lrunoff`.
    end type ocean_dataovr_config_t
 
    type :: ocean_atm_forcing_config_t
@@ -4925,6 +4936,14 @@ module rdb_config
          logical, intent(in) :: use_components
          logical :: bad
       end function dataovr_freshwater_needs_components
+
+      pure module function dataovr_runoff_needs_freshwater(cfg, fw_mode) result(bad)
+            !! See submodule [[rdb_config_validate]].
+         implicit none
+         type(ocean_dataovr_config_t), intent(in) :: cfg
+         integer, intent(in) :: fw_mode
+         logical :: bad
+      end function dataovr_runoff_needs_freshwater
 
       pure module function dataovr_heat_salt_clobbers_ice(cfg, use_components, ice_enable) result(bad)
             !! See submodule [[rdb_config_validate]].

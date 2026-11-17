@@ -4081,6 +4081,14 @@ contains
             call logger%error("&ocean_dataovr_nml salt_file is set but salt_var is blank")
             has_error = .true.
          end if
+         if (.not. dataovr_entry_is_valid(cfg%ocean%dataovr%lrunoff)) then
+            call logger%error("&ocean_dataovr_nml lrunoff_file is set but lrunoff_var is blank")
+            has_error = .true.
+         end if
+         if (.not. dataovr_entry_is_valid(cfg%ocean%dataovr%frunoff)) then
+            call logger%error("&ocean_dataovr_nml frunoff_file is set but frunoff_var is blank")
+            has_error = .true.
+         end if
 
          ! D2: cyclic climatology with no period is undecidable, not
          ! defaultable — there is no sane fallback for "one year".
@@ -4093,7 +4101,7 @@ contains
          ! component set; without it there is no slot to write into.
          if (dataovr_freshwater_needs_components(cfg%ocean%dataovr, &
                                                  cfg%ocean%forcing%enable_components)) then
-            call logger%error("&ocean_dataovr_nml evap/lprec file forcing requires "// &
+            call logger%error("&ocean_dataovr_nml evap/lprec/lrunoff/frunoff file forcing requires "// &
                               "&ocean_forcing_nml enable_components=.true. "// &
                               "(there is no non-component freshwater slot to write into)")
             has_error = .true.
@@ -4131,6 +4139,22 @@ contains
          call check_dataovr_file(cfg%ocean%dataovr%evap, "evap", has_error)
          call check_dataovr_file(cfg%ocean%dataovr%lprec, "lprec", has_error)
          call check_dataovr_file(cfg%ocean%dataovr%salt, "salt", has_error)
+         call check_dataovr_file(cfg%ocean%dataovr%lrunoff, "lrunoff", has_error)
+         call check_dataovr_file(cfg%ocean%dataovr%frunoff, "frunoff", has_error)
+
+         ! D3c: runoff is a mass flux that only a fresh-water mode spends.  Under
+         ! `freshwater = "none"` the slot is read by nothing (the assembler's legacy sums
+         ! never see it), so the file would be silently inert: refuse it by name.  `"virtual"`
+         ! accepts it (it enters the virtual salt flux `salt_fw`, the dilution without volume);
+         ! `"mass"` spends it as real volume.  No atmosphere prerequisite: the runoff tags
+         ! are not among the ones `&ocean_atm_forcing_nml` conflicts with (it writes none).
+         if (dataovr_runoff_needs_freshwater(cfg%ocean%dataovr, &
+                                             parse_surface_freshwater(cfg%ocean%forcing%freshwater))) then
+            call logger%error("&ocean_dataovr_nml lrunoff/frunoff file forcing requires "// &
+                              "&ocean_forcing_nml freshwater = 'virtual' or 'mass' (under 'none' "// &
+                              "no consumer reads the runoff slots, so the file would be silently inert)")
+            has_error = .true.
+         end if
 
          ! D5: enabled but nothing driven is a wordless no-op — the
          ! house "silent no-op => fail loud" rule (cf. V2/V3 above).
@@ -4415,9 +4439,22 @@ contains
       type(ocean_dataovr_config_t), intent(in) :: cfg
       logical, intent(in) :: use_components
       logical :: bad
-      bad = (len_trim(cfg%evap%file) > 0 .or. len_trim(cfg%lprec%file) > 0) &
+      bad = (len_trim(cfg%evap%file) > 0 .or. len_trim(cfg%lprec%file) > 0 .or. &
+             len_trim(cfg%lrunoff%file) > 0 .or. len_trim(cfg%frunoff%file) > 0) &
             .and. (.not. use_components)
    end function dataovr_freshwater_needs_components
+
+   pure module function dataovr_runoff_needs_freshwater(cfg, fw_mode) result(bad)
+      !! `.true.` when a runoff tag is file-driven under `freshwater = "none"` (the legacy
+      !! sums never read `lrunoff`/`frunoff`).  Reports the PROBLEM, like its siblings.
+      use rdb_ocean_surface_flux, only: SURF_FW_NONE
+      type(ocean_dataovr_config_t), intent(in) :: cfg
+      integer, intent(in) :: fw_mode
+         !! `parse_surface_freshwater` of `&ocean_forcing_nml freshwater`.
+      logical :: bad
+      bad = (len_trim(cfg%lrunoff%file) > 0 .or. len_trim(cfg%frunoff%file) > 0) &
+            .and. fw_mode == SURF_FW_NONE
+   end function dataovr_runoff_needs_freshwater
 
    pure module function dataovr_heat_salt_clobbers_ice(cfg, use_components, ice_enable) result(bad)
       !! `.true.` when a heat/salt data file, sea ice and the component set
@@ -4521,7 +4558,8 @@ contains
       logical :: any_set
       any_set = len_trim(cfg%tau_x%file) > 0 .or. len_trim(cfg%tau_y%file) > 0 .or. &
                 len_trim(cfg%heat%file) > 0 .or. len_trim(cfg%evap%file) > 0 .or. &
-                len_trim(cfg%lprec%file) > 0 .or. len_trim(cfg%salt%file) > 0
+                len_trim(cfg%lprec%file) > 0 .or. len_trim(cfg%salt%file) > 0 .or. &
+                len_trim(cfg%lrunoff%file) > 0 .or. len_trim(cfg%frunoff%file) > 0
    end function dataovr_any_tag_set
 
    pure module function ice_hlim_count(hlim) result(n)

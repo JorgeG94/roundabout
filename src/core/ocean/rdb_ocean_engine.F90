@@ -2147,7 +2147,8 @@ contains
       call ocean_data_input_update_all(engine%state%data_input, t)
       call ocean_data_forcing_apply(engine%state%data_forcing, engine%state%data_input, &
                                     engine%grid, engine%state%surface_stress, &
-                                    engine%state%surface_flux, engine%state%bc, t)
+                                    engine%state%surface_flux, engine%state%bc, t, &
+                                    wet_mask=engine%state%multilayer%wet_mask)
       ! JRA55-do-style prescribed atmospheric state (OM3 C2c-2a): a no-op
       ! when `&ocean_atm_forcing_nml enable = .false.` (the default).
       ! Order vs `ocean_data_forcing_apply` above does not matter -- both
