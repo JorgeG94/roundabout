@@ -345,7 +345,8 @@ contains
       !! `i`): the first layer counting down from `k0` that is live (strictly
       !! above `H_VANISHED`) in BOTH columns; `k0` itself when none is.
       !$acc routine seq
-      integer, value :: nx, ny, nz, i, j, k0
+      integer, intent(in) :: nx, ny, nz, k0
+      integer, value :: i, j
       real(wp), intent(in) :: h_layer(nx, ny, nz)
       integer :: kl
       integer :: kk
@@ -362,7 +363,8 @@ contains
       !! Surface layer of the y-face `(i,j)` (between the rows `j-1` and `j`),
       !! as `live_u`.
       !$acc routine seq
-      integer, value :: nx, ny, nz, i, j, k0
+      integer, intent(in) :: nx, ny, nz, k0
+      integer, value :: i, j
       real(wp), intent(in) :: h_layer(nx, ny, nz)
       integer :: kl
       integer :: kk
