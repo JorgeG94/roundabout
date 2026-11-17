@@ -87,7 +87,8 @@ contains
                   new_unittest("fwm_mass_budget_closes", test_mass_budget_closes), &
                   new_unittest("fwm_heat_budget_closes", test_heat_budget_closes), &
                   new_unittest("fwm_uniform_rain_closed_basin_no_flow", test_no_flow), &
-                  new_unittest("fwm_zstar_interfaces_after_rain", test_zstar_interfaces) &
+                  new_unittest("fwm_zstar_interfaces_after_rain", test_zstar_interfaces), &
+                  new_unittest("fwm_diagnostics_registered", test_diagnostics) &
                   ]
    end subroutine collect_ocean_surface_fw_mass_tests
 
@@ -776,8 +777,8 @@ contains
       end if
    end subroutine ensure_comm
 
-   function mass_nml(scheme, therm_ratio, deferred, vcoord, t_top, extra, adv_ratio, forcing_keys, components) &
-      result(nml)
+   function mass_nml(scheme, therm_ratio, deferred, vcoord, t_top, extra, adv_ratio, forcing_keys, components, &
+                     diag_dir, freshwater) result(nml)
       !! A closed 12 x 8 x 4 basin with the real-mass fresh-water mode on.  Every group appears ONCE
       !! (the schema parser refuses a duplicate), so the knobs the refusal cases vary are arguments.
       character(len=*), intent(in) :: scheme, vcoord, extra
@@ -787,7 +788,8 @@ contains
       integer, intent(in), optional :: adv_ratio
       character(len=*), intent(in), optional :: forcing_keys
       logical, intent(in), optional :: components
-      character(len=:), allocatable :: nml, vmix_keys
+      character(len=*), intent(in), optional :: diag_dir, freshwater
+      character(len=:), allocatable :: nml, vmix_keys, fw_s, diag_s, out_s
       character(len=32) :: ratio_s, tt_s, adv_s
       logical :: comps
 
@@ -795,6 +797,14 @@ contains
       write (tt_s, '(F8.3)') t_top
       comps = .true.
       if (present(components)) comps = components
+      fw_s = "mass"
+      if (present(freshwater)) fw_s = freshwater
+      diag_s = "&ocean_diag_nml enabled = .false. /"//NL
+      out_s = "&output_nml output_to_file = .false. /"//NL
+      if (present(diag_dir)) then
+         diag_s = "&ocean_diag_nml enabled = .true., filename = 'd.nc', dt_out = 1200.0 /"//NL
+         out_s = "&output_nml output_to_file = .true., output_dir = '"//diag_dir//"' /"//NL
+      end if
       vmix_keys = ""
       if (therm_ratio > 1) vmix_keys = vmix_keys//" dt_therm_ratio = "//trim(adjustl(ratio_s))
       if (deferred) vmix_keys = vmix_keys//", diabatic_first = .false."
@@ -823,12 +833,10 @@ contains
             "&ocean_bt_nml split_scheme = '"//scheme//"', auto_n_inner = .true. /"//NL// &
             "&ocean_thermo_nml enable_thermodynamics = .true. /"//NL// &
             "&ocean_forcing_nml enable_components = "//merge(".true. ", ".false.", comps)// &
-            ", freshwater = 'mass'"
+            ", freshwater = '"//fw_s//"'"
       if (present(forcing_keys)) nml = nml//forcing_keys
       nml = nml//" /"//NL// &
-            "&ocean_hvisc_nml nu_h = 100.0 /"//NL// &
-            "&ocean_diag_nml enabled = .false. /"//NL// &
-            "&output_nml output_to_file = .false. /"//NL
+            "&ocean_hvisc_nml nu_h = 100.0 /"//NL//diag_s//out_s
       if (trim(vcoord) == "zstar_list") then
          nml = nml//"&vcoord_nml vcoord_type = 'zstar', z_fixed_profile = 'list', "// &
                "z_fixed_dz = 20.0, 60.0, 120.0, 200.0 /"//NL
@@ -1128,6 +1136,78 @@ contains
       call engine_exit_data(engine)
       call engine_teardown(engine)
    end subroutine test_zstar_interfaces
+
+   ! -----------------------------------------------------------------
+   ! diagnostics
+   ! -----------------------------------------------------------------
+
+   subroutine test_diagnostics(error)
+      !! `net_fw`, `evap`, `lprec`, `fprec`, `fw_passdown` are registered under `freshwater = "mass"` only, and
+      !! the registered fill of `net_fw` returns the assembled snapshot.
+      type(error_type), allocatable, intent(out) :: error
+      call diagnostics_pass(error, .true.)
+      if (allocated(error)) return
+      call diagnostics_pass(error, .false.)
+   end subroutine test_diagnostics
+
+   subroutine diagnostics_pass(error, mass)
+      type(error_type), allocatable, intent(out) :: error
+      logical, intent(in) :: mass
+#ifndef RDB_NO_NETCDF
+      character(len=*), parameter :: NAMES(5) = [character(len=16) :: "net_fw", "evap", "lprec", "fprec", "fw_passdown"]
+      type(ocean_engine_t) :: engine
+      type(config_t) :: cfg
+      logical :: ok
+      integer :: n, ierr, k, kk, ip, ngot
+      real(wp) :: t
+      real(wp), allocatable :: buf(:, :, :)
+
+      call start_engine(mass_nml("pred_corr", 1, .false., "zstar", 6.0_wp, "", diag_dir="tmp_fwm_diag", &
+                                 freshwater=merge("mass", "none", mass)), engine, cfg, ok)
+      call check(error, ok, "the engine with a diagnostic stream starts")
+      if (allocated(error)) return
+      call set_forcing(engine, 1)
+      t = 0.0_wp
+      do n = 1, 3
+         call advance(engine, cfg, t, ierr)
+         call check(error, ierr == OCEAN_STATUS_OK, "the step succeeds")
+         if (allocated(error)) exit
+         t = t + 300.0_wp
+      end do
+      ngot = 0
+      kk = 0
+      do k = 1, engine%state%diag%nvars
+         do ip = 1, size(NAMES)
+            if (trim(engine%state%diag%vars(k)%name) == trim(NAMES(ip))) then
+               ngot = ngot + 1
+               if (ip == 1) kk = k
+            end if
+         end do
+      end do
+      if (.not. allocated(error)) then
+         if (mass) then
+            call check(error, ngot == size(NAMES), "mass: all five fresh-water diagnostics are registered")
+            if (.not. allocated(error)) then
+               allocate (buf(size(engine%state%metrics%areaT, 1), size(engine%state%metrics%areaT, 2), 1), &
+                         source=-777.0_wp)
+               !$acc enter data copyin(buf)
+               call engine%state%diag%vars(kk)%fill(engine%state, buf)
+               !$acc update self(buf)
+               !$acc exit data delete(buf)
+               call check(error, abs(buf(engine%grid%nghost + 2, engine%grid%nghost + 2, 1) - 5.0e-3_wp) < 1.0e-15_wp, &
+                          "net_fw is the assembled snapshot (uniform rain 5e-3 kg m-2 s-1)")
+            end if
+         else
+            call check(error, ngot == 0, "none: no fresh-water diagnostic is registered")
+         end if
+      end if
+      call engine_exit_data(engine)
+      call engine_teardown(engine)
+      call execute_command_line("rm -rf tmp_fwm_diag")
+#else
+      call check(error, mass .or. .true., "diagnostics need NetCDF")
+#endif
+   end subroutine diagnostics_pass
 
    ! -----------------------------------------------------------------
    ! 13. configure-time envelope
