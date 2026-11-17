@@ -1751,6 +1751,8 @@ contains
       type(MPI_Status) :: stats(MAX_REQS)
       logical :: need_e, need_w, need_n, need_s
 
+      ! Not initialised (a direct-kernel unit test): a no-op, as the grouped path was.
+      if (.not. oh_initialised) return
       call oh_count_bt_packed()
       call wide_halo_guards(ng, "ocean_halo_packed_wide")
       call pk_ensure(ng)
@@ -2175,7 +2177,7 @@ contains
                            " > nx_local="//to_string(oh_nx_local)// &
                            " with px="//to_string(oh_decomp%px)//". "// &
                            "Wide halo width exceeds local interior; decompose "// &
-                           "less or lower bt_halo.")
+                           "less (a tile must be at least nghost wide) or lower bt_halo.")
          error stop "wide halo width exceeds local interior (x)"
       end if
       if (oh_decomp%py > 1 .and. ng_wide > oh_ny_local) then
@@ -2183,7 +2185,7 @@ contains
                            " > ny_local="//to_string(oh_ny_local)// &
                            " with py="//to_string(oh_decomp%py)//". "// &
                            "Wide halo width exceeds local interior; decompose "// &
-                           "less or lower bt_halo.")
+                           "less (a tile must be at least nghost wide) or lower bt_halo.")
          error stop "wide halo width exceeds local interior (y)"
       end if
       ! Single-rank periodic guard: the wrap reads i + nx_phys, so ng_wide
@@ -2193,7 +2195,7 @@ contains
                            " > nx_phys="//to_string(oh_nx_local)// &
                            " for single-rank periodic-x. "// &
                            "The local wrap reads i+nx_phys which would exceed "// &
-                           "the array. Reduce ng_wide.")
+                           "the array. Use a longer periodic axis or reduce ng_wide/nghost.")
          error stop "wide halo: ng_wide > nx_phys for single-rank periodic-x"
       end if
       if (oh_decomp%py == 1 .and. oh_periodic_y .and. ng_wide > oh_ny_local) then
@@ -2201,7 +2203,7 @@ contains
                            " > ny_phys="//to_string(oh_ny_local)// &
                            " for single-rank periodic-y. "// &
                            "The local wrap reads j+ny_phys which would exceed "// &
-                           "the array. Reduce ng_wide.")
+                           "the array. Use a longer periodic axis or reduce ng_wide/nghost.")
          error stop "wide halo: ng_wide > ny_phys for single-rank periodic-y"
       end if
    end subroutine wide_halo_guards

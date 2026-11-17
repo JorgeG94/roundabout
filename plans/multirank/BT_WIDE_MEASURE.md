@@ -526,7 +526,7 @@ freshen of the time means is a fourth-group round).  After: the end-of-substep a
 `ocean_halo_packed_wide(nghost, eta, ubt, vbt)` (the packed machinery at the model's own width), so TWO rounds
 per substep (`2 N + 1` per solve).  `ocean_halo_reserve` now sizes the packed buffers at `nghost` always (it
 only did so for `bt_halo > 0`), so there is no mid-run growth.  The in-halo march (`inhalo_march`, opt-in) also
-packs: its entry set (eta, ubt, vbt + `F_bt_*_fast` + `bt_rem_*`) is one round instead of five, its in-loop
+packs: its entry set (eta, ubt, vbt + `F_bt_*_fast` + `bt_rem_*`) is one packed call (one two-pass round) instead of five calls (seven two-pass rounds: the grouped call counted as three), its in-loop
 exchange carries `ubt_prev` / `vbt_prev` in the same round.
 
 Left alone, and why:
@@ -561,7 +561,7 @@ during the later runs, so these are noisy and only indicative).  `base` = 0facac
 | base np 2 (a, b, c, d) | 45.7, 47.2, 52.4, 48.2 | 26.6, 27.9, 32.1, 28.5 | 15.8, 17.2, 20.1, 17.1 |
 | new np 2 (a, b, c, d) | 43.5, 49.5, 49.7, 46.4 | 24.3, 29.0, 29.2, 26.6 | 13.2, 16.9, 17.1, 15.1 |
 
-np 1: no change (no messages; the packed call is a no-op there, as the group exchange was).  np 2: medians of the
+np 1: no change (no messages; on a non-periodic axis the packed call does nothing, on a periodic axis it does the local wrap, as the group exchange did).  np 2: medians of the
 BT comms timer 17.1 s -> 16.0 s (about 6 %), of the total wall 47.7 s -> 48.0 s, i.e. a gain in the BT comms timer
 that is visible but of the size of the run-to-run scatter, and no measurable gain in the total wall on this bench.
 The message count halving is exact; the time is dominated by the mid-substep exchange, the per-round synchronisation

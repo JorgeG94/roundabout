@@ -60,7 +60,6 @@ module rdb_barotropic_substep
    use rdb_ocean_boundary_types, only: ocean_bc_state_t, OBC_WALL, OBC_OPEN, OBC_CLAMPED, &
                                        OBC_TIDAL, OBC_CHAPMAN, OBC_PERIODIC, OBC_TRIPOLAR_FOLD
    use rdb_ocean_halo, only: ocean_halo_face_x, ocean_halo_face_y, &
-                             ocean_halo_bt_group_2d_wide, &
                              ocean_halo_packed_wide, &
                              ocean_halo_is_decomposed, &
                              ocean_halo_is_decomposed_x, ocean_halo_is_decomposed_y, &
@@ -1672,7 +1671,7 @@ contains
          ! backward: Pass 2c's Coriolis u_at_v consumes the u that Pass 2b
          ! JUST WROTE.  Under decomposition the seam-adjacent u (owned seam
          ! face + ghost faces/rows) must carry the OWNER's post-2b values
-         ! before 2c reads them -- the end-of-substep grouped exchange is too
+         ! before 2c reads them -- the end-of-substep packed exchange is too
          ! late.  Skipping this exchange is an O4-measured seam instability:
          ! uniform-T seamount at rest (f-plane, auto n_inner ~65, px=2) grows
          ! spurious KE at ~e^1.5/step from round-off and NaNs by step ~24;
@@ -2086,7 +2085,7 @@ contains
       !$acc wait(1)   ! single drain: the whole substep ran on async(1)
       !$acc end data
       ! Exit seam freshen.  The accumulators above add each substep's η/u/v
-      ! BEFORE that substep's grouped exchange, so a seam ghost of the time
+      ! BEFORE that substep's packed exchange, so a seam ghost of the time
       ! mean holds this rank's own (inexact) ghost-row march, not the
       ! neighbour's owned value -- and the pred_corr corrector reads it.
       ! Refresh once here; the march-in path does the same after `copy_out`.
