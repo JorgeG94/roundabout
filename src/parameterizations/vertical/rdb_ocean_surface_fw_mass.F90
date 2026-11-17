@@ -162,7 +162,7 @@ contains
       call fw_mass_column_impl(nx, ny, nz, grid%nghost, dt_over_rho0, sf%fw_evap_cfl_limit, &
                                sf%fw_net, ms%wet_mask, ms%k_top, ms%h_layer, &
                                ms%tracers(idx_t)%c, ms%heat_budget_surface, &
-                               ms%fw_dh, ms%fw_passdown, n_thin, n_pd)
+                               ms%fw_dh, ms%fw_passdown, ms%fw_dhT, n_thin, n_pd)
 
       ! The tracked source: APPLIED volume x weight x RHO_WATER, EFP over owned cells.
       tot = fw_mass_volume_efp(nx, ny, grid%nghost, weight*RHO_WATER, ms%fw_dh, areaT)
@@ -190,7 +190,7 @@ contains
 
    pure subroutine fw_mass_column_impl(nx, ny, nz, nghost, dt_over_rho0, cfl, fw_net, wet_mask, &
                                        k_top, h_layer, c_T, heat_budget, fw_dh, fw_passdown, &
-                                       n_thin, n_pd)
+                                       fw_dhT, n_thin, n_pd)
       !! The thickness update, the heat-content booking and the counts (see the module
       !! docstring).  The withdrawal profile is recomputed identically by `fw_mass_dilute_impl`
       !! from the pre-update thickness: keep the two loops textually in step.
@@ -204,6 +204,9 @@ contains
       real(wp), intent(inout) :: heat_budget(nx, ny, nz)
          !! `ms%heat_budget_surface` (content `h*T` units).
       real(wp), intent(inout) :: fw_dh(nx, ny), fw_passdown(nx, ny)
+      real(wp), intent(inout) :: fw_dhT(nx, ny)
+         !! `sum_k dh_k * T_k` of this step (m K): the heat content the mass entered or left with,
+         !! at the layer temperatures THIS step used (`ms%fw_dhT`).
       integer, intent(out) :: n_thin
          !! Owned columns that could not be satisfied (or non-finite flux).
       integer, intent(out) :: n_pd
@@ -218,6 +221,7 @@ contains
          reduce(+:c_thin, c_pd)
          fw_dh(i, j) = 0.0_wp
          fw_passdown(i, j) = 0.0_wp
+         fw_dhT(i, j) = 0.0_wp
          if (wet_mask(i, j) > 0.5_wp) then
             owned = (i > nghost .and. i <= nx - nghost .and. j > nghost .and. j <= ny - nghost)
             dh = fw_net(i, j)*dt_over_rho0
@@ -228,6 +232,7 @@ contains
                h_layer(i, j, kt) = h_layer(i, j, kt) + dh
                heat_budget(i, j, kt) = heat_budget(i, j, kt) + dh*c_T(i, j, kt)
                fw_dh(i, j) = dh
+               fw_dhT(i, j) = dh*c_T(i, j, kt)
             else if (dh < 0.0_wp .and. h_layer(i, j, kt) > H_VANISHED) then
                left = -dh
                dh_app = 0.0_wp
@@ -239,6 +244,7 @@ contains
                      if (take > 0.0_wp) then
                         h_layer(i, j, k) = h0 - take
                         heat_budget(i, j, k) = heat_budget(i, j, k) - take*c_T(i, j, k)
+                        fw_dhT(i, j) = fw_dhT(i, j) - take*c_T(i, j, k)
                         dh_app = dh_app - take
                         left = left - take
                         if (k < kt) npd_col = npd_col + 1

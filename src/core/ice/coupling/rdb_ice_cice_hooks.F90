@@ -593,6 +593,22 @@ contains
       end associate
    end subroutine hook_ridging
 
+   pure function first_window_length(dt) result(t_first)
+      !! Length of the first ice window of a run, in the deferred order (`diabatic_first = .false.`,
+      !! `dt_therm_ratio = N > 1`): the thermo step is the one BEFORE the interval's last step, so the
+      !! first hand-off finds `N - 1` ice steps accumulated, not `N`.  `-1` (no short window allowed)
+      !! when the order is the in-stage one, or after the first interval.  `outer_step_count` is
+      !! already advanced for this step (post-increment, as the thermo gate reads it) and is
+      !! restart state, so a resumed run keeps counting.
+      real(wp), intent(in) :: dt
+      real(wp) :: t_first
+
+      t_first = -1.0_wp
+      if (S%dyn%thermo_deferred() .and. S%dyn%dt_therm_ratio > 1 .and. S%dyn%outer_step_count < S%dyn%dt_therm_ratio) then
+         t_first = real(S%dyn%outer_step_count, wp)*dt
+      end if
+   end function first_window_length
+
    subroutine hook_ocean_handoff(ctx, status)
       type(ice_step_ctx_t), intent(inout) :: ctx
       integer, intent(out) :: status
@@ -629,7 +645,8 @@ contains
          ! different from the thermo window: all functions of the configuration and of the (rank-uniform) step
          ! schedule, never of a rank's data, so every rank takes the same branch.
          call ice_cice_apply_window(G, S%bc, S%icec%avg, S%surface_flux, S%icec%oin%sss_ocn, ierr, &
-                                    window_expected=S%dyn%therm_dt(ctx%dt))
+                                    window_expected=S%dyn%therm_dt(ctx%dt), &
+                                    t_first_window=first_window_length(ctx%dt))
          if (ierr /= ICE_ADAPT_OK) then
             status = 100 + ierr
             return

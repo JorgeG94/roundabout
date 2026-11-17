@@ -141,7 +141,7 @@ module rdb_ice_cice_adapters
    use rdb_ocean_boundary_types, only: ocean_bc_state_t
    use rdb_ocean_halo_state, only: ocean_seam_refresh_surface_stress, ocean_halo_exchange_centre_field
    use rdb_ice_cice_state, only: ice_cice_state_t
-   use rdb_ice_flux_avg, only: ice_flux_avg_t, ice_flux_avg_reset
+   use rdb_ice_flux_avg, only: ice_flux_avg_t, ice_flux_avg_reset, ice_flux_avg_scale
    use rdb_ice_ocean_coupler, only: ice_ocean_stress_flux_impl
    implicit none
    private
@@ -237,7 +237,8 @@ contains
       sf%has_salt = .true.
    end subroutine ice_cice_to_surface_flux
 
-   subroutine ice_cice_apply_window(grid, bc, avg, sf, sss_ocn, ierr, fresh_mass_out, window_expected, t_window)
+   subroutine ice_cice_apply_window(grid, bc, avg, sf, sss_ocn, ierr, fresh_mass_out, window_expected, t_window, &
+                                    t_first_window)
       !! The thermo-step hand-off: adapt the window mean held by `avg`
       !! (`ice_cice_to_surface_flux` on `avg%acc_*`), optionally copy the mean
       !! `fresh` [kg m-2 s-1, + into ocean] into `fresh_mass_out(nx_total, ny_total)`,
@@ -247,7 +248,12 @@ contains
       !! `t_window` returns the seconds the window accumulated; with `window_expected`
       !! (the thermo-window length, `dt_therm_ratio*dt`) a mismatch beyond 1e-9 relative
       !! returns `ICE_ADAPT_ERR_WINDOW` and touches nothing (a skipped or doubled ice step
-      !! would otherwise be applied for the wrong duration).
+      !! would otherwise be applied for the wrong duration).  `t_first_window` (>= 0): the one window
+      !! that may be SHORT, the first after a cold start in the deferred order
+      !! (`diabatic_first = .false.`), whose hand-off comes `dt_therm_ratio - 1` steps in; a window
+      !! of exactly that length is accepted and its mean scaled by `t_acc/window_expected`, so the
+      !! amount the ocean spends over the thermo interval is what the ice booked over its shorter
+      !! window (mean flux times `window_expected` would hand it `ratio/(ratio-1)` too much).
       type(hgrid_t), intent(in) :: grid
       type(ocean_bc_state_t), intent(in) :: bc
          !! Supplies `north_fold` for the exchange; `ocean_halo_init` must have run.
@@ -258,7 +264,10 @@ contains
       real(wp), intent(inout), optional :: fresh_mass_out(:, :)
       real(wp), intent(in), optional :: window_expected
       real(wp), intent(out), optional :: t_window
+      real(wp), intent(in), optional :: t_first_window
+      real(wp) :: scale_f
 
+      scale_f = 1.0_wp
       ierr = ICE_ADAPT_OK
       if (present(t_window)) t_window = 0.0_wp
       if (.not. avg%is_init .or. avg%nx /= grid%nx_total .or. avg%ny /= grid%ny_total) then
@@ -273,7 +282,14 @@ contains
       if (present(window_expected)) then
          if (.not. (abs(avg%t_acc - window_expected) <= 1.0e-9_wp*abs(window_expected))) then
             ierr = ICE_ADAPT_ERR_WINDOW
-            return
+            if (present(t_first_window)) then
+               if (t_first_window > 0.0_wp .and. t_first_window < window_expected .and. &
+                   abs(avg%t_acc - t_first_window) <= 1.0e-9_wp*abs(window_expected)) then
+                  ierr = ICE_ADAPT_OK
+                  scale_f = avg%t_acc/window_expected
+               end if
+            end if
+            if (ierr /= ICE_ADAPT_OK) return
          end if
       end if
       if (present(fresh_mass_out)) then
@@ -282,6 +298,7 @@ contains
             return
          end if
       end if
+      if (scale_f /= 1.0_wp) call ice_flux_avg_scale(avg, scale_f)
       call ice_cice_to_surface_flux(grid, sf, avg%acc_fresh, avg%acc_fsalt, avg%acc_fhocn, avg%acc_fswthru, &
                                     sss_ocn, ierr)
       if (ierr /= ICE_ADAPT_OK) return
