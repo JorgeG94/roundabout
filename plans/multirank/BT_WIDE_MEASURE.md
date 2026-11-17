@@ -515,3 +515,102 @@ Not verified: nvfortran CPU; GPU np 4; GPU cycle-break and fold-ring legs; GPU `
 accepted combinations (sponge, Orlanski, nudged edges, wave drag) with the fold; timing of the merged result (stage 4 numbers
 were measured without the fold); `bt_halo` odd values across the fold beyond the rounding rule.  Nothing new is refused: the
 fold stays accepted with every tested combination; AUTO still resolves to 0.
+
+
+## Stage 7: AUTO resolves to a wide halo (`feat/bt-wide-halo-auto`)
+
+`&ocean_bt_nml bt_halo = -1` (the default) now resolves on more than one rank to a wide halo wherever a
+bitwise `bth*` case proves it, and to 0 everywhere else.
+
+### Measurement behind the width
+
+V100 x 2 (GPUs 2 and 3, one rank each, HPC-X CUDA-aware, nvfortran 26.5), binary built from this branch, explicit
+`bt_halo = W`.  SINGLE runs for the W scan (not medians), and the host was busy (1-min load 5 to 21: my own builds and
+a CPU MPI test run, plus other projects) with the locks held and `nvidia-smi` clean on 2 and 3.  Read the
+wall column with +-10 % in mind, and the `ocean_barotropic_solver` column (a profiler bucket, steadier) as the signal.
+Benches: `seamount_bt8` (512 x 256 x 30, 2 d, `n_inner` = 65), `dg50` (300 x 300 x 50, 2 d, `n_inner` = 48), and the
+same `dg50` with `dt_fixed` cut so that `n_inner` is small: `dgm` (dt 400, `n_inner` = 16, 0.67 d) and `dgs` (dt 150,
+`n_inner` = 6, 0.25 d; these two runs are only 6 to 8 s long, setup is a visible part of them).
+
+| bench (`n_inner`) | W | wall s | `ocean_barotropic_solver` s | `ocean_comms_bt` s |
+|---|---|---|---|---|
+| seamount (65) | 0 | 46.3 | 27.1 | 16.7 |
+| | 2 | 34.9 | 15.6 | 4.7 |
+| | 4 | 36.2 | 16.2 | 4.3 |
+| | 8 | 37.5 | 16.9 | 3.3 |
+| | 16 | 38.8 | 17.8 | 2.0 |
+| dg50 (48) | 0 | 13.6 | 7.5 | 4.0 |
+| | 2 | 8.5 | 3.1 | 1.0 |
+| | 4 | 8.0 | 2.6 | 0.52 |
+| | 8 | 7.9 | 2.5 | 0.41 |
+| | 16 | 9.5 | 3.6 | 0.28 |
+| dgm (16) | 0 | 6.9 | 1.68 | 0.96 |
+| | 2 | 7.7 | 1.86 | 1.05 |
+| | 4 | 7.6 | 1.73 | 0.91 |
+| | 8 | 7.3 | 1.56 | 0.76 |
+| | 16 | 7.2 | 1.46 | 0.66 |
+| dgs (6) | 0 | 5.9 | 0.71 | 0.39 |
+| | 2 | 5.8 | 0.59 | 0.16 |
+| | 4 | 5.8 | 0.58 | 0.16 |
+| | 8 | 5.8 | 0.56 | 0.14 |
+| | 16 | 5.7 | 0.55 | 0.12 |
+
+Reading.  The first wide step (W = 2) takes most of the gain wherever the solve has many substeps (the in-loop
+exchange count drops from 3 + 1 rounds per substep to one packed one per cycle, and the mid-substep u exchange goes
+away).  Past W = 4 the curve is flat to rising: the redundant band compute eats what the saved exchanges win (seamount:
++4 % solver per doubling; dg50 at 16: worse than 8).  W = 2 LOSES to `bt_halo = 0` on the mid case (`dgm`, 16 substeps,
+cycle of 3 substeps), so a narrow cycle only pays when the solve is long or the tile forces it.  W = 8 is within noise
+of the best on every bench, so the target is 8.  Wider than a solve is useless (the cycle `nghost + W - 2` past
+`n_inner` buys no further exchange), so AUTO caps W at `n_inner - nghost + 2`; at `n_inner` = 6 that is 5, so 4 (the
+rung below), which measured the same as 8.  `n_inner` below `BT_HALO_AUTO_MIN_NINNER = 4` resolves to 0: the cap leaves
+no rung above 2 and nothing below `n_inner` = 6 was measured, so the guard is conservative, not measured.
+
+The rule (`resolve_bt_halo`): one rank 0; excluded 0; else the widest rung of {8, 4, 2} not above the `n_inner` cap
+that fits the smallest tile (`nghost + W <= min(nx/px, ny/py)`, one more across the tripolar fold), shrinking and never
+refusing; 0 if none fits.  AUTO is resolved after `configure_ocean_bt_split` because `auto_n_inner` derives `n_inner`
+there; every input is rank-uniform.  Rungs are only widths a `bth*` case proves (2, 4, 8): W = 16 has no case and is not
+selected.
+
+### AUTO vs `bt_halo = 0` on the same binary, 2 GPUs (two runs each, interleaved, load 10 to 20)
+
+| bench | resolved | `bt_halo = 0` wall s | AUTO wall s | solver s (0 / AUTO) |
+|---|---|---|---|---|
+| seamount (`n_inner` 65) | 8 | 46.9, 47.2 | 32.0, 32.9 | 27.6 / 12.7, 13.4 |
+| dg50 (48) | 8 | 10.1, 10.2 | 7.9, 7.9 | 4.7 / 2.5 |
+| dgm (16) | 8 (cap 15 -> 8) | 6.9, 7.1 | 6.2, 6.3 | 1.7 / 1.0 |
+| dgs (6) | 4 | 5.9, 5.9 | 5.8, 5.8 | 0.70 / 0.57 |
+
+So AUTO buys 30 % of wall on the long-solve seamount bench, 22 % on `dg50`, 10 % on `dgm`, 2 % on the 6-substep case
+where the run is short and dominated by everything but the barotropic solve.  On a realistic case with a 3D
+mixing-heavy step (extreme, `nk100`: ML-comm bound) the stage-5 measurements stand: -5 % to ~0 %.  All of this is np 2;
+np 1 is unchanged by construction (AUTO = 0 there).
+
+### Exclusions (AUTO = 0), by choice (b) unless stated
+
+Single list `bt_halo_auto_exclusion` (`src/core/config/rdb_config_validate.F90`); an explicit `bt_halo` is honoured.
+The first five also refuse an explicit `bt_halo > 0` as before.
+
+| feature | choice | why |
+|---|---|---|
+| wet/dry, `use_cont_type`, `upstream_h_face`, Chapman edge, cavity dynamics | refused today (a) n/a | not widened |
+| `inhalo_march`, `dtbt_reset_period >= 0` | refused today | exclusive / `n_inner` re-derived mid-run |
+| sea ice | (b) | no `bth*` case; ice runs its own seam exchanges and the EVP / transport halo reach |
+| edges clamped, sponge, nested, inflow, discharge | (b) | only wall, open (Flather), tidal, periodic and the fold have cases (`bthx_perxc` pairs a clamped south edge with periodic x only) |
+| Orlanski radiation, open-edge nudging, tracer reservoirs | (b) | the wide band evolves under array-edge closures the OBC target does not see |
+| wave drag | (b) | multiplies `bt_rem` inside the substep; no case |
+| map-driven sponge (`&ocean_sponge_nml`) | (b) | no case |
+| ice-shelf cavity melt | (b) | cavity dyn is already refused; melt without it is not exercised |
+
+Each is a candidate for (a) later: add a `bth`/`bthx` case at np 2 and 4, then drop its line from the exclusion list;
+the unset-`bt_halo` cases of the test already assert that the excluded ones resolve to 0.
+
+### Test gate
+
+Every case of `test_ocean_decomp_bitid_mpi` that leaves `bt_halo` unset runs AUTO on its decomposed legs against the
+one-rank (AUTO = 0) reference.  The test records the resolved width per layout (`case ...: AUTO bt_halo = N`), checks
+the packed-exchange counter against it, asserts that sea ice / wet/dry / cavity / dtbt / wave drag / chapman / sponge
+cases resolved to 0 and that island, spherical, tripolar, periodic channel, closures and eulz_periodic resolved wide
+wherever the tile holds `nghost + 2` (+1 under the fold), prints the totals and fails below 10 wide cases.  Restart:
+`island_basin`, `spherical` and `tripolar` write/resume under AUTO on both legs; `island_basin` and `tripolar` also write
+at `bt_halo = 0` and resume under AUTO and the reverse (owned cells against the one-rank reference: the ghosts of the
+two marches legitimately differ).  The non-trivial widths this exercises include 6 / 4 / 2 shrunk by the odd 26 x 18 tiles.

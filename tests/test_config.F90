@@ -5,7 +5,7 @@ module test_config
                             nz_stack_required, nz_stack_is_sufficient
    use rdb_config, only: config_t, read_config, read_config_from_string, &
                          resolve_bt_halo, bt_halo_auto_exclusion, &
-                         BT_HALO_AUTO_SENTINEL, BT_HALO_AUTO_WIDTH, &
+                         BT_HALO_AUTO_SENTINEL, BT_HALO_AUTO_WIDTH, BT_HALO_AUTO_MIN_NINNER, BT_HALO_AUTO_LADDER, &
                          diag_density_levels_ok, MAX_OCEAN_DIAG_Z_LEVELS, &
                          ice_hlim_count, ice_hlim_spec_is_valid, MAX_ICE_HLIM_VALS, &
                          validate_config, atm_forcing_prereq_code, &
@@ -380,41 +380,73 @@ contains
       if (allocated(error)) return
       call check(error, BT_HALO_AUTO_SENTINEL == -1, "AUTO sentinel changed from -1")
       if (allocated(error)) return
-      call check(error, BT_HALO_AUTO_WIDTH == 8, "recommended explicit width changed from 8")
+      call check(error, BT_HALO_AUTO_WIDTH == 8, "AUTO target width changed from 8")
    end subroutine test_bt_halo_default_sentinel
 
    subroutine test_resolve_bt_halo(error)
-      !! The sentinel-resolution truth table (compute_size / exclusion /
-      !! explicit-value combinations).
+      !! The AUTO resolution table: ranks, exclusion, n_inner cap, tile fit,
+      !! fold, and the explicit-value pass-through.  Arguments:
+      !! (requested, compute_size, exclusion_active, nghost, min_tile, n_inner, fold).
       type(error_type), allocatable, intent(out) :: error
       integer, parameter :: AUTO = BT_HALO_AUTO_SENTINEL
+      integer, parameter :: W = BT_HALO_AUTO_WIDTH
 
-      ! AUTO, serial => 0 (bit-identical to the historical default).
-      call check(error, resolve_bt_halo(AUTO, 1, .false.) == 0, "auto serial clean should be 0")
+      ! One rank => 0, whatever else is true.
+      call check(error, resolve_bt_halo(AUTO, 1, .false., 3, 500, 40, .false.) == 0, "auto serial must be 0")
       if (allocated(error)) return
-      ! AUTO, multi-rank, clean => 0 as well: the march-in is opt-in (it is
-      ! not bit-reproducible against the serial run; test_ocean_decomp_bitid_mpi).
-      call check(error, resolve_bt_halo(AUTO, 2, .false.) == 0, &
-                 "auto multi-rank clean should be 0 (march-in is opt-in)")
+      call check(error, resolve_bt_halo(AUTO, 0, .false., 3, 500, 40, .false.) == 0, "auto size 0 must be 0")
       if (allocated(error)) return
-      ! AUTO, multi-rank, but an exclusion is active => 0.
-      call check(error, resolve_bt_halo(AUTO, 2, .true.) == 0, &
-                 "auto multi-rank with exclusion should be 0")
+      ! N ranks, plain, roomy tile, plenty of substeps => the target width.
+      call check(error, resolve_bt_halo(AUTO, 2, .false., 3, 500, 40, .false.) == W, &
+                 "auto multi-rank plain should be the target width")
       if (allocated(error)) return
-      ! AUTO, serial, exclusion active => 0 (serial dominates anyway).
-      call check(error, resolve_bt_halo(AUTO, 1, .true.) == 0, "auto serial excluded should be 0")
+      call check(error, resolve_bt_halo(AUTO, 64, .false., 3, 500, 40, .false.) == W, "auto 64 ranks plain")
       if (allocated(error)) return
-      ! Explicit 0 is never overridden (stays the v1 per-substep path).
-      call check(error, resolve_bt_halo(0, 4, .false.) == 0, "explicit 0 must stay 0")
+      ! Any exclusion => 0.
+      call check(error, resolve_bt_halo(AUTO, 2, .true., 3, 500, 40, .false.) == 0, "auto excluded must be 0")
       if (allocated(error)) return
-      ! Explicit width is left untouched — even on a serial run.
-      call check(error, resolve_bt_halo(8, 1, .false.) == 8, "explicit 8 must stay 8 (serial)")
+      ! n_inner not yet known (<= 0): no n_inner cap, the width is still resolved.
+      call check(error, resolve_bt_halo(AUTO, 2, .false., 3, 500, 0, .false.) == W, "auto, n_inner unknown")
       if (allocated(error)) return
-      call check(error, resolve_bt_halo(8, 2, .false.) == 8, "explicit 8 must stay 8 (multi)")
+      ! Too few substeps to gain => 0.
+      call check(error, resolve_bt_halo(AUTO, 2, .false., 3, 500, BT_HALO_AUTO_MIN_NINNER - 1, .false.) == 0, &
+                 "auto with n_inner below the minimum must be 0")
       if (allocated(error)) return
-      ! Explicit width + exclusion is left untouched here; validate_config is
-      ! the fail-loud gate for that impossible combination, not resolution.
-      call check(error, resolve_bt_halo(4, 2, .true.) == 4, "explicit width unchanged by exclusion")
+      ! n_inner cap: a cycle of nghost + W - 2 substeps; n_inner = 5, nghost = 3 caps W at 4.
+      call check(error, resolve_bt_halo(AUTO, 2, .false., 3, 500, 5, .false.) == 4, "auto n_inner cap (5 -> 4)")
+      if (allocated(error)) return
+      call check(error, resolve_bt_halo(AUTO, 2, .false., 3, 500, 4, .false.) == 2, "auto n_inner cap (4 -> 2)")
+      if (allocated(error)) return
+      ! Tile fit: nghost + W <= min_tile; AUTO shrinks to the widest proven rung, never errors.
+      call check(error, resolve_bt_halo(AUTO, 4, .false., 3, 11, 40, .false.) == 8, "tile 11 holds W = 8")
+      if (allocated(error)) return
+      call check(error, resolve_bt_halo(AUTO, 4, .false., 3, 10, 40, .false.) == 4, "tile 10 shrinks 8 -> 4")
+      if (allocated(error)) return
+      call check(error, resolve_bt_halo(AUTO, 4, .false., 3, 6, 40, .false.) == 2, "tile 6 shrinks to 2")
+      if (allocated(error)) return
+      call check(error, resolve_bt_halo(AUTO, 4, .false., 3, 4, 40, .false.) == 0, "tile 4 cannot hold any width: 0")
+      if (allocated(error)) return
+      ! Across the fold the tile must be one cell larger.
+      call check(error, resolve_bt_halo(AUTO, 4, .false., 3, 11, 40, .true.) == 4, "fold: tile 11 shrinks 8 -> 4")
+      if (allocated(error)) return
+      call check(error, resolve_bt_halo(AUTO, 4, .false., 3, 12, 40, .true.) == 8, "fold: tile 12 holds 8")
+      if (allocated(error)) return
+      call check(error, resolve_bt_halo(AUTO, 4, .false., 3, 5, 40, .true.) == 0, "fold: tile 5 holds nothing")
+      if (allocated(error)) return
+      ! The widths AUTO picks are always on the proven ladder and even.
+      call check(error, any(resolve_bt_halo(AUTO, 4, .false., 3, 40, 40, .false.) == BT_HALO_AUTO_LADDER), &
+                 "auto width must be a ladder rung")
+      if (allocated(error)) return
+      ! Explicit values are returned unchanged: 0, a width, serial, excluded, ill-fitting.
+      call check(error, resolve_bt_halo(0, 4, .false., 3, 500, 40, .false.) == 0, "explicit 0 must stay 0")
+      if (allocated(error)) return
+      call check(error, resolve_bt_halo(8, 1, .false., 3, 500, 40, .false.) == 8, "explicit 8 must stay 8 (serial)")
+      if (allocated(error)) return
+      call check(error, resolve_bt_halo(8, 2, .false., 3, 500, 40, .false.) == 8, "explicit 8 must stay 8 (multi)")
+      if (allocated(error)) return
+      call check(error, resolve_bt_halo(4, 2, .true., 3, 500, 40, .false.) == 4, "explicit width unchanged by exclusion")
+      if (allocated(error)) return
+      call check(error, resolve_bt_halo(6, 2, .false., 3, 4, 2, .true.) == 6, "explicit width unchanged by a small tile")
    end subroutine test_resolve_bt_halo
 
    subroutine test_periodic_y_needs_uniform_grid(error)
@@ -729,7 +761,7 @@ contains
       call bt_halo_auto_exclusion(cfg, excluded, reason)
       call check(error, excluded, "cavity_dyn enable not detected as exclusion")
       if (allocated(error)) return
-      call check(error, resolve_bt_halo(BT_HALO_AUTO_SENTINEL, 4, excluded) == 0, &
+      call check(error, resolve_bt_halo(BT_HALO_AUTO_SENTINEL, 4, excluded, 3, 500, 40, .false.) == 0, &
                  "cavity + auto bt_halo on 4 ranks must resolve to 0, not the "// &
                  "wide-halo march-in")
       if (allocated(error)) return
@@ -740,6 +772,72 @@ contains
       cfg%ocean%bc%north = "tripolar_fold"
       call bt_halo_auto_exclusion(cfg, excluded, reason)
       call check(error,.not. excluded, "tripolar fold wrongly flagged as an exclusion")
+      if (allocated(error)) return
+      cfg%ocean%grid%grid_config = "cartesian"
+      cfg%ocean%bc%north = "wall"
+
+      ! Edge types the `bth*` cases prove stay allowed (wall / open / tidal /
+      ! periodic); every other type is excluded and the reason names the edge.
+      cfg%ocean%bc%west = "periodic"
+      cfg%ocean%bc%east = "periodic"
+      cfg%ocean%bc%south = "open"
+      cfg%ocean%bc%north = "tidal"
+      call bt_halo_auto_exclusion(cfg, excluded, reason)
+      call check(error,.not. excluded, "periodic / open / tidal edges wrongly excluded")
+      if (allocated(error)) return
+      cfg%ocean%bc%west = "wall"
+      cfg%ocean%bc%east = "wall"
+      cfg%ocean%bc%south = "wall"
+      cfg%ocean%bc%north = "wall"
+      cfg%ocean%bc%east = "clamped"
+      call bt_halo_auto_exclusion(cfg, excluded, reason)
+      call check(error, excluded .and. index(reason, "east") > 0, "clamped east edge not excluded")
+      if (allocated(error)) return
+      cfg%ocean%bc%east = "sponge"
+      call bt_halo_auto_exclusion(cfg, excluded, reason)
+      call check(error, excluded, "sponge edge not excluded")
+      if (allocated(error)) return
+      cfg%ocean%bc%east = "wall"
+
+      ! Features without a wide-halo case: each flips the flag on its own.
+      cfg%ocean%ice%enable = .true.
+      call bt_halo_auto_exclusion(cfg, excluded, reason)
+      call check(error, excluded .and. index(reason, "ice") > 0, "sea ice not excluded")
+      if (allocated(error)) return
+      cfg%ocean%ice%enable = .false.
+      cfg%ocean%sponge%enable = .true.
+      call bt_halo_auto_exclusion(cfg, excluded, reason)
+      call check(error, excluded, "map-driven sponge not excluded")
+      if (allocated(error)) return
+      cfg%ocean%sponge%enable = .false.
+      cfg%ocean%bt%wave_drag = .true.
+      call bt_halo_auto_exclusion(cfg, excluded, reason)
+      call check(error, excluded, "wave_drag not excluded")
+      if (allocated(error)) return
+      cfg%ocean%bt%wave_drag = .false.
+      cfg%ocean%bt%inhalo_march = .true.
+      call bt_halo_auto_exclusion(cfg, excluded, reason)
+      call check(error, excluded, "inhalo_march not excluded")
+      if (allocated(error)) return
+      cfg%ocean%bt%inhalo_march = .false.
+      cfg%ocean%bc%radiation_scheme = "orlanski"
+      call bt_halo_auto_exclusion(cfg, excluded, reason)
+      call check(error, excluded, "Orlanski radiation not excluded")
+      if (allocated(error)) return
+      cfg%ocean%bc%radiation_scheme = "anomaly"
+      cfg%ocean%bc%nudge_tau_in = 3600.0_wp
+      call bt_halo_auto_exclusion(cfg, excluded, reason)
+      call check(error, excluded, "open-edge nudging not excluded")
+      if (allocated(error)) return
+      cfg%ocean%bc%nudge_tau_in = 0.0_wp
+      cfg%ocean%bt%dtbt_reset_period = 0.0_wp
+      cfg%ocean%bt%dtbt = 30.0_wp
+      call bt_halo_auto_exclusion(cfg, excluded, reason)
+      call check(error, excluded, "dtbt with dtbt_reset_period >= 0 not excluded")
+      if (allocated(error)) return
+      cfg%ocean%bt%dtbt_reset_period = -1.0_wp
+      call bt_halo_auto_exclusion(cfg, excluded, reason)
+      call check(error,.not. excluded, "init-only dtbt wrongly excluded")
    end subroutine test_bt_halo_auto_exclusion
 
    subroutine test_ice_hlim_count_leading_run(error)

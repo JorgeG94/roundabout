@@ -603,7 +603,10 @@ contains
       ! the feature flags are both known (see rdb_config::resolve_bt_halo).
       bt_halo_req = cfg%ocean%bt%bt_halo
       call bt_halo_auto_exclusion(cfg, bt_excluded, bt_excl_reason)
-      bt_halo_res = resolve_bt_halo(bt_halo_req, csize, bt_excluded)
+      ! AUTO is resolved after `configure_ocean_bt_split` (below): the width
+      ! depends on `n_inner`, which `auto_n_inner` derives there.  Nothing reads
+      ! `bt_halo` in between.  An explicit value is final here.
+      bt_halo_res = max(bt_halo_req, 0)
       cfg%ocean%bt%bt_halo = bt_halo_res
       ! `dtbt_reset_period >= 0` re-derives `n_inner` mid-run.  Across ranks that
       ! is exact (the domain minimum of dt_max is reduced with an order-independent
@@ -649,17 +652,6 @@ contains
                       to_string(cfg%nx/cfg%px)//" x "//to_string(cfg%ny/cfg%py)// &
                       ".  Reduce bt_halo or use fewer ranks.", ierr, OCEAN_STATUS_ERR_SETUP)
             return
-         end if
-      end if
-      if (rank == 0 .and. bt_halo_req == BT_HALO_AUTO_SENTINEL .and. csize > 1) then
-         if (bt_excluded) then
-            call logger%info("BT march-in: bt_halo auto -> 0 ("// &
-                             trim(bt_excl_reason)//" active)")
-         else
-            call logger%info("BT march-in: bt_halo auto -> 0 (opt-in: set "// &
-                             "&ocean_bt_nml bt_halo = 8 explicitly; verified bitwise equal "// &
-                             "to the one-rank run on the configurations listed in "// &
-                             "docs/CAPABILITIES_AND_LIMITATIONS.md)")
          end if
       end if
       if (rank == 0 .and. bt_halo_res > 0 .and. csize > 1) then
@@ -1103,6 +1095,28 @@ contains
       call configure_ocean_bt(cfg, engine%state, engine%grid, rank)
 
       call configure_ocean_bt_split(cfg, engine%state, engine%grid, rank)   ! may auto-set n_inner
+      if (bt_halo_req == BT_HALO_AUTO_SENTINEL) then
+         ! AUTO: now that `n_inner` is final.  Rank-uniform (every input is).
+         bt_halo_res = resolve_bt_halo(bt_halo_req, csize, bt_excluded, cfg%nghost, &
+                                       min(cfg%nx/cfg%px, cfg%ny/cfg%py), cfg%ocean%bt%n_inner, &
+                                       ocean_bc_type_from_string(cfg%ocean%bc%north) == OBC_TRIPOLAR_FOLD)
+         cfg%ocean%bt%bt_halo = bt_halo_res
+         if (rank == 0) then
+            if (csize <= 1) then
+               call logger%info("BT march-in: bt_halo auto -> 0 (one rank)")
+            else if (bt_excluded) then
+               call logger%info("BT march-in: bt_halo auto -> 0 ("//trim(bt_excl_reason)// &
+                                ": no bitwise-proven wide-halo case)")
+            else if (bt_halo_res == 0) then
+               call logger%info("BT march-in: bt_halo auto -> 0 (n_inner = "// &
+                                to_string(cfg%ocean%bt%n_inner)//" or the "// &
+                                to_string(min(cfg%nx/cfg%px, cfg%ny/cfg%py))// &
+                                "-cell tile is too small for a wide halo)")
+            else
+               call logger%info("BT march-in: bt_halo auto -> "//to_string(bt_halo_res))
+            end if
+         end if
+      end if
       ! BC config: edge tags + tidal constituents + tracer inflow values.
       call configure_ocean_bc(cfg, engine%state, rank, ierr=ierr)
       if (setup_failed(ierr)) return

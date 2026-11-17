@@ -260,7 +260,7 @@ program test_ocean_decomp_bitid_mpi
    use, intrinsic :: iso_fortran_env, only: int64
    use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    use rdb_constants, only: wp
-   use rdb_config, only: config_t, read_config_from_string, validate_config
+   use rdb_config, only: config_t, read_config_from_string, validate_config, BT_HALO_AUTO_SENTINEL
    use rdb_ocean_status, only: OCEAN_STATUS_OK
    use rdb_error_ring, only: error_ring_clear, error_ring_count, error_ring_get
    use rdb_ocean_halo_counters, only: oh_counters_reset, oh_counters_format, oh_counters_get, &
@@ -342,6 +342,8 @@ program test_ocean_decomp_bitid_mpi
       integer :: n = 0
       type(field_t) :: f(MAXF)
       integer :: io = 0, jo = 0, nxl = 0, nyl = 0, ng = 0
+      integer :: bt_halo = 0
+         !! `&ocean_bt_nml bt_halo` as `engine_setup` resolved it (AUTO included).
       integer :: ngrow = 0
          !! Mid-run regrows of the fold-exchange buffers (must stay 0).
       integer :: drain_iter = 0
@@ -394,6 +396,9 @@ program test_ocean_decomp_bitid_mpi
    integer :: bth_nochain_env = 0, bth_steps_env = 0, bth_poison_env = 0, &
               bth_ring_env = 0
       !! `RDB_BITID_BTH_NOCHAIN=1`: the `bth_*` cases run with `visc_rem_chain = .false.`.
+   integer :: n_auto_runs = 0, n_auto_wide = 0, n_auto_cases = 0, n_auto_wide_cases = 0
+      !! AUTO tally (decomposed runs of cases that leave `bt_halo` unset):
+      !! runs / runs that resolved to a wide halo, then the same per case.
    logical :: where_report = .false.
       !! Set per case (the `bth_*` family): `compare` also prints the `[where]` lines.
    integer :: cur_n_inner = 0
@@ -536,6 +541,14 @@ program test_ocean_decomp_bitid_mpi
    if (len_trim(case_filter) == 0 .or. index("cavity_grounded_refused", trim(case_filter)) > 0) &
       call check_cavity_grounded_refusal()
 
+   if (nprocs > 1 .and. n_auto_runs > 0 .and. rank == 0) then
+      write (*, '(a,i0,a,i0,a,i0,a,i0,a)') "AUTO bt_halo: ", n_auto_wide, " of ", n_auto_runs, &
+         " decomposed runs resolved to a wide halo (", n_auto_wide_cases, " of ", n_auto_cases, " cases)"
+   end if
+   if (nprocs > 1 .and. len_trim(case_filter) == 0 .and. n_auto_wide_cases < 10) then
+      if (rank == 0) write (*, '(a,i0)') "FAIL: the AUTO gate is vacuous, wide-halo cases = ", n_auto_wide_cases
+      n_fail = n_fail + 1
+   end if
    call comm%barrier()
    total_fail = n_fail
    call allreduce(comm, total_fail, MPI_SUM)
@@ -2077,6 +2090,7 @@ contains
          snap%fold_wide_active = ocean_fold_ctx_is_distributed(FOLD_CTX_WIDE)
       end block
       cur_n_inner = cfg%ocean%bt%n_inner
+      snap%bt_halo = cfg%ocean%bt%bt_halo
       if (print_counts .and. csize > 1 .and. crank == 0) then
          write (*, '(a,i0,a,i0,a,i0,a,l1,a,a)') "COUNTS n_inner=", cfg%ocean%bt%n_inner, &
             " steps=", n_steps_cur, " stride=", engine%state%dyn%bt_work%inhalo_stride, &
@@ -2356,7 +2370,7 @@ contains
    end subroutine take_snapshot
 
 #ifndef RDB_NO_NETCDF
-   subroutine check_resume_leg(nml, straight, tag)
+   subroutine check_resume_leg(nml, straight, tag, ref, bth1, bth2)
       !! The write/resume leg: the same decomposed run, checkpointed at
       !! N_CKPT to per-rank files (the driver's `<dir>/restart_rank_NNNNNN.nc`
       !! convention, through `ocean_state_restart_write`), torn down, and
@@ -2365,13 +2379,22 @@ contains
       !! steps.  Every registry field (and the BT end-of-step eta) must
       !! equal the STRAIGHT decomposed run's bitwise over the FULL local
       !! array, ghosts included.  Counts into `n_fail` (rank-summed).
+      !! With `ref`, `bth1` / `bth2` the two legs may use DIFFERENT `bt_halo`
+      !! settings (the value overrides the namelist's; -1 = AUTO): a restart
+      !! written with one march-in must resume under the other, so the run does
+      !! not depend on what the previous leg used.  The ghosts then legitimately
+      !! differ (a wide march leaves other ghost rows than the per-substep one),
+      !! so the owned cells of the resumed run are compared against the
+      !! one-rank reference `ref` instead.
       character(len=*), intent(in) :: nml, tag
       type(snap_t), intent(in) :: straight
+      type(snap_t), intent(in), optional :: ref
+      integer, intent(in), optional :: bth1, bth2
       type(snap_t) :: res
       type(ocean_engine_t), target :: engine
       type(config_t) :: cfg
       character(len=512) :: fname
-      integer :: ierr, step0, glob(2), nb
+      integer :: ierr, step0, glob(2), nb, nfin_r
       real(wp) :: t
       logical :: ok
 
@@ -2383,6 +2406,7 @@ contains
 
       ! ---- leg 1: N_CKPT steps, checkpoint ----
       call read_config_from_string(nml, cfg, ierr=ierr)
+      if (present(bth1)) cfg%ocean%bt%bt_halo = bth1
       if (ierr == OCEAN_STATUS_OK) call validate_config(cfg, ierr)
       if (ierr == OCEAN_STATUS_OK) &
          call engine_setup(engine, cfg, ierr, compute_rank=rank, compute_size=nprocs)
@@ -2401,6 +2425,7 @@ contains
       ! ---- leg 2: warm restart from the per-rank files, finish ----
       if (ierr == OCEAN_STATUS_OK) then
          call read_config_from_string(nml, cfg, ierr=ierr)
+         if (present(bth2)) cfg%ocean%bt%bt_halo = bth2
          if (ierr == OCEAN_STATUS_OK) call validate_config(cfg, ierr)
          if (ierr == OCEAN_STATUS_OK) &
             call engine_setup(engine, cfg, ierr, compute_rank=rank, compute_size=nprocs, &
@@ -2420,13 +2445,19 @@ contains
       end if
       call delete_file(trim(fname))
 
-      if (ok) call compare_full(res, straight, nb, tag)
+      if (ok .and. present(ref)) then
+         call compare(res, ref, nb, nfin_r, tag)
+         nb = nb + nfin_r
+      else if (ok) then
+         call compare_full(res, straight, nb, tag)
+      end if
       glob = [nb, merge(0, 1, ok)]
       call allreduce(comm, glob, op=MPI_SUM)
       if (rank == 0) then
          if (sum(glob) == 0) then
-            write (*, '(3a,i0,a)') "case ", tag, " write/resume: IDENTICAL (", &
-               straight%n, " fields, ghosts included)"
+            write (*, '(3a,i0,2a)') "case ", tag, " write/resume: IDENTICAL (", &
+               straight%n, " fields, ", merge("owned cells vs the one-rank reference)", &
+                                              "ghosts included                      )", present(ref))
          else
             write (*, '(3a,i0,a,i0)') "FAIL ", tag, " write/resume: mismatches=", glob(1), &
                " leg_failures=", glob(2)
@@ -2752,6 +2783,7 @@ contains
       type(snap_t) :: ref, dec
       logical :: ok_ref, ok_dec
       integer :: px, nbad, nfin, glob(3), nbud, nghost_bad, nb_img, n_layouts_run
+      logical :: case_wide
       character(len=96) :: tag
       type(conservation_budget_t) :: buds(8)
 
@@ -2794,6 +2826,7 @@ contains
 
       nbud = 0
       n_layouts_run = 0
+      case_wide = .false.
       do px = nprocs, 1, -1
          if (mod(nprocs, px) /= 0) cycle
          write (tag, '(4a,i0,a,i0)') label, "/", scheme, " ", px, "x", nprocs/px
@@ -2815,6 +2848,7 @@ contains
          else
             call compare(dec, ref, nbad, nfin, trim(tag))
             if (is_bth_case(label)) call check_bth_counters(dec, label, tag, nbad, px)
+            if (.not. is_bth_case(label)) call check_auto_resolution(dec, label, tag, nbad, px, case_wide)
             if (is_wetdry_case(label)) then
                call compare_ghosts(dec, ref, nghost_bad, trim(tag))
                nbad = nbad + nghost_bad
@@ -2861,13 +2895,25 @@ contains
                  label == "bulk_flux_ice" .or. label == "dtbt_reset" .or. &
                  label == "cavity_sigma_ratio2" .or. label == "cavity_mass" .or. &
                  label == "cavity_mass_comp" .or. is_wetdry_case(label) .or. is_ice_fold_case(label) .or. &
-                 label == "bthx_tripsea_w4") .and. &
+                 label == "bthx_tripsea_w4" .or. &
+                 ! AUTO-resolved cases: the checkpoint is written and resumed with the
+                 ! wide march (both legs AUTO), plain walls / spherical / the fold.
+                 (label == "island_basin" .or. label == "spherical" .or. label == "tripolar")) .and. &
                 (nprocs/px == 1 .or. px == nprocs/px) .and. &
                 (nprocs > 1 .or. label == "cavity_sigma_ratio2" .or. label == "cavity_mass" .or. &
                  label == "cavity_mass_comp")) then
                ! 4x1 and 2x2 at np = 4 (and 2x1 at np = 2).
                call check_resume_leg(case_nml(label, scheme, px, nprocs/px), dec, &
                                      trim(tag))
+               ! A restart is independent of the march-in the previous leg used:
+               ! written per-substep (bt_halo = 0) and resumed AUTO (wide), and
+               ! the other way round, owned cells against the one-rank reference.
+               if (label == "island_basin" .or. label == "tripolar") then
+                  call check_resume_leg(case_nml(label, scheme, px, nprocs/px), dec, &
+                                        trim(tag)//" [0 -> auto]", ref, bth1=0, bth2=BT_HALO_AUTO_SENTINEL)
+                  call check_resume_leg(case_nml(label, scheme, px, nprocs/px), dec, &
+                                        trim(tag)//" [auto -> 0]", ref, bth1=BT_HALO_AUTO_SENTINEL, bth2=0)
+               end if
             end if
 #endif
             if (nbud < size(buds)) then
@@ -2892,6 +2938,10 @@ contains
       ! subroutine's own docstring.
       ! A `bth*` case whose every layout was skipped by the tile-fit rule proved
       ! nothing: that is a failure, not a pass.
+      if (.not. is_bth_case(label) .and. nprocs > 1) then
+         n_auto_cases = n_auto_cases + 1
+         if (case_wide) n_auto_wide_cases = n_auto_wide_cases + 1
+      end if
       if (is_bth_case(label) .and. n_layouts_run == 0) then
          if (rank == 0) write (*, '(6a)') "FAIL ", label, "/", scheme, &
             ": every layout was skipped by the tile-fit rule at np = ", itoa(nprocs), &
@@ -2921,6 +2971,66 @@ contains
       refreshes_widths = index(label, "bthx_porous") == 1 .or. index(label, "bthx_zfixed") == 1 .or. &
                          index(label, "bthx_trip_porous") == 1 .or. index(label, "bthx_trip_zfixed") == 1
    end function refreshes_widths
+
+   pure logical function auto_must_stay_zero(label)
+      !! Cases whose configuration `bt_halo_auto_exclusion` must keep at AUTO = 0
+      !! (no passing `bth*` case proves them): the feature is on, so a wide
+      !! halo here means the exclusion leaked.
+      character(len=*), intent(in) :: label
+      auto_must_stay_zero = index(label, "sea_ice") == 1 .or. index(label, "wetdry_") == 1 .or. &
+                            index(label, "cavity_") == 1 .or. index(label, "dtbt_reset") == 1 .or. &
+                            index(label, "wave_drag") == 1 .or. label == "chapman_obc" .or. &
+                            label == "obc_sponge_east" .or. label == "obc_radiation_sponge" .or. &
+                            label == "periodic_sponge" .or. index(label, "bulk_flux_ice") == 1
+   end function auto_must_stay_zero
+
+   pure logical function auto_must_be_wide(label)
+      !! The plain wall / periodic / spherical / tripolar / island cases that
+      !! MUST resolve to a wide halo wherever the tile fits (nghost + 2 [+ 1
+      !! under the fold]); the AUTO gate is vacuous without them.
+      character(len=*), intent(in) :: label
+      auto_must_be_wide = label == "island_basin" .or. label == "spherical" .or. label == "tripolar" .or. &
+                          label == "periodic_channel_zstar" .or. label == "closures" .or. &
+                          label == "eulz_periodic"
+   end function auto_must_be_wide
+
+   subroutine check_auto_resolution(dec, label, tag, nbad, px, case_wide)
+      !! A case that leaves `bt_halo` unset runs AUTO on every decomposed leg.
+      !! Reports the resolved width, tallies it, and asserts (i) the packed
+      !! exchange counter agrees with the resolved width (the wide march ran iff
+      !! `bt_halo > 0`), (ii) an excluded configuration resolved to 0, (iii) the
+      !! plain must-be-wide cases resolved wide wherever the smallest tile holds
+      !! `nghost + 2` (`+ 1` under the fold).  One rank is always 0.
+      type(snap_t), intent(in) :: dec
+      character(len=*), intent(in) :: label, tag
+      integer, intent(inout) :: nbad
+      integer, intent(in) :: px
+      logical, intent(inout) :: case_wide
+      integer :: tile, need, bad
+      logical :: fits
+
+      if (nprocs == 1) return
+      n_auto_runs = n_auto_runs + 1
+      if (dec%bt_halo > 0) then
+         n_auto_wide = n_auto_wide + 1
+         case_wide = .true.
+      end if
+      bad = 0
+      ! (a zero-step `_t0` case never marches: no packed exchange to count)
+      if (n_steps_cur > 0 .and. (dec%cnt_pk > 0_int64) .neqv. (dec%bt_halo > 0)) bad = bad + 1
+      if (auto_must_stay_zero(label) .and. dec%bt_halo /= 0) bad = bad + 1
+      tile = min(NX_G/px, NY_G/(nprocs/px))
+      need = 3 + 2 + merge(1, 0, index(label, "tripolar") > 0)
+      fits = tile >= need
+      if (auto_must_be_wide(label) .and. fits .and. dec%bt_halo == 0) bad = bad + 1
+      if (bad > 0) then
+         write (*, '(3a,i0,a,i0,a,l1,a)') "FAIL ", trim(tag), ": AUTO bt_halo resolved to ", dec%bt_halo, &
+            " pk=", dec%cnt_pk, " (wide expected: ", auto_must_be_wide(label) .and. fits, ")"
+         nbad = nbad + bad
+      else if (rank == 0) then
+         write (*, '(3a,i0,a,i0,a)') "case ", trim(tag), ": AUTO bt_halo = ", dec%bt_halo, " (pk=", dec%cnt_pk, ")"
+      end if
+   end subroutine check_auto_resolution
 
    subroutine check_bth_counters(dec, label, tag, nbad, px)
       !! Non-vacuity AND message-count check of a `bth_*` case.  Per BT solve
