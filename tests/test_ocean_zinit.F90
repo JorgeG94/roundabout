@@ -225,9 +225,9 @@ contains
          t_src(:, :, k) = 20.0_wp - 0.04_wp*z_src(k)
          s_src(:, :, k) = 35.5_wp - 0.002_wp*z_src(k)
       end do
-      call write_zfile("/tmp/test_zinit_cons.nc", NX, NY, NZ_SRC, z_src, t_src, s_src)
+      call write_zfile("test_zinit_cons.nc", NX, NY, NZ_SRC, z_src, t_src, s_src)
       grid = make_grid(NX, NY)
-      cfg%file = "/tmp/test_zinit_cons.nc"
+      cfg%file = "test_zinit_cons.nc"
       call make_state(ms, NX, NY, NZ_ML, 400.0_wp)
       call make_state(ms0, NX, NY, NZ_ML, 400.0_wp)
       call make_state(msf, NX, NY, NZ_ML, 400.0_wp)
@@ -284,7 +284,7 @@ contains
          s_src(:, :, k) = 30.0_wp + z_src(k)  ! S = 30 + depth
       end do
 
-      fname = "/tmp/test_zinit_exact.nc"
+      fname = "test_zinit_exact.nc"
       call write_zfile(trim(fname), NX, NY, NZ_SRC, z_src, t_src, s_src)
 
       grid = make_grid(NX, NY)
@@ -342,7 +342,7 @@ contains
          s_src(:, :, k) = 35.0_wp - 0.001_wp*z_src(k)
       end do
 
-      fname = "/tmp/test_zinit_linear.nc"
+      fname = "test_zinit_linear.nc"
       call write_zfile(trim(fname), NX, NY, NZ_SRC, z_src, t_src, s_src)
 
       grid = make_grid(NX, NY)
@@ -395,7 +395,7 @@ contains
          s_src(:, :, k) = 35.0_wp
       end do
 
-      fname = "/tmp/test_zinit_extrap.nc"
+      fname = "test_zinit_extrap.nc"
       call write_zfile(trim(fname), NX, NY, NZ_SRC, z_src, t_src, s_src)
 
       grid = make_grid(NX, NY)
@@ -442,7 +442,7 @@ contains
          s_src(:, :, k) = 36.0_wp     ! distinct from FILL_S
       end do
 
-      fname = "/tmp/test_zinit_dry.nc"
+      fname = "test_zinit_dry.nc"
       call write_zfile(trim(fname), NX, NY, NZ_SRC, z_src, t_src, s_src)
 
       grid = make_grid(NX, NY)
@@ -494,7 +494,7 @@ contains
       t_src = 10.0_wp
       s_src = 35.0_wp
 
-      fname = "/tmp/test_zinit_mismatch.nc"
+      fname = "test_zinit_mismatch.nc"
       call write_zfile(trim(fname), NX, NY, NZ_SRC, z_src, t_src, s_src)
 
       ! Correct query → ok.
