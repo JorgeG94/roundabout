@@ -2325,6 +2325,10 @@ module rdb_config
          !! RH18 mstar fits (MOM6 RH18_MSTAR_CN1..CS2).
       real(wp) :: nstar = 0.2_wp
          !! Convective PE -> TKE efficiency (MOM6 NSTAR).
+      real(wp) :: rivermix_depth = 0.0_wp
+         !! River-mixing depth (m; MOM6 RIVERMIX_DEPTH with DO_RIVERMIX).  0 = off.
+         !! > 0 adds the PE of mixing the runoff over this depth to the EPBL surface
+         !! forcing energy; requires `enable`.
       real(wp) :: tke_decay = 2.5_wp
          !! Ekman-depth / TKE-decay-scale ratio (MOM6 TKE_DECAY).
       real(wp) :: wstar_ustar_coef = 1.0_wp

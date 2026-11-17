@@ -21,7 +21,7 @@ module test_ocean_epbl
    use rdb_grid, only: hgrid_t
    use rdb_multilayer_state, only: multilayer_state_t
    use rdb_ocean_epbl, only: ocean_epbl_t, epbl_compute, epbl_find_mstar, &
-                             epbl_lf17_wave_state, epbl_lf17_la, epbl_lt_enhance, &
+                             epbl_rivermix_energy, epbl_lf17_wave_state, epbl_lf17_la, epbl_lt_enhance, &
                              EPBL_MSTAR_CONSTANT, EPBL_MSTAR_OM4, EPBL_LT_RESCALE
    use rdb_eos, only: eos_t, eos_specvol_derivs, eos_density_point, &
                       EOS_VARIANT_LINEAR, EOS_VARIANT_WRIGHT_97
@@ -54,7 +54,10 @@ contains
                   new_unittest("epbl_convective_deepening", test_convective), &
                   new_unittest("epbl_lf17_la_spot_values", test_lf17_spot), &
                   new_unittest("epbl_lt_enhancement_monotone", test_lt_monotone), &
-                  new_unittest("epbl_lt_deepens_wind_mixing", test_lt_deepens) &
+                  new_unittest("epbl_lt_deepens_wind_mixing", test_lt_deepens), &
+                  new_unittest("epbl_rivermix_energy_hand_value", test_rivermix_energy), &
+                  new_unittest("epbl_rivermix_off_is_bitwise_inert", test_rivermix_off_bitwise), &
+                  new_unittest("epbl_rivermix_deepens_and_scales_with_runoff", test_rivermix_deepens) &
                   ]
    end subroutine collect_ocean_epbl_tests
 
@@ -590,6 +593,123 @@ contains
       call vd%destroy(); call sf%destroy(); call ss%destroy()
       call epbl%destroy(); call ms%destroy()
    end subroutine test_convective
+
+   ! -----------------------------------------------------------------
+   ! River mixing (`rivermix_depth`)
+   ! -----------------------------------------------------------------
+
+   subroutine run_rivermix_column(depth, lrunoff, frunoff, mld, kd_sfc, kd_sum)
+      !! One quiescent thermo step (no wind beyond the u* floor, no heat/salt flux) over a
+      !! weakly stratified column with a uniform runoff of `lrunoff + frunoff` kg m-2 s-1 and
+      !! `rivermix_depth = depth`; returns the probe column's MLD and diffusivities.
+      real(wp), intent(in) :: depth, lrunoff, frunoff
+      real(wp), intent(out) :: mld, kd_sfc, kd_sum
+      type(hgrid_t) :: grid
+      type(multilayer_state_t) :: ms
+      type(ocean_epbl_t) :: epbl
+      type(ocean_surface_stress_t) :: ss
+      type(ocean_surface_flux_t) :: sf
+      type(ocean_vdiff_t) :: vd
+      integer, parameter :: NZ = 40
+      real(wp), parameter :: DZ = 2.0_wp, DT = 1800.0_wp, N2 = 1.0e-6_wp
+      real(wp) :: mld_s(1), t_s(1), dT_dz
+      integer :: ip, jp
+
+      call make_grid(grid, 6, 4)
+      ms%nz_ml = NZ
+      call ms%init(grid)
+      call setup_epbl(epbl, grid, NZ)
+      epbl%rivermix_depth = depth
+      call ss%init(grid)
+      call ss%set_wind_stress_const(0.0_wp, 0.0_wp)
+      call sf%init(grid)
+      call sf%set_surface_flux_const(0.0_wp, 0.0_wp)
+      call sf%set_components(grid, .true.)   ! allocates lrunoff / frunoff
+      sf%lrunoff = lrunoff
+      sf%frunoff = frunoff
+      call vd%init(grid, nz_ml=NZ)
+      dT_dz = N2*RHO0/(GRAVITY*ALPHA_LIN)
+      call setup_stratified_T(ms, NZ, DZ, 15.0_wp, dT_dz)
+      call run_epbl_steps(grid, ms, epbl, ss, sf, vd, DT, 1, mld_s, t_s, sample_every=1)
+      ip = grid%nx_total/2
+      jp = grid%ny_total/2
+      mld = epbl%mld(ip, jp)
+      kd_sfc = epbl%kd_int(ip, jp, NZ)
+      kd_sum = sum(epbl%kd_int(ip, jp, :))
+      call vd%destroy(); call sf%destroy(); call ss%destroy()
+      call epbl%destroy(); call ms%destroy()
+   end subroutine run_rivermix_column
+
+   subroutine test_rivermix_energy(error)
+      !! `epbl_rivermix_energy` against the hand-evaluated
+      !! 0.5 D g beta_S S R dt with beta_S = -rho0 dSV/dS from the EOS, runoff = liquid + frozen
+      !! passed as their sum, and the max(0, .) floor.
+      type(error_type), allocatable, intent(out) :: error
+      type(eos_t) :: eos
+      real(wp) :: dsv_dt, dsv_ds, e, e_hand, beta
+      real(wp), parameter :: D = 40.0_wp, S = 35.0_wp, R = 2.0e-4_wp, DT = 1800.0_wp
+      checks: block
+         eos%variant = EOS_VARIANT_LINEAR
+         eos%alpha_T = ALPHA_LIN
+         eos%beta_S = BETA_LIN
+         eos%rho0 = RHO0
+         call eos_specvol_derivs(eos, 10.0_wp, S, 0.0_wp, dsv_dt, dsv_ds)
+         beta = -RHO0*dsv_ds
+         e_hand = 0.5_wp*D*GRAVITY*beta*S*R*DT
+         e = epbl_rivermix_energy(D, dsv_ds, S, RHO0, R, DT)
+         call check(error, e > 0.0_wp, "river energy must be positive")
+         if (allocated(error)) exit checks
+         call check(error, abs(e - e_hand) <= 1.0e-12_wp*e_hand, &
+                    "river energy differs from 0.5 D g beta S R dt")
+         if (allocated(error)) exit checks
+         ! sum of liquid + frozen enters as one flux
+         call check(error, abs(epbl_rivermix_energy(D, dsv_ds, S, RHO0, 0.5_wp*R + 0.5_wp*R, DT) - e) &
+                    <= 1.0e-12_wp*e, "liquid + frozen must act as their sum")
+         if (allocated(error)) exit checks
+         ! linear in D, R, S, dt; floored at zero for a non-physical (negative) flux
+         call check(error, abs(epbl_rivermix_energy(2.0_wp*D, dsv_ds, S, RHO0, R, DT) - 2.0_wp*e) &
+                    <= 1.0e-12_wp*e, "river energy must be linear in D")
+         if (allocated(error)) exit checks
+         call check(error, epbl_rivermix_energy(D, dsv_ds, S, RHO0, -R, DT) == 0.0_wp, &
+                    "river energy must be floored at zero")
+      end block checks
+   end subroutine test_rivermix_energy
+
+   subroutine test_rivermix_off_bitwise(error)
+      !! knob 0 with runoff present == no runoff, and zero runoff with the knob on ==
+      !! knob off, all BITWISE (the guard adds nothing, and 0 runoff adds exactly 0).
+      type(error_type), allocatable, intent(out) :: error
+      real(wp) :: m0, k0, s0, m1, k1, s1, m2, k2, s2
+      checks: block
+         call run_rivermix_column(0.0_wp, 0.0_wp, 0.0_wp, m0, k0, s0)
+         call run_rivermix_column(0.0_wp, 1.0e-3_wp, 5.0e-4_wp, m1, k1, s1)
+         call check(error, m0 == m1 .and. k0 == k1 .and. s0 == s1, &
+                    "rivermix_depth = 0 must ignore runoff bitwise")
+         if (allocated(error)) exit checks
+         call run_rivermix_column(40.0_wp, 0.0_wp, 0.0_wp, m2, k2, s2)
+         call check(error, m0 == m2 .and. k0 == k2 .and. s0 == s2, &
+                    "zero runoff must be bitwise inert at any rivermix_depth")
+      end block checks
+   end subroutine test_rivermix_off_bitwise
+
+   subroutine test_rivermix_deepens(error)
+      !! With runoff and D = 40 m the boundary layer is deeper / more diffusive than with
+      !! D = 0, grows with the runoff, and (the energy being linear in D) with D.
+      type(error_type), allocatable, intent(out) :: error
+      real(wp) :: m0, k0, s0, ma, ka, sa, mb, kb, sb, mc, kc, sc
+      real(wp), parameter :: R1 = 1.0e-3_wp
+      checks: block
+         call run_rivermix_column(0.0_wp, R1, 0.0_wp, m0, k0, s0)
+         call run_rivermix_column(40.0_wp, R1, 0.0_wp, ma, ka, sa)
+         call run_rivermix_column(40.0_wp, 4.0_wp*R1, 0.0_wp, mb, kb, sb)
+         call run_rivermix_column(80.0_wp, R1, 0.0_wp, mc, kc, sc)
+         call check(error, ma > m0 .and. sa > s0, "river mixing must deepen the boundary layer")
+         if (allocated(error)) exit checks
+         call check(error, mb > ma .and. sb > sa, "more runoff must mix deeper")
+         if (allocated(error)) exit checks
+         call check(error, mc > ma .and. sc > sa, "larger rivermix_depth must mix deeper")
+      end block checks
+   end subroutine test_rivermix_deepens
 
    ! -----------------------------------------------------------------
    ! Langmuir (LF17 wind-only path)

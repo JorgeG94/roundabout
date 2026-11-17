@@ -511,7 +511,8 @@ closure is active in which regime, and its tunable knobs, is tabulated in
 `tools/check_closure_matrix.py`). In brief:
 
 - **Vertical mixing** — PP81 interior + KPP boundary overlay (default
-  on), EPBL (`&ocean_epbl_nml`, mutually exclusive with KPP),
+  on), EPBL (`&ocean_epbl_nml`, mutually exclusive with KPP; `rivermix_depth` adds
+  the PE of mixing runoff over that depth to its surface energy, Reichl & Hallberg 2018),
   kappa-shear (JHL08, `&ocean_kappa_shear_nml`), tidal mixing
   (`&ocean_tidal_mixing_nml`), convective adjustment (`&ocean_conv_nml`),
   double diffusion (`&ocean_ddiff_nml`), and two mutually exclusive

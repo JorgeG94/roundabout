@@ -2574,6 +2574,14 @@ class OceanEpbl(Group):
         default=0.2,
     )
 
+    rivermix_depth = Real(
+        'rivermix_depth',
+        doc='River-mixing depth (m); 0 = off',
+        units='',
+        required=False,
+        default=0.0,
+    )
+
     tke_decay = Real(
         'tke_decay',
         doc='Ekman-depth / TKE-decay-scale ratio',
@@ -8240,4 +8248,4 @@ GENERATED_GROUPS = {
 }
 
 N_GROUPS = 68
-N_KNOBS = 903
+N_KNOBS = 904

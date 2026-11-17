@@ -478,6 +478,7 @@ RH18 energetics-based planetary boundary layer.
 | `rh18_cs1` | `0.2000000000E+00` |  | RH18 mstar fit coefficient cs1 |
 | `rh18_cs2` | `0.4000000000E+00` |  | RH18 mstar fit coefficient cs2 |
 | `nstar` | `0.2000000000E+00` |  | Convective PE -> TKE efficiency |
+| `rivermix_depth` | `0.0000000000E+00` |  | River-mixing depth (m); 0 = off |
 | `tke_decay` | `0.2500000000E+01` |  | Ekman-depth / TKE-decay-scale ratio |
 | `wstar_ustar_coef` | `0.1000000000E+01` |  | Convective weight in the velocity scale |
 | `vel_scale_scheme` | `"cube_root"` |  | Velocity-scale scheme |

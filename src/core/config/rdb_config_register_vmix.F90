@@ -332,6 +332,8 @@ contains
       call g%add(nml_real("rh18_cs2", pr, "RH18 mstar fit coefficient cs2"))
       pr => cfg%ocean%epbl%nstar
       call g%add(nml_real("nstar", pr, "Convective PE -> TKE efficiency"))
+      pr => cfg%ocean%epbl%rivermix_depth
+      call g%add(nml_real("rivermix_depth", pr, "River-mixing depth (m); 0 = off"))
       pr => cfg%ocean%epbl%tke_decay
       call g%add(nml_real("tke_decay", pr, "Ekman-depth / TKE-decay-scale ratio"))
       pr => cfg%ocean%epbl%wstar_ustar_coef
