@@ -2187,7 +2187,8 @@ contains
 
    pure subroutine ocean_surface_flux_fw_virtual_step(grid, sf, ms, active)
       !! **The one writer of `salt_fw`** (virtual fresh-water salt flux,
-      !! `&ocean_forcing_nml freshwater = "virtual"`).  A full overwrite of
+      !! `&ocean_forcing_nml freshwater = "virtual"`, and under `"mass"` for the boundary-layer
+      !! buoyancy: `F` then also carries `seaice_melt + vprec`, as in `fw_net`).  A full overwrite of
       !! the OWNED cells, run right before `ocean_surface_flux_assemble`
       !! every thermo step (`engine_step_finalize`), which sums it into
       !! `Q_salt`.  The seam ghosts are left alone: the surface deposit's
@@ -2313,7 +2314,16 @@ contains
       !! temperature unchanged; keeping `cp*SST*(P-E)` in `Q_heat` would warm
       !! the surface layer with no mass behind it (the `"none"` behaviour,
       !! unchanged).  A mass flux whose own enthalpy differs from `cp*SST*m`
-      !! loses that anomaly under `"virtual"`; the real-mass flux restores it.
+      !! loses that anomaly under `"virtual"`.
+      !! Under `"mass"` (`fw_mode == SURF_FW_MASS`) `Q_salt` is assembled exactly as under
+      !! `"virtual"` (`salt_fw` included: it is the boundary-layer buoyancy forcing), BOTH
+      !! `heat_content_massin` and `massout` are zero (every mass flux joins at the layer's own
+      !! temperature, booked by the mass step), and the two extra outputs are written:
+      !!   fw_net        = wet * ((lprec + fprec + evap + lrunoff + frunoff) + (seaice_melt + vprec))
+      !!   Q_salt_tracer = wet * (Q_salt_const + (salt_flux + salt_ice) + salt_cavity)
+      !! (the same sum as `Q_salt` without `salt_fw`; the cover twin masks the atmospheric part
+      !! by `1 - cover_frac` as it does every other atmospheric term).  Under `"none"` and
+      !! `"virtual"` neither is touched.
       !! All four outputs multiplied by `ms%wet_mask` (land carries
       !! exactly zero; interior loop bounds are NOT restricted — see
       !! CLAUDE.md's "nghost and the assembler loop bounds" gotcha).
