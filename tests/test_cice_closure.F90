@@ -1777,7 +1777,11 @@ contains
       end do
       if (.not. allocated(error)) then
          call pull_sf(engine)
+         !$acc update self(engine%state%surface_flux%p_surf_atm, engine%state%surface_flux%p_surf)
          !$acc update self(engine%state%p_surf%eta_ib)
+         if (mass) then
+            !$acc update self(engine%state%surface_flux%p_ice_load)
+         end if
          rho0g = engine%state%eos%rho0*engine%state%dyn%bt_work%g_bt
          seam = 0.0_wp
          diffuse = 0.0_wp
