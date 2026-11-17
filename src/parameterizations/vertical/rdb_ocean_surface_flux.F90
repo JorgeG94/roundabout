@@ -113,6 +113,10 @@
 !!     open-water fraction), nobody else.  Kept apart from
 !!     `heat_content_fprec` (the sensible enthalpy of the mass).  Inert (all
 !!     zero) unless that writer fills it, so no other configuration moves.
+!!   * `q_fus_rof` (W/m^2, <= 0, positive DOWN): the same latent heat for FROZEN
+!!     RUNOFF / calving, `-L_f*frunoff`; written by the `&ocean_dataovr_nml
+!!     frunoff` consumer (`ocean_data_forcing_apply`), nobody else; summed by the
+!!     assembler like `q_fus`.  Zero unless a `frunoff` file is registered.
 !!   * `heat_added` (either sign) and `salt_flux` (positive SALINIFIES): the
 !!     `&ocean_dataovr_nml heat`/`salt` reader, and no one else.
 !!   * `heat_ice`, `salt_ice`, `sw_ice`: the sea-ice hand-off of WHICHEVER
@@ -140,7 +144,9 @@
 !!     `seaice_melt`) and their `heat_content_*` twins: a forcing reader OR
 !!     the bulk-flux consumer; a mass flux owes its enthalpy companion.  Today
 !!     only `evap`, `lprec`, `fprec` (+ `heat_content_lprec/fprec`) have a
-!!     writer; nothing writes `vprec`, `lrunoff`, `frunoff`, `seaice_melt`.
+!!     writer, plus the `&ocean_dataovr_nml lrunoff/frunoff` reader (which writes no
+!!     `heat_content_*`: runoff enters at the layer temperature under `"mass"` and is
+!!     refused under `"none"`); nothing writes `vprec`, `seaice_melt`.
 !!   * `salt_fw` (positive SALINIFIES): `ocean_surface_flux_fw_virtual_step`
 !!     (`&ocean_forcing_nml freshwater = "virtual"` or `"mass"`) and nothing else.  The
 !!     virtual salt flux `-S_surf*F` of the open-ocean fresh-water mass flux
@@ -445,6 +451,15 @@ module rdb_ocean_surface_flux
          !! snow whatever happens to its mass.  OWNED by the writer of
          !! `fprec` (the bulk-flux consumer); rewritten every step before
          !! the assembler, so not restart state.  Zero everywhere else.
+      real(wp), allocatable :: q_fus_rof(:, :)
+         !! Latent heat of FUSION of frozen RUNOFF / calving (W/m^2, **<= 0**,
+         !! positive down): `q_fus_rof = -L_f * frunoff`.  The runoff twin of
+         !! `q_fus`, kept separate so each has ONE owner: this one is written by
+         !! the `&ocean_dataovr_nml frunoff` consumer (`ocean_data_forcing_apply`)
+         !! and nobody else, `q_fus` by the writer of `fprec`.  Summed into
+         !! `Q_heat` by the assembler (atmospheric group: masked by the shelf
+         !! cover).  Rewritten every outer step, so not restart state.  Zero
+         !! unless a `frunoff` file is registered.
       real(wp), allocatable :: heat_added(:, :)
          !! Restoring / flux-adjustment / "other" net heat term not
          !! decomposed into the radiative/turbulent bands above (W/m^2,
@@ -687,6 +702,7 @@ contains
       if (allocated(this%q_lat)) deallocate (this%q_lat)
       if (allocated(this%q_sens)) deallocate (this%q_sens)
       if (allocated(this%q_fus)) deallocate (this%q_fus)
+      if (allocated(this%q_fus_rof)) deallocate (this%q_fus_rof)
       if (allocated(this%heat_added)) deallocate (this%heat_added)
       if (allocated(this%heat_ice)) deallocate (this%heat_ice)
       if (allocated(this%sw_net)) deallocate (this%sw_net)
@@ -739,7 +755,7 @@ contains
       !$acc enter data copyin(this%sw_frac, this%sw_kappa, this%sw_chl_field)
       !$acc update device(this%sw_frac, this%sw_kappa, this%sw_chl_field)
       if (this%use_components) then
-         !$acc enter data copyin(this%q_sw, this%q_lw, this%q_lat, this%q_sens, this%q_fus, &
+         !$acc enter data copyin(this%q_sw, this%q_lw, this%q_lat, this%q_sens, this%q_fus, this%q_fus_rof, &
          !$acc&                  this%heat_added, this%heat_cavity, this%evap, &
          !$acc&                  this%heat_ice, this%salt_ice, this%sw_ice, this%sw_net, &
          !$acc&                  this%lprec, this%fprec, &
@@ -751,7 +767,7 @@ contains
          !$acc&                  this%salt_flux, this%salt_cavity, this%salt_fw, &
          !$acc&                  this%fw_net, this%Q_salt_tracer, &
          !$acc&                  this%p_surf_atm, this%p_surf)
-         !$acc update device(this%q_sw, this%q_lw, this%q_lat, this%q_sens, this%q_fus, &
+         !$acc update device(this%q_sw, this%q_lw, this%q_lat, this%q_sens, this%q_fus, this%q_fus_rof, &
          !$acc&               this%heat_added, this%heat_cavity, this%evap, &
          !$acc&               this%heat_ice, this%salt_ice, this%sw_ice, this%sw_net, &
          !$acc&               this%lprec, this%fprec, &
@@ -777,7 +793,7 @@ contains
    subroutine ocean_surfflux_exit_data_impl(this)
       type(ocean_surface_flux_t), intent(inout) :: this
       if (this%use_components) then
-         !$acc exit data delete(this%q_sw, this%q_lw, this%q_lat, this%q_sens, this%q_fus, &
+         !$acc exit data delete(this%q_sw, this%q_lw, this%q_lat, this%q_sens, this%q_fus, this%q_fus_rof, &
          !$acc&                 this%heat_added, this%heat_cavity, this%evap, &
          !$acc&                 this%heat_ice, this%salt_ice, this%sw_ice, this%sw_net, &
          !$acc&                 this%lprec, this%fprec, &
@@ -1033,6 +1049,7 @@ contains
       allocate (this%q_lat(nx, ny), source=0.0_wp)
       allocate (this%q_sens(nx, ny), source=0.0_wp)
       allocate (this%q_fus(nx, ny), source=0.0_wp)
+      allocate (this%q_fus_rof(nx, ny), source=0.0_wp)
       allocate (this%heat_added(nx, ny), source=0.0_wp)
       allocate (this%heat_ice(nx, ny), source=0.0_wp)
       allocate (this%salt_ice(nx, ny), source=0.0_wp)
@@ -2067,7 +2084,7 @@ contains
                + arr_bytes(this%sw_chl_field) &
                + arr_bytes(this%q_sw) + arr_bytes(this%q_lw) &
                + arr_bytes(this%q_lat) + arr_bytes(this%q_sens) &
-               + arr_bytes(this%q_fus) &
+               + arr_bytes(this%q_fus) + arr_bytes(this%q_fus_rof) &
                + arr_bytes(this%heat_added) &
                + arr_bytes(this%heat_ice) + arr_bytes(this%salt_ice) &
                + arr_bytes(this%sw_ice) + arr_bytes(this%sw_net) &
@@ -2298,7 +2315,7 @@ contains
       !! field-override path) left them, byte-for-byte.
       !!
       !! Net surface heat into the ocean:
-      !!   Q_heat = Q_heat_const + (q_sw + sw_ice) + q_lw + q_lat + q_sens + q_fus
+      !!   Q_heat = Q_heat_const + (q_sw + sw_ice) + q_lw + q_lat + q_sens + q_fus + q_fus_rof
       !!          + (heat_added + heat_ice) + heat_cavity + heat_content_massin + heat_content_massout
       !!   heat_content_massin  = Σ heat_content_{lprec,fprec,vprec,
       !!                            lrunoff,frunoff,seaice_melt}
@@ -2354,7 +2371,7 @@ contains
       real(wp), intent(in), optional :: cover_frac(:, :)
          !! Optional ice-shelf cover fraction (`metrics%cover_frac`,
          !! v1 binary).  Present ⇒ every ATMOSPHERIC contribution
-         !! (`Q_heat_const`, `q_sw`, `q_lw`, `q_lat`, `q_sens`, `q_fus`,
+         !! (`Q_heat_const`, `q_sw`, `q_lw`, `q_lat`, `q_sens`, `q_fus`, `q_fus_rof`,
          !! `heat_added`, both mass-enthalpy terms, `Q_salt_const`,
          !! `salt_flux`) is scaled by `1 - cover_frac`, while the
          !! cavity's OWN `heat_cavity` / `salt_cavity` pass through
@@ -2387,7 +2404,7 @@ contains
       if (masked) then
          call ocean_surfflux_assemble_cover_impl( &
             sf%heat_content_massin, sf%heat_content_massout, sf%Q_heat, sf%Q_salt, &
-            sf%q_sw, sf%q_lw, sf%q_lat, sf%q_sens, sf%q_fus, sf%heat_added, sf%heat_cavity, &
+            sf%q_sw, sf%q_lw, sf%q_lat, sf%q_sens, sf%q_fus, sf%q_fus_rof, sf%heat_added, sf%heat_cavity, &
             sf%sw_ice, sf%heat_ice, sf%salt_ice, &
             sf%heat_content_lprec, sf%heat_content_fprec, sf%heat_content_vprec, &
             sf%heat_content_lrunoff, sf%heat_content_frunoff, sf%heat_content_seaice_melt, &
@@ -2402,7 +2419,7 @@ contains
 
       call ocean_surfflux_assemble_impl( &
          sf%heat_content_massin, sf%heat_content_massout, sf%Q_heat, sf%Q_salt, &
-         sf%q_sw, sf%q_lw, sf%q_lat, sf%q_sens, sf%q_fus, sf%heat_added, sf%heat_cavity, &
+         sf%q_sw, sf%q_lw, sf%q_lat, sf%q_sens, sf%q_fus, sf%q_fus_rof, sf%heat_added, sf%heat_cavity, &
          sf%sw_ice, sf%heat_ice, sf%salt_ice, &
          sf%heat_content_lprec, sf%heat_content_fprec, sf%heat_content_vprec, &
          sf%heat_content_lrunoff, sf%heat_content_frunoff, sf%heat_content_seaice_melt, &
@@ -2416,7 +2433,7 @@ contains
 
    pure subroutine ocean_surfflux_assemble_impl(heat_content_massin, heat_content_massout, &
                                                 Q_heat, Q_salt, &
-                                                q_sw, q_lw, q_lat, q_sens, q_fus, heat_added, &
+                                                q_sw, q_lw, q_lat, q_sens, q_fus, q_fus_rof, heat_added, &
                                                 heat_cavity, sw_ice, heat_ice, salt_ice, &
                                                 heat_content_lprec, heat_content_fprec, &
                                                 heat_content_vprec, heat_content_lrunoff, &
@@ -2435,7 +2452,7 @@ contains
       real(wp), intent(inout) :: heat_content_massin(nx, ny), heat_content_massout(nx, ny)
       real(wp), intent(inout) :: Q_heat(nx, ny), Q_salt(nx, ny)
       real(wp), intent(in)    :: q_sw(nx, ny), q_lw(nx, ny), q_lat(nx, ny), q_sens(nx, ny)
-      real(wp), intent(in)    :: q_fus(nx, ny)
+      real(wp), intent(in)    :: q_fus(nx, ny), q_fus_rof(nx, ny)
       real(wp), intent(in)    :: heat_added(nx, ny), heat_cavity(nx, ny)
       real(wp), intent(in)    :: sw_ice(nx, ny), heat_ice(nx, ny), salt_ice(nx, ny)
       real(wp), intent(in)    :: heat_content_lprec(nx, ny), heat_content_fprec(nx, ny)
@@ -2478,7 +2495,7 @@ contains
          heat_content_massout(i, j) = wet_mask(i, j)*massout
          Q_heat(i, j) = wet_mask(i, j)* &
                         (Q_heat_const + (q_sw(i, j) + sw_ice(i, j)) + q_lw(i, j) + &
-                         q_lat(i, j) + q_sens(i, j) + q_fus(i, j) + &
+                         q_lat(i, j) + q_sens(i, j) + q_fus(i, j) + q_fus_rof(i, j) + &
                          (heat_added(i, j) + heat_ice(i, j)) + heat_cavity(i, j) + &
                          massin + massout)
          if (fw_mode == SURF_FW_MASS) then
@@ -2506,7 +2523,7 @@ contains
    pure subroutine ocean_surfflux_assemble_cover_impl(heat_content_massin, &
                                                       heat_content_massout, &
                                                       Q_heat, Q_salt, &
-                                                      q_sw, q_lw, q_lat, q_sens, q_fus, heat_added, &
+                                                      q_sw, q_lw, q_lat, q_sens, q_fus, q_fus_rof, heat_added, &
                                                       heat_cavity, sw_ice, heat_ice, salt_ice, &
                                                       heat_content_lprec, heat_content_fprec, &
                                                       heat_content_vprec, heat_content_lrunoff, &
@@ -2523,7 +2540,7 @@ contains
       !! out because it is the whole point of this kernel:
       !!
       !!   masked   — `Q_heat_const`, `q_sw`, `q_lw`, `q_lat`, `q_sens`, `q_fus`,
-      !!              `heat_added`, `heat_content_massin` (the six
+      !!              `q_fus_rof`, `heat_added`, `heat_content_massin` (the six
       !!              mass-enthalpy companions), `heat_content_massout`
       !!              (`cp·SST·evap`), `Q_salt_const`, `salt_flux`, `salt_ice`,
       !!              `salt_fw`;
@@ -2541,7 +2558,7 @@ contains
       real(wp), intent(inout) :: heat_content_massin(nx, ny), heat_content_massout(nx, ny)
       real(wp), intent(inout) :: Q_heat(nx, ny), Q_salt(nx, ny)
       real(wp), intent(in)    :: q_sw(nx, ny), q_lw(nx, ny), q_lat(nx, ny), q_sens(nx, ny)
-      real(wp), intent(in)    :: q_fus(nx, ny)
+      real(wp), intent(in)    :: q_fus(nx, ny), q_fus_rof(nx, ny)
       real(wp), intent(in)    :: heat_added(nx, ny), heat_cavity(nx, ny)
       real(wp), intent(in)    :: sw_ice(nx, ny), heat_ice(nx, ny), salt_ice(nx, ny)
       real(wp), intent(in)    :: heat_content_lprec(nx, ny), heat_content_fprec(nx, ny)
@@ -2585,7 +2602,7 @@ contains
          heat_content_massout(i, j) = wet_mask(i, j)*massout
          Q_heat(i, j) = wet_mask(i, j)* &
                         (open_f*(Q_heat_const + (q_sw(i, j) + sw_ice(i, j)) + q_lw(i, j) + &
-                                 q_lat(i, j) + q_sens(i, j) + q_fus(i, j) + &
+                                 q_lat(i, j) + q_sens(i, j) + q_fus(i, j) + q_fus_rof(i, j) + &
                                  (heat_added(i, j) + heat_ice(i, j))) + &
                          heat_cavity(i, j) + massin + massout)
          if (fw_mode == SURF_FW_MASS) then
