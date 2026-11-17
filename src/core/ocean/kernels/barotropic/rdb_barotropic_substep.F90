@@ -1961,8 +1961,11 @@ contains
          end do
          !$acc end kernels
          ! End-of-substep ghost refresh.
-         ! v1 path (marchin=.false.): drain async(1) then one normal grouped
-         ! exchange per substep (bit-identical; D0).
+         ! v1 path (marchin=.false.): drain async(1) then ONE packed exchange of
+         ! the three arrays per substep (`ocean_halo_packed_wide` at the model's
+         ! own ghost width: one X round + one Y round, the same strips and the
+         ! same two-pass corner route as the three sequential exchanges it
+         ! replaced, so bit-identical).
          ! March-in path (marchin=.true.): fire ONE packed wide exchange every
          ! num_cycles substeps (`bt_wide_cycle_len`); skip the last substep
          ! (n==n_steps) since copy_out immediately follows.  The wide band
@@ -2047,7 +2050,7 @@ contains
          else
             call profiler_start("ocean_comms_bt")
             !$acc wait(1)
-            call ocean_halo_bt_group_2d(bt_eta, bt_ubt, bt_vbt)
+            call ocean_halo_packed_wide(grid%nghost, bt_eta, bt_ubt, bt_vbt)
             call profiler_stop("ocean_comms_bt")
          end if
       end do
@@ -2089,7 +2092,7 @@ contains
       ! Single rank, non-periodic: no-op.
       if (.not. marchin) then
          call profiler_start("ocean_comms_bt")
-         call ocean_halo_bt_group_2d(bt_eta, bt_ubt, bt_vbt)
+         call ocean_halo_packed_wide(grid%nghost, bt_eta, bt_ubt, bt_vbt)
          call profiler_stop("ocean_comms_bt")
       end if
 

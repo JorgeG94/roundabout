@@ -18,7 +18,8 @@
 !! still positive, so inner 3d counters stay suppressed inside ml_state.
 !!
 !! CATEGORIES (10 semantic counters, disjoint and additive):
-!!   oh_cnt_bt_packed   — packed wide-halo BT exchange (`ocean_halo_packed_wide`):
+!!   oh_cnt_bt_packed   — packed BT exchange (`ocean_halo_packed_wide`, wide or at the model's
+!!                        own width: the bt_halo = 0 fast loop uses it per substep):
 !!                        ONE X round + ONE Y round for the whole array set
 !!   oh_cnt_bt_group    — ocean_halo_bt_group_2d grouped exchange
 !!   oh_cnt_bt_u_mid    — mid-substep bt_ubt face_x exchange (BT Pass-2b→2c)

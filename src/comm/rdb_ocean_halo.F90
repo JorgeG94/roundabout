@@ -80,6 +80,19 @@
 !!     Four messages per rank, four matching irecvs — no ambiguity because
 !!     each (source_rank, tag) pair is posted exactly once.
 !!
+!! BAROTROPIC FAST LOOP (`bt_halo = 0`)
+!! ====================================
+!! Per substep the loop issues TWO two-pass rounds: one `ocean_halo_packed_wide`
+!! (at the model's own `nghost`) carrying eta, ubt and vbt together, at the
+!! end of the substep, and the mid-substep `ocean_halo_face_x(bt_ubt)` between
+!! the u update and the v update (the v update reads the u it just wrote; it
+!! cannot join the end-of-substep message, and a fold at px > 1 sits between
+!! the two).  The exit freshen of the time means is one more packed round per
+!! solve.  Before this, the end-of-substep exchange was three sequential
+!! two-pass rounds (`ocean_halo_bt_group_2d`), i.e. four rounds per substep.
+!! The packed call fills the same strips from the same sources in the same
+!! two-pass order per array, so every ghost value is unchanged.
+!!
 !! v1: single code path — device-resident under OpenACC with CUDA-aware MPI;
 !!     host-staged otherwise.  O2 staging variant deferred to solver wiring.
 !!
@@ -444,16 +457,17 @@ contains
          need_ns = max(need_ns, w_ns)
       end if
 
-      if (ng_wide > 0) then
-         block
-            integer :: pk_ew, pk_ns
-            call pk_cap_for(ng_wide, pk_ew, pk_ns)
-            if (.not. allocated(oh_pk_send_east) .or. pk_ew > oh_pk_cap_ew .or. &
-                pk_ns > oh_pk_cap_ns) then
-               call pk_alloc(pk_ew, pk_ns)
-            end if
-         end block
-      end if
+      ! Packed buffers: always at the model's own width (the ordinary
+      ! barotropic loop packs its eta / ubt / vbt exchange at `oh_nghost`), and
+      ! at the wide width when the march-in is on.
+      block
+         integer :: pk_ew, pk_ns
+         call pk_cap_for(max(ng, ng_wide), pk_ew, pk_ns)
+         if (.not. allocated(oh_pk_send_east) .or. pk_ew > oh_pk_cap_ew .or. &
+             pk_ns > oh_pk_cap_ns) then
+            call pk_alloc(pk_ew, pk_ns)
+         end if
+      end block
 
       if (need_ew <= oh_cap_ew .and. need_ns <= oh_cap_ns) return
 

@@ -1083,7 +1083,7 @@ module rdb_config
          !! (`test_ocean_decomp_bitid_mpi`, cases `bth_*` / `bthx_*`); AUTO
          !! stays at 0 until the performance stage lands.  `8`
          !! (`BT_HALO_AUTO_WIDTH`) is the recommended explicit width.
-         !! `0` = explicit off (per-substep grouped exchange, v1 bit-identical).
+         !! `0` = explicit off (per-substep packed exchange, v1 bit-identical).
          !! Even positive value: widen the BT ghost band to `nghost + bt_halo`
          !! and fire one grouped exchange every `bt_halo/2` substeps.  Odd
          !! values are rounded DOWN to even with a warning.  The wide clone's
