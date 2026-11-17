@@ -277,7 +277,7 @@ contains
       !! Outputs are written directly (no
       !! double buffering): after `ierr /= 0` they are unspecified.
       !$acc routine seq
-      integer, value :: i, j
+      integer, intent(in) :: i, j
       integer, intent(in) :: nx, ny, ncat, nilyr, nslyr
       real(wp), intent(in) :: aicen(nx, ny, ncat), vicen(nx, ny, ncat), vsnon(nx, ny, ncat)
       real(wp), intent(in) :: Tsfcn(nx, ny, ncat), qicen(nx, ny, ncat, nilyr)
@@ -519,7 +519,7 @@ contains
       !! post-transfer category vectors of this cell.  Bitwise equal to the
       !! packed form on CPU builds.
       !$acc routine seq
-      integer, value :: i, j
+      integer, intent(in) :: i, j
       integer, intent(in) :: nx, ny, ncat, nilyr, nslyr
       real(wp), intent(in) :: puny, Tf, snow_offset
       integer, intent(in) :: donor(ncat)
@@ -613,7 +613,7 @@ contains
       !! `(i, j)`, updated in place.  On a refused increment `ierr` (the cell's word) gets
       !! `ICE_ERR_ITD_SHIFT_RANGE` and nothing is modified.
       !$acc routine seq
-      integer, value :: i, j
+      integer, intent(in) :: i, j
       integer, intent(in) :: nx, ny, ncat, nilyr, nslyr
       real(wp), intent(in) :: puny, Tf, snow_offset
       integer, intent(in) :: donor(ncat)
@@ -723,7 +723,7 @@ contains
       !! builds.  On a refused shift `ierr(i, j)` gets `ICE_ERR_ITD_SHIFT_RANGE`
       !! and the cell state is UNSPECIFIED (the same as the packed form).
       !$acc routine seq
-      integer, value :: i, j
+      integer, intent(in) :: i, j
       integer, intent(in) :: nx, ny, ncat, nilyr, nslyr
       real(wp), intent(in) :: puny, Tf
       real(wp), intent(in) :: hin_max(0:ncat)

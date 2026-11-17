@@ -213,7 +213,8 @@ contains
       !! `dardg2dt`, `dvirdgdt`, `opening` (all added to the `(nx,ny)` cell arrays) and `niter(i,j)`-style scalar
       !! `niter` (0 = early-out, else the number of passes run).  `ierr(i,j)` receives the bits.
       !$acc routine seq
-      integer, value :: i, j, ndtd, itermax
+      integer, value :: i, j
+      integer, intent(in) :: ndtd, itermax
       integer, intent(in) :: nx, ny, ncat, nilyr, nslyr
       type(ice_ridge_params_t), intent(in) :: rp
       real(wp), intent(in) :: puny, rhos, dt

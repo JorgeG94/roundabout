@@ -171,7 +171,7 @@ contains
       !! In-place twin of `itd_zap_snow` for category `n` of cell `(i, j)` of the
       !! SoA state `vsnon(nx,ny,ncat)`, `qsnon(nx,ny,ncat,nslyr)`.
       !$acc routine seq
-      integer, value :: i, j, n
+      integer, intent(in) :: i, j, n
       integer, intent(in) :: nx, ny, ncat, nslyr
       real(wp), intent(in) :: dt, rhos
       real(wp), intent(inout) :: vsnon(nx, ny, ncat), qsnon(nx, ny, ncat, nslyr)

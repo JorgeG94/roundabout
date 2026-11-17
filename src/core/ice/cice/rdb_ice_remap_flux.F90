@@ -385,7 +385,8 @@ contains
       !! nothing else.  Indices are passed BY VALUE (nvfortran `do concurrent`
       !! index by-reference bug).
       !$acc routine seq
-      integer, value :: i, j, n, b
+      integer, value :: i, j, b
+      integer, intent(in) :: n
       integer, intent(in) :: nx, ny, ncat, ntrace, nb
       real(wp), intent(in) :: puny
       integer, intent(in) :: tracer_type(ntrace), depend(ntrace)
@@ -598,7 +599,8 @@ contains
       !! arithmetic, shared by the reducing kernel (`remap_ledger_impl`) and the per-cell record
       !! (`remap_ledger_cells_impl`).
       !$acc routine seq
-      integer, value :: i, j, n, b
+      integer, value :: i, j, b
+      integer, intent(in) :: n
       integer, intent(in) :: nx, ny, ncat, ntrace, nb, nq1, nq2, nqs
       real(wp), intent(in) :: puny
       integer, intent(in) :: tracer_type(ntrace), depend(ntrace)

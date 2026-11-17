@@ -288,7 +288,7 @@ contains
       !! straight wall: NO slip, Hunke and Dukowicz (2002) / Lemieux et al.
       !! (2024)).  It acts at the corners where at least two of the four T
       !! cells are wet.
-      integer, value :: nx, ny, is, ie, js, je
+      integer, intent(in) :: nx, ny, is, ie, js, je
       real(wp), value :: e_factor
       logical, value :: avg_strength
       real(wp), intent(in) :: u(nx + 1, ny), v(nx, ny + 1)
@@ -358,7 +358,7 @@ contains
       !! viscosities and replacement pressure, and the elastic update of
       !! `stresspT`/`stressmT` (Hunke and Dukowicz 1997; Bouillon et al. 2013)
       !! over `T(is-1:ie+1, js-1:je+1)` where `iceTmask`.
-      integer, value :: nx, ny, is, ie, js, je
+      integer, intent(in) :: nx, ny, is, ie, js, je
       real(wp), value :: arlx1i, revp, denom1, epp2i, e_factor, ktens, deltamin
       logical, value :: cap_max
       real(wp), intent(in) :: u(nx + 1, ny), v(nx, ny + 1)
@@ -413,7 +413,7 @@ contains
       !! corner is the masked, area-weighted mean of the four T viscosities;
       !! `avg_strength`: it is rebuilt from the averaged strength and the
       !! corner Delta (`deltaminEVP * uarea` regularisation).
-      integer, value :: nx, ny, is, ie, js, je
+      integer, intent(in) :: nx, ny, is, ie, js, je
       real(wp), value :: arlx1i, revp, denom1, epp2i, ktens, deltamin
       logical, value :: cap_max, avg_strength
       real(wp), intent(in) :: hm(nx, ny), tarea(nx, ny), uarea(nx, ny), etax2T(nx, ny)
@@ -472,7 +472,7 @@ contains
       !! the ice faces; at every other face `(un, vn)` must already hold the old
       !! value (the caller copies the pair once per step) and the ghost ring is the
       !! caller's (wrap or halo exchange of `(un, vn)`, then swap).
-      integer, value :: nx, ny, is, ie, js, je
+      integer, intent(in) :: nx, ny, is, ie, js, je
       real(wp), value :: revp, brlx, rhow, cw, cosw, sinw, rheo_amin
       logical, value :: free_drift
       real(wp), intent(in) :: uo(nx + 1, ny), vo(nx, ny + 1)
@@ -810,7 +810,7 @@ contains
       !! (the solver never reads `u(1,:)` or `u(nx+1,:)`: its widest read is `is-2 .. ie+3`);
       !! the source column `u(nx+1, owned rows)` of the `i = 1` thread is the wrapped ghost.
       !! The periodic wrap of the columns MUST come first.
-      integer, value :: nx, ny, ng, ni, nj
+      integer, intent(in) :: nx, ny, ng, ni, nj
       real(wp), intent(inout) :: u(nx + 1, ny), v(nx, ny + 1)
       integer :: i, d, fsum, jsum_u, isum_v, jsum_v, jfold, ilo, p, pm
 

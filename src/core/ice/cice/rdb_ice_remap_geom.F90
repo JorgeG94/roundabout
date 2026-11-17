@@ -951,7 +951,7 @@ contains
       !$acc routine seq
       integer, value :: i, j
       integer, intent(in) :: nx, ny
-      integer, value :: iedge, efa
+      integer, intent(in) :: iedge, efa
       real(wp), intent(in) :: puny, dlx, dly, drx, dry, fc, f_tl, f_bl, f_tr, f_br, f_l, f_r
       real(wp), intent(inout) :: edgearea(nx, ny)
       real(wp), intent(inout) :: xp(nx, ny, 3, REMAP_NSLOT), yp(nx, ny, 3, REMAP_NSLOT), area(nx, ny, REMAP_NSLOT)

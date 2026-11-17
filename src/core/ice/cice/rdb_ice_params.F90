@@ -581,7 +581,8 @@ contains
       !! so no packed `(ntrcr, ncat)` column is ever gathered.  An index outside
       !! `1:ice_ntrcr(nilyr, nslyr)` returns NaN (never a silent 0).
       !$acc routine seq
-      integer, value :: it, i, j, n
+      integer, intent(in) :: it
+      integer, value :: i, j, n
       integer, intent(in) :: nx, ny, ncat, nilyr, nslyr
       real(wp), intent(in) :: Tsfcn(nx, ny, ncat), qicen(nx, ny, ncat, nilyr)
       real(wp), intent(in) :: sicen(nx, ny, ncat, nilyr), qsnon(nx, ny, ncat, nslyr)
@@ -605,7 +606,8 @@ contains
       !! `ice_trcr_get`).  An index outside `1:ice_ntrcr(nilyr, nslyr)` is ignored
       !! BY DESIGN (writes nothing, no error): callers loop `1..ice_ntrcr`.
       !$acc routine seq
-      integer, value :: it, i, j, n
+      integer, intent(in) :: it
+      integer, value :: i, j, n
       integer, intent(in) :: nx, ny, ncat, nilyr, nslyr
       real(wp), intent(in) :: v
       real(wp), intent(inout) :: Tsfcn(nx, ny, ncat), qicen(nx, ny, ncat, nilyr)
@@ -629,7 +631,8 @@ contains
       !! (the packed order of `ice_trcr_set`, no category axis).  An index outside
       !! `1:ice_ntrcr(nilyr, nslyr)` is ignored by design.
       !$acc routine seq
-      integer, value :: it, i, j
+      integer, intent(in) :: it
+      integer, intent(in) :: i, j
       integer, intent(in) :: nx, ny, nilyr, nslyr
       real(wp), intent(in) :: v
       real(wp), intent(inout) :: Tsfc(nx, ny), qice(nx, ny, nilyr), qsno(nx, ny, nslyr), sice(nx, ny, nilyr)
