@@ -1661,7 +1661,8 @@ contains
 
    subroutine test_ice_load_no_flow(error)
       !! Freeze half a closed basin at rest.  With the ice's weight on the surface pressure the water the ice takes
-      !! (`rho_i dV/rho_0`) and the load (`g rho_i dV`) change together, so the ocean stays at rest.
+      !! (`rho_i dV/rho_0`) and the load (`g rho_i dV`) change on the SAME outer step (the ice's exchange with the
+      !! atmosphere excepted, see (2)), so the ocean stays at rest.
       !! (1) THE TIMING: through the first delivery of the ice's water max|u| is round-off, at `dt_therm_ratio = 1`,
       !! at ratio 8 in the deferred order (`diabatic_first = .false.`, where the delivery is one step before the
       !! interval's end) and at ratio 2 in the in-stage order, from the cold start the `ice_load_balance_ic` lowered

@@ -221,7 +221,7 @@ contains
       integer :: i, j, k
       real(wp) :: delta, hsum, f
 
-      do concurrent(j=1:ny, i=1:nx)
+      do concurrent(j=1:ny, i=1:nx) local(k, delta, hsum, f)
          if (wet(i, j) > 0.5_wp) then
             delta = p_load(i, j)*i_rho0_g
             hsum = 0.0_wp

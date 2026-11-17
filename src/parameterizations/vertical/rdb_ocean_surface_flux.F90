@@ -658,9 +658,12 @@ module rdb_ocean_surface_flux
 
       real(wp), allocatable :: p_ice_load(:, :)
          !! **Input component of the ice loading** (Pa, >= 0): the weight of the ice and snow
-         !! the OCEAN has been told about, `g*(rho_i*vice + rho_s*vsno)` of the ice state at the
-         !! last delivery (`ocean_engine` refreshes it after the thermo-cadence mass delivery,
-         !! so the load and the water the ice took change together).  Allocated only under
+         !! the OCEAN has been told about, `g*(rho_i*vice + rho_s*vsno)` of the ice state the water
+         !! of the last DELIVERY came from (`ocean_engine` rebuilds it at the end of the outer step
+         !! that delivered it).  What holds is that the load and the water the ice exchanged with
+         !! the OCEAN change on the same step; the ice's exchange with the atmosphere (sublimation,
+         !! snowfall, rain through the ice) changes the weight without moving ocean water, and ice
+         !! drift moves the weight between deliveries only at the next one.  Allocated only under
          !! `ice_load`.  `p_surf = (seed or p_surf_atm) + p_ice_load` is the full overwrite.  Carried
          !! between steps, so it is restart state (`sf_p_ice_load`, `sf_p_ice_valid`).
       real(wp) :: p_ice_valid = 0.0_wp
