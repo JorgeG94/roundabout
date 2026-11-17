@@ -59,7 +59,7 @@ module rdb_barotropic_substep
    ! rdb_coriolis_adv removed: cor was demoted to a plain f_corner(:,:) dummy
    use rdb_ocean_boundary_types, only: ocean_bc_state_t, OBC_WALL, OBC_OPEN, OBC_CLAMPED, &
                                        OBC_TIDAL, OBC_CHAPMAN, OBC_PERIODIC, OBC_TRIPOLAR_FOLD
-   use rdb_ocean_halo, only: ocean_halo_bt_group_2d, ocean_halo_face_x, ocean_halo_face_y, &
+   use rdb_ocean_halo, only: ocean_halo_face_x, ocean_halo_face_y, &
                              ocean_halo_bt_group_2d_wide, &
                              ocean_halo_packed_wide, &
                              ocean_halo_is_decomposed, &
@@ -1984,11 +1984,12 @@ contains
             if (inhalo_phase == 0 .or. n == n_steps) then
                call profiler_start("ocean_comms_bt")
                !$acc wait(1)
-               call ocean_halo_bt_group_2d(bt_eta, bt_ubt, bt_vbt)
                if (bebt > 0.0_wp .and. n < n_steps .and. ocean_halo_is_decomposed()) then
-                  ! Out-of-line (reaches the arrays through `bt_work`) so the
-                  ! knob-off path hands no new array to an external routine.
-                  call inhalo_exchange_prev(bt_work)
+                  ! The previous-substep velocities ride the same packed round.
+                  call ocean_halo_packed_wide(grid%nghost, bt_eta, bt_ubt, bt_vbt, &
+                                              xa=bt_ubt_prev, ya=bt_vbt_prev)
+               else
+                  call ocean_halo_packed_wide(grid%nghost, bt_eta, bt_ubt, bt_vbt)
                end if
                call profiler_stop("ocean_comms_bt")
             else if (bt_work%inhalo_poison > 0) then
@@ -2196,11 +2197,9 @@ contains
          ! covers it, the off path exchanges none of these.)
          call profiler_start("ocean_comms_bt")
          !$acc wait(1)
-         call ocean_halo_bt_group_2d(bt_work%bt_eta, bt_work%bt_ubt, bt_work%bt_vbt)
-         call ocean_halo_face_x(bt_work%F_bt_u_fast)
-         call ocean_halo_face_y(bt_work%F_bt_v_fast)
-         call ocean_halo_face_x(bt_work%bt_rem_u)
-         call ocean_halo_face_y(bt_work%bt_rem_v)
+         call ocean_halo_packed_wide(grid%nghost, bt_work%bt_eta, bt_work%bt_ubt, bt_work%bt_vbt, &
+                                     xa=bt_work%F_bt_u_fast, xb=bt_work%bt_rem_u, &
+                                     ya=bt_work%F_bt_v_fast, yb=bt_work%bt_rem_v)
          call profiler_stop("ocean_comms_bt")
       end if
       call barotropic_substep_nonlinear(grid, bt_work, &
@@ -2234,18 +2233,6 @@ contains
          call profiler_stop("ocean_comms_bt")
       end if
    end subroutine barotropic_substep_nonlinear_interior
-
-   subroutine inhalo_exchange_prev(bt_work)
-      !! In-halo march: exchange the previous-substep velocities that Pass 1's
-      !! BEBT projection reads in the ghost band (stashed locally, hence
-      !! inexact there after a skipped exchange).  Separate from the hot
-      !! routine on purpose: handing `bt_ubt_prev`/`bt_vbt_prev` to an external
-      !! routine from inside it would pessimise its `do concurrent` kernels
-      !! even with the knob off.
-      type(barotropic_workstate_t), intent(inout) :: bt_work
-      call ocean_halo_face_x(bt_work%bt_ubt_prev)
-      call ocean_halo_face_y(bt_work%bt_vbt_prev)
-   end subroutine inhalo_exchange_prev
 
    subroutine wide_poison_prev(nx, ny, bt_ubt_prev, bt_vbt_prev, pmode, pz, &
                                pz_w, pz_e, pz_s, pz_n, ioff, joff)
