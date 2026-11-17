@@ -640,7 +640,48 @@ contains
       call validate_config(cfg, ierr=ierr)
       call check(error, ierr /= OCEAN_STATUS_OK, &
                  "tripolar_fold, bt_halo = 8 on 8-column tiles under px > 1 must be refused")
+      if (allocated(error)) return
+      ! Boundary of the tile-fit rule: nghost + W + 1 = 12 is the smallest
+      ! accepted tile, 11 the largest refused one (W = bt_halo rounded down to
+      ! even: bt_halo = 9 has the same threshold as 8).
+      call fold_fit(error, 44, 4, 1, 8, .false., "11-row tile (bt_halo = 8)")
+      if (allocated(error)) return
+      call fold_fit(error, 48, 4, 1, 8, .true., "12-row tile (bt_halo = 8)")
+      if (allocated(error)) return
+      call fold_fit(error, 44, 1, 4, 8, .false., "11-column tile, px > 1 (bt_halo = 8)")
+      if (allocated(error)) return
+      call fold_fit(error, 48, 1, 4, 8, .true., "12-column tile, px > 1 (bt_halo = 8)")
+      if (allocated(error)) return
+      call fold_fit(error, 48, 4, 1, 9, .true., "12-row tile (bt_halo = 9, W = 8)")
+      if (allocated(error)) return
+      call fold_fit(error, 44, 4, 1, 9, .false., "11-row tile (bt_halo = 9, W = 8)")
    end subroutine test_tidal_edge_bt_halo_refused
+
+   subroutine fold_fit(error, n, py, px, halo, want_ok, what)
+      !! Square-ish `n` x `n` grid with `px` x `py` ranks (one of them 1) and a
+      !! tripolar north fold: `validate_config` accepts iff `want_ok`.
+      type(error_type), allocatable, intent(out) :: error
+      integer, intent(in) :: n, py, px, halo
+      logical, intent(in) :: want_ok
+      character(len=*), intent(in) :: what
+      type(config_t) :: cfg
+      integer :: ierr
+      character(len=16) :: sn, spx, spy, sh
+      write (sn, '(i0)') n
+      write (spx, '(i0)') px
+      write (spy, '(i0)') py
+      write (sh, '(i0)') halo
+      call read_config_from_string( &
+         "&sim_nml sim_type = 'ocean' /"//new_line('a')// &
+         "&grid_nml nx = "//trim(sn)//", ny = "//trim(sn)//", nghost = 3, dx = 20000.0, dy = 20000.0 /"// &
+         new_line('a')// &
+         "&mpi_nml px = "//trim(spx)//", py = "//trim(spy)//" /"//new_line('a')// &
+         "&ocean_bt_nml bt_halo = "//trim(sh)//" /"//new_line('a'), cfg, ierr=ierr)
+      cfg%ocean%bc%north = "tripolar_fold"
+      call validate_config(cfg, ierr=ierr)
+      call check(error, (ierr == OCEAN_STATUS_OK) .eqv. want_ok, &
+                 "tripolar_fold tile-fit boundary: "//what//merge(" must be accepted", " must be refused ", want_ok))
+   end subroutine fold_fit
 
    subroutine test_bt_halo_auto_exclusion(error)
       !! The exclusion detector mirrors validate_config's explicit-bt_halo>0 set.

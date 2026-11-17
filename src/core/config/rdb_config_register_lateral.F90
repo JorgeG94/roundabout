@@ -572,10 +572,10 @@ contains
                          "faces, body tides, surface-pressure loading and the tripolar "// &
                          "north fold (px = 1 and the owner-routed px > 1 fold); the wide "// &
                          "exchanges are packed (one message per neighbour per direction "// &
-                         "pass, cadence nghost + bt_halo - 2 substeps). Refused with "// &
+                         "pass, cadence nghost + W - 2 substeps, W = bt_halo rounded down to even). Refused with "// &
                          "wet/dry, use_cont_type, upstream_h_face, Chapman edges, the "// &
                          "ice-shelf cavity, inhalo_march, dtbt_reset_period >= 0 and a "// &
-                         "tile narrower than nghost + bt_halo (one cell more across the fold)", &
+                         "tile narrower than nghost + W (one cell more across the fold)", &
                          min=BT_HALO_AUTO_SENTINEL))
       pl => cfg%ocean%bt%inhalo_march
       call g%add(nml_logical("inhalo_march", pl, &

@@ -362,11 +362,12 @@ program test_ocean_decomp_bitid_mpi
          !! grounded, melting, top-drag stress > 0, k_top < nz.
       integer(int64) :: cnt_bt_group = 0_int64, cnt_bt_u = 0_int64, cnt_pk = 0_int64, cnt_c2d = 0_int64, &
                         cnt_fx2 = 0_int64, cnt_fy2 = 0_int64
+         !! Halo counters of the run (`bt_group` calls, mid-substep u exchanges,
+         !! packed, centre-2D and face-2D exchanges).
       integer(int64) :: cnt_fold_wide = 0_int64
          !! Owner-routed fold groups exchanged on the wide plan (this rank).
       logical :: fold_wide_active = .false.
          !! This rank folds through the wide owner-routed plan (north rank row, `px > 1`).
-         !! Halo counters of the run (`bt_group` calls, mid-substep u exchanges).
       type(conservation_budget_t) :: bud
          !! Closed-budget mass/salt/heat out+src totals at the final step —
          !! EFP-reduced (`reproducing_sums`, default on), so these must be
@@ -390,7 +391,8 @@ program test_ocean_decomp_bitid_mpi
       !! of a one-rank launch) carries `bt_halo = W`, so at np = 1 the case
       !! compares `bt_halo = W` against `bt_halo = 0` (the 1-rank identity)
       !! instead of running the same namelist twice.
-   integer :: bth_nochain_env = 0, bth_steps_env = 0, bth_poison_env = 0
+   integer :: bth_nochain_env = 0, bth_steps_env = 0, bth_poison_env = 0, &
+              bth_ring_env = 0
       !! `RDB_BITID_BTH_NOCHAIN=1`: the `bth_*` cases run with `visc_rem_chain = .false.`.
    logical :: where_report = .false.
       !! Set per case (the `bth_*` family): `compare` also prints the `[where]` lines.
@@ -487,6 +489,7 @@ program test_ocean_decomp_bitid_mpi
    call env_int("RDB_BITID_BTH_NOCHAIN", bth_nochain_env)
    call env_int("RDB_BITID_BTH_STEPS", bth_steps_env)
    call env_int("RDB_BT_INHALO_POISON", bth_poison_env)
+   call env_int("RDB_BT_RING_POISON", bth_ring_env)
    block
       integer :: pc
       pc = 0
@@ -521,8 +524,14 @@ program test_ocean_decomp_bitid_mpi
       call run_case(trim(CASES(ic)), trim(SCHEMES(2)))
    end do
 
-   if (nprocs >= 2) call check_single_rank_fences()
-   if (nprocs >= 2) call check_balance_fold_refusal()
+   ! The WILL_FAIL poison legs (cycle-break `RDB_BT_INHALO_POISON >= 2000`,
+   ! north-ring liveness `RDB_BT_RING_POISON /= 0` on `bth_trip_w4`) must fail
+   ! through their own case's mismatch, not through an unrelated fence check:
+   ! skip the case-independent fences there.  The plain legs still run them.
+   if (nprocs >= 2 .and. bth_poison_env < 2000 .and. bth_ring_env == 0) then
+      call check_single_rank_fences()
+      call check_balance_fold_refusal()
+   end if
    if (len_trim(case_filter) == 0 .or. index("cavity_grounded_refused", trim(case_filter)) > 0) &
       call check_cavity_grounded_refusal()
 
@@ -607,7 +616,7 @@ contains
       !! (the fold reads W + nghost rows below the fold line / mirror columns).
       character(len=*), intent(in) :: label
       bth_fold_extra = 0
-      if (index(label, "_trip") > 0) bth_fold_extra = 1
+      if (is_bth_case(label) .and. index(label, "_trip") > 0) bth_fold_extra = 1
    end function bth_fold_extra
 
    pure logical function bth_b0(label)
@@ -2781,7 +2790,7 @@ contains
             glob = [1, 0, 1]
          else
             call compare(dec, ref, nbad, nfin, trim(tag))
-            if (is_bth_case(label)) call check_bth_counters(dec, label, tag, nbad)
+            if (is_bth_case(label)) call check_bth_counters(dec, label, tag, nbad, px)
             if (is_wetdry_case(label)) then
                call compare_ghosts(dec, ref, nghost_bad, trim(tag))
                nbad = nbad + nghost_bad
@@ -2811,7 +2820,7 @@ contains
             ! The wide-band fold groups of the `bth*_trip*` cases too (the
             ! wide context's reserve is `2*(nghost + W + 1)` slabs).
             if (is_ice_fold_case(label) .or. index(label, "drain_ratio_fold") == 1 .or. &
-                index(label, "_trip") > 0) &
+                (is_bth_case(label) .and. index(label, "_trip") > 0)) &
                nbad = nbad + dec%ngrow
             glob = [nbad, nfin, 0]
 #ifndef RDB_NO_NETCDF
@@ -2889,7 +2898,7 @@ contains
                          index(label, "bthx_trip_porous") == 1 .or. index(label, "bthx_trip_zfixed") == 1
    end function refreshes_widths
 
-   subroutine check_bth_counters(dec, label, tag, nbad)
+   subroutine check_bth_counters(dec, label, tag, nbad, px)
       !! Non-vacuity AND message-count check of a `bth_*` case.  Per BT solve
       !! the wide march does exactly `2 + floor((n_inner - 1)/cadence)` packed
       !! exchanges (1 entry + the in-loop ones + 1 exit), `cadence` =
@@ -2903,7 +2912,10 @@ contains
       type(snap_t), intent(in) :: dec
       character(len=*), intent(in) :: label, tag
       integer, intent(inout) :: nbad
+      integer, intent(in) :: px
+         !! East-west process count of this layout.
       integer :: w, cycles, cad, solves
+      logical :: fold_expected
       integer(int64) :: expect, exp_c2d, exp_fx, exp_fw
 
       w = bth_width(label)
@@ -2931,6 +2943,15 @@ contains
       ! on every other rank none.  The Isend/Irecv count inside a group depends
       ! on the plan's peer list and is not asserted.
       exp_fw = 0_int64
+      ! Independent of the code under test: the wide fold is distributed iff the
+      ! fold is on and the row is split east-west, and only the rank whose tile
+      ! reaches the global north edge folds.
+      fold_expected = index(label, "_trip") > 0 .and. px > 1 .and. dec%jo + dec%nyl == BTH_NY
+      if (dec%fold_wide_active .neqv. fold_expected) then
+         write (*, '(3a,i0,a,l1,a,l1)') "FAIL ", trim(tag), ": wide fold plan on rank ", rank, &
+            " active=", dec%fold_wide_active, " expected=", fold_expected
+         nbad = nbad + 1
+      end if
       if (dec%fold_wide_active) exp_fw = int(solves, int64)*2_int64*int(BTH_NINNER, int64)
       if (dec%cnt_fold_wide /= exp_fw) then
          write (*, '(3a,i0,a,i0,a,i0)') "FAIL ", trim(tag), &

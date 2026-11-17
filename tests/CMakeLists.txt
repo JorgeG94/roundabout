@@ -948,8 +948,10 @@ if(RDB_ENABLE_MPI)
   # first two model ghost rows beyond them (122) leaves the owned cells bitwise:
   # the clamped copies are never read.  One row deeper (132: all `nghost` model
   # rows) the run breaks -- the model's own folded ghost row next to the fold
-  # line IS read (e.g. `H_ref` one row north of the fold line, as at `bt_halo =
-  # 0`): the liveness control, WILL_FAIL.
+  # line IS read, as at `bt_halo = 0` (static and dynamic fields are poisoned
+  # together, so this shows the ROW is read): the liveness control, WILL_FAIL.
+  # The unrelated fence checks are skipped under RING_POISON (and cycle-break
+  # POISON >= 2000), so the leg can only fail through its case's mismatch.
   foreach(np 1 2 4)
     add_test(NAME rdb_test_ocean_decomp_bitid_mpi_${np}rank_btwide_fold_ring
              COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${np}
@@ -960,7 +962,7 @@ if(RDB_ENABLE_MPI)
         LABELS
         "ocean"
         ENVIRONMENT
-        "OMP_NUM_THREADS=1;RDB_BT_INHALO_POISON=2;RDB_BT_RING_POISON=122;RDB_BITID_CASES=_trip"
+        "OMP_NUM_THREADS=1;RDB_BT_INHALO_POISON=2;RDB_BT_RING_POISON=122;RDB_BITID_CASES=bth_trip,bthx_trip"
         TIMEOUT
         14400)
   endforeach()

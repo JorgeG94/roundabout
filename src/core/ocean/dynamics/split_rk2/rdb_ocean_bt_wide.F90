@@ -6,7 +6,8 @@ module rdb_ocean_bt_wide
    !! band evolve stale data that creeps INWARD at one cell per substep; one
    !! PACKED exchange (a single message per neighbour per direction pass for
    !! eta, ubt, vbt and, with `bebt > 0`, `ubt_prev`/`vbt_prev`) every
-   !! `bt_wide_cycle_len(ng_wide) = ng_wide - 2` substeps keeps the owned cells
+   !! `bt_wide_cycle_len(ng_wide) = ng_wide - 2` substeps (`ng_wide = nghost + W`,
+   !! `W` = `bt_halo` rounded down to even) keeps the owned cells
    !! exact (proven limit `ng_wide - 1`; one substep of margin).  The per-solve
    !! entry set (eta, ubt, vbt, rem, force) is one packed exchange too, the
    !! static `H_ref` is exchanged once, and the normal-width time means,
@@ -26,8 +27,9 @@ module rdb_ocean_bt_wide
    !! fields beyond the fold: the outer `bt_halo` rows are clamped copies that
    !! are never read (the ring poison covers them); the first `nghost` rows
    !! beyond the fold are the model's own already-folded ghost rows and ARE
-   !! read (e.g. `H_ref` one row north of the fold line), exactly as at
-   !! `bt_halo = 0`.  Every dynamic row beyond the fold is refolded each substep.
+   !! read, exactly as at `bt_halo = 0` (the `RDB_BT_RING_POISON=132` control
+   !! poisons the static and dynamic fields of the innermost folded ghost row
+   !! and fails, which shows that the ROW is read, not which field).  Every dynamic row beyond the fold is refolded each substep.
    !!
    !! Lifecycle:
    !!   1. `init`         — allocate wide arrays; fill the STATIC wide metrics and

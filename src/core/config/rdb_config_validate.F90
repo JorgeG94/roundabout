@@ -3833,7 +3833,7 @@ contains
                               "BT solve is not proven against the ice-base datum)")
             has_error = .true.
          end if
-         if (trim(cfg%ocean%bc%north) == "tripolar_fold") then
+         if (ocean_bc_type_from_string(cfg%ocean%bc%north) == OBC_TRIPOLAR_FOLD) then
             ! Across the tripolar fold (Murray 1996 bipolar cap) the band folds
             ! `nghost + bt_halo` rows of the north tile -- read from rows below
             ! the fold line, so the north tile must be taller than the band --
@@ -3846,8 +3846,9 @@ contains
                 (cfg%px > 1 .and. cfg%nghost + cfg%ocean%bt%bt_halo - &
                  mod(cfg%ocean%bt%bt_halo, 2) + 1 > cfg%nx/cfg%px)) then
                call logger%error("&ocean_bt_nml bt_halo > 0 across north='tripolar_fold' "// &
-                                 "needs tiles of at least nghost + bt_halo + 1 rows "// &
-                                 "(and, with px > 1, columns): the fold reads the whole "// &
+                                 "needs tiles of at least nghost + W + 1 rows "// &
+                                 "(and, with px > 1, columns), W = bt_halo rounded "// &
+                                 "down to even: the fold reads the whole "// &
                                  "wide band from the north tile.  Reduce bt_halo or use "// &
                                  "fewer ranks.")
                has_error = .true.

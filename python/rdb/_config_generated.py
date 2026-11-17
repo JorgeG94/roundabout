@@ -4284,7 +4284,7 @@ class OceanBt(Group):
 
     bt_halo = Int(
         'bt_halo',
-        doc='Wide-halo BT march-in width (-1 = auto: resolves to 0, the march-in is opt-in; 0 = explicit off). > 0: verified bitwise equal to the one-rank bt_halo = 0 run on walls, periodic, Flather (legacy and full) and tidal edges, land (incl. land meeting an open edge), lon-lat and supergrid metrics, porous barriers, z-level closed faces, body tides, surface-pressure loading and the tripolar north fold (px = 1 and the owner-routed px > 1 fold); the wide exchanges are packed (one message per neighbour per direction pass, cadence nghost + bt_halo - 2 substeps). Refused with wet/dry, use_cont_type, upstream_h_face, Chapman edges, the ice-shelf cavity, inhalo_march, dtbt_reset_period >= 0 and a tile narrower than nghost + bt_halo (one cell more across the fold)',
+        doc='Wide-halo BT march-in width (-1 = auto: resolves to 0, the march-in is opt-in; 0 = explicit off). > 0: verified bitwise equal to the one-rank bt_halo = 0 run on walls, periodic, Flather (legacy and full) and tidal edges, land (incl. land meeting an open edge), lon-lat and supergrid metrics, porous barriers, z-level closed faces, body tides, surface-pressure loading and the tripolar north fold (px = 1 and the owner-routed px > 1 fold); the wide exchanges are packed (one message per neighbour per direction pass, cadence nghost + W - 2 substeps, W = bt_halo rounded down to even). Refused with wet/dry, use_cont_type, upstream_h_face, Chapman edges, the ice-shelf cavity, inhalo_march, dtbt_reset_period >= 0 and a tile narrower than nghost + W (one cell more across the fold)',
         units='',
         required=False,
         default=-1,
