@@ -396,6 +396,9 @@ program test_ocean_decomp_bitid_mpi
       !! instead of running the same namelist twice.
    integer :: bth_nochain_env = 0, bth_steps_env = 0, bth_poison_env = 0, &
               bth_ring_env = 0
+   logical :: psurf_pattern = .false.
+      !! Set per case (`bthx_psurfv_*`): `run_one` writes a spatially varying surface
+      !! pressure into the engine after setup (no file-free namelist path makes one).
    integer :: case_force = -1
       !! Per-case pinned width: a CASES entry `<label>+w<W>` runs `<label>` with `bt_halo = W` on
       !! every decomposed leg (the 1-rank reference stays AUTO = 0).
@@ -420,7 +423,7 @@ program test_ocean_decomp_bitid_mpi
       !! `RDB_BITID_CASES`: run only the cases whose name contains this substring.
    type(comm_t) :: comm
    character(len=16), parameter :: SCHEMES(2) = [character(len=16) :: "pred_corr", "ssp_rk2"]
-   character(len=24), parameter :: CASES(144) = [character(len=24) :: &
+   character(len=24), parameter :: CASES(160) = [character(len=24) :: &
                                                  "island_basin", "weno7_pv", &
                                                  "periodic_channel_zstar", &
                                                  "visc_rem_zstar", &
@@ -469,7 +472,13 @@ program test_ocean_decomp_bitid_mpi
                                                  "bthx_ffull_w4", "bthx_ffull_w8", &
                                                  "bthx_tidal_w4", "bthx_tidal_w8", &
                                                  "bthx_tides_w4", "bthx_tides_w8", &
-                                                 "bthx_psurf_w4", &
+                                                 "bthx_psurf_w4", "bthx_psurfv_w4", "bthx_psurfv_w8", &
+                                                 "bthx_nochain_w4", "bthx_nochain_w8", "bthx_chain_w4", "bthx_chain_w8", &
+                                                 "bthx_subdrag_w4", "bthx_subdrag_w8", &
+                                                 "bthx_drgwave_w4", "bthx_drgwave_w8", &
+                                                 "bthx_sal_w4", "bthx_sal_w8", &
+                                                 "bthx_dtbtinit_w4", "bthx_dtbtinit_w8", &
+                                                 "bthx_nomaskwall_w4", "bthx_nozeta_w4", &
                                                  "bthx_super_w4", "bthx_super_w8", &
                                                  "bthx_porous_w4", "bthx_porous_w8", &
                                                  "bthx_zfixed_w4", "bthx_zfixed_w8", &
@@ -707,6 +716,7 @@ contains
       character(len=40) :: vortex_balance
       character(len=8) :: sponge_w, sponge_e
       character(len=64) :: wl
+      character(len=40) :: sal_s
 
       ! The visc_rem chain rides on the common &ocean_bt_nml group (one
       ! group per namelist).  D1 follow-up (2026-10): the weighted
@@ -721,6 +731,8 @@ contains
                 "project_ci = .true., "
       if (label == "sea_ice_fold_nodyn") ice_dyn = "dynamics = .false., "
       bt_extra = ""
+      sal_s = ""
+      if (index(label, "bthx_sal") == 1) sal_s = ", use_sal = .true., beta_sal = 0.1"
       bt_head = "auto_n_inner = .true., "
       ! Per-step (period 0) / hourly (period 3600 s) re-derivation of n_inner from
       ! the live thicknesses; the fraction sits at an n_inner threshold (see case).
@@ -737,6 +749,19 @@ contains
          if (.not. bth_ref_leg) bt_extra = bt_extra//", bt_halo = "//itoa(bth_width(label))
          if (bth_b0(label)) bt_extra = bt_extra//", bebt = 0.0"
          if (bth_nochain_env /= 0) bt_extra = bt_extra//", visc_rem_chain = .false."
+         ! Feature cases (`bthx_<feature>_w<W>`): one bt-fast-loop feature each, on
+         ! the closed seamount unless its branch below says otherwise.
+         if (index(label, "bthx_nochain") == 1) bt_extra = bt_extra//", visc_rem_chain = .false."
+         if (index(label, "bthx_subdrag") == 1) &
+            bt_extra = bt_extra//", visc_rem_chain = .false., substep_drag = .true."
+         if (index(label, "bthx_drgwave") == 1) &
+            bt_extra = bt_extra//", wave_drag = .true., wave_drag_form = 'roughness_proxy', "// &
+                       "wave_drag_scale = 1.0e4"
+         if (index(label, "bthx_nozeta") == 1) bt_extra = bt_extra//", substep_zeta_ke = .false."
+         ! init-only dtbt (a fraction of the gravity-wave limit): n_inner is derived
+         ! once at configure (about 45 on this grid), never re-derived.
+         if (index(label, "bthx_dtbtinit") == 1) &
+            bt_head = "dtbt = -0.2, dtbt_reset_period = -1.0, "
       end if
       ! The periodic-edge cases need more than two substeps per solve: the
       ! corner they pin reaches the owned cells from the third substep on.
@@ -988,7 +1013,10 @@ contains
       case ("bth_seamount_w2", "bth_seamount_w4", "bth_seamount_w8", &
             "bth_seamount_w2_b0", "bth_seamount_w4_b0", "bth_seamount_w8_b0", &
             "bth_channel_w2", "bth_channel_w4", "bth_channel_w8", &
-            "bth_channel_w2_b0", "bth_channel_w4_b0", "bth_channel_w8_b0")
+            "bth_channel_w2_b0", "bth_channel_w4_b0", "bth_channel_w8_b0", &
+            "bthx_nochain_w4", "bthx_nochain_w8", "bthx_chain_w4", "bthx_chain_w8", "bthx_subdrag_w4", "bthx_subdrag_w8", &
+            "bthx_drgwave_w4", "bthx_drgwave_w8", "bthx_dtbtinit_w4", "bthx_dtbtinit_w8", &
+            "bthx_nomaskwall_w4", "bthx_nozeta_w4")
          ! Wide-halo march-in geometries: a seamount over variable bathymetry,
          ! closed on four walls (`seamount`) or re-entrant west/east (`channel`).
          nml = common// &
@@ -1001,9 +1029,21 @@ contains
          if (index(label, "bth_channel") == 1) then
             nml = nml//"&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
                   "north = 'wall' /"//NL
+         else if (index(label, "bthx_nomaskwall") == 1) then
+            nml = nml//"&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall', "// &
+                  "mask_wall_velocity = .false. /"//NL
          else
             nml = nml//"&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
          end if
+         if (index(label, "bthx_subdrag") == 1) &
+            nml = nml//"&ocean_bdrag_nml form = 'linear', r = 2.0e-3, hbbl = 10.0, bg_vel = 0.1 /"//NL
+         ! A LIVE bottom drag, so the viscous-remnant chain (hvel_mom6 + bbl_glue are on by
+         ! default) produces a non-trivial `av_rem` / `bt_rem` / `wt_u`: `bthx_chain` with
+         ! the chain on, `bthx_nochain` with it off (the plain `bth_*` cases leave the drag
+         ! at zero, which switches the glue off and the chain with it).
+         if (index(label, "bthx_chain") == 1 .or. index(label, "bthx_nochain") == 1 .or. &
+             index(label, "bthx_drgwave") == 1) &
+            nml = nml//"&ocean_bdrag_nml form = 'quadratic', cd = 3.0e-3, hbbl = 10.0 /"//NL
       case ("bth_spherical_w2", "bth_spherical_w4", "bth_spherical_w8", &
             "bth_spherical_w2_b0", "bth_spherical_w4_b0", "bth_spherical_w8_b0")
          ! Wide-halo march-in on a lon-lat sector (seamount, Wright EOS).
@@ -1140,7 +1180,7 @@ contains
                "&ocean_bc_nml west = 'tidal', east = 'open', south = 'wall', north = 'wall', "// &
                "west_n_tidal = 2, west_tidal_amp = 0.5, 0.2, west_tidal_phase = 0.0, 1.0, "// &
                "west_tidal_omega = 1.4051890e-4, 1.4544410e-4 /"//NL
-      case ("bthx_tides_w4", "bthx_tides_w8")
+      case ("bthx_tides_w4", "bthx_tides_w8", "bthx_sal_w4", "bthx_sal_w8")
          ! Equilibrium body tide (the `eta_forcing` seam) on a lon-lat sector,
          ! with a tidal west edge: the wide solve copies in and exchanges
          ! `eta_forcing` once per solve and receives the model time.
@@ -1161,13 +1201,16 @@ contains
                "west_tidal_omega = 1.4051890e-4, 1.4544410e-4, 0.7292117e-4, 0.6759774e-4, "// &
                "obc_tidal_nodal = .true. /"//NL// &
                "&ocean_tides_nml enable = .true., constituents = 'M2,S2,K1,O1', "// &
-               "ref_date = '2020-03-15', add_nodal = .true. /"//NL
-      case ("bthx_psurf_w4")
+               "ref_date = '2020-03-15', add_nodal = .true."// &
+               trim(sal_s)//" /"//NL
+      case ("bthx_psurf_w4", "bthx_psurfv_w4", "bthx_psurfv_w8")
          ! Surface-pressure loading rides the same `eta_forcing` seam.  The load
          ! here is UNIFORM (no file-free non-uniform path exists), and the kernel
          ! reads only differences of eta_forcing, so this case CANNOT fail on the
          ! wide eta_forcing VALUES: it only runs the path.  `bthx_tides_*` (a
          ! body tide varying in space and time) is the case that tests them.
+         ! `bthx_psurfv_*` is the same namelist with a spatially varying load
+         ! written into `sf%p_surf` / `p_surf_atm` after setup (`apply_psurf_pattern`).
          nml = common// &
                "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
                "dx = 20000.0, dy = 20000.0 /"//NL// &
@@ -2101,6 +2144,7 @@ contains
       call engine_setup(engine, cfg, ierr, compute_rank=crank, compute_size=csize)
       if (ierr /= OCEAN_STATUS_OK) return
 
+      if (psurf_pattern) call apply_psurf_pattern(engine)
       call engine_enter_data(engine, cfg)
       if (len_trim(balance_ref) > 0) then
          call poison_velocity_ghosts(engine, crank)
@@ -2517,6 +2561,29 @@ contains
       if (sum(glob) > 0) n_fail = n_fail + 1
    end subroutine check_resume_leg
 
+   subroutine apply_psurf_pattern(engine)
+      !! A smooth, spatially varying atmospheric load (Pa) as a function of the GLOBAL
+      !! cell index, ghosts included, written host-side before `engine_enter_data` (the
+      !! copy-in maps it).  Amplitude 1500 Pa is about 15 cm of inverse barometer; a
+      !! uniform load is inert (only its gradient is physical), this one has a
+      !! gradient in both directions across every rank seam.
+      type(ocean_engine_t), intent(inout) :: engine
+      integer :: i, j, gi, gj, ng
+      real(wp) :: x, y
+      real(wp), parameter :: TWO_PI = 6.283185307179586_wp
+      ng = engine%grid%nghost
+      do j = 1, size(engine%state%surface_flux%p_surf, 2)
+         do i = 1, size(engine%state%surface_flux%p_surf, 1)
+            gi = i - ng + engine%grid%i_offset_global
+            gj = j - ng + engine%grid%j_offset_global
+            x = TWO_PI*real(gi, wp)/real(BTH_NX, wp)
+            y = TWO_PI*real(gj, wp)/real(BTH_NY, wp)
+            engine%state%surface_flux%p_surf(i, j) = 1500.0_wp*sin(x + 0.5_wp*y) + 700.0_wp*cos(2.0_wp*y)
+         end do
+      end do
+      engine%state%surface_flux%p_surf_atm = engine%state%surface_flux%p_surf
+   end subroutine apply_psurf_pattern
+
    subroutine advance(engine, cfg, t, nsteps, ierr)
       !! The driver's step sequence, `nsteps` times from `t`.
       type(ocean_engine_t), intent(inout) :: engine
@@ -2844,6 +2911,7 @@ contains
       n_steps_cur = N_STEPS
       where_report = is_bth_case(label)
       if (where_report .and. bth_steps_env > 0) n_steps_cur = bth_steps_env
+      psurf_pattern = index(label, "bthx_psurfv") == 1
       balance_ref = ""
       if (index(label, "balance_rest") == 1) balance_ref = "bottom_rest"
       if (index(label, "balance_keep") == 1) balance_ref = "keep_h"
@@ -3023,7 +3091,7 @@ contains
       !! `eta_forcing` is exchanged once per solve).
       character(len=*), intent(in) :: label
       has_eta_forcing = index(label, "bthx_tides") == 1 .or. index(label, "bthx_psurf") == 1 .or. &
-                        index(label, "bthx_trip_tides") == 1
+                        index(label, "bthx_trip_tides") == 1 .or. index(label, "bthx_sal") == 1
    end function has_eta_forcing
 
    pure logical function refreshes_widths(label)
@@ -3041,7 +3109,7 @@ contains
       character(len=*), intent(in) :: label
       auto_must_stay_zero = index(label, "sea_ice") == 1 .or. index(label, "wetdry_") == 1 .or. &
                             index(label, "cavity_") == 1 .or. index(label, "dtbt_reset") == 1 .or. &
-                            index(label, "wave_drag") == 1 .or. label == "chapman_obc" .or. &
+                            label == "chapman_obc" .or. &
                             label == "obc_sponge_east" .or. label == "obc_radiation_sponge" .or. &
                             label == "periodic_sponge" .or. index(label, "bulk_flux_ice") == 1
    end function auto_must_stay_zero
@@ -3140,13 +3208,15 @@ contains
       integer, intent(inout) :: nbad
       integer, intent(in) :: px
          !! East-west process count of this layout.
-      integer :: w, cycles, cad, solves
+      integer :: w, cycles, cad, solves, ninn
       logical :: fold_expected
       integer(int64) :: expect, exp_c2d, exp_fx, exp_fw
 
       w = bth_width(label)
       cad = bt_wide_cycle_len(3 + bth_width_eff(label)) + bth_poison_env/1000
-      cycles = (BTH_NINNER - 1)/cad
+      ninn = BTH_NINNER
+      if (index(label, "bthx_dtbtinit") == 1) ninn = cur_n_inner
+      cycles = (ninn - 1)/cad
       solves = 2*n_steps_cur
       expect = int(solves, int64)*int(2 + cycles, int64)
       ! Centre-2D exchanges: `H_ref` once, plus the wide `eta_forcing` once per
@@ -3178,7 +3248,7 @@ contains
             " active=", dec%fold_wide_active, " expected=", fold_expected
          nbad = nbad + 1
       end if
-      if (dec%fold_wide_active) exp_fw = int(solves, int64)*2_int64*int(BTH_NINNER, int64)
+      if (dec%fold_wide_active) exp_fw = int(solves, int64)*2_int64*int(ninn, int64)
       if (dec%cnt_fold_wide /= exp_fw) then
          write (*, '(3a,i0,a,i0,a,i0)') "FAIL ", trim(tag), &
             ": wide fold groups on rank ", rank, " = ", dec%cnt_fold_wide, " expected=", exp_fw

@@ -4565,8 +4565,6 @@ contains
          reason = "cavity_melt enable"
       else if (cfg%ocean%sponge%enable) then
          reason = "&ocean_sponge_nml enable"
-      else if (cfg%ocean%bt%wave_drag) then
-         reason = "wave_drag"
       end if
       if (len_trim(reason) == 0) then
          ! Edges: only the types a `bth*` case proves (wall, Flather / open,

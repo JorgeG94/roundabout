@@ -810,9 +810,10 @@ contains
       call check(error, excluded, "map-driven sponge not excluded")
       if (allocated(error)) return
       cfg%ocean%sponge%enable = .false.
+      ! Wave drag has a wide-halo case (`bthx_drgwave`): it is NOT excluded.
       cfg%ocean%bt%wave_drag = .true.
       call bt_halo_auto_exclusion(cfg, excluded, reason)
-      call check(error, excluded, "wave_drag not excluded")
+      call check(error, excluded .eqv. .false., "wave_drag excluded despite its bthx_drgwave case")
       if (allocated(error)) return
       cfg%ocean%bt%wave_drag = .false.
       cfg%ocean%bt%inhalo_march = .true.
