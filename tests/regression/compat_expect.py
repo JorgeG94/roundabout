@@ -620,7 +620,8 @@ VALUE_PATHS.update({
     ("forcing", "cool"): [_P + "vertical/rdb_ocean_surface_flux.F90"],
     ("forcing", "warm_sw"): [_P + "vertical/rdb_ocean_surface_flux.F90"],
     ("forcing", "fw_mass"): [_P + "vertical/rdb_ocean_surface_flux.F90",
-                             _P + "vertical/rdb_ocean_surface_fw_mass.F90"],
+                             _P + "vertical/rdb_ocean_surface_fw_mass.F90",
+                             "src/core/ocean/forcing/rdb_ocean_data_forcing.F90"],
 })
 for _v in ("const_nu_h", "smagorinsky", "leith", "leith_biharm", "nu_4", "stress_tensor", "kh_aniso"):
     VALUE_PATHS[("lateral", _v)] = list(_HVISC)
