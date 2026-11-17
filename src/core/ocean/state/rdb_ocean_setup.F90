@@ -458,13 +458,15 @@ module rdb_ocean_setup
          integer, intent(out), optional :: ierr
       end subroutine configure_ocean_wave_drag
 
-      module subroutine wave_drag_roughness_proxy(b, wet_T, nx, ny, nghost, kappa, n_bot, h2_max, r_h)
+      module subroutine wave_drag_roughness_proxy(b, wet_T, nx, ny, nghost, kappa, n_bot, h2_max, r_h, &
+                                                  has_west, has_east, has_south, has_north)
             !! See submodule [[rdb_ocean_setup_bt]].
          implicit none
          integer, intent(in) :: nx, ny, nghost
          real(wp), intent(in) :: b(nx, ny), wet_T(nx, ny)
          real(wp), intent(in) :: kappa, n_bot, h2_max
          real(wp), intent(inout) :: r_h(nx, ny)
+         logical, intent(in), optional :: has_west, has_east, has_south, has_north
       end subroutine wave_drag_roughness_proxy
 
       module subroutine parse_constituent_list(list, cat_idx, nconst, ierr)
