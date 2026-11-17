@@ -52,7 +52,8 @@ module rdb_ice_flux_avg
    implicit none
    private
 
-   public :: ice_flux_avg_t, ice_flux_avg_accumulate, ice_flux_avg_reset, ice_flux_avg_stash_pending
+   public :: ice_flux_avg_t, ice_flux_avg_accumulate, ice_flux_avg_reset, ice_flux_avg_stash_pending, &
+             ice_flux_avg_scale
    public :: ICE_AVG_OK, ICE_AVG_ERR_SHAPE, ICE_AVG_ERR_DT
 
    integer, parameter :: ICE_AVG_OK = 0
@@ -348,5 +349,33 @@ contains
          a_fswthru_vis(i, j) = 0.0_wp
       end do
    end subroutine ice_flux_avg_reset_impl
+
+   subroutine ice_flux_avg_scale(avg, factor)
+      !! `acc <- factor * acc` on the five window means (ghosts included, ONE launch): the short first
+      !! window of the deferred order, whose mean times the thermo interval would hand the ocean more than
+      !! the ice booked (`ice_cice_apply_window`).  The slot must be mapped on an offload build.
+      type(ice_flux_avg_t), intent(inout) :: avg
+      real(wp), intent(in) :: factor
+
+      if (.not. avg%is_init) return
+      call ice_flux_avg_scale_impl(avg%nx, avg%ny, factor, avg%acc_fresh, avg%acc_fsalt, avg%acc_fhocn, &
+                                   avg%acc_fswthru, avg%acc_fswthru_vis)
+   end subroutine ice_flux_avg_scale
+
+   pure subroutine ice_flux_avg_scale_impl(nx, ny, factor, a_fresh, a_fsalt, a_fhocn, a_fswthru, a_fswthru_vis)
+      integer, intent(in) :: nx, ny
+      real(wp), intent(in) :: factor
+      real(wp), intent(inout) :: a_fresh(nx, ny), a_fsalt(nx, ny), a_fhocn(nx, ny), a_fswthru(nx, ny)
+      real(wp), intent(inout) :: a_fswthru_vis(nx, ny)
+      integer :: i, j
+
+      do concurrent(j=1:ny, i=1:nx)
+         a_fresh(i, j) = a_fresh(i, j)*factor
+         a_fsalt(i, j) = a_fsalt(i, j)*factor
+         a_fhocn(i, j) = a_fhocn(i, j)*factor
+         a_fswthru(i, j) = a_fswthru(i, j)*factor
+         a_fswthru_vis(i, j) = a_fswthru_vis(i, j)*factor
+      end do
+   end subroutine ice_flux_avg_scale_impl
 
 end module rdb_ice_flux_avg

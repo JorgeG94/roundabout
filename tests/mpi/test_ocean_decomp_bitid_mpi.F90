@@ -405,7 +405,7 @@ program test_ocean_decomp_bitid_mpi
       !! `RDB_BITID_CASES`: run only the cases whose name contains this substring.
    type(comm_t) :: comm
    character(len=16), parameter :: SCHEMES(2) = [character(len=16) :: "pred_corr", "ssp_rk2"]
-   character(len=24), parameter :: CASES(113) = [character(len=24) :: &
+   character(len=24), parameter :: CASES(117) = [character(len=24) :: &
                                                  "island_basin", "weno7_pv", &
                                                  "periodic_channel_zstar", &
                                                  "visc_rem_zstar", &
@@ -451,7 +451,9 @@ program test_ocean_decomp_bitid_mpi
                                                  "wave_drag_rough", "wave_drag_rough_periodic", &
                                                  "bulk_flux_fw_mass", "bulk_flux_fw_mass_fold", &
                                                  "fw_mass_deferred", "fw_mass_deferred_nowin", "fw_mass_thin", &
-                                                 "runoff_mass", "runoff_mass_fold"]
+                                                 "runoff_mass", "runoff_mass_fold", &
+                                                 "cice_ice_fw_mass", "cice_ice_fw_mass_fold", "cice_ice_fw_mass_led", &
+                                                 "cice_ice_fw_mass_bfold"]
 
    call comm_env_init()
    call comm_env_setup_roles(.false.)
@@ -500,6 +502,7 @@ program test_ocean_decomp_bitid_mpi
       if (trim(CASES(ic)) == "diabatic_end" .or. trim(CASES(ic)) == "drain_ratio_h3" .or. &
           trim(CASES(ic)) == "bulk_flux_bl_ratio2" .or. trim(CASES(ic)) == "fw_mass_deferred" .or. &
           trim(CASES(ic)) == "fw_mass_deferred_nowin" .or. &
+          trim(CASES(ic)) == "cice_ice_fw_mass_bfold" .or. &
           trim(CASES(ic)) == "drain_ratio_fold_h3") cycle
       call run_case(trim(CASES(ic)), trim(SCHEMES(2)))
    end do
@@ -1622,6 +1625,7 @@ contains
       character(len=16) :: spx, spy, snx, sny
       character(len=:), allocatable :: bc, topo, atm, lbl
       logical :: led
+      integer :: a_v, b_v
 
       ! `<case>_led`: the case with the named-term ledger on
       led = .false.
@@ -1701,7 +1705,16 @@ contains
          call replace_once(nml, "conc_config = 'uniform', h_ice = 1.0, conc = 0.7", &
                            "conc_config = 'latitudes', h_ice = 1.0, conc = 0.7, arctic_edge = 59.0")
       end if
-      if (index(lbl, "cice_ice_fold") == 1) then
+      if (lbl == "cice_ice_fw_mass" .or. lbl == "cice_ice_fw_mass_fold") then
+         ! Real fresh-water mass with the sea ice's weight on the surface pressure (`freshwater = 'mass'`,
+         ! `&ocean_psurf_nml ice_load`): the ice's water leaves and enters the layers as volume (`seaice_melt` ->
+         ! `fw_net` -> the mass step, ratio 2: the in-stage thermo path) and its weight rides the `eta_forcing`
+         ! seam.  The channel over the seamount (the ice crosses every rank seam) / the tripolar cap (below).
+         call replace_once(nml, "&ocean_forcing_nml enable_components = .true. /", &
+                           "&ocean_forcing_nml enable_components = .true., freshwater = 'mass' /"//NL// &
+                           "&ocean_psurf_nml enable = .true., ice_load = .true. /")
+      end if
+      if (index(lbl, "cice_ice_fold") == 1 .or. lbl == "cice_ice_fw_mass_fold") then
          ! the tripolar cap of `sea_ice_fold` (59N-83N, phi_join 74N, double-Drake land reaching the fold line, closed by
          ! the north fold; 30 x 24, so 2x1 is 15|15 and 4x1 is 8/8/7/7) under the CICE-port ice: stage B
          call replace_once(nml, "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)// &
@@ -1732,6 +1745,27 @@ contains
          ! with the CICE-port ice: the bulk-forcing / atmosphere-prepare path across the fold
          nml = case_nml("bulk_flux_ice_fold", scheme, px, py)
          call swap_to_cice(nml)
+      end if
+      if (lbl == "cice_ice_fw_mass_bfold") then
+         ! The production shape: real fresh-water mass + the ice's weight + the atmosphere's pressure
+         ! (`atm_load`, a NON-uniform `psl` regridded per rank) through the bulk forcing on the tripolar cap
+         ! (periodic east-west, the north fold), the DEFERRED order at `dt_therm_ratio = 8` (pred_corr), the
+         ! CICE-port ice with dynamics and transport.  Multi-rank bulk forcing is the path of the `bulk_flux_*`
+         ! cases (the prescribed atmosphere files), no data-override reader needed.  The straight run is 48
+         ! steps and the resume leg checkpoints at step 25: MID-interval (25 = 3*8 + 1), with the carried ice
+         ! load and the in-flight fresh-water snapshot in the checkpoint.
+         nml = case_nml("bulk_flux_ice_fold", scheme, px, py)
+         call swap_to_cice(nml)
+         call replace_once(nml, "&ocean_forcing_nml enable_components = .true.", &
+                           "&ocean_forcing_nml enable_components = .true., freshwater = 'mass'")
+         ! the vmix group the bulk namelist carries (a group may appear once): ratio 8, deferred
+         a_v = index(nml, "&ocean_vmix_nml")
+         b_v = a_v + index(nml(a_v:), "/") - 1
+         nml = nml(1:a_v - 1)//"&ocean_vmix_nml dt_therm_ratio = 8, diabatic_first = .false. /"//nml(b_v + 1:)
+         nml = nml//"&ocean_psurf_nml enable = .true., ice_load = .true., atm_load = .true. /"//NL
+         ! 'coszen' needs the 3-hourly rsds interval to divide the 8 x 900 s thermo interval; 'linear' does not
+         call replace_once(nml, "&ocean_atm_forcing_nml enable = .true., time_mode = 'interannual',", &
+                           "&ocean_atm_forcing_nml enable = .true., sw_interp = 'linear', time_mode = 'interannual',")
       end if
       if (lbl == "cice_ice_bulk" .or. lbl == "cice_ice_bulk_sw") then
          ! the lon-lat re-entrant channel of `bulk_flux_ice` (non-uniform prescribed atmosphere, regridded per
@@ -2221,6 +2255,22 @@ contains
       call push_field(s, "img:sw_ice", engine%state%surface_flux%sw_ice)
       call push_field(s, "img:tau_a_x", engine%state%ice%tau_a_x)
       call push_field(s, "img:tau_a_y", engine%state%ice%tau_a_y)
+      if (engine%state%surface_flux%fw_mass) then
+         ! real mass: the ice's water and weight arrive in the seam ghosts the mass step and the seam read
+         !$acc update self(engine%state%surface_flux%seaice_melt, engine%state%surface_flux%fw_net)
+         call push_field(s, "img:seaice_melt", engine%state%surface_flux%seaice_melt)
+         call push_field(s, "img:fw_net", engine%state%surface_flux%fw_net)
+      end if
+      if (engine%state%surface_flux%ice_load) then
+         !$acc update self(engine%state%surface_flux%p_ice_load, engine%state%surface_flux%p_surf)
+         call push_field(s, "img:p_ice_load", engine%state%surface_flux%p_ice_load)
+         call push_field(s, "img:p_surf", engine%state%surface_flux%p_surf)
+      end if
+      if (engine%state%surface_flux%atm_load) then
+         ! the atmosphere's pressure (written on owned cells by the bulk forcing) must reach the seam ghosts
+         !$acc update self(engine%state%surface_flux%p_surf_atm)
+         call push_field(s, "img:p_surf_atm", engine%state%surface_flux%p_surf_atm)
+      end if
    end subroutine add_cice_images
 
    subroutine check_cice_nonvacuous(ref, label, tag)
@@ -2289,6 +2339,19 @@ contains
          end do
          if (.not. (amax > 0.0_wp)) then
             write (*, '(3a,i0)') "FAIL ", tag, ": no through-ice shortwave reaches the ocean (sf_sw_ice is zero), rank ", rank
+            n_fail = n_fail + 1
+         end if
+      end if
+      if (index(label, "cice_ice_fw_mass") == 1) then
+         ! the water and the weight must have moved: a case whose load or fw_net stays zero proves nothing
+         amax = 0.0_wp
+         vmax = 0.0_wp
+         do e = 1, ref%n
+            if (trim(ref%f(e)%tag) == "sf_p_ice_load") amax = maxval(abs(ref%f(e)%a))
+            if (trim(ref%f(e)%tag) == "sf_fw_net") vmax = maxval(abs(ref%f(e)%a))
+         end do
+         if (.not. (amax > 0.0_wp .and. vmax > 0.0_wp)) then
+            write (*, '(3a,2es12.4,a,i0)') "FAIL ", tag, ": the ice load or fw_net is zero all run: ", amax, vmax, " rank ", rank
             n_fail = n_fail + 1
          end if
       end if
@@ -3099,7 +3162,8 @@ contains
       character(len=*), intent(in) :: label
       is_ice_fold_case = label == "sea_ice_fold" .or. label == "sea_ice_fold_nodyn" .or. &
                          label == "sea_ice_cdyn_fold" .or. label == "sea_ice_cdyn_edge" .or. &
-                         index(label, "cice_ice_fold") == 1 .or. label == "cice_ice_bulk_fold"
+                         index(label, "cice_ice_fold") == 1 .or. label == "cice_ice_bulk_fold" .or. &
+                         label == "cice_ice_fw_mass_fold" .or. label == "cice_ice_fw_mass_bfold"
    end function is_ice_fold_case
 
    subroutine check_ice_seam(ref, tag)
@@ -3168,7 +3232,7 @@ contains
       seam_x = [14, 8, 15, 21]
       seam_y = [10, 6, 11, 15]
       if (label == "sea_ice_cdyn_fold" .or. label == "sea_ice_cdyn_edge" .or. label == "cice_ice_fold" .or. label == "cice_ice_fold_led" .or. &
-          label == "cice_ice_bulk_fold") then
+          label == "cice_ice_bulk_fold" .or. label == "cice_ice_fw_mass_fold" .or. label == "cice_ice_fw_mass_bfold") then
          ! the cap grid is 30 x 24
          seam_x = [16, 9, 17, 24]
          seam_y = [13, 7, 13, 19]

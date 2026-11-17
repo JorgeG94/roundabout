@@ -1060,6 +1060,10 @@ contains
       type(error_type), allocatable, intent(out) :: error
       integer, parameter :: REFUSED = OCEAN_STATUS_ERR_CONFIG_VALIDATE
       character(len=*), parameter :: FW = "enable_components = .true., freshwater = 'mass'"
+      character(len=*), parameter :: NL = new_line('a')
+      character(len=*), parameter :: ICE_OK = "&ocean_ice_nml enable = .true., scheme = 'cice', hfreeze = 10.0, dynamics = .true., transport = .true. /"//NL// &
+                                     "&ocean_ice_thermo_nml update_ocn_f = .true. /"//NL// &
+                                     "&ocean_psurf_nml enable = .true., ice_load = .true. /"
 
       call check(error, fw_mass_ierr("zstar", "pred_corr", "use_kpp = .true.", FW, .true., "") == OCEAN_STATUS_OK, &
                  "baseline (zstar, pred_corr, components) accepted")
@@ -1085,11 +1089,59 @@ contains
       if (allocated(error)) return
       call check(error, fw_mass_ierr("zstar", "pred_corr", "use_kpp = .true.", FW, .true., &
                                      "&ocean_ice_nml enable = .true. /") == REFUSED, &
-                 "refused: sea ice (no mass slot in the hand-off yet)")
+                 "refused: the SIS2-derived ice (its brine coupler has no mass slot)")
       if (allocated(error)) return
       call check(error, fw_mass_ierr("zstar", "pred_corr", "use_kpp = .true.", FW, .true., &
-                                     "&ocean_ice_nml enable = .true., scheme = 'cice' /") == REFUSED, &
-                 "refused: CICE-port sea ice")
+           "&ocean_ice_nml enable = .true., scheme = 'cice', hfreeze = 10.0, dynamics = .true., transport = .true. /") == REFUSED, &
+                 "refused: CICE-port sea ice without update_ocn_f, the psurf seam and the ice load")
+      if (allocated(error)) return
+      call check(error, fw_mass_ierr("zstar", "pred_corr", "use_kpp = .true.", FW, .true., &
+                                     ICE_OK) == OCEAN_STATUS_OK, &
+                 "accepted: CICE-port sea ice with update_ocn_f, the psurf seam and ice_load")
+      if (allocated(error)) return
+      call check(error, fw_mass_ierr("sigma", "ssp_rk2", "use_kpp = .true.", FW, .true., ICE_OK) == OCEAN_STATUS_OK, &
+                 "accepted: the same with ssp_rk2")
+      if (allocated(error)) return
+      call check(error, fw_mass_ierr("zstar", "pred_corr", "use_kpp = .true.", FW, .true., &
+                  "&ocean_ice_nml enable = .true., scheme = 'cice', hfreeze = 10.0, dynamics = .true., transport = .true. /"//NL// &
+                                     "&ocean_psurf_nml enable = .true., ice_load = .true. /") == REFUSED, &
+                 "refused: sea ice under real mass without update_ocn_f (the ledger could not close)")
+      if (allocated(error)) return
+      call check(error, fw_mass_ierr("zstar", "pred_corr", "use_kpp = .true.", FW, .true., &
+                  "&ocean_ice_nml enable = .true., scheme = 'cice', hfreeze = 10.0, dynamics = .true., transport = .true. /"//NL// &
+                                     "&ocean_ice_thermo_nml update_ocn_f = .true. /"//NL// &
+                                     "&ocean_psurf_nml enable = .true. /") == REFUSED, &
+                 "refused: sea ice under real mass without ice_load (a spurious flow at the ice edge)")
+      if (allocated(error)) return
+      call check(error, fw_mass_ierr("zstar", "pred_corr", "use_kpp = .true.", FW, .true., &
+                  "&ocean_ice_nml enable = .true., scheme = 'cice', hfreeze = 10.0, dynamics = .true., transport = .true. /"//NL// &
+                                     "&ocean_ice_thermo_nml update_ocn_f = .true. /") == REFUSED, &
+                 "refused: sea ice under real mass without the psurf seam")
+      if (allocated(error)) return
+      call check(error, fw_mass_ierr("zstar", "pred_corr", "use_kpp = .true.", "enable_components = .true.", .true., &
+                                     ICE_OK) == REFUSED, "refused: ice_load without real mass (freshwater = 'none')")
+      if (allocated(error)) return
+      call check(error, fw_mass_ierr("zstar", "pred_corr", "use_kpp = .true.", &
+                                     "enable_components = .true., freshwater = 'virtual'", .true., ICE_OK) == REFUSED, &
+                 "refused: ice_load with freshwater = 'virtual'")
+      if (allocated(error)) return
+      call check(error, fw_mass_ierr("zstar", "pred_corr", "use_kpp = .true.", FW, .true., &
+                                     "&ocean_psurf_nml enable = .true., ice_load = .true. /") == REFUSED, &
+                 "refused: ice_load with no sea ice")
+      if (allocated(error)) return
+      call check(error, fw_mass_ierr("zstar", "pred_corr", "use_kpp = .true.", FW, .true., &
+                  "&ocean_ice_nml enable = .true., scheme = 'cice', hfreeze = 10.0, dynamics = .true., transport = .true. /"//NL// &
+                                     "&ocean_ice_thermo_nml update_ocn_f = .true. /"//NL// &
+                                     "&ocean_psurf_nml ice_load = .true. /") == REFUSED, &
+                 "refused: ice_load without &ocean_psurf_nml enable")
+      if (allocated(error)) return
+      call check(error, fw_mass_ierr("zstar", "pred_corr", "use_kpp = .true.", FW, .true., &
+                                     "&ocean_psurf_nml enable = .true., atm_load = .true. /") == REFUSED, &
+                 "refused: atm_load without the bulk forcing (its only writer)")
+      if (allocated(error)) return
+      call check(error, fw_mass_ierr("zstar", "pred_corr", "use_kpp = .true.", FW, .true., &
+                                     "&ocean_psurf_nml atm_load = .true. /") == REFUSED, &
+                 "refused: atm_load without &ocean_psurf_nml enable")
       if (allocated(error)) return
       call check(error, fw_mass_ierr("zstar", "pred_corr", "use_kpp = .true.", FW//", fw_evap_cfl_limit = 0.0", &
                                      .true., "") == REFUSED, "refused: fw_evap_cfl_limit = 0")

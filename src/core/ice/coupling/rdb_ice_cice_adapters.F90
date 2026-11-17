@@ -38,7 +38,22 @@ module rdb_ice_cice_adapters
    !! exchange (`ocean_halo_exchange_centre_field`: two-pass, periodic wrap, tripolar fold)
    !! of every field it wrote (needs `ocean_halo_init`; a no-op on one non-periodic rank).
    !!
-   !! **Virtual-salt form (interim, until the real-mass PR).**  The ocean is
+   !! **Real-mass form (`&ocean_forcing_nml freshwater = "mass"`).**  The ice's fresh water is REAL
+   !! volume: `seaice_melt = fresh` [kg m-2 s-1, window mean, + into the ocean] is written next to the
+   !! ocean's other mass fluxes and `ocean_surface_flux_assemble` sums it into `fw_net`, which
+   !! `ocean_surface_fw_mass_step` spends as a thickness change of the first live layer (ice growth
+   !! and frazil, `fresh < 0`, take water out; melt puts it in), diluting or concentrating the
+   !! dissolved tracers.  The dilution term is therefore GONE from the salt hand-off:
+   !! `salt_ice = 1000*fsalt` alone (the ice's own salt, kg salt -> psu kg, which the Boussinesq
+   !! ocean takes as concentration with no volume; the water is not double counted through
+   !! `-S*fresh`).  The boundary-layer buoyancy forcing still sees the fresh water: `fw_virtual_step`
+   !! carries `seaice_melt` in its `salt_fw` under mass, and the tracer deposit reads
+   !! `Q_salt_tracer = Q_salt - salt_fw`, so the virtual term reaches the tracers never.  The ice's
+   !! weight rides the surface pressure (`&ocean_psurf_nml ice_load`, required with it), so the
+   !! water the ice takes leaves from under the ice WITHOUT a sea-surface step (Campin et al. 2008).
+   !! The two forms never mix in one run; the rest of this paragraph describes the virtual form.
+   !!
+   !! **Virtual-salt form (`freshwater = "none"` or `"virtual"`).**  The ocean is
    !! volume conserving, so a fresh-water flux enters as a salt flux that has the
    !! same effect on the surface salinity: `dS/dt = Q_salt/(rho0*h)` with
    !! `Q_salt = 1000*fsalt - S_surf*fresh`.  `1000*fsalt` is the salt the ice
@@ -57,10 +72,11 @@ module rdb_ice_cice_adapters
    !! `Q_salt = rhoi*dhi*(S_surf - Sref)/dt > 0` (brine rejection salinifies);
    !! melt (`dhi < 0`): `Q_salt = -rhoi*|dhi|*(S_surf - Sref)/dt < 0` (freshens).
    !! The water itself is NOT given to the ocean (no sea-level change; `fresh`
-   !! enters only through the dilution term); it is returned as `fresh_mass_out`
-   !! so the real-mass PR can take it, at which point `Q_salt` becomes
-   !! `1000*fsalt` alone.  The ocean's `seaice_melt`/`lprec` mass components are
-   !! deliberately NOT written (it would count the water twice).
+   !! enters only through the dilution term); it is returned as `fresh_mass_out`.
+   !! The ocean's `seaice_melt`/`lprec` mass components are
+   !! deliberately NOT written in this form (it would count the water twice); under
+   !! `freshwater = "mass"` the same water is written as `seaice_melt` instead and the
+   !! dilution term is dropped (see above).
    !!
    !! **`update_ocn_f`.**  The frazil mass and salt reach `fresh`/`fsalt` only when
    !! the ice runs with `update_ocn_f = .true.` (the OM3 value); the adapters are
@@ -87,7 +103,10 @@ module rdb_ice_cice_adapters
    !! (through `fresh`).  Under `freshwater = "virtual"` the open share dilutes through `salt_fw`
    !! (`ocean_surface_flux_fw_virtual_step`), the hook therefore KEEPS the rain-through term, and both shares
    !! of the rain dilute (the two weights, `aice0` and `aice_init`, add to the whole precipitation); snow on
-   !! open water freshens too, without the latent heat of melting.  The enthalpy of rain on the ice-covered
+   !! open water freshens too, without the latent heat of melting.  Under `freshwater = "mass"` the hook also
+   !! KEEPS the rain-through term (`.not. (fw_virtual .or. fw_mass)`): the open share arrives as `lprec` (weight
+   !! `aice0`, real volume), the covered share (`aice_init`) as `seaice_melt = fresh`, and the two shares add to
+   !! the whole precipitation exactly once (`rain_split_sums_to_total`).  The enthalpy of rain on the ice-covered
    !! fraction (`~cp*SST*frain*aice`, below 1 W m-2 near freezing) is not delivered, whereas the open-water
    !! share's `heat_content_lprec` is under `"none"` (under `"virtual"` no precipitation enthalpy is added).
    !! `test_cice_closure` and `test_ocean_surface_freshwater` close the ice ledger and the hand-over; the
@@ -122,7 +141,7 @@ module rdb_ice_cice_adapters
    use rdb_ocean_boundary_types, only: ocean_bc_state_t
    use rdb_ocean_halo_state, only: ocean_seam_refresh_surface_stress, ocean_halo_exchange_centre_field
    use rdb_ice_cice_state, only: ice_cice_state_t
-   use rdb_ice_flux_avg, only: ice_flux_avg_t, ice_flux_avg_reset
+   use rdb_ice_flux_avg, only: ice_flux_avg_t, ice_flux_avg_reset, ice_flux_avg_scale
    use rdb_ice_ocean_coupler, only: ice_ocean_stress_flux_impl
    implicit none
    private
@@ -203,7 +222,13 @@ contains
       if (sf%use_components) then
          call ice_adapt_set_impl(nx, ny, is, ie, js, je, fhocn, sf%heat_ice)
          call ice_adapt_set_impl(nx, ny, is, ie, js, je, fswthru, sf%sw_ice)
-         call ice_adapt_salt_impl(nx, ny, is, ie, js, je, fsalt, fresh, sss_ocn, 0.0_wp, sf%salt_ice)
+         if (sf%fw_mass) then
+            ! Real mass: the water is `seaice_melt` and the salt hand-off loses its dilution term.
+            call ice_adapt_set_impl(nx, ny, is, ie, js, je, fresh, sf%seaice_melt)
+            call ice_adapt_salt_mass_impl(nx, ny, is, ie, js, je, fsalt, 0.0_wp, sf%salt_ice)
+         else
+            call ice_adapt_salt_impl(nx, ny, is, ie, js, je, fsalt, fresh, sss_ocn, 0.0_wp, sf%salt_ice)
+         end if
       else
          call ice_adapt_heat_impl(nx, ny, is, ie, js, je, fhocn, fswthru, sf%Q_heat_const, sf%Q_heat)
          call ice_adapt_salt_impl(nx, ny, is, ie, js, je, fsalt, fresh, sss_ocn, sf%Q_salt_const, sf%Q_salt)
@@ -212,7 +237,8 @@ contains
       sf%has_salt = .true.
    end subroutine ice_cice_to_surface_flux
 
-   subroutine ice_cice_apply_window(grid, bc, avg, sf, sss_ocn, ierr, fresh_mass_out, window_expected, t_window)
+   subroutine ice_cice_apply_window(grid, bc, avg, sf, sss_ocn, ierr, fresh_mass_out, window_expected, t_window, &
+                                    t_first_window)
       !! The thermo-step hand-off: adapt the window mean held by `avg`
       !! (`ice_cice_to_surface_flux` on `avg%acc_*`), optionally copy the mean
       !! `fresh` [kg m-2 s-1, + into ocean] into `fresh_mass_out(nx_total, ny_total)`,
@@ -222,7 +248,12 @@ contains
       !! `t_window` returns the seconds the window accumulated; with `window_expected`
       !! (the thermo-window length, `dt_therm_ratio*dt`) a mismatch beyond 1e-9 relative
       !! returns `ICE_ADAPT_ERR_WINDOW` and touches nothing (a skipped or doubled ice step
-      !! would otherwise be applied for the wrong duration).
+      !! would otherwise be applied for the wrong duration).  `t_first_window` (>= 0): the one window
+      !! that may be SHORT, the first after a cold start in the deferred order
+      !! (`diabatic_first = .false.`), whose hand-off comes `dt_therm_ratio - 1` steps in; a window
+      !! of exactly that length is accepted and its mean scaled by `t_acc/window_expected`, so the
+      !! amount the ocean spends over the thermo interval is what the ice booked over its shorter
+      !! window (mean flux times `window_expected` would hand it `ratio/(ratio-1)` too much).
       type(hgrid_t), intent(in) :: grid
       type(ocean_bc_state_t), intent(in) :: bc
          !! Supplies `north_fold` for the exchange; `ocean_halo_init` must have run.
@@ -233,7 +264,10 @@ contains
       real(wp), intent(inout), optional :: fresh_mass_out(:, :)
       real(wp), intent(in), optional :: window_expected
       real(wp), intent(out), optional :: t_window
+      real(wp), intent(in), optional :: t_first_window
+      real(wp) :: scale_f
 
+      scale_f = 1.0_wp
       ierr = ICE_ADAPT_OK
       if (present(t_window)) t_window = 0.0_wp
       if (.not. avg%is_init .or. avg%nx /= grid%nx_total .or. avg%ny /= grid%ny_total) then
@@ -248,7 +282,14 @@ contains
       if (present(window_expected)) then
          if (.not. (abs(avg%t_acc - window_expected) <= 1.0e-9_wp*abs(window_expected))) then
             ierr = ICE_ADAPT_ERR_WINDOW
-            return
+            if (present(t_first_window)) then
+               if (t_first_window > 0.0_wp .and. t_first_window < window_expected .and. &
+                   abs(avg%t_acc - t_first_window) <= 1.0e-9_wp*abs(window_expected)) then
+                  ierr = ICE_ADAPT_OK
+                  scale_f = avg%t_acc/window_expected
+               end if
+            end if
+            if (ierr /= ICE_ADAPT_OK) return
          end if
       end if
       if (present(fresh_mass_out)) then
@@ -257,6 +298,7 @@ contains
             return
          end if
       end if
+      if (scale_f /= 1.0_wp) call ice_flux_avg_scale(avg, scale_f)
       call ice_cice_to_surface_flux(grid, sf, avg%acc_fresh, avg%acc_fsalt, avg%acc_fhocn, avg%acc_fswthru, &
                                     sss_ocn, ierr)
       if (ierr /= ICE_ADAPT_OK) return
@@ -269,6 +311,7 @@ contains
          call ocean_halo_exchange_centre_field(sf%heat_ice, grid, bc)
          call ocean_halo_exchange_centre_field(sf%sw_ice, grid, bc)
          call ocean_halo_exchange_centre_field(sf%salt_ice, grid, bc)
+         if (sf%fw_mass) call ocean_halo_exchange_centre_field(sf%seaice_melt, grid, bc)
       else
          call ocean_halo_exchange_centre_field(sf%Q_heat, grid, bc)
          call ocean_halo_exchange_centre_field(sf%Q_salt, grid, bc)
@@ -317,6 +360,20 @@ contains
          Q_salt(i, j) = Q_const + (PSU_PER_MASS_FRACTION*fsalt(i, j) - sss_ocn(i, j)*fresh(i, j))
       end do
    end subroutine ice_adapt_salt_impl
+
+   pure subroutine ice_adapt_salt_mass_impl(nx, ny, is, ie, js, je, fsalt, Q_const, Q_salt)
+      !! `Q_salt = Q_const + 1000*fsalt` [psu kg m-2 s-1, + salinifies]: the real-mass form of the
+      !! salt hand-off (the water is `seaice_melt`; there is no `-S*fresh` dilution term).
+      integer, intent(in) :: nx, ny, is, ie, js, je
+      real(wp), intent(in) :: fsalt(nx, ny)
+      real(wp), intent(in) :: Q_const
+      real(wp), intent(inout) :: Q_salt(nx, ny)
+      integer :: i, j
+
+      do concurrent(j=js:je, i=is:ie)
+         Q_salt(i, j) = Q_const + PSU_PER_MASS_FRACTION*fsalt(i, j)
+      end do
+   end subroutine ice_adapt_salt_mass_impl
 
    subroutine ice_cice_stress_blend(stress, tau_a_x, tau_a_y, tau_ice_x, tau_ice_y, cice, mirror, grid, bc)
       !! Face stress blend of the CICE ice (retarget of `ice_ocean_stress_flux`):

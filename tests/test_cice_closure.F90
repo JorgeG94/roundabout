@@ -120,6 +120,9 @@ contains
 
    subroutine collect_cice_closure_tests(testsuite)
       type(unittest_type), allocatable, intent(out) :: testsuite(:)
+      character(len=64) :: only
+      logical, allocatable :: keep(:)
+      integer :: k
       testsuite = [ &
                   new_unittest("column_growth", test_column_growth), &
                   new_unittest("column_melt", test_column_melt), &
@@ -141,8 +144,26 @@ contains
                   new_unittest("clip_booked", test_clip_booked), &
                   new_unittest("snow_reset_reported", test_snow_reset_reported), &
                   new_unittest("restart_ledger_off_on", test_restart_off_on), &
-                  new_unittest("restart_ledger_on_off", test_restart_on_off) &
+                  new_unittest("restart_ledger_on_off", test_restart_on_off), &
+                  new_unittest("cice_coupled_water_closure", test_mass_water_closure), &
+                  new_unittest("cice_coupled_water_closure_prescribed", test_mass_water_closure_prescribed), &
+                  new_unittest("cice_salt_closure_mass", test_mass_salt_closure), &
+                  new_unittest("cice_heat_closure_mass", test_mass_heat_closure), &
+                  new_unittest("cice_closure_mass_ratio8_deferred", test_mass_closure_ratio8), &
+                  new_unittest("rain_split_sums_to_total", test_rain_split), &
+                  new_unittest("ice_load_no_flow", test_ice_load_no_flow), &
+                  new_unittest("ice_load_drift", test_ice_load_drift), &
+                  new_unittest("psurf_ice_only_seam", test_psurf_ice_only), &
+                  new_unittest("psurf_atm_load_ice", test_psurf_atm_load_ice), &
+                  new_unittest("psurf_atm_load_ib", test_psurf_atm_load_ib), &
+                  new_unittest("ice_load_restart_exact", test_ice_load_restart) &
                   ]
+      ! Dev filter: `RDB_CICE_CLOSURE_ONLY=<substring>` keeps the cases whose name contains it.
+      call get_environment_variable("RDB_CICE_CLOSURE_ONLY", only)
+      if (len_trim(only) > 0) then
+         keep = [(index(testsuite(k)%name, trim(only)) > 0, k=1, size(testsuite))]
+         testsuite = pack(testsuite, keep)
+      end if
    end subroutine collect_cice_closure_tests
 
    ! ------------------------------------------------------------------
@@ -364,6 +385,7 @@ contains
          !$acc update self(sf%heat_ice, sf%sw_ice, sf%salt_ice, sf%Q_heat, sf%Q_salt)
          !$acc update self(sf%q_sw, sf%q_lw, sf%q_lat, sf%q_sens, sf%q_fus, sf%evap, sf%lprec, sf%fprec)
          !$acc update self(sf%heat_content_lprec, sf%heat_content_fprec)
+         !$acc update self(sf%fw_net, sf%seaice_melt, sf%Q_salt_tracer, sf%p_surf)
       end associate
    end subroutine pull_sf
 
@@ -386,6 +408,26 @@ contains
                                                            engine%state%metrics%areaT, engine%grid%nghost)
       end associate
    end subroutine ocean_totals
+
+   function ocean_volume_mass(engine) result(m)
+      !! `rho0 sum(h A)` [kg] over the owned cells: the Boussinesq column mass (`rho0` converts the volume the
+      !! layers carry to the mass the real-mass step spends).
+      type(ocean_engine_t), intent(inout) :: engine
+      real(wp) :: m
+      integer :: i, j, k, ng
+
+      !$acc update self(engine%state%multilayer%h_layer)
+      ng = engine%grid%nghost
+      m = 0.0_wp
+      do k = 1, size(engine%state%multilayer%h_layer, 3)
+         do j = ng + 1, ng + engine%grid%ny_phys
+            do i = ng + 1, ng + engine%grid%nx_phys
+               m = m + engine%state%metrics%areaT(i, j)*engine%state%multilayer%h_layer(i, j, k)
+            end do
+         end do
+      end do
+      m = m*engine%state%eos%rho0
+   end function ocean_volume_mass
 
    subroutine delete_file(fn_)
       character(len=*), intent(in) :: fn_
@@ -894,7 +936,7 @@ contains
    ! C: the coupled global closure
    ! ------------------------------------------------------------------
 
-   subroutine global_case(error, nml, prescribed, nsteps, label)
+   subroutine global_case(error, nml, prescribed, nsteps, label, mass, what)
       !! ocean + ice on a closed basin.  The totals come from the STATE (ocean tracers, the ice's EFP sums); the
       !! flows from the flux arrays; the open-water atmosphere from the BULK-FORCING outputs (`q_sw`, `q_lw`,
       !! `q_lat`, `q_sens`, `q_fus` (latent heat of melting the open-water snow), the precipitation enthalpies, `cp T evap`), not from the assembler; the frazil clamp
@@ -905,9 +947,21 @@ contains
       character(len=*), intent(in) :: nml, label
       logical, intent(in) :: prescribed
       integer, intent(in) :: nsteps
+      logical, intent(in), optional :: mass
+         !! Real fresh-water mass (`freshwater = 'mass'` with the ice loading): the water, salt and heat closures
+         !! of the REAL-MASS hand-off (the ocean's volume moves) replace the virtual-salt ones.
+      character(len=*), intent(in), optional :: what
+         !! With `mass`: which closure this call asserts (`water`, `salt`, `heat`, `all`); every term is always
+         !! computed and reported.
       type(ocean_engine_t), target :: engine
       type(config_t) :: cfg
       type(stage_run_t) :: run
+      logical :: is_mass
+      character(len=8) :: which
+      real(wp) :: moc0, moc1, oc_atm_n, oc_atm_pend, oc_atm_app, fresh_pend, fresh_app, hmc_n, hmc_pend, hmc_app
+      real(wp) :: wdt, r_oc_now, r_oc_worst, melt_n, salt_n, salt_pend, salt_app_all, salt_book_all
+      logical :: hand, deliver
+      real(wp) :: r_oc, sc_oc, r_cpl, sc_cpl, r_heat_m, hmc_conv_closure, melt_mis, fwnet_mis, f_last, rho0
       real(wp) :: repair_ice, repair_snow, di, ds, repair_sum, t, h0, so0, h1, so1, m0, si0, e0, m1, si1, e1, cp_w, sst
       real(wp) :: open_forc, open_asm, open_forc_app, open_forc_pend, ice_asm, ice_app, ice_pend, ice_asm_last
       real(wp) :: icefl, icefl_all, q_n, qs_n, fsalt_n, fresh_n, fresh_eff_n, dil_n, dil_app, dil_pend
@@ -921,6 +975,19 @@ contains
       real(wp), allocatable :: area(:, :)
 
       nbits = 0
+      is_mass = .false.
+      if (present(mass)) is_mass = mass
+      which = "all"
+      if (present(what)) which = what
+      moc0 = 0.0_wp
+      oc_atm_pend = 0.0_wp
+      oc_atm_app = 0.0_wp
+      fresh_pend = 0.0_wp
+      fresh_app = 0.0_wp
+      hmc_pend = 0.0_wp
+      hmc_app = 0.0_wp
+      melt_mis = 0.0_wp
+      fwnet_mis = 0.0_wp
       if (prescribed) call write_synth_atm("mixed", FN_ATM, FN_LST)
       call make_engine(engine, cfg, nml, ok)
       call check(error, ok, "engine setup failed")
@@ -938,6 +1005,13 @@ contains
       area = engine%state%metrics%areaT
       cp_w = engine%state%eos%c_p
       call ocean_totals(engine, h0, so0)
+      rho0 = engine%state%eos%rho0
+      deliver = .false.
+      r_oc_worst = 0.0_wp
+      salt_pend = 0.0_wp
+      salt_app_all = 0.0_wp
+      salt_book_all = 0.0_wp
+      moc0 = ocean_volume_mass(engine)
       call engine%state%icec%ledger%totals(engine%state%ice%cice, m0, si0, e0)
       run = stage_run_t()
       call init_clamp(engine, run)
@@ -973,12 +1047,17 @@ contains
          repair_sum = repair_sum + profile_repair(engine, di, ds)
          repair_ice = repair_ice + di
          repair_snow = repair_snow + ds
-         call one_step(engine, cfg, t, ok)
+         call one_step(engine, cfg, t, ok, hand)
          call check(error, ok, "step ran")
          if (allocated(error)) exit
+         ! `hand`: this step's ice step handed the ocean its window (the thermo cadence, counter advanced); the
+         ! ocean delivers it in the NEXT step (`deliver`).  `wdt` is the window those hand-over fluxes cover and is
+         ! zero between hand-offs, so the sums below count each hand-over once whatever `dt_therm_ratio` is.
+         wdt = merge(engine%state%dyn%therm_dt(DT), 0.0_wp, hand)
          call pull_cice(engine)
          call pull_ice_flux(engine)
          call pull_sf(engine)
+         !$acc update self(engine%state%multilayer%fw_dhT)
          !$acc update self(engine%state%multilayer%tracers(engine%state%multilayer%idx_temperature)%c)
          !$acc update self(engine%state%ice%u_ice, engine%state%ice%v_ice)
          call accumulate_tab(engine, run)
@@ -1001,18 +1080,38 @@ contains
             fresh_n = 0.0_wp
             fresh_eff_n = 0.0_wp
             dil_n = 0.0_wp
+            oc_atm_n = 0.0_wp
+            hmc_n = 0.0_wp
+            melt_n = 0.0_wp
+            salt_n = 0.0_wp
             do j = js, je
                do i = is, ie
                   sst = ms%tracers(ms%idx_temperature)%c(i, j, nz)
                   icefl = icefl + DT*area(i, j)*(f%fhocn(i, j) + f%fswthru(i, j))
-                  ice_asm = ice_asm + DT*area(i, j)*(sf%heat_ice(i, j) + sf%sw_ice(i, j))
-                  q_n = q_n + DT*area(i, j)*sf%Q_heat(i, j)
-                  qs_n = qs_n + DT*area(i, j)*sf%Q_salt(i, j)
+                  ice_asm = ice_asm + wdt*area(i, j)*(sf%heat_ice(i, j) + sf%sw_ice(i, j))
+                  q_n = q_n + wdt*area(i, j)*sf%Q_heat(i, j)
+                  qs_n = qs_n + wdt*area(i, j)*sf%Q_salt(i, j)
                   ! the open water's heat from the bulk-forcing outputs (the assembler's formula, rebuilt from them)
-                  open_forc = open_forc + DT*area(i, j)*(sf%q_sw(i, j) + sf%q_lw(i, j) + sf%q_lat(i, j) &
-                                                         + sf%q_sens(i, j) + sf%q_fus(i, j) &
-                                                         + sf%heat_content_lprec(i, j) &
-                                                         + sf%heat_content_fprec(i, j) + cp_w*sst*sf%evap(i, j))
+                  if (is_mass) then
+                     ! real mass: the enthalpy of the open water's mass fluxes is the layer-temperature content the
+                     ! mass step books (below), never a `Q_heat` term
+                     open_forc = open_forc + wdt*area(i, j)*(sf%q_sw(i, j) + sf%q_lw(i, j) + sf%q_lat(i, j) &
+                                                             + sf%q_sens(i, j) + sf%q_fus(i, j))
+                     oc_atm_n = oc_atm_n + wdt*area(i, j)*(sf%lprec(i, j) + sf%fprec(i, j) + sf%evap(i, j))
+                     ! what the ocean was handed of the ice: the assembled window means (`seaice_melt`, `salt_ice`)
+                     melt_n = melt_n + wdt*area(i, j)*sf%seaice_melt(i, j)
+                     salt_n = salt_n + wdt*area(i, j)*sf%salt_ice(i, j)/1000.0_wp
+                     if (deliver) hmc_n = hmc_n + rho0_cp(engine)*area(i, j)*ms%fw_dhT(i, j)
+            if (hand .and. engine%state%dyn%dt_therm_ratio <= 1) melt_mis = max(melt_mis, abs(sf%seaice_melt(i, j) - f%fresh(i, j)))
+                     if (hand) fwnet_mis = max(fwnet_mis, abs(sf%fw_net(i, j) - (sf%lprec(i, j) + sf%fprec(i, j) + sf%evap(i, j) &
+                                                                                 + sf%seaice_melt(i, j) + sf%vprec(i, j) &
+                                                                                 + sf%lrunoff(i, j) + sf%frunoff(i, j))))
+                  else
+                     open_forc = open_forc + wdt*area(i, j)*(sf%q_sw(i, j) + sf%q_lw(i, j) + sf%q_lat(i, j) &
+                                                             + sf%q_sens(i, j) + sf%q_fus(i, j) &
+                                                             + sf%heat_content_lprec(i, j) &
+                                                             + sf%heat_content_fprec(i, j) + cp_w*sst*sf%evap(i, j))
+                  end if
                   fsalt_n = fsalt_n + DT*area(i, j)*f%fsalt(i, j)
                   fresh_n = fresh_n + DT*area(i, j)*f%fresh(i, j)
                   a_ice_dt = a_ice_dt + DT*area(i, j)*c%aice_init(i, j)
@@ -1044,15 +1143,29 @@ contains
             end do
             ! the assembler's open-water share against the rebuilt one, this step
             open_asm = q_n - ice_asm
-            if (abs(open_forc) > 0.0_wp .or. abs(open_asm) > 0.0_wp) &
+            if (hand .and. (abs(open_forc) > 0.0_wp .or. abs(open_asm) > 0.0_wp)) &
                run%asm_mismatch = max(run%asm_mismatch, abs(open_asm - open_forc)/max(abs(open_forc), abs(open_asm)))
             ! the ocean applies the flux assembled by the PREVIOUS step
+            oc_atm_app = oc_atm_app + oc_atm_pend
+            oc_atm_pend = oc_atm_n
+            fresh_app = fresh_app + fresh_pend
+            fresh_pend = merge(melt_n, fresh_n, is_mass)
+            salt_app_all = salt_app_all + salt_pend
+            salt_pend = salt_n
+            salt_book_all = salt_book_all + fsalt_n
+            hmc_app = hmc_app + hmc_n
+            deliver = hand
+            if (is_mass) then
+               r_oc_now = (ocean_volume_mass(engine) - moc0) - (fresh_app + oc_atm_app)
+               r_oc_worst = max(r_oc_worst, abs(r_oc_now))
+            end if
             open_forc_app = open_forc_app + open_forc_pend
             ice_app = ice_app + ice_pend
             dil_app = dil_app + dil_pend
             fsalt_app_all = fsalt_app_all + fsalt_last
             open_forc_pend = open_forc
             ice_pend = ice_asm
+            if (is_mass) dil_n = 0.0_wp
             dil_pend = dil_n
             fsalt_last = fsalt_n
             ice_asm_last = ice_asm
@@ -1066,6 +1179,8 @@ contains
       if (.not. allocated(error)) then
          call ocean_totals(engine, h1, so1)
          call engine%state%icec%ledger%totals(engine%state%ice%cice, m1, si1, e1)
+         ! real mass: the salt in transit = booked by the ice (every step) - the windows the ocean has been handed and applied
+         if (is_mass) fsalt_last = salt_book_all - salt_app_all
          clamp_ocean = run%hb_delta
          stock = run%stock_now
          ! ---- heat: the closure.  dH_ocean + dE_ice = what the ice received from the atmosphere + what the open
@@ -1088,6 +1203,22 @@ contains
          ! water that leaves the ocean at its own temperature carries cp T dM against the 0 degC reference; the
          ! ocean volume never changes (virtual salt), so it is booked nowhere: zero by configuration
          h_mass_conv = cp_w*(tsum/asum)*(-(m1 - m0))
+         moc1 = ocean_volume_mass(engine)
+         f_last = fresh_pend
+         ! ---- real mass.  dM_ocean = what the ice (fresh, window mean) and the open-water atmosphere (lprec + fprec +
+         !      evap) handed over and the ocean has APPLIED (the previous step's assembly), read from the ice flux and the
+         !      bulk-forcing arrays, never from `fw_net`.  Coupled: ocean + ice + snow together change only by the
+         !      atmosphere's exchange with ALL fractions (the open water's, the ice's snow/sublimation, the rain
+         !      through the ice) minus what the ice booked and the ocean has not yet applied.
+         r_oc = (moc1 - moc0) - (fresh_app + oc_atm_app)
+         sc_oc = max(abs(moc1 - moc0), abs(fresh_app), abs(oc_atm_app), 1.0e-30_wp)
+         r_cpl = (moc1 - moc0) + (m1 - m0) - (oc_atm_app + w_in + run%rain - f_last)
+         sc_cpl = max(abs(moc1 - moc0), abs(m1 - m0), abs(fresh_all), 1.0e-30_wp)
+         ! heat: the same closure with the mass flux's enthalpy as the layer-temperature content the mass step books
+         ! (`cp T dM`, ice reference 0 degC liquid).  Without it the residual IS that named term.
+         expected = sum_ext_h + open_forc_app + ice_app - icefl_all + run%frz_lat + clamp_ocean + hmc_app
+         r_heat_m = (h1 - h0) + (e1 - e0) - expected
+         hmc_conv_closure = r_heat_m + hmc_app
          ! ---- salt (kg): 1e-3 dSo + dSi + fsalt in transit + the applied virtual-salt dilution = 0
          r_salt = (si1 - si0) + (so1 - so0)/1000.0_wp + fsalt_last + dil_app/1000.0_wp
          sc_salt = max(abs(si1 - si0), abs(so1 - so0)/1000.0_wp, abs(dil_app)/1000.0_wp, 1.0e-30_wp)
@@ -1135,6 +1266,51 @@ contains
          write (output_unit, "(a,a)") "    console: ", trim(line)
          call ice_cice_ledger_report(engine%state, 0)
          call check(error, index(line, "Ice ledger: ") == 1, "the console line is the ledger's")
+         if (is_mass) then
+            write (output_unit, "(a)") "    --- real fresh-water mass ---"
+            write (output_unit, "(a,3es12.4,a,es10.3)") "    ocean: dM, applied ice fresh, applied atmosphere (kg):", moc1 - moc0, &
+               fresh_app, oc_atm_app, "; relative residual", abs(r_oc)/sc_oc
+  write (output_unit, "(a,4es12.4,a,es10.3)") "    coupled: dM_ocean, dM_ice+snow, atmosphere (all fractions), undelivered (kg):", &
+               moc1 - moc0, m1 - m0, oc_atm_app + w_in + run%rain, f_last, "; relative residual", abs(r_cpl)/sc_cpl
+            write (output_unit, "(a,es12.4,a,es12.4)") "    NAMED ledger term: ice salt mass (kg) dSi =", si1 - si0, &
+               "; its share of the ice mass change", abs(si1 - si0)/max(abs(m1 - m0), 1.0e-30_wp)
+        write (output_unit, "(a,es12.4,a,es10.3)") "    salt (ocean + ice, kg): residual", r_salt, "; relative", abs(r_salt)/sc_salt
+            write (output_unit, "(a,es12.4,a,es12.4,a,es10.3)") "    NAMED ledger term H_mass_conv (cp T dM, J) =", hmc_app, &
+               "; closure residual without it", hmc_conv_closure, "; with it (BL99 bound)", bound_bl99
+            write (output_unit, "(a,es12.4,a,es12.4)") "    heat: residual with the term", r_heat_m, "; snow reset", repair_sum
+    write (output_unit, "(a,es10.3,a,es10.3)") "    heat: |residual - snow reset| / bound", abs(r_heat_m - repair_sum)/bound_bl99, &
+               "; worst per-step |ocean mass - delivered|/column mass", r_oc_worst/moc0
+            write (output_unit, "(a,2es10.3)") "    seaice_melt vs fresh, fw_net vs the component sum (worst abs, kg m-2 s-1):", melt_mis, fwnet_mis
+            if (.not. allocated(error)) call check(error, run%finite, "finite")
+  if (.not. allocated(error)) call check(error, melt_mis <= 1.0e-12_wp*max(maxval(abs(engine%state%icec%flux%fresh)), 1.0e-30_wp), &
+                                                   "the adapter hands the ice's fresh over as seaice_melt")
+        if (.not. allocated(error)) call check(error, fwnet_mis <= 1.0e-12_wp*max(maxval(abs(sf_fw_net_ref(engine))), 1.0e-30_wp), &
+                                                   "fw_net is the sum of the mass components")
+            if (.not. allocated(error)) call check(error, abs(r_water)/sc_water < 1.0e-13_wp, &
+                                                   "ice mass change = the atmosphere's exchange - the booked fresh")
+            if (.not. allocated(error) .and. (which == "water" .or. which == "all")) then
+               call check(error, abs(r_oc) < 1.0e-13_wp*moc0, "the ocean's column mass moved by exactly what the ice and the atmosphere handed it (to round-off of the column mass)")
+               if (.not. allocated(error)) call check(error, r_oc_worst < 1.0e-13_wp*moc0, &
+       "the ocean's column mass followed the delivered flux arrays at EVERY step, the first interval after the cold start included")
+               if (.not. allocated(error) .and. engine%state%dyn%dt_therm_ratio <= 1) &
+                  call check(error, abs(r_cpl) < 1.0e-13_wp*moc0, &
+                             "ocean + ice + snow mass = the atmosphere over all fractions (to round-off of the column mass)")
+               if (.not. allocated(error)) call check(error, abs(si1 - si0) > 0.0_wp, "the ice salt mass is a live named term")
+            end if
+            if (.not. allocated(error) .and. (which == "salt" .or. which == "all")) then
+               call check(error, abs(r_salt) < 1.0e-13_wp*abs(so0)/1000.0_wp, "ocean salt + ice salt is exact: no dilution term, no volume for the ice's salt")
+            end if
+            if (.not. allocated(error) .and. (which == "heat" .or. which == "all")) then
+               call check(error, abs(r_heat_m - repair_sum) <= bound_bl99 + 1.0e-11_wp*sc_heat, &
+        "ocean + ice heat closes with the named H_mass_conv term at the temperatures the mass step used, within the solver's bound")
+               if (.not. allocated(error)) call check(error, abs(hmc_app) > 0.0_wp, "H_mass_conv is a live named term")
+               if (.not. allocated(error)) call check(error, run%asm_mismatch < 1.0e-12_wp, &
+                                                      "the assembler's open-water heat is the bulk forcing's non-mass part")
+            end if
+            call finish_engine(engine)
+            if (prescribed) call remove_synth_atm(FN_ATM, FN_LST)
+            return
+         end if
          if (.not. allocated(error)) call check(error, run%finite, "finite")
          if (.not. allocated(error)) call check(error, abs(r_salt)/sc_salt < 1.0e-10_wp, &
                                                 "ocean salt + ice salt + virtual-salt dilution: closed")
@@ -1193,6 +1369,540 @@ contains
       nml = replace(nml, "T_init_surface = -1.0, T_init_bottom = -1.0", "T_init_surface = -1.84, T_init_bottom = -1.84")
       call global_case(error, nml, .true., 96, "prescribed mixed atmosphere, supercooled ocean (frazil): ")
    end subroutine test_global_prescribed_frazil
+
+   ! ------------------------------------------------------------------
+   ! G: real fresh-water mass (`&ocean_forcing_nml freshwater = "mass"`) with the ice loading
+   ! ------------------------------------------------------------------
+
+   function mass_nml(base) result(nml)
+      !! `base` with the real-mass hand-off and the ice weight on the surface pressure.
+      character(len=*), intent(in) :: base
+      character(len=:), allocatable :: nml
+      character(len=*), parameter :: NL = new_line("a")
+
+      nml = replace(base, "&ocean_forcing_nml enable_components = .true. /", &
+                    "&ocean_forcing_nml enable_components = .true., freshwater = 'mass' /"//NL// &
+                    "&ocean_psurf_nml enable = .true., ice_load = .true. /")
+   end function mass_nml
+
+   function sf_fw_net_ref(engine) result(a)
+      type(ocean_engine_t), intent(in) :: engine
+      real(wp), allocatable :: a(:, :)
+
+      a = engine%state%surface_flux%fw_net
+   end function sf_fw_net_ref
+
+   function mass_uniform_nml() result(nml)
+      !! The uniform-atmosphere closed basin of `test_global_uniform` under real mass: cold air over a
+      !! slightly warm ocean, so the ice grows on top and melts below, the wind moves and ridges it.
+      character(len=:), allocatable :: nml
+
+      nml = replace(uni_nml("basin"), "initial_temperature = -1.0", "initial_temperature = -0.6")
+      nml = replace(nml, "T_init_surface = -1.0, T_init_bottom = -1.0", "T_init_surface = -0.6, T_init_bottom = -0.6")
+      nml = replace(nml, "hfreeze = 10.0", "hfreeze = 10.0, snowfall = 3.0e-5")
+      nml = mass_nml(nml)
+   end function mass_uniform_nml
+
+   subroutine test_mass_water_closure(error)
+      !! Ocean + ice + snow mass changes only by the atmosphere's exchange over ALL fractions (relative 1e-12), read
+      !! from the ice's and the bulk forcing's own arrays; the ice's salt mass is the one named ledger term.
+      type(error_type), allocatable, intent(out) :: error
+
+      call global_case(error, mass_uniform_nml(), .false., 144, "real mass, uniform atmosphere, closed basin: ", &
+                       mass=.true., what="water")
+   end subroutine test_mass_water_closure
+
+   subroutine test_mass_water_closure_prescribed(error)
+      !! The same under the prescribed mixed atmosphere: rain and snow on both fractions, evaporation of the open water.
+      type(error_type), allocatable, intent(out) :: error
+
+      call global_case(error, mass_nml(pres_nml(1)), .true., 96, "real mass, prescribed mixed atmosphere: ", &
+                       mass=.true., what="water")
+   end subroutine test_mass_water_closure_prescribed
+
+   subroutine test_mass_salt_closure(error)
+      !! Ocean salt + ice salt is exact: the ice's salt moves as concentration, no volume, and no dilution term.
+      type(error_type), allocatable, intent(out) :: error
+
+      call global_case(error, mass_uniform_nml(), .false., 144, "real mass salt, uniform atmosphere: ", &
+                       mass=.true., what="salt")
+   end subroutine test_mass_salt_closure
+
+   subroutine test_mass_heat_closure(error)
+      !! Heat closes up to the named `H_mass_conv = cp T dM` term (the ocean's mass leaves at its own temperature,
+      !! the ice's reference is 0 degC liquid), reported, within the vertical solver's bound.
+      type(error_type), allocatable, intent(out) :: error
+
+      call global_case(error, mass_uniform_nml(), .false., 144, "real mass heat, uniform atmosphere: ", &
+                       mass=.true., what="heat")
+   end subroutine test_mass_heat_closure
+
+   function mass_ratio8_nml() result(nml)
+      !! `mass_uniform_nml` at `dt_therm_ratio = 8` in the deferred order (`diabatic_first = .false.`).
+      character(len=:), allocatable :: nml
+
+      nml = replace(mass_uniform_nml(), "&ocean_vmix_nml dt_therm_ratio = 1 /", &
+                    "&ocean_vmix_nml dt_therm_ratio = 8, diabatic_first = .false. /")
+   end function mass_ratio8_nml
+
+   subroutine test_mass_closure_ratio8(error)
+      !! Water, salt and heat of ocean + ice at `dt_therm_ratio = 8`, deferred order, from the cold start on (18 thermo
+      !! intervals; the first one included, where the ocean's mass follows the delivered flux arrays at every step).
+      !! The ocean's atmosphere is the hand-off step's sample, held for the interval, so the check is against the
+      !! delivered amounts (windows booked once, each delivered in the step after its hand-off).
+      type(error_type), allocatable, intent(out) :: error
+
+      call global_case(error, mass_ratio8_nml(), .false., 144, "real mass, ratio 8 deferred, uniform atmosphere: ", &
+                       mass=.true., what="all")
+   end subroutine test_mass_closure_ratio8
+
+   subroutine test_rain_split(error)
+      !! The open fraction's rain (`lprec`, weight `aice0`) and the covered fraction's (through the ice, in `fresh`,
+      !! weight `aice_init`) are the whole precipitation exactly once: cell by cell the two weights add to 1 on wet
+      !! cells and the delivered masses add to the nominal precipitation; the hook keeps the rain-through term.
+      type(error_type), allocatable, intent(out) :: error
+      type(ocean_engine_t), target :: engine
+      type(config_t) :: cfg
+      real(wp) :: t, open_rain, ice_rain, nominal_rain, open_snow, ice_snow, nominal_snow, wsum_mis, a
+      real(wp) :: booked_rain, melt_mis
+      real(wp), allocatable :: aice0_prev(:, :)
+      integer :: n, i, j, ng, is, ie, js, je
+      logical :: ok
+
+      call write_synth_atm("mixed", FN_ATM, FN_LST)
+      call make_engine(engine, cfg, mass_nml(pres_nml(1)), ok)
+      call check(error, ok, "engine setup failed")
+      if (allocated(error)) then
+         call remove_synth_atm(FN_ATM, FN_LST)
+         return
+      end if
+      ng = engine%grid%nghost
+      is = ng + 1
+      ie = ng + engine%grid%nx_phys
+      js = ng + 1
+      je = ng + engine%grid%ny_phys
+      t = 0.0_wp
+      open_rain = 0.0_wp
+      ice_rain = 0.0_wp
+      nominal_rain = 0.0_wp
+      open_snow = 0.0_wp
+      ice_snow = 0.0_wp
+      nominal_snow = 0.0_wp
+      wsum_mis = 0.0_wp
+      booked_rain = 0.0_wp
+      melt_mis = 0.0_wp
+      call pull_cice(engine)
+      aice0_prev = engine%state%ice%aice0
+      do n = 1, 48
+         call one_step(engine, cfg, t, ok)
+         call check(error, ok, "step ran")
+         if (allocated(error)) exit
+         call pull_cice(engine)
+         call pull_ice_flux(engine)
+         call pull_sf(engine)
+         do j = js, je
+            do i = is, ie
+               a = DT*engine%state%metrics%areaT(i, j)
+               ! the bulk forcing weights by the aggregate of the PREVIOUS step's end, the ice by its start state
+               if (engine%state%multilayer%wet_mask(i, j) > 0.5_wp) &
+                  wsum_mis = max(wsum_mis, abs(aice0_prev(i, j) + engine%state%ice%cice%aice_init(i, j) - 1.0_wp))
+               open_rain = open_rain + a*engine%state%surface_flux%lprec(i, j)
+               open_snow = open_snow + a*engine%state%surface_flux%fprec(i, j)
+               ice_rain = ice_rain + a*engine%state%icec%work%frain(i, j)*engine%state%ice%cice%aice_init(i, j)
+               ice_snow = ice_snow + a*engine%state%icec%work%fsnow(i, j)*engine%state%ice%cice%aice_init(i, j)
+               nominal_rain = nominal_rain + a*engine%state%icec%work%frain(i, j)
+               nominal_snow = nominal_snow + a*engine%state%icec%work%fsnow(i, j)
+               melt_mis = max(melt_mis, abs(engine%state%surface_flux%seaice_melt(i, j) - engine%state%icec%flux%fresh(i, j)))
+            end do
+         end do
+         booked_rain = booked_rain + engine%state%icec%ledger%tab%rain
+         aice0_prev = engine%state%ice%aice0
+      end do
+      if (.not. allocated(error)) then
+  write (output_unit, "(a,3es13.5)") "  rain split: open (lprec), through the ice, nominal (kg):", open_rain, ice_rain, nominal_rain
+       write (output_unit, "(a,3es13.5)") "  snow split: open (fprec), on the ice, nominal (kg):", open_snow, ice_snow, nominal_snow
+       write (output_unit, "(a,es10.3,a,es13.5)") "  worst |aice0 + aice_init - 1|:", wsum_mis, "; ledger rain booked:", booked_rain
+         call check(error, nominal_rain > 0.0_wp .and. nominal_snow > 0.0_wp, "the prescribed atmosphere precipitates")
+         if (.not. allocated(error)) call check(error, wsum_mis < 1.0e-12_wp, "aice0 + aice_init = 1 on wet cells")
+         if (.not. allocated(error)) call check(error, abs(open_rain + ice_rain - nominal_rain) < 1.0e-12_wp*nominal_rain, &
+                                                "rain: open share + covered share = the whole precipitation")
+         if (.not. allocated(error)) call check(error, abs(open_snow + ice_snow - nominal_snow) < 1.0e-12_wp*nominal_snow, &
+                                                "snow: open share + covered share = the whole snowfall")
+         if (.not. allocated(error)) call check(error, abs(booked_rain - ice_rain) < 1.0e-12_wp*nominal_rain, &
+                                                "the rain through the ice is booked once, by the ice (kept in fresh)")
+  if (.not. allocated(error)) call check(error, melt_mis <= 1.0e-12_wp*max(maxval(abs(engine%state%icec%flux%fresh)), 1.0e-30_wp), &
+                                                "the hand-off keeps it: seaice_melt is fresh, rain through the ice included")
+      end if
+      call finish_engine(engine)
+      call remove_synth_atm(FN_ATM, FN_LST)
+   end subroutine test_rain_split
+
+   function no_flow_nml(load, ratio, deferred, baroclinic) result(nml)
+      !! A closed spherical basin of 12 x 10 cells, 100 m deep, three sigma layers, at rest, no wind; ice thin and
+      !! complete in the northern half (`latitudes`), cold still air, an ocean at the freezing point: the ice
+      !! grows, the open half does not.  `load` = the ice weight on the surface pressure (real mass); off, it is
+      !! real mass WITHOUT the load: the configuration `validate_config` refuses (the negative control).
+      !! `ratio`/`deferred`: `dt_therm_ratio` and `diabatic_first = .false.` (the deferred order).
+      !! `baroclinic` (default off): the density follows T and S.  Off, the linear EOS has no T/S dependence, which
+      !! isolates the BAROTROPIC balance of the load (the brine the freezing rejects would otherwise drive a real,
+      !! slow baroclinic flow under the ice).
+      logical, intent(in) :: load
+      integer, intent(in), optional :: ratio
+      logical, intent(in), optional :: deferred, baroclinic
+      character(len=:), allocatable :: nml
+      character(len=*), parameter :: NL = new_line("a")
+      character(len=16) :: sratio
+      character(len=:), allocatable :: vmix
+      integer :: n
+      logical :: defer, bcl
+
+      n = 1
+      if (present(ratio)) n = ratio
+      defer = .false.
+      if (present(deferred)) defer = deferred
+      bcl = .false.
+      if (present(baroclinic)) bcl = baroclinic
+      write (sratio, '(i0)') n
+      vmix = "&ocean_vmix_nml dt_therm_ratio = "//trim(sratio)
+      if (defer) vmix = vmix//", diabatic_first = .false."
+      vmix = vmix//" /"//NL
+      nml = "&sim_nml sim_type = 'ocean' /"//NL// &
+            "&time_nml t_end = 86400.0, dt_fixed = 600.0 /"//NL// &
+            "&nonhydrostatic_nml nz_layers = 3 /"//NL// &
+            "&ocean_diag_nml enabled = .false. /"//NL// &
+            "&tracer_nml initial_temperature = -1.80, initial_salinity = 34.0, "// &
+            "T_init_surface = -1.80, T_init_bottom = -1.80 /"//NL// &
+            "&ocean_bt_nml auto_n_inner = .true. /"//NL// &
+            "&ocean_hvisc_nml nu_h = 200.0 /"//NL// &
+            "&grid_nml nx = 12, ny = 10, nghost = 3, dx = 0.25, dy = 0.25 /"//NL// &
+            "&ocean_grid_nml grid_config = 'spherical', lon_west = 20.0, lat_south = 70.0, "// &
+            "rad_earth = 6.371e6, coriolis_scheme = 'planetary' /"//NL// &
+            "&physics_nml wind_stress_x = 0.0, wind_stress_y = 0.0 /"//NL// &
+            "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
+            "&ocean_topo_nml topo_config = 'flat', max_depth = 100.0 /"//NL// &
+            "&ocean_thermo_nml enable_thermodynamics = .true. /"//NL// &
+            "&ocean_forcing_nml enable_components = .true., freshwater = 'mass' /"//NL// &
+            vmix// &
+            "&ocean_ice_nml enable = .true., scheme = 'cice', ncat = 5, nilyr = 4, hfreeze = 10.0, "// &
+            "dynamics = .true., transport = .true. /"//NL// &
+            "&ocean_ice_thermo_nml update_ocn_f = .true. /"//NL// &
+            "&ocean_ice_dyn_nml advection = 'upwind', ndte = 40 /"//NL// &
+            "&ocean_ice_ridge_nml kstrength = 0, Pstar = 1.0 /"//NL// &
+            "&ocean_ice_ic_nml conc_config = 'latitudes', arctic_edge = 71.2, h_ice = 0.05, conc = 1.0, "// &
+            "h_snow = 0.0, t_ice = -8.0 /"//NL// &
+            "&ocean_ice_atm_nml uni_tas = 240.0, uni_rlds = 120.0, uni_uas = 0.0, uni_vas = 0.0 /"//NL// &
+            "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL// &
+            "&output_nml output_to_file = .false. /"//NL
+      if (.not. bcl) nml = nml//"&ocean_ic_nml alpha_T = 0.0, beta_S = 0.0 /"//NL
+      if (load) then
+         ! `ice_load_balance_ic` is on by default: the cold start is lowered by the ice's weight, no hand IC
+         nml = nml//"&ocean_psurf_nml enable = .true., ice_load = .true. /"//NL
+      end if
+   end function no_flow_nml
+
+   subroutine no_flow_run(error, load, nsteps, umax, dh_ice, depression, u_first, ratio, deferred, baroclinic, d_atm)
+      !! `umax`: the largest face velocity over the whole run.  `u_first`: over the steps up to and including the
+      !! first one that DELIVERS the ice's water (step `ratio` deferred, `ratio + 1` in-stage, 2 at ratio 1).
+      !! `d_atm`: the largest sea-level step (m) the ICE's EXCHANGE WITH THE ATMOSPHERE made over the run,
+      !! `sum_steps |evap| dt / rho_0` on the worst column: sublimation and condensation change the ice's weight
+      !! (`fresh` contains `evap`, so the ocean's water does not follow) and the ocean answers that real change.
+      type(error_type), allocatable, intent(out) :: error
+      logical, intent(in) :: load
+      integer, intent(in) :: nsteps
+      real(wp), intent(out) :: umax, dh_ice, depression, u_first
+      integer, intent(in), optional :: ratio
+      logical, intent(in), optional :: deferred, baroclinic
+      real(wp), intent(out), optional :: d_atm
+      type(ocean_engine_t), target :: engine
+      type(config_t) :: cfg
+      real(wp) :: t, v0, v1
+      real(wp), allocatable :: cum(:, :)
+      integer :: n, n_first, nr
+      logical :: ok, defer
+
+      umax = 0.0_wp
+      u_first = 0.0_wp
+      dh_ice = 0.0_wp
+      depression = 0.0_wp
+      nr = 1
+      if (present(ratio)) nr = ratio
+      defer = .false.
+      if (present(deferred)) defer = deferred
+      n_first = 2
+      if (nr > 1) n_first = merge(nr, nr + 1, defer)
+      call make_engine(engine, cfg, no_flow_nml(load, ratio, deferred, baroclinic), ok)
+      call check(error, ok, "engine setup failed")
+      if (allocated(error)) return
+      if (load) then
+         !$acc update self(engine%state%surface_flux%p_ice_load)
+         depression = maxval(engine%state%surface_flux%p_ice_load)/(engine%state%eos%rho0*engine%state%dyn%bt_work%g_bt)
+      end if
+      call pull_cice(engine)
+      v0 = maxval(engine%state%ice%vice)
+      allocate (cum(size(engine%state%metrics%areaT, 1), size(engine%state%metrics%areaT, 2)), source=0.0_wp)
+      t = 0.0_wp
+      do n = 1, nsteps
+         call one_step(engine, cfg, t, ok)
+         call check(error, ok, "step ran")
+         if (allocated(error)) exit
+         !$acc update self(engine%state%multilayer%u_face_x_layer, engine%state%multilayer%v_face_y_layer)
+         !$acc update self(engine%state%icec%flux%evap)
+         umax = max(umax, maxval(abs(engine%state%multilayer%u_face_x_layer)), &
+                    maxval(abs(engine%state%multilayer%v_face_y_layer)))
+         cum = cum + DT*abs(engine%state%icec%flux%evap)
+         if (n == n_first) u_first = umax
+      end do
+      call pull_cice(engine)
+      v1 = maxval(engine%state%ice%vice)
+      dh_ice = v1 - v0
+      if (present(d_atm)) d_atm = maxval(cum)/engine%state%eos%rho0
+      call finish_engine(engine)
+   end subroutine no_flow_run
+
+   subroutine test_ice_load_no_flow(error)
+      !! Freeze half a closed basin at rest.  With the ice's weight on the surface pressure the water the ice takes
+      !! (`rho_i dV/rho_0`) and the load (`g rho_i dV`) change on the SAME outer step (the ice's exchange with the
+      !! atmosphere excepted, see (2)), so the ocean stays at rest.
+      !! (1) THE TIMING: through the first delivery of the ice's water max|u| is round-off, at `dt_therm_ratio = 1`,
+      !! at ratio 8 in the deferred order (`diabatic_first = .false.`, where the delivery is one step before the
+      !! interval's end) and at ratio 2 in the in-stage order, from the cold start the `ice_load_balance_ic` lowered
+      !! (no hand IC).  The imbalance a mistimed load would leave is the ice's whole growth, 250 times the next
+      !! term.  (2) THE WHOLE RUN: what remains afterwards is not the delivery but the ice's own exchange with the
+      !! ATMOSPHERE (sublimation / condensation: `fresh` contains `evap`, so the ocean's water does not follow the
+      !! weight that the atmosphere takes), a real sea-level step of `d_atm` that the ocean answers at gravity-wave
+      !! speed `sqrt(g/H)`: the run's max|u| is held to `sqrt(g/H) d_atm` (barotropic: density independent of T, S).
+      !! NEGATIVE CONTROL: the same real-mass run without the load (`validate_config` refuses that; the test builds
+      !! it directly) removes the water from under the ice only, a sea-surface step of the growth at the ice edge,
+      !! and the flow it drives is orders of magnitude larger.
+      type(error_type), allocatable, intent(out) :: error
+      real(wp) :: u_off, g_off, dep_off, uf_off
+      real(wp) :: u1, g1, d1, uf1, a1, u8, g8, d8, uf8, a8, u2, g2, d2, uf2, a2, c
+      real(wp), parameter :: ROUNDOFF = 1.0e-11_wp
+
+      call no_flow_run(error, .true., 72, u1, g1, d1, uf1, ratio=1, d_atm=a1)
+      if (allocated(error)) return
+      call no_flow_run(error, .true., 72, u8, g8, d8, uf8, ratio=8, deferred=.true., d_atm=a8)
+      if (allocated(error)) return
+      call no_flow_run(error, .true., 72, u2, g2, d2, uf2, ratio=2, d_atm=a2)
+      if (allocated(error)) return
+      call no_flow_run(error, .false., 72, u_off, g_off, dep_off, uf_off)
+      if (allocated(error)) return
+      c = sqrt(9.8_wp/100.0_wp)
+      write (output_unit, "(a)") "  ice_load_no_flow: max|u| over the run (m/s), through the first delivery, ice growth (m), IC depression (m), atmosphere sea-level step (m)"
+      write (output_unit, "(a,4es11.3,f8.4)") "    ratio 1:               ", u1, uf1, g1, a1, d1
+      write (output_unit, "(a,4es11.3,f8.4)") "    ratio 8, deferred:     ", u8, uf8, g8, a8, d8
+      write (output_unit, "(a,4es11.3,f8.4)") "    ratio 2, in-stage:     ", u2, uf2, g2, a2, d2
+      write (output_unit, "(a,3es11.3)") "    negative control (no load):", u_off, uf_off, g_off
+      call check(error, g1 > 1.0e-3_wp .and. g8 > 1.0e-3_wp .and. g2 > 1.0e-3_wp .and. g_off > 1.0e-3_wp, &
+                 "the ice grows (the test freezes water)")
+      if (allocated(error)) return
+      call check(error, u_off > 1.0e-4_wp, "negative control: without the load the freezing drives a flow")
+      if (allocated(error)) return
+      call check(error, d1 > 1.0e-3_wp, "the IC balance lowered the start under the ice")
+      if (allocated(error)) return
+      call check(error, uf1 < ROUNDOFF, "ratio 1: through the first delivery the loaded ocean is at rest to round-off")
+      if (allocated(error)) return
+   call check(error, uf8 < ROUNDOFF, "ratio 8, deferred order: through the first delivery the loaded ocean is at rest to round-off")
+      if (allocated(error)) return
+   call check(error, uf2 < ROUNDOFF, "ratio 2, in-stage order: through the first delivery the loaded ocean is at rest to round-off")
+      if (allocated(error)) return
+      call check(error, u1 < c*a1 .and. u8 < c*a8 .and. u2 < c*a2, &
+                 "over the whole run the flow is below the gravity-wave answer to the atmosphere's own sea-level step")
+      if (allocated(error)) return
+      call check(error, u_off > 100.0_wp*max(u1, u8, u2), "the load removes the flow (control / loaded >= 100)")
+   end subroutine test_ice_load_no_flow
+
+   subroutine test_ice_load_drift(error)
+      !! WHERE the residual flow of the loaded, freezing basin comes from (it was 3.9e-6 m/s and attributed to the
+      !! drifting ice).  The ice drifts at about 6e-6 m/s here, and mass conservation of a load of equivalent water
+      !! depth `d` moving at `v` over a column of depth `H` bounds the flow it stirs by `u ~ (d/H) v`, ~5e-9 m/s: the
+      !! drift is NOT the residual.  The barotropic basin's residual equals the run with a different density law, i.e. it
+      !! is neither the drift nor the brine's baroclinic flow (both are tested below as a bound), it is the sea-level
+      !! step of the ice's sublimation (`ice_load_no_flow`).
+      type(error_type), allocatable, intent(out) :: error
+      real(wp) :: u_bt, g_bt_, dep_bt, uf_bt, u_bcl, g_bcl, dep_bcl, uf_bcl, a_bt, a_bcl
+      real(wp), parameter :: ICE_SPEED_OBS = 6.0e-6_wp
+         !! the fastest ice of this basin over the run, measured (it follows the ocean's own flow)
+
+      call no_flow_run(error, .true., 72, u_bt, g_bt_, dep_bt, uf_bt, d_atm=a_bt)
+      if (allocated(error)) return
+      call no_flow_run(error, .true., 72, u_bcl, g_bcl, dep_bcl, uf_bcl, baroclinic=.true., d_atm=a_bcl)
+      if (allocated(error)) return
+      write (output_unit, "(a,es10.3,a,es10.3,a,es10.3)") "  ice_load_drift: barotropic max|u| =", u_bt, " m/s, baroclinic (T/S density) ", u_bcl, &
+         " m/s; the drift's bound (d/H) v:", (dep_bt/100.0_wp)*ICE_SPEED_OBS
+      call check(error, u_bcl < 1.5_wp*u_bt + 1.0e-6_wp, "the brine's baroclinic flow does not exceed the barotropic residual by more than 1e-6 m/s")
+      if (allocated(error)) return
+      call check(error, (dep_bt/100.0_wp)*ICE_SPEED_OBS < 1.0e-3_wp*u_bt, &
+                 "the drift's bound (d/H) v is three orders below the residual: the drift is not the residual")
+   end subroutine test_ice_load_drift
+
+   subroutine psurf_seam_case(error, mass, atm_load)
+      !! The assembled `p_surf` on a periodic east-west channel under the bulk forcing with a latitude-dependent
+      !! sea-level pressure.  `mass`: real mass with the ice weight (else virtual fresh water, no ice load);
+      !! `atm_load`: the atmosphere's pressure joins `p_surf`.
+      type(error_type), allocatable, intent(out) :: error
+      logical, intent(in) :: mass, atm_load
+      type(ocean_engine_t), target :: engine
+      type(config_t) :: cfg
+      character(len=:), allocatable :: nml
+      real(wp) :: t, lat, psl, seam, diffuse, rho0g, ib
+      integer :: n, i, j, ng, nxp, nyp, g
+      logical :: ok
+
+      if (mass) then
+         nml = mass_nml(pres_nml(1))
+         if (atm_load) nml = replace(nml, "ice_load = .true. /", "ice_load = .true., atm_load = .true. /")
+      else
+         nml = pres_nml(1)
+         nml = replace(nml, "&ocean_forcing_nml enable_components = .true. /", &
+                       "&ocean_forcing_nml enable_components = .true. /"//new_line("a")// &
+                       "&ocean_psurf_nml enable = .true., atm_load = .true. /")
+      end if
+      nml = replace(nml, "west = 'wall', east = 'wall'", "west = 'periodic', east = 'periodic'")
+      call write_synth_atm("psl_lat", FN_ATM, FN_LST)
+      call make_engine(engine, cfg, nml, ok)
+      call check(error, ok, "engine setup failed")
+      if (allocated(error)) then
+         call remove_synth_atm(FN_ATM, FN_LST)
+         return
+      end if
+      ng = engine%grid%nghost
+      nxp = engine%grid%nx_phys
+      nyp = engine%grid%ny_phys
+      t = 0.0_wp
+      do n = 1, 4
+         call one_step(engine, cfg, t, ok)
+         call check(error, ok, "step ran")
+         if (allocated(error)) exit
+      end do
+      if (.not. allocated(error)) then
+         call pull_sf(engine)
+         !$acc update self(engine%state%surface_flux%p_surf_atm, engine%state%surface_flux%p_surf)
+         !$acc update self(engine%state%p_surf%eta_ib)
+         if (mass) then
+            !$acc update self(engine%state%surface_flux%p_ice_load)
+         end if
+         rho0g = engine%state%eos%rho0*engine%state%dyn%bt_work%g_bt
+         seam = 0.0_wp
+         diffuse = 0.0_wp
+         ib = 0.0_wp
+         associate (sf => engine%state%surface_flux)
+            call check(error, maxval(sf%p_surf_atm) > 7.0e4_wp, "the bulk forcing wrote the sea-level pressure")
+            do j = ng + 1, ng + nyp
+               lat = 70.0_wp + (real(j - ng, wp) - 0.5_wp)*0.25_wp
+               psl = 79000.0_wp + 300.0_wp*lat
+               do i = 1, size(sf%p_surf, 1)
+                  if (atm_load) then
+                     if (mass) then
+                        diffuse = max(diffuse, abs(sf%p_surf(i, j) - psl - sf%p_ice_load(i, j)))
+                     else
+                        diffuse = max(diffuse, abs(sf%p_surf(i, j) - psl))
+                     end if
+                     if (.not. mass) ib = max(ib, abs(engine%state%p_surf%eta_ib(i, j) + psl/rho0g))
+                  else
+                     ! the ice weight is the ONLY addition to the configure seed (0 Pa): the atmosphere's
+                     ! pressure never reaches p_surf, owned cells or ghosts
+                     diffuse = max(diffuse, abs(sf%p_surf(i, j) - sf%p_ice_load(i, j)))
+                  end if
+               end do
+               do g = 1, ng
+                  seam = max(seam, abs(sf%p_surf(g, j) - sf%p_surf(g + nxp, j)), &
+                             abs(sf%p_surf(ng + nxp + g, j) - sf%p_surf(ng + g, j)))
+               end do
+            end do
+            write (output_unit, "(a,l1,a,l1,a,3es11.3)") "  psurf seam: mass ", mass, ", atm_load ", atm_load, &
+               "; worst |p_surf - expected|, periodic-seam jump (Pa), |eta_ib + psl/(rho0 g)| (m):", diffuse, seam, ib
+            if (.not. allocated(error)) call check(error, diffuse < 1.0e-4_wp, &
+                                                   "p_surf is the expected sum of its parts, ghost columns included")
+            if (.not. allocated(error)) call check(error, seam == 0.0_wp, &
+                                                   "p_surf has no discontinuity across the periodic seam")
+            if (.not. allocated(error) .and. atm_load .and. .not. mass) &
+               call check(error, ib < 1.0e-9_wp, "the inverse-barometer response is -psl/(rho0 g_bt) on every column")
+         end associate
+      end if
+      call finish_engine(engine)
+      call remove_synth_atm(FN_ATM, FN_LST)
+   end subroutine psurf_seam_case
+
+   subroutine test_psurf_ice_only(error)
+      !! `ice_load` adds ONLY the ice's weight: the bulk forcing's sea-level pressure (1e5 Pa) must not reach `p_surf`,
+      !! and the periodic seam is continuous (it was a ~10 m inverse-barometer step before: owned cells held `psl`,
+      !! ghosts held the seed).
+      type(error_type), allocatable, intent(out) :: error
+
+      call psurf_seam_case(error, .true., .false.)
+   end subroutine test_psurf_ice_only
+
+   subroutine test_psurf_atm_load_ice(error)
+      !! `atm_load` + `ice_load`: `p_surf = psl + ice weight`, with the atmosphere's seam ghosts exchanged.
+      type(error_type), allocatable, intent(out) :: error
+
+      call psurf_seam_case(error, .true., .true.)
+   end subroutine test_psurf_atm_load_ice
+
+   subroutine test_psurf_atm_load_ib(error)
+      !! `atm_load` alone: the analytic inverse barometer `eta_ib = -psl/(rho0 g_bt)` on every column, ghosts included.
+      type(error_type), allocatable, intent(out) :: error
+
+      call psurf_seam_case(error, .false., .true.)
+   end subroutine test_psurf_atm_load_ib
+
+   subroutine test_ice_load_restart(error)
+      !! N steps + checkpoint + N steps == 2N, bitwise, with the ice loading on (the carried load `sf_p_ice_load`).
+      type(error_type), allocatable, intent(out) :: error
+      type(ocean_engine_t), target :: ea, eb
+      type(config_t) :: cfg_a, cfg_b
+      real(wp) :: ta, tb, t0
+      integer :: step0, n, ierr
+      logical :: ok
+      character(len=:), allocatable :: nml
+
+      nml = no_flow_nml(.true.)
+      nml = replace(nml, "uni_tas = 240.0", "uni_tas = 235.0")
+      call make_engine(ea, cfg_a, nml, ok)
+      call check(error, ok, "engine A setup failed")
+      if (allocated(error)) return
+      ta = 0.0_wp
+      do n = 1, 6
+         call one_step(ea, cfg_a, ta, ok)
+         call check(error, ok, "A step ran")
+         if (allocated(error)) then
+            call finish_engine(ea)
+            return
+         end if
+      end do
+      call ocean_state_restart_write(ea%state, ea%grid, ea%decomp, FN_RT, ta, 6, ierr=ierr)
+      call check(error, ierr == OCEAN_STATUS_OK, "checkpoint write failed")
+      if (allocated(error)) then
+         call finish_engine(ea)
+         return
+      end if
+      do n = 1, 6
+         call one_step(ea, cfg_a, ta, ok)
+      end do
+      call pull_sf(ea)
+      call make_engine(eb, cfg_b, nml, ok, restart_file=FN_RT, t0=t0, step0=step0)
+      call check(error, ok, "engine B (restart) setup failed")
+      if (allocated(error)) then
+         call finish_engine(ea)
+         return
+      end if
+      tb = t0
+      do n = 1, 6
+         call one_step(eb, cfg_b, tb, ok)
+      end do
+      call pull_sf(eb)
+      !$acc update self(ea%state%multilayer%h_layer, eb%state%multilayer%h_layer)
+      call check(error, all(ea%state%surface_flux%p_surf == eb%state%surface_flux%p_surf), "p_surf is bitwise after the resume")
+      if (.not. allocated(error)) call check(error, all(ea%state%surface_flux%p_ice_load == eb%state%surface_flux%p_ice_load), &
+                                             "the carried ice load is bitwise after the resume")
+      if (.not. allocated(error)) call check(error, all(ea%state%multilayer%h_layer == eb%state%multilayer%h_layer), &
+                                             "h_layer is bitwise after the resume")
+      if (.not. allocated(error)) call check(error, maxval(ea%state%surface_flux%p_ice_load) > 0.0_wp, "the load is live")
+      call finish_engine(eb)
+      call finish_engine(ea)
+      call delete_file(FN_RT)
+   end subroutine test_ice_load_restart
 
    ! ------------------------------------------------------------------
    ! D: dynamics-only invariance

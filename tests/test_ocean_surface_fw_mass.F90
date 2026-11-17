@@ -428,7 +428,7 @@ contains
       !$acc update device(ms%h_layer, sf%fw_net)
       call fw_mass_column_impl(nx, ny, NZ, NGHOST, DT/sf%rho0, sf%fw_evap_cfl_limit, sf%fw_net, ms%wet_mask, &
                                ms%k_top, ms%h_layer, ms%tracers(ms%idx_temperature)%c, ms%heat_budget_surface, &
-                               ms%fw_dh, ms%fw_passdown, n_thin, n_pd)
+                               ms%fw_dh, ms%fw_passdown, ms%fw_dhT, n_thin, n_pd)
       !$acc update self(ms%h_layer, ms%fw_dh)
       call unmap_all(ms, sf, at)
 
