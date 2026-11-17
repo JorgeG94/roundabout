@@ -677,6 +677,12 @@ contains
       ! gfortran 15.1 corrupts do-concurrent locals reassigned across
       ! if/else branches — hence merge() single-write forms below).
       logical :: wd_on
+      integer :: ng_k, nxp_k, nyp_k
+         !! Loop-invariant copies of grid%nghost / nx_phys / ny_phys: a kernel that
+         !! reads the `grid` aggregate gets a per-region present_or_copyin of it.
+      logical :: use_bct_k, use_uph_k
+      real(wp) :: wd_dry_k, wd_rewet_k
+         !! Loop-invariant copies of the bt_work scalars the kernels read (same reason).
          !! Loop-invariant cache of `bt_work%wetdry_enable`.
       real(wp) :: h_up_w, h_up_e, h_up_f, cmax_f, u_cap_f
          !! Pass 1w-a upwind face thickness + FROUDE_CAP guard locals.
@@ -730,6 +736,13 @@ contains
       w_nl = merge(1.0_wp, 0.0_wp, bt_work%substep_zeta_ke)
       tide_on = present(eta_forcing)
       wd_on = bt_work%wetdry_enable
+      ng_k = grid%nghost
+      nxp_k = grid%nx_phys
+      nyp_k = grid%ny_phys
+      use_bct_k = bt_work%use_bt_cont_type
+      use_uph_k = bt_work%use_upstream_h_face
+      wd_dry_k = bt_work%wd_dry_depth
+      wd_rewet_k = bt_work%wd_rewet_depth
       ! NOTE: no single-expression `present(x) .and. x > 0` — Fortran does
       ! not short-circuit .and., and nvfortran evaluates the absent optional
       ! (nil deref, segfault); gfortran happened to tolerate it.
@@ -1095,7 +1108,7 @@ contains
                ! Fr=1 variant measurably destroyed supercritical runup
                ! (prototype: u error 102%); the sqrt floor only keeps the
                ! argument positive at zero-depth faces.
-               cmax_f = FROUDE_CAP*sqrt(G*max(h_up_f, 0.5_wp*bt_work%wd_dry_depth))
+               cmax_f = FROUDE_CAP*sqrt(G*max(h_up_f, 0.5_wp*wd_dry_k))
                u_cap_f = sign(min(abs(ubt_R), cmax_f), ubt_R)
                bt_work%wd_flux_x(i, j) = h_up_f*u_cap_f*dy_cu(i, j)
             end do
@@ -1107,7 +1120,7 @@ contains
                h_up_w = max(bt_H_ref(i, js_f) + bt_eta(i, js_f), 0.0_wp)
                h_up_e = max(bt_H_ref(i, jn_f) + bt_eta(i, jn_f), 0.0_wp)
                h_up_f = merge(h_up_w, h_up_e, vbt_N >= 0.0_wp)
-               cmax_f = FROUDE_CAP*sqrt(G*max(h_up_f, 0.5_wp*bt_work%wd_dry_depth))
+               cmax_f = FROUDE_CAP*sqrt(G*max(h_up_f, 0.5_wp*wd_dry_k))
                u_cap_f = sign(min(abs(vbt_N), cmax_f), vbt_N)
                bt_work%wd_flux_y(i, j) = h_up_f*u_cap_f*dx_cv(i, j)
             end do
@@ -1152,9 +1165,9 @@ contains
                ! Hysteresis wet mask: wet above rewet_depth, dry below
                ! dry_depth, HOLD previous state in the band (kills wet/dry
                ! front chatter).  Own-cell read+write only — race-free.
-               if (d_new > bt_work%wd_rewet_depth) then
+               if (d_new > wd_rewet_k) then
                   bt_work%wd_wet_dyn(i, j) = 1.0_wp
-               else if (d_new < bt_work%wd_dry_depth) then
+               else if (d_new < wd_dry_k) then
                   bt_work%wd_wet_dyn(i, j) = 0.0_wp
                end if
                ! KE + interior zeta: identical to the centred path (Pass 2b/2c
@@ -1185,107 +1198,214 @@ contains
             ! `bebt = 0` (pure FB; the default is MOM6's 0.1) the formula collapses to
             ! `ubt^n` and Pass 1 is bit-identical to the pre-knob FBE
             ! scheme.  See `bt_work%bebt` doc for rationale.
-            do concurrent(j=1:ny, i=1:nx) &
-               local(h_face_E, h_face_W, h_face_N, h_face_S, &
-                     ubt_R, ubt_L, vbt_N, vbt_S, &
-                     flux_x_R, flux_x_L, flux_y_N, flux_y_S, div_h_u, in_band)
-               ! March-in physical-edge emulation: cells beyond the effective
-               ! band do not exist in v1 — skip them entirely (their η/KE/ζ
-               ! are never consumed by band cells once the closures below are
-               ! anchored at ilo_c/ihi_c/jlo_c/jhi_c, and skipping keeps their
-               ! scattered uhbt_sum/vhbt_sum writes from contaminating the
-               ! effective-edge face sums).  At bt_halo = 0 the band is the
-               ! whole array — the branch is uniformly true, bit-identical.
-               in_band = i >= ilo_c .and. i <= ihi_c .and. &
-                         j >= jlo_c .and. j <= jhi_c
-               if (in_band) then
-               if (i < ihi_c) then
-                  h_face_E = 0.5_wp*((bt_H_ref(i, j) + bt_eta(i, j)) + &
-                                     (bt_H_ref(i + 1, j) + bt_eta(i + 1, j)))
-               else
-                  h_face_E = bt_H_ref(i, j) + bt_eta(i, j)
-               end if
-               if (i > ilo_c) then
-                  h_face_W = 0.5_wp*((bt_H_ref(i - 1, j) + bt_eta(i - 1, j)) + &
-                                     (bt_H_ref(i, j) + bt_eta(i, j)))
-               else
-                  h_face_W = bt_H_ref(i, j) + bt_eta(i, j)
-               end if
-               if (j < jhi_c) then
-                  h_face_N = 0.5_wp*((bt_H_ref(i, j) + bt_eta(i, j)) + &
-                                     (bt_H_ref(i, j + 1) + bt_eta(i, j + 1)))
-               else
-                  h_face_N = bt_H_ref(i, j) + bt_eta(i, j)
-               end if
-               if (j > jlo_c) then
-                  h_face_S = 0.5_wp*((bt_H_ref(i, j - 1) + bt_eta(i, j - 1)) + &
-                                     (bt_H_ref(i, j) + bt_eta(i, j)))
-               else
-                  h_face_S = bt_H_ref(i, j) + bt_eta(i, j)
-               end if
-               ubt_R = (1.0_wp + bebt)*bt_ubt(i + 1, j) - bebt*bt_ubt_prev(i + 1, j)
-               ubt_L = (1.0_wp + bebt)*bt_ubt(i, j) - bebt*bt_ubt_prev(i, j)
-               vbt_N = (1.0_wp + bebt)*bt_vbt(i, j + 1) - bebt*bt_vbt_prev(i, j + 1)
-               vbt_S = (1.0_wp + bebt)*bt_vbt(i, j) - bebt*bt_vbt_prev(i, j)
-               if (bt_work%use_bt_cont_type) then
-                  ! Flux-bounded BT continuity — see the linear-substep
-                  ! comment for rationale.  Fed the BEBT-projected face
-                  ! velocities so BT_cont and BT_PROJECT_VELOCITY compose
-                  ! (bebt=0 ⇒ projection is a no-op, bit-identical).
-                  flux_x_R = find_uhbt(ubt_R, bt_work%BTCL_u(i + 1, j))*dy_cu(i + 1, j)
-                  flux_x_L = find_uhbt(ubt_L, bt_work%BTCL_u(i, j))*dy_cu(i, j)
-                  flux_y_N = find_vhbt(vbt_N, bt_work%BTCL_v(i, j + 1))*dx_cv(i, j + 1)
-                  flux_y_S = find_vhbt(vbt_S, bt_work%BTCL_v(i, j))*dx_cv(i, j)
-               else if (bt_work%use_upstream_h_face) then
-                  ! Upstream-PPM h_face from the slow ML snapshot.  Held
-                  ! constant across the substep — `h_face_up_x` was filled
-                  ! from `Σ_k h_layer(upstream)` at the top of the stage,
-                  ! which equals `(H_ref + η)_upstream_at_top`.  We deliberately
-                  ! drop the centred-η anomaly term the plan's pseudocode
-                  ! shows because adding `0.5·(η_W + η_E)` here would
-                  ! double-count `η_at_top` that's already inside
-                  ! `h_face_up_x`.  The η evolution during the substep
-                  ! shifts the face thickness by O(δη) ~ sub-cm vs H ~
-                  ! 100s of metres — well below the upstream-vs-centred
-                  ! correction we're after.  Uses the BEBT-
-                  ! projected velocities for consistency with the other
-                  ! branches (bebt=0 ⇒ bit-identical).
-                  flux_x_R = bt_work%h_face_up_x(i + 1, j)*ubt_R*dy_cu(i + 1, j)
-                  flux_x_L = bt_work%h_face_up_x(i, j)*ubt_L*dy_cu(i, j)
-                  flux_y_N = bt_work%h_face_up_y(i, j + 1)*vbt_N*dx_cv(i, j + 1)
-                  flux_y_S = bt_work%h_face_up_y(i, j)*vbt_S*dx_cv(i, j)
-               else
-                  flux_x_R = h_face_E*ubt_R*dy_cu(i + 1, j)
-                  flux_x_L = h_face_W*ubt_L*dy_cu(i, j)
-                  flux_y_N = h_face_N*vbt_N*dx_cv(i, j + 1)
-                  flux_y_S = h_face_S*vbt_S*dx_cv(i, j)
-               end if
-               ! Conservative transport divergence · iareaT (= inv_dx/inv_dy on uniform).
-               div_h_u = ((flux_x_R - flux_x_L) + (flux_y_N - flux_y_S))*iarea_t(i, j)
-               bt_eta_new(i, j) = bt_eta(i, j) - dt_inner*div_h_u
-               ! MOM6-style transport accumulator.  Cell (i,j) owns its
-               ! east face (i+1, j) and north face (i, j+1).  Uses the
-               ! BEBT-projected face velocity for consistency with the
-               ! η flux divergence above.
-               uhbt_sum(i + 1, j) = uhbt_sum(i + 1, j) + flux_x_R
-               vhbt_sum(i, j + 1) = vhbt_sum(i, j + 1) + flux_y_N
-               ! KE (centre) and interior ζ (NE corner) read only the
-               ! pre-update ubt/vbt and write disjoint arrays, so they ride
-               ! along Pass 1's sweep — bit-identical, one fewer launch each.
-               ! Wall-ζ closure stays below (it overwrites the corners).
-               bt_ke_centre(i, j) = 0.25_wp*iarea_t(i, j)*( &
-                                    area_cu(i, j)*bt_ubt(i, j)**2 + &
-                                    area_cu(i + 1, j)*bt_ubt(i + 1, j)**2 + &
-                                    area_cv(i, j)*bt_vbt(i, j)**2 + &
-                                    area_cv(i, j + 1)*bt_vbt(i, j + 1)**2)
-               if (i >= ilo_c + 1 .and. j >= jlo_c + 1) then
-                  bt_zeta_corner(i, j) = &
-                     ((bt_vbt(i, j)*dy_cv(i, j) - bt_vbt(i - 1, j)*dy_cv(i - 1, j)) - &
-                      (bt_ubt(i, j)*dx_cu(i, j) - bt_ubt(i, j - 1)*dx_cu(i, j - 1)))* &
-                     iarea_bu(i, j)
-               end if
-               end if   ! in_band
-            end do
+            ! Two copies of the Pass-1 sweep, differing ONLY in the flux-bounded
+            ! (BT_cont) branch: the `find_uhbt`/`find_vhbt` calls in a body keep the
+            ! compiler from collapsing the (j, i) nest onto one thread index (grid = ny
+            ! gangs of 128 threads, ~20 % occupancy, 3x the device time); without them it
+            ! collapses like every other sweep here.  Keep the two bodies identical.
+            if (.not. use_bct_k) then
+               do concurrent(j=1:ny, i=1:nx) &
+                  local(h_face_E, h_face_W, h_face_N, h_face_S, &
+                        ubt_R, ubt_L, vbt_N, vbt_S, &
+                        flux_x_R, flux_x_L, flux_y_N, flux_y_S, div_h_u, in_band)
+                  ! March-in physical-edge emulation: cells beyond the effective
+                  ! band do not exist in v1 — skip them entirely (their η/KE/ζ
+                  ! are never consumed by band cells once the closures below are
+                  ! anchored at ilo_c/ihi_c/jlo_c/jhi_c, and skipping keeps their
+                  ! scattered uhbt_sum/vhbt_sum writes from contaminating the
+                  ! effective-edge face sums).  At bt_halo = 0 the band is the
+                  ! whole array — the branch is uniformly true, bit-identical.
+                  in_band = i >= ilo_c .and. i <= ihi_c .and. &
+                            j >= jlo_c .and. j <= jhi_c
+                  if (in_band) then
+                  if (i < ihi_c) then
+                     h_face_E = 0.5_wp*((bt_H_ref(i, j) + bt_eta(i, j)) + &
+                                        (bt_H_ref(i + 1, j) + bt_eta(i + 1, j)))
+                  else
+                     h_face_E = bt_H_ref(i, j) + bt_eta(i, j)
+                  end if
+                  if (i > ilo_c) then
+                     h_face_W = 0.5_wp*((bt_H_ref(i - 1, j) + bt_eta(i - 1, j)) + &
+                                        (bt_H_ref(i, j) + bt_eta(i, j)))
+                  else
+                     h_face_W = bt_H_ref(i, j) + bt_eta(i, j)
+                  end if
+                  if (j < jhi_c) then
+                     h_face_N = 0.5_wp*((bt_H_ref(i, j) + bt_eta(i, j)) + &
+                                        (bt_H_ref(i, j + 1) + bt_eta(i, j + 1)))
+                  else
+                     h_face_N = bt_H_ref(i, j) + bt_eta(i, j)
+                  end if
+                  if (j > jlo_c) then
+                     h_face_S = 0.5_wp*((bt_H_ref(i, j - 1) + bt_eta(i, j - 1)) + &
+                                        (bt_H_ref(i, j) + bt_eta(i, j)))
+                  else
+                     h_face_S = bt_H_ref(i, j) + bt_eta(i, j)
+                  end if
+                  ubt_R = (1.0_wp + bebt)*bt_ubt(i + 1, j) - bebt*bt_ubt_prev(i + 1, j)
+                  ubt_L = (1.0_wp + bebt)*bt_ubt(i, j) - bebt*bt_ubt_prev(i, j)
+                  vbt_N = (1.0_wp + bebt)*bt_vbt(i, j + 1) - bebt*bt_vbt_prev(i, j + 1)
+                  vbt_S = (1.0_wp + bebt)*bt_vbt(i, j) - bebt*bt_vbt_prev(i, j)
+                  if (use_bct_k) then
+                     ! Never taken here (the BT_cont sweep below owns it): keeps the
+                     ! flux select the same three-way merge as that sweep.
+                     flux_x_R = 0.0_wp
+                     flux_x_L = 0.0_wp
+                     flux_y_N = 0.0_wp
+                     flux_y_S = 0.0_wp
+                  else if (use_uph_k) then
+                     ! Upstream-PPM h_face from the slow ML snapshot.  Held
+                     ! constant across the substep — `h_face_up_x` was filled
+                     ! from `Σ_k h_layer(upstream)` at the top of the stage,
+                     ! which equals `(H_ref + η)_upstream_at_top`.  We deliberately
+                     ! drop the centred-η anomaly term the plan's pseudocode
+                     ! shows because adding `0.5·(η_W + η_E)` here would
+                     ! double-count `η_at_top` that's already inside
+                     ! `h_face_up_x`.  The η evolution during the substep
+                     ! shifts the face thickness by O(δη) ~ sub-cm vs H ~
+                     ! 100s of metres — well below the upstream-vs-centred
+                     ! correction we're after.  Uses the BEBT-
+                     ! projected velocities for consistency with the other
+                     ! branches (bebt=0 ⇒ bit-identical).
+                     flux_x_R = bt_work%h_face_up_x(i + 1, j)*ubt_R*dy_cu(i + 1, j)
+                     flux_x_L = bt_work%h_face_up_x(i, j)*ubt_L*dy_cu(i, j)
+                     flux_y_N = bt_work%h_face_up_y(i, j + 1)*vbt_N*dx_cv(i, j + 1)
+                     flux_y_S = bt_work%h_face_up_y(i, j)*vbt_S*dx_cv(i, j)
+                  else
+                     flux_x_R = h_face_E*ubt_R*dy_cu(i + 1, j)
+                     flux_x_L = h_face_W*ubt_L*dy_cu(i, j)
+                     flux_y_N = h_face_N*vbt_N*dx_cv(i, j + 1)
+                     flux_y_S = h_face_S*vbt_S*dx_cv(i, j)
+                  end if
+                  ! Conservative transport divergence · iareaT (= inv_dx/inv_dy on uniform).
+                  div_h_u = ((flux_x_R - flux_x_L) + (flux_y_N - flux_y_S))*iarea_t(i, j)
+                  bt_eta_new(i, j) = bt_eta(i, j) - dt_inner*div_h_u
+                  ! MOM6-style transport accumulator.  Cell (i,j) owns its
+                  ! east face (i+1, j) and north face (i, j+1).  Uses the
+                  ! BEBT-projected face velocity for consistency with the
+                  ! η flux divergence above.
+                  uhbt_sum(i + 1, j) = uhbt_sum(i + 1, j) + flux_x_R
+                  vhbt_sum(i, j + 1) = vhbt_sum(i, j + 1) + flux_y_N
+                  ! KE (centre) and interior ζ (NE corner) read only the
+                  ! pre-update ubt/vbt and write disjoint arrays, so they ride
+                  ! along Pass 1's sweep — bit-identical, one fewer launch each.
+                  ! Wall-ζ closure stays below (it overwrites the corners).
+                  bt_ke_centre(i, j) = 0.25_wp*iarea_t(i, j)*( &
+                                       area_cu(i, j)*bt_ubt(i, j)**2 + &
+                                       area_cu(i + 1, j)*bt_ubt(i + 1, j)**2 + &
+                                       area_cv(i, j)*bt_vbt(i, j)**2 + &
+                                       area_cv(i, j + 1)*bt_vbt(i, j + 1)**2)
+                  if (i >= ilo_c + 1 .and. j >= jlo_c + 1) then
+                     bt_zeta_corner(i, j) = &
+                        ((bt_vbt(i, j)*dy_cv(i, j) - bt_vbt(i - 1, j)*dy_cv(i - 1, j)) - &
+                         (bt_ubt(i, j)*dx_cu(i, j) - bt_ubt(i, j - 1)*dx_cu(i, j - 1)))* &
+                        iarea_bu(i, j)
+                  end if
+                  end if   ! in_band
+               end do
+            else
+               do concurrent(j=1:ny, i=1:nx) &
+                  local(h_face_E, h_face_W, h_face_N, h_face_S, &
+                        ubt_R, ubt_L, vbt_N, vbt_S, &
+                        flux_x_R, flux_x_L, flux_y_N, flux_y_S, div_h_u, in_band)
+                  ! March-in physical-edge emulation: cells beyond the effective
+                  ! band do not exist in v1 — skip them entirely (their η/KE/ζ
+                  ! are never consumed by band cells once the closures below are
+                  ! anchored at ilo_c/ihi_c/jlo_c/jhi_c, and skipping keeps their
+                  ! scattered uhbt_sum/vhbt_sum writes from contaminating the
+                  ! effective-edge face sums).  At bt_halo = 0 the band is the
+                  ! whole array — the branch is uniformly true, bit-identical.
+                  in_band = i >= ilo_c .and. i <= ihi_c .and. &
+                            j >= jlo_c .and. j <= jhi_c
+                  if (in_band) then
+                  if (i < ihi_c) then
+                     h_face_E = 0.5_wp*((bt_H_ref(i, j) + bt_eta(i, j)) + &
+                                        (bt_H_ref(i + 1, j) + bt_eta(i + 1, j)))
+                  else
+                     h_face_E = bt_H_ref(i, j) + bt_eta(i, j)
+                  end if
+                  if (i > ilo_c) then
+                     h_face_W = 0.5_wp*((bt_H_ref(i - 1, j) + bt_eta(i - 1, j)) + &
+                                        (bt_H_ref(i, j) + bt_eta(i, j)))
+                  else
+                     h_face_W = bt_H_ref(i, j) + bt_eta(i, j)
+                  end if
+                  if (j < jhi_c) then
+                     h_face_N = 0.5_wp*((bt_H_ref(i, j) + bt_eta(i, j)) + &
+                                        (bt_H_ref(i, j + 1) + bt_eta(i, j + 1)))
+                  else
+                     h_face_N = bt_H_ref(i, j) + bt_eta(i, j)
+                  end if
+                  if (j > jlo_c) then
+                     h_face_S = 0.5_wp*((bt_H_ref(i, j - 1) + bt_eta(i, j - 1)) + &
+                                        (bt_H_ref(i, j) + bt_eta(i, j)))
+                  else
+                     h_face_S = bt_H_ref(i, j) + bt_eta(i, j)
+                  end if
+                  ubt_R = (1.0_wp + bebt)*bt_ubt(i + 1, j) - bebt*bt_ubt_prev(i + 1, j)
+                  ubt_L = (1.0_wp + bebt)*bt_ubt(i, j) - bebt*bt_ubt_prev(i, j)
+                  vbt_N = (1.0_wp + bebt)*bt_vbt(i, j + 1) - bebt*bt_vbt_prev(i, j + 1)
+                  vbt_S = (1.0_wp + bebt)*bt_vbt(i, j) - bebt*bt_vbt_prev(i, j)
+                  if (use_bct_k) then
+                     ! Flux-bounded BT continuity — see the linear-substep
+                     ! comment for rationale.  Fed the BEBT-projected face
+                     ! velocities so BT_cont and BT_PROJECT_VELOCITY compose
+                     ! (bebt=0 ⇒ projection is a no-op, bit-identical).
+                     flux_x_R = find_uhbt(ubt_R, bt_work%BTCL_u(i + 1, j))*dy_cu(i + 1, j)
+                     flux_x_L = find_uhbt(ubt_L, bt_work%BTCL_u(i, j))*dy_cu(i, j)
+                     flux_y_N = find_vhbt(vbt_N, bt_work%BTCL_v(i, j + 1))*dx_cv(i, j + 1)
+                     flux_y_S = find_vhbt(vbt_S, bt_work%BTCL_v(i, j))*dx_cv(i, j)
+                  else if (use_uph_k) then
+                     ! Upstream-PPM h_face from the slow ML snapshot.  Held
+                     ! constant across the substep — `h_face_up_x` was filled
+                     ! from `Σ_k h_layer(upstream)` at the top of the stage,
+                     ! which equals `(H_ref + η)_upstream_at_top`.  We deliberately
+                     ! drop the centred-η anomaly term the plan's pseudocode
+                     ! shows because adding `0.5·(η_W + η_E)` here would
+                     ! double-count `η_at_top` that's already inside
+                     ! `h_face_up_x`.  The η evolution during the substep
+                     ! shifts the face thickness by O(δη) ~ sub-cm vs H ~
+                     ! 100s of metres — well below the upstream-vs-centred
+                     ! correction we're after.  Uses the BEBT-
+                     ! projected velocities for consistency with the other
+                     ! branches (bebt=0 ⇒ bit-identical).
+                     flux_x_R = bt_work%h_face_up_x(i + 1, j)*ubt_R*dy_cu(i + 1, j)
+                     flux_x_L = bt_work%h_face_up_x(i, j)*ubt_L*dy_cu(i, j)
+                     flux_y_N = bt_work%h_face_up_y(i, j + 1)*vbt_N*dx_cv(i, j + 1)
+                     flux_y_S = bt_work%h_face_up_y(i, j)*vbt_S*dx_cv(i, j)
+                  else
+                     flux_x_R = h_face_E*ubt_R*dy_cu(i + 1, j)
+                     flux_x_L = h_face_W*ubt_L*dy_cu(i, j)
+                     flux_y_N = h_face_N*vbt_N*dx_cv(i, j + 1)
+                     flux_y_S = h_face_S*vbt_S*dx_cv(i, j)
+                  end if
+                  ! Conservative transport divergence · iareaT (= inv_dx/inv_dy on uniform).
+                  div_h_u = ((flux_x_R - flux_x_L) + (flux_y_N - flux_y_S))*iarea_t(i, j)
+                  bt_eta_new(i, j) = bt_eta(i, j) - dt_inner*div_h_u
+                  ! MOM6-style transport accumulator.  Cell (i,j) owns its
+                  ! east face (i+1, j) and north face (i, j+1).  Uses the
+                  ! BEBT-projected face velocity for consistency with the
+                  ! η flux divergence above.
+                  uhbt_sum(i + 1, j) = uhbt_sum(i + 1, j) + flux_x_R
+                  vhbt_sum(i, j + 1) = vhbt_sum(i, j + 1) + flux_y_N
+                  ! KE (centre) and interior ζ (NE corner) read only the
+                  ! pre-update ubt/vbt and write disjoint arrays, so they ride
+                  ! along Pass 1's sweep — bit-identical, one fewer launch each.
+                  ! Wall-ζ closure stays below (it overwrites the corners).
+                  bt_ke_centre(i, j) = 0.25_wp*iarea_t(i, j)*( &
+                                       area_cu(i, j)*bt_ubt(i, j)**2 + &
+                                       area_cu(i + 1, j)*bt_ubt(i + 1, j)**2 + &
+                                       area_cv(i, j)*bt_vbt(i, j)**2 + &
+                                       area_cv(i, j + 1)*bt_vbt(i, j + 1)**2)
+                  if (i >= ilo_c + 1 .and. j >= jlo_c + 1) then
+                     bt_zeta_corner(i, j) = &
+                        ((bt_vbt(i, j)*dy_cv(i, j) - bt_vbt(i - 1, j)*dy_cv(i - 1, j)) - &
+                         (bt_ubt(i, j)*dx_cu(i, j) - bt_ubt(i, j - 1)*dx_cu(i, j - 1)))* &
+                        iarea_bu(i, j)
+                  end if
+                  end if   ! in_band
+               end do
+            end if
          end if
          ! η-swap + ζ wall closure — one barrier sweep over the corner
          ! grid. Both must finish before Pass 2b reads η/ζ neighbours, and
@@ -1294,6 +1414,12 @@ contains
          ! sets; the interior ζ written in Pass 1 is untouched here.
          do concurrent(j=1:ny + 1, i=1:nx + 1)
             if (i <= nx .and. j <= ny) bt_eta(i, j) = bt_eta_new(i, j)
+            ! BEBT stash of the outer edge faces that Pass 2b (i = 2:nx) / 2c
+            ! (j = 2:ny) do not sweep; ubt / vbt are untouched until then.
+            if (bebt > 0.0_wp) then
+               if (j <= ny .and. (i == 1 .or. i == nx + 1)) bt_ubt_prev(i, j) = bt_ubt(i, j)
+               if (i <= nx .and. (j == 1 .or. j == ny + 1)) bt_vbt_prev(i, j) = bt_vbt(i, j)
+            end if
             ! ζ outer ring → 0 (free-slip); physical walls → 0 so (ζ+f)·v
             ! reduces to f·v there.
             ! §3 (v2): zero ζ at boundary corner line for ALL non-PERIODIC tags
@@ -1317,12 +1443,12 @@ contains
             ! Physical-wall corner-zeta closure: gate on has_* so an MPI
             ! seam face is left for the halo to correct (bit-identical at
             ! has_*=.true. / single-rank; no-op at seam with has_*=.false.).
-            if (bc_w /= OBC_PERIODIC .and. has_w .and. i == grid%nghost + 1) bt_zeta_corner(i, j) = 0.0_wp
-            if (bc_e /= OBC_PERIODIC .and. has_e .and. i == grid%nghost + grid%nx_phys + 1) bt_zeta_corner(i, j) = 0.0_wp
-            if (bc_s /= OBC_PERIODIC .and. has_s .and. j == grid%nghost + 1) bt_zeta_corner(i, j) = 0.0_wp
+            if (bc_w /= OBC_PERIODIC .and. has_w .and. i == ng_k + 1) bt_zeta_corner(i, j) = 0.0_wp
+            if (bc_e /= OBC_PERIODIC .and. has_e .and. i == ng_k + nxp_k + 1) bt_zeta_corner(i, j) = 0.0_wp
+            if (bc_s /= OBC_PERIODIC .and. has_s .and. j == ng_k + 1) bt_zeta_corner(i, j) = 0.0_wp
             ! The tripolar fold line is a seam (interior corners), not a wall.
             if (bc_n /= OBC_PERIODIC .and. bc_n /= OBC_TRIPOLAR_FOLD .and. has_n .and. &
-                j == grid%nghost + grid%ny_phys + 1) bt_zeta_corner(i, j) = 0.0_wp
+                j == ng_k + nyp_k + 1) bt_zeta_corner(i, j) = 0.0_wp
          end do
          ! Periodic η ghost-wrap (design §1.5 step 3).  Required before
          ! Pass 2b because the u-update at the west wall face reads
@@ -1336,21 +1462,21 @@ contains
          ! corner ghosts correct (same convention as rdb_ocean_periodic).
          if (per_x) then
             do concurrent(j=1:ny, i=1:nx)
-               if (i <= grid%nghost) then
-                  bt_eta(i, j) = bt_eta(i + grid%nx_phys, j)
+               if (i <= ng_k) then
+                  bt_eta(i, j) = bt_eta(i + nxp_k, j)
                end if
-               if (i > grid%nx_phys + grid%nghost) then
-                  bt_eta(i, j) = bt_eta(i - grid%nx_phys, j)
+               if (i > nxp_k + ng_k) then
+                  bt_eta(i, j) = bt_eta(i - nxp_k, j)
                end if
             end do
          end if
          if (per_y) then
             do concurrent(j=1:ny, i=1:nx)
-               if (j <= grid%nghost) then
-                  bt_eta(i, j) = bt_eta(i, j + grid%ny_phys)
+               if (j <= ng_k) then
+                  bt_eta(i, j) = bt_eta(i, j + nyp_k)
                end if
-               if (j > grid%ny_phys + grid%nghost) then
-                  bt_eta(i, j) = bt_eta(i, j - grid%ny_phys)
+               if (j > nyp_k + ng_k) then
+                  bt_eta(i, j) = bt_eta(i, j - nyp_k)
                end if
             end do
          end if
@@ -1385,7 +1511,7 @@ contains
          ! x-pass: west / east ghost columns over the full j extent.
          if (has_w .and. (bc_w == OBC_OPEN .or. bc_w == OBC_TIDAL .or. &
                           bc_w == OBC_CHAPMAN .or. bc_w == OBC_CLAMPED)) then
-            do concurrent(j=1:ny, i=1:grid%nghost)
+            do concurrent(j=1:ny, i=1:ng_k)
                bt_eta(i, j) = bt_eta(i_w_int, j)
             end do
          end if
@@ -1408,7 +1534,7 @@ contains
          ! edge).  A wall x-edge ghost is still overwritten, as before.
          if (has_s .and. (bc_s == OBC_OPEN .or. bc_s == OBC_TIDAL .or. &
                           bc_s == OBC_CHAPMAN .or. bc_s == OBC_CLAMPED)) then
-            do concurrent(j=1:grid%nghost, i=1:nx)
+            do concurrent(j=1:ng_k, i=1:nx)
                bt_eta(i, j) = bt_eta(i, j_s_int)
             end do
          end if
@@ -1419,25 +1545,17 @@ contains
             end do
          end if
 
-         ! BEBT projection prep: stash the current (`ubt^n`) before
-         ! Pass 2b/2c overwrites it with `ubt^{n+1}`.  Next substep's
-         ! Pass 1 will then read `ubt_prev = ubt^n` for the
-         ! `(1+bebt)·ubt^{n+1} − bebt·ubt^n` extrapolation.  Skip
-         ! when `bebt = 0` to keep the no-knob path at zero extra
-         ! per-step memory bandwidth.
-         if (bebt > 0.0_wp) then
-            do concurrent(j=1:ny, i=1:nx + 1)
-               bt_ubt_prev(i, j) = bt_ubt(i, j)
-            end do
-            do concurrent(j=1:ny + 1, i=1:nx)
-               bt_vbt_prev(i, j) = bt_vbt(i, j)
-            end do
-         end if
-
+         ! BEBT projection prep (the `ubt^n` / `vbt^n` stash that the next
+         ! substep's Pass 1 extrapolates from) is folded into the sweeps that
+         ! overwrite them: Pass 2b / 2c copy their own face before updating it
+         ! (own-cell read then write: no neighbour reads), the outer edge faces
+         ! neither sweep owns are stashed in the eta-swap sweep above.  Skipped at
+         ! `bebt = 0`.  Same values as the old stand-alone copies, three launches fewer.
          ! ---- Pass 2b: u_bt update at interior east faces ----
          do concurrent(j=1:ny, i=2:nx) &
             local(zeta_at_u, f_at_u, v_at_u, ke_grad_x, d_eta, &
                   wet_l, wet_r, zb_l, zb_r, open_f)
+            if (bebt > 0.0_wp) bt_ubt_prev(i, j) = bt_ubt(i, j)
             zeta_at_u = w_nl*0.5_wp*(bt_zeta_corner(i, j) + bt_zeta_corner(i, j + 1))
             f_at_u = 0.5_wp*(f_corner(i, j) + f_corner(i, j + 1))
             ! One-sided rows anchored at the EFFECTIVE array edge (jlo_c/jhi_c
@@ -1479,9 +1597,9 @@ contains
                open_f = merge(1.0_wp, 0.0_wp, &
                               (wet_l > 0.5_wp .and. wet_r > 0.5_wp) .or. &
                               (wet_l > 0.5_wp .and. &
-                               bt_eta(i - 1, j) > zb_r + bt_work%wd_dry_depth) .or. &
+                               bt_eta(i - 1, j) > zb_r + wd_dry_k) .or. &
                               (wet_r > 0.5_wp .and. &
-                               bt_eta(i, j) > zb_l + bt_work%wd_dry_depth))
+                               bt_eta(i, j) > zb_l + wd_dry_k))
                bt_work%wd_open_u(i, j) = open_f
                bt_ubt(i, j) = bt_ubt(i, j)*open_f
             end if
@@ -1628,14 +1746,14 @@ contains
          ! g-loop covers all nghost ghost faces on each side (nghost is a
          ! loop-invariant scalar, legal inside the async region).
          if (per_x) then
-            do concurrent(j=1:ny, gw=1:grid%nghost)
+            do concurrent(j=1:ny, gw=1:ng_k)
                ! West ghost faces i=1..nghost ← interior face i+nx_phys
-               bt_ubt(gw, j) = bt_ubt(gw + grid%nx_phys, j)
+               bt_ubt(gw, j) = bt_ubt(gw + nxp_k, j)
                ! East ghost faces i=nx_phys+nghost+2..nx+1 ← interior face i-nx_phys.
                ! i_e_face = nghost+nx_phys+1, so the ghost faces beyond it are
                ! i_e_face+1 .. i_e_face+nghost == nx+1.
                bt_ubt(i_e_face + gw, j) = &
-                  bt_ubt(i_e_face + gw - grid%nx_phys, j)
+                  bt_ubt(i_e_face + gw - nxp_k, j)
             end do
             ! Belt-and-braces: enforce i_w == i_e seam identity.
             do concurrent(j=1:ny)
@@ -1651,10 +1769,10 @@ contains
          ! the x-wrap so doubly-periodic corner faces read the already
          ! x-wrapped columns.
          if (per_y) then
-            do concurrent(gw=1:grid%nghost, i=1:nx + 1)
-               bt_ubt(i, gw) = bt_ubt(i, gw + grid%ny_phys)
-               bt_ubt(i, grid%ny_phys + grid%nghost + gw) = &
-                  bt_ubt(i, grid%nghost + gw)
+            do concurrent(gw=1:ng_k, i=1:nx + 1)
+               bt_ubt(i, gw) = bt_ubt(i, gw + nyp_k)
+               bt_ubt(i, nyp_k + ng_k + gw) = &
+                  bt_ubt(i, ng_k + gw)
             end do
          end if
          ! Tripolar north-fold of ubt (u-face Cu, NEGATE — true vector).
@@ -1724,6 +1842,7 @@ contains
          do concurrent(j=2:ny, i=1:nx) &
             local(zeta_at_v, f_at_v, u_at_v, ke_grad_y, d_eta, &
                   wet_l, wet_r, zb_l, zb_r, open_f)
+            if (bebt > 0.0_wp) bt_vbt_prev(i, j) = bt_vbt(i, j)
             zeta_at_v = w_nl*0.5_wp*(bt_zeta_corner(i, j) + bt_zeta_corner(i + 1, j))
             f_at_v = 0.5_wp*(f_corner(i, j) + f_corner(i + 1, j))
             ! One-sided columns anchored at the EFFECTIVE array edge
@@ -1756,9 +1875,9 @@ contains
                open_f = merge(1.0_wp, 0.0_wp, &
                               (wet_l > 0.5_wp .and. wet_r > 0.5_wp) .or. &
                               (wet_l > 0.5_wp .and. &
-                               bt_eta(i, j - 1) > zb_r + bt_work%wd_dry_depth) .or. &
+                               bt_eta(i, j - 1) > zb_r + wd_dry_k) .or. &
                               (wet_r > 0.5_wp .and. &
-                               bt_eta(i, j) > zb_l + bt_work%wd_dry_depth))
+                               bt_eta(i, j) > zb_l + wd_dry_k))
                bt_work%wd_open_v(i, j) = open_f
                bt_vbt(i, j) = bt_vbt(i, j)*open_f
             end if
@@ -1878,21 +1997,21 @@ contains
          ! bit-identity test at N_INNER > nghost+1.  Runs before the
          ! y-wrap so doubly-periodic corner faces wrap correctly.
          if (per_x) then
-            do concurrent(j=1:ny + 1, gw=1:grid%nghost)
-               bt_vbt(gw, j) = bt_vbt(gw + grid%nx_phys, j)
-               bt_vbt(grid%nx_phys + grid%nghost + gw, j) = &
-                  bt_vbt(grid%nghost + gw, j)
+            do concurrent(j=1:ny + 1, gw=1:ng_k)
+               bt_vbt(gw, j) = bt_vbt(gw + nxp_k, j)
+               bt_vbt(nxp_k + ng_k + gw, j) = &
+                  bt_vbt(ng_k + gw, j)
             end do
          end if
          ! Periodic v ghost-wrap + belt-and-braces seam copy (design §1.5 step 5).
          ! Generic in nghost (g-loop covers all ghost faces on each side).
          if (per_y) then
-            do concurrent(i=1:nx, gw=1:grid%nghost)
+            do concurrent(i=1:nx, gw=1:ng_k)
                ! South ghost faces j=1..nghost ← interior face j+ny_phys
-               bt_vbt(i, gw) = bt_vbt(i, gw + grid%ny_phys)
+               bt_vbt(i, gw) = bt_vbt(i, gw + nyp_k)
                ! North ghost faces j=ny_phys+nghost+2..ny+1 ← interior face j-ny_phys
                bt_vbt(i, j_n_face + gw) = &
-                  bt_vbt(i, j_n_face + gw - grid%ny_phys)
+                  bt_vbt(i, j_n_face + gw - nyp_k)
             end do
             ! Belt-and-braces: enforce j_s == j_n seam identity.
             do concurrent(i=1:nx)
@@ -1913,10 +2032,10 @@ contains
                bt_vbt(i, j) = -bt_vbt(nf_isum - i, nf_jsum_v - j)
             end do
             do concurrent(i=1:nx) local(nf_p, nf_pm)
-               nf_p = modulo(i - grid%nghost - 1, grid%nx_phys) + 1
-               nf_pm = grid%nx_phys + 1 - nf_p
+               nf_p = modulo(i - ng_k - 1, nxp_k) + 1
+               nf_pm = nxp_k + 1 - nf_p
                if (nf_p < nf_pm) then
-                  bt_vbt(i, nf_jfold) = -bt_vbt(grid%nghost + nf_pm, nf_jfold)
+                  bt_vbt(i, nf_jfold) = -bt_vbt(ng_k + nf_pm, nf_jfold)
                else if (nf_p == nf_pm) then
                   bt_vbt(i, nf_jfold) = 0.0_wp
                end if
@@ -1933,7 +2052,7 @@ contains
             call profiler_start("ocean_comms_bt")
             !$acc wait(1)
             call ocean_fold_north_v_face(bt_vbt, nx, ny + 1, grid%nx_phys, grid%ny_phys, &
-                                         grid%nghost, ctx=fold_ctx)
+                                         ng_k, ctx=fold_ctx)
             call profiler_stop("ocean_comms_bt")
          end if
          !$acc kernels async(1) &
