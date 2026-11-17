@@ -57,8 +57,8 @@ barriers, wave drag, BT_cont and the upstream-h face add arithmetic to existing 
    When no edge needs the neighbour-reading radiation legs (Flather, tidal, Chapman) and the array edge is not
    marched, the stand-alone u and v BC sweeps are skipped: the wall faces are branch-free selects at the end of
    Pass 2b / 2c (after the wet/dry gate, as before), the u outer-edge columns zero in the eta-swap sweep (Pass 2b
-   neither reads nor writes them), the v outer-edge rows zero in the sum sweep (Pass 2b READS them, so they cannot go
-   earlier; any periodic wrap or fold between 2c and the sum would copy the unzeroed rows, so periodic / fold keep the
+   neither reads nor writes them), the v outer-edge rows zero in the sum sweep (Pass 2b reads only rows 2..ny there, so they
+   could go earlier but stay at the sum, after the BEBT stash; any periodic wrap or fold between 2c and the sum would copy the unzeroed rows, so periodic / fold keep the
    stand-alone sweep).
 5. **Packed exchange in one kernel per side** (`pk_{x,y}_{pack,unpack}3` in `rdb_ocean_halo.F90`): the
    `(eta, ubt, vbt)` call with no optional array packs / unpacks all three in one launch with the SAME buffer layout

@@ -708,6 +708,7 @@ contains
       ! gfortran 15.1 corrupts do-concurrent locals reassigned across
       ! if/else branches — hence merge() single-write forms below).
       logical :: wd_on
+         !! Loop-invariant cache of `bt_work%wetdry_enable`.
       logical :: fuse_u, fuse_v, uzw, uze, ucw, uce, vzs, vzn, vcs, vcn
          !! Wall-BC fusion switches (see the `bc_fuse_mode` block): the physical
          !! west/east (south/north) wall treatment folded into Pass 2b (2c) and the
@@ -720,7 +721,6 @@ contains
       logical :: use_bct_k, use_uph_k
       real(wp) :: wd_dry_k, wd_rewet_k
          !! Loop-invariant copies of the bt_work scalars the kernels read (same reason).
-         !! Loop-invariant cache of `bt_work%wetdry_enable`.
       real(wp) :: h_up_w, h_up_e, h_up_f, cmax_f, u_cap_f
          !! Pass 1w-a upwind face thickness + FROUDE_CAP guard locals.
       real(wp) :: out_rate, out_vol, avail_v
@@ -1077,8 +1077,12 @@ contains
       ! u: the outer-edge column zeros move ahead of Pass 2b (which neither reads
       ! nor writes columns 1 and nx + 1); needs the un-marched array edge.
       fuse_u = ilo_c == 1 .and. ihi_c == nx .and. mode_w < 3 .and. mode_e < 3
-      ! v: Pass 2b READS the outer v rows, so their zeros wait for the sum sweep;
-      ! any wrap or fold between Pass 2c and the sum would copy the unzeroed rows.
+      ! v: the outer v rows (1, ny + 1) are zeroed in the sum sweep.  With
+      ! jlo_c = 1, jhi_c = ny (required here) Pass 2b's v_at_u reads rows 2..ny
+      ! only, and Pass 2c neither reads nor writes them, so the zero could move
+      ! ahead of 2b; it stays at the sum sweep (the first reader of the rows, via
+      ! vbt_sum) so the eta-swap sweep's BEBT stash sees the unzeroed value.  Any
+      ! wrap or fold between Pass 2c and the sum would copy the unzeroed rows.
       fuse_v = jlo_c == 1 .and. jhi_c == ny .and. mode_s < 3 .and. mode_n < 3 .and. &
                .not. per_x .and. .not. per_y .and. .not. do_fold
       uzw = fuse_u .and. mode_w == 1
@@ -1482,6 +1486,11 @@ contains
             end if
             ! Fused wall BC (u): outer-edge face columns zero (the stand-alone BC sweep's
             ! first statements); nothing before Pass 2b reads them after this point.
+            ! Edge selected by an in-loop compound guard (cf. CLAUDE.md, "Exclude an array
+            ! edge by LOOP RANGE"): checked bitwise, ghost ring included, base vs this
+            ! on nvfortran 26.5 CPU (-O2) with nx + 1 and ny + 1 multiples of 8 (31x23,
+            ! 15x15, 63x31), closed walls, bebt = 0.1: no difference (the stash and both
+            ! zeros take the right branch at i = nx + 1 / j = ny + 1).
             if (fuse_u .and. j <= ny .and. (i == 1 .or. i == nx + 1)) bt_ubt(i, j) = 0.0_wp
             ! ζ outer ring → 0 (free-slip); physical walls → 0 so (ζ+f)·v
             ! reduces to f·v there.
@@ -1613,7 +1622,7 @@ contains
          ! overwrite them: Pass 2b / 2c copy their own face before updating it
          ! (own-cell read then write: no neighbour reads), the outer edge faces
          ! neither sweep owns are stashed in the eta-swap sweep above.  Skipped at
-         ! `bebt = 0`.  Same values as the old stand-alone copies, three launches fewer.
+         ! `bebt = 0`.  Same values as the old stand-alone copies, two launches fewer.
          ! ---- Pass 2b: u_bt update at interior east faces ----
          do concurrent(j=1:ny, i=2:nx) &
             local(zeta_at_u, f_at_u, v_at_u, ke_grad_x, d_eta, &
@@ -2146,7 +2155,8 @@ contains
          ! fused over the staggered union (η centres, u/v faces) with
          ! per-array index guards; one launch instead of three.
          do concurrent(j=1:ny + 1, i=1:nx + 1)
-            ! Fused wall BC (v): outer-edge face rows zero, after Pass 2b has read them.
+            ! Fused wall BC (v): outer-edge face rows zero, ahead of their first reader (vbt_sum below);
+            ! Pass 2b reads rows 2..ny only, so this could move earlier (see fuse_v).
             if (fuse_v .and. i <= nx .and. (j == 1 .or. j == ny + 1)) bt_vbt(i, j) = 0.0_wp
             if (i <= nx .and. j <= ny) then
                eta_sum(i, j) = eta_sum(i, j) + bt_eta(i, j)

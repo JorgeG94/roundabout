@@ -1753,9 +1753,11 @@ contains
       logical :: only3
          !! No optional array: the exchange is the (eta, ubt, vbt) triple, packed in one kernel.
 
+      ! The call is counted first, as the grouped path counted `bt_group` before its
+      ! (then no-op) exchanges: the counter tallies calls, not exchanges done.
+      call oh_count_bt_packed()
       ! Not initialised (a direct-kernel unit test): a no-op, as the grouped path was.
       if (.not. oh_initialised) return
-      call oh_count_bt_packed()
       call wide_halo_guards(ng, "ocean_halo_packed_wide")
       call pk_ensure(ng)
 
