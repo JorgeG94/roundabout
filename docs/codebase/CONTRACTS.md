@@ -23,6 +23,7 @@ is the bug.
 | Cavity datum (`bt_H_ref = b − z_draft`, counted-once load) | module header of `src/core/ocean/state/rdb_ocean_cavity.F90`; assembly in `configure_ocean_cavity` |
 | Surface-flux component ownership (one writer per component) | module header of `src/parameterizations/vertical/rdb_ocean_surface_flux.F90` |
 | Real freshwater mass from basal melt | module header of `src/parameterizations/vertical/rdb_ocean_cavity_flux.F90`; summary below |
+| Real surface fresh-water mass (P − E, runoff slots) | module header of `src/parameterizations/vertical/rdb_ocean_surface_fw_mass.F90`; summary below |
 | Strided-hybrid column loops, scratch buffers | module header of `src/framework/rdb_scratch_3d.F90` |
 | Joining the checkpoint | `ocean_state_build_restart_registry`, `src/core/ocean/state/ocean_state/rdb_ocean_state_restart.F90` |
 | Diagnostics are pull-only | module header of `src/core/ocean/diag/rdb_ocean_diag.F90` |
@@ -122,7 +123,25 @@ The latent heat of fusion of a frozen flux is its own heat component, `q_fus` (`
 | Ice-shelf basal melt, `&ocean_cavity_melt_nml freshwater = "mass"` | Yes. The only one. |
 | Ice-shelf basal melt, `freshwater = "virtual"` (default) | No |
 | Sea ice (`salt_ice`, `heat_ice`, `sw_ice` through the coupler) | No. Virtual. |
-| The seven atmospheric/river mass-flux components (`&ocean_forcing_nml freshwater = "virtual"`: their net `F` is the virtual salt flux `salt_fw`, still no mass; `"mass"` is reserved and refused) | No |
+| The seven atmospheric/river mass-flux components, `&ocean_forcing_nml freshwater = "virtual"`: their net `F` is the virtual salt flux `salt_fw`, no mass | No |
+| The same components, `freshwater = "mass"` (open-ocean `lprec`, `fprec`, `evap`; the runoff / `seaice_melt` / `vprec` slots are in the sum but have no filler yet) | Yes (`ocean_surface_fw_mass_step`, module `rdb_ocean_surface_fw_mass`) |
+
+**Surface fresh-water mass (`&ocean_forcing_nml freshwater = "mass"`).** Ownership and order, all in the
+module header of `src/parameterizations/vertical/rdb_ocean_surface_fw_mass.F90`:
+- The assembler (`ocean_surface_flux_assemble`) is the ONE writer of `sf%fw_net` (the net open-ocean flux
+  snapshot, kg m-2 s-1, into the ocean) and `sf%Q_salt_tracer` (`Q_salt` without the virtual `salt_fw`).
+  Both are carried between thermo steps (restart state `sf_fw_net`, `sf_Q_salt_tracer`) and seam-exchanged
+  with `Q_heat`/`Q_salt` (`ocean_seam_refresh_surface_flux`). The mass step reads the snapshot, never the raw
+  components (bulk forcing rewrites them every outer step, before the assembly of the same thermo step).
+- `ocean_surface_fw_mass_step` runs immediately after EVERY `ocean_surface_flux_apply_tracers`: `run_stage`,
+  `run_stage_split` and `apply_deferred_thermo` (the cavity's step is not there). It is the one writer of
+  `h_layer` for this flux; it does not touch T, books `dh_k·T_k` into `ms%heat_budget_surface`, and keeps the
+  content of every other tracer (`c ← c·h0/hn`). The applied (not requested) volume is booked into the EFP
+  accumulator `ms%mass_src_efp` over owned cells; the console adds it to `ms%mass_src`.
+- `Q_salt` (incl. the virtual `salt_fw`) stays what KPP/EPBL read for `B_0`; only the tracer deposit reads
+  `Q_salt_tracer`.
+- `ocean_dyn_step_split` re-derives `bt_eta = Σh − bt_H_ref` right before the ALE remap (which takes
+  `h_ref = Σh − bt_eta`); without it the z*/z_fixed target is built on `H + dh`.
 
 Under `"mass"` the melt is a Boussinesq volume source, `dh = m·dt/ρ₀`, added to `h_layer(:,:,nz)` by
 `ocean_cavity_mass_step` in the stage, at thermo cadence, just after the surface-flux apply.

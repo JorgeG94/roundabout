@@ -3293,11 +3293,19 @@ class OceanForcing(Group):
 
     freshwater = Enum(
         'freshwater',
-        doc="Surface fresh-water mass fluxes (lprec/fprec/evap/lrunoff/frunoff): 'none' (default, enthalpy only), 'virtual' (virtual salt flux -S_surf*F, fixed column mass; needs enable_components) or 'mass' (reserved, refused at configure)",
+        doc="Surface fresh-water mass fluxes (lprec/fprec/evap/lrunoff/frunoff): 'none' (default, enthalpy only), 'virtual' (virtual salt flux -S_surf*F, fixed column mass; needs enable_components) or 'mass' (real volume with the evaporation pass-down; open-ocean fluxes, needs enable_components)",
         units='',
         required=False,
         default='none',
         allowed=('none', 'virtual', 'mass'),
+    )
+
+    fw_evap_cfl_limit = Real(
+        'fw_evap_cfl_limit',
+        doc="freshwater='mass': largest fraction of a live layer one evaporative withdrawal may take, range (0,1] (OM3/MOM6 EVAP_CFL_LIMIT); the unmet remainder is passed down the column",
+        units='',
+        required=False,
+        default=0.8,
     )
 
 
@@ -8140,4 +8148,4 @@ GENERATED_GROUPS = {
 }
 
 N_GROUPS = 68
-N_KNOBS = 891
+N_KNOBS = 892
