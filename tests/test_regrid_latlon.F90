@@ -43,6 +43,7 @@ contains
                   new_unittest("regrid_conservative_global_integral", &
                                test_conservative_global_integral), &
                   new_unittest("regrid_conservative_nmax_cap", test_conservative_nmax_cap), &
+                  new_unittest("regrid_conservative_wide_cap_cell", test_conservative_wide_cap_cell), &
                   new_unittest("regrid_tile_bitid_serial", test_tile_bitid_serial), &
                   new_unittest("regrid_apply_device", test_apply_device) &
                   ]
@@ -564,6 +565,51 @@ contains
 
       call destroy_cartesian_metrics(metrics)
    end subroutine test_conservative_nmax_cap
+
+   ! =====================================================================
+   ! Test 6b: a tripolar-cap-like target cell that touches the pole spans a
+   ! quarter circle of longitude and needs far more than 64 source cells
+   ! (the 1-degree OM_1deg mosaic against TL319 needs a few hundred); it
+   ! must build, with weights that sum to one.
+   ! =====================================================================
+
+   subroutine test_conservative_wide_cap_cell(error)
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(ocean_metrics_t) :: metrics
+      type(regrid_weights_t) :: wts
+      integer, parameter :: NLON = 640, NLAT = 320
+      real(wp) :: lon_e(NLON + 1), lat_e(NLAT + 1)
+      integer :: ierr, i, j
+
+      call grid%init(2, 2, 2, 1000.0_wp, 1000.0_wp)
+      ! 2x2 cells over lon 0..180, lat 88.5..90: the cells meeting at the pole are 90 degrees wide
+      call make_spherical_metrics(metrics, grid, 0.0_wp, 88.5_wp, 90.0_wp, 0.75_wp, 6.378e6_wp)
+      call edges_from_span(NLON, 0.0_wp, 360.0_wp, lon_e)
+      call edges_from_span(NLAT, -90.0_wp, 90.0_wp, lat_e)
+
+      call regrid_weights_conservative(wts, NLON, NLAT, lon_e, lat_e, &
+                                       grid%nx_phys, grid%ny_phys, grid%nghost, &
+                                       grid%nx_total, grid%ny_total, &
+                                       metrics%geolonBu, metrics%geolatBu, &
+                                       metrics%geolonT, metrics%geolatT, ierr)
+      call check(error, ierr, 0)
+      if (allocated(error)) then
+         call destroy_cartesian_metrics(metrics)
+         return
+      end if
+      call check(error, wts%nmax > 64)
+      if (.not. allocated(error)) then
+         do j = 1, wts%ny
+            do i = 1, wts%nx
+               call check(error, abs(sum(wts%w(i, j, :)) - 1.0_wp) <= 1.0e-12_wp)
+               if (allocated(error)) exit
+            end do
+            if (allocated(error)) exit
+         end do
+      end if
+      call destroy_cartesian_metrics(metrics)
+   end subroutine test_conservative_wide_cap_cell
 
    ! =====================================================================
    ! Test 7: one tile vs 2x2 tiles, bit-identical, on the tripolar grid.
