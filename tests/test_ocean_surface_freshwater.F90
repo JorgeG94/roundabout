@@ -594,10 +594,15 @@ contains
       if (allocated(error)) return
       ! 'mass' ships (test_ocean_surface_fw_mass): the default sigma coordinate remaps, so it is
       ! accepted; `eulerian_z` cannot give the volume back to a remap target and stays refused.
-      call check(error, valid_ierr("&ocean_forcing_nml enable_components = .true., freshwater = 'mass' /") &
+      call check(error, valid_ierr("&ocean_forcing_nml enable_components = .true., freshwater = 'mass' /"//NL// &
+                                   "&ocean_bt_nml auto_n_inner = .true. /") &
                  == OCEAN_STATUS_OK, "freshwater = 'mass' is accepted (default sigma coordinate)")
       if (allocated(error)) return
+      call check(error, valid_ierr("&ocean_forcing_nml enable_components = .true., freshwater = 'mass' /") &
+                 /= OCEAN_STATUS_OK, "freshwater = 'mass' is refused on the unsplit solver (no remap)")
+      if (allocated(error)) return
       call check(error, valid_ierr("&ocean_forcing_nml enable_components = .true., freshwater = 'mass' /"//NL// &
+                                   "&ocean_bt_nml auto_n_inner = .true. /"//NL// &
                                    "&vcoord_nml vcoord_type = 'eulerian_z' /") /= OCEAN_STATUS_OK, &
                  "freshwater = 'mass' is refused with eulerian_z")
       if (allocated(error)) return
