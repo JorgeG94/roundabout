@@ -86,6 +86,7 @@ contains
                   new_unittest("fwm_none_and_virtual_bitidentical", test_none_virtual_bitident), &
                   new_unittest("fwm_refusals_by_name", test_refusals), &
                   new_unittest("fwm_mass_budget_closes", test_mass_budget_closes), &
+                  new_unittest("fwm_absolute_time_factor", test_absolute_time_factor), &
                   new_unittest("fwm_heat_budget_closes", test_heat_budget_closes), &
                   new_unittest("fwm_uniform_rain_closed_basin_no_flow", test_no_flow), &
                   new_unittest("fwm_zstar_interfaces_after_rain", test_zstar_interfaces), &
@@ -448,7 +449,6 @@ contains
    end subroutine test_column_exhaustion_is_fatal
 
    ! -----------------------------------------------------------------
-   ! -----------------------------------------------------------------
    ! 4b. no accepted limit may lose dissolved content
    ! -----------------------------------------------------------------
 
@@ -502,6 +502,7 @@ contains
       end do
    end subroutine test_evap_keeps_salt
 
+   ! -----------------------------------------------------------------
    ! 5. passive tracers, age, pseudo-salt
    ! -----------------------------------------------------------------
 
@@ -1083,6 +1084,65 @@ contains
       if (allocated(error)) return
       call budget_case(error, "pred_corr", 2, .true., "deferred", .true.)
    end subroutine test_heat_budget_closes
+
+   subroutine absolute_case(error, scheme, ratio, deferred, label, n_apply)
+      !! ABSOLUTE time factor: the budget gates close against the APPLIED dh, so a wrong factor
+      !! (outer dt for thermo dt, a doubled call) would still close.  Uniform P on a closed basin:
+      !! `M - M0` must equal `n_apply * dt_thermo * F * A * RHO_WATER/rho_0`, `n_apply` an INTEGER
+      !! count of thermo intervals, to round-off.  In the IN-STAGE orders (ssp_rk2, pred_corr) the
+      !! count is one short of the intervals run: the stage spends the snapshot of the PREVIOUS
+      !! assembly, which is zero in the first interval after a cold start, so every later interval
+      !! spends exactly one snapshot over the whole interval.  The DEFERRED order assembles and
+      !! spends in the same block: no lag, all six intervals.
+      type(error_type), allocatable, intent(out) :: error
+      character(len=*), intent(in) :: scheme, label
+      integer, intent(in) :: ratio, n_apply
+      logical, intent(in) :: deferred
+      type(ocean_engine_t) :: engine
+      type(config_t) :: cfg
+      logical :: ok
+      integer :: n, ierr
+      real(wp) :: t, m0, mt, dummy(8), expect, area_tot, rho0
+      integer, parameter :: NSTEPS = 12
+      real(wp), parameter :: P = 5.0e-3_wp, DTE = 300.0_wp
+
+      call start_engine(mass_nml(scheme, ratio, deferred, "zstar", 6.0_wp, ""), engine, cfg, ok)
+      call check(error, ok, label//": the engine starts")
+      if (allocated(error)) return
+      gate: block
+         call set_forcing(engine, 1)
+         call totals(engine, m0, dummy(1), dummy(2), dummy(3), dummy(4), dummy(5), dummy(6), dummy(7), dummy(8))
+         t = 0.0_wp
+         do n = 1, NSTEPS
+            call advance(engine, cfg, t, ierr)
+            call check(error, ierr == OCEAN_STATUS_OK, label//": the step succeeds")
+            if (allocated(error)) exit gate
+            t = t + DTE
+         end do
+         call totals(engine, mt, dummy(1), dummy(2), dummy(3), dummy(4), dummy(5), dummy(6), dummy(7), dummy(8))
+         rho0 = engine%state%surface_flux%rho0
+         area_tot = 12.0_wp*8.0_wp*4000.0_wp*4000.0_wp
+         expect = real(n_apply, wp)*DTE*real(ratio, wp)*P*area_tot*RHO_WATER/rho0
+         write (output_unit, "(a,a,2es24.14,f10.5,es11.3)") "  fw abs ", label, mt - m0, expect, &
+            (mt - m0)/(P*area_tot*RHO_WATER/rho0*DTE), (mt - m0 - expect)/m0
+         ! the tolerance is the round-off of the TOTAL (M ~ 6e14 kg summed over 96 cells), ~1e-14 M,
+         ! not of the change: still 1e8 times finer than the smallest wrong factor (one interval in n)
+         call check(error, abs((mt - m0) - expect) < 1.0e-13_wp*m0, &
+                    label//": M - M0 is exactly the applied intervals times F*A*dt")
+         if (allocated(error)) exit gate
+      end block gate
+      call engine_exit_data(engine)
+      call engine_teardown(engine)
+   end subroutine absolute_case
+
+   subroutine test_absolute_time_factor(error)
+      type(error_type), allocatable, intent(out) :: error
+      call absolute_case(error, "ssp_rk2", 1, .false., "ssp_rk2", 11)
+      if (allocated(error)) return
+      call absolute_case(error, "pred_corr", 2, .false., "ratio2", 5)
+      if (allocated(error)) return
+      call absolute_case(error, "pred_corr", 2, .true., "deferred", 6)
+   end subroutine test_absolute_time_factor
 
    subroutine no_flow_case(error, scheme, label)
       type(error_type), allocatable, intent(out) :: error
