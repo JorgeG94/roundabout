@@ -57,6 +57,10 @@ contains
          coefs(1, 7) = 150.0_wp
          coefs(:, 8) = 0.0_wp
          coefs(:, 9) = 0.0_wp
+      case ("psl_lat")
+         ! the cold atmosphere with a sea-level pressure that varies with latitude only (so it is continuous
+         ! across a periodic east-west seam): 100 000 Pa at 70 N, 300 Pa per degree
+         coefs(:, 5) = [79000.0_wp, 0.0_wp, 300.0_wp, 0.0_wp]
       case ("mixed")
          ! a latitude gradient of the air temperature: freezing in the south, melting in the north of the basin
          coefs(1, 1) = 250.0_wp - 14.0_wp*70.0_wp

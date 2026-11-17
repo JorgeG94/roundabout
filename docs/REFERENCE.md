@@ -536,7 +536,7 @@ closure is active in which regime, and its tunable knobs, is tabulated in
 - **Surface forcing** — wind stress (2D `tau_x`/`tau_y`, with the MOM6
   `DIRECT_STRESS` distribution option), heat/salt flux and the
   MOM6-shaped component set (`&ocean_forcing_nml enable_components`), its
-  virtual fresh-water salt flux (`freshwater = "virtual"`, `-S_surf*(P-E+runoff)`) or its real-mass form (`freshwater = "mass"`: `dh = (P-E+runoff)·dt/ρ₀` into / out of the first live layer, evaporation passed down the column at `fw_evap_cfl_limit`, Griffies et al. 2001; Campin et al. 2008; with the CICE-port sea ice the ice's water enters as `seaice_melt` and its weight loads `p_surf` via `&ocean_psurf_nml ice_load`, Adcroft et al. 2019),
+  virtual fresh-water salt flux (`freshwater = "virtual"`, `-S_surf*(P-E+runoff)`) or its real-mass form (`freshwater = "mass"`: `dh = (P-E+runoff)·dt/ρ₀` into / out of the first live layer, evaporation passed down the column at `fw_evap_cfl_limit`, Griffies et al. 2001; Campin et al. 2008; with the CICE-port sea ice the ice's water enters as `seaice_melt` and its weight loads `p_surf` via `&ocean_psurf_nml ice_load` (the cold start lowered by the displaced water, `ice_load_balance_ic`; the atmosphere's sea-level pressure joins only with `atm_load`), Adcroft et al. 2019),
   shortwave penetration (`&ocean_thermo_nml sw_pen_frac`), surface
   buoyancy restoring (`&ocean_restore_nml`), atmospheric pressure loading
   (`&ocean_psurf_nml`), geothermal bottom heat
