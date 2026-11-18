@@ -54,6 +54,7 @@ contains
       call register_ocean_thermo(cfg, schema)
       call register_ocean_forcing(cfg, schema)
       call register_ocean_ice(cfg, schema)
+      call register_ocean_ice_cice(cfg, schema)
       call register_ocean_ice_ic(cfg, schema)
       call register_ocean_restore(cfg, schema)
       call register_ocean_geothermal(cfg, schema)
@@ -1015,6 +1016,10 @@ contains
                              "liquid precipitation (>= 0)", "kg m-2 s-1")
       call add_dataovr_entry(g, cfg%ocean%dataovr%salt, "salt", &
                              "surface salt flux (positive salinifies)", "kg m-2 s-1")
+      call add_dataovr_entry(g, cfg%ocean%dataovr%lrunoff, "lrunoff", &
+                             "liquid runoff mass flux (>= 0, on wet cells only)", "kg m-2 s-1")
+      call add_dataovr_entry(g, cfg%ocean%dataovr%frunoff, "frunoff", &
+                             "frozen runoff / calving mass flux (>= 0, on wet cells only)", "kg m-2 s-1")
 
       call schema%add_group(g)
    end subroutine register_ocean_dataovr

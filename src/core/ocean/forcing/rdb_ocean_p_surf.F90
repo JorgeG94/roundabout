@@ -27,11 +27,11 @@ module rdb_ocean_p_surf
    !! `p_surf` (the assembled total, Pa, `>= 0`) is consumed read-only from
    !! the surface-forcing type (`ocean_surface_flux_t`) — this module adds no
    !! forcing field of its own, and does not write `p_surf` (the dyn step
-   !! holds `sf` `intent(in)`).  With no ice mass-loading the assembly
-   !! `p_surf = p_surf_atm` is a configure-time seed (`set_p_surf_const`
-   !! fills both) since `p_surf_atm` is static; when sea-ice loading lands
-   !! (PR-18) its `ice_ocean_mass_load` overwrites `p_surf = p_surf_atm +
-   !! g_load*mis` via its own `inout` access earlier in the same outer step,
+   !! holds `sf` `intent(in)`).  With neither `ice_load` nor `atm_load` the
+   !! assembly is the configure-time seed (`set_p_surf_const`) and `p_surf`
+   !! is never rewritten; otherwise the engine rebuilds `p_surf = (seed or
+   !! p_surf_atm [atm_load]) + p_ice_load [ice_load]` once per outer step
+   !! (`ocean_surface_flux_assemble_p_surf`, full overwrite, ghosts valid),
    !! and this module reads whatever `p_surf` then holds.  Adcroft et al.
    !! (2019) levitating surface-load convention.
    !!
@@ -81,7 +81,7 @@ module rdb_ocean_p_surf
    private
 
    public :: ocean_p_surf_t
-   public :: p_surf_configure, p_surf_update_seam
+   public :: p_surf_configure, p_surf_update_seam, p_surf_balance_ic_impl
 
    type :: ocean_p_surf_t
       logical :: is_init = .false.
@@ -203,6 +203,40 @@ contains
          end if
       end do
    end subroutine p_surf_update_seam_impl
+
+   pure subroutine p_surf_balance_ic_impl(nx, ny, nz, i_rho0_g, p_load, wet, h_layer)
+      !! Cold-start balance of a resting ocean with the weight on its surface
+      !! (`&ocean_psurf_nml ice_load_balance_ic`): the inverse-barometer response to the load
+      !! `p_load` (Pa) is a sea surface lowered by `p_load/(rho0 g) = (rho_i vice + rho_s vsno)/rho0`
+      !! (Campin et al. 2008), so take exactly that from the column, PROPORTIONALLY from every
+      !! layer (`h <- h (1 - delta/sum h)`: a concentration-preserving thinning, vanished layers
+      !! stay vanished, and `sum h` drops by `delta`).  One column per iteration, over the FULL
+      !! array: the load's seam ghosts were exchanged first, so each ghost column is lowered by the
+      !! same amount as the owner's, on any decomposition.  Columns thinner than `2 delta` (a
+      !! load heavier than the water it stands on) are left alone.
+      integer, intent(in) :: nx, ny, nz
+      real(wp), intent(in) :: i_rho0_g
+      real(wp), intent(in) :: p_load(nx, ny), wet(nx, ny)
+      real(wp), intent(inout) :: h_layer(nx, ny, nz)
+      integer :: i, j, k
+      real(wp) :: delta, hsum, f
+
+      do concurrent(j=1:ny, i=1:nx) local(k, delta, hsum, f)
+         if (wet(i, j) > 0.5_wp) then
+            delta = p_load(i, j)*i_rho0_g
+            hsum = 0.0_wp
+            do k = 1, nz
+               hsum = hsum + h_layer(i, j, k)
+            end do
+            if (delta > 0.0_wp .and. hsum > 2.0_wp*delta) then
+               f = 1.0_wp - delta/hsum
+               do k = 1, nz
+                  h_layer(i, j, k) = h_layer(i, j, k)*f
+               end do
+            end if
+         end if
+      end do
+   end subroutine p_surf_balance_ic_impl
 
    subroutine ocean_p_surf_enter_data(this)
       !! Attach the device-resident seam arrays.  Only when enabled.

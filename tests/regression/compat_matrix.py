@@ -209,6 +209,7 @@ def write_netcdf_classic(path, dims, variables, gatts=()):
 BATHY_FILE = "compat_bathy.nc"
 BATHY_CLIFF_FILE = "compat_bathy_cliff.nc"
 TS_FILE = "compat_ts.nc"
+FW_FILE = "compat_fw.nc"
 
 
 def write_domain_inputs(directory):
@@ -224,6 +225,25 @@ def write_domain_inputs(directory):
             t, s = ts_profile(j, z)
             temp.extend([t] * NX)
             salt.extend([s] * NX)
+    # Fresh-water forcing for the `fw_mass` forcing value: rain varying along x,
+    # evaporation over the northern half, two records (static: record 1 is read).
+    # Runoff on the model grid, wet cells only (a value on a land cell aborts): a liquid river
+    # mouth in the south-west and a frozen (calving) point source in the east, away from the island.
+    rain, evap, lroff, froff = [], [], [], []
+    for _rec in range(2):
+        for j in range(NY):
+            for i in range(NX):
+                rain.append(2.0e-3 * (1.0 + 0.5 * math.sin(2.0 * math.pi * (i + 0.5) / NX)))
+                evap.append(-1.5e-3 if j >= NY // 2 else 0.0)
+                lroff.append(4.0e-3 if (i, j) in ((3, 4), (4, 4)) else 0.0)
+                froff.append(3.0e-3 if (i, j) == (20, 12) else 0.0)
+    write_netcdf_classic(os.path.join(directory, FW_FILE),
+                         [("time", 2), ("y", NY), ("x", NX)],
+                         [("time", ("time",), [0.0, 1.0e9]),
+                          ("lprec", ("time", "y", "x"), rain),
+                          ("evap", ("time", "y", "x"), evap),
+                          ("lrunoff", ("time", "y", "x"), lroff),
+                          ("frunoff", ("time", "y", "x"), froff)])
     write_netcdf_classic(os.path.join(directory, TS_FILE),
                          [("z", len(Z_SRC)), ("y", NY), ("x", NX)],
                          [("z_src", ("z",), list(Z_SRC)),
@@ -474,6 +494,20 @@ AXES = [
         # Wind + heating with penetrating shortwave.
         ("warm_sw", {"ocean_thermo_nml": {"enable_thermodynamics": True, "q_heat": 60.0,
                                           "sw_pen_frac": 0.4}}),
+        # Wind + cooling with the real-mass fresh-water mode on (`freshwater = "mass"`).
+        # P - E comes from a static two-field file (`compat_fw.nc`: rain along x,
+        # evaporation over the northern half, plus a liquid river mouth and a frozen point source
+        # on wet cells: `lrunoff` / `frunoff`, `q_fus_rof`), so real volume moves in every cell: the value
+        # proves the CONFIGURE-TIME envelope (every refusal of the mode is a row in
+        # `compat_expect`), that every accepted vertical coordinate takes the volume, and that
+        # the carried `fw_net` / `Q_salt_tracer` snapshot survives the RESTART and DECOMP legs.
+        ("fw_mass", {"ocean_thermo_nml": {"enable_thermodynamics": True, "q_heat": -60.0},
+                     "ocean_forcing_nml": {"enable_components": True, "freshwater": "mass"},
+                     "ocean_dataovr_nml": {"enable": True, "time_mode": "static",
+                                           "lprec_file": "compat_fw.nc", "lprec_var": "lprec",
+                                           "evap_file": "compat_fw.nc", "evap_var": "evap",
+                                           "lrunoff_file": "compat_fw.nc", "lrunoff_var": "lrunoff",
+                                           "frunoff_file": "compat_fw.nc", "frunoff_var": "frunoff"}}),
     ]),
 ]
 AXIS_NAMES = [a for a, _ in AXES]
@@ -2100,7 +2134,7 @@ def cmd_validate_smoke(args):
     rc, out, err, _ = _run(binary, ["--validate-only", "cell.nml"], d2, 60)
     _check(rc == 3 and "REFUSED by engine_setup" in out and "nu_h" in out,
            "engine_setup (configure-stage) refusal -> rc 3, reason logged (rc {})".format(rc), fails)
-    _check(not any(n.endswith(".nc") and n not in (BATHY_FILE, BATHY_CLIFF_FILE, TS_FILE)
+    _check(not any(n.endswith(".nc") and n not in (BATHY_FILE, BATHY_CLIFF_FILE, TS_FILE, FW_FILE)
                    for n in os.listdir(d2)),
            "a refused validation writes no output file", fails)
     print("{} failure(s)".format(len(fails)))

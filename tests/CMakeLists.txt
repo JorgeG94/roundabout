@@ -25,8 +25,16 @@ file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/tmp_local_artifacts)
 
 # Helper modules used by some unit tests (Ritter dam-break + Thacker bowl
 # analytical solutions). Built as a static lib and linked into every test.
-add_library(rdb_analytical STATIC ritter_dambreak.F90 thacker_bowl.F90
-                                  ocean_test_metrics.F90 lcg_deterministic.F90)
+# lcg_deterministic compiles ONCE (rdb_test_lcg) and is archived here; the
+# standalone ice tests link the same objects.
+add_library(rdb_test_lcg OBJECT lcg_deterministic.F90)
+set_target_properties(
+  rdb_test_lcg PROPERTIES POSITION_INDEPENDENT_CODE ON
+                          Fortran_MODULE_DIRECTORY ${CMAKE_BINARY_DIR}/modules)
+target_link_libraries(rdb_test_lcg PUBLIC pic::pic)
+add_library(
+  rdb_analytical STATIC ritter_dambreak.F90 thacker_bowl.F90
+                        ocean_test_metrics.F90 $<TARGET_OBJECTS:rdb_test_lcg>)
 set_target_properties(rdb_analytical PROPERTIES Fortran_MODULE_DIRECTORY
                                                 ${CMAKE_BINARY_DIR}/modules)
 target_include_directories(rdb_analytical PRIVATE "${CMAKE_BINARY_DIR}/modules"
@@ -101,6 +109,11 @@ set(RDB_TESTS
     "test_efp|test_efp|collect_efp_tests|efp|core"
     "test_ocean_console_stats_efp|test_ocean_console_stats_efp|collect_ocean_console_stats_efp_tests|ocean_console_stats_efp|ocean"
     "test_config|test_config|collect_config_tests|config|ocean+core"
+    "test_cice_config|test_cice_config|collect_cice_config_tests|cice_config|ocean"
+    "test_cice_state|test_cice_state|collect_cice_state_tests|cice_state|ocean"
+    "test_cice_flux|test_cice_flux|collect_cice_flux_tests|cice_flux|ocean"
+    "test_cice_restart_convert|test_cice_restart_convert|collect_cice_restart_convert_tests|cice_restart_convert|ocean"
+    "test_cice_therm1_ledger|test_cice_therm1_ledger|collect_cice_therm1_ledger_tests|cice_therm1_ledger|ocean"
     "test_nml_schema|test_nml_schema|collect_nml_schema_tests|nml_schema|core"
     "test_config_schema|test_config_schema|collect_config_schema_tests|config_schema|core"
     "test_ocean_knob_retirement|test_ocean_knob_retirement|collect_ocean_knob_retirement_tests|ocean_knob_retirement|ocean"
@@ -143,6 +156,8 @@ set(RDB_TESTS
     "test_ocean_cavity_grounded_budget|test_ocean_cavity_grounded_budget|collect_ocean_cavity_grounded_budget_tests|ocean_cavity_grounded_budget|ocean"
     "test_ocean_cavity_engine|test_ocean_cavity_engine|collect_ocean_cavity_engine_tests|ocean_cavity_engine|ocean"
     "test_ocean_cavity_freshwater|test_ocean_cavity_freshwater|collect_ocean_cavity_freshwater_tests|ocean_cavity_freshwater|ocean"
+    "test_ocean_surface_fw_mass|test_ocean_surface_fw_mass|collect_ocean_surface_fw_mass_tests|ocean_surface_fw_mass|ocean"
+    "test_ocean_runoff|test_ocean_runoff|collect_ocean_runoff_tests|ocean_runoff|ocean"
     "test_ocean_pgf_wright|test_ocean_pgf_wright|collect_ocean_pgf_wright_tests|ocean_pgf_wright|ocean"
     "test_ocean_pgf_gprime|test_ocean_pgf_gprime|collect_ocean_pgf_gprime_tests|ocean_pgf_gprime|ocean"
     "test_ocean_pgf_gfs_scale|test_ocean_pgf_gfs_scale|collect_ocean_pgf_gfs_scale_tests|ocean_pgf_gfs_scale|ocean"
@@ -233,6 +248,7 @@ set(RDB_TESTS
     "test_ocean_surface_flux|test_ocean_surface_flux|collect_ocean_surface_flux_tests|ocean_surface_flux|ocean"
     "test_ocean_bulk_flux|test_ocean_bulk_flux|collect_ocean_bulk_flux_tests|ocean_bulk_flux|ocean"
     "test_ocean_surface_forcing_type|test_ocean_surface_forcing_type|collect_ocean_surface_forcing_type_tests|ocean_surface_forcing_type|ocean"
+    "test_ocean_surface_freshwater|test_ocean_surface_freshwater|collect_ocean_surface_freshwater_tests|ocean_surface_freshwater|ocean"
     "test_ocean_forcing_rho_ref|test_ocean_forcing_rho_ref|collect_ocean_forcing_rho_ref_tests|ocean_forcing_rho_ref|ocean"
     "test_ocean_frazil|test_ocean_frazil|collect_ocean_frazil_tests|ocean_frazil|ocean"
     "test_ocean_ice_enthalpy|test_ocean_ice_enthalpy|collect_ocean_ice_enthalpy_tests|ocean_ice_enthalpy|ocean"
@@ -244,9 +260,23 @@ set(RDB_TESTS
     "test_ocean_ice_transport|test_ocean_ice_transport|collect_ocean_ice_transport_tests|ocean_ice_transport|ocean"
     "test_ocean_ice_fold|test_ocean_ice_fold|collect_ocean_ice_fold_tests|ocean_ice_fold|ocean"
     "test_ocean_ice_evp|test_ocean_ice_evp|collect_ocean_ice_evp_tests|ocean_ice_evp|ocean"
+    "test_cice_cgrid_metrics|test_cice_cgrid_metrics|collect_cice_cgrid_metrics_tests|cice_cgrid_metrics|ocean"
+    "test_cice_dyn_c_kernels|test_cice_dyn_c_kernels|collect_cice_dyn_c_kernels_tests|cice_dyn_c_kernels|ocean"
+    "test_cice_dyn_c_engine|test_cice_dyn_c_engine|collect_cice_dyn_c_engine_tests|cice_dyn_c_engine|ocean"
+    "test_cice_step_plan|test_cice_step_plan|collect_cice_step_plan_tests|cice_step_plan|ocean"
+    "test_cice_coupling|test_cice_coupling|collect_cice_coupling_tests|cice_coupling|ocean"
+    "test_cice_engine|test_cice_engine|collect_cice_engine_tests|cice_engine|ocean"
+    "test_cice_tripole|test_cice_tripole|collect_cice_tripole_tests|cice_tripole|ocean"
+    "test_cice_forcing|test_cice_forcing|collect_cice_forcing_tests|cice_forcing|ocean"
+    "test_cice_closure|test_cice_closure|collect_cice_closure_tests|cice_closure|ocean"
+    "test_cice_ledger_cost|test_cice_ledger_cost|collect_cice_ledger_cost_tests|cice_ledger_cost|ocean"
+    "test_cice_stefan_column|test_cice_stefan_column|collect_cice_stefan_column_tests|cice_stefan_column|ocean"
+    "test_cice_diags|test_cice_diags|collect_cice_diags_tests|cice_diags|ocean"
     "test_ocean_ice_evp_fold|test_ocean_ice_evp_fold|collect_ocean_ice_evp_fold_tests|ocean_ice_evp_fold|ocean"
     "test_ocean_ice_restart|test_ocean_ice_restart|collect_ocean_ice_restart_tests|ocean_ice_restart|ocean"
     "test_ocean_ice_diags|test_ocean_ice_diags|collect_ocean_ice_diags_tests|ocean_ice_diags|ocean"
+    "test_ocean_ice_aggregates|test_ocean_ice_aggregates|collect_ocean_ice_aggregates_tests|ocean_ice_aggregates|ocean"
+    "test_ocean_ice_melt_potential|test_ocean_ice_melt_potential|collect_ocean_ice_melt_potential_tests|ocean_ice_melt_potential|ocean"
     "test_ocean_ice_init|test_ocean_ice_init|collect_ocean_ice_init_tests|ocean_ice_init|ocean"
     "test_ocean_ice_stress_mag|test_ocean_ice_stress_mag|collect_ocean_ice_stress_mag_tests|ocean_ice_stress_mag|ocean"
     "test_ocean_sw_penetration|test_ocean_sw_penetration|collect_ocean_sw_penetration_tests|ocean_sw_penetration|ocean"
@@ -432,6 +462,7 @@ set(RDB_STATIC_CORE_TESTS test_remap_pqm)
 # built thread-safe (OMP_NUM_THREADS=1 prevents crashes when the OpenMP runtime
 # is active via -mp=multicore or -fopenmp).
 set(NETCDF_TESTS
+    test_cice_diags
     test_static_2d_reader
     test_ocean_cavity_draft_file
     test_ocean_periodic_seam_file
@@ -443,12 +474,14 @@ set(NETCDF_TESTS
     test_ocean_zinit
     test_ocean_data_input
     test_ocean_data_forcing
+    test_ocean_runoff
     test_ocean_sss_restore
     test_ocean_sw_chl
     test_ocean_atm_state
     test_ocean_driver_diag
     test_ocean_restart
     test_ocean_restart_engine
+    test_ocean_surface_freshwater
     test_ocean_tracer_ratio_pc
     test_ocean_ice_evp
     test_ocean_ice_restart
@@ -473,6 +506,7 @@ set(NETCDF_REQUIRED_TESTS
     test_ocean_zinit
     test_ocean_data_input
     test_ocean_data_forcing
+    test_ocean_runoff
     test_ocean_sss_restore
     test_ocean_sw_chl
     test_ocean_atm_state
@@ -480,6 +514,7 @@ set(NETCDF_REQUIRED_TESTS
     test_ocean_driver_diag
     test_ocean_restart
     test_ocean_restart_engine
+    test_ocean_surface_freshwater
     test_ocean_tracer_ratio_pc
     test_ocean_ice_restart
     test_driver_ocean)
@@ -610,6 +645,14 @@ foreach(row ${RDB_TESTS})
   endif()
   target_link_libraries(${test_name} PRIVATE ${_core_for_test} rdb_analytical
                                              test-drive::test-drive)
+  if(test_name STREQUAL "test_cice_forcing"
+     OR test_name STREQUAL "test_cice_closure"
+     OR test_name STREQUAL "test_ocean_surface_freshwater"
+     OR test_name STREQUAL "test_ocean_restart_engine")
+    # the synthetic prescribed atmosphere shared by the two engine tests
+    target_sources(${test_name}
+                   PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/test_cice_synth_atm.F90)
+  endif()
   if(RDB_ENABLE_MPI AND ${test_name} IN_LIST MPI_LAUNCH_TESTS)
     add_test(NAME rdb_${test_name}
              COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} 1
@@ -619,6 +662,12 @@ foreach(row ${RDB_TESTS})
   endif()
   set_tests_properties(rdb_${test_name} PROPERTIES LABELS
                                                    "${TEST_REGIME_LABELS}")
+  if(test_name STREQUAL "test_cice_closure")
+    # the dynamics-only case freezes the thermodynamics, a harness-only switch
+    set_tests_properties(
+      rdb_${test_name}
+      PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=1;RDB_ICE_ALLOW_SKIP_THERMO=1")
+  endif()
   if(${test_name} IN_LIST NETCDF_TESTS)
     set_tests_properties(rdb_${test_name} PROPERTIES ENVIRONMENT
                                                      "OMP_NUM_THREADS=1")
@@ -645,6 +694,90 @@ foreach(row ${RDB_TESTS})
   endif()
 endforeach()
 
+# Standalone CICE-port tests: link `rdb_ice_core_objs` + test-drive only (no
+# ocean core), so they build in seconds.  Row:
+# <test-name>|<module>|<collect-fn>|<suite>|<regime>.
+set(RDB_CICE_TESTS
+    "test_cice_conversions|test_cice_conversions|collect_cice_conversions_tests|cice_conversions|ocean"
+    "test_cice_device|test_cice_device|collect_cice_device_tests|cice_device|ocean"
+    "test_cice_errors|test_cice_errors|collect_cice_errors_tests|cice_errors|ocean"
+    "test_cice_golden|test_cice_golden|collect_cice_golden_tests|cice_golden|ocean"
+    "test_cice_params|test_cice_params|collect_cice_params_tests|cice_params|ocean"
+    "test_cice_shortwave|test_cice_shortwave|collect_cice_shortwave_tests|cice_shortwave|ocean"
+    "test_cice_golden_thermo_shared|test_cice_golden_thermo_shared|collect_cice_golden_thermo_shared_tests|cice_golden_thermo_shared|ocean"
+    "test_cice_thermo_shared|test_cice_thermo_shared|collect_cice_thermo_shared_tests|cice_thermo_shared|ocean"
+    "test_cice_itd_params|test_cice_itd_params|collect_cice_itd_params_tests|cice_itd_params|ocean"
+    "test_cice_lateral_melt|test_cice_lateral_melt|collect_cice_lateral_melt_tests|cice_lateral_melt|ocean"
+    "test_cice_bl99_pieces|test_cice_bl99_pieces|collect_cice_bl99_pieces_tests|cice_bl99_pieces|ocean"
+    "test_cice_golden_bl99_pieces|test_cice_golden_bl99_pieces|collect_cice_golden_bl99_pieces_tests|cice_golden_bl99_pieces|ocean"
+    "test_cice_ridge_itd|test_cice_ridge_itd|collect_cice_ridge_itd_tests|cice_ridge_itd|ocean"
+    "test_cice_atmo|test_cice_atmo|collect_cice_atmo_tests|cice_atmo|ocean"
+    "test_cice_golden_atmo|test_cice_golden_atmo|collect_cice_golden_atmo_tests|cice_golden_atmo|ocean"
+    "test_cice_thickness_pieces|test_cice_thickness_pieces|collect_cice_thickness_pieces_tests|cice_thickness_pieces|ocean"
+    "test_cice_golden_thickness_pieces|test_cice_golden_thickness_pieces|collect_cice_golden_thickness_pieces_tests|cice_golden_thickness_pieces|ocean"
+    "test_cice_bl99_solver|test_cice_bl99_solver|collect_cice_bl99_solver_tests|cice_bl99_solver|ocean"
+    "test_cice_golden_bl99_solver|test_cice_golden_bl99_solver|collect_cice_golden_bl99_solver_tests|cice_golden_bl99_solver|ocean"
+    "test_cice_agg_cell|test_cice_agg_cell|collect_cice_agg_cell_tests|cice_agg_cell|ocean"
+    "test_cice_thickness_changes|test_cice_thickness_changes|collect_cice_thickness_changes_tests|cice_thickness_changes|ocean"
+    "test_cice_basal_heat|test_cice_basal_heat|collect_cice_basal_heat_tests|cice_basal_heat|ocean"
+    "test_cice_itd_linear|test_cice_itd_linear|collect_cice_itd_linear_tests|cice_itd_linear|ocean"
+    "test_cice_new_ice|test_cice_new_ice|collect_cice_new_ice_tests|cice_new_ice|ocean"
+    "test_cice_itd_cleanup|test_cice_itd_cleanup|collect_cice_itd_cleanup_tests|cice_itd_cleanup|ocean"
+    "test_cice_transport_pack|test_cice_transport_pack|collect_cice_transport_pack_tests|cice_transport_pack|ocean"
+    "test_cice_therm1|test_cice_therm1|collect_cice_therm1_tests|cice_therm1|ocean"
+    "test_cice_radiation|test_cice_radiation|collect_cice_radiation_tests|cice_radiation|ocean"
+    "test_cice_therm2|test_cice_therm2|collect_cice_therm2_tests|cice_therm2|ocean"
+    "test_cice_sw_wiring|test_cice_sw_wiring|collect_cice_sw_wiring_tests|cice_sw_wiring|ocean"
+    "test_cice_evp_c|test_cice_evp_c|collect_cice_evp_c_tests|cice_evp_c|ocean"
+    "test_cice_upwind|test_cice_upwind|collect_cice_upwind_tests|cice_upwind|ocean"
+    "test_cice_ridge_ice|test_cice_ridge_ice|collect_cice_ridge_ice_tests|cice_ridge_ice|ocean"
+    "test_cice_atm_inputs|test_cice_atm_inputs|collect_cice_atm_inputs_tests|cice_atm_inputs|ocean"
+    "test_cice_remap_geom|test_cice_remap_geom|collect_cice_remap_geom_tests|cice_remap_geom|ocean"
+    "test_cice_remap_recon|test_cice_remap_recon|collect_cice_remap_recon_tests|cice_remap_recon|ocean"
+    "test_cice_remap_flux|test_cice_remap_flux|collect_cice_remap_flux_tests|cice_remap_flux|ocean"
+    "test_cice_evp_c_fold|test_cice_evp_c_fold|collect_cice_evp_c_fold_tests|cice_evp_c_fold|ocean"
+)
+
+# Shared helpers of the ice tests (deterministic columns, ledger, golden
+# compare); objects are linked into each ice test directly.
+add_library(rdb_cice_test_util OBJECT test_cice_util.F90)
+set_target_properties(
+  rdb_cice_test_util
+  PROPERTIES POSITION_INDEPENDENT_CODE ON Fortran_MODULE_DIRECTORY
+                                          ${CMAKE_BINARY_DIR}/modules_cice_test)
+target_link_libraries(rdb_cice_test_util PUBLIC rdb_test_lcg rdb_ice_core_objs
+                                                test-drive::test-drive)
+target_include_directories(rdb_cice_test_util
+                           PUBLIC ${CMAKE_BINARY_DIR}/modules_cice_test)
+foreach(row ${RDB_CICE_TESTS})
+  string(REPLACE "|" ";" fields "${row}")
+  list(GET fields 0 test_name)
+  list(GET fields 1 MODULE_NAME)
+  list(GET fields 2 COLLECT_FN)
+  list(GET fields 3 SUITE_NAME)
+  list(GET fields 4 TEST_REGIME)
+  set(TESTER_NAME "tester_${test_name}")
+  set(driver_path "${CMAKE_CURRENT_BINARY_DIR}/generated/${TESTER_NAME}.F90")
+  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/tester_cice_template.F90.in
+                 ${driver_path} @ONLY)
+  add_executable(${test_name} ${CMAKE_CURRENT_SOURCE_DIR}/${MODULE_NAME}.F90
+                              ${driver_path})
+  set_target_properties(
+    ${test_name} PROPERTIES Fortran_MODULE_DIRECTORY
+                            "${CMAKE_CURRENT_BINARY_DIR}/modules/${test_name}")
+  target_include_directories(
+    ${test_name}
+    PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/modules/${test_name}"
+            "${CMAKE_BINARY_DIR}/modules" "${RDB_SHARED_INCLUDE_DIR}")
+  target_link_libraries(
+    ${test_name} PRIVATE rdb_cice_test_util rdb_test_lcg rdb_ice_core_objs
+                         rdb_core_objs test-drive::test-drive)
+  add_test(NAME rdb_${test_name} COMMAND ${test_name})
+  set_tests_properties(
+    rdb_${test_name} PROPERTIES LABELS "${TEST_REGIME}" ENVIRONMENT
+                                "OMP_NUM_THREADS=1")
+endforeach()
+
 # MPI integration tests (only when MPI is enabled). Per-test rank counts because
 # the structured halo test wants a 2x2 grid (4 ranks) while the unstructured
 # halo and lake-at-rest tests run on 2 ranks.
@@ -659,6 +792,7 @@ if(RDB_ENABLE_MPI)
       test_ocean_fold_exchange_mpi
       test_ocean_fold_sites_mpi
       test_ocean_decomp_bitid_mpi
+      test_cice_remap_decomp_mpi
       test_ocean_ke_probe_mpi)
   set(MPI_TEST_NPROCS_test_halo_mpi 4)
   set(MPI_TEST_NPROCS_test_halo_ocean_mpi 4)
@@ -669,6 +803,7 @@ if(RDB_ENABLE_MPI)
   set(MPI_TEST_NPROCS_test_ocean_fold_exchange_mpi 2)
   set(MPI_TEST_NPROCS_test_ocean_fold_sites_mpi 2)
   set(MPI_TEST_NPROCS_test_ocean_decomp_bitid_mpi 2)
+  set(MPI_TEST_NPROCS_test_cice_remap_decomp_mpi 2)
   set(MPI_TEST_NPROCS_test_ocean_ke_probe_mpi 4)
   # Per-test regime label (same values as the RDB_TESTS 5th field;
   # classification is by the source path of the modules each test imports).
@@ -681,6 +816,7 @@ if(RDB_ENABLE_MPI)
   set(MPI_TEST_REGIME_test_ocean_fold_exchange_mpi ocean)
   set(MPI_TEST_REGIME_test_ocean_fold_sites_mpi ocean)
   set(MPI_TEST_REGIME_test_ocean_decomp_bitid_mpi ocean)
+  set(MPI_TEST_REGIME_test_cice_remap_decomp_mpi ocean)
   set(MPI_TEST_REGIME_test_ocean_ke_probe_mpi ocean)
   # Writes + reads NetCDF inputs (the per-rank windowed readers).
   set(MPI_NETCDF_TESTS test_ocean_decomp_bitid_mpi)
@@ -837,6 +973,19 @@ if(RDB_ENABLE_MPI)
   set_tests_properties(
     rdb_test_ocean_decomp_bitid_mpi_1rank rdb_test_ocean_decomp_bitid_mpi_4rank
     PROPERTIES LABELS "ocean" ENVIRONMENT "OMP_NUM_THREADS=1" TIMEOUT 14400)
+  # CICE6 port D10.6: the incremental-remapping transport, every px x py layout
+  # of 1/2/4 ranks vs the serial run (owned cells bitwise), the tripolar fold
+  # seam included.  The 2-rank leg is the unsuffixed MPI_TESTS entry.
+  foreach(_np 1 4)
+    add_test(NAME rdb_test_cice_remap_decomp_mpi_${_np}rank
+             COMMAND ${MPIEXEC_EXECUTABLE} ${MPIEXEC_NUMPROC_FLAG} ${_np}
+                     $<TARGET_FILE:test_cice_remap_decomp_mpi>)
+    set_tests_properties(
+      rdb_test_cice_remap_decomp_mpi_${_np}rank
+      PROPERTIES LABELS "ocean" ENVIRONMENT "OMP_NUM_THREADS=1")
+  endforeach()
+  set_tests_properties(rdb_test_cice_remap_decomp_mpi
+                       PROPERTIES ENVIRONMENT "OMP_NUM_THREADS=1")
   # OM3 C2c-3b: atm-state provider + ocean bulk-flux consumer, 1 vs 2x2
   # bit-identity (atm%tas, ss%tau_x/tau_y, sf%q_sens physical cells). Not part
   # of the generic MPI_TESTS foreach above (it needs exactly the {1,4}rank legs
@@ -943,6 +1092,28 @@ if(Python3_EXECUTABLE)
       rdb_validate_only PROPERTIES LABELS "ocean;python" ENVIRONMENT
                                    "OMP_NUM_THREADS=1")
   endif()
+endif()
+
+# tools/om_runoff_to_model.f90 self-test: builds a synthetic mosaic, depth map
+# and lon-lat runoff product in the (scratch) working directory, runs the
+# conservative remap + land-to-coast move, and asserts the global total is
+# preserved and no land cell is non-zero, both inside the tool and from an
+# independent re-read of its output. Plain host Fortran + NetCDF, so it needs no
+# core library.
+if(RDB_ENABLE_NETCDF)
+  add_executable(om_runoff_to_model
+                 "${PROJECT_SOURCE_DIR}/tools/om_runoff_to_model.f90")
+  target_link_libraries(om_runoff_to_model PRIVATE netCDF::netcdff)
+  set_target_properties(
+    om_runoff_to_model PROPERTIES Fortran_MODULE_DIRECTORY
+                                  ${CMAKE_CURRENT_BINARY_DIR}/om_runoff_mod)
+  add_test(
+    NAME rdb_om_runoff_to_model_selftest
+    COMMAND om_runoff_to_model --selftest
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/tmp_local_artifacts)
+  set_tests_properties(
+    rdb_om_runoff_to_model_selftest PROPERTIES LABELS "ocean" ENVIRONMENT
+                                               "OMP_NUM_THREADS=1")
 endif()
 
 # [C1] tools/vgrid_to_dz.py self-test: builds a synthetic MOM6 vgrid in memory

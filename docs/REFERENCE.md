@@ -511,7 +511,8 @@ closure is active in which regime, and its tunable knobs, is tabulated in
 `tools/check_closure_matrix.py`). In brief:
 
 - **Vertical mixing** — PP81 interior + KPP boundary overlay (default
-  on), EPBL (`&ocean_epbl_nml`, mutually exclusive with KPP),
+  on), EPBL (`&ocean_epbl_nml`, mutually exclusive with KPP; `rivermix_depth` adds
+  the PE of mixing runoff over that depth to its surface energy, Reichl & Hallberg 2018),
   kappa-shear (JHL08, `&ocean_kappa_shear_nml`), tidal mixing
   (`&ocean_tidal_mixing_nml`), convective adjustment (`&ocean_conv_nml`),
   double diffusion (`&ocean_ddiff_nml`), and two mutually exclusive
@@ -535,12 +536,13 @@ closure is active in which regime, and its tunable knobs, is tabulated in
   killing thin-layer CFL blow-up.
 - **Surface forcing** — wind stress (2D `tau_x`/`tau_y`, with the MOM6
   `DIRECT_STRESS` distribution option), heat/salt flux and the
-  MOM6-shaped component set (`&ocean_forcing_nml enable_components`),
+  MOM6-shaped component set (`&ocean_forcing_nml enable_components`), its
+  virtual fresh-water salt flux (`freshwater = "virtual"`, `-S_surf*(P-E+runoff)`) or its real-mass form (`freshwater = "mass"`: `dh = (P-E+runoff)·dt/ρ₀` into / out of the first live layer, evaporation passed down the column at `fw_evap_cfl_limit`, Griffies et al. 2001; Campin et al. 2008; with the CICE-port sea ice the ice's water enters as `seaice_melt` and its weight loads `p_surf` via `&ocean_psurf_nml ice_load` (the cold start lowered by the displaced water, `ice_load_balance_ic`; the atmosphere's sea-level pressure joins only with `atm_load`), Adcroft et al. 2019),
   shortwave penetration (`&ocean_thermo_nml sw_pen_frac`), surface
   buoyancy restoring (`&ocean_restore_nml`), atmospheric pressure loading
   (`&ocean_psurf_nml`), geothermal bottom heat
   (`&ocean_geothermal_nml`), and time-varying NetCDF forcing
-  (`&ocean_dataovr_nml`, off the shared `rdb_ocean_data_input` reader).
+  (`&ocean_dataovr_nml`, off the shared `rdb_ocean_data_input` reader; wind stress, heat, salt, `evap`, `lprec`, and the runoff mass fluxes `lrunoff`/`frunoff`, kg m-2 s-1 on wet cells of the model grid, with `frunoff` also charging its latent heat `q_fus_rof = -L_f*frunoff`; `tools/om_runoff_to_model.f90` builds such a file from a lon-lat product: conservative remap, land values moved to the nearest wet coastal cell, total preserved; Tsujino et al. 2018).
 - **Tides** — equilibrium body forcing + scalar SAL
   (`&ocean_tides_nml`), the boundary-tide nodal correction, and
   barotropic linear wave drag (`&ocean_bt_nml wave_drag`).
@@ -654,7 +656,10 @@ closure is active in which regime, and its tunable knobs, is tabulated in
 - **Sea ice** (`&ocean_ice_nml`, default off) — SIS2 port: Winton column
   thermodynamics, multi-category ITD, category transport, C-grid EVP
   dynamics, snowfall, Archimedes snow-ice flooding. Single-rank,
-  wall/periodic edges, no tripolar fold.
+  wall/periodic edges, or a tripolar north fold (the SIS2 EVP and the CICE
+  C-grid EVP `dyn_scheme = "cice_c"` on any rank count); the CICE-port
+  scheme `scheme = "cice"` runs on any rank count on wall/periodic edges
+  (not yet with the fold).
 
 Most new-physics knobs default off ⇒ bit-identical; KPP and the ALE remap
 are the on-by-default exceptions. Each path is guarded by an analytical
@@ -853,8 +858,22 @@ Per-rank files merge offline via `tools/merge_output.py`.
 (aggregate surface temperature, degC; open water at the seawater freezing
 point), and the rates `congel`, `frazil`, `snoice`, `meltt`, `meltb`,
 `meltl`, `dvidtt` in **cm day⁻¹** (CICE `mps_to_cmpdy`), time-averaged over
-the output window. `meltl` is identically 0 (no lateral melt scheme). `dvidtt`
-is the thermodynamic volume tendency, not `dvidtd`. The former default
+the output window. Under `scheme = "sis2"`, `meltl` is identically 0 (no
+lateral melt scheme) and `dvidtt` is the thermodynamic volume tendency, not
+`dvidtd`. Under `scheme = "cice"` the same names are the CICE-port step's
+(per grid-cell area, CICE's units; `Tsfc` is the ice-area mean with the
+freezing point only where there is no ice) and these are added: `melts`
+(cm/day of snow), `dvidtd` (cm/day), `daidtt`, `daidtd` (%/day), `albsni`
+(%, ice-area weighted snapshot: not a physical window-mean albedo), and the
+cell-weighted fluxes `fswdn_ai`, `fswabs_ai`, `fswthru_ai`, `flwup_ai`,
+`fsens_ai`, `flat_ai`, `fhocn_ai` (W m⁻², CICE signs), `fsalt_ai`
+(kg m⁻² s⁻¹), `fresh_ai`, `evap_ai`, `evapi_ai`, `evaps_ai` (cm/day water
+equivalent). Albedo: `1 - mean(fswabs_ai)/mean(fswdn_ai)`. `fresh_ai` includes
+the rain that falls through the ice, which the hand-off removes from the
+ocean's input under the prescribed atmosphere with `freshwater = "none"`.
+`dvidtt = congel + frazil + snoice - meltt - meltb - meltl + evapi_ai*1000/rhoi`
+to round-off. Definitions and signs in the docstring of
+`rdb_ocean_diag_ice_cice`. The former default
 `ice_conc`/`ice_thick` are opt-in aliases (name them in `diags`). Derived
 `uvel`/`vvel` are the cell-centre drift velocities under the CICE names
 (CICE's own `uvel`/`vvel` sit on the U/V points).

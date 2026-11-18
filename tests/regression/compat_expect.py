@@ -152,6 +152,10 @@ FEATURES = {
     "spherical": ("spherical sector", lambda n: _g(n, "ocean_grid_nml", "grid_config", "cartesian") == "spherical"),
     "sw_pen": ("penetrating shortwave", lambda n: float(_g(n, "ocean_thermo_nml", "sw_pen_frac", 0.0)) > 0.0),
     "cooling": ("surface cooling", lambda n: float(_g(n, "ocean_thermo_nml", "q_heat", 0.0)) < 0.0),
+    "dataovr": ("file-backed surface forcing (&ocean_dataovr_nml)",
+                lambda n: bool(_g(n, "ocean_dataovr_nml", "enable", False))),
+    "fw_mass": ("real fresh-water mass (freshwater = 'mass')",
+                lambda n: _g(n, "ocean_forcing_nml", "freshwater", "none") == "mass"),
 }
 
 
@@ -304,6 +308,27 @@ ROWS = [
         ("pgf_recon", r"reconstruct_for_pressure=\.true\.", "partial top cell reads fillers"),
     )
 ] + [
+    _phys("fw_mass_eulerian_z", ("fw_mass", "vc_eulerian_z"),
+          "eulerian_z's remap returns early and its target ignores eta: the real volume would pile "
+          "up in the top layer for ever.",
+          r"freshwater='mass' is refused with the 'eulerian_z' vertical coordinate"),
+    _phys("fw_mass_lagrangian", ("fw_mass", "vc_lagrangian"),
+          "the pure Lagrangian coordinate has no remap, so the top layer is unbounded under a "
+          "persistent P - E (validation-only coordinate).",
+          r"freshwater='mass' is refused with the 'lagrangian' vertical coordinate"),
+    _phys("fw_mass_cavity", ("fw_mass", "cavity"),
+          "the ice-shelf cover twin of the fresh-water mass step is untested.",
+          r"freshwater='mass' is refused with the ice-shelf cavity"),
+    _phys("runoff_cavity", ("fw_mass", "cavity"),
+          "the assembler's open-fraction twin scales fw_net / salt_fw / q_fus_rof by the shelf "
+          "cover, so runoff on a covered wet cell would be dropped silently (the matrix's fw_mass "
+          "value carries a runoff file).",
+          r"lrunoff/frunoff file forcing is refused with an ice-shelf cavity"),
+    _phys("cavity_dataovr", ("cavity", "dataovr"),
+          "file-backed surface forcing rewrites tau / Q_heat per time bracket with no ice-cover "
+          "mask, so it is refused alongside a cavity (the matrix's fw_mass value feeds P - E "
+          "through it).",
+          r"mutually exclusive with &ocean_dataovr_nml enable=\.true\."),
     Row("cavity_needs_fv_mom6", "PHYSICAL", "refused", ("cavity", "pgf_mont"),
         "The ice load enters through the FV pressure-stack top boundary condition "
         "pa(nz+1); Montgomery hard-zeroes M(nz), so it has nowhere to put it.",
@@ -599,6 +624,9 @@ VALUE_PATHS.update({
                              _P + "vertical/rdb_ocean_top_drag.F90"],
     ("forcing", "cool"): [_P + "vertical/rdb_ocean_surface_flux.F90"],
     ("forcing", "warm_sw"): [_P + "vertical/rdb_ocean_surface_flux.F90"],
+    ("forcing", "fw_mass"): [_P + "vertical/rdb_ocean_surface_flux.F90",
+                             _P + "vertical/rdb_ocean_surface_fw_mass.F90",
+                             "src/core/ocean/forcing/rdb_ocean_data_forcing.F90"],
 })
 for _v in ("const_nu_h", "smagorinsky", "leith", "leith_biharm", "nu_4", "stress_tensor", "kh_aniso"):
     VALUE_PATHS[("lateral", _v)] = list(_HVISC)

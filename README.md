@@ -56,6 +56,11 @@ In the author's words:
 The parts ported from MOM6 and SIS2 are used and modified under the
 Apache License 2.0, as set out in [`NOTICE`](NOTICE).
 
+The sea-ice column physics and dynamics ported from CICE/Icepack (CICE
+Consortium) are used and modified under the BSD-3-Clause license, as set out
+in [`NOTICE`](NOTICE) and
+[`LICENSES/BSD-3-Clause-CICE.txt`](LICENSES/BSD-3-Clause-CICE.txt).
+
 ## Acknowledgement: NOAA-GFDL, MOM6 and SIS2
 
 **The numerical methods in Roundabout were developed at NOAA's Geophysical
@@ -87,6 +92,9 @@ against. Deliberate divergences are documented in
 **Licensing.** MOM6 and SIS2 are licensed under the Apache License 2.0. The
 code ported from them is used and modified under that licence: see
 [`NOTICE`](NOTICE) and [`LICENSES/Apache-2.0.txt`](LICENSES/Apache-2.0.txt).
+Code ported from CICE/Icepack (CICE Consortium) is used and modified under the
+BSD-3-Clause license: see [`NOTICE`](NOTICE) and
+[`LICENSES/BSD-3-Clause-CICE.txt`](LICENSES/BSD-3-Clause-CICE.txt).
 Roundabout's own code is under the MIT License ([`LICENSE`](LICENSE)). The
 physics comes from the published literature: the papers are listed in
 [`rdb_docs/source/references.rst`](rdb_docs/source/references.rst), and the

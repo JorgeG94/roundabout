@@ -1,6 +1,7 @@
 # Core infrastructure sources
 set(CORE_SOURCES
-    ${CMAKE_CURRENT_SOURCE_DIR}/core/rdb_constants.F90
+    # rdb_constants, rdb_safe_math and rdb_efp compile in `rdb_core_objs` (root
+    # CMakeLists.txt); core_rdb archives those objects.
     # Leaf module (only dep: rdb_constants): proleptic-Gregorian calendar
     # arithmetic (date<->seconds-since-epoch, CF time-units parsing, RYF
     # date-arithmetic wrap). Used by rdb_ocean_tide_astro, rdb_config,
@@ -31,11 +32,12 @@ set(CORE_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/core/config/rdb_config_register_lateral.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/config/rdb_config_register_forcing.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/rdb_config_schema.F90
+    # CICE port: config -> ice_params_t + configure-time refusals (needs
+    # rdb_config, so it is NOT part of rdb_ice_core_objs).
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/cice/rdb_ice_config.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/rdb_grid.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/rdb_tracer.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/framework/rdb_scratch_3d.F90
-    ${CMAKE_CURRENT_SOURCE_DIR}/framework/rdb_safe_math.F90
-    ${CMAKE_CURRENT_SOURCE_DIR}/framework/rdb_efp.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/framework/rdb_mem_report.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/rdb_barotropic_state.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/rdb_barotropic_workstate.F90
@@ -76,6 +78,7 @@ set(CORE_SOURCES
     # below the ice base, not "layer nz") and the per-thermo-step driver that
     # fills the owned heat_cavity/salt_cavity components.
     ${CMAKE_CURRENT_SOURCE_DIR}/parameterizations/vertical/rdb_ocean_cavity_flux.F90
+    ${CMAKE_CURRENT_SOURCE_DIR}/parameterizations/vertical/rdb_ocean_surface_fw_mass.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/parameterizations/vertical/rdb_ocean_vdiff.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/parameterizations/lateral/rdb_ocean_lateral_mix.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/parameterizations/lateral/rdb_ocean_isopycnal_slopes.F90
@@ -147,9 +150,8 @@ set(CORE_SOURCES
     # scanning orders the actual compilation, not this list.
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/state/rdb_ocean_halo_width.F90
     # Sea-ice PR 2: pure device-callable enthalpy library (T<->E inversions);
-    # leaf module. Precedes rdb_ice_optics/_mass/_column (PR 3a), which all
-    # depend on it.
-    ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/thermo/rdb_ice_enthalpy.F90
+    # leaf module, now built in rdb_ice_core_objs (cmake/ice_core_sources.cmake)
+    # because the SIS2 -> Icepack restart converter (D1.5) needs it there.
     # Sea-ice PR 3a: shortwave optics (CSIM4 branch) + column mass bookkeeping
     # (bottom-freeze, melt peel, rebalance) — both leaf modules `rdb_ice_column`
     # depends on.
@@ -162,6 +164,21 @@ set(CORE_SOURCES
     # Sea-ice slot scaffold (SIS2 port, PR 0) — composed by rdb_ocean_state, so
     # it must precede it in the list. PR 3a: now depends on rdb_ice_column for
     # ICE_BULK_SALINITY/ICE_NK_MAX (the Winton column prognostics' init values).
+    # CICE-port ice state slot (D1.4): composed into ocean_sea_ice_t, so it
+    # precedes rdb_ice_state.
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/state/rdb_ice_cice_state.F90
+    # CICE-port C-grid EVP dynamics slot under the SIS2-derived state (D9.2);
+    # composed into ocean_sea_ice_t; uses rdb_ice_cgrid_metrics.
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/state/rdb_ice_dyn_c_state.F90
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/state/rdb_ice_flux_state.F90
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/coupling/rdb_ice_ledger.F90
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/coupling/rdb_ice_ledger_terms.F90
+    # CICE-port ice step sequencer (D11.3): stage order, cadence, error
+    # enforcement; needs the slots above and the ice-core drivers.
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/coupling/rdb_ice_step_cice.F90
+    # SIS2 -> CICE start-up read path (D1.5): v2 read / convert / cold start.
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/state/rdb_ice_cice_restart.F90
+    # (rdb_ice_state, the SIS2 slot, continues the comment above.)
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/state/rdb_ice_state.F90
     # Sea-ice PR 24: analytic initial-condition path (uniform/latitudes
     # concentration seeding). Host-side setup code, no device kernel; depends on
@@ -185,9 +202,21 @@ set(CORE_SOURCES
     # face/centre ghost-wrap helpers, declared earlier in this file at the
     # ocean/boundary entry).
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/dynamics/rdb_ice_evp.F90
+    # CICE6 port D9.0: C-grid ice metrics name map + face-pair halo wrapper;
+    # depends on rdb_ocean_metrics, rdb_ocean_halo, rdb_ocean_periodic,
+    # rdb_ocean_fold_apply (all declared earlier in this file).
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/cice/rdb_ice_cgrid_metrics.F90
+    # CICE6 port D10.6: the transport's decomposition seam (collectives, the
+    # distributed fold pairing, the category-state halo); uses rdb_halo,
+    # rdb_ocean_halo, rdb_ocean_fold_exchange.
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/cice/rdb_ice_transport_seam_comm.F90
+    # CICE6 port D9.2: C-grid EVP driver on the SIS2-derived state (coupling
+    # kernels, subcycle loop with the face halo, strocnT).
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/dynamics/rdb_ice_dyn_c.F90
     # Sea-ice PR 1: ocean-side frazil accumulator (freezing-point clamp), called
     # from the driver after each ocean outer step.
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/thermo/rdb_ice_frazil.F90
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/thermo/rdb_ice_melt_potential.F90
     # Sea-ice PR 3c: coupleable atmospheric-forcing seam filler (v1 scalar
     # restoring); depends only on rdb_ice_state (already declared above).
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/thermo/rdb_ice_atm_forcing.F90
@@ -209,6 +238,14 @@ set(CORE_SOURCES
     # the driver's thermo-cadence block (mandated order).
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/thermo/rdb_ice_snow.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/coupling/rdb_ice_ocean_coupler.F90
+    # CICE-port ocean-ice coupling library (D11.2): import, window-mean flux
+    # averager, Q_* adapters.  Not called by any step driver yet.
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/coupling/rdb_ice_import_ocean.F90
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/coupling/rdb_ice_flux_avg.F90
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/coupling/rdb_ice_cice_adapters.F90
+    # CICE-port run slots (D11.4): flux/radiation/work/averager/import/transport
+    # workspace, composed into ocean_state_t.
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/coupling/rdb_ice_cice_run.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/state/rdb_ocean_state.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/state/ocean_state/rdb_ocean_state_seed.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/state/ocean_state/rdb_ocean_state_topo.F90
@@ -228,6 +265,7 @@ set(CORE_SOURCES
     # rdb_ocean_metrics (both declared above).
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/state/rdb_ocean_stability_audit.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/state/rdb_ocean_balance.F90
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/diag/rdb_ocean_diag_ice_cice.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/diag/rdb_ocean_diag_fills.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/diag/rdb_ocean_diag_derived.F90
     ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/diag/rdb_ocean_console_stats.F90
@@ -330,8 +368,11 @@ endif()
 # rdb_ice_ocean_coupler, rdb_ocean_diag*, rdb_ocean_sponge, rdb_ocean_geothermal
 # (declared above in CORE_SOURCES) plus rdb_ocean_halo/rdb_ocean_boundary_data/
 # rdb_ocean_periodic/rdb_ocean_fold_apply/rdb_ocean_dyn (KERNEL_SOURCES/
-# COMM_SOURCES, declared above too).
-set(ENGINE_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/rdb_ocean_engine.F90)
+# COMM_SOURCES, declared above too). CICE-port ice step hooks bound to the
+# engine's state (D11.4): used by the engine.
+set(ENGINE_SOURCES
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/ice/coupling/rdb_ice_cice_hooks.F90
+    ${CMAKE_CURRENT_SOURCE_DIR}/core/ocean/rdb_ocean_engine.F90)
 
 # C ABI (Python runtime API plan, P1) — compiles INTO core_objs, never linked
 # against it: RDC cannot cross a shared-library boundary (see the core_objs

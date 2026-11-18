@@ -57,6 +57,8 @@ module rdb_config
    public :: ocean_config_t, ocean_grid_config_t, &
              ocean_coriolis_config_t, ocean_thermo_config_t, &
              ocean_ice_config_t, ocean_ice_ic_config_t, &
+             ocean_ice_thermo_config_t, ocean_ice_sw_config_t, &
+             ocean_ice_ridge_config_t, ocean_ice_atm_config_t, ocean_ice_dyn_config_t, &
              ocean_restore_config_t, &
              ocean_geothermal_config_t, &
              ocean_sponge_config_t, &
@@ -90,6 +92,7 @@ module rdb_config
    public :: diag_density_levels_ok
    public :: dataovr_entry_is_valid, dataovr_time_is_valid
    public :: dataovr_freshwater_needs_components, dataovr_any_tag_set
+   public :: dataovr_runoff_needs_freshwater
    public :: dataovr_heat_salt_clobbers_ice
    public :: build_rdb_schema
    public :: resolve_bt_halo
@@ -372,6 +375,24 @@ module rdb_config
          !! `Q_heat`/`Q_salt` from it.  Individual components carry no
          !! knobs of their own — they are filled by fillers (readers,
          !! the ice coupler, ...), not by this namelist.
+      character(len=16) :: freshwater = "none"
+         !! What the surface fresh-water MASS fluxes (`lprec`, `fprec`,
+         !! `evap`, `lrunoff`, `frunoff`) do.  `"none"` (default): nothing,
+         !! they carry enthalpy only (bit-identical).  `"virtual"`: their net
+         !! `F` (kg m-2 s-1, into the ocean) becomes the virtual salt flux
+         !! `-S_surf*F` in its own component slot `salt_fw`, summed by the
+         !! assembler; no column mass moves (Griffies et al. 2001).
+         !! `"mass"`: the same flux moves REAL Boussinesq volume into / out of the
+         !! first live layer with the evaporation pass-down, dilutes / concentrates
+         !! every dissolved tracer, and keeps the virtual salt flux only for the
+         !! boundary-layer buoyancy (`rdb_ocean_surface_fw_mass`).  Open-ocean fluxes
+         !! only; refused with sea ice, `eulerian_z`/`lagrangian` vcoords, wet/dry,
+         !! the ice-shelf cavity and `dt_tracer_advect_ratio > 1` with
+         !! `diabatic_first = .true.`.  Requires `enable_components`.
+      real(wp) :: fw_evap_cfl_limit = 0.8_wp
+         !! `freshwater = "mass"` only: the largest fraction of a live layer's
+         !! thickness one evaporative withdrawal may take (MOM6 `EVAP_CFL_LIMIT`);
+         !! the unmet remainder is passed down the column.  Range (0, 1].
    end type ocean_forcing_config_t
 
    type :: ocean_ice_config_t
@@ -439,6 +460,17 @@ module rdb_config
          !! OM3 `RECLAIM_FRAZIL`: spend the standing frazil bank on a warm
          !! surface layer before the sweep.  Default `.true.` (the OM3
          !! value) but USED ONLY with `frazil_column`; inert otherwise.
+      logical :: ledger = .false.
+         !! `scheme = "cice"` only: run the named-term conservation ledger
+         !! (`rdb_ice_ledger_terms`) every ice step, restart-carried, and print its
+         !! residual line at the console cadence.  Default off: the step takes none of
+         !! it and the run is bit-identical.
+      real(wp) :: hfreeze = -1.0_wp
+         !! Depth cap [m] of the melt-potential integral
+         !! (`rdb_ice_melt_potential`; OM3 `HFREEZE` = 10): the sea ice's
+         !! `frzmlt` integrates ocean heat above freezing over
+         !! `min(hfreeze, boundary-layer depth)`.  -1 (default) = OFF, the
+         !! provider is never called => byte-identical; otherwise > 0.
       logical :: bound_salinity = .false.
          !! OM3 `BOUND_SALINITY`: after the surface salt flux (and so the
          !! ice-ocean salt exchange) is applied each thermo step, set
@@ -518,7 +550,245 @@ module rdb_config
          !! convergence (and weakening it under divergence) within the
          !! call. `.false.` (Roundabout default, house bit-identity rule) holds
          !! `pres_mice` at its pre-loop value for all subcycles => byte-identical.
+      ! ---- CICE port (CICE6/Icepack) structure keys ----
+      character(len=8) :: scheme = "sis2"
+         !! Ice model: `"sis2"` (default, the shipped SIS2-derived model,
+         !! byte-identical) or `"cice"` (the CICE6/Icepack port, runnable
+         !! single-rank: see `docs/CAPABILITIES_AND_LIMITATIONS.md`).
+      integer :: nilyr = 7
+         !! `scheme="cice"` ice layers per category (upstream default 7;
+         !! OM3 4).  `scheme="sis2"` keeps `nk_ice`.  `1 < nilyr <=
+         !! ICE_NILYR_MAX`.
+      integer :: nslyr = 1
+         !! `scheme="cice"` snow layers per category; only 1 is supported.
+      integer :: kcatbound = 1
+         !! `scheme="cice"` category-bound formula (upstream default 1; OM3
+         !! 0).  0..3 accepted.
+      character(len=8) :: constants_set = "icepack"
+         !! `scheme="cice"` physical-constants table: `"icepack"` (upstream
+         !! code defaults) or `"cesm"` (the CESM-coupled override set).
+      real(wp) :: dt_ice = -1.0_wp
+         !! `scheme="cice"` ice time step [s]: `<= 0` (default) is the outer
+         !! ocean step; a positive value must equal `&time_nml dt_fixed`
+         !! (the ice step IS the outer step under this scheme, so any other
+         !! value is refused by `ice_config_check`).
    end type ocean_ice_config_t
+
+   type :: ocean_ice_thermo_config_t
+      !! `&ocean_ice_thermo_nml`: CICE-port thermodynamics + ITD knobs
+      !! (`scheme="cice"` only; inert under `"sis2"`).  Every default is the
+      !! upstream CICE code default except `tfrz_option` (OM3's
+      !! `linear_salt`; upstream's `mushy` is refused); OM3 values go in the OM3 example
+      !! namelist.  Options outside the supported set are refused by
+      !! `validate_config`.
+      integer :: ktherm = 1
+         !! Thermodynamics: 1 = Bitz-Lipscomb (1999); 2 (mushy) is refused.
+      character(len=8) :: conduct = "bubbly"
+         !! Ice conductivity: `"bubbly"` (Pringle et al. 2007) / `"MU71"`.
+      character(len=16) :: tfrz_option = "linear_salt"
+         !! Sea freezing point used by the ice: `linear_salt` / `constant` /
+         !! `minus1p8`; `"mushy"` is refused.
+      real(wp) :: ice_ref_salinity = 4.0_wp
+         !! Salt-flux reference salinity [ppt] (OM3 5.0).
+      character(len=16) :: saltflux_option = "constant"
+         !! `"constant"` only; `"prognostic"` is refused.
+      character(len=16) :: congel_freeze = "two-step"
+         !! Congelation freezing: `"two-step"` / `"one-step"`.
+      character(len=24) :: cpl_frazil = "fresh_ice_correction"
+         !! Frazil coupling: only `"fresh_ice_correction"` is supported.
+      logical :: update_ocn_f = .false.
+         !! Frazil fresh water / salt fluxes to the ocean (OM3 `.true.`).
+      real(wp) :: hfrazilmin = 0.05_wp
+         !! Minimum new-frazil thickness [m].
+      real(wp) :: hi_min = 0.01_wp
+         !! Minimum ice thickness for thermodynamics [m].
+      real(wp) :: ustar_min = 0.005_wp
+         !! Friction-velocity floor [m/s] (OM3 5e-4).
+      character(len=8) :: fbot_xfer_type = "constant"
+         !! Basal heat-transfer coefficient: `"constant"` only;
+         !! `"Cdn_ocn"` is refused.
+      real(wp) :: floediam = 300.0_wp
+         !! Floe diameter for lateral melt [m] (Steele 1992); must be > 0.
+      real(wp) :: floeshape = 0.66_wp
+         !! Floe shape factor for lateral melt (Steele 1992); must be > 0.
+      real(wp) :: ksno = 0.3_wp
+         !! Snow thermal conductivity [W/m/K].
+      real(wp) :: emissivity = 0.985_wp
+         !! Surface emissivity (OM3 0.95).
+      integer :: kitd = 1
+         !! Thickness-distribution conversion: 1 = linear remap; 0 (delta)
+         !! is refused.
+      logical :: calc_tsfc = .true.
+         !! Solve for the surface temperature; `.false.` is refused.
+      logical :: semi_implicit_tsfc = .false.
+         !! Semi-implicit surface-temperature coupling; `.true.` is refused.
+   end type ocean_ice_thermo_config_t
+
+   type :: ocean_ice_sw_config_t
+      !! `&ocean_ice_sw_nml`: CICE-port shortwave parameters of the CCSM3
+      !! scheme (Briegleb et al. 2004, NCAR/TN-463+STR; `scheme="cice"`
+      !! only).  Upstream code defaults; OM3 values go in the OM3 example
+      !! namelist.
+      character(len=16) :: shortwave = "ccsm3"
+         !! Shortwave scheme.  Only `"ccsm3"` is ported; `"dEdd"` and
+         !! `"dEdd_snicar_ad"` are accepted by the schema and refused by
+         !! `ice_config_check`.
+      character(len=16) :: albedo_type = "ccsm3"
+         !! Albedo parameterisation.  `"ccsm3"` is ported; `"constant"` is
+         !! refused.
+      real(wp) :: albicev = 0.78_wp
+         !! Visible albedo of thick ice (OM3 0.86).
+      real(wp) :: albicei = 0.36_wp
+         !! Near-infrared albedo of thick ice (OM3 0.44).
+      real(wp) :: albsnowv = 0.98_wp
+         !! Visible albedo of cold snow.
+      real(wp) :: albsnowi = 0.70_wp
+         !! Near-infrared albedo of cold snow.
+      real(wp) :: ahmax = 0.3_wp
+         !! Thickness above which the ice albedo is constant [m] (OM3 0.1);
+         !! must be > 0 (it divides the thin-ice albedo ramp).
+      real(wp) :: snowpatch = -1.0_wp
+         !! Snow-cover patchiness length [m]; negative (default) follows
+         !! `constants_set` (0.02 icepack, 0.005 cesm).
+      logical :: sw_redist = .false.
+         !! Move shortwave absorbed in a near-melting layer to the surface
+         !! (Bitz and Lipscomb 1999 thermodynamics; OM3 `.true.`).
+      real(wp) :: sw_frac = 0.9_wp
+         !! Fraction of the internal shortwave `sw_redist` moves to the
+         !! surface; must lie in (0, 1].
+      real(wp) :: sw_dtemp = 0.02_wp
+         !! `sw_redist` temperature offset from melting [K]; must be >= 0.
+      real(wp) :: sw_vis_frac = 0.52_wp
+         !! Visible fraction of the broadband downwelling shortwave in a
+         !! forced run (the near-IR band is the complement); must lie in
+         !! [0, 1].  roundabout knob, not an Icepack name.  Interim value
+         !! 0.52 = 0.28 + 0.24, the CICE standalone forcing split.
+   end type ocean_ice_sw_config_t
+
+   type :: ocean_ice_ridge_config_t
+      !! `&ocean_ice_ridge_nml`: CICE-port ridging and ice-strength knobs
+      !! (Thorndike et al. 1975; Rothrock 1975; Hibler 1979, 1980; Flato and
+      !! Hibler 1995; Lipscomb et al. 2007).  `scheme="cice"` only.  Upstream
+      !! code defaults, which OM3 also uses (it sets none of them).
+      integer :: kstrength = 1
+         !! Ice strength: 1 = Rothrock (1975), 0 = Hibler (1979).
+      integer :: krdg_partic = 1
+         !! Ridge participation: 1 = Lipscomb et al. (2007), 0 = Thorndike et al. (1975).
+      integer :: krdg_redist = 1
+         !! Ridge redistribution: 1 = exponential (Lipscomb et al. 2007),
+         !! 0 = Hibler (1980).
+      real(wp) :: mu_rdg = 3.0_wp
+         !! E-folding scale of ridged ice for `krdg_redist = 1` [m^0.5]; > 0.
+      real(wp) :: cf = 17.0_wp
+         !! Ratio of ridging work to potential-energy change (Flato and
+         !! Hibler 1995); > 0.
+      real(wp) :: pstar = 2.75e4_wp
+         !! Hibler strength constant [N/m] (`kstrength = 0`); > 0.
+      real(wp) :: cstar = 20.0_wp
+         !! Hibler concentration constant (`kstrength = 0`); > 0.
+   end type ocean_ice_ridge_config_t
+
+   type :: ocean_ice_atm_config_t
+      !! `&ocean_ice_atm_nml`: CICE-port atmosphere-ice boundary-layer knobs
+      !! (Monin-Obukhov similarity, Jordan et al. 1999 bulk transfer).
+      !! `scheme="cice"` only.  Upstream code defaults (OM3: `highfreq = .true.`).
+      logical :: highfreq = .false.
+         !! Relative-wind (ice-velocity) stress with a 0.5 m/s floor (OM3 `.true.`).
+      integer :: natmiter = 5
+         !! Monin-Obukhov iterations; >= 0.
+      real(wp) :: atmiter_conv = 0.0_wp
+         !! Relative change in ustar that stops the iteration; >= 0.
+      real(wp) :: iceruf = 5.0e-4_wp
+         !! Ice surface roughness [m]; in (0, 10 m) and below both forcing
+         !! reference heights.
+      character(len=16) :: atmbndy = "similarity"
+         !! Boundary-layer form: only `"similarity"` is supported.
+      logical :: formdrag = .false.
+         !! Form drag: only `.false.` is supported.
+      logical :: calc_strair = .true.
+         !! Compute the wind stress in the ice model: only `.true.` is supported.
+      real(wp) :: uni_tas = 263.15_wp
+         !! Uniform-atmosphere air temperature [K].  The `uni_*` knobs build the ice's
+         !! atmosphere when `&ocean_atm_forcing_nml enable = .false.` (no prescribed
+         !! atmospheric-state files): one value everywhere, with `&ocean_ice_nml sw_down`
+         !! (downward shortwave) and `snowfall` (snow flux) completing it; rain is zero.
+      real(wp) :: uni_uas = 0.0_wp
+         !! Uniform-atmosphere eastward 10 m wind [m/s] (earth-relative).
+      real(wp) :: uni_vas = 0.0_wp
+         !! Uniform-atmosphere northward 10 m wind [m/s].
+      real(wp) :: uni_psl = 101325.0_wp
+         !! Uniform-atmosphere sea-level pressure [Pa]; must be > 0.
+      real(wp) :: uni_huss = 1.0e-3_wp
+         !! Uniform-atmosphere specific humidity [kg/kg]; must be >= 0.
+      real(wp) :: uni_rlds = 200.0_wp
+         !! Uniform-atmosphere downward longwave [W/m2]; must be >= 0.
+   end type ocean_ice_atm_config_t
+
+   type :: ocean_ice_dyn_config_t
+      !! `&ocean_ice_dyn_nml`: CICE-port ice dynamics and transport knobs (one group, two
+      !! owners).  EVP keys: Hunke and Dukowicz 1997; Hunke 2001; Bouillon et al. 2013; Konig
+      !! Beatty and Holland 2010; Lemieux et al. 2024 (upstream CICE code defaults for the
+      !! C-grid dynamics; OM3 itself runs the B-grid dynamics).  Transport keys: `advection`,
+      !! `transport_check`.  The EVP keys act under `dyn_scheme="cice_c"`.
+      character(len=8) :: dyn_scheme = "sis2_c"
+         !! Dynamics core under the SIS2-derived ice state: `"sis2_c"` (the SIS2 C-grid
+         !! EVP, default, unchanged) or `"cice_c"` (the CICE6 C-grid EVP coupled to the
+         !! ocean through the sea-surface tilt and the ocean surface current).
+      integer :: ndte = 120
+         !! Elastic subcycles per dynamics step; >= 1.
+      real(wp) :: elasticdamp = 0.36_wp
+         !! Damping parameter E of the classic EVP (`arlx = 2 E ndte`); > 0.
+      logical :: revised_evp = .false.
+         !! Revised EVP (Bouillon et al. 2013): `arlx`/`brlx` apply.
+      real(wp) :: arlx = 300.0_wp
+         !! Revised EVP stress relaxation parameter alpha; > 0 when `revised_evp`.
+      real(wp) :: brlx = 300.0_wp
+         !! Revised EVP momentum relaxation parameter beta; > 0 when `revised_evp`.
+      real(wp) :: e_yieldcurve = 2.0_wp
+         !! Aspect ratio of the elliptical yield curve; > 0.
+      real(wp) :: e_plasticpot = 2.0_wp
+         !! Aspect ratio of the elliptical plastic potential; > 0.
+      real(wp) :: ktens = 0.0_wp
+         !! Tensile strength fraction (T = Ktens P); in [0, 1).
+      real(wp) :: deltaminevp = 1.0e-11_wp
+         !! Minimum Delta of the viscosities [1/s]; > 0.
+      character(len=8) :: capping_method = "max"
+         !! `"max"` (Hibler 1979) or `"sum"` (Kreyscher et al. 2000).
+      real(wp) :: dyn_area_min = 1.0e-11_wp
+         !! Minimum concentration for the dynamics; >= 0.
+      real(wp) :: dyn_mass_min = 1.0e-10_wp
+         !! Minimum mass for the dynamics [kg/m2]; >= 0.
+      real(wp) :: rheo_area_min = 1.0e-3_wp
+         !! Concentration below which the internal stress is dropped; >= 0.
+      logical :: free_drift_approx = .true.
+         !! Drop the internal stress below `rheo_area_min`.
+      character(len=16) :: visc_method = "avg_zeta"
+         !! Corner viscosity: `"avg_zeta"` or `"avg_strength"`.
+      real(wp) :: cdn_ocn = 0.00536_wp
+         !! Ice-ocean drag coefficient (upstream `dragio`); >= 0.
+      real(wp) :: vel_cap = 10.0_wp
+         !! Face speed above which `ICE_ERR_DYN_VEL` is raised [m/s]; > 0.
+      character(len=8) :: advection = "remap"
+         !! Horizontal transport of the ice state: `"remap"` (incremental
+         !! remapping, Lipscomb and Hunke 2004; upstream default; needs three
+         !! ghost cells) or `"upwind"` (first-order upwind).
+      logical :: transport_check = .false.
+         !! Run the transport checks (non-finite entry, negative area, CFL,
+         !! conservation of area and of area-weighted tracers, monotonicity);
+         !! costs extra reductions and, for monotonicity, scratch bounds.
+      integer :: transport_buffer_mib = 1024
+         !! `advection = "remap"`: budget [MiB] of the flux and reconstruction buffers of ONE category
+         !! batch (the largest batch of category indices that fits is used, at least one).  Bigger
+         !! is faster (fewer launches), smaller is leaner; at least ONE category index is always
+         !! processed per batch, whatever the budget (the workspace logs the batch and warns when one
+         !! index alone exceeds it); the packed fields and the departure
+         !! geometry are extra.  Inert under `"upwind"`.
+      integer :: ndtd = 1
+         !! Dynamics substeps per ice step (upstream `ndtd`).  Only 1 is
+         !! supported: the transport and ridging steps are written for a
+         !! single dynamics step per thermodynamic step; any other value is
+         !! refused by `ice_config_check`.
+   end type ocean_ice_dyn_config_t
 
    type :: ocean_ice_ic_config_t
       !! `&ocean_ice_ic_nml`: sea-ice ANALYTIC initial-condition path (PR
@@ -2055,6 +2325,10 @@ module rdb_config
          !! RH18 mstar fits (MOM6 RH18_MSTAR_CN1..CS2).
       real(wp) :: nstar = 0.2_wp
          !! Convective PE -> TKE efficiency (MOM6 NSTAR).
+      real(wp) :: rivermix_depth = 0.0_wp
+         !! River-mixing depth (m; MOM6 RIVERMIX_DEPTH with DO_RIVERMIX).  0 = off.
+         !! > 0 adds the PE of mixing the runoff over this depth to the EPBL surface
+         !! forcing energy; requires `enable`.
       real(wp) :: tke_decay = 2.5_wp
          !! Ekman-depth / TKE-decay-scale ratio (MOM6 TKE_DECAY).
       real(wp) :: wstar_ustar_coef = 1.0_wp
@@ -2744,6 +3018,40 @@ module rdb_config
          !! tags (tau_x, tau_y, heat, salt, evap, lprec) yet, so a
          !! file-driven load needs a `register_tag` entry, not new reader
          !! machinery.
+      logical :: ice_load = .false.
+         !! Sea-ice + snow MASS loading of the surface pressure:
+         !! `p_surf = (the configure-time seed, p_surf_const) + g*(rho_i*vice + rho_s*vsno)`
+         !! (cell-mean ice and snow volumes of the CICE-port aggregates; Campin et al. 2008
+         !! "levitating" sea ice with its weight on the ocean, Adcroft et al. 2019).  A FULL
+         !! OVERWRITE of `sf%p_surf` once per outer step, sent through the `eta_forcing` seam.  The
+         !! load follows the DELIVERY of the fresh water the ice exchanged with the ocean (thermo
+         !! cadence), so the load and the water change on the same outer step.  Required `.true.`
+         !! by `&ocean_forcing_nml freshwater = "mass"` with `scheme = "cice"` (otherwise growing ice
+         !! removes its water from under the ice only and drives a spurious flow), and refused
+         !! WITHOUT mass (under `"none"`/`"virtual"` no water leaves, so a load would depress the
+         !! sea surface under the ice for nothing).  Requires `enable = .true.` and
+         !! `&ocean_ice_nml scheme = "cice"`.  It adds ONLY the ice weight: the atmosphere's
+         !! pressure joins `p_surf` solely through `atm_load`.  Default off => bit-identical.
+      logical :: atm_load = .false.
+         !! Add the bulk forcing's sea-level pressure (`p_surf_atm = psl`, Pa) to `p_surf`:
+         !! `p_surf = p_surf_atm [+ ice weight]`, i.e. the atmosphere's inverse barometer (~1 cm per
+         !! hPa; Wunsch & Stammer 1997) and its gradient force.  Its seam ghosts are exchanged
+         !! (periodic wrap and the tripolar fold, as a scalar) every outer step before the
+         !! assembly, because the bulk forcing writes owned cells only.  Requires `enable = .true.`
+         !! and `&ocean_bulk_flux_nml enable` (its only writer).  Default off: `p_surf` stays the
+         !! configure-time seed (`p_surf_const`) whatever the bulk forcing computes, which is what
+         !! every run did before `ice_load` existed => bit-identical.
+      logical :: ice_load_balance_ic = .true.
+         !! COLD start only, with `ice_load`: lower the initial sea surface under the ice by the
+         !! water its weight displaces, `(rho_i*vice + rho_s*vsno)/rho_0`, taken proportionally
+         !! from the layers (the column total, hence `eta`, drops by exactly that; the ALE remap
+         !! then re-places the interfaces), so a start under an ice sheet is in hydrostatic
+         !! balance with its load rather than launching a gravity-wave adjustment (a flat `eta`
+         !! under a loaded sheet is a sea-surface step at the ice edge).  Default on because the
+         !! alternative is a transient that depends on the ice IC; set `.false.` to start from
+         !! the layers as given.  Never applied on a warm restart (the layers are already
+         !! balanced), and decomposition-independent (a local per-column operation on the
+         !! seam-exchanged load).  Ignored without `ice_load`.
    end type ocean_psurf_config_t
    type :: ocean_cavity_dyn_config_t
       !! Static ice-shelf cavity GEOMETRY (`&ocean_cavity_dyn_nml`,
@@ -3588,6 +3896,16 @@ module rdb_config
       type(dataovr_entry_config_t) :: salt
          !! Surface salt flux (kg salt/m^2/s, positive salinifies) ->
          !! `surface_flux%salt_flux`.
+      type(dataovr_entry_config_t) :: lrunoff
+         !! Liquid runoff mass flux (kg/m^2/s, >= 0, INTO the ocean) ->
+         !! `surface_flux%lrunoff`.  Already on the model grid, non-zero only on
+         !! WET cells (a value on a land cell aborts); see
+         !! `tools/om_runoff_to_model.f90`.  Needs `&ocean_forcing_nml freshwater`
+         !! `"virtual"` or `"mass"` (inert, hence refused, under `"none"`).
+      type(dataovr_entry_config_t) :: frunoff
+         !! Frozen runoff / calving mass flux (kg/m^2/s, >= 0) ->
+         !! `surface_flux%frunoff`, and its latent heat of fusion
+         !! `q_fus_rof = -L_f*frunoff` is written alongside.  Same contract as `lrunoff`.
    end type ocean_dataovr_config_t
 
    type :: ocean_atm_forcing_config_t
@@ -3933,6 +4251,16 @@ module rdb_config
       type(ocean_ice_config_t)        :: ice
          !! Sea-ice slot config (`&ocean_ice_nml`).  Default off ⇒
          !! byte-identical (PR 0 scaffold).
+      type(ocean_ice_thermo_config_t) :: ice_thermo
+         !! CICE-port thermo/ITD knobs (`&ocean_ice_thermo_nml`).
+      type(ocean_ice_sw_config_t)     :: ice_sw
+         !! CICE-port albedo knobs (`&ocean_ice_sw_nml`).
+      type(ocean_ice_ridge_config_t)  :: ice_ridge
+         !! CICE-port ridging/strength knobs (`&ocean_ice_ridge_nml`).
+      type(ocean_ice_atm_config_t)    :: ice_atm
+         !! CICE-port atmosphere boundary-layer knobs (`&ocean_ice_atm_nml`).
+      type(ocean_ice_dyn_config_t)    :: ice_dyn
+         !! CICE-port ice dynamics/transport knobs (`&ocean_ice_dyn_nml`).
       type(ocean_ice_ic_config_t)     :: ice_ic
          !! Sea-ice initial-condition config (`&ocean_ice_ic_nml`, PR 24).
          !! Default `conc_config="zero"` ⇒ byte-identical.
@@ -4647,6 +4975,14 @@ module rdb_config
          logical :: bad
       end function dataovr_freshwater_needs_components
 
+      pure module function dataovr_runoff_needs_freshwater(cfg, fw_mode) result(bad)
+            !! See submodule [[rdb_config_validate]].
+         implicit none
+         type(ocean_dataovr_config_t), intent(in) :: cfg
+         integer, intent(in) :: fw_mode
+         logical :: bad
+      end function dataovr_runoff_needs_freshwater
+
       pure module function dataovr_heat_salt_clobbers_ice(cfg, use_components, ice_enable) result(bad)
             !! See submodule [[rdb_config_validate]].
          implicit none
@@ -5078,6 +5414,13 @@ module rdb_config
          type(config_t), target, intent(in) :: cfg
          type(nml_schema_t), intent(inout) :: schema
       end subroutine register_ocean_ice
+
+      module subroutine register_ocean_ice_cice(cfg, schema)
+            !! See submodule [[rdb_config_register_forcing]].
+         implicit none
+         type(config_t), target, intent(in) :: cfg
+         type(nml_schema_t), intent(inout) :: schema
+      end subroutine register_ocean_ice_cice
 
       module subroutine register_ocean_ice_ic(cfg, schema)
             !! See submodule [[rdb_config_register_forcing]].

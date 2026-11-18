@@ -132,6 +132,7 @@ module rdb_ocean_halo
    public :: ocean_halo_reserve
    public :: ocean_halo_is_init
    public :: ocean_halo_is_decomposed
+   public :: ocean_halo_nranks
    public :: ocean_halo_is_decomposed_x
    public :: ocean_halo_is_decomposed_y
    public :: ocean_halo_global_extent
@@ -139,6 +140,7 @@ module rdb_ocean_halo
    public :: ocean_halo_face_x
    public :: ocean_halo_face_y
    public :: ocean_halo_bt_group_2d
+   public :: ocean_halo_face_pair_2d
 
    ! Rank-generic dispatch: ocean_halo_<stagger>(fld[, nz][, device_resident])
    ! selects the 2D or 3D specific by the rank of fld (2 vs 3).  The
@@ -529,6 +531,13 @@ contains
       logical :: flag
       flag = oh_initialised .and. (oh_decomp%px > 1 .or. oh_decomp%py > 1)
    end function ocean_halo_is_decomposed
+
+   pure function ocean_halo_nranks() result(n)
+      !! Number of ranks of the current decomposition (`px*py`); 1 when the halo layer is not initialised.
+      integer :: n
+      n = 1
+      if (oh_initialised) n = max(1, oh_decomp%px*oh_decomp%py)
+   end function ocean_halo_nranks
 
    pure subroutine ocean_halo_global_extent(i_start, j_start, nx_global, ny_global)
       !! Global physical extent and this rank's 1-based global offset
@@ -1493,6 +1502,225 @@ contains
       call ocean_halo_face_y_2d(vbt, device_resident)
       call oh_count_suppress_off()
    end subroutine ocean_halo_bt_group_2d
+
+   subroutine ocean_halo_face_pair_2d(u, v, device_resident)
+      !! Two-pass X-then-Y halo exchange of an x-face / y-face pair `(u, v)` with ONE
+      !! message per direction and ONE `waitall` per pass (2 instead of 4 per call: half
+      !! the messages and waitalls of `ocean_halo_face_x` + `ocean_halo_face_y`).
+      !! Bitwise equal to the two single exchanges, which is what the sea-ice C-grid
+      !! dynamics' decomposition cases pin: the passes of the two fields are independent
+      !! (the Y pass of a field reads that field's own X-pass ghost columns, never the
+      !! other field's), so bundling the X passes together and the Y passes together
+      !! reorders nothing a field reads.  The corner (two-pass) semantics are therefore
+      !! unchanged.  Ownership is that of the single exchanges (D1: the west/south rank
+      !! owns a seam face; u sends `ng + 1` columns east, v `ng`).  Each direction's
+      !! buffer holds the u strip then the v strip (`blk_pack`, i fastest); the persistent
+      !! halo buffers are used (capacity `2 (ng + 1) n`, ensured once), no allocation per call.
+      real(wp), intent(inout) :: u(oh_nx_total + 1, oh_ny_total)
+         !! x-face field (nx_total+1 x ny_total).
+      real(wp), intent(inout) :: v(oh_nx_total, oh_ny_total + 1)
+         !! y-face field (nx_total x ny_total+1).
+      logical, intent(in), optional :: device_resident
+         !! If .false., operate on host memory.  Default (.true.) is device-resident.
+
+      integer :: nxl, nyl, nxt, nxt1, nyt, nyt1, ng
+      integer :: rk_e, rk_w, rk_n, rk_s
+      integer :: nreq, nu, nv
+      type(comm_t) :: comm
+      type(request_t) :: reqs(MAX_REQS)
+      type(MPI_Status) :: stats(MAX_REQS)
+      logical :: need_e, need_w, need_n, need_s
+      logical :: on_device
+
+      on_device = .true.
+      if (present(device_resident)) on_device = device_resident
+      call oh_count_face_x_2d()
+      call oh_count_face_y_2d()
+      call ocean_halo_buffers_ensure_nz(2)
+
+      ng = oh_nghost
+      nxl = oh_nx_local
+      nyl = oh_ny_local
+      nxt = nxl + 2*ng
+      nxt1 = nxt + 1
+      nyt = nyl + 2*ng
+      nyt1 = nyt + 1
+      if (oh_decomp%px > 1 .or. oh_decomp%py > 1) comm = comm_env_compute_comm()
+      call needs_flags(need_w, need_e, need_s, need_n)
+
+      ! ---- X pass ----
+      if (oh_decomp%px == 1) then
+         if (oh_periodic_x) then
+            call ocean_periodic_wrap_face_x_2d(u, nxt1, nyt, nxl, nyl, ng, .true., .false.)
+            call ocean_periodic_wrap_face_y_2d(v, nxt, nyt1, nxl, nyl, ng, .true., .false.)
+         end if
+      else
+         if (need_e) rk_e = ew_rank_east()
+         if (need_w) rk_w = ew_rank_west()
+         nu = (ng + 1)*nyt
+         nv = ng*nyt1
+         if (need_e) then
+            call blk_pack(on_device, nxt1, nyt, u, nxl + 1, 1, ng + 1, nyt, oh_buf_send_east, oh_cap_ew, 0)
+            call blk_pack(on_device, nxt, nyt1, v, nxl + 1, 1, ng, nyt1, oh_buf_send_east, oh_cap_ew, nu)
+         end if
+         if (need_w) then
+            call blk_pack(on_device, nxt1, nyt, u, ng + 2, 1, ng, nyt, oh_buf_send_west, oh_cap_ew, 0)
+            call blk_pack(on_device, nxt, nyt1, v, ng + 1, 1, ng, nyt1, oh_buf_send_west, oh_cap_ew, ng*nyt)
+         end if
+         nreq = 0
+         if (on_device) then
+            if (need_e) then
+               !$acc host_data use_device(oh_buf_send_east, oh_buf_recv_east)
+               nreq = nreq + 1
+               call HALO_ISEND_N(comm, oh_buf_send_east, nu + nv, rk_e, TAG_OC_W_TO_E, reqs(nreq))
+               nreq = nreq + 1
+               call HALO_IRECV_N(comm, oh_buf_recv_east, ng*nyt + nv, rk_e, TAG_OC_E_TO_W, reqs(nreq))
+               !$acc end host_data
+            end if
+            if (need_w) then
+               !$acc host_data use_device(oh_buf_send_west, oh_buf_recv_west)
+               nreq = nreq + 1
+               call HALO_ISEND_N(comm, oh_buf_send_west, ng*nyt + nv, rk_w, TAG_OC_E_TO_W, reqs(nreq))
+               nreq = nreq + 1
+               call HALO_IRECV_N(comm, oh_buf_recv_west, nu + nv, rk_w, TAG_OC_W_TO_E, reqs(nreq))
+               !$acc end host_data
+            end if
+         else
+            if (need_e) then
+               nreq = nreq + 1
+               call HALO_ISEND_N(comm, oh_buf_send_east, nu + nv, rk_e, TAG_OC_W_TO_E, reqs(nreq))
+               nreq = nreq + 1
+               call HALO_IRECV_N(comm, oh_buf_recv_east, ng*nyt + nv, rk_e, TAG_OC_E_TO_W, reqs(nreq))
+            end if
+            if (need_w) then
+               nreq = nreq + 1
+               call HALO_ISEND_N(comm, oh_buf_send_west, ng*nyt + nv, rk_w, TAG_OC_E_TO_W, reqs(nreq))
+               nreq = nreq + 1
+               call HALO_IRECV_N(comm, oh_buf_recv_west, nu + nv, rk_w, TAG_OC_W_TO_E, reqs(nreq))
+            end if
+         end if
+         if (nreq > 0) then
+            call oh_count_msgs(nreq/2)
+            call waitall(reqs(1:nreq), stats(1:nreq))
+         end if
+         if (need_w) then
+            call blk_unpack(on_device, nxt1, nyt, u, 1, 1, ng + 1, nyt, oh_buf_recv_west, oh_cap_ew, 0)
+            call blk_unpack(on_device, nxt, nyt1, v, 1, 1, ng, nyt1, oh_buf_recv_west, oh_cap_ew, nu)
+         end if
+         if (need_e) then
+            call blk_unpack(on_device, nxt1, nyt, u, ng + nxl + 2, 1, ng, nyt, oh_buf_recv_east, oh_cap_ew, 0)
+            call blk_unpack(on_device, nxt, nyt1, v, ng + nxl + 1, 1, ng, nyt1, oh_buf_recv_east, oh_cap_ew, &
+                            ng*nyt)
+         end if
+      end if
+
+      ! ---- Y pass (spans the full i extent, x ghosts included) ----
+      if (oh_decomp%py == 1) then
+         if (oh_periodic_y) then
+            call ocean_periodic_wrap_face_x_2d(u, nxt1, nyt, nxl, nyl, ng, .false., .true.)
+            call ocean_periodic_wrap_face_y_2d(v, nxt, nyt1, nxl, nyl, ng, .false., .true.)
+         end if
+      else
+         if (need_n) rk_n = ns_rank_north()
+         if (need_s) rk_s = ns_rank_south()
+         nu = ng*nxt1
+         nv = (ng + 1)*nxt
+         if (need_n) then
+            call blk_pack(on_device, nxt1, nyt, u, 1, nyl + 1, nxt1, ng, oh_buf_send_north, oh_cap_ns, 0)
+            call blk_pack(on_device, nxt, nyt1, v, 1, nyl + 1, nxt, ng + 1, oh_buf_send_north, oh_cap_ns, nu)
+         end if
+         if (need_s) then
+            call blk_pack(on_device, nxt1, nyt, u, 1, ng + 1, nxt1, ng, oh_buf_send_south, oh_cap_ns, 0)
+            call blk_pack(on_device, nxt, nyt1, v, 1, ng + 2, nxt, ng, oh_buf_send_south, oh_cap_ns, nu)
+         end if
+         nreq = 0
+         if (on_device) then
+            if (need_n) then
+               !$acc host_data use_device(oh_buf_send_north, oh_buf_recv_north)
+               nreq = nreq + 1
+               call HALO_ISEND_N(comm, oh_buf_send_north, nu + nv, rk_n, TAG_OC_S_TO_N, reqs(nreq))
+               nreq = nreq + 1
+               call HALO_IRECV_N(comm, oh_buf_recv_north, nu + ng*nxt, rk_n, TAG_OC_N_TO_S, reqs(nreq))
+               !$acc end host_data
+            end if
+            if (need_s) then
+               !$acc host_data use_device(oh_buf_send_south, oh_buf_recv_south)
+               nreq = nreq + 1
+               call HALO_ISEND_N(comm, oh_buf_send_south, nu + ng*nxt, rk_s, TAG_OC_N_TO_S, reqs(nreq))
+               nreq = nreq + 1
+               call HALO_IRECV_N(comm, oh_buf_recv_south, nu + nv, rk_s, TAG_OC_S_TO_N, reqs(nreq))
+               !$acc end host_data
+            end if
+         else
+            if (need_n) then
+               nreq = nreq + 1
+               call HALO_ISEND_N(comm, oh_buf_send_north, nu + nv, rk_n, TAG_OC_S_TO_N, reqs(nreq))
+               nreq = nreq + 1
+               call HALO_IRECV_N(comm, oh_buf_recv_north, nu + ng*nxt, rk_n, TAG_OC_N_TO_S, reqs(nreq))
+            end if
+            if (need_s) then
+               nreq = nreq + 1
+               call HALO_ISEND_N(comm, oh_buf_send_south, nu + ng*nxt, rk_s, TAG_OC_N_TO_S, reqs(nreq))
+               nreq = nreq + 1
+               call HALO_IRECV_N(comm, oh_buf_recv_south, nu + nv, rk_s, TAG_OC_S_TO_N, reqs(nreq))
+            end if
+         end if
+         if (nreq > 0) then
+            call oh_count_msgs(nreq/2)
+            call waitall(reqs(1:nreq), stats(1:nreq))
+         end if
+         if (need_s) then
+            call blk_unpack(on_device, nxt1, nyt, u, 1, 1, nxt1, ng, oh_buf_recv_south, oh_cap_ns, 0)
+            call blk_unpack(on_device, nxt, nyt1, v, 1, 1, nxt, ng + 1, oh_buf_recv_south, oh_cap_ns, nu)
+         end if
+         if (need_n) then
+            call blk_unpack(on_device, nxt1, nyt, u, 1, ng + nyl + 1, nxt1, ng, oh_buf_recv_north, oh_cap_ns, 0)
+            call blk_unpack(on_device, nxt, nyt1, v, 1, ng + nyl + 2, nxt, ng, oh_buf_recv_north, oh_cap_ns, nu)
+         end if
+      end if
+   end subroutine ocean_halo_face_pair_2d
+
+   subroutine blk_pack(on_dev, nx1, ny1, fld, i0, j0, na, nb, buf, ncap, off)
+      !! Copy the block `fld(i0:i0+na-1, j0:j0+nb-1)` into `buf(off+1:)`, i fastest.
+      logical, intent(in) :: on_dev
+      integer, intent(in) :: nx1, ny1, i0, j0, na, nb, ncap, off
+      real(wp), intent(in) :: fld(nx1, ny1)
+      real(wp), intent(inout) :: buf(ncap)
+      integer :: a, b
+
+      if (on_dev) then
+         do concurrent(b=1:nb, a=1:na)
+            buf(off + (b - 1)*na + a) = fld(i0 + a - 1, j0 + b - 1)
+         end do
+      else
+         do b = 1, nb
+            do a = 1, na
+               buf(off + (b - 1)*na + a) = fld(i0 + a - 1, j0 + b - 1)
+            end do
+         end do
+      end if
+   end subroutine blk_pack
+
+   subroutine blk_unpack(on_dev, nx1, ny1, fld, i0, j0, na, nb, buf, ncap, off)
+      !! Inverse of `blk_pack`.
+      logical, intent(in) :: on_dev
+      integer, intent(in) :: nx1, ny1, i0, j0, na, nb, ncap, off
+      real(wp), intent(inout) :: fld(nx1, ny1)
+      real(wp), intent(in) :: buf(ncap)
+      integer :: a, b
+
+      if (on_dev) then
+         do concurrent(b=1:nb, a=1:na)
+            fld(i0 + a - 1, j0 + b - 1) = buf(off + (b - 1)*na + a)
+         end do
+      else
+         do b = 1, nb
+            do a = 1, na
+               fld(i0 + a - 1, j0 + b - 1) = buf(off + (b - 1)*na + a)
+            end do
+         end do
+      end if
+   end subroutine blk_unpack
 
    ! ==================================================================
    ! Wide halo primitives (Phase 3a)

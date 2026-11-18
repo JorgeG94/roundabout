@@ -1,0 +1,47 @@
+# Sources of the standalone ice core library `rdb_ice_core_objs` (OBJECT).
+# Infrastructure-only dependencies (pic, safe-math includes): nothing here may
+# `use` the ocean state, engine, config or halo.  One path per line,
+# alphabetical.
+set(RDB_ICE_CORE_SOURCES
+    ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_aggregate.F90
+    ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_atm_inputs.F90
+    ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_atmo.F90
+    ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_basal_heat.F90
+    ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_bl99.F90
+    ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_dims.F90
+    ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_errors.F90
+    ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_evp_c.F90
+    ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_evp_c_prep.F90
+    ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_flux.F90
+    ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_itd_cleanup.F90
+    ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_itd_linear.F90
+    ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_itd_params.F90
+    ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_itd_shift.F90
+    ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_lateral_melt.F90
+    ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_ledger_sums.F90
+    ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_new_ice.F90
+    ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_params.F90
+    ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_rad_state.F90
+    ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_radiation.F90
+    ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_remap_flux.F90
+    ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_remap_geom.F90
+    ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_remap_recon.F90
+    ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_remap_recon_batch.F90
+    ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_restart_convert.F90
+    ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_ridge.F90
+    ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_ridge_itd.F90
+    ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_ridge_shift.F90
+    ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_seed.F90
+    ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_shortwave.F90
+    ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_sw_wiring.F90
+    ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_therm1.F90
+    ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_therm2.F90
+    ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_thermo_shared.F90
+    ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_thickness.F90
+    ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_transport_checks.F90
+    ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_transport_cice.F90
+    ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_transport_pack.F90
+    ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_transport_seam.F90
+    ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_upwind.F90
+    ${PROJECT_SOURCE_DIR}/src/core/ice/cice/rdb_ice_vprofile.F90
+    ${PROJECT_SOURCE_DIR}/src/core/ice/thermo/rdb_ice_enthalpy.F90)

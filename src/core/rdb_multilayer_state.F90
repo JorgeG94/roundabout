@@ -102,6 +102,19 @@ module rdb_multilayer_state
          !! `mass0` reference latch, so the residual is measured over the
          !! resumed window rather than across the gap).
 
+      integer(int64) :: mass_src_efp(EFP_DIGITS) = 0_int64
+         !! This rank's tracked mass SOURCE of the surface fresh-water mass step
+         !! (`&ocean_forcing_nml freshwater="mass"`, `ocean_surface_fw_mass_step`) as
+         !! EFP bins (kg, `rdb_efp` layout), accumulated per call over this tile's
+         !! OWNED cells with the call's stage weight, exactly like `mass_out_efp`:
+         !! no per-step collective, order-invariant, so the console's
+         !! `(M - M0) + mass_out - mass_src` is the same on every rank count.  Added
+         !! to the plain `mass_src` (cavity) by the console.  What is booked is the
+         !! APPLIED thickness change.  Not restart state (the console residual is
+         !! measured over the resumed window, as for `mass_out`).
+      integer(int64) :: mass_src_efp_poison = 0_int64
+         !! Non-finite counter of `mass_src_efp` (see `mass_out_efp_poison`).
+
       integer :: nz_ml = 0
          !! Number of multilayer levels (k=1 bed, k=nz_ml surface).
 
@@ -329,6 +342,28 @@ module rdb_multilayer_state
       ! drive fictitious land-column currents.  Default 1.0 everywhere
       ! is bit-identical.  Not yet plumbed through the prognostic
       ! kernels (continuity, PGF, advection, viscosity, vdiff).
+      real(wp), allocatable :: fw_dh(:, :)
+         !! Applied thickness change of the last surface fresh-water mass step (m, positive
+         !! grows the column), per column, ghosts included: the mass step's own scratch (the
+         !! tracked-source reduction reads it) and diagnostic.  Lives here, not on the
+         !! surface-flux slot, because the dynamics hand that slot down read-only.  Not restart
+         !! state; written only under `&ocean_forcing_nml freshwater="mass"`.
+      real(wp), allocatable :: fw_passdown(:, :)
+         !! Number of layers BELOW the first live one that supplied part of the last
+         !! evaporative withdrawal (0 where none did); diagnostic, same lifetime as `fw_dh`.
+      real(wp), allocatable :: fw_dhT(:, :)
+         !! `sum_k dh_k * T_k` (m K) of the last surface fresh-water mass step, per column: the heat
+         !! content the mass entered or left with, at the layer temperatures the step itself used.
+         !! Diagnostic (the coupled heat closure's named `cp rho0 T dM` term, exactly); same lifetime
+         !! as `fw_dh`.
+      integer(int64) :: fw_n_thin_step = 0_int64
+         !! Columns (owned, global) whose whole live stack could not supply the requested
+         !! withdrawal in the last mass step (any is fatal).
+      integer(int64) :: fw_n_passdown_step = 0_int64
+         !! Columns (owned, global) that drew from a layer below the first live one in the
+         !! last mass step.
+      integer(int64) :: fw_n_passdown_total = 0_int64
+         !! Running total of `fw_n_passdown_step` (diagnostic and test non-vacuity only).
       real(wp), allocatable :: wet_mask(:, :)
 
       ! ---- Tracer registry ----
@@ -527,6 +562,9 @@ contains
       ! bottom tests don't see a behaviour change.  Realistic-bathy runs
       ! overwrite this in `ocean_state_seed_from_cfg` after the bathy load.
       allocate (this%wet_mask(nx, ny), source=1.0_wp)
+      allocate (this%fw_dh(nx, ny), source=0.0_wp)
+      allocate (this%fw_passdown(nx, ny), source=0.0_wp)
+      allocate (this%fw_dhT(nx, ny), source=0.0_wp)
 
       ! First-live-layer indices.  Seeded at the fallback `nz_ml`
       ! everywhere, which IS the answer on every coordinate family that
@@ -623,6 +661,9 @@ contains
       if (allocated(this%heat_budget_remap)) deallocate (this%heat_budget_remap)
       if (allocated(this%salt_budget_remap)) deallocate (this%salt_budget_remap)
       if (allocated(this%wet_mask)) deallocate (this%wet_mask)
+      if (allocated(this%fw_dh)) deallocate (this%fw_dh)
+      if (allocated(this%fw_passdown)) deallocate (this%fw_passdown)
+      if (allocated(this%fw_dhT)) deallocate (this%fw_dhT)
       if (allocated(this%k_top)) deallocate (this%k_top)
       if (allocated(this%k_top_u)) deallocate (this%k_top_u)
       if (allocated(this%k_top_v)) deallocate (this%k_top_v)
@@ -651,6 +692,7 @@ contains
                + arr_bytes(this%flux_h_layer) + arr_bytes(this%rho_layer) &
                + arr_bytes(this%p_top) &
                + arr_bytes(this%w_interface) + arr_bytes(this%wet_mask) &
+               + arr_bytes(this%fw_dh) + arr_bytes(this%fw_passdown) + arr_bytes(this%fw_dhT) &
                + arr_bytes(this%k_top) + arr_bytes(this%k_top_u) &
                + arr_bytes(this%k_top_v) &
                + arr_bytes(this%k_bot) + arr_bytes(this%k_bot_u) &
@@ -776,6 +818,7 @@ contains
       !$acc&                  this%heat_budget_horiz_adv, this%salt_budget_horiz_adv, &
       !$acc&                  this%mass_budget_remap, this%heat_budget_remap, &
       !$acc&                  this%salt_budget_remap, this%wet_mask)
+      !$acc enter data copyin(this%fw_dh, this%fw_passdown, this%fw_dhT)
       ! `copyin`, not `create`: the first-live-layer indices are filled
       ! on the HOST at configure (before this map) and never recomputed
       ! on device, so the seeded value has to travel with the map.
@@ -840,6 +883,7 @@ contains
       !$acc&                 this%heat_budget_horiz_adv, this%salt_budget_horiz_adv, &
       !$acc&                 this%mass_budget_remap, this%heat_budget_remap, &
       !$acc&                 this%salt_budget_remap, this%wet_mask)
+      !$acc exit data delete(this%fw_dh, this%fw_passdown, this%fw_dhT)
       !$acc exit data delete(this%k_top, this%k_top_u, this%k_top_v)
       !$acc exit data delete(this%k_bot, this%k_bot_u, this%k_bot_v)
    end subroutine multilayer_state_exit_data_impl

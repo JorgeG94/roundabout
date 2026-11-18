@@ -998,3 +998,67 @@ run's own measurements now also happen to agree with.
   the unforced/wind cases (under-resolved western boundary currents, a 2-D
   background-viscosity file not read, one-cell trenches/sills) apply
   unchanged here.
+
+## 8. Real fresh water: `global_1deg_ice_fwmass.nml`
+
+`jra_ryf_1deg.nml` (JRA55-do bulk forcing, zstar, SIS2-derived ice) with the fresh-water
+**mass** path on: `&ocean_forcing_nml freshwater="mass"` (precipitation, evaporation and
+runoff change the column volume; evaporation that would empty a layer is passed down the
+column), the CICE6/Icepack-port ice (`&ocean_ice_nml scheme="cice"`, `nilyr=4`,
+`&ocean_ice_thermo_nml update_ocn_f`), the ice and snow mass as a surface load
+(`&ocean_psurf_nml ice_load` + `ice_load_balance_ic`; `freshwater="mass"` with sea ice
+refuses to start without it) and liquid + frozen (calving) runoff from model-grid files
+(`&ocean_dataovr_nml lrunoff_* / frunoff_*`, `time_mode="cyclic"`, 365 days).
+`atm_load` stays off: the parent does not apply the atmospheric sea-level pressure to the
+free surface, and this namelist does not change that. The parent has `dt_therm_ratio = 1`,
+so this one does too (the OM3 interval order, `diabatic_first = .false.`, needs a ratio
+above 1). Nothing else
+differs from the parent.
+
+### 8.1 Inputs
+
+```bash
+export RDB_DATA_DIR=/somewhere/with/20GB
+python3 tools/fetch_om1deg.py                       # grid, bathymetry (+ WOA13)
+python3 tools/om1deg_prepare_inputs.py              # bathy_om1deg.nc + ic_woa13_jan.nc
+# the nine JRA55-do 1958 atmosphere files (GFDL's reanalysis.tgz, ~12 GB, padded files)
+# -> $RDB_DATA_DIR/JRA55do/ ; one-line filelists, in $RDB_DATA_DIR/OM_1deg/filelists/:
+for v in tas huss uas vas psl rlds rsds prra prsn; do
+  ls $RDB_DATA_DIR/JRA55do/${v}_*.padded.nc > $RDB_DATA_DIR/OM_1deg/filelists/$v.txt; done
+```
+
+`tools/fetch_om1deg.py --jra-wind` fetches only `uas`/`vas` from that tarball. **GFDL's
+tarball holds the nine atmosphere variables and no runoff**, so the runoff fields
+(`friver`, liquid, and `licalvf`, frozen/calving, of JRA55-do v1.4.0, Tsujino et al., 2018;
+input4MIPs `land`/`landIce`, `source_id MRI-JRA55-do-1-4-0`) have to be downloaded from
+input4MIPs/ESGF by hand. Then put them on the model grid, onto the model's own bathymetry:
+
+```bash
+nvfortran -O2 $(nf-config --fflags) -o om_runoff_to_model tools/om_runoff_to_model.f90 $(nf-config --flibs)
+D=$RDB_DATA_DIR/OM_1deg
+./om_runoff_to_model $D/ocean_hgrid.nc $D/bathy_om1deg.nc friver_1958.nc friver  $D/runoff_liquid_om1deg.nc --global
+./om_runoff_to_model $D/ocean_hgrid.nc $D/bathy_om1deg.nc licalvf_1958.nc licalvf $D/runoff_frozen_om1deg.nc --global
+```
+
+`--global` makes any discarded mass fatal. By default rivers are spread over the coastal ocean (`--spread-radius-km 500`, see the howto; `0` turns it off). The tool prints, per record, the source and
+model-grid totals and the mass moved from land to the coast, and at the end the number of
+land cells that carried mass and the farthest move. It takes about one minute for a 0.25
+degree source on the 360 x 320 mosaic (the point map is built once, not per record).
+See `docs/howto/prepare_runoff_file.md`.
+
+## 9. ACCESS-OM3 vertical-mixing settings: `global_1deg_ice_om3.nml`
+
+`global_1deg_ice_fwmass.nml` (Sec. 8, same inputs) with OM3's boundary-layer and interior
+mixing in place of KPP + PP81: the energetics-based boundary layer (`&ocean_epbl_nml`,
+Reichl & Hallberg 2018) with OM3's values of the OM4 mstar scheme, `nstar = 0.06`,
+`tke_decay = 0.01`, the additive Langmuir enhancement and `combine = "max_shear"`; river
+mixing over 40 m (`rivermix_depth`); Jackson, Hallberg & Legg (2008) shear mixing
+(`&ocean_kappa_shear_nml`); a 1.5e-5 m2/s background diffusivity with unit Prandtl number;
+and the OM3 interval order (`diabatic_first = .false.`) at `dt_therm_ratio = 2`.
+
+What is not OM3's yet is listed in the namelist header: the thermodynamic interval (3600 s
+here, 7200 s in OM3 -- the cosine-zenith shortwave interpolation needs the 3-hourly
+radiation interval to be a multiple of it), the shortwave bands, and tidal mixing.
+
+Measured so far: a 30-day run on one V100 with the SYNTHETIC runoff files of Sec. 8 --
+finite, budgets at round-off, about 8 minutes. It has not been compared with OM3 output.

@@ -138,6 +138,7 @@ program rdb_tests
                                               collect_ocean_surface_forcing_type_tests
    use test_ocean_frazil, only: ocean_frazil_collect => collect_ocean_frazil_tests
    use test_ocean_ice_enthalpy, only: ocean_ice_enthalpy_collect => collect_ocean_ice_enthalpy_tests
+   use test_ocean_ice_melt_potential, only: ocean_ice_melt_potential_collect => collect_ocean_ice_melt_potential_tests
    use test_ocean_ice_column, only: ocean_ice_column_collect => collect_ocean_ice_column_tests
    use test_ocean_ice_coupling, only: ocean_ice_coupling_collect => collect_ocean_ice_coupling_tests
    use test_ocean_ice_driver_column, only: ocean_ice_driver_column_collect => &
@@ -389,6 +390,7 @@ program rdb_tests
                 new_testsuite("ocean_surface_forcing_type", ocean_surface_forcing_type_collect), &
                 new_testsuite("ocean_frazil", ocean_frazil_collect), &
                 new_testsuite("ocean_ice_enthalpy", ocean_ice_enthalpy_collect), &
+                new_testsuite("ocean_ice_melt_potential", ocean_ice_melt_potential_collect), &
                 new_testsuite("ocean_ice_column", ocean_ice_column_collect), &
                 new_testsuite("ocean_ice_coupling", ocean_ice_coupling_collect), &
                 new_testsuite("ocean_ice_driver_column", ocean_ice_driver_column_collect), &

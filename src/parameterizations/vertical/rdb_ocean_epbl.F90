@@ -23,6 +23,21 @@ module rdb_ocean_epbl
    !! same paper's available-PE bookkeeping.  Knob table:
    !! `docs/generated_nml_knobs.md`.
    !!
+   !! **River mixing** (`&ocean_epbl_nml rivermix_depth` = D, MOM6 `DO_RIVERMIX` /
+   !! `RIVERMIX_DEPTH`; default 0 = off, bit-identical).  An EXTERNAL energy source standing
+   !! in for unresolved estuarine mixing: `E_river = max(0, 0.5 D g beta_S S_sfc R dt)`
+   !! (J/m^2, `epbl_rivermix_energy`), sized as the potential energy of mixing the fresh
+   !! runoff over depth D, is injected into the surface convective channel -- added to
+   !! `ctke_sfc` BEFORE its sign test, so it is weighted by `nstar` and also feeds the
+   !! convective velocity scale -- with `R = sf%runoff` (= `lrunoff + frunoff`, assembled and
+   !! halo-exchanged by `ocean_data_forcing_apply`) and `beta_S = -rho0 dSV/dS` at the surface
+   !! layer.  It is an energy only: there is no cap of the mixing at D.  Ordering: the
+   !! surface-flux deposit and, under `freshwater = "mass"`, the fresh-water mass step run
+   !! BEFORE the vertical-mixing stage, so EPBL sees the POST-dilution surface salinity
+   !! `S_sfc` (the state its skin buoyancy term already uses).  That matters only at
+   !! point-source river mouths (a very large river in one cell can lower E by tens of
+   !! percent) and is negligible once the runoff is spread over several cells.
+   !!
    !! Scope (PR 1): surface boundary layer only — no bottom-boundary
    !! ePBL, no mean-KE→TKE conversion (so the closed-form direct
    !! energy solve applies; no inner Newton loop), no Langmuir
@@ -58,6 +73,7 @@ module rdb_ocean_epbl
    public :: epbl_compute
    public :: epbl_merge_into_kv_kt
    public :: epbl_find_mstar
+   public :: epbl_rivermix_energy
    public :: epbl_mixlen_shape
    public :: epbl_lf17_wave_state
    public :: epbl_lf17_la
@@ -183,6 +199,11 @@ module rdb_ocean_epbl
       real(wp) :: nstar = 0.2_wp
          !! Fraction of convectively released PE that becomes
          !! entrainment-driving TKE (MOM6 NSTAR).
+      real(wp) :: rivermix_depth = 0.0_wp
+         !! River-mixing depth D (m; `&ocean_epbl_nml rivermix_depth`, MOM6
+         !! `RIVERMIX_DEPTH` with `DO_RIVERMIX`).  `0` (default) = off, bit-identical.
+         !! `> 0` adds `epbl_rivermix_energy` to the surface forcing energy
+         !! `ctke_sfc` where runoff enters.
       real(wp) :: tke_decay = 2.5_wp
          !! Ratio of the natural Ekman depth to the mechanical-TKE
          !! decay scale (MOM6 TKE_DECAY).
@@ -626,6 +647,36 @@ contains
    ! Pure helpers (device-callable; unit-tested directly)
    ! =================================================================
 
+   pure function epbl_rivermix_energy(depth, dsv_ds, s_sfc, rho0, runoff, dt) result(e_river)
+      !! River-mixing energy (J/m^2) handed to the boundary layer for one thermo step:
+      !!
+      !!     E_river = max(0, 0.5 * D * g * beta_S * S_sfc * R * dt),
+      !!     beta_S  = -rho0 * dSV/dS      (haline contraction, 1/psu)
+      !!
+      !! An external energy source representing unresolved estuarine mixing, sized as the
+      !! potential energy of mixing fresh runoff (mass flux `R`, kg m-2 s-1, salinity 0; volume
+      !! `R*dt/rho0`) over a column of depth `D` and salinity `S_sfc`, and injected into the
+      !! surface convective channel of the EPBL budget (Reichl & Hallberg 2018): same units and
+      !! sign convention as `ctke_sfc` (`> 0` releases PE), so it is weighted by `nstar` and
+      !! also feeds the convective velocity scale.  `dsv_ds` is the surface-layer
+      !! specific-volume salinity derivative the skin term of `ctke_sfc` already uses.
+      real(wp), intent(in) :: depth
+         !! `rivermix_depth` (m).
+      real(wp), intent(in) :: dsv_ds
+         !! dSV/dS at the surface layer (m3 kg-1 psu-1, negative).
+      real(wp), intent(in) :: s_sfc
+         !! Surface-layer salinity (psu).
+      real(wp), intent(in) :: rho0
+         !! Reference density (kg m-3).
+      real(wp), intent(in) :: runoff
+         !! Total (liquid + frozen) runoff mass flux (kg m-2 s-1).
+      real(wp), intent(in) :: dt
+         !! Thermo step (s).
+      real(wp) :: e_river
+      !$acc routine seq
+      e_river = max(0.0_wp, -0.5_wp*depth*GRAVITY*rho0*dsv_ds*s_sfc*runoff*dt)
+   end function epbl_rivermix_energy
+
    pure subroutine epbl_find_mstar(scheme, mstar_const, mstar_cap, &
                                    mstar_coef1, c_ek, mstar_conv_adj, &
                                    cn1, cn2, cn3, cs1, cs2, &
@@ -881,7 +932,7 @@ contains
       type(ocean_surface_flux_t), intent(in) :: sf
 
       integer :: nx, ny
-      logical :: sw_ctke_active
+      logical :: sw_ctke_active, river_active
 
       if (ms%idx_temperature <= 0 .or. ms%idx_salinity <= 0) return
 
@@ -902,6 +953,35 @@ contains
       ! When inactive, the source array is irrelevant (kernel never reads
       ! it), so the legacy `Q_heat` argument is passed on both branches.
       sw_ctke_active = this%epbl_sw_ctke .and. sf%has_sw
+      ! River mixing reads the assembled, halo-exchanged `sf%runoff` (built by
+      ! `ocean_data_forcing_apply`; `configure_ocean_epbl` refuses `rivermix_depth > 0`
+      ! without a runoff source).  Off, the kernel is handed `Q_salt` in its place and never
+      ! reads it.
+      river_active = this%rivermix_depth > 0.0_wp
+      if (river_active) then
+         call epbl_compute_runoff(grid, this, ms, ss, dt, sf, sw_ctke_active, river_active, &
+                                  sf%runoff, nx, ny)
+      else
+         call epbl_compute_runoff(grid, this, ms, ss, dt, sf, sw_ctke_active, river_active, &
+                                  sf%Q_salt, nx, ny)
+      end if
+   end subroutine epbl_compute
+
+   pure subroutine epbl_compute_runoff(grid, this, ms, ss, dt, sf, sw_ctke_active, river_active, &
+                                       runoff, nx, ny)
+      !! `epbl_compute`'s two kernel calls (shortwave-ledger source branch), with the runoff
+      !! actual already chosen by the caller (`sf%runoff` when river mixing is on, else an
+      !! unread placeholder).
+      type(hgrid_t), intent(in) :: grid
+      type(ocean_epbl_t), intent(inout) :: this
+      type(multilayer_state_t), intent(in) :: ms
+      type(ocean_surface_stress_t), intent(in) :: ss
+      real(wp), intent(in) :: dt
+      type(ocean_surface_flux_t), intent(in) :: sf
+      logical, intent(in) :: sw_ctke_active, river_active
+      integer, intent(in) :: nx, ny
+      real(wp), intent(in) :: runoff(nx, ny)
+
       if (sw_ctke_active .and. sf%sw_from_qsw) then
          call epbl_column_kernel(grid, this, ms, &
                                  ms%tracers(ms%idx_temperature)%c, &
@@ -912,7 +992,7 @@ contains
                                  sf%sw_net, sw_ctke_active, sf%sw_pen_frac, &
                                  sf%sw_band_ratio, sf%sw_zeta1, sf%sw_zeta2, &
                                  sf%sw_chl, sf%sw_nb, sf%sw_frac, sf%sw_kappa, &
-                                 ms%wet_mask, this%in_eos, nx, ny)
+                                 ms%wet_mask, this%in_eos, river_active, runoff, nx, ny)
       else
          call epbl_column_kernel(grid, this, ms, &
                                  ms%tracers(ms%idx_temperature)%c, &
@@ -923,9 +1003,9 @@ contains
                                  sf%Q_heat, sw_ctke_active, sf%sw_pen_frac, &
                                  sf%sw_band_ratio, sf%sw_zeta1, sf%sw_zeta2, &
                                  sf%sw_chl, sf%sw_nb, sf%sw_frac, sf%sw_kappa, &
-                                 ms%wet_mask, this%in_eos, nx, ny)
+                                 ms%wet_mask, this%in_eos, river_active, runoff, nx, ny)
       end if
-   end subroutine epbl_compute
+   end subroutine epbl_compute_runoff
 
    pure subroutine epbl_column_kernel(grid, this, ms, hT, hS, ss, dt, &
                                       Q_heat_field, inv_rho0_cp, &
@@ -933,7 +1013,7 @@ contains
                                       sw_src_field, sw_ctke_active, sw_pen_frac, &
                                       sw_R, sw_zeta1, sw_zeta2, &
                                       sw_chl, sw_nb, sw_frac, sw_kappa, wet_mask_field, &
-                                      p_top_in_eos, nx_arg, ny_arg)
+                                      p_top_in_eos, river_active, runoff_field, nx_arg, ny_arg)
       !! Per-column EPBL solve.  One `do concurrent (j, i)` with the
       !! serial work in k inside (j -> i -> k ordering); ALL sweep
       !! state is carried in scalars (design doc D6) — the only
@@ -1003,6 +1083,11 @@ contains
          !! (E3) Seed the column pressure stack at `ms%p_top(i,j)` rather
          !! than at 0 Pa — `&ocean_psurf_nml in_eos`, by value.  `.false.`
          !! ⇒ the pre-E3 arithmetic, character for character.
+      logical, intent(in) :: river_active
+         !! `rivermix_depth > 0`.
+      real(wp), intent(in) :: runoff_field(:, :)   ! assumed-shape-ok: outer-shim pass; thermo cadence
+         !! Total runoff mass flux (kg/m^2/s), `sf%runoff` (`lrunoff + frunoff`, seam ghosts
+         !! exchanged); read only when `river_active`.
       integer, intent(in) :: nx_arg, ny_arg
          !! Grid extents — used to bounds-check Q_* indexing.
 
@@ -1210,6 +1295,14 @@ contains
          else
             ctke_sfc = -0.5_wp*GRAVITY*this%rho0**2*ms%h_layer(i, j, nz)* &
                        (q_t_kin*dt*dsv_dt_sfc + q_s_kin*dt*dsv_ds_sfc)
+         end if
+         ! River mixing (`rivermix_depth > 0`): the energy to mix this step's runoff over D
+         ! joins the SAME per-column forcing energy BEFORE the sign test below, so it can
+         ! offset a stabilising surface term.  Off (`0`) the line is skipped entirely.
+         if (river_active) then
+            ctke_sfc = ctke_sfc + epbl_rivermix_energy(this%rivermix_depth, dsv_ds_sfc, &
+                                                       this%s0%data(i, j, nz), this%rho0, &
+                                                       runoff_field(i, j), dt)
          end if
 
          ! PR-12 dedup: |tau| at cell centres is a shared field

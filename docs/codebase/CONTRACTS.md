@@ -23,10 +23,17 @@ is the bug.
 | Cavity datum (`bt_H_ref = b − z_draft`, counted-once load) | module header of `src/core/ocean/state/rdb_ocean_cavity.F90`; assembly in `configure_ocean_cavity` |
 | Surface-flux component ownership (one writer per component) | module header of `src/parameterizations/vertical/rdb_ocean_surface_flux.F90` |
 | Real freshwater mass from basal melt | module header of `src/parameterizations/vertical/rdb_ocean_cavity_flux.F90`; summary below |
+| Real surface fresh-water mass (P − E, runoff slots) | module header of `src/parameterizations/vertical/rdb_ocean_surface_fw_mass.F90`; summary below |
 | Strided-hybrid column loops, scratch buffers | module header of `src/framework/rdb_scratch_3d.F90` |
 | Joining the checkpoint | `ocean_state_build_restart_registry`, `src/core/ocean/state/ocean_state/rdb_ocean_state_restart.F90` |
 | Diagnostics are pull-only | module header of `src/core/ocean/diag/rdb_ocean_diag.F90` |
 | Order-invariant global sums | `src/framework/rdb_efp.F90` |
+| CICE-port ice step order, hook contracts, error enforcement between stage groups | module header of `src/core/ice/coupling/rdb_ice_step_cice.F90` |
+| CICE-port transport on several ranks and across the tripolar fold (rank-uniform decisions and a rank-uniform category batch, paired fold-row fluxes for area and tracers (not for upwind), the category-state halo, the seam binding, the T-cell stress pair folded as a vector by `ocean_fold_wrap_centre_vector_pair`) | module headers of `src/core/ice/cice/rdb_ice_transport_seam.F90`, `rdb_ice_transport_seam_comm.F90`, `rdb_ice_transport_cice.F90`; the `row_shift` option of `src/comm/rdb_ocean_fold_exchange.F90` |
+| CICE-port multi-rank step (which exchange feeds which stage, rank-uniform statuses and error words, the flux-ghost refresh, the test seam of the negative controls) | module headers of `src/core/ice/coupling/rdb_ice_cice_hooks.F90`, `rdb_ice_step_cice.F90` and `src/core/ice/cice/rdb_ice_errors.F90`, `rdb_ice_transport_seam_comm.F90` |
+| CICE-port engine wiring (hook adapters bound to the engine state, run slots, start path, scheme select in `engine_step_ice`) | module headers of `src/core/ice/coupling/rdb_ice_cice_hooks.F90`, `rdb_ice_cice_run.F90` |
+| CICE-port ocean-ice flux hand-off (import, window-mean averager + restart tags, `Q_*` adapters, virtual-salt form, shared `heat_ice`/`sw_ice`/`salt_ice` surface-flux components (one slot set for both ice schemes), stress blend + restart mirror, melt-potential cap) | module headers of `src/core/ice/coupling/rdb_ice_import_ocean.F90`, `rdb_ice_flux_avg.F90`, `rdb_ice_cice_adapters.F90` |
+| CICE-port conservation ledger (stages as named terms, signs, EFP sums and the one cross-rank collective per step, restart scalars (global values), the transport clip record, the zaps, the thin-snow reset, the new-ice energy sign) | module headers of `src/core/ice/coupling/rdb_ice_ledger_terms.F90` (per-stage) and `rdb_ice_ledger.F90` (whole-step mirror); read [how to read it](../howto/read_ice_ledger.md) |
 | Who reads / writes what in each slot | the `!!` docstring of each slot type, composed in `src/core/ocean/state/rdb_ocean_state.F90` |
 
 ## Conventions that apply everywhere
@@ -109,14 +116,48 @@ reproducible, and `efp_real_diff` for a difference against a latched reference.
 
 The mass-flux components (`evap`, `lprec`, `fprec`, `vprec`, `lrunoff`, `frunoff`, `seaice_melt`) and
 their `heat_content_*` companions are enthalpy and salt bookkeeping only. They do not change column mass.
-The latent heat of fusion of a frozen flux is its own heat component, `q_fus` (`-L_f*fprec`, written by whoever writes `fprec`), kept apart from `heat_content_fprec` so it stays charged whatever the mass treatment does.
+The latent heat of fusion of a frozen flux is its own heat component, `q_fus` (`-L_f*fprec`, written by whoever writes `fprec`) or `q_fus_rof` (`-L_f*frunoff`, written by the runoff reader, `&ocean_dataovr_nml frunoff`), kept apart from `heat_content_fprec` so it stays charged whatever the mass treatment does.
 
 | Path | Real column mass? |
 |---|---|
 | Ice-shelf basal melt, `&ocean_cavity_melt_nml freshwater = "mass"` | Yes. The only one. |
 | Ice-shelf basal melt, `freshwater = "virtual"` (default) | No |
-| Sea ice (`salt_ice`, `heat_ice`, `sw_ice` through the coupler) | No. Virtual. |
-| The seven atmospheric/river mass-flux components | No |
+| Sea ice (`salt_ice`, `heat_ice`, `sw_ice` through the coupler), `freshwater = "none"`/`"virtual"` | No. Virtual. |
+| Sea ice, CICE-port, `freshwater = "mass"` (`seaice_melt = fresh`, `salt_ice = 1000*fsalt`; weight on `p_surf` via `&ocean_psurf_nml ice_load`) | Yes (same step as the atmosphere's; named terms: the ice's salt mass, `H_mass_conv`) |
+| The seven atmospheric/river mass-flux components, `&ocean_forcing_nml freshwater = "virtual"`: their net `F` is the virtual salt flux `salt_fw`, no mass | No |
+| The same components, `freshwater = "mass"` (open-ocean `lprec`, `fprec`, `evap`, and `lrunoff`/`frunoff` from `&ocean_dataovr_nml`; `seaice_melt` is written by the CICE-port hand-off; `vprec` has no filler) | Yes (`ocean_surface_fw_mass_step`, module `rdb_ocean_surface_fw_mass`) |
+
+**Surface fresh-water mass (`&ocean_forcing_nml freshwater = "mass"`).** Ownership and order, all in the
+module header of `src/parameterizations/vertical/rdb_ocean_surface_fw_mass.F90`:
+- The assembler (`ocean_surface_flux_assemble`) is the ONE writer of `sf%fw_net` (the net open-ocean flux
+  snapshot, kg m-2 s-1, into the ocean) and `sf%Q_salt_tracer` (`Q_salt` without the virtual `salt_fw`).
+  Both are carried between thermo steps (restart state `sf_fw_net`, `sf_Q_salt_tracer`) and seam-exchanged
+  with `Q_heat`/`Q_salt` (`ocean_seam_refresh_surface_flux`). The mass step reads the snapshot, never the raw
+  components (bulk forcing rewrites them every outer step, before the assembly of the same thermo step).
+- `ocean_surface_fw_mass_step` runs immediately after EVERY `ocean_surface_flux_apply_tracers`: `run_stage`,
+  `run_stage_split` and `apply_deferred_thermo` (the cavity's step is not there). It is the one writer of
+  `h_layer` for this flux; it does not touch T, books `dh_k·T_k` into `ms%heat_budget_surface`, and keeps the
+  content of every other tracer (`c ← c·h0/hn`). The applied (not requested) volume is booked into the EFP
+  accumulator `ms%mass_src_efp` over owned cells; the console adds it to `ms%mass_src`.
+- `Q_salt` (incl. the virtual `salt_fw`) stays what KPP/EPBL read for `B_0`; only the tracer deposit reads
+  `Q_salt_tracer`.
+- Sea ice (CICE-port): `ice_cice_to_surface_flux` is the one writer of `seaice_melt` (= window-mean `fresh`) and
+  `salt_ice` (= `1000*fsalt`, no dilution) under mass; `seaice_melt` reaches the ocean ONLY through `fw_net` (and
+  `salt_fw` for the buoyancy), never a second consumer. The engine hook keeps the rain-through term in `fresh`.
+  `sf%p_ice_load` is written ONLY by `ocean_surface_flux_apply_ice_load` (full overwrite, owned cells, seam ghosts
+  exchanged, called by `engine_ice_load_refresh` at the end of an `engine_step` that DELIVERED the water: `delivered` is
+  latched BEFORE the dynamics advance the cadence counter, so the load is built from the ice state the delivered water
+  came from -- in-stage: hand-off of ice step `kN-1`, delivered `kN`; deferred: hand-off of ice step `kN-2`, delivered
+  `kN-1`). `sf%p_surf` is the ONE assembled total, a full overwrite over the whole array (ghosts included) by
+  `ocean_surface_flux_assemble_p_surf`: `(p_surf_seed | p_surf_atm [atm_load]) + p_ice_load [ice_load]`, at the top of
+  `engine_step` and again after every load refresh; every part is seam-valid first (`p_surf_atm`, written by the bulk
+  forcing on owned cells only, is exchanged under `atm_load`). `ice_load` alone never adds the atmosphere. Restart state
+  `sf_p_ice_load`/`sf_p_ice_valid`. `ice_dyn_c_step` adds `p_surf/(rho0 g)` to the ssh its tilt reads.
+  `ice_load_balance_ic` (cold start only, `engine_ice_load_start`) thins every layer of a column by the displaced water
+  `p_ice_load/(rho0 g)`; the deferred order's first hand-off (`N-1` ice steps) is scaled by `t_acc/therm_dt`
+  (`ice_cice_apply_window`, `t_first_window`) so the ocean spends what the ice booked.
+- `ocean_dyn_step_split` re-derives `bt_eta = Σh − bt_H_ref` right before the ALE remap (which takes
+  `h_ref = Σh − bt_eta`); without it the z*/z_fixed target is built on `H + dh`.
 
 Under `"mass"` the melt is a Boussinesq volume source, `dh = m·dt/ρ₀`, added to `h_layer(:,:,nz)` by
 `ocean_cavity_mass_step` in the stage, at thermo cadence, just after the surface-flux apply.

@@ -2178,6 +2178,30 @@ class OceanPsurf(Group):
         default=False,
     )
 
+    ice_load = Bool(
+        'ice_load',
+        doc="Sea-ice + snow mass loading: p_surf = p_surf_const + g*(rho_i*vice + rho_s*vsno) (CICE-port ice only; REQUIRED by freshwater='mass' with sea ice, refused without it; requires enable=.true.)",
+        units='',
+        required=False,
+        default=False,
+    )
+
+    atm_load = Bool(
+        'atm_load',
+        doc="Add the bulk forcing's sea-level pressure (p_surf_atm = psl) to p_surf: the atmosphere's inverse barometer, seam ghosts exchanged every step (requires enable=.true. and &ocean_bulk_flux_nml enable). Off: p_surf stays the p_surf_const seed",
+        units='',
+        required=False,
+        default=False,
+    )
+
+    ice_load_balance_ic = Bool(
+        'ice_load_balance_ic',
+        doc='Cold start with ice_load: lower the initial sea surface under the ice by (rho_i*vice+rho_s*vsno)/rho_0 so the start is in balance with the load (never on a warm restart)',
+        units='',
+        required=False,
+        default=True,
+    )
+
     p_surf_const = Real(
         'p_surf_const',
         doc='Uniform atmospheric surface pressure (Pa) seeded into p_surf_atm (uniform => provably inert)',
@@ -2548,6 +2572,14 @@ class OceanEpbl(Group):
         units='',
         required=False,
         default=0.2,
+    )
+
+    rivermix_depth = Real(
+        'rivermix_depth',
+        doc='River-mixing depth (m); 0 = off',
+        units='',
+        required=False,
+        default=0.0,
     )
 
     tke_decay = Real(
@@ -3291,6 +3323,23 @@ class OceanForcing(Group):
         default=False,
     )
 
+    freshwater = Enum(
+        'freshwater',
+        doc="Surface fresh-water mass fluxes (lprec/fprec/evap/lrunoff/frunoff): 'none' (default, enthalpy only), 'virtual' (virtual salt flux -S_surf*F, fixed column mass; needs enable_components) or 'mass' (real volume with the evaporation pass-down; open-ocean fluxes, needs enable_components)",
+        units='',
+        required=False,
+        default='none',
+        allowed=('none', 'virtual', 'mass'),
+    )
+
+    fw_evap_cfl_limit = Real(
+        'fw_evap_cfl_limit',
+        doc="freshwater='mass': largest fraction of a live layer one evaporative withdrawal may take, range (0,1) (OM3/MOM6 EVAP_CFL_LIMIT); the unmet remainder is passed down the column",
+        units='',
+        required=False,
+        default=0.8,
+    )
+
 
 class OceanIce(Group):
     """`&ocean_ice_nml` -- Sea-ice model (SIS2 port) master switch + category/layer counts."""
@@ -3404,6 +3453,23 @@ class OceanIce(Group):
         default=True,
     )
 
+    ledger = Bool(
+        'ledger',
+        doc="scheme='cice': run the named-term ice conservation ledger every step and print its residual line at the console cadence (default off => bit-identical)",
+        units='',
+        required=False,
+        default=False,
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
+    )
+
+    hfreeze = Real(
+        'hfreeze',
+        doc='Depth cap of the melt-potential (frzmlt) integral, capped by the boundary-layer depth where KPP/EPBL provide one; -1 = off (OM3 HFREEZE = 10)',
+        units='m',
+        required=False,
+        default=-1.0,
+    )
+
     bound_salinity = Bool(
         'bound_salinity',
         doc='Floor top-layer salinity at min_salinity after the ice salt exchange (OM3 BOUND_SALINITY; non-conservative; default off)',
@@ -3468,7 +3534,7 @@ class OceanIce(Group):
 
     p0 = Real(
         'p0',
-        doc='Ice-strength pressure constant (SIS2 ICE_STRENGTH_PSTAR)',
+        doc='Ice-strength pressure constant (SIS2 ICE_STRENGTH_PSTAR); read by dyn_scheme=sis2_c only (dyn_scheme=cice_c reads Pstar of &ocean_ice_ridge_nml)',
         units='Pa',
         required=False,
         default=27500.0,
@@ -3478,7 +3544,7 @@ class OceanIce(Group):
 
     c0 = Real(
         'c0',
-        doc='Ice-strength exponent constant (SIS2 ICE_STRENGTH_CSTAR)',
+        doc='Ice-strength exponent constant (SIS2 ICE_STRENGTH_CSTAR); read by dyn_scheme=sis2_c only (dyn_scheme=cice_c reads Cstar of &ocean_ice_ridge_nml)',
         units='',
         required=False,
         default=20.0,
@@ -3568,6 +3634,769 @@ class OceanIce(Group):
         units='',
         required=False,
         default=False,
+    )
+
+    scheme = Enum(
+        'scheme',
+        doc="Ice model: 'sis2' (default) or 'cice' (CICE6/Icepack port, single rank; see docs/CAPABILITIES_AND_LIMITATIONS.md)",
+        units='',
+        required=False,
+        default='sis2',
+        allowed=('sis2', 'cice'),
+    )
+
+    nilyr = Int(
+        'nilyr',
+        doc="scheme='cice': ice layers per category (upstream 7; OM3 4)",
+        units='',
+        required=False,
+        default=7,
+        has_min=True,
+        vmin=1,
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
+    )
+
+    nslyr = Int(
+        'nslyr',
+        doc="scheme='cice': snow layers per category (only 1 supported)",
+        units='',
+        required=False,
+        default=1,
+        has_min=True,
+        vmin=1,
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
+    )
+
+    kcatbound = Int(
+        'kcatbound',
+        doc="scheme='cice': category-bound formula 0..3 (upstream 1; OM3 0)",
+        units='',
+        required=False,
+        default=1,
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
+    )
+
+    constants_set = Enum(
+        'constants_set',
+        doc="scheme='cice': physical-constants table: 'icepack' (upstream) or 'cesm' (CESM-coupled override set)",
+        units='',
+        required=False,
+        default='icepack',
+        allowed=('icepack', 'cesm'),
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
+    )
+
+    dt_ice = Real(
+        'dt_ice',
+        doc="scheme='cice': ice time step; <= 0 is the outer ocean step, a positive value must equal &time_nml dt_fixed (refused otherwise)",
+        units='s',
+        required=False,
+        default=-1.0,
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
+    )
+
+
+class OceanIceThermo(Group):
+    """`&ocean_ice_thermo_nml` -- CICE-port ice thermodynamics and thickness-distribution knobs (scheme='cice'; upstream CICE defaults)."""
+
+    _nml_name = 'ocean_ice_thermo'
+
+    ktherm = Int(
+        'ktherm',
+        doc='Thermodynamics: 1 = Bitz-Lipscomb 1999 (2 = mushy is refused)',
+        units='',
+        required=False,
+        default=1,
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
+    )
+
+    conduct = Enum(
+        'conduct',
+        doc='Ice conductivity: bubbly (Pringle 2007) or MU71',
+        units='',
+        required=False,
+        default='bubbly',
+        allowed=('bubbly', 'MU71'),
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
+    )
+
+    tfrz_option = Enum(
+        'tfrz_option',
+        doc="Ice-side sea freezing point (default linear_salt is OM3's value, NOT upstream's mushy; mushy is refused)",
+        units='',
+        required=False,
+        default='linear_salt',
+        allowed=('linear_salt', 'constant', 'minus1p8', 'mushy'),
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
+    )
+
+    ice_ref_salinity = Real(
+        'ice_ref_salinity',
+        doc='Salt-flux reference salinity (OM3 5.0)',
+        units='ppt',
+        required=False,
+        default=4.0,
+        has_min=True,
+        vmin=0.0,
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
+    )
+
+    saltflux_option = Enum(
+        'saltflux_option',
+        doc='Salt flux: constant (prognostic is refused)',
+        units='',
+        required=False,
+        default='constant',
+        allowed=('constant', 'prognostic'),
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
+    )
+
+    congel_freeze = Enum(
+        'congel_freeze',
+        doc='Congelation freezing: two-step or one-step',
+        units='',
+        required=False,
+        default='two-step',
+        allowed=('two-step', 'one-step'),
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
+    )
+
+    cpl_frazil = Enum(
+        'cpl_frazil',
+        doc='Frazil coupling (only fresh_ice_correction is supported)',
+        units='',
+        required=False,
+        default='fresh_ice_correction',
+        allowed=('fresh_ice_correction', 'internal', 'external'),
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
+    )
+
+    update_ocn_f = Bool(
+        'update_ocn_f',
+        doc='Frazil fresh water/salt fluxes to the ocean (OM3 .true.)',
+        units='',
+        required=False,
+        default=False,
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
+    )
+
+    hfrazilmin = Real(
+        'hfrazilmin',
+        doc='Minimum new-frazil thickness',
+        units='m',
+        required=False,
+        default=0.05,
+        has_min=True,
+        vmin=0.0,
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
+    )
+
+    hi_min = Real(
+        'hi_min',
+        doc='Minimum ice thickness for thermodynamics',
+        units='m',
+        required=False,
+        default=0.01,
+        has_min=True,
+        vmin=0.0,
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
+    )
+
+    ustar_min = Real(
+        'ustar_min',
+        doc='Friction-velocity floor (OM3 5e-4)',
+        units='m/s',
+        required=False,
+        default=0.005,
+        has_min=True,
+        vmin=0.0,
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
+    )
+
+    fbot_xfer_type = Enum(
+        'fbot_xfer_type',
+        doc='Basal heat-transfer coefficient: constant (Cdn_ocn is refused)',
+        units='',
+        required=False,
+        default='constant',
+        allowed=('constant', 'Cdn_ocn'),
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
+    )
+
+    floediam = Real(
+        'floediam',
+        doc='Floe diameter for lateral melt (Steele 1992); must be > 0',
+        units='m',
+        required=False,
+        default=300.0,
+        has_min=True,
+        vmin=0.0,
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
+    )
+
+    floeshape = Real(
+        'floeshape',
+        doc='Floe shape factor for lateral melt (Steele 1992); must be > 0',
+        units='',
+        required=False,
+        default=0.66,
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
+    )
+
+    ksno = Real(
+        'ksno',
+        doc='Snow thermal conductivity',
+        units='W/m/K',
+        required=False,
+        default=0.3,
+        has_min=True,
+        vmin=0.0,
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
+    )
+
+    emissivity = Real(
+        'emissivity',
+        doc='Surface emissivity (OM3 0.95)',
+        units='',
+        required=False,
+        default=0.985,
+        has_min=True,
+        vmin=0.0,
+        has_max=True,
+        vmax=1.0,
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
+    )
+
+    kitd = Int(
+        'kitd',
+        doc='ITD conversion: 1 = linear remap (0 = delta function is refused)',
+        units='',
+        required=False,
+        default=1,
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
+    )
+
+    calc_Tsfc = Bool(
+        'calc_Tsfc',
+        doc='Solve for the surface temperature (.false. is refused)',
+        units='',
+        required=False,
+        default=True,
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
+    )
+
+    semi_implicit_Tsfc = Bool(
+        'semi_implicit_Tsfc',
+        doc='Semi-implicit surface temperature coupling (.true. is refused)',
+        units='',
+        required=False,
+        default=False,
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
+    )
+
+
+class OceanIceSw(Group):
+    """`&ocean_ice_sw_nml` -- CICE-port ice shortwave knobs of the CCSM3 scheme (Briegleb et al. 2004; scheme='cice'; upstream CICE defaults)."""
+
+    _nml_name = 'ocean_ice_sw'
+
+    shortwave = Enum(
+        'shortwave',
+        doc='Shortwave scheme: ccsm3 (Briegleb et al. 2004); the delta-Eddington options are refused (not ported)',
+        units='',
+        required=False,
+        default='ccsm3',
+        allowed=('ccsm3', 'dEdd', 'dEdd_snicar_ad'),
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
+    )
+
+    albedo_type = Enum(
+        'albedo_type',
+        doc='Albedo parameterisation: ccsm3 (Briegleb et al. 2004); constant is refused (not ported)',
+        units='',
+        required=False,
+        default='ccsm3',
+        allowed=('ccsm3', 'constant'),
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
+    )
+
+    albicev = Real(
+        'albicev',
+        doc='Visible albedo of cold thick bare ice, in [0, 1] (OM3 0.86)',
+        units='',
+        required=False,
+        default=0.78,
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
+    )
+
+    albicei = Real(
+        'albicei',
+        doc='Near-infrared albedo of cold thick bare ice, in [0, 1] (OM3 0.44)',
+        units='',
+        required=False,
+        default=0.36,
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
+    )
+
+    albsnowv = Real(
+        'albsnowv',
+        doc='Visible albedo of cold snow, in [0, 1]',
+        units='',
+        required=False,
+        default=0.98,
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
+    )
+
+    albsnowi = Real(
+        'albsnowi',
+        doc='Near-infrared albedo of cold snow, in [0, 1]',
+        units='',
+        required=False,
+        default=0.7,
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
+    )
+
+    ahmax = Real(
+        'ahmax',
+        doc='Thickness above which the ice albedo is constant (OM3 0.1); must be > 0',
+        units='m',
+        required=False,
+        default=0.3,
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
+    )
+
+    snowpatch = Real(
+        'snowpatch',
+        doc='Snow-cover patchiness length; negative follows constants_set (0.02 icepack, 0.005 cesm)',
+        units='m',
+        required=False,
+        default=-1.0,
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
+    )
+
+    sw_redist = Bool(
+        'sw_redist',
+        doc='Move shortwave absorbed in a near-melting layer to the surface (OM3 .true.)',
+        units='',
+        required=False,
+        default=False,
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
+    )
+
+    sw_frac = Real(
+        'sw_frac',
+        doc='Fraction of the internal shortwave sw_redist moves to the surface; must be in (0, 1]',
+        units='',
+        required=False,
+        default=0.9,
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
+    )
+
+    sw_dtemp = Real(
+        'sw_dtemp',
+        doc='sw_redist temperature offset from melting; must be >= 0',
+        units='K',
+        required=False,
+        default=0.02,
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
+    )
+
+    sw_vis_frac = Real(
+        'sw_vis_frac',
+        doc='Visible fraction of the broadband downwelling shortwave in a forced run (near-IR is the complement); must be in [0, 1]',
+        units='',
+        required=False,
+        default=0.52,
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
+    )
+
+
+class OceanIceRidge(Group):
+    """`&ocean_ice_ridge_nml` -- CICE-port ridging and ice-strength knobs (scheme='cice'; upstream CICE defaults, which OM3 also uses)."""
+
+    _nml_name = 'ocean_ice_ridge'
+
+    kstrength = Int(
+        'kstrength',
+        doc='Ice strength: 1 = Rothrock (1975), 0 = Hibler (1979); other values are refused',
+        units='',
+        required=False,
+        default=1,
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
+    )
+
+    krdg_partic = Int(
+        'krdg_partic',
+        doc='Ridge participation: 1 = Lipscomb et al. (2007), 0 = Thorndike et al. (1975); other values are refused',
+        units='',
+        required=False,
+        default=1,
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
+    )
+
+    krdg_redist = Int(
+        'krdg_redist',
+        doc='Ridge redistribution: 1 = exponential (Lipscomb et al. 2007), 0 = Hibler (1980); other values are refused',
+        units='',
+        required=False,
+        default=1,
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
+    )
+
+    mu_rdg = Real(
+        'mu_rdg',
+        doc='E-folding scale of ridged ice for krdg_redist=1 (Lipscomb et al. 2007); must be > 0',
+        units='m^0.5',
+        required=False,
+        default=3.0,
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
+    )
+
+    Cf = Real(
+        'Cf',
+        doc='Ratio of ridging work to potential-energy change (Flato and Hibler 1995); must be > 0',
+        units='',
+        required=False,
+        default=17.0,
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
+    )
+
+    Pstar = Real(
+        'Pstar',
+        doc='Hibler (1979) strength constant, kstrength=0; must be > 0.  Read by &ocean_ice_dyn_nml dyn_scheme=cice_c (the sis2_c core reads p0 of &ocean_ice_nml)',
+        units='N/m',
+        required=False,
+        default=27500.0,
+    )
+
+    Cstar = Real(
+        'Cstar',
+        doc='Hibler (1979) concentration constant, kstrength=0; must be > 0.  Read by &ocean_ice_dyn_nml dyn_scheme=cice_c (the sis2_c core reads c0 of &ocean_ice_nml)',
+        units='',
+        required=False,
+        default=20.0,
+    )
+
+
+class OceanIceAtm(Group):
+    """`&ocean_ice_atm_nml` -- CICE-port atmosphere-ice boundary-layer knobs (scheme='cice'; upstream CICE defaults)."""
+
+    _nml_name = 'ocean_ice_atm'
+
+    highfreq = Bool(
+        'highfreq',
+        doc='Relative-wind (ice-velocity) stress with a 0.5 m/s floor (OM3 .true.)',
+        units='',
+        required=False,
+        default=False,
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
+    )
+
+    natmiter = Int(
+        'natmiter',
+        doc='Monin-Obukhov iterations (Jordan et al. 1999); must be >= 0',
+        units='',
+        required=False,
+        default=5,
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
+    )
+
+    atmiter_conv = Real(
+        'atmiter_conv',
+        doc='Relative change in ustar that stops the iteration; must be >= 0',
+        units='',
+        required=False,
+        default=0.0,
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
+    )
+
+    iceruf = Real(
+        'iceruf',
+        doc='Ice surface roughness for the neutral drag; must be > 0 and below zref = 10 m (checked at configure); the forcing reference heights must also exceed it (checked at run time by the forcing input PR, not at configure)',
+        units='m',
+        required=False,
+        default=0.0005,
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
+    )
+
+    atmbndy = Enum(
+        'atmbndy',
+        doc='Boundary-layer form: similarity (constant and mixed are refused)',
+        units='',
+        required=False,
+        default='similarity',
+        allowed=('similarity', 'constant', 'mixed'),
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
+    )
+
+    formdrag = Bool(
+        'formdrag',
+        doc='Form drag (.true. is refused)',
+        units='',
+        required=False,
+        default=False,
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
+    )
+
+    calc_strair = Bool(
+        'calc_strair',
+        doc='Compute the wind stress in the ice model (.false. is refused)',
+        units='',
+        required=False,
+        default=True,
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
+    )
+
+    uni_tas = Real(
+        'uni_tas',
+        doc='Uniform-atmosphere air temperature, used when &ocean_atm_forcing_nml enable is off',
+        units='K',
+        required=False,
+        default=263.15,
+        has_min=True,
+        vmin=1.0,
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
+    )
+
+    uni_uas = Real(
+        'uni_uas',
+        doc='Uniform-atmosphere eastward wind (earth-relative)',
+        units='m/s',
+        required=False,
+        default=0.0,
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
+    )
+
+    uni_vas = Real(
+        'uni_vas',
+        doc='Uniform-atmosphere northward wind',
+        units='m/s',
+        required=False,
+        default=0.0,
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
+    )
+
+    uni_psl = Real(
+        'uni_psl',
+        doc='Uniform-atmosphere sea-level pressure; must be > 0',
+        units='Pa',
+        required=False,
+        default=101325.0,
+        has_min=True,
+        vmin=1.0,
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
+    )
+
+    uni_huss = Real(
+        'uni_huss',
+        doc='Uniform-atmosphere specific humidity',
+        units='kg/kg',
+        required=False,
+        default=0.001,
+        has_min=True,
+        vmin=0.0,
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
+    )
+
+    uni_rlds = Real(
+        'uni_rlds',
+        doc='Uniform-atmosphere downward longwave',
+        units='W/m2',
+        required=False,
+        default=200.0,
+        has_min=True,
+        vmin=0.0,
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
+    )
+
+
+class OceanIceDyn(Group):
+    """`&ocean_ice_dyn_nml` -- CICE-port ice dynamics and transport knobs (upstream CICE code defaults; the EVP keys act under dyn_scheme='cice_c' (the C-grid EVP core on the SIS2-derived ice state); illegal EVP values are collected by the configure-time check, not rejected by the parser)."""
+
+    _nml_name = 'ocean_ice_dyn'
+
+    dyn_scheme = Enum(
+        'dyn_scheme',
+        doc='Ice dynamics core: sis2_c = the SIS2 C-grid EVP (default, unchanged), cice_c = the CICE6 C-grid EVP (Lemieux et al. 2024) coupled to the ocean through the sea-surface tilt and the ocean surface current; needs &ocean_ice_nml enable and dynamics, nghost >= 3; runs on any rank count, a tripolar north fold included (px > 1 too)',
+        units='',
+        required=False,
+        default='sis2_c',
+        allowed=('sis2_c', 'cice_c'),
+    )
+
+    ndte = Int(
+        'ndte',
+        doc='Elastic subcycles per dynamics step; must be >= 1',
+        units='',
+        required=False,
+        default=120,
+    )
+
+    elasticDamp = Real(
+        'elasticDamp',
+        doc='Damping parameter E of the classic EVP (Hunke 2001, arlx = 2 E ndte); must be > 0',
+        units='',
+        required=False,
+        default=0.36,
+    )
+
+    revised_evp = Bool(
+        'revised_evp',
+        doc='Revised EVP (Bouillon et al. 2013): arlx and brlx apply',
+        units='',
+        required=False,
+        default=False,
+    )
+
+    arlx = Real(
+        'arlx',
+        doc='Revised EVP stress relaxation parameter alpha; must be > 0 when revised_evp',
+        units='',
+        required=False,
+        default=300.0,
+    )
+
+    brlx = Real(
+        'brlx',
+        doc='Revised EVP momentum relaxation parameter beta; must be > 0 when revised_evp',
+        units='',
+        required=False,
+        default=300.0,
+    )
+
+    e_yieldcurve = Real(
+        'e_yieldcurve',
+        doc='Aspect ratio of the elliptical yield curve; must be > 0',
+        units='',
+        required=False,
+        default=2.0,
+    )
+
+    e_plasticpot = Real(
+        'e_plasticpot',
+        doc='Aspect ratio of the elliptical plastic potential; must be > 0',
+        units='',
+        required=False,
+        default=2.0,
+    )
+
+    Ktens = Real(
+        'Ktens',
+        doc='Tensile strength fraction, T = Ktens P (Konig Beatty and Holland 2010); must be in [0, 1)',
+        units='',
+        required=False,
+        default=0.0,
+    )
+
+    deltaminEVP = Real(
+        'deltaminEVP',
+        doc='Minimum Delta of the viscosities (Hunke 2001); must be > 0',
+        units='1/s',
+        required=False,
+        default=1e-11,
+    )
+
+    capping_method = Str(
+        'capping_method',
+        doc='Viscosity capping: max (Hibler 1979) or sum (Kreyscher et al. 2000); other values are refused',
+        units='',
+        required=False,
+        default='max',
+        max_len=8,
+    )
+
+    dyn_area_min = Real(
+        'dyn_area_min',
+        doc='Minimum concentration for the dynamics; must be >= 0',
+        units='',
+        required=False,
+        default=1e-11,
+    )
+
+    dyn_mass_min = Real(
+        'dyn_mass_min',
+        doc='Minimum mass for the dynamics; must be >= 0',
+        units='kg/m^2',
+        required=False,
+        default=1e-10,
+    )
+
+    rheo_area_min = Real(
+        'rheo_area_min',
+        doc='Concentration below which the internal stress is dropped (free_drift_approx); must be >= 0',
+        units='',
+        required=False,
+        default=0.001,
+    )
+
+    free_drift_approx = Bool(
+        'free_drift_approx',
+        doc='Drop the internal stress below rheo_area_min',
+        units='',
+        required=False,
+        default=True,
+    )
+
+    visc_method = Str(
+        'visc_method',
+        doc='Corner shear viscosity: avg_zeta (mean of the T viscosities) or avg_strength (rebuilt from the mean strength); other values are refused',
+        units='',
+        required=False,
+        default='avg_zeta',
+        max_len=16,
+    )
+
+    cdn_ocn = Real(
+        'cdn_ocn',
+        doc='Ice-ocean drag coefficient (upstream dragio); must be >= 0',
+        units='',
+        required=False,
+        default=0.00536,
+    )
+
+    vel_cap = Real(
+        'vel_cap',
+        doc='Face speed above which the velocity guard raises ICE_ERR_DYN_VEL (never clamps); must be > 0',
+        units='m/s',
+        required=False,
+        default=10.0,
+    )
+
+    advection = Enum(
+        'advection',
+        doc='Horizontal transport: remap = incremental remapping (Lipscomb and Hunke 2004; upstream default), upwind = first-order upwind',
+        units='',
+        required=False,
+        default='remap',
+        allowed=('remap', 'upwind'),
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
+    )
+
+    transport_check = Bool(
+        'transport_check',
+        doc='Run the transport checks (non-finite entry, negative area, CFL, conservation of area and tracers, monotonicity)',
+        units='',
+        required=False,
+        default=False,
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
+    )
+
+    transport_buffer_mib = Int(
+        'transport_buffer_mib',
+        doc="advection='remap': memory budget [MiB] of the flux and reconstruction buffers of one category batch (bigger = fewer launches); at least one category index per batch whatever the budget; must be >= 1",
+        units='',
+        required=False,
+        default=1024,
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
+    )
+
+    ndtd = Int(
+        'ndtd',
+        doc='Dynamics substeps per ice step; only 1 is supported (refused otherwise)',
+        units='',
+        required=False,
+        default=1,
+        dead_on_ocean_path="scheme='cice' only; inert under scheme='sis2' (read by the CICE-port ice step)",
     )
 
 
@@ -6332,6 +7161,74 @@ class OceanDataovr(Group):
         default=0.0,
     )
 
+    lrunoff_file = Str(
+        'lrunoff_file',
+        doc='Path to the liquid runoff mass flux (>= 0, on wet cells only) NetCDF (blank ⇒ tag not file-driven)',
+        units='',
+        required=False,
+        default='',
+        max_len=256,
+    )
+
+    lrunoff_var = Str(
+        'lrunoff_var',
+        doc='Variable name inside lrunoff_file (required when it is set)',
+        units='',
+        required=False,
+        default='',
+        max_len=64,
+    )
+
+    lrunoff_scale = Real(
+        'lrunoff_scale',
+        doc='Multiplier applied to the liquid runoff mass flux (>= 0, on wet cells only) slab at read',
+        units='kg m-2 s-1',
+        required=False,
+        default=1.0,
+    )
+
+    lrunoff_add = Real(
+        'lrunoff_add',
+        doc='Offset added to the liquid runoff mass flux (>= 0, on wet cells only) slab after scale',
+        units='kg m-2 s-1',
+        required=False,
+        default=0.0,
+    )
+
+    frunoff_file = Str(
+        'frunoff_file',
+        doc='Path to the frozen runoff / calving mass flux (>= 0, on wet cells only) NetCDF (blank ⇒ tag not file-driven)',
+        units='',
+        required=False,
+        default='',
+        max_len=256,
+    )
+
+    frunoff_var = Str(
+        'frunoff_var',
+        doc='Variable name inside frunoff_file (required when it is set)',
+        units='',
+        required=False,
+        default='',
+        max_len=64,
+    )
+
+    frunoff_scale = Real(
+        'frunoff_scale',
+        doc='Multiplier applied to the frozen runoff / calving mass flux (>= 0, on wet cells only) slab at read',
+        units='kg m-2 s-1',
+        required=False,
+        default=1.0,
+    )
+
+    frunoff_add = Real(
+        'frunoff_add',
+        doc='Offset added to the frozen runoff / calving mass flux (>= 0, on wet cells only) slab after scale',
+        units='kg m-2 s-1',
+        required=False,
+        default=0.0,
+    )
+
 
 class OceanAtmForcing(Group):
     """`&ocean_atm_forcing_nml` -- JRA55-do-style prescribed atmospheric state driving bulk-flux ocean/ice surface forcing (PR-C2c)."""
@@ -7315,6 +8212,11 @@ GENERATED_GROUPS = {
     'ocean_thermo': OceanThermo,
     'ocean_forcing': OceanForcing,
     'ocean_ice': OceanIce,
+    'ocean_ice_thermo': OceanIceThermo,
+    'ocean_ice_sw': OceanIceSw,
+    'ocean_ice_ridge': OceanIceRidge,
+    'ocean_ice_atm': OceanIceAtm,
+    'ocean_ice_dyn': OceanIceDyn,
     'ocean_ice_ic': OceanIceIc,
     'ocean_restore': OceanRestore,
     'ocean_geothermal': OceanGeothermal,
@@ -7345,5 +8247,5 @@ GENERATED_GROUPS = {
     'ocean_bc': OceanBc,
 }
 
-N_GROUPS = 63
-N_KNOBS = 809
+N_GROUPS = 68
+N_KNOBS = 904

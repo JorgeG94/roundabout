@@ -55,7 +55,8 @@ contains
                   new_unittest("cice_rate_zero_before_window", test_cice_rate_zero_before_window), &
                   new_unittest("cice_hs_part_weighted", test_cice_hs_part_weighted), &
                   new_unittest("cice_tsfc_open_water_freezing", test_cice_tsfc_open_water_freezing), &
-                  new_unittest("cice_aliases_opt_in", test_cice_aliases_opt_in) &
+                  new_unittest("cice_aliases_opt_in", test_cice_aliases_opt_in), &
+                  new_unittest("sis2_registers_no_cice_port_names", test_sis2_registers_no_cice_port_names) &
                   ]
    end subroutine collect_ocean_ice_diags_tests
 
@@ -344,7 +345,8 @@ contains
       !! Anti-divergence gate: a non-uniform part_size/m_ice pattern run
       !! through the diag-manager fills must match the host-side
       !! `ice_cell_concentration_impl` (the canonical two-mode gather) to
-      !! FP round-off, so the fill copy cannot silently diverge from the
+      !! FP round-off, so the aggregates the fills now read
+      !! (`ice_aggregates_fill`, D1.6) cannot silently diverge from the
       !! EVP/coupler view.
       type(error_type), allocatable, intent(out) :: error
       type(hgrid_t) :: grid
@@ -394,10 +396,11 @@ contains
    end subroutine test_ice_fill_matches_concentration_impl
 
    subroutine test_console_ice_totals_reference(error)
-      !! Pins the THIRD gather copy — the console-side `compute_ice_totals`
-      !! (`rdb_ocean_console_stats`) — against a hand-computed reference, so
-      !! it cannot silently drift from the fills / `ice_cell_concentration_impl`
-      !! convention (the anti-divergence fill test only covers the fills copy).
+      !! Pins the console-side `compute_ice_totals` (`rdb_ocean_console_stats`,
+      !! which since D1.6 reads the `aice`/`vice` aggregates like the fills do)
+      !! against a hand-computed reference, so it cannot silently drift from
+      !! the fills / `ice_cell_concentration_impl` convention (the
+      !! anti-divergence fill test covers the fills' view).
       !! Reuses the supersaturated column (Σ part_size = 1.3 ⇒ ci clamps to 1)
       !! with a known mice.  `compute_ice_totals` reads its inputs on-DEVICE
       !! (!$acc reductions), so bracket the call with enter/exit_data; the out
@@ -425,7 +428,7 @@ contains
 
          call ocean_state_enter_data(state)
          call compute_ice_totals(state%metrics%wet_T, state%metrics%areaT, &
-                                 state%ice%part_size, state%ice%m_ice, 3, grid%nghost, &
+                                 state%ice%aice, state%ice%vice, grid%nghost, &
                                  wet_area, ci_area, hi_area)
          call ocean_state_exit_data(state)
 
@@ -807,5 +810,34 @@ contains
       call st_sel%destroy()
       call st_off%destroy()
    end subroutine test_cice_aliases_opt_in
+
+   subroutine test_sis2_registers_no_cice_port_names(error)
+      !! The default `scheme = "sis2"` registers exactly the set it always did: the CICE-port-only names
+      !! (`dvidtd`, `daidtt`, `daidtd`, `albsni` and the `_ai` fluxes) are absent, the rates are there.
+      type(error_type), allocatable, intent(out) :: error
+      type(hgrid_t) :: grid
+      type(ocean_state_t) :: st
+      character(len=10), parameter :: NEW_NAMES(13) = [character(len=10) :: "dvidtd", "daidtt", "daidtd", "albsni", &
+                                                                     "fswabs_ai", "fswthru_ai", "flwup_ai", "fsens_ai", "flat_ai", &
+                                                                                      "fhocn_ai", "fresh_ai", "fsalt_ai", "evap_ai"]
+      character(len=8), parameter :: OLD_NAMES(11) = [character(len=8) :: "aice", "hi", "hs", "Tsfc", "congel", &
+                                                                            "frazil", "snoice", "meltt", "meltb", "meltl", "dvidtt"]
+      integer :: i
+
+      call setup_state_ice(grid, st, ncat=1)
+      st%dyn%enable_thermodynamics = .true.
+      call register_default_diags(st, dt_out=1.0_wp)
+      do i = 1, size(OLD_NAMES)
+         call check(error, find_var(st, trim(OLD_NAMES(i))) > 0, trim(OLD_NAMES(i))//" is registered under sis2")
+         if (allocated(error)) exit
+      end do
+      if (.not. allocated(error)) then
+         do i = 1, size(NEW_NAMES)
+            call check(error, find_var(st, trim(NEW_NAMES(i))) == 0, trim(NEW_NAMES(i))//" is NOT registered under sis2")
+            if (allocated(error)) exit
+         end do
+      end if
+      call st%destroy()
+   end subroutine test_sis2_registers_no_cice_port_names
 
 end module test_ocean_ice_diags

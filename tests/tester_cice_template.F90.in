@@ -1,0 +1,47 @@
+!! Auto-generated per-test driver — DO NOT EDIT in the build dir.
+!! Source template: tests/tester_cice_template.F90.in (standalone ice tests: no comm env)
+!! CMake (`configure_file`) substitutes:
+!!   @TESTER_NAME@  - program identifier (e.g. tester_state)
+!!   @MODULE_NAME@  - test module name   (e.g. test_state)
+!!   @COLLECT_FN@   - testdrive collector (e.g. collect_state_tests)
+!!   @SUITE_NAME@   - display string      (e.g. state)
+!!
+!! The fpm build uses `tests/tester.F90` instead, which bundles every
+!! `collect_*_tests` into a single executable.
+program @TESTER_NAME@
+   use, intrinsic :: iso_fortran_env, only: error_unit
+   use testdrive, only: run_testsuite, new_testsuite, testsuite_type
+   use @MODULE_NAME@, only: @COLLECT_FN@
+   implicit none
+
+   integer :: stat, is
+   type(testsuite_type), allocatable :: testsuites(:)
+   character(len=*), parameter :: fmt = '("#", *(1x, a))'
+
+   stat = 0
+
+   testsuites = [ &
+                new_testsuite("@SUITE_NAME@", @COLLECT_FN@) &
+                ]
+
+   do is = 1, size(testsuites)
+      write (error_unit, fmt) "Testing:", testsuites(is)%name
+      ! `parallel=.false.` is REQUIRED, not a preference.  test-drive's
+      ! `run_testsuite` defaults to `parallel=.true.` and wraps the per-test-case
+      ! loop in `!$omp parallel do`.  gfortran and nvfortran build this tree
+      ! without any OpenMP flag, so that directive is inert there — but ifx gets
+      ! `-qopenmp` unconditionally (it is how ifx maps `do concurrent` onto
+      ! threads), so every test CASE in a suite ran concurrently in one process.
+      ! The suites are not written for that: kernels keep module-level persistent
+      ! workspaces, the profiler and the error ring are module state, and several
+      ! cases share a `save`d config.  Running them serially is the contract the
+      ! tests were written against.
+      call run_testsuite(testsuites(is)%collect, error_unit, stat, parallel=.false.)
+   end do
+
+   if (stat > 0) then
+      write (error_unit, '(i0, 1x, a)') stat, "test(s) failed!"
+      error stop 1
+   end if
+
+end program @TESTER_NAME@

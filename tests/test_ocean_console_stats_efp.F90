@@ -190,7 +190,7 @@ contains
       ke_e = real(efp_to_real(ke_efp), wp)
 
       call compute_ice_totals_efp(state%metrics%wet_T, state%metrics%areaT, &
-                                  state%ice%part_size, state%ice%m_ice, 1, grid%nghost, &
+                                  state%ice%aice, state%ice%vice, grid%nghost, &
                                   wet_efp, ci_efp, hi_efp)
       wet_fp = real(efp_to_real(wet_efp), wp)
       ci_fp = real(efp_to_real(ci_efp), wp)
@@ -437,10 +437,10 @@ contains
       call ocean_state_enter_data(state)
 
       call compute_ice_totals_efp(state%metrics%wet_T, state%metrics%areaT, &
-                                  state%ice%part_size, state%ice%m_ice, NCAT, grid%nghost, &
+                                  state%ice%aice, state%ice%vice, grid%nghost, &
                                   wet_efp, ci_efp, hi_efp)
       call compute_ice_totals(state%metrics%wet_T, state%metrics%areaT, &
-                              state%ice%part_size, state%ice%m_ice, NCAT, grid%nghost, &
+                              state%ice%aice, state%ice%vice, grid%nghost, &
                               wet_fp, ci_fp, hi_fp)
 
       call ocean_state_exit_data(state)

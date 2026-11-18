@@ -3,6 +3,12 @@ submodule(rdb_ocean_state) rdb_ocean_state_restart
    !! moved verbatim from rdb_ocean_state.F90 (restart WRITE stays in
    !! the parent -- it is the D->H pull side; see
    !! src/core/ocean/state/rdb_ocean_state.F90 for the public interface).
+   use rdb_ice_cice_restart, only: ice_legacy_t, ice_cice_restart_resume, ICE_RESUME_V2, ICE_RESUME_FAILED, ICE_RESUME_COLD
+   use rdb_ice_restart_convert, only: ice_convert_report_t
+#ifndef RDB_NO_NETCDF
+   use netcdf, only: nf90_open, nf90_close, nf90_inq_varid, nf90_inquire_variable, nf90_inquire_dimension, &
+                     nf90_nowrite, nf90_noerr
+#endif
    implicit none
 
 contains
@@ -501,6 +507,39 @@ contains
                               size(state%surface_flux%Q_salt, 2), optional=.true.)
          call reg%register_scalar("sf_q_assembled", state%surface_flux%q_assembled, &
                                   optional=.true.)
+         ! Real fresh-water mass (`freshwater="mass"`): the assembled snapshot the mass step
+         ! spends and the tracer salt flux the deposit reads are carried between thermo steps
+         ! exactly like `Q_heat`/`Q_salt` (the deferred path spends the one assembled after
+         ! step N-1 at step N), so a warm restart needs both.  Registered only under the mode,
+         ! so every other restart file is unchanged.
+         if (state%surface_flux%fw_mass) then
+            call reg%register_2d("sf_fw_net", state%surface_flux%fw_net, 0, &
+                                 size(state%surface_flux%fw_net, 1), &
+                                 size(state%surface_flux%fw_net, 2), optional=.true.)
+            call reg%register_2d("sf_Q_salt_tracer", state%surface_flux%Q_salt_tracer, 0, &
+                                 size(state%surface_flux%Q_salt_tracer, 1), &
+                                 size(state%surface_flux%Q_salt_tracer, 2), optional=.true.)
+         end if
+         ! Ice mass loading: the load the ocean was last told about is carried (it is the ice
+         ! state at the last DELIVERY of the fresh water, one ice step behind the restored ice
+         ! state, so it cannot be rebuilt from it).  `p_surf` itself is reassembled at resume.
+         if (state%surface_flux%ice_load .and. allocated(state%surface_flux%p_ice_load)) then
+            call reg%register_2d("sf_p_ice_load", state%surface_flux%p_ice_load, 0, &
+                                 size(state%surface_flux%p_ice_load, 1), &
+                                 size(state%surface_flux%p_ice_load, 2), optional=.true.)
+            call reg%register_scalar("sf_p_ice_valid", state%surface_flux%p_ice_valid, optional=.true.)
+         end if
+         ! CICE-port ice: the shortwave through the ice (`sw_ice`, window mean of `fswthru`) is
+         ! refreshed only at the thermo hand-off yet read EVERY step through `sw_net`, so a
+         ! checkpoint inside a window must carry it.  The SIS2-derived scheme's `sw_ice` is NOT
+         ! registered: its resume folds the restart-carried `sw_thru_diag` into `Q_heat` only, so
+         ! after a mid-window resume its `sw_net` lacks the ice shortwave until the next hand-off
+         ! (a gap older than this tag; `restart_time_varying` gates the CICE-port side).
+         if (state%ice%cice%is_init .and. allocated(state%surface_flux%sw_ice)) then
+            call reg%register_2d("sf_sw_ice", state%surface_flux%sw_ice, 0, &
+                                 size(state%surface_flux%sw_ice, 1), &
+                                 size(state%surface_flux%sw_ice, 2), optional=.true.)
+         end if
       end if
 
       ! --- Sea-ice PR 5: C-grid EVP dynamics prognostics.  u_ice/v_ice
@@ -592,22 +631,22 @@ contains
       !     checkpoint warns-and-seeds the init values (part_size all
       !     open water, m_ice/m_snow/enth_* = 0, sal_ice =
       !     ICE_BULK_SALINITY) rather than failing. ---
-      if (allocated(state%ice%part_size)) then
+      if (allocated(state%ice%part_size) .and. .not. state%ice%cice%is_init) then
          call reg%register_3d("ice_part_size", state%ice%part_size, 0, &
                               size(state%ice%part_size, 1), &
                               size(state%ice%part_size, 2), optional=.true.)
       end if
-      if (allocated(state%ice%m_ice)) then
+      if (allocated(state%ice%m_ice) .and. .not. state%ice%cice%is_init) then
          call reg%register_3d("ice_m_ice", state%ice%m_ice, 0, &
                               size(state%ice%m_ice, 1), &
                               size(state%ice%m_ice, 2), optional=.true.)
       end if
-      if (allocated(state%ice%m_snow)) then
+      if (allocated(state%ice%m_snow) .and. .not. state%ice%cice%is_init) then
          call reg%register_3d("ice_m_snow", state%ice%m_snow, 0, &
                               size(state%ice%m_snow, 1), &
                               size(state%ice%m_snow, 2), optional=.true.)
       end if
-      if (allocated(state%ice%enth_ice)) then
+      if (allocated(state%ice%enth_ice) .and. .not. state%ice%cice%is_init) then
          do it = 1, size(state%ice%enth_ice, 4)
             call reg%register_3d("ice_enth_ice_k"//to_string(it), &
                                  state%ice%enth_ice(:, :, :, it), 0, &
@@ -615,7 +654,7 @@ contains
                                  size(state%ice%enth_ice, 2), optional=.true.)
          end do
       end if
-      if (allocated(state%ice%sal_ice)) then
+      if (allocated(state%ice%sal_ice) .and. .not. state%ice%cice%is_init) then
          do it = 1, size(state%ice%sal_ice, 4)
             call reg%register_3d("ice_sal_ice_k"//to_string(it), &
                                  state%ice%sal_ice(:, :, :, it), 0, &
@@ -623,13 +662,69 @@ contains
                                  size(state%ice%sal_ice, 2), optional=.true.)
          end do
       end if
-      if (allocated(state%ice%enth_snow)) then
+      if (allocated(state%ice%enth_snow) .and. .not. state%ice%cice%is_init) then
          do it = 1, size(state%ice%enth_snow, 4)
             call reg%register_3d("ice_enth_snow_k"//to_string(it), &
                                  state%ice%enth_snow(:, :, :, it), 0, &
                                  size(state%ice%enth_snow, 1), &
                                  size(state%ice%enth_snow, 2), optional=.true.)
          end do
+      end if
+
+      ! --- CICE-port ice state (v2 tags, `ice_state_version`): only when the
+      !     slot is live, i.e. `scheme = "cice"`; never under "sis2". ---
+      if (state%ice%cice%is_init) call state%ice%cice%register_restart(reg)
+      ! The run slots of the same scheme: the persistent centre ice-ocean stress and the
+      ! mid-window flux averager.
+      if (state%icec%is_init) call state%icec%register_restart(reg)
+
+      ! --- C-grid EVP dynamics under the SIS2-derived state
+      !     (`dyn_scheme = "cice_c"`, D9.2): the T and corner stresses (whole
+      !     arrays, ghost rings included, so no exchange is needed after the
+      !     read), the 0/1 mirrors of the two face ice masks (they decide the
+      !     start velocity of a newly covered face) and the ice-ocean stress
+      !     per ice area at T (read one step late by the basal heat).  The ice
+      !     velocity itself is `ice_u_ice`/`ice_v_ice` above.  Optional: a
+      !     checkpoint from a run without the C-grid core resumes with the
+      !     zero state.  Never registered under the default "sis2_c". ---
+      if (state%ice%dync%is_init) then
+         call reg%register_scalar("ice_dyn_scheme_id", state%ice%dync%scheme_id, optional=.true.)
+         call reg%register_2d("ice_dync_stresspT", state%ice%dync%w%stresspT, 0, &
+                              size(state%ice%dync%w%stresspT, 1), &
+                              size(state%ice%dync%w%stresspT, 2), optional=.true.)
+         call reg%register_2d("ice_dync_stressmT", state%ice%dync%w%stressmT, 0, &
+                              size(state%ice%dync%w%stressmT, 1), &
+                              size(state%ice%dync%w%stressmT, 2), optional=.true.)
+         call reg%register_2d("ice_dync_stress12U", state%ice%dync%w%stress12U, 0, &
+                              size(state%ice%dync%w%stress12U, 1), &
+                              size(state%ice%dync%w%stress12U, 2), optional=.true.)
+         call reg%register_2d("ice_dync_emask", state%ice%dync%emask_r, 0, &
+                              size(state%ice%dync%emask_r, 1), &
+                              size(state%ice%dync%emask_r, 2), optional=.true.)
+         call reg%register_2d("ice_dync_nmask", state%ice%dync%nmask_r, 0, &
+                              size(state%ice%dync%nmask_r, 1), &
+                              size(state%ice%dync%nmask_r, 2), optional=.true.)
+         ! Under `scheme = "cice"` the centre stress is owned by the step work slot
+         ! (`ice_strocnTx/y`); the dynamics slot's copy is a per-step scratch.
+         if (.not. state%ice%cice%is_init) then
+            call reg%register_2d("ice_dync_strocnT_x", state%ice%dync%strocnT_x, 0, &
+                                 size(state%ice%dync%strocnT_x, 1), &
+                                 size(state%ice%dync%strocnT_x, 2), optional=.true.)
+            call reg%register_2d("ice_dync_strocnT_y", state%ice%dync%strocnT_y, 0, &
+                                 size(state%ice%dync%strocnT_y, 1), &
+                                 size(state%ice%dync%strocnT_y, 2), optional=.true.)
+         else
+            ! The ice-ocean stress the ocean blend (`tau = (1 - a) tau_wind - strocn`) reads at the TOP of
+            ! the next outer step.  The face concentration is rebuilt from the restart-carried aggregate
+            ! there, so only the stress is state.  REQUIRED under the prescribed atmosphere (a missing
+            ! tag would hand the ocean the bare wind under ice); optional otherwise.
+            call reg%register_2d("ice_dync_strocnxE", state%ice%dync%w%strocnxE, 0, &
+                                 size(state%ice%dync%w%strocnxE, 1), size(state%ice%dync%w%strocnxE, 2), &
+                                 optional=.not. state%bulk_forcing%cice_wind)
+            call reg%register_2d("ice_dync_strocnyN", state%ice%dync%w%strocnyN, 0, &
+                                 size(state%ice%dync%w%strocnyN, 1), size(state%ice%dync%w%strocnyN, 2), &
+                                 optional=.not. state%bulk_forcing%cice_wind)
+         end if
       end if
 
       ! --- Tidal-mixing + law-of-the-wall BBL kd_int (merged every stage).
@@ -792,12 +887,48 @@ contains
 #ifndef RDB_NO_NETCDF
       type(restart_registry_t) :: reg
       type(ocean_restart_metadata_t) :: meta
-      integer :: osc, local_ierr
+      integer :: osc, local_ierr, file_id, cfg_id
 
       call ocean_state_build_restart_registry(state, grid, reg)
+      ! The dynamics-scheme id is registered (and so written) only under
+      ! dyn_scheme = "cice_c"; the READ side probes it under "sis2_c" too, so a
+      ! file written by the other core is refused rather than resumed half-mixed.
+      if (.not. state%ice%dync%is_init) then
+         ! (the slot's own scalar is the target: a local would be a dangling pointer)
+         state%ice%dync%scheme_id = 0.0_wp
+         call reg%register_scalar("ice_dyn_scheme_id", state%ice%dync%scheme_id, optional=.true.)
+      end if
       call ocean_state_fill_restart_metadata(state, grid, meta)
       call ocean_restart_read_local(filename, reg, decomp, meta, t, step, osc, &
                                     ierr=local_ierr)
+      if (local_ierr == 0 .and. state%ice%cice%is_init) then
+         call resume_cice_ice(state, grid, decomp, filename, reg, meta, local_ierr)
+         if (local_ierr /= 0) then
+            if (present(ierr)) then
+               ierr = OCEAN_STATUS_ERR_RESTART_GRID
+               return
+            end if
+            call fail("ice restart: the sea-ice state of "//trim(filename)//" cannot be resumed under "// &
+                      "scheme = 'cice' (see the log above); refusing.", code=OCEAN_STATUS_ERR_RESTART_GRID)
+         end if
+      end if
+      if (local_ierr == 0 .and. state%ice%enable .and. state%ice%dynamics .and. .not. state%ice%cice%is_init) then
+         if (reg%entry_found("ice_dyn_scheme_id")) then
+            file_id = merge(1, 0, state%ice%dync%scheme_id > 0.5_wp)
+         else
+            file_id = 0
+         end if
+         cfg_id = merge(1, 0, state%ice%dync%is_init)
+         if (file_id /= cfg_id) then
+            call fail("Ocean restart "//trim(filename)//" was written with &ocean_ice_dyn_nml "// &
+                      "dyn_scheme = '"//merge("cice_c", "sis2_c", file_id == 1)// &
+                      "' (a file without the scheme id is the existing 'sis2_c'), but this run is "// &
+                      "configured with dyn_scheme = '"//merge("cice_c", "sis2_c", cfg_id == 1)// &
+                      "': the ice stresses and velocities of the two cores are not interchangeable; "// &
+                      "refusing to resume.", ierr, restart_mismatch_status_code(3))
+            return
+         end if
+      end if
       if (present(ierr)) then
          ! Translate the INTERNAL 1/2/3 restart_mismatch_kind convention
          ! (private to `ocean_restart_check_decomp`/`ocean_restart_read_local`)
@@ -834,6 +965,84 @@ contains
       return
 #endif
    end subroutine ocean_state_restart_read
+
+   subroutine resume_cice_ice(state, grid, decomp, filename, reg, meta, ierr)
+      !! Start path of the CICE-port ice state after the run registry was read: v2 tags (read
+      !! already), a SIS2 checkpoint (read into a short-lived legacy registry, converted ONCE,
+      !! logged), or no ice state (cold, empty).  A v2 file must also carry the flux averager's
+      !! window counters (a checkpoint that lost part of a window is refused, never resumed
+      !! with an empty window).  Host, before `enter_data`.  `ierr /= 0`: refused.
+      type(ocean_state_t), intent(inout), target :: state
+      type(hgrid_t), intent(in) :: grid
+      type(decomp_t), intent(in) :: decomp
+      character(len=*), intent(in) :: filename
+      type(restart_registry_t), intent(in) :: reg
+      type(ocean_restart_metadata_t), intent(in) :: meta
+      integer, intent(out) :: ierr
+      type(ice_legacy_t), target :: legacy
+      type(restart_registry_t) :: reg_legacy
+      type(ice_convert_report_t) :: rep
+      real(wp) :: t2, tf
+      integer :: step2, osc2, e2, status
+
+      ierr = 0
+#ifndef RDB_NO_NETCDF
+      ! Probe the file's SIS2 category dimension BEFORE the legacy read: a file written with another
+      ! category count would abort the reader on a shape mismatch instead of being refused.
+      block
+         integer, parameter :: MAXDIM = 8
+         integer :: ncid, varid, ndims, len3, st
+         integer :: dimids(MAXDIM)
+         st = nf90_open(trim(filename), nf90_nowrite, ncid)
+         if (st == nf90_noerr) then
+            if (nf90_inq_varid(ncid, "ice_part_size", varid) == nf90_noerr) then
+               st = nf90_inquire_variable(ncid, varid, ndims=ndims, dimids=dimids)
+               if (st == nf90_noerr .and. ndims == 3) then
+                  st = nf90_inquire_dimension(ncid, dimids(3), len=len3)
+                  if (st == nf90_noerr .and. len3 /= state%ice%ncat + 1) then
+                     call logger%error("ice restart: the SIS2 checkpoint has "//to_string(len3 - 1)// &
+                                       " ice categories, this run's &ocean_ice_nml ncat is "// &
+                                       to_string(state%ice%ncat)//"; refusing to convert")
+                     ierr = 14
+                  end if
+               end if
+            end if
+            st = nf90_close(ncid)
+         end if
+      end block
+      if (ierr /= 0) return
+#endif
+      call legacy%init(grid%nx_total, grid%ny_total, state%ice%ncat, state%ice%nk_ice, grid%nghost)
+      call legacy%register_restart(reg_legacy)
+      call ocean_restart_read_local(filename, reg_legacy, decomp, meta, t2, step2, osc2, ierr=e2)
+      if (e2 /= 0) then
+         call logger%error("ice restart: the SIS2 tags of "//trim(filename)//" could not be read into the "// &
+                           "legacy registry (a different category count or extents than this run's namelist?)")
+         ierr = 11
+         call legacy%destroy()
+         return
+      end if
+      tf = -state%ice%cice%p%c%depressT*state%eos%S_ref
+      call ice_cice_restart_resume(state%ice%cice, legacy, reg, reg_legacy, tf, status, rep)
+      call legacy%destroy()
+      if (status == ICE_RESUME_FAILED) then
+         ierr = 12
+         return
+      end if
+      if (status == ICE_RESUME_COLD) then
+         state%icec%resume_cold = .true.
+         call logger%info("ice restart: the checkpoint holds no ice state (ocean-only file): the CICE-port "// &
+                          "ice cold-starts from &ocean_ice_ic_nml")
+      end if
+      if (status == ICE_RESUME_V2 .and. state%icec%is_init) then
+         if (.not. (reg%entry_found("ice_avg_n") .and. reg%entry_found("ice_avg_t") .and. &
+                    reg%entry_found("ice_avg_fresh") .and. reg%entry_found("ice_avg_fhocn"))) then
+            call logger%error("ice restart: a CICE-port checkpoint without the flux averager's window "// &
+                              "state (ice_avg_*); refusing to resume with an empty window")
+            ierr = 13
+         end if
+      end if
+   end subroutine resume_cice_ice
 
    subroutine convert_legacy_tracer_content(state, reg)
       !! One-time conversion of a pre-concentration restart: every tracer

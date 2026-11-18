@@ -26,6 +26,7 @@
 !! Dev filter: `RDB_BITID_CASES=<substring>` runs only the cases whose label
 !! contains it (e.g. `RDB_BITID_CASES=drain`); a comma-separated list
 !! (`island_basin,open_obc`) selects every case matching any item.
+!! `RDB_BITID_STEPS=<n>` overrides the step count (first-divergence hunts).
 !!
 !! Cases (each under `pred_corr` AND `ssp_rk2`, 48 steps):
 !!   * island_basin — closed Cartesian basin with an interior land block
@@ -122,6 +123,22 @@
 !!     `ref_level` bottom_rest (global per-layer median + column stretch) or
 !!     keep_h, after poisoning the WHOLE u/v/hu/hv arrays with rank-dependent garbage;
 !!     the `_t0` twins compare the balanced IC itself;
+!!   * cice_ice / _wall / _island / _sph / _lat / _upwind / _bulk - the CICE-port sea ice
+!!     (`&ocean_ice_nml scheme = 'cice'`: thermodynamics + ITD, C-grid EVP with the category strength,
+!!     remap transport, ridging, ocean hand-off) on a cold column at the liquidus under an oblique wind:
+!!     the re-entrant seamount channel; a closed flat basin; a closed basin with an interior land block
+!!     on the rank seams; the lon-lat channel (latitude-dependent metrics); the `latitudes` seed with an
+!!     ice-free southern tile; first-order upwind advection; the prescribed (non-uniform, regridded)
+!!     atmosphere through the bulk forcing.  Also: the console ice totals (EFP) bitwise, a checkpoint/resume
+!!     leg, a NEGATIVE CONTROL per exchange the multi-rank step added (`ice_mr_test_skip`), a fault
+!!     injection (a NaN area on one rank; the import refusing on one rank: every rank must stop with the same
+!!     verdict) and the error-word reduction bound / unbound.  On the tripolar cap (`cice_ice_fold`, `_fold_edge`; remap advection) the fold's
+!!     own controls: the stress pair folded as a scalar, its fold skipped, the fold-row flux pairing off;
+!!     !!   * cice_ice_led / cice_ice_island_led / cice_ice_r1_led - the same with the named-term conservation ledger ON:
+!!     every number the ledger reports (the step's table, the cumulative accumulators, the clip record, the global
+!!     state totals) is bitwise the serial run's on every layout, also after the write/resume leg; the run with the
+!!     ledger OFF is bitwise the ledger-on run in every registry field (the ledger is an observer); a ledger term
+!!     left rank-local (`ice_lt_test_local`) is DETECTED; a NaN summand on one rank makes every rank read NaN;
 !!   * drain_ratio / drain_ratio_h3 - windowed tracer drain (ratio 4, ppm / ppm_h3
 !!     + diabatic_first = .false.) on a periodic channel, >1 sub-cycle pass;
 !!   * drain_ratio_weno5 / _weno7 / _weno9 - the same drain with the WENO swept
@@ -235,8 +252,8 @@
 !! cell of every mismatching field on every rank.
 #ifdef RDB_ENABLE_MPI
 program test_ocean_decomp_bitid_mpi
-   use, intrinsic :: iso_fortran_env, only: int64
-   use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+   use, intrinsic :: iso_fortran_env, only: int32, int64
+   use, intrinsic :: ieee_arithmetic, only: ieee_is_finite, ieee_value, ieee_quiet_nan
    use rdb_constants, only: wp
    use rdb_config, only: config_t, read_config_from_string, validate_config
    use rdb_ocean_status, only: OCEAN_STATUS_OK
@@ -251,13 +268,23 @@ program test_ocean_decomp_bitid_mpi
    use rdb_comm_env, only: comm_env_init, comm_env_setup_roles, comm_env_finalize, &
                            comm_env_rank, comm_env_size, comm_env_compute_comm, &
                            comm_env_push_compute_comm, comm_env_pop_compute_comm
-   use pic_mpi_lib, only: comm_t, allreduce, MPI_SUM, MPI_MAX
+   use pic_mpi_lib, only: comm_t, allreduce, MPI_SUM, MPI_MAX, MPI_MIN
    use rdb_console_stats, only: console_stats_t, conservation_budget_t
    use rdb_ocean_console_stats, only: ocean_console_stats_report, ocean_budget_stage_weight
    use rdb_ocean_dyn, only: SPLIT_SCHEME_PRED_CORR
    use rdb_ocean_balance, only: BALANCE_GEOSTROPHIC, ocean_balance_velocity
    use rdb_ocean_reinit, only: ocean_balance_apply
    use rdb_ocean_fold_exchange, only: ocean_fold_exchange_grow_count
+   use rdb_ice_cice_hooks, only: ice_cice_bind, ice_cice_step_result, ice_mr_test_skip, &
+                                 ICE_SKIP_STRESS_HALO, ICE_SKIP_STATE_HALO, &
+                                 ICE_SKIP_FOLD_SIGN, ICE_SKIP_FOLD_PAIR, ICE_SKIP_FOLD_FLUX
+   use rdb_ice_step_cice, only: ice_step_result_t, ICE_STEP_OK, ICE_STEP_FATAL, ICE_STEP_STAGE_FAILED, &
+                                ICE_STAGE_OCEAN_IMPORT
+   use rdb_ice_transport_seam_comm, only: ice_err_combine_collective, ice_transport_seam_bind_reductions
+   use rdb_ice_transport_seam, only: transport_seam_t
+   use rdb_ice_ledger_terms, only: ice_lt_ix_state, ice_lt_test_local, ICE_LT_THERM1, ICE_LT_RIDGING
+   use rdb_ice_errors, only: ice_err_summary_t, ice_err_reduce, ice_err_set_combine, ice_err_combine_iface, &
+                             ICE_ERR_FATAL_MASK, ICE_ERR_NONFINITE, ICE_ERR_TSN_RANGE, ICE_ERR_ITD_SHIFT_RANGE
 #ifndef RDB_NO_NETCDF
    use rdb_io_netcdf, only: nc_create_file, nc_close, nc_def_dim, nc_def_var_2d, &
                             nc_def_var_3d, nc_enddef, nc_put_var_2d, rdb_def_var_1d, &
@@ -293,6 +320,13 @@ program test_ocean_decomp_bitid_mpi
    character(len=*), parameter :: ATM_WARM = "bitid_atm_warm.nc"
    character(len=*), parameter :: ATM_COLD = "bitid_atm_cold.nc"
    character(len=*), parameter :: ATM_CRSE = "bitid_atm_coarse.nc"
+   character(len=*), parameter :: FW_THIN_CFL = "1.0e-6"
+      !! `fw_evap_cfl_limit` of `fw_mass_thin` (ten sigma layers over 300-3000 m): the top layer gives at most
+      !! 1e-6 of its thickness (3e-5 m over the 300 m rim), so every evaporating column of the rim passes the rest
+      !! down, while the whole stack (>= 3e-4 m) still covers the largest withdrawal (~1.3e-4 m): no column runs dry.
+   character(len=*), parameter :: RUNOFF_BASIN = "bitid_runoff_isle.nc"
+   character(len=*), parameter :: RUNOFF_FOLD = "bitid_runoff_fold.nc"
+   character(len=*), parameter :: RUNOFF_FOLD_W = "bitid_runoff_wrap.nc"
    character(len=*), parameter :: ATM_WARM_LIST = "bitid_atm_warm_files.txt"
    character(len=*), parameter :: ATM_CRSE_LIST = "bitid_atm_coarse_files.txt"
    character(len=*), parameter :: ATM_COLD_LIST = "bitid_atm_cold_files.txt"
@@ -325,9 +359,27 @@ program test_ocean_decomp_bitid_mpi
          !! (m^3/step) and of the compensating withdrawal `dw` (m).
       integer :: mvol_nvar = 0, dw_nvar = 0
          !! Number of steps on which each changed (non-vacuity: varying, non-zero).
+      integer(int64) :: fw_pd_total = 0_int64
+         !! `freshwater='mass'` cases: running count of owned columns that passed an evaporative
+         !! withdrawal down the column (the pass-down non-vacuity).
+      real(wp) :: fw_net_absmax = 0.0_wp
+         !! Largest |`fw_net`| over the owned cells of the last step (host-read, non-vacuity).
+      real(wp) :: fw_h_total0 = 0.0_wp, fw_h_total1 = 0.0_wp
+         !! Owned-cell sum of the layer thickness at the start and at the end of the run (mass moved).
       integer :: ncav(6) = 0
          !! Cavity non-vacuity counts over the OWNED cells: covered wet, open wet,
          !! grounded, melting, top-drag stress > 0, k_top < nz.
+      real(wp) :: ridge_act = 0.0_wp
+         !! Sum over the run of the ridging area-rate magnitude (`dardg1dt`) on the owned cells (CICE-port cases).
+      logical :: led_on = .false.
+         !! The named-term ice ledger was on in this run (`led` holds its report).
+      real(wp), allocatable :: led(:)
+         !! The ledger's report at the end of the run: the last closed step's table (state changes, flux terms, sources,
+         !! the clip record, the residuals and scales), the cumulative accumulators and the global state totals.  GLOBAL
+         !! values: bitwise the same on every rank, every layout and the serial run.
+      real(wp) :: ice_tot(3) = 0.0_wp
+         !! The console's global ice sums (wet area, ice-covered area, ice volume): EFP-reduced, so they
+         !! must be bit-identical between the serial run and every decomposition.
       type(conservation_budget_t) :: bud
          !! Closed-budget mass/salt/heat out+src totals at the final step —
          !! EFP-reduced (`reproducing_sums`, default on), so these must be
@@ -339,6 +391,9 @@ program test_ocean_decomp_bitid_mpi
    logical :: wd_edge_e = .false., wd_edge_s = .false.
       !! The wet/dry case under way has an open east / south edge (open-edge flip bands).
    integer :: n_steps_cur = N_STEPS
+   integer :: n_ckpt_cur = N_CKPT
+      !! Checkpoint step of the resume leg (`N_CKPT`; the windowed deferred case needs a window-aligned one:
+      !! the restart writer flushes the tracer window, which a mid-window straight run does not do).
    character(len=16) :: balance_ref = ""
       !! Non-empty: `run_one` calls `ocean_balance_apply` with this `ref_level`
       !! after `engine_enter_data` (the `balance_*` cases).
@@ -351,43 +406,56 @@ program test_ocean_decomp_bitid_mpi
       !! `RDB_BITID_CASES`: run only the cases whose name contains this substring.
    type(comm_t) :: comm
    character(len=16), parameter :: SCHEMES(2) = [character(len=16) :: "pred_corr", "ssp_rk2"]
-   character(len=24), parameter :: CASES(81) = [character(len=24) :: &
-                                                "island_basin", "weno7_pv", &
-                                                "periodic_channel_zstar", &
-                                                "visc_rem_zstar", &
-                                                "periodic_sponge", &
-                                                "open_obc", "spherical", "obc_radiation_sponge", "obc_sponge_east", &
-                                                "closures", "file_readers", &
-                                                "file_readers_zstar_full", &
-                                                "file_readers_zstar", "sea_ice", &
-                                                "sea_ice_transport", "tripolar", &
-                                                "visc_rem_chain", "sea_ice_fold", &
-                                                "sea_ice_fold_nodyn", "sss_restore", &
-                                                "gm_ebt_struct", "gm_fgnv", "meke_gm_work", &
-                                                "hvisc_om3_floors", "vmix_no_interior", &
-                                                "redi_cfl_fold", "tidal_files", &
-                                                "tidal_polzin", "bbl_lotw", "tracer_ppm_h3", "body_tide_nodal", &
-                                                "hvisc_kh_points", "diabatic_end", &
-                                                "hvisc_thin_layer", "hvisc_biharm_stress", &
-                                                "balanced_vortex_t0", "balanced_vortex", &
-                                                "balance_rest_t0", "balance_keep_t0", &
-                                                "balance_rest", &
-                                                "drain_ratio", "drain_ratio_h3", &
-                                                "drain_ratio_weno5", "drain_ratio_weno7", &
-                                                "drain_ratio_weno9", "drain_ratio_fold", &
-                                                "drain_ratio_fold_h3", "eulz", "eulz_periodic", &
-                                                "eulz_tripolar", "eulz_epbl_mle", "bulk_flux", &
-                                                "bulk_flux_ice", "bulk_flux_fold", "bulk_flux_sw", "bulk_flux_bl", &
-                                                "bulk_flux_bl_epbl", "bulk_flux_bl_sw", "bulk_flux_bl_fold", &
-                                                "bulk_flux_bl_ratio2", "manizza", "dtbt_reset", &
-                                                "dtbt_reset_period", &
-                                                "cavity_zfixed", "cavity_sigma", &
-                                                "cavity_sigma_ratio2", "cavity_gall", "cavity_melt_only", "cavity_periodic", &
-                                                "cavity_combo", "wetdry_shoal", &
-                                                "wetdry_periodic", "wetdry_file", "chapman_obc", "obc_epbl", &
-                                                "wetdry_tidal_flat", "wetdry_open_flat", &
-                                                "cavity_mass", "cavity_mass_comp", &
-                                                "wave_drag_rough", "wave_drag_rough_periodic"]
+   character(len=24), parameter :: CASES(119) = [character(len=24) :: &
+                                                 "island_basin", "weno7_pv", &
+                                                 "periodic_channel_zstar", &
+                                                 "visc_rem_zstar", &
+                                                 "periodic_sponge", &
+                                                 "open_obc", "spherical", "obc_radiation_sponge", "obc_sponge_east", &
+                                                 "closures", "file_readers", &
+                                                 "file_readers_zstar_full", &
+                                                 "file_readers_zstar", "sea_ice", &
+                                                 "sea_ice_transport", "tripolar", &
+                                                 "visc_rem_chain", "sea_ice_fold", &
+                                                 "sea_ice_fold_nodyn", "sss_restore", &
+                                                 "gm_ebt_struct", "gm_fgnv", "meke_gm_work", &
+                                                 "hvisc_om3_floors", "vmix_no_interior", &
+                                                 "redi_cfl_fold", "tidal_files", &
+                                                 "tidal_polzin", "bbl_lotw", "tracer_ppm_h3", "body_tide_nodal", &
+                                                 "hvisc_kh_points", "diabatic_end", &
+                                                 "hvisc_thin_layer", "hvisc_biharm_stress", &
+                                                 "balanced_vortex_t0", "balanced_vortex", &
+                                                 "balance_rest_t0", "balance_keep_t0", &
+                                                 "balance_rest", &
+                                                 "drain_ratio", "drain_ratio_h3", &
+                                                 "drain_ratio_weno5", "drain_ratio_weno7", &
+                                                 "drain_ratio_weno9", "drain_ratio_fold", &
+                                                 "drain_ratio_fold_h3", "eulz", "eulz_periodic", &
+                                                 "eulz_tripolar", "eulz_epbl_mle", "bulk_flux", &
+                                                 "bulk_flux_ice", "bulk_flux_fold", "bulk_flux_sw", "bulk_flux_fw", &
+                                  "bulk_flux_ice_fw", "bulk_flux_bl", "bulk_flux_bl_epbl", "bulk_flux_bl_sw", "bulk_flux_bl_fold", &
+                                                 "bulk_flux_bl_ratio2", "manizza", "dtbt_reset", &
+                                                 "dtbt_reset_period", &
+                                                 "sea_ice_cdyn", "sea_ice_cdyn_rev", "sea_ice_cdyn_island", &
+                                                 "sea_ice_cdyn_fold", "sea_ice_cdyn_edge", &
+                                                 "cice_ice", "cice_ice_wall", "cice_ice_island", "cice_ice_bulk", &
+                                                 "cice_ice_bulk_sw", "cice_ice_sph", "cice_ice_lat", "cice_ice_upwind", &
+                                                 "cice_ice_pp", "cice_ice_r1", "cice_ice_epbl", &
+                                                 "cice_ice_led", "cice_ice_island_led", "cice_ice_r1_led", &
+                                                 "cice_ice_fold", "cice_ice_fold_edge", "cice_ice_bulk_fold", "cice_ice_fold_led", &
+                                                 "cavity_zfixed", "cavity_sigma", &
+                                                 "cavity_sigma_ratio2", "cavity_gall", "cavity_melt_only", "cavity_periodic", &
+                                                 "cavity_combo", "wetdry_shoal", &
+                                                 "wetdry_periodic", "wetdry_file", "chapman_obc", "obc_epbl", &
+                                                 "wetdry_tidal_flat", "wetdry_open_flat", &
+                                                 "cavity_mass", "cavity_mass_comp", &
+                                                 "wave_drag_rough", "wave_drag_rough_periodic", &
+                                                 "bulk_flux_fw_mass", "bulk_flux_fw_mass_fold", &
+                                                 "fw_mass_deferred", "fw_mass_deferred_nowin", "fw_mass_thin", &
+                                                 "runoff_mass", "runoff_mass_fold", &
+                                                 "runoff_river", "runoff_river_fold", &
+                                                 "cice_ice_fw_mass", "cice_ice_fw_mass_fold", "cice_ice_fw_mass_led", &
+                                                 "cice_ice_fw_mass_bfold"]
 
    call comm_env_init()
    call comm_env_setup_roles(.false.)
@@ -425,7 +493,7 @@ program test_ocean_decomp_bitid_mpi
           trim(CASES(ic)) == "wetdry_open_flat" .or. &
           trim(CASES(ic)) == "tidal_files" .or. &
           trim(CASES(ic)) == "tidal_polzin" .or. &
-          index(trim(CASES(ic)), "bulk_flux") == 1 .or. &
+          index(trim(CASES(ic)), "bulk_flux") == 1 .or. index(trim(CASES(ic)), "cice_ice_bulk") == 1 .or. &
           trim(CASES(ic)) == "file_readers_zstar") cycle
 #endif
       ! Dynamic wet/dry and eulerian_z refuse pred_corr (validate_config): ssp_rk2 only.
@@ -434,11 +502,17 @@ program test_ocean_decomp_bitid_mpi
       ! diabatic_first = .false. is refused under ssp_rk2 (validate_config).
       ! (drain_ratio_h3 pins it too.)
       if (trim(CASES(ic)) == "diabatic_end" .or. trim(CASES(ic)) == "drain_ratio_h3" .or. &
-          trim(CASES(ic)) == "bulk_flux_bl_ratio2" .or. &
+          trim(CASES(ic)) == "bulk_flux_bl_ratio2" .or. trim(CASES(ic)) == "fw_mass_deferred" .or. &
+          trim(CASES(ic)) == "fw_mass_deferred_nowin" .or. &
+          trim(CASES(ic)) == "cice_ice_fw_mass_bfold" .or. &
           trim(CASES(ic)) == "drain_ratio_fold_h3") cycle
       call run_case(trim(CASES(ic)), trim(SCHEMES(2)))
    end do
 
+   if (nprocs >= 2 .and. (len_trim(case_filter) == 0 .or. index("cice_faults", trim(case_filter)) > 0 .or. &
+                          index(trim(case_filter), "cice") > 0)) call check_cice_faults()
+   if (nprocs >= 2 .and. (len_trim(case_filter) == 0 .or. index(trim(case_filter), "cice") > 0)) call check_cice_fences()
+   if (nprocs >= 2 .and. (len_trim(case_filter) == 0 .or. index(trim(case_filter), "cice") > 0)) call check_cice_ledger_poison()
    if (nprocs >= 2) call check_single_rank_fences()
    if (nprocs >= 2) call check_balance_fold_refusal()
    if (len_trim(case_filter) == 0 .or. index("cavity_grounded_refused", trim(case_filter)) > 0) &
@@ -496,7 +570,7 @@ contains
       if (ios == 0) val = v
    end subroutine env_int
 
-   function case_nml(label, scheme, px, py) result(nml)
+   recursive function case_nml(label, scheme, px, py) result(nml)
       !! The namelist of one case on a px x py process grid.
       character(len=*), intent(in) :: label, scheme
       integer, intent(in) :: px, py
@@ -508,6 +582,49 @@ contains
       character(len=40) :: vortex_balance
       character(len=8) :: sponge_w, sponge_e
       character(len=64) :: wl
+
+      if (index(label, "sea_ice_cdyn") == 1) then
+         nml = cdyn_nml(label, scheme, px, py)
+         return
+      end if
+      if (index(label, "cice_ice") == 1) then
+         nml = cice_ice_nml(label, scheme, px, py)
+         return
+      end if
+      if (label == "runoff_river" .or. label == "runoff_river_fold") then
+         ! EPBL river mixing (`&ocean_epbl_nml rivermix_depth`) over the same file-driven runoff:
+         ! the river energy is read in the GHOST columns (the momentum vdiff face loop averages the
+         ! EPBL `kv` from both neighbouring centres), so `surface_flux%runoff` must be seam-exchanged.
+         ! `runoff_river` reuses the basin points (both sides of every x / y seam); the fold twin adds
+         ! points on the periodic west/east wrap, (2,12) and (29,10) (within `nghost` of the wrap) (see `write_runoff_files`).
+         nml = case_nml(merge("island_basin", "tripolar    ", label == "runoff_river"), scheme, px, py)// &
+               "&ocean_thermo_nml enable_thermodynamics = .true. /"//NL// &
+               "&ocean_forcing_nml enable_components = .true., freshwater = 'mass' /"//NL// &
+               "&ocean_epbl_nml enable = .true., rivermix_depth = 40.0 /"//NL// &
+               "&ocean_dataovr_nml enable = .true., time_mode = 'static', "// &
+               "lrunoff_file = '"//merge(RUNOFF_BASIN, RUNOFF_FOLD_W, label == "runoff_river")// &
+               "', lrunoff_var = 'lrunoff', "// &
+               "frunoff_file = '"//merge(RUNOFF_BASIN, RUNOFF_FOLD_W, label == "runoff_river")// &
+               "', frunoff_var = 'frunoff' /"//NL
+         return
+      end if
+      if (label == "runoff_mass" .or. label == "runoff_mass_fold") then
+         ! File-driven RUNOFF (`&ocean_dataovr_nml lrunoff / frunoff`, static record) spent as real
+         ! volume (`freshwater = 'mass'`) on the island basin / the tripolar cap.  The point sources
+         ! (see `write_runoff_files`) sit on both sides of the x and y rank seams, and on the fold row
+         ! across the tripolar fold (columns that mirror each other, one liquid, one frozen), so the
+         ! reader's per-rank windows, `q_fus_rof`, the seam-exchanged `fw_net` snapshot, the layer
+         ! growth and the console mass source all cross a seam.
+         nml = case_nml(merge("island_basin", "tripolar    ", label == "runoff_mass"), scheme, px, py)// &
+               "&ocean_thermo_nml enable_thermodynamics = .true. /"//NL// &
+               "&ocean_forcing_nml enable_components = .true., freshwater = 'mass' /"//NL// &
+               "&ocean_dataovr_nml enable = .true., time_mode = 'static', "// &
+               "lrunoff_file = '"//merge(RUNOFF_BASIN, RUNOFF_FOLD, label == "runoff_mass")// &
+               "', lrunoff_var = 'lrunoff', "// &
+               "frunoff_file = '"//merge(RUNOFF_BASIN, RUNOFF_FOLD, label == "runoff_mass")// &
+               "', frunoff_var = 'frunoff' /"//NL
+         return
+      end if
 
       ! The visc_rem chain rides on the common &ocean_bt_nml group (one
       ! group per namelist).  D1 follow-up (2026-10): the weighted
@@ -1324,8 +1441,10 @@ contains
                "&ocean_ice_ic_nml conc_config = 'uniform', h_ice = 1.0, conc = 0.7 /"//NL// &
                "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
                "north = 'tripolar_fold' /"//NL
-      case ("bulk_flux", "bulk_flux_ice", "bulk_flux_fold", "bulk_flux_sw", "bulk_flux_bl", &
-            "bulk_flux_bl_epbl", "bulk_flux_bl_sw", "bulk_flux_bl_fold", "bulk_flux_bl_ratio2")
+      case ("bulk_flux", "bulk_flux_ice", "bulk_flux_fold", "bulk_flux_sw", "bulk_flux_fw", &
+            "bulk_flux_ice_fw", "bulk_flux_bl", "bulk_flux_bl_epbl", "bulk_flux_bl_sw", "bulk_flux_bl_fold", &
+            "bulk_flux_bl_ratio2", "bulk_flux_ice_fold", "bulk_flux_fw_mass", "bulk_flux_fw_mass_fold", &
+            "fw_mass_deferred", "fw_mass_deferred_nowin", "fw_mass_thin")
          ! Atmosphere-driven bulk forcing (`&ocean_atm_forcing_nml` +
          ! `&ocean_bulk_flux_nml`): nine prescribed atmospheric fields from
          ! files the test writes (spatially NON-uniform, non-symmetric in
@@ -1343,6 +1462,19 @@ contains
          ! profile `exp` all feed the heating: any of them rounding by tile
          ! position shows in T.  Gate for the safe-math adoption of
          ! `rdb_atm_state`/`rdb_ocean_bulk_flux`/`rdb_ocean_surface_flux`.
+         ! `bulk_flux_fw` / `bulk_flux_ice_fw`: `bulk_flux` / `bulk_flux_ice` with
+         ! `&ocean_forcing_nml freshwater = 'virtual'` (the virtual salt flux of
+         ! P - E, rain and snow on open water, and the rain through the ice).
+         ! `bulk_flux_fw_mass` / `bulk_flux_fw_mass_fold`: `bulk_flux` / `bulk_flux_fold` with
+         ! `freshwater = 'mass'`: the real Boussinesq P - E on the spoon basin / across the tripolar
+         ! north fold (px = 1 and px > 1), so the top layer's thickness, the diluted tracers, the
+         ! tracked mass source and the seam-exchanged `fw_net` / `Q_salt_tracer` snapshot all cross
+         ! the rank seams.  `fw_mass_deferred`: the same on the OM3 interval order (pred_corr,
+         ! `dt_therm_ratio = 2`, `diabatic_first = .false.`, windowed tracer advection), the mass
+         ! step spending the carried snapshot once per interval (checkpoint mid-window).
+         ! `fw_mass_thin`: `bulk_flux_fw_mass` with `fw_evap_cfl_limit` so small that the
+         ! evaporative withdrawal is passed DOWN the column in every evaporating column (the
+         ! pass-down count is asserted non-zero on the reference).
          ! `bulk_flux_bl`, `bulk_flux_bl_epbl`, `bulk_flux_bl_sw`: the BOUNDARY-LAYER
          ! gate.  A re-entrant (periodic-x) 100 m basin on ten 10 m sigma layers under
          ! cold dry wind over 20 C water: the surface cooling is destabilising and
@@ -1358,7 +1490,7 @@ contains
                "&mpi_nml px = "//trim(spx)//", py = "//trim(spy)//" /"//NL// &
                "&time_nml t_end = 86400.0, dt_fixed = 900.0, start_date = '2000-06-21' /"//NL// &
                "&nonhydrostatic_nml nz_layers = "//merge("10", "4 ", &
-                                                         index(label, "bulk_flux_bl") == 1)//" /"//NL// &
+                                                       index(label, "bulk_flux_bl") == 1 .or. label == "fw_mass_thin")//" /"//NL// &
                "&ocean_bt_nml auto_n_inner = .true., split_scheme = '"//scheme//"' /"//NL// &
                "&ocean_hvisc_nml nu_h = 200.0, lateral_closure = 'smagorinsky', "// &
                "smag_ah = .true. /"//NL// &
@@ -1371,23 +1503,28 @@ contains
             nml = nml//"&ocean_thermo_nml enable_thermodynamics = .true. /"//NL
          end if
          nml = nml// &
-               "&ocean_forcing_nml enable_components = .true. /"//NL// &
+               "&ocean_forcing_nml enable_components = .true."// &
+               merge(", freshwater = 'virtual'", repeat(" ", 24), &
+                     label == "bulk_flux_fw" .or. label == "bulk_flux_ice_fw")// &
+               fw_mass_keys(label)//" /"//NL// &
                "&ocean_bulk_flux_nml enable = .true., n_iter = 5, z_wind = 10.0, "// &
                "z_ta = 10.0 /"//NL
          if (label == "bulk_flux_bl_epbl") then
             nml = nml//"&ocean_vmix_nml use_kpp = .false. /"//NL// &
                   "&ocean_epbl_nml enable = .true. /"//NL
          end if
-         if (label == "bulk_flux_ice") then
+         if (label == "bulk_flux_ice" .or. label == "bulk_flux_ice_fw" .or. label == "bulk_flux_ice_fold") then
+            wl = ATM_COLD_LIST
+            if (label == "bulk_flux_ice_fold") wl = ATM_CRSE_COLD_LIST
             nml = nml// &
                   "&tracer_nml initial_temperature = -1.83, initial_salinity = 34.0, "// &
                   "T_init_surface = -1.82, T_init_bottom = -1.835 /"//NL// &
                   "&ocean_atm_forcing_nml enable = .true., time_mode = 'interannual', "// &
-                  "filelist_tas = '"//ATM_COLD_LIST//"', filelist_huss = '"//ATM_COLD_LIST// &
-                  "', filelist_uas = '"//ATM_COLD_LIST//"', filelist_vas = '"//ATM_COLD_LIST// &
-                  "', filelist_psl = '"//ATM_COLD_LIST//"', filelist_rlds = '"//ATM_COLD_LIST// &
-                  "', filelist_rsds = '"//ATM_COLD_LIST//"', filelist_prra = '"//ATM_COLD_LIST// &
-                  "', filelist_prsn = '"//ATM_COLD_LIST//"' /"//NL// &
+                  "filelist_tas = '"//trim(wl)//"', filelist_huss = '"//trim(wl)// &
+                  "', filelist_uas = '"//trim(wl)//"', filelist_vas = '"//trim(wl)// &
+                  "', filelist_psl = '"//trim(wl)//"', filelist_rlds = '"//trim(wl)// &
+                  "', filelist_rsds = '"//trim(wl)//"', filelist_prra = '"//trim(wl)// &
+                  "', filelist_prsn = '"//trim(wl)//"' /"//NL// &
                   "&ocean_vmix_nml dt_therm_ratio = 2 /"//NL// &
                   "&ocean_ice_nml enable = .true., ncat = 5, nk_ice = 2, "// &
                   "restore_lambda = 20.0, dynamics = .true., evp_sub_steps = 30, "// &
@@ -1396,7 +1533,7 @@ contains
                   "&ocean_ice_ic_nml conc_config = 'uniform', h_ice = 1.0, conc = 0.7 /"//NL
          else
             wl = ATM_WARM_LIST
-            if (label == "bulk_flux_fold") wl = ATM_CRSE_LIST
+            if (label == "bulk_flux_fold" .or. label == "bulk_flux_fw_mass_fold") wl = ATM_CRSE_LIST
             if (index(label, "bulk_flux_bl") == 1) wl = ATM_COLD_LIST
             if (label == "bulk_flux_bl_fold") wl = ATM_CRSE_COLD_LIST
             nml = nml// &
@@ -1412,7 +1549,15 @@ contains
          if (label == "bulk_flux_bl_ratio2") then
             nml = nml//"&ocean_vmix_nml dt_therm_ratio = 2, diabatic_first = .false. /"//NL
          end if
-         if (label == "bulk_flux_fold" .or. label == "bulk_flux_bl_fold") then
+         if (label == "fw_mass_deferred") then
+            nml = nml//"&ocean_vmix_nml dt_therm_ratio = 2, diabatic_first = .false., "// &
+                  "dt_tracer_advect_ratio = 2 /"//NL
+         end if
+         if (label == "fw_mass_deferred_nowin") then
+            nml = nml//"&ocean_vmix_nml dt_therm_ratio = 2, diabatic_first = .false. /"//NL
+         end if
+         if (label == "bulk_flux_fold" .or. label == "bulk_flux_bl_fold" .or. &
+             label == "bulk_flux_ice_fold" .or. label == "bulk_flux_fw_mass_fold") then
             ! Coarse (30 x 10 degree) atmosphere source.  The default
             ! conservative flux regrid (`fluxes_regrid` is not set) overflows
             ! its per-target-cell candidate cap (`REGRID_NMAX_CAP`) on the
@@ -1448,7 +1593,7 @@ contains
                      "&ocean_topo_nml topo_config = 'spoon', max_depth = 100.0, "// &
                      "edge_depth = 60.0, slope_scale = 300000.0 /"//NL
             end if
-            if (label == "bulk_flux_ice" .or. index(label, "bulk_flux_bl") == 1) then
+            if (label == "bulk_flux_ice" .or. label == "bulk_flux_ice_fw" .or. index(label, "bulk_flux_bl") == 1) then
                nml = nml//"&ocean_bc_nml west = 'periodic', east = 'periodic', "// &
                      "south = 'wall', north = 'wall' /"//NL
             else
@@ -1483,6 +1628,238 @@ contains
          nml = nml//"&output_nml output_to_file = .false. /"//NL
       end if
    end function case_nml
+
+   function cice_ice_nml(label, scheme, px, py) result(nml)
+      !! The CICE-port sea ice (`&ocean_ice_nml scheme = 'cice'`) on the ocean's decomposition (stage A,
+      !! no fold): the full step (import, atmosphere, thermodynamics + ITD, dynamics with the category
+      !! strength, remap transport, ridging, hand-off) on a cold column just above the liquidus under an
+      !! oblique wind.  `cice_ice`: the re-entrant channel over a seamount (the ice crosses the wrap seam
+      !! and every rank seam); `_wall`: a closed flat basin; `_island`: a closed basin with an interior
+      !! land block (land crossing the seams); `_bulk`: the channel under the prescribed atmosphere of
+      !! `&ocean_atm_forcing_nml` (the atmosphere-prepare path with regridded, non-uniform fields).
+      character(len=*), intent(in) :: label, scheme
+      integer, intent(in) :: px, py
+      character(len=:), allocatable :: nml
+      character(len=*), parameter :: NL = new_line("a")
+      character(len=16) :: spx, spy, snx, sny
+      character(len=:), allocatable :: bc, topo, atm, lbl
+      logical :: led
+      integer :: a_v, b_v
+
+      ! `<case>_led`: the case with the named-term ledger on
+      led = .false.
+      lbl = trim(label)
+      if (len_trim(label) > 4) then
+         if (label(len_trim(label) - 3:len_trim(label)) == "_led") then
+            led = .true.
+            lbl = label(1:len_trim(label) - 4)
+         end if
+      end if
+      write (spx, '(i0)') px
+      write (spy, '(i0)') py
+      write (snx, '(i0)') NX_G
+      write (sny, '(i0)') NY_G
+      bc = "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', north = 'wall' /"//NL
+      topo = "&ocean_topo_nml topo_config = 'seamount', max_depth = 1000.0, edge_depth = 800.0, "// &
+             "slope_scale = 60000.0 /"//NL
+      atm = "&ocean_ice_atm_nml uni_tas = 255.0, uni_rlds = 180.0, uni_uas = 8.0, uni_vas = 2.0 /"//NL
+      if (lbl == "cice_ice_pp") then
+         ! periodic in BOTH directions: the corner ghosts and both wraps, on every split
+         bc = "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'periodic', north = 'periodic' /"//NL
+         topo = "&ocean_topo_nml topo_config = 'island', max_depth = 1000.0, slope_scale = 0.15 /"//NL
+      end if
+      if (lbl == "cice_ice_wall") then
+         bc = "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
+         topo = "&ocean_topo_nml topo_config = 'flat', max_depth = 1000.0 /"//NL
+      end if
+      if (lbl == "cice_ice_island") then
+         bc = "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
+         topo = "&ocean_topo_nml topo_config = 'island', max_depth = 1000.0, slope_scale = 0.15 /"//NL
+      end if
+      nml = "&sim_nml sim_type = 'ocean' /"//NL// &
+            "&mpi_nml px = "//trim(spx)//", py = "//trim(spy)//" /"//NL// &
+            "&time_nml t_end = 86400.0, dt_fixed = 900.0 /"//NL// &
+            "&nonhydrostatic_nml nz_layers = 4 /"//NL// &
+            "&tracer_nml initial_temperature = -1.83, initial_salinity = 34.0, "// &
+            "T_init_surface = -1.82, T_init_bottom = -1.835 /"//NL// &
+            "&ocean_bt_nml auto_n_inner = .true., split_scheme = '"//scheme//"' /"//NL// &
+            "&ocean_hvisc_nml nu_h = 200.0, lateral_closure = 'smagorinsky', smag_ah = .true. /"//NL// &
+            "&ocean_diag_nml enabled = .false. /"//NL// &
+            "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, dx = 20000.0, dy = 20000.0 /"//NL// &
+            "&physics_nml coriolis_f = 1.4e-4, wind_stress_x = 0.1, wind_stress_y = 0.04 /"//NL// &
+            "&vcoord_nml vcoord_type = 'sigma' /"//NL//topo// &
+            "&ocean_thermo_nml enable_thermodynamics = .true. /"//NL// &
+            "&ocean_forcing_nml enable_components = .true. /"//NL// &
+            "&ocean_vmix_nml dt_therm_ratio = 2 /"//NL// &
+            "&ocean_ice_nml enable = .true., scheme = 'cice', ncat = 5, nilyr = 4, hfreeze = 10.0, "// &
+            "dynamics = .true., transport = .true. /"//NL// &
+            "&ocean_ice_thermo_nml update_ocn_f = .true. /"//NL// &
+            "&ocean_ice_dyn_nml advection = 'remap', ndte = 10 /"//NL// &
+            "&ocean_ice_ic_nml conc_config = 'uniform', h_ice = 1.0, conc = 0.7, h_snow = 0.1, "// &
+            "t_ice = -8.0 /"//NL//atm//bc// &
+            "&output_nml output_to_file = .false. /"//NL
+      if (lbl == "cice_ice_r1") call replace_once(nml, "dt_therm_ratio = 2", "dt_therm_ratio = 1")
+      if (lbl == "cice_ice_epbl") then
+         ! EPBL instead of KPP (its boundary-layer reads the same surface-flux ghosts)
+         call replace_once(nml, "&ocean_vmix_nml dt_therm_ratio = 2 /", &
+                           "&ocean_vmix_nml dt_therm_ratio = 2, use_kpp = .false. /"//NL//"&ocean_epbl_nml enable = .true. /")
+      end if
+      if (lbl == "cice_ice_upwind") call replace_once(nml, "advection = 'remap'", "advection = 'upwind'")
+      if (lbl == "cice_ice_sph" .or. lbl == "cice_ice_lat") then
+         ! the channel on a lon-lat grid: latitude-dependent metrics (areas, spacings) under the uniform atmosphere
+         call replace_once(nml, "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)// &
+                           ", nghost = 3, dx = 20000.0, dy = 20000.0 /", &
+                           "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, dx = 1.0, dy = 1.0 /"//NL// &
+                           "&ocean_grid_nml grid_config = 'spherical', lon_west = 0.0, lat_south = 50.0, "// &
+                           "rad_earth = 6.371e6, coriolis_scheme = 'planetary' /")
+         call replace_once(nml, "&physics_nml coriolis_f = 1.4e-4, wind_stress_x = 0.1, wind_stress_y = 0.04 /", &
+                           "&physics_nml wind_stress_x = 0.1, wind_stress_y = 0.04 /")
+         call replace_once(nml, "&ocean_topo_nml topo_config = 'seamount', max_depth = 1000.0, edge_depth = 800.0, "// &
+                           "slope_scale = 60000.0 /", "&ocean_topo_nml topo_config = 'spoon', max_depth = 3000.0, "// &
+                           "edge_depth = 300.0, slope_scale = 300000.0 /")
+      end if
+      if (lbl == "cice_ice_lat") then
+         ! the `latitudes` seed: ice only poleward of 59 N, so the southern tile of a 1x2 / 1x4 split holds none
+         ! (an empty tile must stay empty and still take part in every exchange)
+         call replace_once(nml, "conc_config = 'uniform', h_ice = 1.0, conc = 0.7", &
+                           "conc_config = 'latitudes', h_ice = 1.0, conc = 0.7, arctic_edge = 59.0")
+      end if
+      if (lbl == "cice_ice_fw_mass" .or. lbl == "cice_ice_fw_mass_fold") then
+         ! Real fresh-water mass with the sea ice's weight on the surface pressure (`freshwater = 'mass'`,
+         ! `&ocean_psurf_nml ice_load`): the ice's water leaves and enters the layers as volume (`seaice_melt` ->
+         ! `fw_net` -> the mass step, ratio 2: the in-stage thermo path) and its weight rides the `eta_forcing`
+         ! seam.  The channel over the seamount (the ice crosses every rank seam) / the tripolar cap (below).
+         call replace_once(nml, "&ocean_forcing_nml enable_components = .true. /", &
+                           "&ocean_forcing_nml enable_components = .true., freshwater = 'mass' /"//NL// &
+                           "&ocean_psurf_nml enable = .true., ice_load = .true. /")
+      end if
+      if (index(lbl, "cice_ice_fold") == 1 .or. lbl == "cice_ice_fw_mass_fold") then
+         ! the tripolar cap of `sea_ice_fold` (59N-83N, phi_join 74N, double-Drake land reaching the fold line, closed by
+         ! the north fold; 30 x 24, so 2x1 is 15|15 and 4x1 is 8/8/7/7) under the CICE-port ice: stage B
+         call replace_once(nml, "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)// &
+                           ", nghost = 3, dx = 20000.0, dy = 20000.0 /", &
+                           "&grid_nml nx = 30, ny = 24, nghost = 3, dx = 12.0, dy = 1.0 /"//NL// &
+                           "&ocean_grid_nml grid_config = 'tripolar', lon_west = 0.0, lat_south = 59.0, "// &
+                           "phi_join = 74.0, lon_pole = 0.0, rad_earth = 6.378e6, "// &
+                           "coriolis_scheme = 'planetary' /")
+         call replace_once(nml, "&physics_nml coriolis_f = 1.4e-4, wind_stress_x = 0.1, wind_stress_y = 0.04 /", &
+                           "&physics_nml wind_stress_x = 0.1, wind_stress_y = 0.04 /")
+         call replace_once(nml, "&ocean_topo_nml topo_config = 'seamount', max_depth = 1000.0, edge_depth = 800.0, "// &
+                           "slope_scale = 60000.0 /", "&ocean_topo_nml topo_config = 'double_drake', max_depth = 1000.0, "// &
+                           "slope_scale = 0.2 /")
+         call replace_once(nml, "south = 'wall', north = 'wall' /", "south = 'wall', north = 'tripolar_fold' /")
+         call replace_once(nml, "&ocean_thermo_nml enable_thermodynamics = .true. /", &
+                           "&ocean_thermo_nml enable_thermodynamics = .true., q_heat = -100.0 /")
+      end if
+      if (lbl == "cice_ice_fold_edge") then
+         ! ice only poleward of 66 N on a column at the liquidus without cooling: the southern rows carry no ice, so
+         ! on a 1x4 split a tile is ice free (an empty tile must stay empty and still take part in every exchange,
+         ! the fold's included) and the cold start seeds the cap through the fold
+         call replace_once(nml, "conc_config = 'uniform', h_ice = 1.0, conc = 0.7", &
+                           "conc_config = 'latitudes', h_ice = 1.0, conc = 0.7, arctic_edge = 66.0")
+         call replace_once(nml, "q_heat = -100.0", "q_heat = 0.0")
+      end if
+      if (lbl == "cice_ice_bulk_fold") then
+         ! the prescribed (regridded, non-uniform) cold atmosphere through the bulk forcing on the tripolar cap,
+         ! with the CICE-port ice: the bulk-forcing / atmosphere-prepare path across the fold
+         nml = case_nml("bulk_flux_ice_fold", scheme, px, py)
+         call swap_to_cice(nml)
+      end if
+      if (lbl == "cice_ice_fw_mass_bfold") then
+         ! The production shape: real fresh-water mass + the ice's weight + the atmosphere's pressure
+         ! (`atm_load`, a NON-uniform `psl` regridded per rank) through the bulk forcing on the tripolar cap
+         ! (periodic east-west, the north fold), the DEFERRED order at `dt_therm_ratio = 8` (pred_corr), the
+         ! CICE-port ice with dynamics and transport.  Multi-rank bulk forcing is the path of the `bulk_flux_*`
+         ! cases (the prescribed atmosphere files), no data-override reader needed.  The straight run is 48
+         ! steps and the resume leg checkpoints at step 25: MID-interval (25 = 3*8 + 1), with the carried ice
+         ! load and the in-flight fresh-water snapshot in the checkpoint.
+         nml = case_nml("bulk_flux_ice_fold", scheme, px, py)
+         call swap_to_cice(nml)
+         call replace_once(nml, "&ocean_forcing_nml enable_components = .true.", &
+                           "&ocean_forcing_nml enable_components = .true., freshwater = 'mass'")
+         ! the vmix group the bulk namelist carries (a group may appear once): ratio 8, deferred
+         a_v = index(nml, "&ocean_vmix_nml")
+         b_v = a_v + index(nml(a_v:), "/") - 1
+         nml = nml(1:a_v - 1)//"&ocean_vmix_nml dt_therm_ratio = 8, diabatic_first = .false. /"//nml(b_v + 1:)
+         nml = nml//"&ocean_psurf_nml enable = .true., ice_load = .true., atm_load = .true. /"//NL
+         ! 'coszen' needs the 3-hourly rsds interval to divide the 8 x 900 s thermo interval; 'linear' does not
+         call replace_once(nml, "&ocean_atm_forcing_nml enable = .true., time_mode = 'interannual',", &
+                           "&ocean_atm_forcing_nml enable = .true., sw_interp = 'linear', time_mode = 'interannual',")
+      end if
+      if (lbl == "cice_ice_bulk" .or. lbl == "cice_ice_bulk_sw") then
+         ! the lon-lat re-entrant channel of `bulk_flux_ice` (non-uniform prescribed atmosphere, regridded per
+         ! rank) with the CICE-port ice in place of the SIS2 one
+         nml = case_nml("bulk_flux_ice", scheme, px, py)
+         call swap_to_cice(nml)
+         if (label == "cice_ice_bulk_sw") then
+            ! penetrating shortwave from the bulk `q_sw`: the through-ice shortwave also feeds `sw_net`, which the
+            ! boundary layer reads in the ghost columns
+            call replace_once(nml, "&ocean_thermo_nml enable_thermodynamics = .true. /", &
+                              "&ocean_thermo_nml enable_thermodynamics = .true., sw_pen_frac = 0.6, sw_source = 'q_sw' /")
+         end if
+      end if
+      if (led) call replace_once(nml, "dynamics = .true., transport = .true. /", "dynamics = .true., transport = .true., ledger = .true. /")
+      ! the land-block ledger case carries snow thinner than `hs_min` (and cold), so the thin-snow reset term is non-zero
+      if (led .and. lbl == "cice_ice_island") call replace_once(nml, "h_snow = 0.1", "h_snow = 0.00005")
+   end function cice_ice_nml
+
+   function cdyn_nml(label, scheme, px, py) result(nml)
+      !! The C-grid EVP cases (D9.4): a sea-ice case with `&ocean_ice_dyn_nml dyn_scheme = 'cice_c'`
+      !! on top of the SIS2 thermodynamics + transport.  `sea_ice_cdyn`: the periodic channel over a
+      !! seamount (the ice crosses the wrap seam and every rank seam); `_rev`: revised EVP with the
+      !! averaged-strength corner viscosity; `_island`: a closed basin with an interior land block;
+      !! `_fold`: the tripolar cap (distributed fold on every x split).
+      character(len=*), intent(in) :: label, scheme
+      integer, intent(in) :: px, py
+      character(len=:), allocatable :: nml
+      character(len=*), parameter :: NL = new_line("a")
+      character(len=:), allocatable :: dyn
+      integer :: a, b
+
+      dyn = "&ocean_ice_ridge_nml kstrength = 0 /"//NL// &
+            "&ocean_ice_dyn_nml dyn_scheme = 'cice_c', ndte = 10 /"//NL
+      if (label == "sea_ice_cdyn_rev") then
+         dyn = "&ocean_ice_ridge_nml kstrength = 0 /"//NL// &
+               "&ocean_ice_dyn_nml dyn_scheme = 'cice_c', ndte = 10, revised_evp = .true., "// &
+               "visc_method = 'avg_strength' /"//NL
+      end if
+      if (label == "sea_ice_cdyn_fold") then
+         nml = case_nml("sea_ice_fold", scheme, px, py)//dyn
+         return
+      end if
+      if (label == "sea_ice_cdyn_edge") then
+         ! The fold cap with ice only poleward of 66 N on a column at the liquidus without cooling (q_heat = 0): the
+         ! southern rows carry no ice at all, so on a 1x4 split one rank's tile is ice free
+         ! (an empty tile must stay empty and still take part in every exchange).
+         nml = case_nml("sea_ice_fold", scheme, px, py)//dyn
+         call replace_once(nml, "conc_config = 'uniform', h_ice = 1.0, conc = 0.7", &
+                           "conc_config = 'latitudes', h_ice = 1.0, conc = 0.7, arctic_edge = 66.0")
+         call replace_once(nml, "q_heat = -100.0", "q_heat = 0.0")
+         return
+      end if
+      nml = case_nml("sea_ice_transport", scheme, px, py)//dyn
+      if (label == "sea_ice_cdyn_island") then
+         a = index(nml, "&ocean_topo_nml")
+         b = a + index(nml(a:), "/") - 1
+         nml = nml(1:a - 1)//"&ocean_topo_nml topo_config = 'island', max_depth = 1000.0, "// &
+               "slope_scale = 0.15 /"//nml(b + 1:)
+         a = index(nml, "&ocean_bc_nml")
+         b = a + index(nml(a:), "/") - 1
+         nml = nml(1:a - 1)//"&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', "// &
+               "north = 'wall' /"//nml(b + 1:)
+      end if
+   end function cdyn_nml
+
+   subroutine replace_once(str, old, new)
+      !! Replace the first occurrence of `old` in `str` (stop when absent: a test-namelist typo).
+      character(len=:), allocatable, intent(inout) :: str
+      character(len=*), intent(in) :: old, new
+      integer :: a
+
+      a = index(str, old)
+      if (a == 0) error stop "replace_once: pattern not found in the case namelist: "//old
+      str = str(1:a - 1)//new//str(a + len(old):)
+   end subroutine replace_once
 
    function cavity_nml(label, scheme, spx, spy, gfrac) result(nml)
       !! Ice-shelf cavity cases (dyn + virtual melt + quadratic top drag, all
@@ -1632,12 +2009,17 @@ contains
          end if
       end if
       call oh_counters_reset()
+      if (engine%state%surface_flux%fw_mass) then
+         snap%fw_h_total0 = sum(engine%state%multilayer%h_layer( &
+                                engine%grid%nghost + 1:engine%grid%nghost + engine%grid%nx_phys, &
+                                engine%grid%nghost + 1:engine%grid%nghost + engine%grid%ny_phys, :))
+      end if
       t = 0.0_wp
       ierr = OCEAN_STATUS_OK
       do n = 1, n_steps_cur
          call engine_step(engine, DT, t, ierr=ierr)
          if (ierr /= OCEAN_STATUS_OK) exit
-         if (index(nml, "freshwater = 'mass'") > 0) then
+         if (engine%state%cavity_flux%enable .and. index(nml, "freshwater = 'mass'") > 0) then
             call track_mass_range(snap, engine%state%cavity_flux%melt_volume_step, &
                                   engine%state%cavity_flux%comp_withdrawal_step, n)
          end if
@@ -1645,12 +2027,28 @@ contains
          ! enable`) between the dyn-core advance and the finalize.
          call engine_step_ice(engine, cfg, DT, t, ierr=ierr)
          if (ierr /= OCEAN_STATUS_OK) exit
+         if (engine%state%icec%is_init) then
+            !$acc update self(engine%state%icec%flux%dardg1dt)
+            snap%ridge_act = snap%ridge_act + sum(abs(engine%state%icec%flux%dardg1dt( &
+                                                      engine%grid%nghost + 1:engine%grid%nghost + engine%grid%nx_phys, &
+                                                      engine%grid%nghost + 1:engine%grid%nghost + engine%grid%ny_phys)))
+         end if
          call engine_step_finalize(engine, DT, t, ierr=ierr)
          if (ierr /= OCEAN_STATUS_OK) exit
          if (allocated(engine%state%dyn%bt_work%wd_wet_dyn)) &
             call count_wd_flips(engine, wd_prev, snap%flips)
          t = t + DT
       end do
+      if (engine%state%surface_flux%fw_mass .and. ierr == OCEAN_STATUS_OK) then
+         !$acc update self(engine%state%multilayer%h_layer, engine%state%surface_flux%fw_net)
+         snap%fw_pd_total = engine%state%multilayer%fw_n_passdown_total
+         snap%fw_h_total1 = sum(engine%state%multilayer%h_layer( &
+                                engine%grid%nghost + 1:engine%grid%nghost + engine%grid%nx_phys, &
+                                engine%grid%nghost + 1:engine%grid%nghost + engine%grid%ny_phys, :))
+         snap%fw_net_absmax = maxval(abs(engine%state%surface_flux%fw_net( &
+                                         engine%grid%nghost + 1:engine%grid%nghost + engine%grid%nx_phys, &
+                                         engine%grid%nghost + 1:engine%grid%nghost + engine%grid%ny_phys)))
+      end if
       if (print_counts .and. csize > 1 .and. crank == 0) then
          write (*, '(a,i0,a,i0,a,i0,a,l1,a,a)') "COUNTS n_inner=", cfg%ocean%bt%n_inner, &
             " steps=", n_steps_cur, " stride=", engine%state%dyn%bt_work%inhalo_stride, &
@@ -1708,12 +2106,14 @@ contains
                                          compute_rank=crank, reproducing_sums=.true., &
                                          budget_stage_weight=ocean_budget_stage_weight( &
                                          engine%state%dyn%split_scheme == SPLIT_SCHEME_PRED_CORR), &
-                                         budget_out=snap%bud)
+                                         ice_aice=engine%state%ice%aice, ice_vice=engine%state%ice%vice, &
+                                         budget_out=snap%bud, ice_totals_out=snap%ice_tot)
          if (pushed_self_comm) then
             call comm_env_pop_compute_comm()
             call self_comm%finalize()
          end if
          call take_snapshot(engine, snap)
+         call take_ledger(engine, snap)
          snap%drain_iter = engine%state%continuity%drain_iter_max
          ok = .true.
       end if
@@ -1851,6 +2251,550 @@ contains
       end do
    end subroutine add_cavity_fields
 
+   subroutine add_cice_images(engine, s)
+      !! The ghost-inclusive state the ocean step reads from the CICE-port ice (the wind-stress pair the ice
+      !! blends, the aggregates, the window fluxes), tagged `img:` so `check_ghost_images` compares the
+      !! SEAM GHOSTS against the serial array: a ghost that a full-array consumer reads stale shows here.
+      type(ocean_engine_t), intent(inout), target :: engine
+      type(snap_t), intent(inout) :: s
+
+      !$acc update self(engine%state%surface_stress%tau_x, engine%state%surface_stress%tau_y)
+      !$acc update self(engine%state%surface_stress%stress_mag)
+      !$acc update self(engine%state%ice%aice0, engine%state%ice%aice)
+      !$acc update self(engine%state%ice%tau_a_x, engine%state%ice%tau_a_y)
+      !$acc update self(engine%state%surface_flux%heat_ice, engine%state%surface_flux%salt_ice)
+      !$acc update self(engine%state%surface_flux%sw_ice)
+      call push_field(s, "img:ss_tau_x", engine%state%surface_stress%tau_x)
+      call push_field(s, "img:ss_tau_y", engine%state%surface_stress%tau_y)
+      call push_field(s, "img:ss_mag", engine%state%surface_stress%stress_mag)
+      call push_field(s, "img:aice0", engine%state%ice%aice0)
+      call push_field(s, "img:aice", engine%state%ice%aice)
+      call push_field(s, "img:heat_ice", engine%state%surface_flux%heat_ice)
+      call push_field(s, "img:salt_ice", engine%state%surface_flux%salt_ice)
+      call push_field(s, "img:sw_ice", engine%state%surface_flux%sw_ice)
+      call push_field(s, "img:tau_a_x", engine%state%ice%tau_a_x)
+      call push_field(s, "img:tau_a_y", engine%state%ice%tau_a_y)
+      if (engine%state%surface_flux%fw_mass) then
+         ! real mass: the ice's water and weight arrive in the seam ghosts the mass step and the seam read
+         !$acc update self(engine%state%surface_flux%seaice_melt, engine%state%surface_flux%fw_net)
+         call push_field(s, "img:seaice_melt", engine%state%surface_flux%seaice_melt)
+         call push_field(s, "img:fw_net", engine%state%surface_flux%fw_net)
+      end if
+      if (engine%state%surface_flux%ice_load) then
+         !$acc update self(engine%state%surface_flux%p_ice_load, engine%state%surface_flux%p_surf)
+         call push_field(s, "img:p_ice_load", engine%state%surface_flux%p_ice_load)
+         call push_field(s, "img:p_surf", engine%state%surface_flux%p_surf)
+      end if
+      if (engine%state%surface_flux%atm_load) then
+         ! the atmosphere's pressure (written on owned cells by the bulk forcing) must reach the seam ghosts
+         !$acc update self(engine%state%surface_flux%p_surf_atm)
+         call push_field(s, "img:p_surf_atm", engine%state%surface_flux%p_surf_atm)
+      end if
+   end subroutine add_cice_images
+
+   subroutine check_cice_nonvacuous(ref, label, tag)
+      !! Non-vacuity of the CICE-port cases, on the SERIAL reference: the ice cover must be non-uniform (the
+      !! dynamics and the transport moved it), the volume must have left its initial uniform value (the
+      !! thermodynamics ran), the console ice totals must be non-zero, and the `_island` case must have land on
+      !! the rank seam lines of the 2-rank layouts (columns 13 | 14 and rows 9 | 10), else a stale ghost could hide.
+      type(snap_t), intent(in) :: ref
+      character(len=*), intent(in) :: label, tag
+      integer :: e, i, j, k, ng, nxl, nyl, nland_x, nland_y
+      real(wp) :: a, amin, amax, vmin, vmax, v
+      logical :: have
+
+      have = .false.
+      amin = huge(1.0_wp)
+      amax = -huge(1.0_wp)
+      vmin = huge(1.0_wp)
+      vmax = -huge(1.0_wp)
+      nland_x = 0
+      nland_y = 0
+      ng = ref%ng
+      nxl = ref%nxl
+      nyl = ref%nyl
+      do e = 1, ref%n
+         if (trim(ref%f(e)%tag) /= "ice_aicen") cycle
+         have = .true.
+         do j = 1, nyl
+            do i = 1, nxl
+               a = 0.0_wp
+               v = 0.0_wp
+               do k = 1, size(ref%f(e)%a, 3)
+                  a = a + ref%f(e)%a(ng + i, ng + j, k)
+               end do
+               if (a > 0.0_wp) then
+                  amin = min(amin, a)
+                  amax = max(amax, a)
+               else if (i == 13 .or. i == 14) then
+                  nland_x = nland_x + 1
+               end if
+               if (a <= 0.0_wp .and. (j == 9 .or. j == 10)) nland_y = nland_y + 1
+            end do
+         end do
+      end do
+      do e = 1, ref%n
+         if (trim(ref%f(e)%tag) /= "ice_vicen") cycle
+         do j = 1, nyl
+            do i = 1, nxl
+               v = sum(ref%f(e)%a(ng + i, ng + j, :))
+               if (v > 0.0_wp) then
+                  vmin = min(vmin, v)
+                  vmax = max(vmax, v)
+               end if
+            end do
+         end do
+      end do
+      if (.not. have .or. .not. (amax - amin > 1.0e-3_wp) .or. .not. (vmax - vmin > 1.0e-3_wp) .or. &
+          .not. (ref%ice_tot(2) > 0.0_wp) .or. .not. (ref%ice_tot(3) > 0.0_wp)) then
+         write (*, '(3a,4es10.2,2es12.4,a,i0)') "FAIL ", tag, ": ice state is uniform or empty (a, v range; totals): ", &
+            amin, amax, vmin, vmax, ref%ice_tot(2:3), " rank ", rank
+         n_fail = n_fail + 1
+      end if
+      if (label == "cice_ice_bulk_sw") then
+         amax = 0.0_wp
+         do e = 1, ref%n
+            if (trim(ref%f(e)%tag) == "sf_sw_ice") amax = maxval(abs(ref%f(e)%a))
+         end do
+         if (.not. (amax > 0.0_wp)) then
+            write (*, '(3a,i0)') "FAIL ", tag, ": no through-ice shortwave reaches the ocean (sf_sw_ice is zero), rank ", rank
+            n_fail = n_fail + 1
+         end if
+      end if
+      if (index(label, "cice_ice_fw_mass") == 1) then
+         ! the water and the weight must have moved: a case whose load or fw_net stays zero proves nothing
+         amax = 0.0_wp
+         vmax = 0.0_wp
+         do e = 1, ref%n
+            if (trim(ref%f(e)%tag) == "sf_p_ice_load") amax = maxval(abs(ref%f(e)%a))
+            if (trim(ref%f(e)%tag) == "sf_fw_net") vmax = maxval(abs(ref%f(e)%a))
+         end do
+         if (.not. (amax > 0.0_wp .and. vmax > 0.0_wp)) then
+            write (*, '(3a,2es12.4,a,i0)') "FAIL ", tag, ": the ice load or fw_net is zero all run: ", amax, vmax, " rank ", rank
+            n_fail = n_fail + 1
+         end if
+      end if
+      if (ref%led_on) call check_ledger_nonvacuous(ref, tag, label == "cice_ice_island_led")
+      if (label == "cice_ice" .and. .not. (ref%ridge_act > 0.0_wp)) then
+         write (*, '(3a,i0)') "FAIL ", tag, ": ridging never acted (dardg1dt is zero all run), rank ", rank
+         n_fail = n_fail + 1
+      end if
+      if (label == "cice_ice_island" .and. (nland_x == 0 .or. nland_y == 0)) then
+         write (*, '(3a,2(1x,i0),a,i0)') "FAIL ", tag, ": no land on the rank seam lines (x, y cells):", nland_x, nland_y, &
+            " rank ", rank
+         n_fail = n_fail + 1
+      end if
+   end subroutine check_cice_nonvacuous
+
+   subroutine cice_negative_controls(ref, label, scheme)
+      !! Each exchange the multi-rank CICE-port step added must be NEEDED: a decomposed run with it skipped
+      !! (`ice_mr_test_skip`) has to differ from the serial reference.  `cice_ice` skips the wind-stress exchange
+      !! and the category-state halo (the flux-ghost refresh is the general one of `engine_step_finalize`, gated by `bulk_flux_bl*`
+      !! and by `cice_ice_bulk`, which fails without it).
+      type(snap_t), intent(in) :: ref
+      character(len=*), intent(in) :: label, scheme
+      integer :: skips(4), nskip, is, nbad, nfin, bit
+      integer :: tot(2)
+      type(snap_t) :: dec
+      logical :: ok
+      character(len=96) :: tag
+
+      skips = [ICE_SKIP_STRESS_HALO, ICE_SKIP_STATE_HALO, 0, 0]
+      nskip = 2
+      if (label == "cice_ice_fold") then
+         ! the fold: the stress pair's sign, its fold exchange, the fold-row flux pairing of the transport, the state halo
+         skips = [ICE_SKIP_FOLD_SIGN, ICE_SKIP_FOLD_PAIR, ICE_SKIP_FOLD_FLUX, ICE_SKIP_STATE_HALO]
+         nskip = 4
+      end if
+      do is = 1, nskip + 1
+         ! the last control of `cice_ice` repeats the stress skip under a y-only split (1 x nprocs)
+         bit = skips(min(is, nskip))
+         if (is > nskip) bit = merge(ICE_SKIP_FOLD_SIGN, ICE_SKIP_STRESS_HALO, label == "cice_ice_fold")
+         ice_mr_test_skip = bit
+         if (is > nskip) then
+            call run_one(case_nml(label, scheme, 1, nprocs), nprocs, rank, dec, ok)
+         else
+            call run_one(case_nml(label, scheme, nprocs, 1), nprocs, rank, dec, ok)
+         end if
+         ice_mr_test_skip = 0
+         nbad = 0
+         nfin = 0
+         if (ok) call compare(dec, ref, nbad, nfin, "negctrl", quiet=.true.)
+         tot = [nbad, merge(0, 1, ok)]
+         call allreduce(comm, tot, op=MPI_SUM)
+         write (tag, '(4a,i0,a)') label, "/", scheme, " negative control, skip bit ", bit, &
+            merge(" (y-only split)", "               ", is > nskip)
+         if (tot(1) + tot(2) == 0) then
+            if (rank == 0) write (*, '(2a)') "FAIL ", trim(tag)//": the run with the exchange skipped is IDENTICAL (not detected)"
+            n_fail = n_fail + 1
+         else if (rank == 0) then
+            write (*, '(3a,i0,a,i0,a)') "case ", trim(tag), ": DETECTED (", tot(1), " mismatching values, ", tot(2), &
+               " failed runs)"
+         end if
+      end do
+   end subroutine cice_negative_controls
+
+   pure function is_led_label(label) result(yes)
+      !! A `cice_ice*_led` case (the ledger on).
+      character(len=*), intent(in) :: label
+      logical :: yes
+      integer :: n
+
+      n = len_trim(label)
+      yes = .false.
+      if (index(label, "cice_ice") == 1 .and. n > 4) yes = label(n - 3:n) == "_led"
+   end function is_led_label
+
+   subroutine check_ledger_nonvacuous(ref, tag, thin_snow)
+      !! The serial reference's ledger report must be live: finite, steps counted, a non-zero cumulative scale in each
+      !! line, and the state totals of ice (positive mass, negative enthalpy).  Layout of `take_ledger`: the three global
+      !! totals, the step counter, the cumulative zap terms, snow reset, clip record, worst and scales close it.
+      type(snap_t), intent(in) :: ref
+      character(len=*), intent(in) :: tag
+      logical, intent(in) :: thin_snow
+         !! The case carries thin cold snow: the cumulative thin-snow reset must be non-zero.
+      integer :: n, q, e
+      real(wp) :: r
+
+      n = size(ref%led)
+      ! the serial run's cumulative residuals close in every stage and line (water and salt everywhere, heat everywhere but
+      ! `therm1`, whose solver tolerance and thin-snow reset are not round-off): in particular the `transport` stage, whose fold-row
+      ! face fluxes are shared by two cells, is neither double counted nor dropped
+      do q = 1, 3
+         do e = 1, 8
+            if (q == 3 .and. e == 1) cycle
+            r = abs(ref%led(n - 43 + (q - 1) + 3*(e - 1)))/max(ref%led(n - 19 + q - 1), tiny(1.0_wp))
+            if (.not. (r < 1.0e-9_wp)) then
+               write (*, '(3a,2i2,es10.2,a,i0)') "FAIL ", tag, ": the ledger does not close (line, stage, |res|/scale):", q, e, r, &
+                  ", rank ", rank
+               n_fail = n_fail + 1
+            end if
+         end do
+      end do
+      if (thin_snow) then
+         if (.not. (ref%led(n - 7) > 0.0_wp)) then
+            write (*, '(3a,i0)') "FAIL ", tag, ": the thin-snow reset is zero in the serial reference (vacuous), rank ", rank
+            n_fail = n_fail + 1
+         end if
+      end if
+      if (.not. all(ieee_is_finite(ref%led)) .or. .not. (ref%led(n - 3) > 0.0_wp) .or. &
+          .not. all(ref%led(n - 19:n - 17) > 0.0_wp) .or. .not. (ref%led(n - 2) > 0.0_wp) .or. .not. (ref%led(n) < 0.0_wp)) then
+ write (*, '(3a,i0)') "FAIL ", tag, ": the ledger report is dead (non-finite, no steps, a zero scale, or empty totals), rank ", rank
+         n_fail = n_fail + 1
+      end if
+   end subroutine check_ledger_nonvacuous
+
+   function tiles_differ(a, b, report) result(nbad)
+      !! Bitwise, every element of every field of two snapshots of the SAME decomposition (tile against tile, ghosts
+      !! included), and the console ice totals.  (`compare` is tile against the serial run's whole domain.)
+      type(snap_t), intent(in) :: a, b
+      character(len=*), intent(in) :: report
+      integer :: nbad
+      integer :: e, nb
+
+      nbad = 0
+      if (a%n /= b%n) then
+         write (*, '(a,i0,2a)') "  rank ", rank, " field count differs: ", report
+         nbad = 1
+         return
+      end if
+      if (any(transfer(a%ice_tot, [0_int64]) /= transfer(b%ice_tot, [0_int64]))) nbad = nbad + 1
+      do e = 1, a%n
+         if (a%f(e)%tag /= b%f(e)%tag .or. any(shape(a%f(e)%a) /= shape(b%f(e)%a))) then
+            nbad = nbad + 1
+            cycle
+         end if
+         nb = count(transfer(a%f(e)%a, 0_int64, size(a%f(e)%a)) /= transfer(b%f(e)%a, 0_int64, size(b%f(e)%a)))
+         if (nb > 0) write (*, '(a,i0,5a,i0)') "  rank ", rank, " ", report, " ", trim(a%f(e)%tag), ": mismatches=", nb
+         nbad = nbad + nb
+      end do
+   end function tiles_differ
+
+   subroutine check_ledger_observer(nml, on, tag, nbad)
+      !! The same decomposed run with the ledger OFF must equal the ledger-on run in every registry field (the whole
+      !! tile, ghosts included: the two runs share the decomposition, so the arrays are compared element by element), the
+      !! console ice totals included: the ledger only reads.
+      character(len=*), intent(in) :: nml, tag
+      type(snap_t), intent(in) :: on
+      integer, intent(out) :: nbad
+      type(snap_t) :: off
+      character(len=:), allocatable :: nml_off
+      integer :: nb, tot(2)
+      logical :: ok
+
+      nml_off = nml
+      call replace_once(nml_off, ", ledger = .true.", "")
+      call run_one(nml_off, nprocs, rank, off, ok)
+      nb = 0
+      nb = 0
+      if (ok) nb = tiles_differ(on, off, trim(tag)//" ledger on vs off")
+      tot = [nb, merge(0, 1, ok)]
+      call allreduce(comm, tot, op=MPI_SUM)
+      nbad = tot(1) + tot(2)
+      if (rank == 0 .and. nbad == 0) write (*, '(3a)') "case ", trim(tag), ": ledger on == ledger off in every field (observer)"
+      if (rank == 0 .and. nbad > 0) write (*, '(3a,i0)') "FAIL ", trim(tag), ": ledger on differs from off: ", nbad
+      if (nbad > 0) nbad = 1
+   end subroutine check_ledger_observer
+
+   subroutine cice_ledger_negative_control(ref, label, scheme)
+      !! A ledger term left RANK-LOCAL (`ice_lt_test_local`: the step's reduction discards the cross-rank sum of the mass
+      !! total after `therm1`) must make the decomposed ledger report differ from the serial one: the comparison can
+      !! tell a missing reduction.
+      type(snap_t), intent(in) :: ref
+      character(len=*), intent(in) :: label, scheme
+      type(snap_t) :: dec
+      integer :: nbad, nfin, tot(2)
+      logical :: ok
+
+      ice_lt_test_local = ice_lt_ix_state(1, ICE_LT_THERM1)
+      call run_one(case_nml(label, scheme, nprocs, 1), nprocs, rank, dec, ok)
+      ice_lt_test_local = 0
+      nbad = 0
+      nfin = 0
+      if (ok) call compare(dec, ref, nbad, nfin, "ledger negctrl", quiet=.true.)
+      tot = [nbad, merge(0, 1, ok)]
+      call allreduce(comm, tot, op=MPI_SUM)
+      if (tot(1) + tot(2) == 0) then
+         if (rank == 0) write (*, '(2a)') "FAIL ", trim(label)//": a ledger term left rank-local is IDENTICAL to the serial report (not detected)"
+         n_fail = n_fail + 1
+      else if (rank == 0) then
+         write (*, '(3a,i0,a)') "case ", trim(label), " ledger negative control (term left rank-local): DETECTED (", tot(1), " mismatching values)"
+      end if
+   end subroutine cice_ledger_negative_control
+
+   subroutine check_cice_ledger_poison()
+      !! A NaN summand on ONE rank must make EVERY rank's ledger read NaN (the EFP poison counter rides the same
+      !! collective), and nothing may hang: the step's totals are summed once, the verdict is the global one.  Control: the
+      !! same sequence on the clean state is finite on every rank.
+      type(ocean_engine_t), target :: engine
+      type(config_t) :: cfg
+      type(transport_seam_t) :: sm
+      real(wp) :: t
+      integer :: ierr, n, ng, pass, st(2), smin(2), smax(2)
+      logical :: fin
+
+      call read_config_from_string(case_nml("cice_ice_led", "pred_corr", nprocs, 1), cfg, ierr=ierr)
+      call validate_config(cfg, ierr)
+      call engine_setup(engine, cfg, ierr, compute_rank=rank, compute_size=nprocs)
+      if (ierr /= OCEAN_STATUS_OK) then
+         write (*, '(a,i0)') "FAIL cice ledger poison: setup failed on rank ", rank
+         n_fail = n_fail + 1
+         return
+      end if
+      call engine_enter_data(engine, cfg)
+      t = 0.0_wp
+      do n = 1, 3
+         call engine_step(engine, DT, t, ierr=ierr)
+         call engine_step_ice(engine, cfg, DT, t, ierr=ierr)
+         call engine_step_finalize(engine, DT, t, ierr=ierr)
+         t = t + DT
+      end do
+      ng = engine%grid%nghost
+      call ice_transport_seam_bind_reductions(sm, engine%grid, engine%state%bc)
+      do pass = 1, 2
+         associate (L => engine%state%icec%ledger, c => engine%state%ice%cice, w => engine%state%icec%work)
+            if (pass == 2 .and. rank == nprocs - 1) then
+               c%vicen(ng + 2, ng + 2, 1) = ieee_value(1.0_wp, ieee_quiet_nan)
+               !$acc update device(c%vicen)
+            end if
+            call L%begin(c, DT, w%fsnow, w%frain, w%flw, .false.)
+            call L%probe(ICE_LT_RIDGING, c, engine%state%icec%flux)
+            call L%end_step(sm)
+            fin = L%finite .and. ieee_is_finite(L%cum_scale(1)) .and. ieee_is_finite(L%tab%dstate(1, ICE_LT_RIDGING))
+            st = [merge(1, 0, fin), merge(1, 0, L%valid)]
+         end associate
+         smin = st
+         smax = st
+         call allreduce(comm, smin, op=MPI_MIN)
+         call allreduce(comm, smax, op=MPI_MAX)
+         if (any(smin /= smax)) then
+            write (*, '(a,i0,a,2(1x,i0),a,i0)') "FAIL cice ledger poison pass ", pass, ": the ranks disagree:", st, " rank ", rank
+            n_fail = n_fail + 1
+         else if (pass == 1 .and. .not. (st(1) == 1 .and. st(2) == 1)) then
+            write (*, '(a,i0)') "FAIL cice ledger poison control: the clean state is not finite on every rank, rank ", rank
+            n_fail = n_fail + 1
+         else if (pass == 2 .and. st(1) /= 0) then
+            write (*, '(a,i0)') "FAIL cice ledger poison: a NaN on one rank was not seen by every rank, rank ", rank
+            n_fail = n_fail + 1
+         else if (rank == 0) then
+            if (pass == 1) write (*, '(a)') "case cice ledger poison control: finite on every rank (ok)"
+            if (pass == 2) write (*, '(a)') "case cice ledger poison: a NaN summand on one rank reads NaN on EVERY rank (ok)"
+         end if
+      end do
+      call engine_exit_data(engine)
+      call engine_teardown(engine)
+   end subroutine check_cice_ledger_poison
+
+   subroutine check_cice_faults()
+      !! Fault injection on a decomposed CICE-port run: ONE rank gets a bad state and EVERY rank must come out of
+      !! the step with the same verdict (no hang: a rank that stopped alone would leave the others in a halo
+      !! exchange).  (1) a NaN category area on the first rank: every rank reports the fatal error word, the same
+      !! mask and the same global first offender; (2) the ocean import refusing on the LAST rank only (a hook
+      !! status): every rank reports that stage failed.  (3) the reduction of the error words itself: bound to
+      !! the collective, every rank holds the one global summary; unbound (rank-local, the negative control) the
+      !! ranks disagree.
+      integer :: kind
+
+      do kind = 1, 2
+         call cice_fault_case(kind)
+      end do
+      call cice_err_reduce_case()
+   end subroutine check_cice_faults
+
+   subroutine cice_fault_case(kind)
+      integer, intent(in) :: kind
+      type(ocean_engine_t), target :: engine
+      type(config_t) :: cfg
+      type(ice_step_result_t) :: res
+      real(wp) :: t
+      integer :: ierr, n, ng, stat(5), smin(5), smax(5), nx_save, expect(1)
+      character(len=48) :: what
+
+      if (kind == 1) then
+         what = "NaN category area on the last rank"
+      else
+         what = "ocean import refuses on the last rank"
+      end if
+      call read_config_from_string(case_nml("cice_ice", "pred_corr", nprocs, 1), cfg, ierr=ierr)
+      call validate_config(cfg, ierr)
+      call engine_setup(engine, cfg, ierr, compute_rank=rank, compute_size=nprocs)
+      if (ierr /= OCEAN_STATUS_OK) then
+         write (*, '(a,i0)') "FAIL cice fault injection: setup failed on rank ", rank
+         n_fail = n_fail + 1
+         return
+      end if
+      call engine_enter_data(engine, cfg)
+      t = 0.0_wp
+      do n = 1, 3
+         call engine_step(engine, DT, t, ierr=ierr)
+         call engine_step_ice(engine, cfg, DT, t, ierr=ierr)
+         call engine_step_finalize(engine, DT, t, ierr=ierr)
+         t = t + DT
+      end do
+      ng = engine%grid%nghost
+      nx_save = engine%state%icec%oin%nx
+      expect = [0]
+      if (kind == 1 .and. rank == nprocs - 1) then
+         ! the LAST rank (a non-zero global offset), so the global first-offender index must be decoded right
+         expect = [(2 - 1)*NX_G + 2 + engine%grid%i_offset_global]
+         engine%state%ice%cice%aicen(ng + 2, ng + 2, 1) = ieee_value(1.0_wp, ieee_quiet_nan)
+         !$acc update device(engine%state%ice%cice%aicen)
+      end if
+      if (kind == 2 .and. rank == nprocs - 1) engine%state%icec%oin%nx = 0
+      call ice_cice_bind(engine%state, engine%grid)
+      call ice_cice_step_result(DT, .false., 3, res)
+      engine%state%icec%oin%nx = nx_save
+      call allreduce(comm, expect, op=MPI_MAX)
+      stat = [res%status, res%stage, int(res%summary%mask), int(res%summary%first_idx), res%stage_status]
+      smin = stat
+      smax = stat
+      call allreduce(comm, smin, op=MPI_MIN)
+      call allreduce(comm, smax, op=MPI_MAX)
+      if (any(smin /= smax)) then
+         write (*, '(3a,5(1x,i0),a,i0)') "FAIL cice fault injection (", trim(what), "): the verdict differs between ranks:", &
+            stat, " rank ", rank
+         n_fail = n_fail + 1
+      else if (kind == 1 .and. .not. (stat(1) == ICE_STEP_FATAL .and. iand(stat(3), int(ICE_ERR_NONFINITE)) /= 0 .and. &
+                                      stat(4) == expect(1))) then
+         write (*, '(3a,5(1x,i0),a,i0)') "FAIL cice fault injection (", trim(what), "): wrong verdict:", stat, " rank ", rank
+         n_fail = n_fail + 1
+      else if (kind == 2 .and. .not. (stat(1) == ICE_STEP_STAGE_FAILED .and. stat(2) == ICE_STAGE_OCEAN_IMPORT)) then
+         write (*, '(3a,5(1x,i0),a,i0)') "FAIL cice fault injection (", trim(what), "): wrong verdict:", stat, " rank ", rank
+         n_fail = n_fail + 1
+      else if (rank == 0) then
+         write (*, '(3a,5(1x,i0))') "case cice fault injection (", trim(what), "): every rank stopped with the same verdict:", stat
+      end if
+      call engine_exit_data(engine)
+      call engine_teardown(engine)
+   end subroutine cice_fault_case
+
+   subroutine cice_err_reduce_case()
+      !! `ice_err_reduce` on a tiny grid whose error word is set on the first rank only: with the collective bound
+      !! every rank holds the same global summary; unbound (the negative control, rank-local) the ranks differ.
+      integer, parameter :: N = 4
+      integer(int32) :: w(N, N)
+      type(ice_err_summary_t) :: summ
+      procedure(ice_err_combine_iface), pointer :: p
+      integer :: stat(4), smin(4), smax(4), pass
+      logical :: agree
+
+      do pass = 1, 2
+         w = 0_int32
+         if (rank == nprocs - 1) w(2, 3) = ior(ICE_ERR_NONFINITE, ICE_ERR_TSN_RANGE)
+         p => null()
+         if (pass == 1) p => ice_err_combine_collective
+         call ice_err_set_combine(p)
+         call ice_err_reduce(w, N, N, 2, 3, 2, 3, 2*rank, 0, 2*nprocs, ICE_ERR_FATAL_MASK, summ)
+         p => null()
+         call ice_err_set_combine(p)
+         stat = [int(summ%mask), int(summ%first_idx), int(summ%first_word), int(summ%count(0)) + int(summ%count(1))]
+         smin = stat
+         smax = stat
+         call allreduce(comm, smin, op=MPI_MIN)
+         call allreduce(comm, smax, op=MPI_MAX)
+         agree = all(smin == smax)
+         if (pass == 1 .and. .not. (agree .and. stat(1) /= 0 .and. stat(2) > 0)) then
+            write (*, '(a,4(1x,i0),a,i0)') "FAIL error-word reduction: ranks disagree with the collective bound:", stat, &
+               " rank ", rank
+            n_fail = n_fail + 1
+         else if (pass == 2 .and. agree) then
+            write (*, '(a,i0)') "FAIL error-word reduction negative control: rank-local reduction NOT detected, rank ", rank
+            n_fail = n_fail + 1
+         else if (rank == 0) then
+            if (pass == 1) then
+               write (*, '(a)') "case error-word reduction: the collective gives one global summary on every rank (ok)"
+            else
+               write (*, '(a)') "case error-word reduction negative control: rank-local summaries differ (DETECTED)"
+            end if
+         end if
+      end do
+   end subroutine cice_err_reduce_case
+
+   subroutine take_ledger(engine, s)
+      !! The named-term ledger's report into `s%led` (a no-op with the ledger off): the last closed step's table, the
+      !! cumulative accumulators and the GLOBAL state totals (one collective over the real communicator when the run is
+      !! decomposed, an identity on the serial reference).  All of it is a global number: it must be the same bits on every
+      !! rank, every layout and the serial run.
+      type(ocean_engine_t), intent(inout), target :: engine
+      type(snap_t), intent(inout) :: s
+      type(transport_seam_t) :: sm
+      real(wp) :: m, sa, e
+
+      s%led_on = .false.
+      if (.not. engine%state%icec%is_init) return
+      if (.not. engine%state%icec%ledger%on) return
+      call ice_transport_seam_bind_reductions(sm, engine%grid, engine%state%bc)
+      call engine%state%icec%ledger%totals(engine%state%ice%cice, m, sa, e, sm)
+      associate (L => engine%state%icec%ledger)
+         s%led = [reshape(L%tab%dstate, [size(L%tab%dstate)]), reshape(L%tab%fout, [size(L%tab%fout)]), L%tab%fsw, &
+                  reshape(L%tab%res, [size(L%tab%res)]), L%tab%scale, &
+                  L%tab%snow, L%tab%rain, L%tab%evap, L%tab%lw_in, L%tab%snow_enth, L%tab%atm_rad, L%tab%atm_lat, &
+                  L%tab%frz_lat, L%tab%n_clip, L%tab%clip_area, L%tab%drop_vice, L%tab%drop_vsno, L%tab%drop_eice, &
+                  L%tab%drop_esno, L%tab%clip_w, L%tab%clip_s, L%tab%clip_h, L%tab%snow_reset, L%tab%heat_bound, &
+                  reshape(L%cum_res, [size(L%cum_res)]), L%cum_scale, L%worst, L%cum_clip, L%cum_snow_reset, &
+                  L%cum_zap, L%nsteps, m, sa, e]
+         s%led_on = .true.
+      end associate
+   end subroutine take_ledger
+
+   function led_differs(a, b) result(nb)
+      !! Number of bitwise-different entries of the two ledger reports (both runs have one, or both not).
+      type(snap_t), intent(in) :: a, b
+      integer :: nb
+
+      nb = 0
+      if (a%led_on .neqv. b%led_on) then
+         nb = 1
+         return
+      end if
+      if (.not. a%led_on) return
+      if (size(a%led) /= size(b%led)) then
+         nb = 1
+         return
+      end if
+      nb = count(transfer(a%led, 0_int64, size(a%led)) /= transfer(b%led, 0_int64, size(b%led)))
+   end function led_differs
+
    subroutine take_snapshot(engine, s)
       !! Host copy of every restart-registry field (device -> host first)
       !! plus the BT end-of-step eta.
@@ -1921,6 +2865,7 @@ contains
                                size(engine%state%dyn%bt_work%bt_vhbt, 2), 1])
       end if
       if (engine%state%metrics%use_cavity) call add_cavity_fields(engine, s)
+      if (engine%state%icec%is_init) call add_cice_images(engine, s)
       s%io = engine%grid%i_offset_global
       s%jo = engine%grid%j_offset_global
       s%nxl = engine%grid%nx_phys
@@ -1963,10 +2908,10 @@ contains
       if (ierr == OCEAN_STATUS_OK) then
          call engine_enter_data(engine, cfg)
          t = 0.0_wp
-         call advance(engine, cfg, t, N_CKPT, ierr)
+         call advance(engine, cfg, t, n_ckpt_cur, ierr)
          if (ierr == OCEAN_STATUS_OK) &
             call ocean_state_restart_write(engine%state, engine%grid, engine%decomp, &
-                                           trim(fname), t, N_CKPT, ierr=ierr)
+                                           trim(fname), t, n_ckpt_cur, ierr=ierr)
          call engine_exit_data(engine)
          call engine_teardown(engine)
       end if
@@ -1980,11 +2925,12 @@ contains
             call engine_setup(engine, cfg, ierr, compute_rank=rank, compute_size=nprocs, &
                               restart_file=RST_DIR, t_restart=t, step_restart=step0)
          if (ierr == OCEAN_STATUS_OK) then
-            if (step0 == N_CKPT .and. engine%warm_restart) then
+            if (step0 == n_ckpt_cur .and. engine%warm_restart) then
                call engine_enter_data(engine, cfg)
-               call advance(engine, cfg, t, n_steps_cur - N_CKPT, ierr)
+               call advance(engine, cfg, t, n_steps_cur - n_ckpt_cur, ierr)
                if (ierr == OCEAN_STATUS_OK) then
                   call take_snapshot(engine, res)
+                  call take_ledger(engine, res)
                   ok = .true.
                end if
                call engine_exit_data(engine)
@@ -2042,6 +2988,9 @@ contains
          nbad = 1
          return
       end if
+      nb = led_differs(a, b)
+      if (nb > 0) write (*, '(a,i0,3a,i0,a)') "  rank ", rank, " ", report, " write/resume ledger report: ", nb, " mismatches"
+      nbad = nbad + nb
       do e = 1, a%n
          if (a%f(e)%tag /= b%f(e)%tag .or. any(shape(a%f(e)%a) /= shape(b%f(e)%a))) then
             nbad = nbad + 1
@@ -2067,22 +3016,43 @@ contains
    end subroutine delete_file
 #endif
 
-   subroutine compare(dec, ref, nbad, nfin, report)
+   subroutine compare(dec, ref, nbad, nfin, report, quiet, skip_led)
       !! Bitwise comparison of each field's owned window.  A face array is
       !! one wider than the cell array along its stagger; its owned window
       !! then includes both edge faces of the tile.
       type(snap_t), intent(in) :: dec, ref
       integer, intent(out) :: nbad, nfin
       character(len=*), intent(in) :: report
+      logical, intent(in), optional :: quiet
+         !! Count only (a negative control expects mismatches and need not print them).
+      logical, intent(in), optional :: skip_led
+         !! Leave the ledger report out (the ledger-off twin of an observer comparison has none).
       integer :: e, i, j, k, ex, ey, nb
       character(len=160) :: first
+      logical :: talk, skip
 
+      talk = .true.
+      if (present(quiet)) talk = .not. quiet
+      skip = .false.
+      if (present(skip_led)) skip = skip_led
       nbad = 0
       nfin = 0
       if (dec%n /= ref%n) then
          write (*, '(a,i0,a,i0,a,i0)') "  rank ", rank, ": field count differs ", dec%n, " vs ", ref%n
          nbad = 1
          return
+      end if
+      if (any(transfer(dec%ice_tot, [0_int64]) /= transfer(ref%ice_tot, [0_int64]))) then
+         if (talk) write (*, '(a,i0,2a,3es24.16,a,3es24.16)') "  rank ", rank, " ", report//" console ice totals differ: ", &
+            dec%ice_tot, " vs ", ref%ice_tot
+         nbad = nbad + 1
+      end if
+      if (.not. skip) then
+         nb = led_differs(dec, ref)
+         if (nb > 0) then
+            if (talk) write (*, '(a,i0,2a,i0,a)') "  rank ", rank, " ", report//" ledger report differs in ", nb, " value(s)"
+            nbad = nbad + nb
+         end if
       end if
       do e = 1, dec%n
          if (dec%f(e)%tag /= ref%f(e)%tag) then
@@ -2112,7 +3082,7 @@ contains
                end do
             end do
          end associate
-         if (nb > 0) then
+         if (nb > 0 .and. talk) then
             write (*, '(a,i0,5a,i0,2a)') "  rank ", rank, " ", report, " ", &
                trim(dec%f(e)%tag), ": mismatches=", nb, "  ", trim(first)
          end if
@@ -2183,6 +3153,24 @@ contains
       end do
    end subroutine compare_ghosts
 
+   pure function fw_mass_keys(label) result(keys)
+      !! The `&ocean_forcing_nml` keys the fresh-water MASS cases add (empty elsewhere).
+      character(len=*), intent(in) :: label
+      character(len=:), allocatable :: keys
+      keys = ""
+      if (is_fw_mass_label(label)) keys = ", freshwater = 'mass'"
+      if (label == "fw_mass_thin") keys = keys//", fw_evap_cfl_limit = "//FW_THIN_CFL
+   end function fw_mass_keys
+
+   pure logical function is_fw_mass_label(label)
+      !! The surface fresh-water MASS cases (`freshwater = 'mass'`).
+      character(len=*), intent(in) :: label
+      is_fw_mass_label = label == "bulk_flux_fw_mass" .or. label == "bulk_flux_fw_mass_fold" .or. &
+                         label == "fw_mass_deferred" .or. label == "fw_mass_deferred_nowin" .or. &
+                         label == "fw_mass_thin" .or. label == "runoff_mass" .or. label == "runoff_mass_fold" .or. &
+                         label == "runoff_river" .or. label == "runoff_river_fold"
+   end function is_fw_mass_label
+
    pure logical function is_wetdry_case(label)
       !! The dynamic wet/dry cases (`wetdry_*`).
       character(len=*), intent(in) :: label
@@ -2192,7 +3180,10 @@ contains
    pure logical function is_ice_fold_case(label)
       !! The sea-ice-on-the-tripolar-cap cases (A7).
       character(len=*), intent(in) :: label
-      is_ice_fold_case = label == "sea_ice_fold" .or. label == "sea_ice_fold_nodyn"
+      is_ice_fold_case = label == "sea_ice_fold" .or. label == "sea_ice_fold_nodyn" .or. &
+                         label == "sea_ice_cdyn_fold" .or. label == "sea_ice_cdyn_edge" .or. &
+                         index(label, "cice_ice_fold") == 1 .or. label == "cice_ice_bulk_fold" .or. &
+                         label == "cice_ice_fw_mass_fold" .or. label == "cice_ice_fw_mass_bfold"
    end function is_ice_fold_case
 
    subroutine check_ice_seam(ref, tag)
@@ -2216,7 +3207,7 @@ contains
       have_v = .false.
       jf = ref%ng + ref%nyl + 1
       do e = 1, ref%n
-         if (trim(ref%f(e)%tag) == "ice_m_ice") then
+         if (trim(ref%f(e)%tag) == "ice_m_ice" .or. trim(ref%f(e)%tag) == "ice_vicen") then
             seam_mice = maxval(abs(ref%f(e)%a(ref%ng + 1:ref%ng + ref%nxl, &
                                               ref%ng + ref%nyl, :)))
          else if (trim(ref%f(e)%tag) == "ice_v_ice") then
@@ -2242,6 +3233,63 @@ contains
          n_fail = n_fail + 1
       end if
    end subroutine check_ice_seam
+
+   subroutine check_cdyn_seams(ref, label, tag)
+      !! Non-vacuity of the C-grid EVP decomposition cases, on the SERIAL reference: the ice
+      !! velocity must be non-zero across EVERY rank seam of the 2- and 4-rank layouts (the u
+      !! faces on each x seam, the v faces on each y seam; equal split, the first ranks one
+      !! cell wider), else a stale ghost could hide.  `sea_ice_cdyn_edge` additionally needs a
+      !! tile with no ice at all (rows 1..6 empty, the southern tile of a 1x4 split) and ice
+      !! in the northern rows.
+      type(snap_t), intent(in) :: ref
+      character(len=*), intent(in) :: label, tag
+      integer, parameter :: NSEAM_X = 4, NSEAM_Y = 4
+      integer :: seam_x(NSEAM_X), seam_y(NSEAM_Y), k, e, nbad
+      real(wp) :: umax, vmax, mice_south, mice_north
+
+      ! first-face index of the east tile: 2 ranks 13 | 14 ; 4 ranks 7|8, 14|15, 20|21 (x);
+      ! 9 | 10 ; 5|6, 10|11, 14|15 (y), as the global face index of the seam face.
+      seam_x = [14, 8, 15, 21]
+      seam_y = [10, 6, 11, 15]
+      if (label == "sea_ice_cdyn_fold" .or. label == "sea_ice_cdyn_edge" .or. label == "cice_ice_fold" .or. label == "cice_ice_fold_led" .or. &
+          label == "cice_ice_bulk_fold" .or. label == "cice_ice_fw_mass_fold" .or. label == "cice_ice_fw_mass_bfold") then
+         ! the cap grid is 30 x 24
+         seam_x = [16, 9, 17, 24]
+         seam_y = [13, 7, 13, 19]
+      end if
+      nbad = 0
+      mice_south = 0.0_wp
+      mice_north = 0.0_wp
+      do e = 1, ref%n
+         if (trim(ref%f(e)%tag) == "ice_u_ice") then
+            do k = 1, NSEAM_X
+               if (label == "sea_ice_cdyn_edge") cycle
+               umax = maxval(abs(ref%f(e)%a(ref%ng + seam_x(k), ref%ng + 1:ref%ng + ref%nyl, 1)))
+               if (.not. (umax > 0.0_wp)) nbad = nbad + 1
+            end do
+         else if (trim(ref%f(e)%tag) == "ice_v_ice") then
+            do k = 1, NSEAM_Y
+               if (label == "sea_ice_cdyn_edge" .and. k /= 4) cycle
+               vmax = maxval(abs(ref%f(e)%a(ref%ng + 1:ref%ng + ref%nxl, ref%ng + seam_y(k), 1)))
+               if (.not. (vmax > 0.0_wp)) nbad = nbad + 1
+            end do
+         else if (trim(ref%f(e)%tag) == "ice_m_ice") then
+            mice_south = maxval(abs(ref%f(e)%a(ref%ng + 1:ref%ng + ref%nxl, ref%ng + 1:ref%ng + 6, :)))
+            mice_north = maxval(abs(ref%f(e)%a(ref%ng + 1:ref%ng + ref%nxl, ref%ng + ref%nyl, :)))
+         end if
+      end do
+      if (nbad > 0) then
+         write (*, '(3a,i0,a,i0)') "FAIL ", tag, ": ice velocity is zero on ", nbad, " seam line(s), rank ", rank
+         n_fail = n_fail + 1
+      end if
+      if (label == "sea_ice_cdyn_edge") then
+         if (mice_south /= 0.0_wp .or. .not. (mice_north > 0.0_wp)) then
+            write (*, '(3a,2es10.2,a,i0)') "FAIL ", tag, ": expected an ice-free south tile and ice in the north: ", &
+               mice_south, mice_north, " rank ", rank
+            n_fail = n_fail + 1
+         end if
+      end if
+   end subroutine check_cdyn_seams
 
    pure logical function carried_tendency(tag)
       !! The `pred_corr` predictor's carried viscous tendency
@@ -2273,18 +3321,23 @@ contains
       character(len=*), intent(in) :: label, scheme
       type(snap_t) :: ref, dec
       logical :: ok_ref, ok_dec
-      integer :: px, nbad, nfin, glob(3), nbud, nghost_bad, nb_img
+      integer :: px, nbad, nfin, glob(3), nbud, nghost_bad, nb_img, nb_obs
       character(len=96) :: tag
+      character(len=16) :: steps_env
       type(conservation_budget_t) :: buds(8)
 
       n_steps_cur = N_STEPS
+      n_ckpt_cur = N_CKPT
+      if (label == "fw_mass_deferred") n_ckpt_cur = N_CKPT - 1
+      call get_environment_variable("RDB_BITID_STEPS", steps_env)
+      if (len_trim(steps_env) > 0) read (steps_env, *) n_steps_cur
       balance_ref = ""
       if (index(label, "balance_rest") == 1) balance_ref = "bottom_rest"
       if (index(label, "balance_keep") == 1) balance_ref = "keep_h"
       ! The emergent shoal needs twice the gate length: at 48 steps the
       ! stale seam-ghost mask is still latched to the owner's value, by 96 the
       ! front has moved a ghost cell of `wd_wet_dyn` (and `wd_open_*`) off it.
-      if (is_wetdry_case(label)) n_steps_cur = 2*N_STEPS
+      if (is_wetdry_case(label) .and. len_trim(steps_env) == 0) n_steps_cur = 2*N_STEPS
       call set_wd_edges(label)
       if (len(label) > 3) then
          if (label(len(label) - 2:) == "_t0") n_steps_cur = 0
@@ -2297,6 +3350,9 @@ contains
       end if
 
       if (is_ice_fold_case(label)) call check_ice_seam(ref, trim(label)//"/"//scheme)
+      if (index(label, "sea_ice_cdyn") == 1 .or. (index(label, "cice_ice") == 1 .and. label /= "cice_ice_lat" .and. label /= "cice_ice_fold_edge")) &
+         call check_cdyn_seams(ref, label, trim(label)//"/"//scheme)
+      if (index(label, "cice_ice") == 1) call check_cice_nonvacuous(ref, label, trim(label)//"/"//scheme)
       if (is_wetdry_case(label)) then
          ! Non-vacuity: the front must cross every seam band in BOTH directions
          ! in the serial reference (the decomposed runs are then compared to it).
@@ -2309,6 +3365,7 @@ contains
          end if
       end if
       if (index(label, "cavity_") == 1) call check_cavity_counters(ref, label, trim(label)//"/"//scheme)
+      if (is_fw_mass_label(label)) call check_fw_mass_nonvacuous(ref, label, trim(label)//"/"//scheme)
 
       nbud = 0
       do px = nprocs, 1, -1
@@ -2324,9 +3381,14 @@ contains
                call compare_ghosts(dec, ref, nghost_bad, trim(tag))
                nbad = nbad + nghost_bad
             end if
-            if (index(label, "cavity_") == 1) then
+            if (index(label, "cavity_") == 1 .or. index(label, "cice_ice") == 1) then
                call check_ghost_images(dec, ref, nb_img, trim(tag))
                nbad = nbad + nb_img
+            end if
+            if (is_led_label(label)) then
+               ! the ledger is an observer: the same run with it OFF is bitwise the ledger-on run in every field
+               call check_ledger_observer(case_nml(label, scheme, px, nprocs/px), dec, trim(tag), nb_obs)
+               nbad = nbad + nb_obs
             end if
             ! Windowed-drain cases: the sub-cycle must run >1 pass (else the
             ! pass-count reduction is never exercised) and every layout must
@@ -2336,7 +3398,7 @@ contains
             ! drain at all (ref >= 1) with the same count on every layout; the
             ! windowed accumulation is compared bitwise.)
             if (index(case_nml(label, scheme, 1, 1), "dt_tracer_advect_ratio") > 0) then
-               if (ref%drain_iter < merge(1, 2, label == "cavity_combo") .or. &
+               if (ref%drain_iter < merge(1, 2, label == "cavity_combo" .or. label == "fw_mass_deferred") .or. &
                    dec%drain_iter /= ref%drain_iter) then
                   write (*, '(3a,i0,a,i0)') "FAIL ", trim(tag), ": drain passes ref=", &
                      ref%drain_iter, " dec=", dec%drain_iter
@@ -2359,13 +3421,17 @@ contains
             ! (dyn + draft only) resumes bit-identically and the ratio-2 twin
             ! does too: a serial warm-restart defect of the melt path at
             ! `dt_therm_ratio = 1`, not a decomposition defect.
-            if ((label == "sea_ice" .or. label == "sea_ice_transport" .or. &
-                 label == "bulk_flux_ice" .or. label == "dtbt_reset" .or. &
+            if ((label == "sea_ice" .or. label == "sea_ice_transport" .or. index(label, "sea_ice_cdyn") == 1 .or. &
+                 label == "bulk_flux_ice" .or. label == "bulk_flux_ice_fw" .or. label == "dtbt_reset" .or. &
+                 index(label, "cice_ice") == 1 .or. &
                  label == "cavity_sigma_ratio2" .or. label == "cavity_mass" .or. &
-                 label == "cavity_mass_comp" .or. is_wetdry_case(label) .or. is_ice_fold_case(label)) .and. &
-                (nprocs/px == 1 .or. px == nprocs/px) .and. &
+                 label == "cavity_mass_comp" .or. is_wetdry_case(label) .or. is_ice_fold_case(label) .or. &
+                 is_fw_mass_label(label)) .and. &
+                (nprocs/px == 1 .or. px == nprocs/px .or. (index(label, "cice_ice") == 1 .and. px == 1) .or. &
+                 (is_fw_mass_label(label) .and. (label == "bulk_flux_fw_mass_fold" .or. label == "runoff_mass_fold" .or. &
+                                                 label == "runoff_river_fold"))) .and. &
                 (nprocs > 1 .or. label == "cavity_sigma_ratio2" .or. label == "cavity_mass" .or. &
-                 label == "cavity_mass_comp")) then
+                 label == "cavity_mass_comp" .or. is_fw_mass_label(label))) then
                ! 4x1 and 2x2 at np = 4 (and 2x1 at np = 2).
                call check_resume_leg(case_nml(label, scheme, px, nprocs/px), dec, &
                                      trim(tag))
@@ -2387,6 +3453,10 @@ contains
          end if
          if (sum(glob) > 0) n_fail = n_fail + 1
       end do
+      if (nprocs >= 2 .and. trim(scheme) == trim(SCHEMES(1)) .and. (label == "cice_ice" .or. label == "cice_ice_fold")) &
+         call cice_negative_controls(ref, label, scheme)
+      if (nprocs >= 2 .and. trim(scheme) == trim(SCHEMES(1)) .and. label == "cice_ice_led") &
+         call cice_ledger_negative_control(ref, label, scheme)
       ! The real regression gate: the single-rank reference's budget
       ! against every decomposed factorization, bit-for-bit, at whatever
       ! `nprocs` this launch is (1, 2, or 4 under ctest) -- see the
@@ -2463,6 +3533,37 @@ contains
          snap%dw_min = min(snap%dw_min, dw)
       end if
    end subroutine track_mass_range
+
+   subroutine check_fw_mass_nonvacuous(ref, label, tag)
+      !! Non-vacuity of a `freshwater='mass'` case on the serial reference: the flux snapshot is
+      !! non-zero, the column mass actually changed, the tracked source is non-zero, and (the thin
+      !! case) the evaporative pass-down fired.  A case where nothing moved would pass bitwise
+      !! trivially.
+      type(snap_t), intent(in) :: ref
+      character(len=*), intent(in) :: label, tag
+
+      if (rank == 0) write (*, '(3a,3(1x,es12.4),1x,i0)') "case ", tag, &
+         ": fw mass (|fw_net|max, h0, h1, pass-down columns) =", ref%fw_net_absmax, ref%fw_h_total0, &
+         ref%fw_h_total1, ref%fw_pd_total
+      if (.not. (ref%fw_net_absmax > 0.0_wp)) then
+         write (*, '(3a)') "FAIL ", tag, ": fw_net is zero (vacuous mass case)"
+         n_fail = n_fail + 1
+      end if
+      if (.not. (abs(ref%fw_h_total1 - ref%fw_h_total0) > 1.0e-9_wp*abs(ref%fw_h_total0))) then
+         write (*, '(3a)') "FAIL ", tag, ": the column mass did not change (vacuous mass case)"
+         n_fail = n_fail + 1
+      end if
+      if (.not. (ref%bud%mass_src /= 0.0_wp)) then
+         write (*, '(3a)') "FAIL ", tag, ": the console mass source is zero (vacuous mass case)"
+         n_fail = n_fail + 1
+      end if
+      if (label == "fw_mass_thin" .and. ref%fw_pd_total <= 0_int64) then
+         write (*, '(3a)') "FAIL ", tag, ": the evaporative pass-down never fired (vacuous thin case)"
+         n_fail = n_fail + 1
+      end if
+      if (label /= "fw_mass_thin" .and. rank == 0) &
+         write (*, '(3a,i0)') "case ", tag, ": pass-down columns (informational) = ", ref%fw_pd_total
+   end subroutine check_fw_mass_nonvacuous
 
    subroutine check_cavity_counters(ref, label, tag)
       !! Non-vacuity of a cavity case on the serial reference: every count the
@@ -2669,7 +3770,8 @@ contains
 
       ! `cavity_mass*`: the console's mass `src` must be the GLOBAL source once
       ! (not once per rank), i.e. equal to the serial reference's.
-      if (trim(label) /= "periodic_sponge" .and. index(label, "cavity_mass") /= 1) return
+      if (trim(label) /= "periodic_sponge" .and. index(label, "cavity_mass") /= 1 .and. &
+          .not. is_fw_mass_label(label)) return
 
       if (.not. ref_bud%mass_active) then
          n_fail = n_fail + 1
@@ -2693,7 +3795,7 @@ contains
       end if
 
       nbad = 0
-      if (rank == 0 .and. index(label, "cavity_mass") == 1) then
+      if (rank == 0 .and. (index(label, "cavity_mass") == 1 .or. is_fw_mass_label(label))) then
          write (*, '(4a,es22.14)') "  budget mass_src ", trim(label), "/", trim(scheme), ref_bud%mass_src
          do k = 1, size(dec_buds)
             write (*, '(a,i0,a,es22.14)') "     layout ", k, " mass_src ", dec_buds(k)%mass_src
@@ -2794,6 +3896,109 @@ contains
             st(1), ") (ok)"
       end if
    end subroutine check_balance_fold_refusal
+
+   subroutine swap_to_cice(nml)
+      !! Replace the SIS2 ice groups of a sea-ice case namelist by the CICE-port ones (`scheme = 'cice'`, the
+      !! default remap advection, the CICE-named initial slab).
+      character(len=:), allocatable, intent(inout) :: nml
+      character(len=*), parameter :: NL = new_line("a")
+      integer :: a, b
+
+      a = index(nml, "&ocean_ice_nml")
+      b = a + index(nml(a:), "/") - 1
+      nml = nml(1:a - 1)//"&ocean_ice_nml enable = .true., scheme = 'cice', ncat = 5, nilyr = 4, "// &
+            "hfreeze = 10.0, dynamics = .true., transport = .true. /"//NL// &
+            "&ocean_ice_thermo_nml update_ocn_f = .true. /"//NL// &
+            "&ocean_ice_dyn_nml advection = 'remap', ndte = 10 /"//NL//nml(b + 1:)
+      a = index(nml, "&ocean_ice_ic_nml")
+      b = a + index(nml(a:), "/") - 1
+      nml = nml(1:a - 1)//"&ocean_ice_ic_nml conc_config = 'uniform', h_ice = 1.0, conc = 0.7, h_snow = 0.1, "// &
+            "t_ice = -8.0 /"//nml(b + 1:)
+   end subroutine swap_to_cice
+
+   subroutine check_cice_fences()
+      !! What stages A and B do NOT cover stays refused at configure on several ranks: the upwind advection across the
+      !! tripolar fold (its fold-row face flux is not paired).  The refused namelist is the accepted `cice_ice_fold` one
+      !! with ONLY the advection swapped, so the refusal is that knob's, and the accepted twin proves the base is valid.
+      !! The named-term ledger is NOT a fence: its sums are EFP values combined in one collective per step, so the same
+      !! namelist with `ledger = .true.` is ACCEPTED on several ranks, with an explicit or an unset process grid (the
+      !! `cice_ice_*_led` cases pin its numbers).
+      character(len=*), parameter :: NL = new_line("a")
+      character(len=:), allocatable :: base, nml
+      type(config_t) :: cfg
+      integer :: ierr
+
+      base = cice_ice_nml("cice_ice", "pred_corr", nprocs, 1)
+      call read_config_from_string(base, cfg, ierr=ierr)
+      if (ierr == OCEAN_STATUS_OK) call validate_config(cfg, ierr)
+      if (ierr /= OCEAN_STATUS_OK) then
+         write (*, '(a,i0)') "FAIL cice fence: the accepted base namelist is refused, rank ", rank
+         n_fail = n_fail + 1
+         return
+      end if
+      ! the ledger: accepted at configure on several ranks (explicit process grid)
+      nml = base
+      call replace_once(nml, "hfreeze = 10.0, dynamics", "hfreeze = 10.0, ledger = .true., dynamics")
+      call read_config_from_string(nml, cfg, ierr=ierr)
+      if (ierr == OCEAN_STATUS_OK) call validate_config(cfg, ierr)
+      if (ierr /= OCEAN_STATUS_OK) then
+         write (*, '(a,i0)') "FAIL cice fence: ledger = .true. is REFUSED on several ranks (it is supported now), rank ", rank
+         n_fail = n_fail + 1
+      else if (rank == 0) then
+         write (*, '(a)') "case cice fence: ledger = .true. accepted on several ranks (ok)"
+      end if
+      call check_cice_ledger_unset_grid()
+      ! the accepted tripolar-cap twin (`cice_ice_fold`, stage B) with ONLY the advection swapped to the upwind scheme
+      nml = cice_ice_nml("cice_ice_fold", "pred_corr", nprocs, 1)
+      call read_config_from_string(nml, cfg, ierr=ierr)
+      if (ierr == OCEAN_STATUS_OK) call validate_config(cfg, ierr)
+      if (ierr /= OCEAN_STATUS_OK) then
+         write (*, '(a,i0)') "FAIL cice fence: the accepted tripolar twin is refused, rank ", rank
+         n_fail = n_fail + 1
+         return
+      end if
+      call replace_once(nml, "advection = 'remap'", "advection = 'upwind'")
+      call read_config_from_string(nml, cfg, ierr=ierr)
+      if (ierr == OCEAN_STATUS_OK) call validate_config(cfg, ierr)
+      if (ierr == OCEAN_STATUS_OK) then
+         write (*, '(a,i0)') "FAIL cice fence: the upwind advection across the fold was ACCEPTED on several ranks, rank ", rank
+         n_fail = n_fail + 1
+      else if (rank == 0) then
+         write (*, '(a)') "case cice fence: upwind across the fold refused on several ranks (ok)"
+      end if
+   end subroutine check_cice_fences
+
+   subroutine check_cice_ledger_unset_grid()
+      !! The ledger with NO `&mpi_nml` (px = py = 1 for `validate_config`, auto-factored by the engine on N ranks) is
+      !! accepted by `engine_setup` on the actual rank count and comes up active.
+      type(config_t) :: cfg
+      type(ocean_engine_t) :: engine
+      character(len=:), allocatable :: nml
+      integer :: ierr
+
+      nml = cice_ice_nml("cice_ice", "pred_corr", 1, 1)
+      call replace_once(nml, "hfreeze = 10.0, dynamics", "hfreeze = 10.0, ledger = .true., dynamics")
+      call read_config_from_string(nml, cfg, ierr=ierr)
+      if (ierr == OCEAN_STATUS_OK) call validate_config(cfg, ierr)
+      if (ierr /= OCEAN_STATUS_OK) then
+         write (*, '(a,i0)') "FAIL cice fence: validate_config refused the unset-grid ledger namelist, rank ", rank
+         n_fail = n_fail + 1
+         return
+      end if
+      call error_ring_clear()
+      call engine_setup(engine, cfg, ierr, compute_rank=rank, compute_size=nprocs)
+      if (ierr /= OCEAN_STATUS_OK) then
+         write (*, '(a,i0)') "FAIL cice fence: ledger with an unset process grid was REFUSED on several ranks, rank ", rank
+         n_fail = n_fail + 1
+      else if (.not. engine%state%icec%ledger%on) then
+         write (*, '(a,i0)') "FAIL cice fence: the ledger is not active after setup, rank ", rank
+         n_fail = n_fail + 1
+         call engine_teardown(engine)
+      else
+         if (rank == 0) write (*, '(a)') "case cice fence: ledger with an unset process grid accepted by engine_setup (ok)"
+         call engine_teardown(engine)
+      end if
+   end subroutine check_cice_ledger_unset_grid
 
    subroutine check_single_rank_fences()
       !! The single-rank features must be REFUSED at configure on more than
@@ -3223,12 +4428,63 @@ contains
       ierr = nf90_put_var(ncid, v1, tt)
       call rdb_put_var_1d(ncid, v2, [0.0_wp, 172800.0_wp])
       call nc_close(ncid)
+      call write_runoff_files()
       call write_atm_file(ATM_WARM, ATM_WARM_LIST, 288.0_wp, 4.0e-3_wp, 72, 36)
       call write_atm_file(ATM_COLD, ATM_COLD_LIST, 255.0_wp, 6.0e-4_wp, 72, 36)
       ! 30 x 10 degree source for the tripolar cap (see the bulk_flux_fold case).
       call write_atm_file(ATM_CRSE, ATM_CRSE_LIST, 288.0_wp, 4.0e-3_wp, 12, 18)
       call write_atm_file(ATM_CRSE_COLD, ATM_CRSE_COLD_LIST, 255.0_wp, 6.0e-4_wp, 12, 18)
    end subroutine write_input_files
+
+   subroutine write_runoff_file(path, nx, ny, pts, nfrozen)
+      !! One static (two identical records) model-grid runoff file with `lrunoff` and `frunoff`:
+      !! `pts(:, 1:2)` are the physical cell indices of the point sources, the first `nfrozen` of
+      !! them frozen (`frunoff`), the others liquid.  Rates differ per point; zero elsewhere.
+      character(len=*), intent(in) :: path
+      integer, intent(in) :: nx, ny, nfrozen, pts(:, :)
+      real(wp), allocatable :: lr(:, :, :), fr(:, :, :)
+      integer :: ncid, dx_, dy_, dt_, v1, v2, v3, ierr, k
+
+      allocate (lr(nx, ny, 2), fr(nx, ny, 2))
+      lr = 0.0_wp
+      fr = 0.0_wp
+      do k = 1, size(pts, 1)
+         if (k <= nfrozen) then
+            fr(pts(k, 1), pts(k, 2), :) = 2.0e-3_wp*(1.0_wp + 0.25_wp*real(k, wp))
+         else
+            lr(pts(k, 1), pts(k, 2), :) = 3.0e-3_wp*(1.0_wp + 0.5_wp*real(k, wp))
+         end if
+      end do
+      call nc_create_file(path, ncid)
+      call nc_def_dim(ncid, "x", nx, dx_)
+      call nc_def_dim(ncid, "y", ny, dy_)
+      call nc_def_dim(ncid, "time", 2, dt_)
+      call nc_def_var_3d(ncid, "lrunoff", [dx_, dy_, dt_], v1)
+      call nc_def_var_3d(ncid, "frunoff", [dx_, dy_, dt_], v2)
+      call rdb_def_var_1d(ncid, "time", dt_, v3)
+      call nc_enddef(ncid)
+      ierr = nf90_put_var(ncid, v1, lr)
+      ierr = nf90_put_var(ncid, v2, fr)
+      call rdb_put_var_1d(ncid, v3, [0.0_wp, 1.0e9_wp])
+      call nc_close(ncid)
+   end subroutine write_runoff_file
+
+   subroutine write_runoff_files()
+      !! The `runoff_mass` / `runoff_mass_fold` inputs.  Basin (26 x 18, island in the middle): frozen
+      !! at (14,3) (a seam cell of every x split) and (4,10); liquid at (13,3), (7,3), (8,3), (4,9) and
+      !! (20,16) -- both sides of the x seams (np 2: 13|14, np 4: 7|8) and of the y seam (9|10), on
+      !! wet cells only.  Fold (30 x 24, fold row j = 24, mirror of column i is 31 - i): frozen at
+      !! (16,24) (the mirror partner of the liquid (15,24), and the x seam of np 2 is 15|16) and
+      !! (12,23); liquid at (15,24), (17,12), (8,12) and (9,12) (np 4: 8|9 seam).
+      integer, parameter :: PB(7, 2) = reshape([14, 4, 13, 7, 8, 20, 4, 3, 10, 3, 3, 3, 16, 9], [7, 2])
+      integer, parameter :: PF(6, 2) = reshape([16, 12, 15, 17, 8, 9, 24, 23, 24, 12, 12, 12], [6, 2])
+      ! `runoff_river_fold`: PF plus liquid points on the periodic west/east wrap, (2,12) and (29,10) (within `nghost` of the wrap).
+      integer, parameter :: PFW(8, 2) = reshape([16, 12, 15, 17, 8, 9, 2, 29, 24, 23, 24, 12, 12, 12, 12, 10], [8, 2])
+
+      call write_runoff_file(RUNOFF_BASIN, NX_G, NY_G, PB, 2)
+      call write_runoff_file(RUNOFF_FOLD, 30, 24, PF, 2)
+      call write_runoff_file(RUNOFF_FOLD_W, 30, 24, PFW, 2)
+   end subroutine write_runoff_files
 
    subroutine write_atm_file(path, listname, tas0, huss0, nlon, nlat)
       !! One global lon-lat file (5 degrees, NT three-hourly records stamped at

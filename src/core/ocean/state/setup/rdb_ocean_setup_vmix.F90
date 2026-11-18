@@ -7,6 +7,7 @@ submodule(rdb_ocean_setup) rdb_ocean_setup_vmix
 #endif
    use rdb_ocean_tidal_mixing, only: tidal_mixing_fold_static_fields
    use rdb_ocean_status, only: OCEAN_STATUS_ERR_IO
+   use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
    implicit none
 
 contains
@@ -569,7 +570,18 @@ contains
          ! passed (P0.1 review F9 — `configure_ocean_porous` is the
          ! pattern): setting it up front left a half-configured slot
          ! flagged enabled on any of this routine's many failure returns.
+         if (.not. ieee_is_finite(ecfg%rivermix_depth) .or. ecfg%rivermix_depth < 0.0_wp) then
+            call fail("ocean_epbl_nml: rivermix_depth must be finite and >= 0 (got "// &
+                      to_string(ecfg%rivermix_depth)//")", ierr, OCEAN_STATUS_ERR_SETUP)
+            return
+         end if
          if (.not. ecfg%enable) then
+            if (ecfg%rivermix_depth > 0.0_wp) then
+               call fail("ocean_epbl_nml: rivermix_depth > 0 requires enable=.true. "// &
+                         "(river mixing is energy handed to EPBL; KPP has no such term)", &
+                         ierr, OCEAN_STATUS_ERR_SETUP)
+               return
+            end if
             epbl%enable = .false.
             if (present(ierr)) ierr = OCEAN_STATUS_OK
             return
@@ -605,6 +617,18 @@ contains
          epbl%rh18_cs1 = ecfg%rh18_cs1
          epbl%rh18_cs2 = ecfg%rh18_cs2
          epbl%nstar = ecfg%nstar
+         epbl%rivermix_depth = ecfg%rivermix_depth
+         if (ecfg%rivermix_depth > 0.0_wp) then
+            ! River mixing is driven by the runoff mass flux; with no runoff source it would
+            ! be silently inert.  `ocean_data_forcing_configure` has already run.
+            if (ocean_state%data_forcing%id_lrunoff <= 0 .and. ocean_state%data_forcing%id_frunoff <= 0) then
+               call fail("ocean_epbl_nml: rivermix_depth > 0 needs a runoff source "// &
+                         "(&ocean_dataovr_nml lrunoff and/or frunoff file); without one the "// &
+                         "term would be silently inert", ierr, OCEAN_STATUS_ERR_SETUP)
+               return
+            end if
+            ocean_state%surface_flux%river_runoff_on = .true.
+         end if
          epbl%tke_decay = ecfg%tke_decay
          epbl%wstar_ustar_coef = ecfg%wstar_ustar_coef
          epbl%vstar_scale_fac = ecfg%vstar_scale_fac
@@ -711,6 +735,7 @@ contains
             call logger%info("EPBL:             mstar="//trim(ecfg%mstar_scheme)// &
                              "  nstar="//to_string(ecfg%nstar)// &
                              "  tke_decay="//to_string(ecfg%tke_decay)// &
+                             "  rivermix_depth="//to_string(ecfg%rivermix_depth)// &
                              "  vstar="//trim(ecfg%vel_scale_scheme)// &
                              "  combine="//trim(ecfg%combine))
          end if

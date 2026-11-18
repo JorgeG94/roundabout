@@ -101,4 +101,4 @@ Contributions are welcome. Please follow the conventions documented in [`FORTRAN
 
 ## License
 
-See [`LICENSE`](https://github.com/JorgeG94/roundabout/blob/main/LICENSE) in the source tree.
+See [`LICENSE`](https://github.com/JorgeG94/roundabout/blob/main/LICENSE) in the source tree. Code ported from MOM6 and SIS2 (Apache-2.0) and from CICE/Icepack (BSD-3-Clause, CICE Consortium) is covered by [`NOTICE`](https://github.com/JorgeG94/roundabout/blob/main/NOTICE), which must accompany any redistribution of the source or the rendered docs; the licence texts are in [`LICENSES/`](https://github.com/JorgeG94/roundabout/tree/main/LICENSES).

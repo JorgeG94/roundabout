@@ -411,6 +411,9 @@ Atmospheric surface-pressure loading / inverse barometer (PR-17).
 |------|---------|-------|-------------|
 | `enable` | `.false.` |  | Master switch (split-solver only; requires &ocean_forcing_nml enable_components=.true.) |
 | `in_eos` | `.false.` |  | Also feed the surface load to the equation of state as the top-of-column pressure p_top (requires enable=.true.; refused with the unported pressure builders) |
+| `ice_load` | `.false.` |  | Sea-ice + snow mass loading: p_surf = p_surf_const + g*(rho_i*vice + rho_s*vsno) (CICE-port ice only; REQUIRED by freshwater='mass' with sea ice, refused without it; requires enable=.true.) |
+| `atm_load` | `.false.` |  | Add the bulk forcing's sea-level pressure (p_surf_atm = psl) to p_surf: the atmosphere's inverse barometer, seam ghosts exchanged every step (requires enable=.true. and &ocean_bulk_flux_nml enable). Off: p_surf stays the p_surf_const seed |
+| `ice_load_balance_ic` | `.true.` |  | Cold start with ice_load: lower the initial sea surface under the ice by (rho_i*vice+rho_s*vsno)/rho_0 so the start is in balance with the load (never on a warm restart) |
 | `p_surf_const` | `0.0000000000E+00` |  | Uniform atmospheric surface pressure (Pa) seeded into p_surf_atm (uniform => provably inert) |
 
 ### &ocean_cavity_dyn_nml
@@ -475,6 +478,7 @@ RH18 energetics-based planetary boundary layer.
 | `rh18_cs1` | `0.2000000000E+00` |  | RH18 mstar fit coefficient cs1 |
 | `rh18_cs2` | `0.4000000000E+00` |  | RH18 mstar fit coefficient cs2 |
 | `nstar` | `0.2000000000E+00` |  | Convective PE -> TKE efficiency |
+| `rivermix_depth` | `0.0000000000E+00` |  | River-mixing depth (m); 0 = off |
 | `tke_decay` | `0.2500000000E+01` |  | Ekman-depth / TKE-decay-scale ratio |
 | `wstar_ustar_coef` | `0.1000000000E+01` |  | Convective weight in the velocity scale |
 | `vel_scale_scheme` | `"cube_root"` |  | Velocity-scale scheme |
@@ -600,6 +604,8 @@ Surface-flux component-set gate (PR-12): allocate the q_sw/evap/heat_content_*/.
 | Knob | Default | Units | Description |
 |------|---------|-------|-------------|
 | `enable_components` | `.false.` |  | Allocate the surface-flux component set and run the assembler (default off => byte-identical) |
+| `freshwater` | `"none"` |  | Surface fresh-water mass fluxes (lprec/fprec/evap/lrunoff/frunoff): 'none' (default, enthalpy only), 'virtual' (virtual salt flux -S_surf*F, fixed column mass; needs enable_components) or 'mass' (real volume with the evaporation pass-down; open-ocean fluxes, needs enable_components) |
+| `fw_evap_cfl_limit` | `0.8000000000E+00` |  | freshwater='mass': largest fraction of a live layer one evaporative withdrawal may take, range (0,1) (OM3/MOM6 EVAP_CFL_LIMIT); the unmet remainder is passed down the column |
 
 ### &ocean_ice_nml
 
@@ -619,6 +625,8 @@ Sea-ice model (SIS2 port) master switch + category/layer counts.
 | `frazil_column` | `.false.` |  | Full-column frazil sweep with rising carry instead of the surface-only clamp (OM3 FRAZIL; default off => byte-identical) |
 | `pressure_dependent_frazil` | `.false.` |  | Freezing point at layer-centre hydrostatic pressure (OM3 PRESSURE_DEPENDENT_FRAZIL; needs frazil_column) |
 | `reclaim_frazil` | `.true.` |  | Spend the standing frazil bank on a warm surface layer (OM3 RECLAIM_FRAZIL; default true, used only with frazil_column) |
+| `ledger` | `.false.` |  | scheme='cice': run the named-term ice conservation ledger every step and print its residual line at the console cadence (default off => bit-identical) |
+| `hfreeze` | `-0.1000000000E+01` | m | Depth cap of the melt-potential (frzmlt) integral, capped by the boundary-layer depth where KPP/EPBL provide one; -1 = off (OM3 HFREEZE = 10) |
 | `bound_salinity` | `.false.` |  | Floor top-layer salinity at min_salinity after the ice salt exchange (OM3 BOUND_SALINITY; non-conservative; default off) |
 | `min_salinity` | `0.0000000000E+00` | g/kg | Salinity floor for bound_salinity (OM3 MIN_SALINITY) |
 | `transport` | `.false.` |  | Enable horizontal category ice/snow transport (default off => byte-identical) |
@@ -626,8 +634,8 @@ Sea-ice model (SIS2 port) master switch + category/layer counts.
 | `roll_factor` | `0.1000000000E+01` |  | Thin-ice rolling floor factor (SIS2 SEA_ICE_ROLL_FACTOR); 0 disables rolling |
 | `dynamics` | `.false.` |  | Enable C-grid EVP ice dynamics (default off => byte-identical) |
 | `a_face_stress` | `.false.` |  | Weight EVP wind stress + ice-ocean drag by face ice concentration (momentum-conserving; default off => byte-identical) |
-| `p0` | `0.2750000000E+05` | Pa | Ice-strength pressure constant (SIS2 ICE_STRENGTH_PSTAR) |
-| `c0` | `0.2000000000E+02` |  | Ice-strength exponent constant (SIS2 ICE_STRENGTH_CSTAR) |
+| `p0` | `0.2750000000E+05` | Pa | Ice-strength pressure constant (SIS2 ICE_STRENGTH_PSTAR); read by dyn_scheme=sis2_c only (dyn_scheme=cice_c reads Pstar of &ocean_ice_ridge_nml) |
+| `c0` | `0.2000000000E+02` |  | Ice-strength exponent constant (SIS2 ICE_STRENGTH_CSTAR); read by dyn_scheme=sis2_c only (dyn_scheme=cice_c reads Cstar of &ocean_ice_ridge_nml) |
 | `ec` | `0.2000000000E+01` |  | Yield-curve axis ratio (SIS2 ICE_YIELD_ELLIPTICITY); 0 = cavitating fluid |
 | `cdw` | `0.3240000000E-02` |  | Ice-ocean drag coefficient (SIS2 ICE_CDRAG_WATER) |
 | `rho_ocean` | `0.1030000000E+04` | kg/m^3 | Ice-drag reference density (SIS2 RHO_OCEAN) |
@@ -637,6 +645,120 @@ Sea-ice model (SIS2 port) master switch + category/layer counts.
 | `cfl_trunc` | `0.0000000000E+00` |  | Transport-CFL ceiling on the final ice velocity (SIS2 CFL_TRUNCATE, default 0.5 there); 0 disables |
 | `cfl_trunc_dyn_its` | `.false.` |  | Also clip the ice velocity every EVP subcycle (SIS2 CFL_TRUNC_DYN_ITS) |
 | `project_ci` | `.false.` |  | Project ice concentration forward within the EVP subcycle loop and recompute the ice strength (SIS2 PROJECT_ICE_CONCENTRATION) |
+| `scheme` | `"sis2"` |  | Ice model: 'sis2' (default) or 'cice' (CICE6/Icepack port, single rank; see docs/CAPABILITIES_AND_LIMITATIONS.md) |
+| `nilyr` | `7` |  | scheme='cice': ice layers per category (upstream 7; OM3 4) |
+| `nslyr` | `1` |  | scheme='cice': snow layers per category (only 1 supported) |
+| `kcatbound` | `1` |  | scheme='cice': category-bound formula 0..3 (upstream 1; OM3 0) |
+| `constants_set` | `"icepack"` |  | scheme='cice': physical-constants table: 'icepack' (upstream) or 'cesm' (CESM-coupled override set) |
+| `dt_ice` | `-0.1000000000E+01` | s | scheme='cice': ice time step; <= 0 is the outer ocean step, a positive value must equal &time_nml dt_fixed (refused otherwise) |
+
+### &ocean_ice_thermo_nml
+
+CICE-port ice thermodynamics and thickness-distribution knobs (scheme='cice'; upstream CICE defaults).
+
+| Knob | Default | Units | Description |
+|------|---------|-------|-------------|
+| `ktherm` | `1` |  | Thermodynamics: 1 = Bitz-Lipscomb 1999 (2 = mushy is refused) |
+| `conduct` | `"bubbly"` |  | Ice conductivity: bubbly (Pringle 2007) or MU71 |
+| `tfrz_option` | `"linear_salt"` |  | Ice-side sea freezing point (default linear_salt is OM3's value, NOT upstream's mushy; mushy is refused) |
+| `ice_ref_salinity` | `0.4000000000E+01` | ppt | Salt-flux reference salinity (OM3 5.0) |
+| `saltflux_option` | `"constant"` |  | Salt flux: constant (prognostic is refused) |
+| `congel_freeze` | `"two-step"` |  | Congelation freezing: two-step or one-step |
+| `cpl_frazil` | `"fresh_ice_correction"` |  | Frazil coupling (only fresh_ice_correction is supported) |
+| `update_ocn_f` | `.false.` |  | Frazil fresh water/salt fluxes to the ocean (OM3 .true.) |
+| `hfrazilmin` | `0.5000000000E-01` | m | Minimum new-frazil thickness |
+| `hi_min` | `0.1000000000E-01` | m | Minimum ice thickness for thermodynamics |
+| `ustar_min` | `0.5000000000E-02` | m/s | Friction-velocity floor (OM3 5e-4) |
+| `fbot_xfer_type` | `"constant"` |  | Basal heat-transfer coefficient: constant (Cdn_ocn is refused) |
+| `floediam` | `0.3000000000E+03` | m | Floe diameter for lateral melt (Steele 1992); must be > 0 |
+| `floeshape` | `0.6600000000E+00` |  | Floe shape factor for lateral melt (Steele 1992); must be > 0 |
+| `ksno` | `0.3000000000E+00` | W/m/K | Snow thermal conductivity |
+| `emissivity` | `0.9850000000E+00` |  | Surface emissivity (OM3 0.95) |
+| `kitd` | `1` |  | ITD conversion: 1 = linear remap (0 = delta function is refused) |
+| `calc_Tsfc` | `.true.` |  | Solve for the surface temperature (.false. is refused) |
+| `semi_implicit_Tsfc` | `.false.` |  | Semi-implicit surface temperature coupling (.true. is refused) |
+
+### &ocean_ice_sw_nml
+
+CICE-port ice shortwave knobs of the CCSM3 scheme (Briegleb et al. 2004; scheme='cice'; upstream CICE defaults).
+
+| Knob | Default | Units | Description |
+|------|---------|-------|-------------|
+| `shortwave` | `"ccsm3"` |  | Shortwave scheme: ccsm3 (Briegleb et al. 2004); the delta-Eddington options are refused (not ported) |
+| `albedo_type` | `"ccsm3"` |  | Albedo parameterisation: ccsm3 (Briegleb et al. 2004); constant is refused (not ported) |
+| `albicev` | `0.7800000000E+00` |  | Visible albedo of cold thick bare ice, in [0, 1] (OM3 0.86) |
+| `albicei` | `0.3600000000E+00` |  | Near-infrared albedo of cold thick bare ice, in [0, 1] (OM3 0.44) |
+| `albsnowv` | `0.9800000000E+00` |  | Visible albedo of cold snow, in [0, 1] |
+| `albsnowi` | `0.7000000000E+00` |  | Near-infrared albedo of cold snow, in [0, 1] |
+| `ahmax` | `0.3000000000E+00` | m | Thickness above which the ice albedo is constant (OM3 0.1); must be > 0 |
+| `snowpatch` | `-0.1000000000E+01` | m | Snow-cover patchiness length; negative follows constants_set (0.02 icepack, 0.005 cesm) |
+| `sw_redist` | `.false.` |  | Move shortwave absorbed in a near-melting layer to the surface (OM3 .true.) |
+| `sw_frac` | `0.9000000000E+00` |  | Fraction of the internal shortwave sw_redist moves to the surface; must be in (0, 1] |
+| `sw_dtemp` | `0.2000000000E-01` | K | sw_redist temperature offset from melting; must be >= 0 |
+| `sw_vis_frac` | `0.5200000000E+00` |  | Visible fraction of the broadband downwelling shortwave in a forced run (near-IR is the complement); must be in [0, 1] |
+
+### &ocean_ice_ridge_nml
+
+CICE-port ridging and ice-strength knobs (scheme='cice'; upstream CICE defaults, which OM3 also uses).
+
+| Knob | Default | Units | Description |
+|------|---------|-------|-------------|
+| `kstrength` | `1` |  | Ice strength: 1 = Rothrock (1975), 0 = Hibler (1979); other values are refused |
+| `krdg_partic` | `1` |  | Ridge participation: 1 = Lipscomb et al. (2007), 0 = Thorndike et al. (1975); other values are refused |
+| `krdg_redist` | `1` |  | Ridge redistribution: 1 = exponential (Lipscomb et al. 2007), 0 = Hibler (1980); other values are refused |
+| `mu_rdg` | `0.3000000000E+01` | m^0.5 | E-folding scale of ridged ice for krdg_redist=1 (Lipscomb et al. 2007); must be > 0 |
+| `Cf` | `0.1700000000E+02` |  | Ratio of ridging work to potential-energy change (Flato and Hibler 1995); must be > 0 |
+| `Pstar` | `0.2750000000E+05` | N/m | Hibler (1979) strength constant, kstrength=0; must be > 0.  Read by &ocean_ice_dyn_nml dyn_scheme=cice_c (the sis2_c core reads p0 of &ocean_ice_nml) |
+| `Cstar` | `0.2000000000E+02` |  | Hibler (1979) concentration constant, kstrength=0; must be > 0.  Read by &ocean_ice_dyn_nml dyn_scheme=cice_c (the sis2_c core reads c0 of &ocean_ice_nml) |
+
+### &ocean_ice_atm_nml
+
+CICE-port atmosphere-ice boundary-layer knobs (scheme='cice'; upstream CICE defaults).
+
+| Knob | Default | Units | Description |
+|------|---------|-------|-------------|
+| `highfreq` | `.false.` |  | Relative-wind (ice-velocity) stress with a 0.5 m/s floor (OM3 .true.) |
+| `natmiter` | `5` |  | Monin-Obukhov iterations (Jordan et al. 1999); must be >= 0 |
+| `atmiter_conv` | `0.0000000000E+00` |  | Relative change in ustar that stops the iteration; must be >= 0 |
+| `iceruf` | `0.5000000000E-03` | m | Ice surface roughness for the neutral drag; must be > 0 and below zref = 10 m (checked at configure); the forcing reference heights must also exceed it (checked at run time by the forcing input PR, not at configure) |
+| `atmbndy` | `"similarity"` |  | Boundary-layer form: similarity (constant and mixed are refused) |
+| `formdrag` | `.false.` |  | Form drag (.true. is refused) |
+| `calc_strair` | `.true.` |  | Compute the wind stress in the ice model (.false. is refused) |
+| `uni_tas` | `0.2631500000E+03` | K | Uniform-atmosphere air temperature, used when &ocean_atm_forcing_nml enable is off |
+| `uni_uas` | `0.0000000000E+00` | m/s | Uniform-atmosphere eastward wind (earth-relative) |
+| `uni_vas` | `0.0000000000E+00` | m/s | Uniform-atmosphere northward wind |
+| `uni_psl` | `0.1013250000E+06` | Pa | Uniform-atmosphere sea-level pressure; must be > 0 |
+| `uni_huss` | `0.1000000000E-02` | kg/kg | Uniform-atmosphere specific humidity |
+| `uni_rlds` | `0.2000000000E+03` | W/m2 | Uniform-atmosphere downward longwave |
+
+### &ocean_ice_dyn_nml
+
+CICE-port ice dynamics and transport knobs (upstream CICE code defaults; the EVP keys act under dyn_scheme='cice_c' (the C-grid EVP core on the SIS2-derived ice state); illegal EVP values are collected by the configure-time check, not rejected by the parser).
+
+| Knob | Default | Units | Description |
+|------|---------|-------|-------------|
+| `dyn_scheme` | `"sis2_c"` |  | Ice dynamics core: sis2_c = the SIS2 C-grid EVP (default, unchanged), cice_c = the CICE6 C-grid EVP (Lemieux et al. 2024) coupled to the ocean through the sea-surface tilt and the ocean surface current; needs &ocean_ice_nml enable and dynamics, nghost >= 3; runs on any rank count, a tripolar north fold included (px > 1 too) |
+| `ndte` | `120` |  | Elastic subcycles per dynamics step; must be >= 1 |
+| `elasticDamp` | `0.3600000000E+00` |  | Damping parameter E of the classic EVP (Hunke 2001, arlx = 2 E ndte); must be > 0 |
+| `revised_evp` | `.false.` |  | Revised EVP (Bouillon et al. 2013): arlx and brlx apply |
+| `arlx` | `0.3000000000E+03` |  | Revised EVP stress relaxation parameter alpha; must be > 0 when revised_evp |
+| `brlx` | `0.3000000000E+03` |  | Revised EVP momentum relaxation parameter beta; must be > 0 when revised_evp |
+| `e_yieldcurve` | `0.2000000000E+01` |  | Aspect ratio of the elliptical yield curve; must be > 0 |
+| `e_plasticpot` | `0.2000000000E+01` |  | Aspect ratio of the elliptical plastic potential; must be > 0 |
+| `Ktens` | `0.0000000000E+00` |  | Tensile strength fraction, T = Ktens P (Konig Beatty and Holland 2010); must be in [0, 1) |
+| `deltaminEVP` | `0.1000000000E-10` | 1/s | Minimum Delta of the viscosities (Hunke 2001); must be > 0 |
+| `capping_method` | `"max"` |  | Viscosity capping: max (Hibler 1979) or sum (Kreyscher et al. 2000); other values are refused |
+| `dyn_area_min` | `0.1000000000E-10` |  | Minimum concentration for the dynamics; must be >= 0 |
+| `dyn_mass_min` | `0.1000000000E-09` | kg/m^2 | Minimum mass for the dynamics; must be >= 0 |
+| `rheo_area_min` | `0.1000000000E-02` |  | Concentration below which the internal stress is dropped (free_drift_approx); must be >= 0 |
+| `free_drift_approx` | `.true.` |  | Drop the internal stress below rheo_area_min |
+| `visc_method` | `"avg_zeta"` |  | Corner shear viscosity: avg_zeta (mean of the T viscosities) or avg_strength (rebuilt from the mean strength); other values are refused |
+| `cdn_ocn` | `0.5360000000E-02` |  | Ice-ocean drag coefficient (upstream dragio); must be >= 0 |
+| `vel_cap` | `0.1000000000E+02` | m/s | Face speed above which the velocity guard raises ICE_ERR_DYN_VEL (never clamps); must be > 0 |
+| `advection` | `"remap"` |  | Horizontal transport: remap = incremental remapping (Lipscomb and Hunke 2004; upstream default), upwind = first-order upwind |
+| `transport_check` | `.false.` |  | Run the transport checks (non-finite entry, negative area, CFL, conservation of area and tracers, monotonicity) |
+| `transport_buffer_mib` | `1024` |  | advection='remap': memory budget [MiB] of the flux and reconstruction buffers of one category batch (bigger = fewer launches); at least one category index per batch whatever the budget; must be >= 1 |
+| `ndtd` | `1` |  | Dynamics substeps per ice step; only 1 is supported (refused otherwise) |
 
 ### &ocean_ice_ic_nml
 
@@ -1113,6 +1235,14 @@ File-backed surface forcing (PR-15): wind stress, heat, freshwater.
 | `salt_var` | `""` |  | Variable name inside salt_file (required when it is set) |
 | `salt_scale` | `0.1000000000E+01` | kg m-2 s-1 | Multiplier applied to the surface salt flux (positive salinifies) slab at read |
 | `salt_add` | `0.0000000000E+00` | kg m-2 s-1 | Offset added to the surface salt flux (positive salinifies) slab after scale |
+| `lrunoff_file` | `""` |  | Path to the liquid runoff mass flux (>= 0, on wet cells only) NetCDF (blank ⇒ tag not file-driven) |
+| `lrunoff_var` | `""` |  | Variable name inside lrunoff_file (required when it is set) |
+| `lrunoff_scale` | `0.1000000000E+01` | kg m-2 s-1 | Multiplier applied to the liquid runoff mass flux (>= 0, on wet cells only) slab at read |
+| `lrunoff_add` | `0.0000000000E+00` | kg m-2 s-1 | Offset added to the liquid runoff mass flux (>= 0, on wet cells only) slab after scale |
+| `frunoff_file` | `""` |  | Path to the frozen runoff / calving mass flux (>= 0, on wet cells only) NetCDF (blank ⇒ tag not file-driven) |
+| `frunoff_var` | `""` |  | Variable name inside frunoff_file (required when it is set) |
+| `frunoff_scale` | `0.1000000000E+01` | kg m-2 s-1 | Multiplier applied to the frozen runoff / calving mass flux (>= 0, on wet cells only) slab at read |
+| `frunoff_add` | `0.0000000000E+00` | kg m-2 s-1 | Offset added to the frozen runoff / calving mass flux (>= 0, on wet cells only) slab after scale |
 
 ### &ocean_atm_forcing_nml
 

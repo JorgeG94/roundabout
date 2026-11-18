@@ -1,0 +1,631 @@
+!! Sea-ice (CICE port) configuration glue: the configure-time refusals and the
+!! translation of the namelist into the device-friendly `ice_params_t`.
+!!
+!! This module needs the config types, so it lives in the MAIN library, not in
+!! `rdb_ice_core_objs` (the ice core depends on the shared infrastructure only).
+!! The namelist groups are `&ocean_ice_nml` (structure: `scheme`, `nilyr`,
+!! `nslyr`, `kcatbound`, `constants_set`), `&ocean_ice_thermo_nml` (thermo,
+!! ITD and floe-geometry knobs), `&ocean_ice_sw_nml` (albedo parameters),
+!! `&ocean_ice_ridge_nml` (ridging and strength), `&ocean_ice_dyn_nml` (C-grid
+!! EVP dynamics keys, `dyn_scheme` ("sis2_c" | "cice_c": which C-grid core runs under
+!! `scheme="sis2"`), and the transport keys `advection` ("remap" | "upwind", both
+!! runnable) and `transport_check`) and
+!! `&ocean_ice_atm_nml`
+!! (atmosphere-ice boundary layer; the option keys the port supports one value
+!! of are refused here with a message naming the value); every default is the
+!! upstream CICE code default EXCEPT `tfrz_option = "linear_salt"` (upstream's
+!! code default is `mushy`, which is out of scope and refused; linear_salt is
+!! OM3's value).  Every new knob is registered DEAD until the PR that consumes
+!! it wires it (only `scheme` is live: it drives a refusal).
+!!
+!! **Refusals.**  `ice_config_check` collects every reason a configuration is
+!! not supported (all of them, not just the first); `ice_config_validate`
+!! logs them for `validate_config`, so each one is reported by
+!! `./rdb --validate-only`.  Value-level checks (an unsupported thermodynamics
+!! option, a non-positive `ahmax`) apply under either scheme; structure checks
+!! (layer and category counts, `hlim`) apply under `scheme="cice"`.
+!! `scheme="cice"` is runnable, on any rank count on walls and periodic edges, on the envelope the checks
+!! above spell out; the tripolar fold (remap advection) and the named-term ledger run on several ranks; across the fold the upwind
+!! advection stays refused.
+module rdb_ice_config
+   use, intrinsic :: ieee_arithmetic, only: ieee_is_finite
+   use rdb_constants, only: wp
+   use rdb_config, only: config_t, ocean_ice_atm_config_t
+   use rdb_ice_dims, only: ICE_NCAT_MAX, ICE_NILYR_MAX
+   use rdb_ice_params, only: ICE_ADVECT_UPWIND, ICE_ADVECT_REMAP, &
+                             ice_params_t, ice_params_default, ice_constants, ice_constants_t, &
+                             ice_atm_params_finalize, ice_ridge_params_t, ice_ridge_params_default, &
+                             ice_ridge_params_valid, ice_dyn_params_t, ice_dyn_params_default, &
+                             ice_dyn_params_check, ICE_DYN_NMSG, ICE_VISC_AVG_ZETA, ICE_VISC_AVG_STRENGTH, &
+                             ICE_CONSTANTS_ICEPACK, ICE_CONSTANTS_CESM, &
+                             ICE_TFRZ_LINEAR_SALT, ICE_TFRZ_CONSTANT, ICE_TFRZ_MINUS1P8, &
+                             ICE_CONDUCT_BUBBLY, ICE_CONDUCT_MU71
+   use pic_logger, only: logger => global_logger
+   implicit none
+   private
+
+   public :: ice_params_from_config, ice_config_check, ice_config_validate, ice_dyn_params_from_config
+   public :: ice_scheme_is_cice, ice_constants_set_from_name
+   public :: ICE_CONFIG_MSG_LEN, ICE_CONFIG_MAX_MSGS
+
+   integer, parameter :: ICE_CONFIG_MSG_LEN = 240
+      !! Length of one refusal message.
+   integer, parameter :: ICE_CONFIG_MAX_MSGS = 72
+      !! Capacity of the refusal list (more than every check can raise).
+
+contains
+
+   pure function ice_scheme_is_cice(cfg) result(is_cice)
+      !! `&ocean_ice_nml scheme = "cice"`.
+      type(config_t), intent(in) :: cfg
+      logical :: is_cice
+      is_cice = trim(adjustl(cfg%ocean%ice%scheme)) == "cice"
+   end function ice_scheme_is_cice
+
+   pure function ice_constants_set_from_name(name) result(set)
+      !! `ICE_CONSTANTS_*` for a `constants_set` spelling; the upstream set
+      !! for anything unrecognised (the check reports it).
+      character(len=*), intent(in) :: name
+      integer :: set
+      select case (trim(adjustl(name)))
+      case ("cesm")
+         set = ICE_CONSTANTS_CESM
+      case default
+         set = ICE_CONSTANTS_ICEPACK
+      end select
+   end function ice_constants_set_from_name
+
+   pure subroutine add_msg(msgs, n, text)
+      character(len=ICE_CONFIG_MSG_LEN), intent(inout) :: msgs(:)
+      integer, intent(inout) :: n
+      character(len=*), intent(in) :: text
+      if (n < size(msgs)) then
+         n = n + 1
+         msgs(n) = text
+      end if
+   end subroutine add_msg
+
+   pure subroutine ice_config_check(cfg, msgs, n)
+      !! Every refusal for `cfg`, in `msgs(1:n)` (empty list: accepted).
+      type(config_t), intent(in) :: cfg
+      character(len=ICE_CONFIG_MSG_LEN), intent(out) :: msgs(ICE_CONFIG_MAX_MSGS)
+      integer, intent(out) :: n
+      character(len=24) :: s
+      integer :: nilyr, nslyr, ncat, kcb
+      real(wp) :: zref
+      type(ice_ridge_params_t) :: rp
+      character(len=24) :: szref
+      type(ice_constants_t) :: cst
+      type(ice_dyn_params_t) :: dyp
+      integer :: dcodes(ICE_DYN_NMSG)
+      integer :: ndc, k
+
+      msgs = ""
+      n = 0
+
+      if (cfg%ocean%ice%ledger .and. .not. ice_scheme_is_cice(cfg)) then
+         call add_msg(msgs, n, "&ocean_ice_nml ledger = .true. needs scheme = 'cice' (the named-term ledger "// &
+                      "books the CICE-port stages; it would be silently inert under 'sis2')")
+      end if
+
+      ! ---- structure: scheme and the not-yet-runnable refusal ----
+      if (ice_scheme_is_cice(cfg)) then
+         nilyr = cfg%ocean%ice%nilyr
+         nslyr = cfg%ocean%ice%nslyr
+         ncat = cfg%ocean%ice%ncat
+         kcb = cfg%ocean%ice%kcatbound
+         if (nilyr < 2) then
+            call add_msg(msgs, n, "&ocean_ice_nml scheme='cice' requires nilyr >= 2 "// &
+                         "(a single ice layer is not supported)")
+         end if
+         if (nilyr > ICE_NILYR_MAX) then
+            write (s, "(i0)") ICE_NILYR_MAX
+            call add_msg(msgs, n, "&ocean_ice_nml nilyr exceeds the compile-time "// &
+                         "maximum ICE_NILYR_MAX="//trim(s))
+         end if
+         if (nslyr /= 1) then
+            call add_msg(msgs, n, "&ocean_ice_nml nslyr /= 1 is not supported "// &
+                         "(one snow layer only)")
+         end if
+         if (ncat < 2) then
+            call add_msg(msgs, n, "&ocean_ice_nml scheme='cice' requires ncat >= 2 "// &
+                         "(a single category is not supported)")
+         end if
+         if (ncat > ICE_NCAT_MAX) then
+            write (s, "(i0)") ICE_NCAT_MAX
+            call add_msg(msgs, n, "&ocean_ice_nml ncat exceeds the compile-time "// &
+                         "maximum ICE_NCAT_MAX="//trim(s))
+         end if
+         if (kcb < 0 .or. kcb > 3) then
+            call add_msg(msgs, n, "&ocean_ice_nml kcatbound must be 0..3 "// &
+                         "(-1 is the single-category formula and needs ncat=1, "// &
+                         "which is not supported)")
+         end if
+         if (kcb == 2 .and. (ncat < 5 .or. ncat > 7)) then
+            call add_msg(msgs, n, "&ocean_ice_nml kcatbound=2 (WMO classes) requires "// &
+                         "ncat of 5, 6 or 7")
+         end if
+         if (any(cfg%ocean%ice%hlim >= 0.0_wp)) then
+            call add_msg(msgs, n, "&ocean_ice_nml hlim is a scheme='sis2' knob; "// &
+                         "scheme='cice' takes its category bounds from kcatbound")
+         end if
+
+         ! ---- the step sequencer's envelope (rdb_ice_step_cice) ----
+         if (cfg%nghost < 3) then
+            call add_msg(msgs, n, "&grid_nml nghost >= 3 is required by scheme='cice' "// &
+                         "(the C-grid dynamics reads three ghost rings; an earlier plan "// &
+                         "text said 2, which is superseded)")
+         end if
+         if (cfg%ocean%ice_dyn%ndtd /= 1) then
+            call add_msg(msgs, n, "&ocean_ice_dyn_nml ndtd /= 1 is not supported "// &
+                         "(one dynamics step per ice step)")
+         end if
+         if (.not. ieee_is_finite(cfg%ocean%ice%dt_ice)) then
+            call add_msg(msgs, n, "&ocean_ice_nml dt_ice must be finite (<= 0 selects the outer step)")
+         else if (cfg%ocean%ice%dt_ice > 0.0_wp) then
+            if (.not. (abs(cfg%ocean%ice%dt_ice - cfg%dt_fixed) <= 1.0e-9_wp*cfg%dt_fixed)) then
+               call add_msg(msgs, n, "&ocean_ice_nml dt_ice must equal the outer step "// &
+                            "&time_nml dt_fixed (the ice step is the outer step under "// &
+                            "scheme='cice'; leave dt_ice unset)")
+            end if
+         end if
+
+         ! ---- the engine envelope of the first runnable version ----
+         if (.not. cfg%ocean%ice%enable) then
+            call add_msg(msgs, n, "&ocean_ice_nml scheme='cice' needs enable=.true. (the ice slot)")
+         end if
+         if (cfg%ocean%ice_dyn%transport_buffer_mib < 1) then
+            call add_msg(msgs, n, "&ocean_ice_dyn_nml transport_buffer_mib must be >= 1")
+         end if
+         if (trim(adjustl(cfg%ocean%bc%north)) == "tripolar_fold" .and. &
+             trim(adjustl(cfg%ocean%ice_dyn%advection)) == "upwind") then
+            call add_msg(msgs, n, "&ocean_ice_dyn_nml advection='upwind' across a tripolar north fold is not "// &
+                         "supported (its fold-row face flux is not paired; use advection='remap')")
+         end if
+         if (cfg%ocean%wetdry%enable) then
+            call add_msg(msgs, n, "&ocean_wetdry_nml enable=.true. is not supported by scheme='cice' "// &
+                         "(the ice masks are static)")
+         end if
+         if (cfg%ocean%cavity_dyn%enable) then
+            call add_msg(msgs, n, "&ocean_cavity_dyn_nml enable=.true. is not supported by "// &
+                         "scheme='cice' (no ice under an ice shelf)")
+         end if
+         if (.not. (edge_is_closed(cfg%ocean%bc%west) .and. edge_is_closed(cfg%ocean%bc%east) .and. &
+                    edge_is_closed(cfg%ocean%bc%south) .and. edge_is_closed(cfg%ocean%bc%north, fold_ok=.true.))) then
+            call add_msg(msgs, n, "&ocean_bc_nml scheme='cice' supports 'wall' or 'periodic' edges "// &
+                         "only (an open ocean boundary is land for the ice dynamics)")
+         end if
+         if (.not. cfg%ocean%thermo%enable_thermodynamics) then
+            call add_msg(msgs, n, "&ocean_thermo_nml scheme='cice' needs enable_thermodynamics=.true. "// &
+                         "(the ice fluxes reach the ocean at the thermo step)")
+         end if
+         if (.not. cfg%ocean%forcing%enable_components) then
+            call add_msg(msgs, n, "&ocean_forcing_nml scheme='cice' needs enable_components=.true. "// &
+                         "(the ice fluxes are separate surface-flux components)")
+         end if
+         if (.not. (cfg%ocean%ice%hfreeze > 0.0_wp)) then
+            call add_msg(msgs, n, "&ocean_ice_nml scheme='cice' needs hfreeze > 0 (the melt-potential "// &
+                         "provider that makes the signed freezing/melt potential)")
+         end if
+         if (.not. cfg%ocean%ice%dynamics) then
+            call add_msg(msgs, n, "&ocean_ice_nml scheme='cice' needs dynamics=.true. (the ice always moves "// &
+                         "under this scheme; a frozen pack is not implemented)")
+         end if
+         if (.not. cfg%ocean%ice%transport) then
+            call add_msg(msgs, n, "&ocean_ice_nml scheme='cice' needs transport=.true. (the ice is always "// &
+                         "advected under this scheme)")
+         end if
+         if (cfg%ocean%atm_forcing%enable) then
+            ! One atmosphere: the prescribed state of the bulk forcing, or the uniform one.
+            if (uniform_atmosphere_set(cfg)) then
+               call add_msg(msgs, n, "&ocean_atm_forcing_nml enable together with the uniform atmosphere "// &
+                            "(&ocean_ice_atm_nml uni_*, &ocean_ice_nml sw_down / snowfall) is ambiguous: "// &
+                            "set one atmosphere, not both")
+            end if
+         end if
+         if (len_trim(cfg%ocean%dataovr%tau_x%file) > 0 .or. len_trim(cfg%ocean%dataovr%tau_y%file) > 0) then
+            call add_msg(msgs, n, "&ocean_dataovr_nml tau_x/tau_y files are not supported by scheme='cice' "// &
+                         "yet (a time-varying wind stress would be frozen at its configure-time value by "// &
+                         "the ice-ocean stress blend)")
+         end if
+         if (.not. (cfg%ocean%ice_atm%uni_psl > 0.0_wp .and. cfg%ocean%ice_atm%uni_tas > 0.0_wp)) then
+            call add_msg(msgs, n, "&ocean_ice_atm_nml uni_psl and uni_tas must be > 0")
+         end if
+      end if
+
+      ! ---- thermodynamics / ITD options the port does not carry ----
+      if (cfg%ocean%ice_thermo%ktherm /= 1) then
+         call add_msg(msgs, n, "&ocean_ice_thermo_nml ktherm /= 1 is not supported "// &
+                      "(only Bitz-Lipscomb 1999; mushy thermodynamics is excluded)")
+      end if
+      if (trim(adjustl(cfg%ocean%ice_thermo%tfrz_option)) == "mushy") then
+         call add_msg(msgs, n, "&ocean_ice_thermo_nml tfrz_option='mushy' is not "// &
+                      "supported (mushy thermodynamics is excluded)")
+      end if
+      if (trim(adjustl(cfg%ocean%ice_thermo%saltflux_option)) /= "constant") then
+         call add_msg(msgs, n, "&ocean_ice_thermo_nml saltflux_option /= 'constant' "// &
+                      "is not supported (prognostic ice salinity is excluded)")
+      end if
+      if (trim(adjustl(cfg%ocean%ice_thermo%fbot_xfer_type)) /= "constant") then
+         call add_msg(msgs, n, "&ocean_ice_thermo_nml fbot_xfer_type /= 'constant' "// &
+                      "is not supported (only the constant transfer coefficient)")
+      end if
+      if (trim(adjustl(cfg%ocean%ice_thermo%cpl_frazil)) /= "fresh_ice_correction") then
+         call add_msg(msgs, n, "&ocean_ice_thermo_nml cpl_frazil /= "// &
+                      "'fresh_ice_correction' is not supported")
+      end if
+      if (cfg%ocean%ice_thermo%kitd /= 1) then
+         call add_msg(msgs, n, "&ocean_ice_thermo_nml kitd /= 1 is not supported "// &
+                      "(only the linear ITD remap; the delta-function ITD is excluded)")
+      end if
+      if (.not. cfg%ocean%ice_thermo%calc_tsfc) then
+         call add_msg(msgs, n, "&ocean_ice_thermo_nml calc_Tsfc=.false. is not "// &
+                      "supported (the surface temperature is always solved)")
+      end if
+      if (cfg%ocean%ice_thermo%semi_implicit_tsfc) then
+         call add_msg(msgs, n, "&ocean_ice_thermo_nml semi_implicit_Tsfc=.true. is "// &
+                      "not supported")
+      end if
+      if (.not. (cfg%ocean%ice_thermo%floediam > 0.0_wp)) then
+         call add_msg(msgs, n, "&ocean_ice_thermo_nml floediam must be > 0 "// &
+                      "(it divides the lateral-melt rate)")
+      end if
+      if (.not. (cfg%ocean%ice_thermo%floeshape > 0.0_wp)) then
+         call add_msg(msgs, n, "&ocean_ice_thermo_nml floeshape must be > 0 "// &
+                      "(it divides the lateral-melt rate)")
+      end if
+
+      ! ---- ridging and ice strength ----
+      rp = ice_ridge_params_default()
+      rp%kstrength = cfg%ocean%ice_ridge%kstrength
+      if (.not. ice_ridge_params_valid(rp)) then
+         call add_msg(msgs, n, "&ocean_ice_ridge_nml kstrength must be 0 (Hibler 1979) "// &
+                      "or 1 (Rothrock 1975)")
+      end if
+      rp = ice_ridge_params_default()
+      rp%krdg_partic = cfg%ocean%ice_ridge%krdg_partic
+      if (.not. ice_ridge_params_valid(rp)) then
+         call add_msg(msgs, n, "&ocean_ice_ridge_nml krdg_partic must be 0 (Thorndike "// &
+                      "et al. 1975) or 1 (Lipscomb et al. 2007)")
+      end if
+      rp = ice_ridge_params_default()
+      rp%krdg_redist = cfg%ocean%ice_ridge%krdg_redist
+      if (.not. ice_ridge_params_valid(rp)) then
+         call add_msg(msgs, n, "&ocean_ice_ridge_nml krdg_redist must be 0 (Hibler 1980) "// &
+                      "or 1 (Lipscomb et al. 2007)")
+      end if
+      if (.not. (cfg%ocean%ice_ridge%mu_rdg > 0.0_wp)) then
+         call add_msg(msgs, n, "&ocean_ice_ridge_nml mu_rdg must be > 0 (the "// &
+                      "e-folding scale of the ridged-ice thickness)")
+      end if
+      if (.not. (cfg%ocean%ice_ridge%cf > 0.0_wp)) then
+         call add_msg(msgs, n, "&ocean_ice_ridge_nml Cf must be > 0 (it divides "// &
+                      "the ridging work)")
+      end if
+      if (.not. (cfg%ocean%ice_ridge%pstar > 0.0_wp)) then
+         call add_msg(msgs, n, "&ocean_ice_ridge_nml Pstar must be > 0 (Hibler "// &
+                      "strength constant)")
+      end if
+      if (.not. (cfg%ocean%ice_ridge%cstar > 0.0_wp)) then
+         call add_msg(msgs, n, "&ocean_ice_ridge_nml Cstar must be > 0 (Hibler "// &
+                      "concentration constant)")
+      end if
+
+      ! ---- atmosphere-ice boundary layer ----
+      if (cfg%ocean%ice_atm%natmiter < 0) then
+         call add_msg(msgs, n, "&ocean_ice_atm_nml natmiter must be >= 0")
+      end if
+      if (.not. (cfg%ocean%ice_atm%atmiter_conv >= 0.0_wp)) then
+         call add_msg(msgs, n, "&ocean_ice_atm_nml atmiter_conv must be >= 0")
+      end if
+      cst = ice_constants(ice_constants_set_from_name(cfg%ocean%ice%constants_set))
+      zref = cst%zref
+      if (.not. (cfg%ocean%ice_atm%iceruf > 0.0_wp .and. cfg%ocean%ice_atm%iceruf < zref)) then
+         write (szref, "(g0)") zref
+         call add_msg(msgs, n, "&ocean_ice_atm_nml iceruf must be > 0 and below the "// &
+                      "reference height zref="//trim(szref)//" m (the neutral drag "// &
+                      "takes ln(zref/iceruf))")
+      end if
+      if (trim(adjustl(cfg%ocean%ice_atm%atmbndy)) /= "similarity") then
+         call add_msg(msgs, n, "&ocean_ice_atm_nml atmbndy /= 'similarity' is not "// &
+                      "supported (only the similarity-theory boundary layer)")
+      end if
+      if (cfg%ocean%ice_atm%formdrag) then
+         call add_msg(msgs, n, "&ocean_ice_atm_nml formdrag=.true. is not supported "// &
+                      "(form drag needs melt ponds and level ice, which are excluded)")
+      end if
+      if (.not. cfg%ocean%ice_atm%calc_strair) then
+         call add_msg(msgs, n, "&ocean_ice_atm_nml calc_strair=.false. is not "// &
+                      "supported (the wind stress is always computed in the ice model)")
+      end if
+
+      ! ---- dynamics core under the SIS2-derived ice state ----
+      select case (trim(adjustl(cfg%ocean%ice_dyn%dyn_scheme)))
+      case ("sis2_c")
+         continue
+      case ("cice_c")
+         if (.not. (cfg%ocean%ice%enable .and. cfg%ocean%ice%dynamics)) then
+            call add_msg(msgs, n, "&ocean_ice_dyn_nml dyn_scheme='cice_c' needs &ocean_ice_nml "// &
+                         "enable=.true. and dynamics=.true. (the C-grid EVP replaces the SIS2 "// &
+                         "dynamics call)")
+         end if
+         if (cfg%nghost < 3) then
+            call add_msg(msgs, n, "&ocean_ice_dyn_nml dyn_scheme='cice_c' needs nghost >= 3 (the "// &
+                         "corner stress reaches three cells into the halo)")
+         end if
+         if (cfg%ocean%ice_ridge%kstrength /= 0 .and. .not. ice_scheme_is_cice(cfg)) then
+            call add_msg(msgs, n, "&ocean_ice_dyn_nml dyn_scheme='cice_c' needs &ocean_ice_ridge_nml "// &
+                         "kstrength = 0 (Hibler strength of the aggregates, from Pstar/Cstar): the "// &
+                         "category (Rothrock) strength arrives with the full scheme")
+         end if
+         if (cfg%ocean%wetdry%enable) then
+            call add_msg(msgs, n, "&ocean_ice_dyn_nml dyn_scheme='cice_c' with &ocean_wetdry_nml "// &
+                         "enable=.true. is not supported (the ice masks are static)")
+         end if
+      case default
+         call add_msg(msgs, n, "&ocean_ice_dyn_nml dyn_scheme must be 'sis2_c' or 'cice_c'")
+      end select
+
+      ! ---- C-grid EVP dynamics ----
+      dyp = ice_dyn_params_from_config(cfg)
+      call ice_dyn_params_check(dyp, dcodes, ndc)
+      do k = 1, ndc
+         select case (dcodes(k))
+         case (1)
+            call add_msg(msgs, n, "&ocean_ice_dyn_nml ndte must be >= 1 (elastic subcycles)")
+         case (2)
+            call add_msg(msgs, n, "&ocean_ice_dyn_nml elasticDamp must be > 0 (classic EVP: "// &
+                         "arlx = 2 elasticDamp ndte)")
+         case (3)
+            call add_msg(msgs, n, "&ocean_ice_dyn_nml arlx must be > 0 (revised_evp: stress "// &
+                         "relaxation, divides)")
+         case (4)
+            call add_msg(msgs, n, "&ocean_ice_dyn_nml brlx must be > 0 (revised_evp: momentum "// &
+                         "relaxation)")
+         case (5)
+            call add_msg(msgs, n, "&ocean_ice_dyn_nml e_yieldcurve must be > 0 (aspect ratio "// &
+                         "of the yield curve)")
+         case (6)
+            call add_msg(msgs, n, "&ocean_ice_dyn_nml e_plasticpot must be > 0 (aspect ratio "// &
+                         "of the plastic potential, divides)")
+         case (7)
+            call add_msg(msgs, n, "&ocean_ice_dyn_nml Ktens must be in [0, 1) (tensile "// &
+                         "strength fraction)")
+         case (8)
+            call add_msg(msgs, n, "&ocean_ice_dyn_nml deltaminEVP must be > 0 (it regularises "// &
+                         "the viscosities)")
+         case (9)
+            call add_msg(msgs, n, "&ocean_ice_dyn_nml dyn_area_min must be >= 0")
+         case (10)
+            call add_msg(msgs, n, "&ocean_ice_dyn_nml dyn_mass_min must be >= 0")
+         case (11)
+            call add_msg(msgs, n, "&ocean_ice_dyn_nml rheo_area_min must be >= 0")
+         case (12)
+            call add_msg(msgs, n, "&ocean_ice_dyn_nml visc_method must be 'avg_zeta' or "// &
+                         "'avg_strength'")
+         case (13)
+            call add_msg(msgs, n, "&ocean_ice_dyn_nml cdn_ocn must be >= 0 (drag coefficient)")
+         case (14)
+            call add_msg(msgs, n, "&ocean_ice_dyn_nml vel_cap must be > 0 (face-speed ceiling "// &
+                         "of the velocity guard)")
+         case default
+            call add_msg(msgs, n, "&ocean_ice_dyn_nml: unknown refusal code")
+         end select
+      end do
+      select case (trim(adjustl(cfg%ocean%ice_dyn%capping_method)))
+      case ("max", "sum")
+      case default
+         call add_msg(msgs, n, "&ocean_ice_dyn_nml capping_method must be 'max' (Hibler 1979) "// &
+                      "or 'sum' (Kreyscher et al. 2000)")
+      end select
+
+      ! ---- horizontal transport ----
+      select case (trim(adjustl(cfg%ocean%ice_dyn%advection)))
+      case ("upwind", "remap")
+         continue
+      case default
+         call add_msg(msgs, n, "&ocean_ice_dyn_nml advection must be 'remap' or 'upwind'")
+      end select
+
+      ! ---- shortwave albedo parameters ----
+      if (.not. (cfg%ocean%ice_sw%ahmax > 0.0_wp)) then
+         call add_msg(msgs, n, "&ocean_ice_sw_nml ahmax must be > 0 (it divides "// &
+                      "the thin-ice albedo ramp)")
+      end if
+      if (trim(adjustl(cfg%ocean%ice_sw%shortwave)) /= "ccsm3") then
+         call add_msg(msgs, n, "&ocean_ice_sw_nml shortwave='"// &
+                      trim(adjustl(cfg%ocean%ice_sw%shortwave))// &
+                      "' is not ported (only the CCSM3 scheme; no delta-Eddington, "// &
+                      "melt ponds or SNICAR)")
+      end if
+      if (trim(adjustl(cfg%ocean%ice_sw%albedo_type)) /= "ccsm3") then
+         call add_msg(msgs, n, "&ocean_ice_sw_nml albedo_type='"// &
+                      trim(adjustl(cfg%ocean%ice_sw%albedo_type))// &
+                      "' is not ported (only the CCSM3 albedo parameterisation)")
+      end if
+      if (.not. unit_closed(cfg%ocean%ice_sw%albicev)) then
+         call add_msg(msgs, n, "&ocean_ice_sw_nml albicev must lie in [0, 1]")
+      end if
+      if (.not. unit_closed(cfg%ocean%ice_sw%albicei)) then
+         call add_msg(msgs, n, "&ocean_ice_sw_nml albicei must lie in [0, 1]")
+      end if
+      if (.not. unit_closed(cfg%ocean%ice_sw%albsnowv)) then
+         call add_msg(msgs, n, "&ocean_ice_sw_nml albsnowv must lie in [0, 1]")
+      end if
+      if (.not. unit_closed(cfg%ocean%ice_sw%albsnowi)) then
+         call add_msg(msgs, n, "&ocean_ice_sw_nml albsnowi must lie in [0, 1]")
+      end if
+      if (.not. (cfg%ocean%ice_sw%sw_frac > 0.0_wp .and. cfg%ocean%ice_sw%sw_frac <= 1.0_wp)) then
+         call add_msg(msgs, n, "&ocean_ice_sw_nml sw_frac must lie in (0, 1] (the "// &
+                      "fraction of the internal shortwave moved to the surface)")
+      end if
+      if (.not. (cfg%ocean%ice_sw%sw_dtemp >= 0.0_wp)) then
+         call add_msg(msgs, n, "&ocean_ice_sw_nml sw_dtemp must be >= 0")
+      end if
+      if (.not. unit_closed(cfg%ocean%ice_sw%sw_vis_frac)) then
+         call add_msg(msgs, n, "&ocean_ice_sw_nml sw_vis_frac must lie in [0, 1] "// &
+                      "(the near-IR band is 1 - sw_vis_frac, so the two sum to 1)")
+      end if
+   end subroutine ice_config_check
+
+   pure function uniform_atmosphere_set(cfg) result(set)
+      !! Any knob of the uniform atmosphere away from its default: the five `uni_*` fields the
+      !! prescribed atmosphere would silently override, plus `sw_down` and `snowfall`.
+      type(config_t), intent(in) :: cfg
+      logical :: set
+      type(ocean_ice_atm_config_t) :: d
+
+      associate (a => cfg%ocean%ice_atm)
+         set = a%uni_tas /= d%uni_tas .or. a%uni_uas /= d%uni_uas .or. a%uni_vas /= d%uni_vas .or. &
+               a%uni_psl /= d%uni_psl .or. a%uni_huss /= d%uni_huss .or. a%uni_rlds /= d%uni_rlds
+      end associate
+      set = set .or. cfg%ocean%ice%sw_down /= 0.0_wp .or. cfg%ocean%ice%snowfall /= 0.0_wp
+   end function uniform_atmosphere_set
+
+   pure function edge_is_closed(tag, fold_ok) result(ok)
+      !! A boundary tag the ice dynamics can live with: a wall or a periodic seam, and on the north edge
+      !! (`fold_ok`) the tripolar fold (Murray 1996).
+      character(len=*), intent(in) :: tag
+      logical, intent(in), optional :: fold_ok
+      logical :: ok
+      ok = trim(adjustl(tag)) == "wall" .or. trim(adjustl(tag)) == "periodic"
+      if (present(fold_ok)) then
+         if (fold_ok .and. trim(adjustl(tag)) == "tripolar_fold") ok = .true.
+      end if
+   end function edge_is_closed
+
+   pure function unit_closed(x) result(ok)
+      !! `x` in [0, 1]; `.false.` for NaN.
+      real(wp), intent(in) :: x
+      logical :: ok
+      ok = x >= 0.0_wp .and. x <= 1.0_wp
+   end function unit_closed
+
+   subroutine ice_config_validate(cfg, has_error)
+      !! Log every refusal from `ice_config_check` and set `has_error`.
+      type(config_t), intent(in) :: cfg
+      logical, intent(inout) :: has_error
+      character(len=ICE_CONFIG_MSG_LEN) :: msgs(ICE_CONFIG_MAX_MSGS)
+      integer :: n, i
+
+      call ice_config_check(cfg, msgs, n)
+      do i = 1, n
+         call logger%error(trim(msgs(i)))
+      end do
+      if (n > 0) has_error = .true.
+   end subroutine ice_config_validate
+
+   pure function ice_dyn_params_from_config(cfg) result(dp)
+      !! The dynamics bundle for `cfg` (an unknown `visc_method` becomes the
+      !! refused code 0; an unknown `capping_method` keeps the Hibler cap, the
+      !! check reports it).
+      type(config_t), intent(in) :: cfg
+      type(ice_dyn_params_t) :: dp
+
+      dp = ice_dyn_params_default()
+      dp%ndte = cfg%ocean%ice_dyn%ndte
+      dp%elasticDamp = cfg%ocean%ice_dyn%elasticdamp
+      dp%revised_evp = cfg%ocean%ice_dyn%revised_evp
+      dp%arlx = cfg%ocean%ice_dyn%arlx
+      dp%brlx = cfg%ocean%ice_dyn%brlx
+      dp%e_yieldcurve = cfg%ocean%ice_dyn%e_yieldcurve
+      dp%e_plasticpot = cfg%ocean%ice_dyn%e_plasticpot
+      dp%Ktens = cfg%ocean%ice_dyn%ktens
+      dp%deltaminEVP = cfg%ocean%ice_dyn%deltaminevp
+      dp%capping_max = trim(adjustl(cfg%ocean%ice_dyn%capping_method)) /= "sum"
+      dp%dyn_area_min = cfg%ocean%ice_dyn%dyn_area_min
+      dp%dyn_mass_min = cfg%ocean%ice_dyn%dyn_mass_min
+      dp%rheo_area_min = cfg%ocean%ice_dyn%rheo_area_min
+      dp%free_drift_approx = cfg%ocean%ice_dyn%free_drift_approx
+      select case (trim(adjustl(cfg%ocean%ice_dyn%visc_method)))
+      case ("avg_zeta")
+         dp%visc_method = ICE_VISC_AVG_ZETA
+      case ("avg_strength")
+         dp%visc_method = ICE_VISC_AVG_STRENGTH
+      case default
+         dp%visc_method = 0
+      end select
+      dp%cdn_ocn = cfg%ocean%ice_dyn%cdn_ocn
+      dp%vel_cap = cfg%ocean%ice_dyn%vel_cap
+   end function ice_dyn_params_from_config
+
+   pure function ice_params_from_config(cfg) result(p)
+      !! The ice parameter bundle for `cfg`.  Does not validate: call
+      !! `ice_config_check` first.  Unrecognised enum spellings fall back to the
+      !! upstream default.  A negative `snowpatch` keeps the value of the
+      !! selected `constants_set`.
+      type(config_t), intent(in) :: cfg
+      type(ice_params_t) :: p
+      integer :: set
+
+      set = ice_constants_set_from_name(cfg%ocean%ice%constants_set)
+      p = ice_params_default(set, cfg%ocean%ice%ncat, cfg%ocean%ice%nilyr, &
+                             cfg%ocean%ice%nslyr)
+
+      p%thermo%ktherm = cfg%ocean%ice_thermo%ktherm
+      select case (trim(adjustl(cfg%ocean%ice_thermo%conduct)))
+      case ("MU71")
+         p%thermo%conduct = ICE_CONDUCT_MU71
+      case default
+         p%thermo%conduct = ICE_CONDUCT_BUBBLY
+      end select
+      select case (trim(adjustl(cfg%ocean%ice_thermo%tfrz_option)))
+      case ("constant")
+         p%thermo%tfrz_option = ICE_TFRZ_CONSTANT
+      case ("minus1p8")
+         p%thermo%tfrz_option = ICE_TFRZ_MINUS1P8
+      case default
+         p%thermo%tfrz_option = ICE_TFRZ_LINEAR_SALT
+      end select
+      p%thermo%ice_ref_salinity = cfg%ocean%ice_thermo%ice_ref_salinity
+      p%thermo%congel_one_step = trim(adjustl(cfg%ocean%ice_thermo%congel_freeze)) == "one-step"
+      p%thermo%update_ocn_f = cfg%ocean%ice_thermo%update_ocn_f
+      p%thermo%hfrazilmin = cfg%ocean%ice_thermo%hfrazilmin
+      p%thermo%hi_min = cfg%ocean%ice_thermo%hi_min
+      p%thermo%ustar_min = cfg%ocean%ice_thermo%ustar_min
+      p%thermo%floediam = cfg%ocean%ice_thermo%floediam
+      p%thermo%floeshape = cfg%ocean%ice_thermo%floeshape
+      p%thermo%emissivity = cfg%ocean%ice_thermo%emissivity
+      p%thermo%calc_Tsfc = cfg%ocean%ice_thermo%calc_tsfc
+      p%c%ksno = cfg%ocean%ice_thermo%ksno
+
+      p%itd%kitd = cfg%ocean%ice_thermo%kitd
+      p%itd%kcatbound = cfg%ocean%ice%kcatbound
+
+      p%ridge%kstrength = cfg%ocean%ice_ridge%kstrength
+      p%ridge%krdg_partic = cfg%ocean%ice_ridge%krdg_partic
+      p%ridge%krdg_redist = cfg%ocean%ice_ridge%krdg_redist
+      p%ridge%mu_rdg = cfg%ocean%ice_ridge%mu_rdg
+      p%ridge%Cf = cfg%ocean%ice_ridge%cf
+      p%ridge%Pstar = cfg%ocean%ice_ridge%pstar
+      p%ridge%Cstar = cfg%ocean%ice_ridge%cstar
+
+      p%dyn = ice_dyn_params_from_config(cfg)
+
+      p%atm%highfreq = cfg%ocean%ice_atm%highfreq
+      p%atm%natmiter = cfg%ocean%ice_atm%natmiter
+      p%atm%atmiter_conv = cfg%ocean%ice_atm%atmiter_conv
+      p%atm%iceruf = cfg%ocean%ice_atm%iceruf
+      call ice_atm_params_finalize(p%c, p%atm)
+
+      select case (trim(adjustl(cfg%ocean%ice_dyn%advection)))
+      case ("upwind")
+         p%transport%advection = ICE_ADVECT_UPWIND
+      case default
+         p%transport%advection = ICE_ADVECT_REMAP
+      end select
+      p%transport%check = cfg%ocean%ice_dyn%transport_check
+
+      p%sw%albicev = cfg%ocean%ice_sw%albicev
+      p%sw%albicei = cfg%ocean%ice_sw%albicei
+      p%sw%albsnowv = cfg%ocean%ice_sw%albsnowv
+      p%sw%albsnowi = cfg%ocean%ice_sw%albsnowi
+      p%sw%ahmax = cfg%ocean%ice_sw%ahmax
+      p%sw%sw_redist = cfg%ocean%ice_sw%sw_redist
+      p%sw%sw_frac = cfg%ocean%ice_sw%sw_frac
+      p%sw%sw_dtemp = cfg%ocean%ice_sw%sw_dtemp
+      p%sw%sw_vis_frac = cfg%ocean%ice_sw%sw_vis_frac
+      if (cfg%ocean%ice_sw%snowpatch >= 0.0_wp) p%c%snowpatch = cfg%ocean%ice_sw%snowpatch
+   end function ice_params_from_config
+
+end module rdb_ice_config

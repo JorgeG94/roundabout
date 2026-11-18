@@ -668,16 +668,16 @@ contains
    end subroutine write_field_file
 
    subroutine write_atm_file(path, listname)
-      !! One global 10-degree lon-lat file, two time records, the nine CMOR
+      !! One global 10-degree lon-lat file, five 3-hourly time records (the coszen shortwave interpolation needs >= 3 at interval centres), the nine CMOR
       !! names: a COLD (255 K) DRY atmosphere with a zonal wavenumber-2
       !! structure (period 180 degrees, so a half-period roll of the model
       !! domain sees the identical atmosphere) and a meridional dependence.
       character(len=*), intent(in) :: path, listname
-      integer, parameter :: NLON = 36, NLAT = 18
+      integer, parameter :: NLON = 36, NLAT = 18, NREC = 5
       real(wp), parameter :: PI = 3.14159265358979323846_wp
       character(len=4), parameter :: VN(9) = [character(len=4) :: "tas", "huss", "uas", &
                                                                                        "vas", "psl", "rlds", "rsds", "prra", "prsn"]
-      real(wp) :: lon(NLON), lat(NLAT), lonb(2, NLON), latb(2, NLAT), tax(2), f(NLON, NLAT, 2)
+      real(wp) :: lon(NLON), lat(NLAT), lonb(2, NLON), latb(2, NLAT), tax(NREC), f(NLON, NLAT, NREC)
       real(wp) :: sx, sy, dlo, dla
       integer :: ncid, dlon_, dlat_, dbnd, dtim, vlon, vlat, vlonb, vlatb, vtim, vf(9)
       integer :: v, i, j, k, ierr, u
@@ -694,12 +694,12 @@ contains
          latb(2, j) = -90.0_wp + dla*real(j, wp)
          lat(j) = 0.5_wp*(latb(1, j) + latb(2, j))
       end do
-      tax = [0.0_wp, 10.0_wp]
+      tax = [0.9375_wp, 1.0625_wp, 1.1875_wp, 1.3125_wp, 1.4375_wp]  ! 3-hourly, stamped at the interval centres
       call nc_create_file(path, ncid)
       call nc_def_dim(ncid, "lon", NLON, dlon_)
       call nc_def_dim(ncid, "lat", NLAT, dlat_)
       call nc_def_dim(ncid, "bnds", 2, dbnd)
-      call nc_def_dim(ncid, "time", 2, dtim)
+      call nc_def_dim(ncid, "time", NREC, dtim)
       call rdb_def_var_1d(ncid, "lon", dlon_, vlon)
       call rdb_def_var_1d(ncid, "lat", dlat_, vlat)
       call nc_def_var_2d(ncid, "lon_bnds", [dbnd, dlon_], vlonb)
@@ -716,7 +716,7 @@ contains
       ierr = nf90_put_var(ncid, vlatb, latb)
       call rdb_put_var_1d(ncid, vtim, tax)
       do v = 1, 9
-         do k = 1, 2
+         do k = 1, NREC
             do j = 1, NLAT
                do i = 1, NLON
                   sx = sin(2.0_wp*PI*lon(i)/180.0_wp + 0.3_wp)
