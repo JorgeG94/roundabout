@@ -326,6 +326,7 @@ program test_ocean_decomp_bitid_mpi
       !! down, while the whole stack (>= 3e-4 m) still covers the largest withdrawal (~1.3e-4 m): no column runs dry.
    character(len=*), parameter :: RUNOFF_BASIN = "bitid_runoff_isle.nc"
    character(len=*), parameter :: RUNOFF_FOLD = "bitid_runoff_fold.nc"
+   character(len=*), parameter :: RUNOFF_FOLD_W = "bitid_runoff_wrap.nc"
    character(len=*), parameter :: ATM_WARM_LIST = "bitid_atm_warm_files.txt"
    character(len=*), parameter :: ATM_CRSE_LIST = "bitid_atm_coarse_files.txt"
    character(len=*), parameter :: ATM_COLD_LIST = "bitid_atm_cold_files.txt"
@@ -405,7 +406,7 @@ program test_ocean_decomp_bitid_mpi
       !! `RDB_BITID_CASES`: run only the cases whose name contains this substring.
    type(comm_t) :: comm
    character(len=16), parameter :: SCHEMES(2) = [character(len=16) :: "pred_corr", "ssp_rk2"]
-   character(len=24), parameter :: CASES(117) = [character(len=24) :: &
+   character(len=24), parameter :: CASES(119) = [character(len=24) :: &
                                                  "island_basin", "weno7_pv", &
                                                  "periodic_channel_zstar", &
                                                  "visc_rem_zstar", &
@@ -452,6 +453,7 @@ program test_ocean_decomp_bitid_mpi
                                                  "bulk_flux_fw_mass", "bulk_flux_fw_mass_fold", &
                                                  "fw_mass_deferred", "fw_mass_deferred_nowin", "fw_mass_thin", &
                                                  "runoff_mass", "runoff_mass_fold", &
+                                                 "runoff_river", "runoff_river_fold", &
                                                  "cice_ice_fw_mass", "cice_ice_fw_mass_fold", "cice_ice_fw_mass_led", &
                                                  "cice_ice_fw_mass_bfold"]
 
@@ -587,6 +589,23 @@ contains
       end if
       if (index(label, "cice_ice") == 1) then
          nml = cice_ice_nml(label, scheme, px, py)
+         return
+      end if
+      if (label == "runoff_river" .or. label == "runoff_river_fold") then
+         ! EPBL river mixing (`&ocean_epbl_nml rivermix_depth`) over the same file-driven runoff:
+         ! the river energy is read in the GHOST columns (the momentum vdiff face loop averages the
+         ! EPBL `kv` from both neighbouring centres), so `surface_flux%runoff` must be seam-exchanged.
+         ! `runoff_river` reuses the basin points (both sides of every x / y seam); the fold twin adds
+         ! points on the periodic west/east wrap, (2,12) and (29,10) (within `nghost` of the wrap) (see `write_runoff_files`).
+         nml = case_nml(merge("island_basin", "tripolar    ", label == "runoff_river"), scheme, px, py)// &
+               "&ocean_thermo_nml enable_thermodynamics = .true. /"//NL// &
+               "&ocean_forcing_nml enable_components = .true., freshwater = 'mass' /"//NL// &
+               "&ocean_epbl_nml enable = .true., rivermix_depth = 40.0 /"//NL// &
+               "&ocean_dataovr_nml enable = .true., time_mode = 'static', "// &
+               "lrunoff_file = '"//merge(RUNOFF_BASIN, RUNOFF_FOLD_W, label == "runoff_river")// &
+               "', lrunoff_var = 'lrunoff', "// &
+               "frunoff_file = '"//merge(RUNOFF_BASIN, RUNOFF_FOLD_W, label == "runoff_river")// &
+               "', frunoff_var = 'frunoff' /"//NL
          return
       end if
       if (label == "runoff_mass" .or. label == "runoff_mass_fold") then
@@ -3148,7 +3167,8 @@ contains
       character(len=*), intent(in) :: label
       is_fw_mass_label = label == "bulk_flux_fw_mass" .or. label == "bulk_flux_fw_mass_fold" .or. &
                          label == "fw_mass_deferred" .or. label == "fw_mass_deferred_nowin" .or. &
-                         label == "fw_mass_thin" .or. label == "runoff_mass" .or. label == "runoff_mass_fold"
+                         label == "fw_mass_thin" .or. label == "runoff_mass" .or. label == "runoff_mass_fold" .or. &
+                         label == "runoff_river" .or. label == "runoff_river_fold"
    end function is_fw_mass_label
 
    pure logical function is_wetdry_case(label)
@@ -3408,7 +3428,8 @@ contains
                  label == "cavity_mass_comp" .or. is_wetdry_case(label) .or. is_ice_fold_case(label) .or. &
                  is_fw_mass_label(label)) .and. &
                 (nprocs/px == 1 .or. px == nprocs/px .or. (index(label, "cice_ice") == 1 .and. px == 1) .or. &
-                 (is_fw_mass_label(label) .and. (label == "bulk_flux_fw_mass_fold" .or. label == "runoff_mass_fold"))) .and. &
+                 (is_fw_mass_label(label) .and. (label == "bulk_flux_fw_mass_fold" .or. label == "runoff_mass_fold" .or. &
+                                                 label == "runoff_river_fold"))) .and. &
                 (nprocs > 1 .or. label == "cavity_sigma_ratio2" .or. label == "cavity_mass" .or. &
                  label == "cavity_mass_comp" .or. is_fw_mass_label(label))) then
                ! 4x1 and 2x2 at np = 4 (and 2x1 at np = 2).
@@ -4457,9 +4478,12 @@ contains
       !! (12,23); liquid at (15,24), (17,12), (8,12) and (9,12) (np 4: 8|9 seam).
       integer, parameter :: PB(7, 2) = reshape([14, 4, 13, 7, 8, 20, 4, 3, 10, 3, 3, 3, 16, 9], [7, 2])
       integer, parameter :: PF(6, 2) = reshape([16, 12, 15, 17, 8, 9, 24, 23, 24, 12, 12, 12], [6, 2])
+      ! `runoff_river_fold`: PF plus liquid points on the periodic west/east wrap, (2,12) and (29,10) (within `nghost` of the wrap).
+      integer, parameter :: PFW(8, 2) = reshape([16, 12, 15, 17, 8, 9, 2, 29, 24, 23, 24, 12, 12, 12, 12, 10], [8, 2])
 
       call write_runoff_file(RUNOFF_BASIN, NX_G, NY_G, PB, 2)
       call write_runoff_file(RUNOFF_FOLD, 30, 24, PF, 2)
+      call write_runoff_file(RUNOFF_FOLD_W, 30, 24, PFW, 2)
    end subroutine write_runoff_files
 
    subroutine write_atm_file(path, listname, tas0, huss0, nlon, nlat)

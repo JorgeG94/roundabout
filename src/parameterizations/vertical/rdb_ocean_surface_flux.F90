@@ -643,6 +643,14 @@ module rdb_ocean_surface_flux
          !! reads under `freshwater = "mass"`: `Q_salt` without the virtual
          !! fresh-water term `salt_fw` (the real volume already dilutes).  Same
          !! carry / restart / exchange rules as `fw_net` (`sf_Q_salt_tracer`).
+      real(wp), allocatable :: runoff(:, :)
+         !! River-mixing input (kg m-2 s-1): `lrunoff + frunoff`, ghosts EXCHANGED.  Built
+         !! by `ocean_data_forcing_apply` (its only writer) and ONLY when `river_runoff_on`
+         !! (otherwise zero and never read); read by EPBL's river-mixing term in the
+         !! ghost columns, which `lrunoff`/`frunoff` (physical cells only) cannot serve.
+      logical :: river_runoff_on = .false.
+         !! `&ocean_epbl_nml rivermix_depth > 0` (set by `configure_ocean_epbl`): builds +
+         !! exchanges `runoff` each step.  `.false.` => nothing built, bit-identical.
       real(wp), allocatable :: p_surf_atm(:, :)
          !! **Input component.**  Atmospheric surface-pressure load
          !! (Pa, >= 0).  Filled by an external reader / configure-time
@@ -761,6 +769,7 @@ contains
       if (allocated(this%salt_fw)) deallocate (this%salt_fw)
       if (allocated(this%fw_net)) deallocate (this%fw_net)
       if (allocated(this%Q_salt_tracer)) deallocate (this%Q_salt_tracer)
+      if (allocated(this%runoff)) deallocate (this%runoff)
       if (allocated(this%p_surf_atm)) deallocate (this%p_surf_atm)
       if (allocated(this%p_surf)) deallocate (this%p_surf)
       if (allocated(this%p_ice_load)) deallocate (this%p_ice_load)
@@ -798,7 +807,7 @@ contains
          !$acc&                  this%heat_content_frunoff, this%heat_content_seaice_melt, &
          !$acc&                  this%heat_content_massin, this%heat_content_massout, &
          !$acc&                  this%salt_flux, this%salt_cavity, this%salt_fw, &
-         !$acc&                  this%fw_net, this%Q_salt_tracer, &
+         !$acc&                  this%fw_net, this%Q_salt_tracer, this%runoff, &
          !$acc&                  this%p_surf_atm, this%p_surf)
          !$acc update device(this%q_sw, this%q_lw, this%q_lat, this%q_sens, this%q_fus, this%q_fus_rof, &
          !$acc&               this%heat_added, this%heat_cavity, this%evap, &
@@ -810,7 +819,7 @@ contains
          !$acc&               this%heat_content_frunoff, this%heat_content_seaice_melt, &
          !$acc&               this%heat_content_massin, this%heat_content_massout, &
          !$acc&               this%salt_flux, this%salt_cavity, this%salt_fw, &
-         !$acc&               this%fw_net, this%Q_salt_tracer, &
+         !$acc&               this%fw_net, this%Q_salt_tracer, this%runoff, &
          !$acc&               this%p_surf_atm, this%p_surf)
       end if
       if (allocated(this%p_ice_load)) then
@@ -840,7 +849,7 @@ contains
          !$acc&                 this%heat_content_frunoff, this%heat_content_seaice_melt, &
          !$acc&                 this%heat_content_massin, this%heat_content_massout, &
          !$acc&                 this%salt_flux, this%salt_cavity, this%salt_fw, &
-         !$acc&                 this%fw_net, this%Q_salt_tracer, &
+         !$acc&                 this%fw_net, this%Q_salt_tracer, this%runoff, &
          !$acc&                 this%p_surf_atm, this%p_surf)
       end if
       if (allocated(this%p_ice_load)) then
@@ -1116,6 +1125,7 @@ contains
       allocate (this%salt_fw(nx, ny), source=0.0_wp)
       allocate (this%fw_net(nx, ny), source=0.0_wp)
       allocate (this%Q_salt_tracer(nx, ny), source=0.0_wp)
+      allocate (this%runoff(nx, ny), source=0.0_wp)
       allocate (this%p_surf_atm(nx, ny), source=0.0_wp)
       allocate (this%p_surf(nx, ny), source=0.0_wp)
    end subroutine ocean_surfflux_alloc_components
@@ -2144,6 +2154,7 @@ contains
                + arr_bytes(this%salt_flux) &
                + arr_bytes(this%salt_cavity) + arr_bytes(this%salt_fw) &
                + arr_bytes(this%fw_net) + arr_bytes(this%Q_salt_tracer) &
+               + arr_bytes(this%runoff) &
                + arr_bytes(this%p_surf_atm) + arr_bytes(this%p_surf) &
                + arr_bytes(this%p_ice_load)
    end function ocean_surface_flux_bytes

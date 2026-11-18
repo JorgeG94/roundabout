@@ -57,7 +57,8 @@ contains
                   new_unittest("epbl_lt_deepens_wind_mixing", test_lt_deepens), &
                   new_unittest("epbl_rivermix_energy_hand_value", test_rivermix_energy), &
                   new_unittest("epbl_rivermix_off_is_bitwise_inert", test_rivermix_off_bitwise), &
-                  new_unittest("epbl_rivermix_deepens_and_scales_with_runoff", test_rivermix_deepens) &
+                  new_unittest("epbl_rivermix_deepens_and_scales_with_runoff", test_rivermix_deepens), &
+                  new_unittest("epbl_rivermix_ledger_is_exactly_nstar_e", test_rivermix_ledger) &
                   ]
    end subroutine collect_ocean_epbl_tests
 
@@ -598,12 +599,14 @@ contains
    ! River mixing (`rivermix_depth`)
    ! -----------------------------------------------------------------
 
-   subroutine run_rivermix_column(depth, lrunoff, frunoff, mld, kd_sfc, kd_sum)
+   subroutine run_rivermix_column(depth, lrunoff, frunoff, mld, kd_sfc, kd_sum, tke_conv)
       !! One quiescent thermo step (no wind beyond the u* floor, no heat/salt flux) over a
       !! weakly stratified column with a uniform runoff of `lrunoff + frunoff` kg m-2 s-1 and
       !! `rivermix_depth = depth`; returns the probe column's MLD and diffusivities.
       real(wp), intent(in) :: depth, lrunoff, frunoff
       real(wp), intent(out) :: mld, kd_sfc, kd_sum
+      real(wp), intent(out), optional :: tke_conv
+         !! Probe column's convective TKE ledger term (`epbl%tke_conv`, W m-2).
       type(hgrid_t) :: grid
       type(multilayer_state_t) :: ms
       type(ocean_epbl_t) :: epbl
@@ -624,9 +627,13 @@ contains
       call ss%set_wind_stress_const(0.0_wp, 0.0_wp)
       call sf%init(grid)
       call sf%set_surface_flux_const(0.0_wp, 0.0_wp)
-      call sf%set_components(grid, .true.)   ! allocates lrunoff / frunoff
-      sf%lrunoff = lrunoff
-      sf%frunoff = frunoff
+      call sf%set_components(grid, .true.)   ! allocates the runoff fields
+      ! The assembled `runoff` is set on OWNED cells only; its ghosts stay unset (zero), as
+      ! on a decomposed run before the exchange -- the probe column is interior.
+      sf%river_runoff_on = depth > 0.0_wp
+      sf%runoff = 0.0_wp
+      sf%runoff(grid%nghost + 1:grid%nx_total - grid%nghost, &
+                grid%nghost + 1:grid%ny_total - grid%nghost) = lrunoff + frunoff
       call vd%init(grid, nz_ml=NZ)
       dT_dz = N2*RHO0/(GRAVITY*ALPHA_LIN)
       call setup_stratified_T(ms, NZ, DZ, 15.0_wp, dT_dz)
@@ -636,6 +643,7 @@ contains
       mld = epbl%mld(ip, jp)
       kd_sfc = epbl%kd_int(ip, jp, NZ)
       kd_sum = sum(epbl%kd_int(ip, jp, :))
+      if (present(tke_conv)) tke_conv = epbl%tke_conv(ip, jp)
       call vd%destroy(); call sf%destroy(); call ss%destroy()
       call epbl%destroy(); call ms%destroy()
    end subroutine run_rivermix_column
@@ -710,6 +718,34 @@ contains
          call check(error, mc > ma .and. sc > sa, "larger rivermix_depth must mix deeper")
       end block checks
    end subroutine test_rivermix_deepens
+
+   subroutine test_rivermix_ledger(error)
+      !! Quiescent stable column, zero heat/salt flux, no wind, f = 0: `ctke_sfc` is exactly
+      !! the river energy, so the convective ledger is `tke_conv = nstar * E / dt` (the
+      !! ledger stores `d_conv/dt`; the stable sweep never touches it).  Pins the term to
+      !! being added exactly ONCE, with the right magnitude, and linear in the runoff.
+      type(error_type), allocatable, intent(out) :: error
+      type(eos_t) :: eos
+      real(wp) :: dsv_dt, dsv_ds, e, m, k, s, conv1, conv2, conv0
+      real(wp), parameter :: D = 40.0_wp, R = 1.0e-3_wp, DT = 1800.0_wp, S_SFC = 35.0_wp
+      checks: block
+         eos%variant = EOS_VARIANT_LINEAR
+         eos%alpha_T = ALPHA_LIN
+         eos%beta_S = BETA_LIN
+         eos%rho0 = RHO0
+         call eos_specvol_derivs(eos, 15.0_wp, S_SFC, 0.0_wp, dsv_dt, dsv_ds)
+         e = epbl_rivermix_energy(D, dsv_ds, S_SFC, RHO0, R, DT)
+         call run_rivermix_column(0.0_wp, R, 0.0_wp, m, k, s, conv0)
+         call run_rivermix_column(D, R, 0.0_wp, m, k, s, conv1)
+         call run_rivermix_column(D, 0.5_wp*R, 0.5_wp*R, m, k, s, conv2)
+         call check(error, conv0 == 0.0_wp, "no river mixing: the quiescent ledger must be zero")
+         if (allocated(error)) exit checks
+         call check(error, e > 0.0_wp .and. abs(conv1 - 0.2_wp*e/DT) <= 1.0e-10_wp*conv1, &
+                    "convective ledger != nstar*E_river/dt (term added twice or mis-sized)")
+         if (allocated(error)) exit checks
+         call check(error, conv2 == conv1, "liquid + frozen runoff must act as their sum")
+      end block checks
+   end subroutine test_rivermix_ledger
 
    ! -----------------------------------------------------------------
    ! Langmuir (LF17 wind-only path)

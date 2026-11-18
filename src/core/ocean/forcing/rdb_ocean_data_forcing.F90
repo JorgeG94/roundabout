@@ -494,7 +494,8 @@ contains
 
       ! --- runoff: model-grid mass fluxes (kg m-2 s-1, into the ocean).  Read on physical
       ! cells; the assembler snapshots them into `fw_net` (whose ghosts are exchanged), so no
-      ! halo work belongs here.  `frunoff` also owes the latent heat of fusion `q_fus_rof`
+      ! halo work belongs here (bar the river-mixing sum below).  `frunoff` also owes the latent
+      ! heat of fusion `q_fus_rof`
       ! (its ONE owner is this routine).
       if (this%id_lrunoff > 0) then
          call ocean_data_input_update_2d(reader, this%id_lrunoff, t, nx, ny, sf%lrunoff)
@@ -502,6 +503,14 @@ contains
       if (this%id_frunoff > 0) then
          call ocean_data_input_update_2d(reader, this%id_frunoff, t, nx, ny, sf%frunoff)
          call runoff_latent_heat_impl(nx, ny, ICE_LAT_FUS, sf%frunoff, sf%q_fus_rof)
+      end if
+      ! River mixing (`&ocean_epbl_nml rivermix_depth > 0`) reads the total runoff in the ghost
+      ! columns (EPBL `kv` is averaged onto faces from both neighbouring centres), but
+      ! `lrunoff`/`frunoff` live on physical cells only: assemble the sum once and EXCHANGE it
+      ! like `Q_heat` above.  Off, nothing runs (bit-identical).
+      if (sf%river_runoff_on) then
+         call runoff_sum_impl(nx, ny, sf%lrunoff, sf%frunoff, sf%runoff)
+         call ocean_halo_exchange_centre_field(sf%runoff, grid, bc)
       end if
       ! The land check reads the blended slot, whose land-ness is that of the two bracketing
       ! records, so it runs only when a record has been (re)read since the last check -- and
@@ -583,6 +592,19 @@ contains
       end do
       n_land = c
    end subroutine runoff_land_count_impl
+
+   pure subroutine runoff_sum_impl(nx, ny, lrunoff, frunoff, runoff)
+      !! `runoff = lrunoff + frunoff` (kg m-2 s-1) over the whole array; the seam ghosts are
+      !! overwritten by the exchange that follows.
+      integer, intent(in) :: nx, ny
+      real(wp), intent(in) :: lrunoff(nx, ny), frunoff(nx, ny)
+      real(wp), intent(out) :: runoff(nx, ny)
+      integer :: i, j
+
+      do concurrent(j=1:ny, i=1:nx)
+         runoff(i, j) = lrunoff(i, j) + frunoff(i, j)
+      end do
+   end subroutine runoff_sum_impl
 
    pure subroutine runoff_latent_heat_impl(nx, ny, lfus, frunoff, q_fus_rof)
       !! `q_fus_rof = -L_f * frunoff` (W m-2, <= 0, positive down): the latent heat owed
