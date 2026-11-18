@@ -1045,3 +1045,20 @@ model-grid totals and the mass moved from land to the coast, and at the end the 
 land cells that carried mass and the farthest move. It takes about one minute for a 0.25
 degree source on the 360 x 320 mosaic (the point map is built once, not per record).
 See `docs/howto/prepare_runoff_file.md`.
+
+## 9. ACCESS-OM3 vertical-mixing settings: `global_1deg_ice_om3.nml`
+
+`global_1deg_ice_fwmass.nml` (Sec. 8, same inputs) with OM3's boundary-layer and interior
+mixing in place of KPP + PP81: the energetics-based boundary layer (`&ocean_epbl_nml`,
+Reichl & Hallberg 2018) with OM3's values of the OM4 mstar scheme, `nstar = 0.06`,
+`tke_decay = 0.01`, the additive Langmuir enhancement and `combine = "max_shear"`; river
+mixing over 40 m (`rivermix_depth`); Jackson, Hallberg & Legg (2008) shear mixing
+(`&ocean_kappa_shear_nml`); a 1.5e-5 m2/s background diffusivity with unit Prandtl number;
+and the OM3 interval order (`diabatic_first = .false.`) at `dt_therm_ratio = 2`.
+
+What is not OM3's yet is listed in the namelist header: the thermodynamic interval (3600 s
+here, 7200 s in OM3 -- the cosine-zenith shortwave interpolation needs the 3-hourly
+radiation interval to be a multiple of it), the shortwave bands, and tidal mixing.
+
+Measured so far: a 30-day run on one V100 with the SYNTHETIC runoff files of Sec. 8 --
+finite, budgets at round-off, about 8 minutes. It has not been compared with OM3 output.
