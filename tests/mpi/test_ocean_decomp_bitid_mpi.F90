@@ -1841,9 +1841,11 @@ contains
       if (lbl == "cice_ice_bulk_cz" .or. lbl == "cice_ice_bulk_cz_fold") then
          ! The prescribed atmosphere with `sw_interp = 'coszen'` (the default) at a 7200 s thermo window
          ! (dt 900, ratio 8, the OM3 interval order `diabatic_first = .false.`) against 3-hourly `rsds`
-         ! records: every third window straddles a bucket edge (windows [7200,14400) and [28800,36000) of the
-         ! 48 steps), so the neighbour-record views, their per-rank regrids and the per-step `rsds_step` that
-         ! the CICE-port ice reads are all live.  The files' `rsds` differs from record to record and in
+         ! records.  The ocean's surface flux is the mean of the eight per-step fluxes of the interval
+         ! (the coszen window handed to the atmosphere is the 900 s step, which divides the 10800 s
+         ! record interval, so no step straddles an edge here); the per-step `rsds_step` that the
+         ! CICE-port ice reads, the interval accumulator and its mid-interval restart are live.  The
+         ! straddling kernels are exercised by the `_s` cases (ratio 1, steps that straddle).  The files' `rsds` differs from record to record and in
          ! longitude.  `_fold`: the tripolar cap (north fold, `px > 1` too).  The resume leg checkpoints at
          ! step 25 (mid-interval: 25 = 3*8 + 1).
          if (lbl == "cice_ice_bulk_cz") then
@@ -1862,8 +1864,8 @@ contains
          ! `dt_therm_ratio = 1`, so the shortwave window is the step and 4800 is not a multiple of 900:
          ! most record edges fall inside a step.  Every consumer (the ocean's bulk `q_sw`, the CICE-port
          ! ice's `sw_down`) then reads a two-record mixture, so the neighbour-record views, their
-         ! per-rank regrids and the straddle kernel move the compared fields (at ratio 8 the ocean never
-         ! spends the thermo-step window shortwave, see `cice_ice_bulk_cz`).
+         ! per-rank regrids and the straddle kernel move the compared fields (the ratio-8 `cice_ice_bulk_cz` cases
+         ! no longer straddle: the ocean averages per-step shortwave, see there).
          if (lbl == "cice_ice_bulk_cz_s") then
             nml = case_nml("bulk_flux_ice", scheme, px, py)
             call replace_all(nml, ATM_COLD_LIST, ATM_COLD_B_LIST)

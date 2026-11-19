@@ -2202,6 +2202,13 @@ contains
       ! under the interval mean (`accum_on`) `sw_net` is formed at the assembling
       ! finalize from the mean `q_sw` -- the shortwave inside `Q_heat` -- so the
       ! per-step form (and its seam exchange) is skipped.
+      if (engine%state%surface_flux%sw_net_stale) then
+         ! Resumed at ratio > 1 from a checkpoint without `sw_net`: form it once from this step's
+         ! `q_sw + sw_ice` (the checkpoint's `q_sw` is not restart state), then the assembly owns it.
+         call ocean_surface_flux_refresh_sw_net(engine%state%surface_flux, at_assembly=.true.)
+         call ocean_seam_refresh_sw_net(engine%state%surface_flux, engine%grid, engine%state%bc)
+         engine%state%surface_flux%sw_net_stale = .false.
+      end if
       if (.not. engine%state%surface_flux%accum_on) then
          call ocean_surface_flux_refresh_sw_net(engine%state%surface_flux)
          ! `q_sw` is a physical-span-only write, `sw_net` was just formed over

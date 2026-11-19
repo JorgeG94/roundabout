@@ -148,7 +148,7 @@ so the heat applied over the interval is `dt` times the sum of the per-step flux
 coupled-model treatment). The shortwave that penetrates (`sw_net`, with
 `sw_source = "q_sw"`) is formed from the same mean. Wind stress is per step, and so are the
 sea-ice and ice-shelf components, which are already interval quantities. The samples are those of
-the `N` dynamic steps that precede the assembly (one step of lag, as at ratio 1). The sums and the
+the `N` dynamic steps that precede the assembly, and the assembly is spent by the NEXT thermo step: with `diabatic_first = .true.` that step leads the following interval, so the mean lags the interval it is spent over by a full `N*dt` (energy is conserved, the diurnal phase is shifted); with `diabatic_first = .false.` (the OM3 order) the lag is about one step and the first interval has `N-1` samples. The sums and the
 count are restart state, so a checkpoint inside an interval resumes bit-identically. At
 `dt_therm_ratio = 1` none of this runs.
 

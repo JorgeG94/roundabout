@@ -973,6 +973,9 @@ contains
          ! `configure_ocean_lateral`'s config-copy to decide whether to
          ! skip reseeding `kv` (see `ocean_vmix_t%kv_from_restart`).
          state%vmix%kv_from_restart = reg%entry_found("vmix_kv")
+         ! Interval-mean treatment: a checkpoint without `sf_sw_net` leaves `sw_net` zero against
+         ! the restored `Q_heat`; the first resumed step forms it once (see `sw_net_stale`).
+         if (state%surface_flux%accum_on) state%surface_flux%sw_net_stale = .not. reg%entry_found("sf_sw_net")
       end if
 #else
       t = 0.0_wp

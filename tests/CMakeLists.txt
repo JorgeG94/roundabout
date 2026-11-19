@@ -468,6 +468,7 @@ set(NETCDF_TESTS
     test_ocean_cavity_draft_file
     test_ocean_periodic_seam_file
     test_ocean_surface_flux_seam
+    test_ocean_surface_flux_interval_mean
     test_ocean_diag_netcdf
     test_ocean_diag_precision
     test_ocean_supergrid
@@ -496,6 +497,7 @@ set(NETCDF_REQUIRED_TESTS
     test_ocean_cavity_draft_file
     test_ocean_periodic_seam_file
     test_ocean_surface_flux_seam
+    test_ocean_surface_flux_interval_mean
     test_ocean_diag_netcdf
     test_ocean_diag_precision
     test_ocean_supergrid

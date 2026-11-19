@@ -677,6 +677,11 @@ module rdb_ocean_surface_flux
          !! (`set_interval_mean`): true only with components on, thermodynamics on and
          !! `dt_therm_ratio > 1`.  Host latch.  Off (the default and every ratio-1 run) the
          !! accumulator is not allocated and no code path below runs: bit-identical.
+      logical :: sw_net_stale = .false.
+         !! Host latch, set by the restart read when the interval-mean treatment is on but the
+         !! checkpoint carried no `sf_sw_net` (written at ratio 1 or before the treatment): the
+         !! first `engine_step` then forms `sw_net` once from that step's `q_sw + sw_ice`, so it is
+         !! never zero against the restored non-zero `Q_heat`, and clears this.
       real(wp) :: accum_n = 0.0_wp
          !! Host scalar: number of dynamic steps summed into `accum` since the last assembly.
          !! Restart state (`sf_accum_n`, with `sf_accum`): a checkpoint can fall mid-interval.
