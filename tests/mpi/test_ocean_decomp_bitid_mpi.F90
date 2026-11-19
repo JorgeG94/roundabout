@@ -332,6 +332,21 @@ program test_ocean_decomp_bitid_mpi
    character(len=*), parameter :: ATM_COLD_LIST = "bitid_atm_cold_files.txt"
    character(len=*), parameter :: ATM_CRSE_COLD = "bitid_atm_coarse_cold.nc"
    character(len=*), parameter :: ATM_CRSE_COLD_LIST = "bitid_atm_coarse_cold_files.txt"
+   character(len=*), parameter :: ATM_COLD_T = "bitid_atm_cold_t.nc"
+   character(len=*), parameter :: ATM_COLD_T_LIST = "bitid_atm_cold_t_files.txt"
+   character(len=*), parameter :: ATM_CRSE_COLD_T = "bitid_atm_coarse_cold_t.nc"
+   character(len=*), parameter :: ATM_CRSE_COLD_T_LIST = "bitid_atm_coarse_cold_t_files.txt"
+   character(len=*), parameter :: ATM_COLD_B = "bitid_atm_cold_b.nc"
+   character(len=*), parameter :: ATM_COLD_B_LIST = "bitid_atm_cold_b_files.txt"
+   character(len=*), parameter :: ATM_CRSE_COLD_B = "bitid_atm_coarse_cold_b.nc"
+   character(len=*), parameter :: ATM_CRSE_COLD_B_LIST = "bitid_atm_coarse_cold_b_files.txt"
+      !! The `_T` files with the records every 4800 s (not 3 h): with the 900 s step, the step
+      !! `[t, t + dt)` itself straddles a record edge (4800 is not a multiple of 900), so the
+      !! per-step shortwave -- consumed by the ocean at `dt_therm_ratio = 1` and by the ice --
+      !! reads the neighbouring record.
+      !! Twins of the cold atmospheres whose `rsds` also varies from record to record (and in
+      !! longitude): the `cice_ice_bulk_cz*` cases read a different shortwave record in every
+      !! 3-hour bucket, so a rank holding the wrong record or the wrong neighbour cannot pass.
 
    type :: field_t
       !! One compared field: a host copy of the whole local array (2-D
@@ -406,7 +421,7 @@ program test_ocean_decomp_bitid_mpi
       !! `RDB_BITID_CASES`: run only the cases whose name contains this substring.
    type(comm_t) :: comm
    character(len=16), parameter :: SCHEMES(2) = [character(len=16) :: "pred_corr", "ssp_rk2"]
-   character(len=24), parameter :: CASES(119) = [character(len=24) :: &
+   character(len=24), parameter :: CASES(123) = [character(len=24) :: &
                                                  "island_basin", "weno7_pv", &
                                                  "periodic_channel_zstar", &
                                                  "visc_rem_zstar", &
@@ -455,7 +470,9 @@ program test_ocean_decomp_bitid_mpi
                                                  "runoff_mass", "runoff_mass_fold", &
                                                  "runoff_river", "runoff_river_fold", &
                                                  "cice_ice_fw_mass", "cice_ice_fw_mass_fold", "cice_ice_fw_mass_led", &
-                                                 "cice_ice_fw_mass_bfold"]
+                                                 "cice_ice_fw_mass_bfold", &
+                                                 "cice_ice_bulk_cz", "cice_ice_bulk_cz_fold", &
+                                                 "cice_ice_bulk_cz_s", "cice_ice_bulk_cz_s_fold"]
 
    call comm_env_init()
    call comm_env_setup_roles(.false.)
@@ -505,6 +522,7 @@ program test_ocean_decomp_bitid_mpi
           trim(CASES(ic)) == "bulk_flux_bl_ratio2" .or. trim(CASES(ic)) == "fw_mass_deferred" .or. &
           trim(CASES(ic)) == "fw_mass_deferred_nowin" .or. &
           trim(CASES(ic)) == "cice_ice_fw_mass_bfold" .or. &
+          trim(CASES(ic)) == "cice_ice_bulk_cz" .or. trim(CASES(ic)) == "cice_ice_bulk_cz_fold" .or. &
           trim(CASES(ic)) == "drain_ratio_fold_h3") cycle
       call run_case(trim(CASES(ic)), trim(SCHEMES(2)))
    end do
@@ -1786,6 +1804,44 @@ contains
          call replace_once(nml, "&ocean_atm_forcing_nml enable = .true., time_mode = 'interannual',", &
                            "&ocean_atm_forcing_nml enable = .true., sw_interp = 'linear', time_mode = 'interannual',")
       end if
+      if (lbl == "cice_ice_bulk_cz" .or. lbl == "cice_ice_bulk_cz_fold") then
+         ! The prescribed atmosphere with `sw_interp = 'coszen'` (the default) at a 7200 s thermo window
+         ! (dt 900, ratio 8, the OM3 interval order `diabatic_first = .false.`) against 3-hourly `rsds`
+         ! records: every third window straddles a bucket edge (windows [7200,14400) and [28800,36000) of the
+         ! 48 steps), so the neighbour-record views, their per-rank regrids and the per-step `rsds_step` that
+         ! the CICE-port ice reads are all live.  The files' `rsds` differs from record to record and in
+         ! longitude.  `_fold`: the tripolar cap (north fold, `px > 1` too).  The resume leg checkpoints at
+         ! step 25 (mid-interval: 25 = 3*8 + 1).
+         if (lbl == "cice_ice_bulk_cz") then
+            nml = case_nml("bulk_flux_ice", scheme, px, py)
+            call replace_all(nml, ATM_COLD_LIST, ATM_COLD_T_LIST)
+         else
+            nml = case_nml("bulk_flux_ice_fold", scheme, px, py)
+            call replace_all(nml, ATM_CRSE_COLD_LIST, ATM_CRSE_COLD_T_LIST)
+         end if
+         call swap_to_cice(nml)
+         call replace_once(nml, "&ocean_vmix_nml dt_therm_ratio = 2 /", &
+                           "&ocean_vmix_nml dt_therm_ratio = 8, diabatic_first = .false. /")
+      end if
+      if (lbl == "cice_ice_bulk_cz_s" .or. lbl == "cice_ice_bulk_cz_s_fold") then
+         ! The step ITSELF straddles a record edge: records every 4800 s (`sw_offset_s = 2400`), dt 900,
+         ! `dt_therm_ratio = 1`, so the shortwave window is the step and 4800 is not a multiple of 900:
+         ! most record edges fall inside a step.  Every consumer (the ocean's bulk `q_sw`, the CICE-port
+         ! ice's `sw_down`) then reads a two-record mixture, so the neighbour-record views, their
+         ! per-rank regrids and the straddle kernel move the compared fields (at ratio 8 the ocean never
+         ! spends the thermo-step window shortwave, see `cice_ice_bulk_cz`).
+         if (lbl == "cice_ice_bulk_cz_s") then
+            nml = case_nml("bulk_flux_ice", scheme, px, py)
+            call replace_all(nml, ATM_COLD_LIST, ATM_COLD_B_LIST)
+         else
+            nml = case_nml("bulk_flux_ice_fold", scheme, px, py)
+            call replace_all(nml, ATM_CRSE_COLD_LIST, ATM_CRSE_COLD_B_LIST)
+         end if
+         call swap_to_cice(nml)
+         call replace_once(nml, "&ocean_vmix_nml dt_therm_ratio = 2 /", "&ocean_vmix_nml dt_therm_ratio = 1 /")
+         call replace_once(nml, "&ocean_atm_forcing_nml enable = .true.,", &
+                           "&ocean_atm_forcing_nml enable = .true., sw_offset_s = 2400.0,")
+      end if
       if (lbl == "cice_ice_bulk" .or. lbl == "cice_ice_bulk_sw") then
          ! the lon-lat re-entrant channel of `bulk_flux_ice` (non-uniform prescribed atmosphere, regridded per
          ! rank) with the CICE-port ice in place of the SIS2 one
@@ -1860,6 +1916,22 @@ contains
       if (a == 0) error stop "replace_once: pattern not found in the case namelist: "//old
       str = str(1:a - 1)//new//str(a + len(old):)
    end subroutine replace_once
+
+   subroutine replace_all(str, old, new)
+      !! Replace every occurrence of `old` in `str` (stop when absent).
+      character(len=:), allocatable, intent(inout) :: str
+      character(len=*), intent(in) :: old, new
+      integer :: a, from
+      from = 1
+      if (index(str, old) == 0) error stop "replace_all: pattern not found in the case namelist: "//old
+      do
+         a = index(str(from:), old)
+         if (a == 0) exit
+         a = a + from - 1
+         str = str(1:a - 1)//new//str(a + len(old):)
+         from = a + len(new)
+      end do
+   end subroutine replace_all
 
    function cavity_nml(label, scheme, spx, spy, gfrac) result(nml)
       !! Ice-shelf cavity cases (dyn + virtual melt + quadratic top drag, all
@@ -3183,7 +3255,8 @@ contains
       is_ice_fold_case = label == "sea_ice_fold" .or. label == "sea_ice_fold_nodyn" .or. &
                          label == "sea_ice_cdyn_fold" .or. label == "sea_ice_cdyn_edge" .or. &
                          index(label, "cice_ice_fold") == 1 .or. label == "cice_ice_bulk_fold" .or. &
-                         label == "cice_ice_fw_mass_fold" .or. label == "cice_ice_fw_mass_bfold"
+                         label == "cice_ice_fw_mass_fold" .or. label == "cice_ice_fw_mass_bfold" .or. &
+                         label == "cice_ice_bulk_cz_fold" .or. label == "cice_ice_bulk_cz_s_fold"
    end function is_ice_fold_case
 
    subroutine check_ice_seam(ref, tag)
@@ -3252,7 +3325,8 @@ contains
       seam_x = [14, 8, 15, 21]
       seam_y = [10, 6, 11, 15]
       if (label == "sea_ice_cdyn_fold" .or. label == "sea_ice_cdyn_edge" .or. label == "cice_ice_fold" .or. label == "cice_ice_fold_led" .or. &
-          label == "cice_ice_bulk_fold" .or. label == "cice_ice_fw_mass_fold" .or. label == "cice_ice_fw_mass_bfold") then
+          label == "cice_ice_bulk_fold" .or. label == "cice_ice_fw_mass_fold" .or. label == "cice_ice_fw_mass_bfold" .or. &
+          label == "cice_ice_bulk_cz_fold" .or. label == "cice_ice_bulk_cz_s_fold") then
          ! the cap grid is 30 x 24
          seam_x = [16, 9, 17, 24]
          seam_y = [13, 7, 13, 19]
@@ -4434,6 +4508,11 @@ contains
       ! 30 x 10 degree source for the tripolar cap (see the bulk_flux_fold case).
       call write_atm_file(ATM_CRSE, ATM_CRSE_LIST, 288.0_wp, 4.0e-3_wp, 12, 18)
       call write_atm_file(ATM_CRSE_COLD, ATM_CRSE_COLD_LIST, 255.0_wp, 6.0e-4_wp, 12, 18)
+      call write_atm_file(ATM_COLD_T, ATM_COLD_T_LIST, 255.0_wp, 6.0e-4_wp, 72, 36, rsds_time=.true.)
+      call write_atm_file(ATM_CRSE_COLD_T, ATM_CRSE_COLD_T_LIST, 255.0_wp, 6.0e-4_wp, 12, 18, rsds_time=.true.)
+      call write_atm_file(ATM_COLD_B, ATM_COLD_B_LIST, 255.0_wp, 6.0e-4_wp, 72, 36, rsds_time=.true., bucket_s=4800.0_wp)
+      call write_atm_file(ATM_CRSE_COLD_B, ATM_CRSE_COLD_B_LIST, 255.0_wp, 6.0e-4_wp, 12, 18, rsds_time=.true., &
+                          bucket_s=4800.0_wp)
    end subroutine write_input_files
 
    subroutine write_runoff_file(path, nx, ny, pts, nfrozen)
@@ -4486,7 +4565,7 @@ contains
       call write_runoff_file(RUNOFF_FOLD_W, 30, 24, PFW, 2)
    end subroutine write_runoff_files
 
-   subroutine write_atm_file(path, listname, tas0, huss0, nlon, nlat)
+   subroutine write_atm_file(path, listname, tas0, huss0, nlon, nlat, rsds_time, bucket_s)
       !! One global lon-lat file (5 degrees, NT three-hourly records stamped at
       !! the interval centres over 2000-06-20..22 -- `sw_interp = 'coszen'` infers
       !! the averaging interval from the `rsds` axis and needs >= 3 -- all nine CMOR
@@ -4496,15 +4575,26 @@ contains
       character(len=*), intent(in) :: path, listname
       real(wp), intent(in) :: tas0, huss0
       integer, intent(in) :: nlon, nlat
+      logical, intent(in), optional :: rsds_time
+      real(wp), intent(in), optional :: bucket_s
+         !! Record spacing in seconds (default 10800, three-hourly); the records stay stamped at
+         !! the interval centres and cover the same three days.
+         !! `rsds` also varies with the record and the longitude (a different shortwave in every
+         !! 3-hour bucket).
       real(wp), parameter :: PI = 3.14159265358979323846_wp
       character(len=4), parameter :: VN(9) = [character(len=4) :: "tas", "huss", "uas", &
                                                                                        "vas", "psl", "rlds", "rsds", "prra", "prsn"]
-      integer, parameter :: NT = 24
-      real(wp) :: lon(nlon), lat(nlat), lonb(2, nlon), latb(2, nlat), tax(NT), f(nlon, nlat, NT)
+      integer :: NT
+      real(wp) :: lon(nlon), lat(nlat), lonb(2, nlon), latb(2, nlat), spacing
+      real(wp), allocatable :: tax(:), f(:, :, :)
       real(wp) :: sx, sy, dlo, dla
       integer :: ncid, dlon_, dlat_, dbnd, dtim, vlon, vlat, vlonb, vlatb, vtim, vf(9)
       integer :: v, i, j, k, ierr, u
 
+      spacing = 10800.0_wp
+      if (present(bucket_s)) spacing = bucket_s
+      NT = nint(3.0_wp*86400.0_wp/spacing)
+      allocate (tax(NT), f(nlon, nlat, NT))
       dlo = 360.0_wp/real(nlon, wp)
       dla = 180.0_wp/real(nlat, wp)
       do i = 1, nlon
@@ -4518,7 +4608,7 @@ contains
          lat(j) = 0.5_wp*(latb(1, j) + latb(2, j))
       end do
       do k = 1, NT
-         tax(k) = 0.125_wp*(real(k, wp) - 0.5_wp)
+         tax(k) = (real(k, wp) - 0.5_wp)*spacing/86400.0_wp
       end do
       call nc_create_file(path, ncid)
       call nc_def_dim(ncid, "lon", nlon, dlon_)
@@ -4562,6 +4652,9 @@ contains
                      f(i, j, k) = 330.0_wp + 15.0_wp*sy + 20.0_wp*sx
                   case (7)
                      f(i, j, k) = 180.0_wp + 40.0_wp*sx*sy + 0.5_wp*lat(j)
+                     if (present(rsds_time)) then
+                        if (rsds_time) f(i, j, k) = f(i, j, k) + 45.0_wp*sin(0.9_wp*real(k, wp) + lon(i)/40.0_wp)
+                     end if
                   case (8)
                      f(i, j, k) = 2.0e-5_wp*(1.0_wp + 0.5_wp*sx)
                   case default
