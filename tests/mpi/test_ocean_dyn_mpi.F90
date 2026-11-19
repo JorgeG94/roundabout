@@ -1371,9 +1371,9 @@ contains
    !                                    without a `vcoord`, i.e. Eulerian)
    !   centre_3d = 3 * 2 * N_STEPS     (continuity mid-Lie-split: h + the
    !                                    2 registered tracers, per stage)
-   !   bt_group  = (N_INNER + 1) * 2 * N_STEPS  (one grouped BT exchange per
-   !                                       fast-loop substep, plus the exit
-   !                                       freshen of the time mean)
+   !   bt_packed = (N_INNER + 1) * 2 * N_STEPS  (one packed eta/ubt/vbt exchange
+   !                                       per fast-loop substep, plus the exit
+   !                                       freshen of the time mean; bt_group = 0)
    !   bt_u_mid  = N_INNER * 2 * N_STEPS on a REAL decomposition (px > 1),
    !               0 single-rank (the mid-substep u exchange is gated on
    !               ocean_halo_is_decomposed())
@@ -1514,7 +1514,10 @@ contains
          end block
       else
          ! v1 path.
-         expect_btg = int((N_INNER + 1)*2*N_STEPS, int64)
+         ! One PACKED exchange (eta, ubt, vbt) per fast-loop substep plus the exit
+         ! freshen; the grouped `bt_group` exchange is no longer on this path.
+         expect_btg = 0_int64
+         expect_pk = int((N_INNER + 1)*2*N_STEPS, int64)
          expect_btu = 0_int64
          if (decomposed) expect_btu = int(N_INNER*2*N_STEPS, int64)
          expect_c2d = 0_int64
@@ -1525,20 +1528,19 @@ contains
          !   Per outer step per direction:
          !     ml_state:    4 calls/stage × 2 stages × 5 prims (h, ux, vy, S, T) = 40
          !     continuity:  1 call/stage  × 2 stages × 3 prims (h, S, T)         = 6
-         !     bt_group:    (N_INNER+1)/stage × 2 stages × 3 prims (η, ubt, vbt) = N_INNER*6 + 6
+         !     bt_packed:   (N_INNER+1)/stage × 2 stages × 1 packed round        = N_INNER*2 + 2
          !     bt_u_mid:    N_INNER/stage  × 2 stages × 1 prim  (ubt face_x)     = N_INNER*2
-         !   = (52 + N_INNER*8) × N_STEPS × n_x_dirs
+         !   = (48 + N_INNER*4) × N_STEPS × n_x_dirs
          block
             integer(int64) :: isends_per_step_per_dir, n_x_dirs
             n_x_dirs = 1_int64
             if (periodic .and. decomposed) n_x_dirs = 2_int64
-            isends_per_step_per_dir = 52_int64 + int(N_INNER, int64)*8_int64 &
+            isends_per_step_per_dir = 48_int64 + int(N_INNER, int64)*4_int64 &
                                       + pc_isends_per_step
             expect_msgs = isends_per_step_per_dir*int(N_STEPS, int64)*n_x_dirs
          end block
       end if
 
-      expect_pk = merge(expect_pk, 0_int64, bh > 0)
       c_pk = oh_counters_packed()
       call oh_counters_get(c_bt_group, c_bt_u_mid, c_ml_state, &
                            c_centre_2d, c_centre_3d, &

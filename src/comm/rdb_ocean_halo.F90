@@ -80,6 +80,19 @@
 !!     Four messages per rank, four matching irecvs — no ambiguity because
 !!     each (source_rank, tag) pair is posted exactly once.
 !!
+!! BAROTROPIC FAST LOOP (`bt_halo = 0`)
+!! ====================================
+!! Per substep the loop issues TWO two-pass rounds: one `ocean_halo_packed_wide`
+!! (at the model's own `nghost`) carrying eta, ubt and vbt together, at the
+!! end of the substep, and the mid-substep `ocean_halo_face_x(bt_ubt)` between
+!! the u update and the v update (the v update reads the u it just wrote; it
+!! cannot join the end-of-substep message, and a fold at px > 1 sits between
+!! the two).  The exit freshen of the time means is one more packed round per
+!! solve.  Before this, the end-of-substep exchange was three sequential
+!! two-pass rounds (`ocean_halo_bt_group_2d`), i.e. four rounds per substep.
+!! The packed call fills the same strips from the same sources in the same
+!! two-pass order per array, so every ghost value is unchanged.
+!!
 !! v1: single code path — device-resident under OpenACC with CUDA-aware MPI;
 !!     host-staged otherwise.  O2 staging variant deferred to solver wiring.
 !!
@@ -444,16 +457,17 @@ contains
          need_ns = max(need_ns, w_ns)
       end if
 
-      if (ng_wide > 0) then
-         block
-            integer :: pk_ew, pk_ns
-            call pk_cap_for(ng_wide, pk_ew, pk_ns)
-            if (.not. allocated(oh_pk_send_east) .or. pk_ew > oh_pk_cap_ew .or. &
-                pk_ns > oh_pk_cap_ns) then
-               call pk_alloc(pk_ew, pk_ns)
-            end if
-         end block
-      end if
+      ! Packed buffers: always at the model's own width (the ordinary
+      ! barotropic loop packs its eta / ubt / vbt exchange at `oh_nghost`), and
+      ! at the wide width when the march-in is on.
+      block
+         integer :: pk_ew, pk_ns
+         call pk_cap_for(max(ng, ng_wide), pk_ew, pk_ns)
+         if (.not. allocated(oh_pk_send_east) .or. pk_ew > oh_pk_cap_ew .or. &
+             pk_ns > oh_pk_cap_ns) then
+            call pk_alloc(pk_ew, pk_ns)
+         end if
+      end block
 
       if (need_ew <= oh_cap_ew .and. need_ns <= oh_cap_ns) return
 
@@ -1736,8 +1750,14 @@ contains
       type(request_t) :: reqs(MAX_REQS)
       type(MPI_Status) :: stats(MAX_REQS)
       logical :: need_e, need_w, need_n, need_s
+      logical :: only3
+         !! No optional array: the exchange is the (eta, ubt, vbt) triple, packed in one kernel.
 
+      ! The call is counted first, as the grouped path counted `bt_group` before its
+      ! (then no-op) exchanges: the counter tallies calls, not exchanges done.
       call oh_count_bt_packed()
+      ! Not initialised (a direct-kernel unit test): a no-op, as the grouped path was.
+      if (.not. oh_initialised) return
       call wide_halo_guards(ng, "ocean_halo_packed_wide")
       call pk_ensure(ng)
 
@@ -1747,6 +1767,7 @@ contains
       nyt = nyl + 2*ng
       if (oh_decomp%px > 1 .or. oh_decomp%py > 1) comm = comm_env_compute_comm()
       call needs_flags(need_w, need_e, need_s, need_n)
+      only3 = .not. (present(eb) .or. present(xa) .or. present(xb) .or. present(ya) .or. present(yb))
       ! Message lengths from the array counts alone (a rank without an east
       ! neighbour still receives from its west one the size it would send).
       n_c = 1
@@ -1789,23 +1810,27 @@ contains
          if (need_w) rk_w = ew_rank_west()
          so_e = 0
          so_w = 0
-         call pk_x_pack(eta, nxt, nyt, 1, ng, nxl, need_e, need_w, so_e, so_w)
-         if (present(eb)) then
-            call pk_x_pack(eb, nxt, nyt, 1, ng, nxl, need_e, need_w, so_e, so_w)
-         end if
-         call pk_x_pack(ubt, nxt + 1, nyt, 2, ng, nxl, need_e, need_w, so_e, so_w)
-         if (present(xa)) then
-            call pk_x_pack(xa, nxt + 1, nyt, 2, ng, nxl, need_e, need_w, so_e, so_w)
-         end if
-         if (present(xb)) then
-            call pk_x_pack(xb, nxt + 1, nyt, 2, ng, nxl, need_e, need_w, so_e, so_w)
-         end if
-         call pk_x_pack(vbt, nxt, nyt + 1, 3, ng, nxl, need_e, need_w, so_e, so_w)
-         if (present(ya)) then
-            call pk_x_pack(ya, nxt, nyt + 1, 3, ng, nxl, need_e, need_w, so_e, so_w)
-         end if
-         if (present(yb)) then
-            call pk_x_pack(yb, nxt, nyt + 1, 3, ng, nxl, need_e, need_w, so_e, so_w)
+         if (only3) then
+            call pk_x_pack3(eta, ubt, vbt, ng, nxl, nxt, nyt, need_e, need_w)
+         else
+            call pk_x_pack(eta, nxt, nyt, 1, ng, nxl, need_e, need_w, so_e, so_w)
+            if (present(eb)) then
+               call pk_x_pack(eb, nxt, nyt, 1, ng, nxl, need_e, need_w, so_e, so_w)
+            end if
+            call pk_x_pack(ubt, nxt + 1, nyt, 2, ng, nxl, need_e, need_w, so_e, so_w)
+            if (present(xa)) then
+               call pk_x_pack(xa, nxt + 1, nyt, 2, ng, nxl, need_e, need_w, so_e, so_w)
+            end if
+            if (present(xb)) then
+               call pk_x_pack(xb, nxt + 1, nyt, 2, ng, nxl, need_e, need_w, so_e, so_w)
+            end if
+            call pk_x_pack(vbt, nxt, nyt + 1, 3, ng, nxl, need_e, need_w, so_e, so_w)
+            if (present(ya)) then
+               call pk_x_pack(ya, nxt, nyt + 1, 3, ng, nxl, need_e, need_w, so_e, so_w)
+            end if
+            if (present(yb)) then
+               call pk_x_pack(yb, nxt, nyt + 1, 3, ng, nxl, need_e, need_w, so_e, so_w)
+            end if
          end if
          nreq = 0
          if (need_e) then
@@ -1830,23 +1855,27 @@ contains
          end if
          ro_w = 0
          ro_e = 0
-         call pk_x_unpack(eta, nxt, nyt, 1, ng, nxl, need_e, need_w, ro_w, ro_e)
-         if (present(eb)) then
-            call pk_x_unpack(eb, nxt, nyt, 1, ng, nxl, need_e, need_w, ro_w, ro_e)
-         end if
-         call pk_x_unpack(ubt, nxt + 1, nyt, 2, ng, nxl, need_e, need_w, ro_w, ro_e)
-         if (present(xa)) then
-            call pk_x_unpack(xa, nxt + 1, nyt, 2, ng, nxl, need_e, need_w, ro_w, ro_e)
-         end if
-         if (present(xb)) then
-            call pk_x_unpack(xb, nxt + 1, nyt, 2, ng, nxl, need_e, need_w, ro_w, ro_e)
-         end if
-         call pk_x_unpack(vbt, nxt, nyt + 1, 3, ng, nxl, need_e, need_w, ro_w, ro_e)
-         if (present(ya)) then
-            call pk_x_unpack(ya, nxt, nyt + 1, 3, ng, nxl, need_e, need_w, ro_w, ro_e)
-         end if
-         if (present(yb)) then
-            call pk_x_unpack(yb, nxt, nyt + 1, 3, ng, nxl, need_e, need_w, ro_w, ro_e)
+         if (only3) then
+            call pk_x_unpack3(eta, ubt, vbt, ng, nxl, nxt, nyt, need_e, need_w)
+         else
+            call pk_x_unpack(eta, nxt, nyt, 1, ng, nxl, need_e, need_w, ro_w, ro_e)
+            if (present(eb)) then
+               call pk_x_unpack(eb, nxt, nyt, 1, ng, nxl, need_e, need_w, ro_w, ro_e)
+            end if
+            call pk_x_unpack(ubt, nxt + 1, nyt, 2, ng, nxl, need_e, need_w, ro_w, ro_e)
+            if (present(xa)) then
+               call pk_x_unpack(xa, nxt + 1, nyt, 2, ng, nxl, need_e, need_w, ro_w, ro_e)
+            end if
+            if (present(xb)) then
+               call pk_x_unpack(xb, nxt + 1, nyt, 2, ng, nxl, need_e, need_w, ro_w, ro_e)
+            end if
+            call pk_x_unpack(vbt, nxt, nyt + 1, 3, ng, nxl, need_e, need_w, ro_w, ro_e)
+            if (present(ya)) then
+               call pk_x_unpack(ya, nxt, nyt + 1, 3, ng, nxl, need_e, need_w, ro_w, ro_e)
+            end if
+            if (present(yb)) then
+               call pk_x_unpack(yb, nxt, nyt + 1, 3, ng, nxl, need_e, need_w, ro_w, ro_e)
+            end if
          end if
       end if
 
@@ -1877,23 +1906,27 @@ contains
          if (need_s) rk_s = ns_rank_south()
          so_n = 0
          so_s = 0
-         call pk_y_pack(eta, nxt, nyt, 1, ng, nyl, need_n, need_s, so_n, so_s)
-         if (present(eb)) then
-            call pk_y_pack(eb, nxt, nyt, 1, ng, nyl, need_n, need_s, so_n, so_s)
-         end if
-         call pk_y_pack(ubt, nxt + 1, nyt, 2, ng, nyl, need_n, need_s, so_n, so_s)
-         if (present(xa)) then
-            call pk_y_pack(xa, nxt + 1, nyt, 2, ng, nyl, need_n, need_s, so_n, so_s)
-         end if
-         if (present(xb)) then
-            call pk_y_pack(xb, nxt + 1, nyt, 2, ng, nyl, need_n, need_s, so_n, so_s)
-         end if
-         call pk_y_pack(vbt, nxt, nyt + 1, 3, ng, nyl, need_n, need_s, so_n, so_s)
-         if (present(ya)) then
-            call pk_y_pack(ya, nxt, nyt + 1, 3, ng, nyl, need_n, need_s, so_n, so_s)
-         end if
-         if (present(yb)) then
-            call pk_y_pack(yb, nxt, nyt + 1, 3, ng, nyl, need_n, need_s, so_n, so_s)
+         if (only3) then
+            call pk_y_pack3(eta, ubt, vbt, ng, nyl, nxt, nyt, need_n, need_s)
+         else
+            call pk_y_pack(eta, nxt, nyt, 1, ng, nyl, need_n, need_s, so_n, so_s)
+            if (present(eb)) then
+               call pk_y_pack(eb, nxt, nyt, 1, ng, nyl, need_n, need_s, so_n, so_s)
+            end if
+            call pk_y_pack(ubt, nxt + 1, nyt, 2, ng, nyl, need_n, need_s, so_n, so_s)
+            if (present(xa)) then
+               call pk_y_pack(xa, nxt + 1, nyt, 2, ng, nyl, need_n, need_s, so_n, so_s)
+            end if
+            if (present(xb)) then
+               call pk_y_pack(xb, nxt + 1, nyt, 2, ng, nyl, need_n, need_s, so_n, so_s)
+            end if
+            call pk_y_pack(vbt, nxt, nyt + 1, 3, ng, nyl, need_n, need_s, so_n, so_s)
+            if (present(ya)) then
+               call pk_y_pack(ya, nxt, nyt + 1, 3, ng, nyl, need_n, need_s, so_n, so_s)
+            end if
+            if (present(yb)) then
+               call pk_y_pack(yb, nxt, nyt + 1, 3, ng, nyl, need_n, need_s, so_n, so_s)
+            end if
          end if
          nreq = 0
          if (need_n) then
@@ -1918,23 +1951,27 @@ contains
          end if
          ro_s = 0
          ro_n = 0
-         call pk_y_unpack(eta, nxt, nyt, 1, ng, nyl, need_n, need_s, ro_s, ro_n)
-         if (present(eb)) then
-            call pk_y_unpack(eb, nxt, nyt, 1, ng, nyl, need_n, need_s, ro_s, ro_n)
-         end if
-         call pk_y_unpack(ubt, nxt + 1, nyt, 2, ng, nyl, need_n, need_s, ro_s, ro_n)
-         if (present(xa)) then
-            call pk_y_unpack(xa, nxt + 1, nyt, 2, ng, nyl, need_n, need_s, ro_s, ro_n)
-         end if
-         if (present(xb)) then
-            call pk_y_unpack(xb, nxt + 1, nyt, 2, ng, nyl, need_n, need_s, ro_s, ro_n)
-         end if
-         call pk_y_unpack(vbt, nxt, nyt + 1, 3, ng, nyl, need_n, need_s, ro_s, ro_n)
-         if (present(ya)) then
-            call pk_y_unpack(ya, nxt, nyt + 1, 3, ng, nyl, need_n, need_s, ro_s, ro_n)
-         end if
-         if (present(yb)) then
-            call pk_y_unpack(yb, nxt, nyt + 1, 3, ng, nyl, need_n, need_s, ro_s, ro_n)
+         if (only3) then
+            call pk_y_unpack3(eta, ubt, vbt, ng, nyl, nxt, nyt, need_n, need_s)
+         else
+            call pk_y_unpack(eta, nxt, nyt, 1, ng, nyl, need_n, need_s, ro_s, ro_n)
+            if (present(eb)) then
+               call pk_y_unpack(eb, nxt, nyt, 1, ng, nyl, need_n, need_s, ro_s, ro_n)
+            end if
+            call pk_y_unpack(ubt, nxt + 1, nyt, 2, ng, nyl, need_n, need_s, ro_s, ro_n)
+            if (present(xa)) then
+               call pk_y_unpack(xa, nxt + 1, nyt, 2, ng, nyl, need_n, need_s, ro_s, ro_n)
+            end if
+            if (present(xb)) then
+               call pk_y_unpack(xb, nxt + 1, nyt, 2, ng, nyl, need_n, need_s, ro_s, ro_n)
+            end if
+            call pk_y_unpack(vbt, nxt, nyt + 1, 3, ng, nyl, need_n, need_s, ro_s, ro_n)
+            if (present(ya)) then
+               call pk_y_unpack(ya, nxt, nyt + 1, 3, ng, nyl, need_n, need_s, ro_s, ro_n)
+            end if
+            if (present(yb)) then
+               call pk_y_unpack(yb, nxt, nyt + 1, 3, ng, nyl, need_n, need_s, ro_s, ro_n)
+            end if
          end if
       end if
    end subroutine ocean_halo_packed_wide
@@ -2091,6 +2128,123 @@ contains
       end if
    end subroutine pk_y_unpack
 
+   ! The four `*3` kernels below do ONE pass over the (eta, ubt, vbt) triple that the fast loop
+   ! exchanges every substep, instead of one launch per array and direction.  They write the same
+   ! buffer layout as three consecutive pk_*_pack / pk_*_unpack calls (eta strip, then ubt, then
+   ! vbt, each j-major / k-major exactly as above), so the messages are unchanged.
+
+   subroutine pk_x_pack3(eta, ubt, vbt, ng, nxl, nxt, nyt, need_e, need_w)
+      !! X pass: append the east / west send strips of (eta, ubt, vbt) in one kernel per side.
+      integer, intent(in) :: ng, nxl, nxt, nyt
+      real(wp), intent(in) :: eta(nxt, nyt)
+      real(wp), intent(in) :: ubt(nxt + 1, nyt)
+      real(wp), intent(in) :: vbt(nxt, nyt + 1)
+      logical, intent(in) :: need_e, need_w
+      integer :: j, k, e2, e3, w2, w3
+      e2 = ng*nyt
+      e3 = e2 + (ng + 1)*nyt
+      w2 = ng*nyt
+      w3 = w2 + ng*nyt
+      if (need_e) then
+         do concurrent(j=1:nyt + 1, k=1:ng + 1)
+            if (j <= nyt .and. k <= ng) oh_pk_send_east((j - 1)*ng + k) = eta(nxl + k, j)
+            if (j <= nyt) oh_pk_send_east(e2 + (j - 1)*(ng + 1) + k) = ubt(nxl + k, j)
+            if (k <= ng) oh_pk_send_east(e3 + (j - 1)*ng + k) = vbt(nxl + k, j)
+         end do
+      end if
+      if (need_w) then
+         do concurrent(j=1:nyt + 1, k=1:ng)
+            if (j <= nyt) oh_pk_send_west((j - 1)*ng + k) = eta(ng + k, j)
+            if (j <= nyt) oh_pk_send_west(w2 + (j - 1)*ng + k) = ubt(ng + 1 + k, j)
+            oh_pk_send_west(w3 + (j - 1)*ng + k) = vbt(ng + k, j)
+         end do
+      end if
+   end subroutine pk_x_pack3
+
+   subroutine pk_x_unpack3(eta, ubt, vbt, ng, nxl, nxt, nyt, need_e, need_w)
+      !! X pass: fill the west / east ghost bands of (eta, ubt, vbt) in one kernel per side.
+      integer, intent(in) :: ng, nxl, nxt, nyt
+      real(wp), intent(inout) :: eta(nxt, nyt)
+      real(wp), intent(inout) :: ubt(nxt + 1, nyt)
+      real(wp), intent(inout) :: vbt(nxt, nyt + 1)
+      logical, intent(in) :: need_e, need_w
+      integer :: j, k, w2, w3, e2, e3
+      w2 = ng*nyt
+      w3 = w2 + (ng + 1)*nyt
+      e2 = ng*nyt
+      e3 = e2 + ng*nyt
+      if (need_w) then
+         do concurrent(j=1:nyt + 1, k=1:ng + 1)
+            if (j <= nyt .and. k <= ng) eta(k, j) = oh_pk_recv_west((j - 1)*ng + k)
+            if (j <= nyt) ubt(k, j) = oh_pk_recv_west(w2 + (j - 1)*(ng + 1) + k)
+            if (k <= ng) vbt(k, j) = oh_pk_recv_west(w3 + (j - 1)*ng + k)
+         end do
+      end if
+      if (need_e) then
+         do concurrent(j=1:nyt + 1, k=1:ng)
+            if (j <= nyt) eta(ng + nxl + k, j) = oh_pk_recv_east((j - 1)*ng + k)
+            if (j <= nyt) ubt(ng + nxl + 1 + k, j) = oh_pk_recv_east(e2 + (j - 1)*ng + k)
+            vbt(ng + nxl + k, j) = oh_pk_recv_east(e3 + (j - 1)*ng + k)
+         end do
+      end if
+   end subroutine pk_x_unpack3
+
+   subroutine pk_y_pack3(eta, ubt, vbt, ng, nyl, nxt, nyt, need_n, need_s)
+      !! Y pass: append the north / south send strips of (eta, ubt, vbt) in one kernel per side.
+      integer, intent(in) :: ng, nyl, nxt, nyt
+      real(wp), intent(in) :: eta(nxt, nyt)
+      real(wp), intent(in) :: ubt(nxt + 1, nyt)
+      real(wp), intent(in) :: vbt(nxt, nyt + 1)
+      logical, intent(in) :: need_n, need_s
+      integer :: i, k, n2, n3, s2, s3
+      n2 = ng*nxt
+      n3 = n2 + ng*(nxt + 1)
+      s2 = ng*nxt
+      s3 = s2 + ng*(nxt + 1)
+      if (need_n) then
+         do concurrent(k=1:ng + 1, i=1:nxt + 1)
+            if (k <= ng .and. i <= nxt) oh_pk_send_north((k - 1)*nxt + i) = eta(i, nyl + k)
+            if (k <= ng) oh_pk_send_north(n2 + (k - 1)*(nxt + 1) + i) = ubt(i, nyl + k)
+            if (i <= nxt) oh_pk_send_north(n3 + (k - 1)*nxt + i) = vbt(i, nyl + k)
+         end do
+      end if
+      if (need_s) then
+         do concurrent(k=1:ng, i=1:nxt + 1)
+            if (i <= nxt) oh_pk_send_south((k - 1)*nxt + i) = eta(i, ng + k)
+            oh_pk_send_south(s2 + (k - 1)*(nxt + 1) + i) = ubt(i, ng + k)
+            if (i <= nxt) oh_pk_send_south(s3 + (k - 1)*nxt + i) = vbt(i, ng + 1 + k)
+         end do
+      end if
+   end subroutine pk_y_pack3
+
+   subroutine pk_y_unpack3(eta, ubt, vbt, ng, nyl, nxt, nyt, need_n, need_s)
+      !! Y pass: fill the south / north ghost bands of (eta, ubt, vbt) in one kernel per side.
+      integer, intent(in) :: ng, nyl, nxt, nyt
+      real(wp), intent(inout) :: eta(nxt, nyt)
+      real(wp), intent(inout) :: ubt(nxt + 1, nyt)
+      real(wp), intent(inout) :: vbt(nxt, nyt + 1)
+      logical, intent(in) :: need_n, need_s
+      integer :: i, k, s2, s3, n2, n3
+      s2 = ng*nxt
+      s3 = s2 + ng*(nxt + 1)
+      n2 = ng*nxt
+      n3 = n2 + ng*(nxt + 1)
+      if (need_s) then
+         do concurrent(k=1:ng + 1, i=1:nxt + 1)
+            if (k <= ng .and. i <= nxt) eta(i, k) = oh_pk_recv_south((k - 1)*nxt + i)
+            if (k <= ng) ubt(i, k) = oh_pk_recv_south(s2 + (k - 1)*(nxt + 1) + i)
+            if (i <= nxt) vbt(i, k) = oh_pk_recv_south(s3 + (k - 1)*nxt + i)
+         end do
+      end if
+      if (need_n) then
+         do concurrent(k=1:ng, i=1:nxt + 1)
+            if (i <= nxt) eta(i, ng + nyl + k) = oh_pk_recv_north((k - 1)*nxt + i)
+            ubt(i, ng + nyl + k) = oh_pk_recv_north(n2 + (k - 1)*(nxt + 1) + i)
+            if (i <= nxt) vbt(i, ng + nyl + 1 + k) = oh_pk_recv_north(n3 + (k - 1)*nxt + i)
+         end do
+      end if
+   end subroutine pk_y_unpack3
+
    ! ==================================================================
    ! Private helpers
    ! ==================================================================
@@ -2161,7 +2315,7 @@ contains
                            " > nx_local="//to_string(oh_nx_local)// &
                            " with px="//to_string(oh_decomp%px)//". "// &
                            "Wide halo width exceeds local interior; decompose "// &
-                           "less or lower bt_halo.")
+                           "less (a tile must be at least nghost wide) or lower bt_halo.")
          error stop "wide halo width exceeds local interior (x)"
       end if
       if (oh_decomp%py > 1 .and. ng_wide > oh_ny_local) then
@@ -2169,7 +2323,7 @@ contains
                            " > ny_local="//to_string(oh_ny_local)// &
                            " with py="//to_string(oh_decomp%py)//". "// &
                            "Wide halo width exceeds local interior; decompose "// &
-                           "less or lower bt_halo.")
+                           "less (a tile must be at least nghost wide) or lower bt_halo.")
          error stop "wide halo width exceeds local interior (y)"
       end if
       ! Single-rank periodic guard: the wrap reads i + nx_phys, so ng_wide
@@ -2179,7 +2333,7 @@ contains
                            " > nx_phys="//to_string(oh_nx_local)// &
                            " for single-rank periodic-x. "// &
                            "The local wrap reads i+nx_phys which would exceed "// &
-                           "the array. Reduce ng_wide.")
+                           "the array. Use a longer periodic axis or reduce ng_wide/nghost.")
          error stop "wide halo: ng_wide > nx_phys for single-rank periodic-x"
       end if
       if (oh_decomp%py == 1 .and. oh_periodic_y .and. ng_wide > oh_ny_local) then
@@ -2187,7 +2341,7 @@ contains
                            " > ny_phys="//to_string(oh_ny_local)// &
                            " for single-rank periodic-y. "// &
                            "The local wrap reads j+ny_phys which would exceed "// &
-                           "the array. Reduce ng_wide.")
+                           "the array. Use a longer periodic axis or reduce ng_wide/nghost.")
          error stop "wide halo: ng_wide > ny_phys for single-rank periodic-y"
       end if
    end subroutine wide_halo_guards

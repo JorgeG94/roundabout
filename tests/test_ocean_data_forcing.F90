@@ -265,7 +265,7 @@ contains
       call reader%init()
 
       ! A file IS named — the master switch alone must suppress it.
-      call tau_x_config(cfg, "/tmp/test_data_forcing_never_read.nc", "field")
+      call tau_x_config(cfg, "test_data_forcing_never_read.nc", "field")
       cfg%enable = .false.
 
       ss%tau_x = SEED
@@ -311,7 +311,7 @@ contains
 
       t_axis = [0.0_wp, TEND]
       amp = [0.0_wp, TAU]
-      fname = "/tmp/test_data_forcing_tau_half.nc"
+      fname = "test_data_forcing_tau_half.nc"
       call write_ramp_file(trim(fname), NXP + 1, NYP, NT, t_axis, amp)
 
       grid = make_grid()
@@ -388,7 +388,7 @@ contains
       integer :: i, j, ilo, ihi, jlo, jhi
 
       t_axis = [0.0_wp, 1000.0_wp]
-      fname = "/tmp/test_data_forcing_ghosts.nc"
+      fname = "test_data_forcing_ghosts.nc"
       call write_gradient_file(trim(fname), NXP + 1, NYP, NT, t_axis)
 
       grid = make_grid()
@@ -496,7 +496,7 @@ contains
       ! re-derived afterwards.
       t_axis = [0.0_wp, 100.0_wp, 200.0_wp]
       amp = [0.0_wp, TAU, 2.0_wp*TAU]
-      fname = "/tmp/test_data_forcing_stress_mag.nc"
+      fname = "test_data_forcing_stress_mag.nc"
       call write_ramp_file(trim(fname), NXP + 1, NYP, NT, t_axis, amp)
 
       grid = make_grid()
@@ -562,7 +562,7 @@ contains
 
       t_axis = [0.0_wp, 1000.0_wp]
       amp = [Q, Q]
-      fname = "/tmp/test_data_forcing_heat.nc"
+      fname = "test_data_forcing_heat.nc"
       call write_ramp_file(trim(fname), NXP + 1, NYP, NT, t_axis, amp)
 
       grid = make_grid()
@@ -631,7 +631,7 @@ contains
       ! the first: expect the mean of the two amplitudes.
       t_axis = [0.0_wp, 200.0_wp]
       amp = [0.0_wp, TAU]
-      fname = "/tmp/test_data_forcing_cyclic.nc"
+      fname = "test_data_forcing_cyclic.nc"
       call write_ramp_file(trim(fname), NXP + 1, NYP, NT, t_axis, amp)
 
       grid = make_grid()
@@ -694,10 +694,10 @@ contains
       integer :: i, j
 
       t_axis = [0.0_wp, 1000.0_wp]
-      call write_ramp_file("/tmp/test_data_forcing_c_heat.nc", NXP, NYP, NT, t_axis, [Q, Q])
-      call write_ramp_file("/tmp/test_data_forcing_c_evap.nc", NXP, NYP, NT, t_axis, [EV, EV])
-      call write_ramp_file("/tmp/test_data_forcing_c_lprec.nc", NXP, NYP, NT, t_axis, [LP, LP])
-      call write_ramp_file("/tmp/test_data_forcing_c_salt.nc", NXP, NYP, NT, t_axis, [SL, SL])
+      call write_ramp_file("test_data_forcing_c_heat.nc", NXP, NYP, NT, t_axis, [Q, Q])
+      call write_ramp_file("test_data_forcing_c_evap.nc", NXP, NYP, NT, t_axis, [EV, EV])
+      call write_ramp_file("test_data_forcing_c_lprec.nc", NXP, NYP, NT, t_axis, [LP, LP])
+      call write_ramp_file("test_data_forcing_c_salt.nc", NXP, NYP, NT, t_axis, [SL, SL])
 
       grid = make_grid()
       call ss%init(grid)
@@ -710,13 +710,13 @@ contains
 
       cfg%enable = .true.
       cfg%time_mode = "linear"
-      cfg%heat%file = "/tmp/test_data_forcing_c_heat.nc"
+      cfg%heat%file = "test_data_forcing_c_heat.nc"
       cfg%heat%var = "field"
-      cfg%evap%file = "/tmp/test_data_forcing_c_evap.nc"
+      cfg%evap%file = "test_data_forcing_c_evap.nc"
       cfg%evap%var = "field"
-      cfg%lprec%file = "/tmp/test_data_forcing_c_lprec.nc"
+      cfg%lprec%file = "test_data_forcing_c_lprec.nc"
       cfg%lprec%var = "field"
-      cfg%salt%file = "/tmp/test_data_forcing_c_salt.nc"
+      cfg%salt%file = "test_data_forcing_c_salt.nc"
       cfg%salt%var = "field"
 
       call ocean_data_forcing_configure(cfg, reader, grid, ss, sf, bc, df)
@@ -1064,7 +1064,7 @@ contains
       ! in time for ANY weight — this isolates the wiring from the
       ! time-interpolation logic (T1/T8 cover the weight).
       t_axis = [0.0_wp, 1.0e6_wp]
-      fname = "/tmp/test_data_forcing_ekman_const.nc"
+      fname = "test_data_forcing_ekman_const.nc"
       call write_ramp_file(trim(fname), EK_NX + 1, EK_NY, NT, t_axis, [EK_TAU, EK_TAU])
 
       call ek_run_const(EK_TAU, EK_STEPS, u_ref, v_ref, drift_ref)
@@ -1117,7 +1117,7 @@ contains
       ! Record 1 = 0, record 2 = EK_TAU: the query at TEND/2 blends to
       ! exactly EK_TAU/2.
       t_axis = [0.0_wp, TEND]
-      fname = "/tmp/test_data_forcing_ekman_ramp.nc"
+      fname = "test_data_forcing_ekman_ramp.nc"
       call write_ramp_file(trim(fname), EK_NX + 1, EK_NY, NT, t_axis, [0.0_wp, EK_TAU])
 
       call ek_run_const(EK_TAU, 1, u_full, v_full, drift_full)
