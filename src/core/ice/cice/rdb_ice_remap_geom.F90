@@ -92,6 +92,13 @@ module rdb_ice_remap_geom
    !! of `DL-DR` ON the corner after rounding; the pinned-crossing tests of the edge flux
    !! adjustment are closed intervals, `xcl <= xic < 0` and `0 <= xic <= xcr`, so such an
    !! edge is adjusted instead of falling through unadjusted, `test_cice_remap_flux`.)
+   !! (Regression: a nearly stagnant edge.  One corner at rest, the other displaced by `1e-9` cells along the edge
+   !! and `1e-11` across it, nothing prescribed: the adjustment puts the shifted midpoint on the far side of the
+   !! axis, and both segments to it are flatter than `puny`.  The reference then takes their axis crossings as 0,
+   !! which is not on the segment whose end sits ON the axis at the corner, so the triangle it bounds came out a
+   !! quarter of its size and the sum missed the prescribed area by `1.06e-12` cell areas (ten times the check) on
+   !! day 2 of a global 1-degree run.  `shifted_crossing` returns the crossing of a flat segment that does cross;
+   !! `test_cice_remap_geom` `flat_shifted_midpoint_crossing`.)
    !!
    !! **The case table.**  The side cells are decided by where the lines
    !! `DL-DM`, `DM-DR` cut the sides `x = -+1/2` and the line `DL-DR` cuts the
@@ -584,6 +591,31 @@ contains
       a = 0.5_wp*((px(2, g) - px(1, g))*(py(3, g) - py(1, g)) - (py(2, g) - py(1, g))*(px(3, g) - px(1, g)))*af(g)
    end function tri_area
 
+   pure function shifted_crossing(xa, ya, xb, yb, slope, puny) result(x)
+      !! Where the segment from a departure point `(xa, ya)` to the SHIFTED midpoint `(xb, yb)` of the edge flux
+      !! adjustment meets the axis `y = 0`; `slope` is the segment's.  A slope above `puny`: the reference's
+      !! expression, unchanged.  A flatter segment whose ends are NOT strictly on one side of the axis does cross it,
+      !! at a point the centre table uses as a triangle vertex: the crossing is then the interpolate between the
+      !! ends (the ordinates have opposite signs or one is zero, so the denominator cannot cancel), held to the
+      !! segment.  The reference returns 0 for every flat segment, which is the crossing only by accident; the
+      !! triangles that share the vertex then miss the prescribed area by up to `puny/8` cell areas per crossing
+      !! (half a cell of abscissa times an ordinate of `puny/2`).  A flat segment strictly on one side (or along the
+      !! axis) has no crossing and none is read: 0, as before.
+      !$acc routine seq
+      real(wp), intent(in) :: xa, ya, xb, yb, slope, puny
+      real(wp) :: x
+
+      if (abs(slope) > puny) then
+         x = xa - ya/slope
+      else if ((ya >= 0.0_wp .and. yb < 0.0_wp) .or. (ya <= 0.0_wp .and. yb > 0.0_wp) &
+               .or. (ya > 0.0_wp .and. yb == 0.0_wp) .or. (ya < 0.0_wp .and. yb == 0.0_wp)) then
+         x = xa + (xb - xa)*(ya/(ya - yb))
+         x = min(max(x, min(xa, xb)), max(xa, xb))
+      else
+         x = 0.0_wp
+      end if
+   end function shifted_crossing
+
    pure subroutine remap_locate_edge(iedge, efa, puny, dlx, dly, drx, dry, fc, f_tl, f_bl, f_tr, f_br, f_l, f_r, &
                                      edgearea, px, py, ar, sc, icase, areasum, ibits)
       !! The case table for ONE edge, on scalars.  `iedge` is
@@ -757,17 +789,9 @@ contains
             ydm = ydm - (xdr - xdl)*w1
             mdl = (ydm - ydl)/(xdm - xdl)
             mdr = (ydr - ydm)/(xdr - xdm)
-            if (abs(mdl) > puny) then
-               xicl = xdl - ydl/mdl
-            else
-               xicl = 0.0_wp
-            end if
+            xicl = shifted_crossing(xdl, ydl, xdm, ydm, mdl, puny)
             yicl = 0.0_wp
-            if (abs(mdr) > puny) then
-               xicr = xdr - ydr/mdr
-            else
-               xicr = 0.0_wp
-            end if
+            xicr = shifted_crossing(xdr, ydr, xdm, ydm, mdr, puny)
             yicr = 0.0_wp
          else if (xic < 0.0_wp .and. xic >= xcl) then
             ! different sides, axis crossing left of centre: pin ICL = IC
@@ -784,11 +808,7 @@ contains
             xdm = xdm + ydr*w1
             ydm = ydm - (xdr - xic)*w1
             mdr = (ydr - ydm)/(xdr - xdm)
-            if (abs(mdr) > puny) then
-               xicr = xdr - ydr/mdr
-            else
-               xicr = 0.0_wp
-            end if
+            xicr = shifted_crossing(xdr, ydr, xdm, ydm, mdr, puny)
             yicr = 0.0_wp
          else if (xic >= 0.0_wp .and. xic <= xcr) then
             ! different sides, axis crossing right of centre: pin ICR = IC
@@ -805,11 +825,7 @@ contains
             xdm = xdm - ydl*w1
             ydm = ydm - (xic - xdl)*w1
             mdl = (ydm - ydl)/(xdm - xdl)
-            if (abs(mdl) > puny) then
-               xicl = xdl - ydl/mdl
-            else
-               xicl = 0.0_wp
-            end if
+            xicl = shifted_crossing(xdl, ydl, xdm, ydm, mdl, puny)
             yicl = 0.0_wp
          else
             ic_e = 4

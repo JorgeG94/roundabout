@@ -97,6 +97,7 @@ contains
                   new_unittest("one_cell_channel", test_channel), &
                   new_unittest("zero_velocity_clears_everything", test_zero), &
                   new_unittest("degenerate_corners_device_vs_host", test_degenerate), &
+                  new_unittest("flat_shifted_midpoint_crossing", test_flat_crossing), &
                   new_unittest("cfl_bits_both_signs_and_crossing", test_cfl), &
                   new_unittest("nan_in_raises_bit", test_nan), &
                   new_unittest("zero_area_face_is_inactive", test_zero_area_face), &
@@ -1881,6 +1882,148 @@ contains
          call test_failed(error, "degenerate: a source-cell area differs from the host table")
       end if
    end subroutine test_degenerate
+
+   subroutine test_flat_crossing(error)
+      !! The edge flux adjustment on a NEARLY STAGNANT edge: the shifted midpoint lands on the far side of the axis
+      !! and the segments to it are flatter than `puny`, so their axis crossings (vertices of the centre triangles)
+      !! are not the reference's 0.  (a) The edge that stopped a global 1-degree run on day 2, replayed from its bit
+      !! patterns (a north edge; left corner at rest, right corner displaced by `3.7e-9` cells along the edge and
+      !! `-8.5e-12` across it, prescribed area 0): no error bit, the same branch (`BR`, centre 4, adjustment 1),
+      !! the areas summing to the prescribed one, and the left crossing AT the corner the left departure point sits
+      !! on.  Before the fix the crossing was 0, the `TC` triangle a quarter of its size and the sum off by
+      !! `1.06e-12` cell areas (`ICE_ERR_TRANSPORT_CONSERV`).  (b) The family around it on the scalar table: one
+      !! corner at rest, the other displaced along the edge by six values of either sign and across it by
+      !! `1e-15 .. 6e-11` of either sign, either corner, both edge directions, prescribed areas 0 and `+-0.3` of
+      !! the displacement (one in six failed before).  (c) Such corners through the device kernels on a grid
+      !! (isolated moved corners, so each is the left point of one north and one east edge and the right point of
+      !! another pair), uniform and non-uniform metric: no error bit and every edge closes.
+      type(error_type), allocatable, intent(out) :: error
+      integer, parameter :: NB = 20, NA = 6
+      real(wp), parameter :: AX(NA) = [0.0_wp, 3.7e-9_wp, 1.0e-4_wp, 0.2_wp, -1.0e-6_wp, -0.2_wp]
+      real(wp), parameter :: EAF(3) = [0.0_wp, 0.3_wp, -0.3_wp]
+      integer(int64), parameter :: CAP(6) = [int(z'3E300255EB11C72C', int64), int(z'3DA2AC3C0A6DFE69', int64), &
+                                             int(z'41EAC24CA4FE4D97', int64), int(z'41EA5E22631F3E89', int64), &
+                                             int(z'41EB27A4D73ABFD4', int64), 0_int64]
+         !! Captured bit patterns: `drx`, `-dry`, `fc = f_l = f_r`, `f_tl = f_tr`, `f_bl = f_br`, and the zero of
+         !! `dlx = dly = edgearea`.
+      type(geo_t) :: g
+      real(wp) :: c(6), d(4), fc, ea, asum, b, worst, w
+      real(wp) :: px(3, REMAP_NSLOT), py(3, REMAP_NSLOT), ar(REMAP_NSLOT)
+      integer(int8) :: sc(REMAP_NSLOT)
+      integer(int32) :: ic, bits
+      integer :: m, ia, isb, side, ie, iedge, i, j, k, variant, nrun, nact
+      character(len=200) :: msg
+
+      ! ---- (a) the captured edge ----
+      c = transfer(CAP, c)
+      call remap_locate_edge(REMAP_EDGE_NORTH, 1, PUNY, c(6), c(6), c(1), -c(2), c(3), c(4), c(5), c(4), c(5), c(3), c(3), &
+                             c(6), px, py, ar, sc, ic, asum, bits)
+      if (bits /= 0_int32) then
+         write (msg, "(a,z8.8,a,es10.3)") "captured edge: error word ", bits, ", |sum - edgearea|/areafac ", abs(asum)/c(3)
+         call test_failed(error, trim(msg))
+         return
+      end if
+      call check(error, ic == int(2*5 + 4*25 + 325, int32), "captured edge: branch (BR, centre 4, adjustment 1)")
+      if (allocated(error)) return
+      call check(error, abs(asum) <= 1.0e-13_wp*c(3), "captured edge: the areas sum to the prescribed (zero) area")
+      if (allocated(error)) return
+      ! slot 6 is the TC triangle ICL-ICR-DM; in the source frame of TC the left corner of the edge is (-1/2, -1/2)
+      call check(error, sc(6) /= 0_int8 .and. abs(px(1, 6) + 0.5_wp) <= 1.0e-12_wp .and. abs(py(1, 6) + 0.5_wp) <= 1.0e-12_wp, &
+                 "captured edge: the left crossing is the corner the left departure point sits on")
+      if (allocated(error)) return
+      call check(error, abs(ar(6) + ar(5)) <= 1.0e-13_wp*c(3) .and. abs(ar(5)) > 1.0e-12_wp*c(3), &
+                 "captured edge: the TC triangle cancels the BC one")
+      if (allocated(error)) return
+
+      ! ---- (b) the family, scalar table ----
+      worst = 0.0_wp
+      nrun = 0
+      fc = c(3)
+      do m = 0, NB - 1
+         b = 10.0_wp**(-15.0_wp + 0.25_wp*real(m, wp))
+         do ia = 1, NA
+            do isb = -1, 1, 2
+               do side = 0, 1
+                  do ie = 1, 3
+                     do iedge = REMAP_EDGE_NORTH, REMAP_EDGE_EAST
+                        d = 0.0_wp
+                        d(1 + 2*side) = AX(ia)
+                        d(2 + 2*side) = real(isb, wp)*b
+                        ea = EAF(ie)*b*fc
+                        call remap_locate_edge(iedge, 1, PUNY, d(1), d(2), d(3), d(4), fc, c(4), c(5), c(4), c(5), fc, fc, &
+                                               ea, px, py, ar, sc, ic, asum, bits)
+                        nrun = nrun + 1
+                        w = abs(asum - ea)/fc
+                        if (bits /= 0_int32 .or. .not. (w <= 1.0e-13_wp)) then
+                           write (msg, "(a,z8.8,a,es10.3,a,4es11.3,a,es10.3)") "flat family: error word ", bits, &
+                              ", |sum - edgearea|/areafac ", w, ", displacements ", d, ", edgearea/areafac ", ea/fc
+                           call test_failed(error, trim(msg))
+                           return
+                        end if
+                        worst = max(worst, w)
+                     end do
+                  end do
+               end do
+            end do
+         end do
+      end do
+
+      ! ---- (c) the device kernels ----
+      nact = 0
+      do variant = 0, 1
+         call geo_init(g, 12, 10, variant == 1)
+         g%dt = 1.0_wp
+         g%ws%dpx = 0.0_wp
+         g%ws%dpy = 0.0_wp
+         g%ws%edgearea_e = 0.0_wp
+         g%ws%edgearea_n = 0.0_wp
+         k = 0
+         do j = g%js + 1, g%je - 1, 2
+            do i = g%is + 1, g%ie - 1, 2
+               ! isolated corners: along x and across y (flat north edges), then along y and across x (flat east edges)
+               b = 10.0_wp**(-13.0_wp + 0.125_wp*real(mod(k, 16), wp))
+               if (k == 0) b = c(2)
+               if (mod(k, 2) == 0) then
+                  g%ws%dpx(i, j) = merge(c(1), AX(1 + mod(k/2, NA)), k == 0)*g%dxU(i, j)
+                  g%ws%dpy(i, j) = merge(-b, b, mod(k/4, 2) == 0)*g%dyU(i, j)
+               else
+                  g%ws%dpy(i, j) = AX(1 + mod(k/2, NA))*g%dyU(i, j)
+                  g%ws%dpx(i, j) = merge(-b, b, mod(k/4, 2) == 0)*g%dxU(i, j)
+               end if
+               k = k + 1
+            end do
+         end do
+         g%ierr = 0_int32
+         call geo_locate(g, 1)
+         if (any(g%ierr /= 0_int32)) then
+            write (msg, "(a,i0,a,i0,a,z8.8)") "flat crossing (kernels), variant ", variant, ": ", count(g%ierr /= 0_int32), &
+               " cells with an error word, the largest ", maxval(g%ierr)
+            call test_failed(error, trim(msg))
+            call geo_destroy(g)
+            return
+         end if
+         do j = g%js, g%je
+            do i = g%is, g%ie
+               if (g%ws%icase_n(i, j) /= 0_int32) then
+                  nact = nact + 1
+                  worst = max(worst, abs(sum(g%ws%area_n(i, j, :)))/g%narea(i, j))
+               end if
+               if (g%ws%icase_e(i, j) /= 0_int32) then
+                  nact = nact + 1
+                  worst = max(worst, abs(sum(g%ws%area_e(i, j, :)))/g%earea(i, j))
+               end if
+            end do
+         end do
+         call geo_destroy(g)
+      end do
+      write (error_unit, "(a,i0,a,i0,a,es9.2)") "  [remap_geom] flat shifted-midpoint crossing: ", nrun, &
+         " scalar edges, ", nact, " kernel edges, worst |sum - edgearea|/areafac ", worst
+      if (nact < 100) then
+         call test_failed(error, "flat crossing (kernels): too few active edges")
+      else if (.not. (worst <= 1.0e-13_wp)) then
+         call test_failed(error, "flat crossing (kernels): an edge does not close on its prescribed area")
+      end if
+   end subroutine test_flat_crossing
 
    subroutine corner_kind(kind, noise, st, dx, dy, dpx, dpy)
       !! The displacement (m) of one corner of the degenerate field.
