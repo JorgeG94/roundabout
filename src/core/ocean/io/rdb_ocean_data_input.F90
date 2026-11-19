@@ -764,7 +764,7 @@ contains
                                                     oor_mode, time_mode, ryf_start_date, &
                                                     ryf_period_days, scale, add_offset, &
                                                     t_offset, win_i0, win_j0, win_nx, win_ny, &
-                                                    hold, ierr)
+                                                    hold, quiet_clamp, ierr)
       !! Register a 2-D time-varying field backed by an ORDERED LIST of
       !! files sharing one variable name — the JRA55-do-style "one file
       !! per variable per year" layout a glob-free Fortran reader needs
@@ -812,6 +812,13 @@ contains
       !! whose interval contains the query time) instead of linearly
       !! blending toward `n1` -- the held-interval-mean shortwave path,
       !! paired with a diurnal coszen factor the consumer applies on top.
+      !!
+      !! `quiet_clamp` (default `.false.`) suppresses the one-time "clamped at
+      !! the time-axis boundary" warning of a `"extend"` field.  For a field
+      !! that is registered as a NEIGHBOUR view of another one (the coszen
+      !! previous/next-bucket `rsds`), whose query runs a whole bucket off the
+      !! axis at the first/last step by construction and whose value is not
+      !! read there.
       class(ocean_data_input_t), intent(inout) :: this
       character(len=*), intent(in) :: files(:)
       character(len=*), intent(in) :: var
@@ -825,7 +832,7 @@ contains
       real(wp), intent(in), optional :: ryf_period_days
       real(wp), intent(in), optional :: scale, add_offset, t_offset
       integer, intent(in), optional :: win_i0, win_j0, win_nx, win_ny
-      logical, intent(in), optional :: hold
+      logical, intent(in), optional :: hold, quiet_clamp
       integer, intent(out), optional :: ierr
 
       type(date_t) :: epoch_date, file_epoch, file_date, ryf_date
@@ -932,6 +939,7 @@ contains
          end if
          fld%hold = .false.
          if (present(hold)) fld%hold = hold
+         if (present(quiet_clamp)) fld%oor_warned = quiet_clamp
          fld%nfiles = nfiles
          fld%nt = 0
          allocate (fld%file_ncid(nfiles), fld%file_varid(nfiles), &

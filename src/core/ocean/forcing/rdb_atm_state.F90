@@ -62,11 +62,34 @@ module rdb_atm_state
    !! samples on the interval's last step and applies over `[t - (N-1) dt,
    !! t + dt)`.  `atm_sw_window` is the ONE place that says so (the engine
    !! and the tests both call it) and `atm_state_update` integrates over
-   !! exactly that window.  Windows are never split across a bucket edge:
-   !! the bucket length must be a multiple of the window length and the
-   !! window start must sit on the window-length grid of the UTC clock
-   !! (`start_date` time of day included); anything else FAILS LOUD
-   !! (`atm_sw_coszen_refresh`) rather than biasing the energy.
+   !! exactly that window.  A window needs neither to divide the bucket nor to
+   !! start on any grid of the UTC clock (`start_date` time of day included).
+   !! One that lies inside a single bucket uses the formula above unchanged.
+   !! One that STRADDLES a bucket edge (7200 s windows against 10800 s buckets:
+   !! every third window) is split at the edge into pieces `p`, piece `p` lying
+   !! in bucket `B_p` with record `rec_p`, and
+   !!   `rsds = (bucket / wlen) * Sum_p rec_p * I_p / I_{B_p}`,
+   !! `I_p` and `I_{B_p}` the integrals of `max(0, cos Z)` over the piece and
+   !! over its whole bucket (each bucket's declination / equation of time frozen
+   !! at ITS midpoint, a bucket below the mean-cosine floor contributing 0).
+   !! The pieces of one bucket, taken from the windows that overlap it,
+   !! telescope to `I_B`, so `Sum_windows rsds * wlen = Sum_buckets rec * bucket`
+   !! to round-off in every cell for ANY tiling of time by windows.  Each piece's
+   !! share `I_p / I_B` is capped at 1 (round-off guard; it cannot exceed it).
+   !! The record of the neighbouring bucket comes from two further registrations
+   !! of the same files (`id_rsds_prev`/`id_rsds_next`, held, query shifted by
+   !! `-/+ bucket`, so the repeat-year wrap and the per-rank hyperslab windows
+   !! come for free); they are refreshed by the reader with every other field,
+   !! but regridded (into `rsds_alt`) only on steps whose window straddles an
+   !! edge.  They are pure functions of `t`: nothing extra is checkpointed.
+   !! A window LONGER than the bucket is refused (configure time when `dt_fixed`
+   !! is known, `atm_sw_coszen_refresh` otherwise): it would need records more
+   !! than one bucket away.
+   !! **Two shortwave outputs.**  `rsds` is the mean over the application window
+   !! (what the OCEAN spends on its thermo steps); `rsds_step` is the mean over the
+   !! single step `[t, t + dt)`, for a consumer that steps EVERY outer step (the CICE-port
+   !! sea ice).  The N steps of one thermo interval then sum to the window energy; the
+   !! two are bit-identical wherever the window is the step.
    !! **Bucket length** is not a constant: `atm_sw_check_axis` derives it at
    !! configure from the `rsds` record spacing (must divide 86400 s, the
    !! records must be uniform and stamped at the interval CENTRE) and
@@ -131,6 +154,7 @@ module rdb_atm_state
    use rdb_io_netcdf, only: nc_open_read, nc_close, nc_get_varid, nc_get_var_1d, &
                             nc_get_var_2d, nc_get_dim_len
    use pic_strings, only: to_string
+   use pic_logger, only: logger => global_logger
    implicit none
    private
 
@@ -138,6 +162,9 @@ module rdb_atm_state
    public :: atm_state_configure
    public :: atm_state_update
    public :: atm_sw_window
+   public :: atm_coszen_apply_impl, atm_spencer_sun
+      !! Test seams: the one-bucket kernel and the solar-position helper, so a test
+      !! can call the kernel directly with independently derived arguments.
 
    integer, parameter :: IDX_TAS = 1, IDX_HUSS = 2, IDX_UAS = 3, IDX_VAS = 4, IDX_PSL = 5
    integer, parameter :: IDX_RLDS = 6, IDX_PRRA = 7, IDX_PRSN = 8, IDX_RSDS = 9
@@ -150,6 +177,14 @@ module rdb_atm_state
       !! offset in `[bucket/2, bucket/2 + dt)` selects the same record for
       !! every `t` on the `dt` grid, so half a second moves the switch off
       !! the tie without changing a single selection.
+   real(wp), parameter :: ATM_SW_TOL_S = 1.0e-3_wp
+      !! Tolerance (s) for "on the grid" / "at the bucket edge" decisions about a
+      !! shortwave window (the calendar carries whole seconds; this is far below
+      !! any real offset).
+   real(wp), parameter :: ATM_STAMP_TOL_S = 2.5_wp
+      !! Tolerance (s) on "one interval apart" between two held records' stamps
+      !! (`atm_sw_check_axis` accepts stamps up to 1 s off centre).
+   integer, parameter :: ATM_REL_UNKNOWN = 99
    real(wp), parameter :: ATM_EARTH_OMEGA = TWO_PI/86400.0_wp
       !! Hour-angle rate (rad/s): 15 degrees per hour.
    real(wp), parameter :: ATM_COSZ_MEAN_MIN = 1.0e-9_wp
@@ -197,6 +232,15 @@ module rdb_atm_state
          !! Target-tile geometry, cached from `grid` at configure time.
       integer :: id(N_ATM_FIELDS) = 0
          !! Reader registration ids, indexed by the `IDX_*` constants.
+      logical :: alt_warned = .false., held_warned = .false.
+         !! One-shot log flags (neighbour view clamped at the end of the data; the
+         !! held record is not the window's interval's).
+      integer :: id_rsds_prev = 0, id_rsds_next = 0
+         !! `coszen` only: the SAME `rsds` files registered a second and third
+         !! time, held, with the query shifted by `-bucket` / `+bucket`, so at
+         !! model time `t` they return the records of the buckets before / after
+         !! the one holding `t`.  Used only when a window straddles a bucket
+         !! edge (`rsds_alt`).
       type(regrid_weights_t) :: wb
          !! Bilinear weights (states; fluxes when `fluxes_regrid =
          !! "bilinear"`).
@@ -222,14 +266,31 @@ module rdb_atm_state
          !! value straight off the reader -- `rsds = rsds_rec *
          !! cosz / cosz_mean` under `coszen`, `rsds = rsds_rec` under
          !! `linear`.
+      real(wp), allocatable :: rsds_step(:, :)
+         !! Shortwave over the single model step `[t, t + dt)` -- what a consumer
+         !! that steps EVERY outer step (the CICE-port sea ice) needs, whatever the
+         !! thermo window.  Same conserving redistribution as `rsds`, with the
+         !! window set to the step, so the steps of one thermo interval sum to the
+         !! window's energy.  Equal to `rsds` (bit for bit) whenever the window is the
+         !! step (`dt_therm_ratio = 1`, or a non-thermo step); `sw_interp = "linear"`
+         !! copies `rsds_rec`, like `rsds`.
+      real(wp), allocatable :: rsds_alt(:, :)
+         !! `coszen` only: the regridded record of the NEIGHBOURING bucket
+         !! (previous or next, whichever the straddling window reaches into),
+         !! refilled from the reader on every step whose window straddles a
+         !! bucket edge and never read otherwise.  A pure function of `t`:
+         !! nothing to checkpoint, a resumed run rebuilds it on its first step.
       real(wp), allocatable :: cosz(:, :)
          !! Mean of `max(0, cos Z)` (cosine of the solar zenith angle,
          !! clamped to `>= 0`: night is not negative insolation) over the
-         !! model step `[t, t + dt)` the flux is applied for. `coszen`
+         !! application window `[t + shift, t + shift + wlen)` (the model step,
+         !! or the thermo interval when `dt_therm_ratio > 1`; across a bucket
+         !! edge the two pieces' sum over the window length). `coszen`
          !! only -- stays 0 under `linear`.
       real(wp), allocatable :: cosz_mean(:, :)
          !! Exact mean of `max(0, cos Z)` over the `rsds_rec` bucket
-         !! `[t_rec, t_rec+3h)` (UTC 3-hour bucket containing `t`).
+         !! `[t_rec, t_rec+3h)` (UTC 3-hour bucket containing `t`); for a
+         !! straddling window, over the bucket holding the window START.
          !! `coszen` only.
    contains
       procedure, non_overridable :: enter_data => atm_state_enter_data
@@ -254,6 +315,7 @@ contains
       !$acc enter data copyin(this%tas, this%huss, this%uas, this%vas, this%psl)
       !$acc enter data copyin(this%rlds, this%prra, this%prsn, this%rsds)
       !$acc enter data copyin(this%rsds_rec, this%cosz, this%cosz_mean)
+      !$acc enter data copyin(this%rsds_alt, this%rsds_step)
       !$acc enter data create(this%win_bl, this%win_cv, this%tgt_bl, this%tgt_cv)
       call this%wb%enter_data()
       call this%wc%enter_data()
@@ -269,6 +331,7 @@ contains
       !$acc exit data delete(this%tas, this%huss, this%uas, this%vas, this%psl)
       !$acc exit data delete(this%rlds, this%prra, this%prsn, this%rsds)
       !$acc exit data delete(this%rsds_rec, this%cosz, this%cosz_mean)
+      !$acc exit data delete(this%rsds_alt, this%rsds_step)
       this%on_device = .false.
    end subroutine atm_state_exit_data
 
@@ -284,6 +347,7 @@ contains
                arr2_bytes(this%vas) + arr2_bytes(this%psl) + arr2_bytes(this%rlds) + &
                arr2_bytes(this%prra) + arr2_bytes(this%prsn) + arr2_bytes(this%rsds) + &
                arr2_bytes(this%rsds_rec) + arr2_bytes(this%cosz) + arr2_bytes(this%cosz_mean) + &
+               arr2_bytes(this%rsds_alt) + arr2_bytes(this%rsds_step) + &
                arr2_bytes(this%win_bl) + arr2_bytes(this%win_cv) + &
                arr2_bytes(this%tgt_bl) + arr2_bytes(this%tgt_cv) + &
                this%wb%bytes() + this%wc%bytes()
@@ -315,6 +379,8 @@ contains
       if (allocated(this%prsn)) deallocate (this%prsn)
       if (allocated(this%rsds)) deallocate (this%rsds)
       if (allocated(this%rsds_rec)) deallocate (this%rsds_rec)
+      if (allocated(this%rsds_alt)) deallocate (this%rsds_alt)
+      if (allocated(this%rsds_step)) deallocate (this%rsds_step)
       if (allocated(this%cosz)) deallocate (this%cosz)
       if (allocated(this%cosz_mean)) deallocate (this%cosz_mean)
       this%enable = .false.
@@ -327,6 +393,8 @@ contains
       this%ny_phys = 0
       this%nghost = 0
       this%id = 0
+      this%id_rsds_prev = 0
+      this%id_rsds_next = 0
    end subroutine atm_state_destroy
 
    ! ======================================================================
@@ -358,7 +426,7 @@ contains
       integer :: win_j0_flux, nsy_flux
       real(wp), allocatable :: lon_c(:), lat_c(:), lon_bnds(:, :), lat_bnds(:, :)
       real(wp), allocatable :: lon_e(:), lat_e(:)
-      real(wp) :: sw_offset_eff
+      real(wp) :: sw_offset_eff, wlen_cfg
       logical :: epoch_ok
 
       if (present(ierr)) ierr = OCEAN_STATUS_OK
@@ -526,6 +594,8 @@ contains
       allocate (this%prsn(this%nx_total, this%ny_total), source=0.0_wp)
       allocate (this%rsds(this%nx_total, this%ny_total), source=0.0_wp)
       allocate (this%rsds_rec(this%nx_total, this%ny_total), source=0.0_wp)
+      allocate (this%rsds_alt(this%nx_total, this%ny_total), source=0.0_wp)
+      allocate (this%rsds_step(this%nx_total, this%ny_total), source=0.0_wp)
       allocate (this%cosz(this%nx_total, this%ny_total), source=0.0_wp)
       allocate (this%cosz_mean(this%nx_total, this%ny_total), source=0.0_wp)
 
@@ -614,6 +684,42 @@ contains
       if (setup_failed(ierr)) return
       if (this%sw_coszen) then
          call atm_sw_check_axis(this, reader, cfg%ocean%atm_forcing%sw_offset_s, ierr=ierr)
+         if (setup_failed(ierr)) return
+         ! The thermo window the flux is applied over, `dt * dt_therm_ratio`
+         ! (`engine_setup` refuses `dt_fixed <= 0` before this runs; a caller that
+         ! drives the provider directly with `dt_fixed` unset (0) skips this check
+         ! and gets the per-step one in `atm_sw_coszen_refresh`).  It may straddle one
+         ! bucket edge (the neighbour record is read for it) but not span a
+         ! whole bucket: a window longer than the bucket would need records
+         ! two buckets away.  Refused HERE so `--validate-only` reports it.
+         ! A config that never set `dt_fixed` (unit tests that drive the provider
+         ! directly) skips this check; `atm_sw_coszen_refresh` repeats it per step.
+         wlen_cfg = cfg%dt_fixed*real(max(cfg%ocean%vmix%dt_therm_ratio, 1), wp)
+         if (cfg%dt_fixed > 0.0_wp .and. wlen_cfg > this%sw_bucket + ATM_SW_TOL_S) then
+            call fail("atm_state_configure: sw_interp = 'coszen' needs dt * dt_therm_ratio <= "// &
+                      "the rsds interval ("//to_string(this%sw_bucket)//" s); the shortwave "// &
+                      "window is "//to_string(wlen_cfg)//" s. Lower dt_therm_ratio or use "// &
+                      "sw_interp = 'linear'", ierr, OCEAN_STATUS_ERR_SETUP)
+            return
+         end if
+         ! Neighbour-bucket views of the same record series (see `id_rsds_prev`).
+         call register_field(reader, grid, trim(cfg%ocean%atm_forcing%filelist_rsds), &
+                             trim(cfg%ocean%atm_forcing%var_rsds), trim(cfg%start_date), &
+                             trim(cfg%ocean%atm_forcing%time_mode), &
+                             trim(cfg%ocean%atm_forcing%ryf_start_date), &
+                             cfg%ocean%atm_forcing%ryf_period_days, "extend", &
+                             win_j0_flux, nlon, nsy_flux, this%id_rsds_prev, &
+                             hold=.true., t_offset=sw_offset_eff - this%sw_bucket, &
+                             quiet_clamp=.true., ierr=ierr)
+         if (setup_failed(ierr)) return
+         call register_field(reader, grid, trim(cfg%ocean%atm_forcing%filelist_rsds), &
+                             trim(cfg%ocean%atm_forcing%var_rsds), trim(cfg%start_date), &
+                             trim(cfg%ocean%atm_forcing%time_mode), &
+                             trim(cfg%ocean%atm_forcing%ryf_start_date), &
+                             cfg%ocean%atm_forcing%ryf_period_days, "extend", &
+                             win_j0_flux, nlon, nsy_flux, this%id_rsds_next, &
+                             hold=.true., t_offset=sw_offset_eff + this%sw_bucket, &
+                             quiet_clamp=.true., ierr=ierr)
          if (setup_failed(ierr)) return
       end if
 
@@ -704,7 +810,7 @@ contains
 
    subroutine register_field(reader, grid, filelist_path, var, start_date, time_mode, &
                              ryf_start_date, ryf_period_days, oor_mode, win_j0, nlon, nsy, &
-                             id, hold, t_offset, ierr)
+                             id, hold, t_offset, quiet_clamp, ierr)
       !! Read `filelist_path` into a path array, then register it on the
       !! shared reader with the given weight set's window
       !! `(win_i0=1, win_j0, win_nx=nlon, win_ny=nsy)` -- destination is
@@ -718,7 +824,7 @@ contains
       integer, intent(in) :: win_j0, nlon, nsy
       real(wp), intent(in) :: ryf_period_days
       integer, intent(out) :: id
-      logical, intent(in), optional :: hold
+      logical, intent(in), optional :: hold, quiet_clamp
       real(wp), intent(in), optional :: t_offset
       integer, intent(out), optional :: ierr
 
@@ -737,7 +843,7 @@ contains
                                                  ryf_period_days=ryf_period_days, &
                                                  win_i0=1, win_j0=win_j0, win_nx=nlon, &
                                                  win_ny=nsy, hold=hold, t_offset=t_offset, &
-                                                 ierr=ierr)
+                                                 quiet_clamp=quiet_clamp, ierr=ierr)
    end subroutine register_field
 
    subroutine read_filelist(path, files, ierr)
@@ -923,73 +1029,278 @@ contains
          wlen = dt
          if (present(win_shift)) shift = win_shift
          if (present(win_len)) wlen = win_len
-         call atm_sw_coszen_refresh(this, metrics, t, shift, wlen)
+         if (shift == 0.0_wp .and. wlen == dt) then
+            ! The window IS the step: one evaluation serves both.
+            call atm_sw_coszen_refresh(this, reader, metrics, t, shift, wlen, this%rsds)
+            call atm_state_copy_impl(this%nx_total, this%ny_total, this%rsds, this%rsds_step)
+         else
+            ! Step first, window last, so `cosz`/`cosz_mean` end up the window's.
+            call atm_sw_coszen_refresh(this, reader, metrics, t, 0.0_wp, dt, this%rsds_step)
+            call atm_sw_coszen_refresh(this, reader, metrics, t, shift, wlen, this%rsds)
+         end if
       else
          call atm_state_copy_impl(this%nx_total, this%ny_total, this%rsds_rec, this%rsds)
+         call atm_state_copy_impl(this%nx_total, this%ny_total, this%rsds_rec, this%rsds_step)
       end if
    end subroutine atm_state_update
 
-   subroutine atm_sw_coszen_refresh(this, metrics, t, shift, wlen)
+   subroutine atm_sw_coszen_refresh(this, reader, metrics, t, shift, wlen, rsds_out)
       !! Host-side Spencer (1971) solar-position scalars (calendar
-      !! arithmetic, not device-safe) for the UTC bucket `[t_rec, t_rec +
-      !! bucket)` holding the application window `[t + shift, t + shift +
-      !! wlen)`, then ONE device kernel (`atm_coszen_apply_impl`) doing the
-      !! per-cell closed-form integrals over the window and over the bucket.
-      !! Fails loud if the window is not a tile of the bucket (see the
-      !! module docstring).
+      !! arithmetic, not device-safe) for the UTC bucket(s) holding the
+      !! application window `[t + shift, t + shift + wlen)`, then ONE device
+      !! kernel doing the per-cell closed-form integrals.
+      !!
+      !! A window inside one bucket takes the original single-bucket path
+      !! (`atm_coszen_apply_impl`) with the original arithmetic, bit for bit.
+      !! A window across a bucket edge (`atm_coszen_straddle_impl`) is split
+      !! at the edge: the record of the bucket holding the window START and
+      !! that of the bucket holding its END are paired with the integral of
+      !! `max(0, cos Z)` over their own piece.  One of the two is the record
+      !! the reader selected for `t` (`rsds_rec`); the other is read through
+      !! the previous- or next-bucket view (`id_rsds_prev/next`) into
+      !! `rsds_alt`.  Fails loud only on a window longer than the bucket (also
+      !! refused at configure when `dt_fixed` is known).
       class(atm_state_t), intent(inout) :: this
+      type(ocean_data_input_t), intent(in) :: reader
       type(ocean_metrics_t), intent(in) :: metrics
       real(wp), intent(in) :: t, shift, wlen
+      real(wp), intent(inout) :: rsds_out(this%nx_total, this%ny_total)
+         !! Receives the shortwave over the window (`this%rsds`, or `this%rsds_step`
+         !! for the single-step window).  Only this array is written among the
+         !! outputs through this name; `cosz`/`cosz_mean` are the window's last call's.
 
       type(date_t) :: d
-      real(wp), parameter :: TOL_S = 1.0e-3_wp
-      real(wp) :: sod, sod_a, r, t_off, t_rec, hour_frac_rec, hour_frac_mid
-      real(wp) :: decl_mid, eqtime_mid, decl_unused, eqtime_unused
+      real(wp), parameter :: TOL_S = ATM_SW_TOL_S
+      real(wp) :: sod, sod_a, sod_a0, r, rb, t_off, t_rec, t_rec_e, t_cur, sod_edge
+      real(wp) :: hour_frac_rec, hour_frac_mid, hour_frac_e
+      real(wp) :: decl_mid, eqtime_mid, decl_e, eqtime_e, decl_unused, eqtime_unused
+      integer :: rel
+      logical :: cur_is_start, verify
 
       if (.not. (wlen > 0.0_wp)) then
          call fail("atm_sw_coszen_refresh: non-positive shortwave window length "// &
                    to_string(wlen)//" s", code=OCEAN_STATUS_ERR_SETUP)
       end if
-      r = modulo(this%sw_bucket, wlen)
-      if (min(r, wlen - r) > TOL_S) then
-         call fail("atm_sw_coszen_refresh: sw_interp = 'coszen' needs the "// &
-                   to_string(this%sw_bucket)//" s rsds interval to be a multiple of the "// &
-                   "step over which the flux is applied ("//to_string(wlen)// &
-                   " s = dt * dt_therm_ratio); change dt / dt_therm_ratio or use "// &
-                   "sw_interp = 'linear'", code=OCEAN_STATUS_ERR_SETUP)
+      if (wlen > this%sw_bucket + TOL_S) then
+         call fail("atm_sw_coszen_refresh: sw_interp = 'coszen' needs the step over which the "// &
+                   "flux is applied ("//to_string(wlen)//" s = dt * dt_therm_ratio) to be no "// &
+                   "longer than the "//to_string(this%sw_bucket)//" s rsds interval; lower "// &
+                   "dt_therm_ratio or use sw_interp = 'linear'", code=OCEAN_STATUS_ERR_SETUP)
       end if
 
       ! UTC time of day of the window start; the buckets are fixed to the
       ! UTC clock, not to the model epoch.
       call seconds_to_date(t, this%epoch, d)
       sod = real(d%h, wp)*3600.0_wp + real(d%mi, wp)*60.0_wp + d%s
-      sod_a = sod + shift
-      r = modulo(sod_a, wlen)
-      if (min(r, wlen - r) > TOL_S) then
-         call fail("atm_sw_coszen_refresh: sw_interp = 'coszen' needs the shortwave window "// &
-                   "start on the "//to_string(wlen)//" s grid of the UTC clock (start_date "// &
-                   "time of day / restart time are off it by "//to_string(min(r, wlen - r))//" s)", code=OCEAN_STATUS_ERR_SETUP)
+      sod_a0 = sod + shift
+      ! Snap a start that sits (within a millisecond) on the window-length grid
+      ! of the clock, else on a bucket edge, so a start a hair below an edge
+      ! cannot fall into the previous bucket.  Any other start is used as is:
+      ! there is no grid requirement.
+      sod_a = sod_a0
+      r = modulo(sod_a0, wlen)
+      rb = modulo(sod_a0, this%sw_bucket)
+      if (min(r, wlen - r) <= TOL_S) then
+         sod_a = anint(sod_a0/wlen)*wlen
+      else if (min(rb, this%sw_bucket - rb) <= TOL_S) then
+         sod_a = anint(sod_a0/this%sw_bucket)*this%sw_bucket
       end if
-      ! Snap the (verified) tie so a window start a hair below a bucket edge
-      ! cannot fall into the previous bucket.
-      sod_a = anint(sod_a/wlen)*wlen
       t_off = modulo(sod_a, this%sw_bucket)
-      t_rec = t + shift + (sod_a - (sod + shift)) - t_off
+      t_rec = t + shift + (sod_a - sod_a0) - t_off
 
-      ! Hour of day at the bucket start; declination + equation of time
-      ! frozen at the bucket midpoint (so every window's integral and the
-      ! bucket's come from ONE function and telescope exactly).
+      rel = atm_held_rel(this, reader, t_rec)
+      if (t_off + wlen <= this%sw_bucket + TOL_S) then
+         ! ---- one bucket: the original path, unchanged ----
+         ! (Report only: the record the reader holds should be this bucket's.  It
+         ! is not when `sw_offset_s` / the stamps sit off-centre within the
+         ! tolerance `atm_sw_check_axis` accepts and `t` is on an edge, or in a
+         ! padded repeat-year file's wrapped bucket.  Changing the pairing would
+         ! change the answers of runs accepted today, so it is only logged.)
+         if (rel /= 0 .and. .not. this%held_warned) then
+            call logger%warning("atm_sw_coszen_refresh: at t = "//to_string(t)//" s the rsds "// &
+                                "record the reader holds is not the one of the window's "// &
+                                "interval (offset "//to_string(rel)//" intervals; off-centre "// &
+                                "sw_offset_s / record stamps, or a padded repeat-year file); "// &
+                                "the flux of this interval pairs a neighbouring record. Logged once.")
+            this%held_warned = .true.
+         end if
+         ! Hour of day at the bucket start; declination + equation of time
+         ! frozen at the bucket midpoint (so every window's integral and the
+         ! bucket's come from ONE function and telescope exactly).
+         call atm_spencer_sun(this%epoch, t_rec, hour_frac_rec, decl_unused, eqtime_unused)
+         call atm_spencer_sun(this%epoch, t_rec + 0.5_wp*this%sw_bucket, hour_frac_mid, &
+                              decl_mid, eqtime_mid)
+
+         call atm_coszen_apply_impl(this%nx_total, this%ny_total, this%nghost, &
+                                    this%nx_phys, this%ny_phys, &
+                                    hour_frac_rec, safe_sin(decl_mid), safe_cos(decl_mid), &
+                                    eqtime_mid, t_off, wlen, this%sw_bucket, &
+                                    metrics%geolonT, metrics%geolatT, &
+                                    this%rsds_rec, this%cosz, this%cosz_mean, rsds_out)
+         return
+      end if
+
+      ! ---- straddle: [t_off, bucket) of the start bucket S + [0, t_off+wlen-bucket)
+      ! of the next one E.  Which of the two does the reader hold for `t`?  Read it
+      ! off the held record's own stamp (centre of S: offset 0, of E: offset 1), so
+      ! `sw_offset_s` / stamps that are off-centre within `atm_sw_check_axis`'s
+      ! tolerance cannot make the clock and the reader disagree.  The other bucket
+      ! comes from the neighbour view, whose stamp is verified.
+      t_rec_e = t_rec + this%sw_bucket
+      verify = .true.
+      if (rel == 0) then
+         cur_is_start = .true.
+      else if (rel == 1) then
+         cur_is_start = .false.
+      else
+         ! Held stamp matches neither bucket (padded repeat-year file at the wrap,
+         ! ...): fall back to the clock rule, as before, and say so once.
+         verify = .false.
+         if (.not. this%held_warned) then
+            call logger%warning("atm_sw_coszen_refresh: at t = "//to_string(t)//" s the held rsds "// &
+                                "record matches neither interval of a straddling window; pairing "// &
+                                "by the clock (the record of this interval may be a pad/neighbour). "// &
+                                "Logged once.")
+            this%held_warned = .true.
+         end if
+         sod_edge = floor((sod + ATM_SW_TIE_S)/this%sw_bucket)*this%sw_bucket
+         t_cur = t - (sod - sod_edge)
+         if (abs(t_cur - t_rec) < 0.5_wp*this%sw_bucket) then
+            cur_is_start = .true.
+         else if (abs(t_cur - t_rec_e) < 0.5_wp*this%sw_bucket) then
+            cur_is_start = .false.
+         else
+            call fail("atm_sw_coszen_refresh: the straddling shortwave window does not touch the "// &
+                      "bucket of the record selected for t (internal inconsistency)", &
+                      code=OCEAN_STATUS_ERR_SETUP)
+         end if
+      end if
+      if (cur_is_start) then
+         if (verify) call atm_check_alt(this, reader, this%id_rsds_next, +1.0_wp)
+         call atm_apply_rsds_alt(this, reader, this%id_rsds_next, t)
+      else
+         if (verify) call atm_check_alt(this, reader, this%id_rsds_prev, -1.0_wp)
+         call atm_apply_rsds_alt(this, reader, this%id_rsds_prev, t)
+      end if
+
       call atm_spencer_sun(this%epoch, t_rec, hour_frac_rec, decl_unused, eqtime_unused)
       call atm_spencer_sun(this%epoch, t_rec + 0.5_wp*this%sw_bucket, hour_frac_mid, &
                            decl_mid, eqtime_mid)
+      call atm_spencer_sun(this%epoch, t_rec_e, hour_frac_e, decl_unused, eqtime_unused)
+      call atm_spencer_sun(this%epoch, t_rec_e + 0.5_wp*this%sw_bucket, hour_frac_mid, &
+                           decl_e, eqtime_e)
 
-      call atm_coszen_apply_impl(this%nx_total, this%ny_total, this%nghost, &
-                                 this%nx_phys, this%ny_phys, &
-                                 hour_frac_rec, safe_sin(decl_mid), safe_cos(decl_mid), &
-                                 eqtime_mid, t_off, wlen, this%sw_bucket, &
-                                 metrics%geolonT, metrics%geolatT, &
-                                 this%rsds_rec, this%cosz, this%cosz_mean, this%rsds)
+      if (cur_is_start) then
+         call atm_coszen_straddle_impl(this%nx_total, this%ny_total, this%nghost, &
+                                       this%nx_phys, this%ny_phys, &
+                                       hour_frac_rec, safe_sin(decl_mid), safe_cos(decl_mid), &
+                                       eqtime_mid, hour_frac_e, safe_sin(decl_e), &
+                                       safe_cos(decl_e), eqtime_e, t_off, wlen, this%sw_bucket, &
+                                       metrics%geolonT, metrics%geolatT, &
+                                       this%rsds_rec, this%rsds_alt, &
+                                       this%cosz, this%cosz_mean, rsds_out)
+      else
+         call atm_coszen_straddle_impl(this%nx_total, this%ny_total, this%nghost, &
+                                       this%nx_phys, this%ny_phys, &
+                                       hour_frac_rec, safe_sin(decl_mid), safe_cos(decl_mid), &
+                                       eqtime_mid, hour_frac_e, safe_sin(decl_e), &
+                                       safe_cos(decl_e), eqtime_e, t_off, wlen, this%sw_bucket, &
+                                       metrics%geolonT, metrics%geolatT, &
+                                       this%rsds_alt, this%rsds_rec, &
+                                       this%cosz, this%cosz_mean, rsds_out)
+      end if
    end subroutine atm_sw_coszen_refresh
+
+   function atm_held_rel(this, reader, t_rec) result(rel)
+      !! The reader's held `rsds` record, as an offset in intervals from the
+      !! interval starting at model time `t_rec`: 0 = that interval's own record,
+      !! 1 = the next one's, -1 = the previous one's, `ATM_REL_UNKNOWN` = the stamp
+      !! sits at none of them (padded repeat-year file at the wrap).  Read off the
+      !! record's stamp (centre of its interval), not inferred from the clock.
+      class(atm_state_t), intent(in) :: this
+      type(ocean_data_input_t), intent(in) :: reader
+      real(wp), intent(in) :: t_rec
+      integer :: rel
+      real(wp) :: dd, per
+
+      dd = held_stamp(reader, this%id(IDX_RSDS)) - (t_rec + 0.5_wp*this%sw_bucket)
+      if (reader%fields(this%id(IDX_RSDS))%ryf_enabled) then
+         per = reader%fields(this%id(IDX_RSDS))%cycle_period
+         dd = modulo(dd + 0.5_wp*per, per) - 0.5_wp*per
+      end if
+      rel = nint(dd/this%sw_bucket)
+      if (abs(dd - real(rel, wp)*this%sw_bucket) > 0.25_wp*this%sw_bucket) rel = ATM_REL_UNKNOWN
+   end function atm_held_rel
+
+   pure function held_stamp(reader, id) result(stamp)
+      !! Time stamp (s since `start_date`) of the record field `id` holds.
+      type(ocean_data_input_t), intent(in) :: reader
+      integer, intent(in) :: id
+      real(wp) :: stamp
+      stamp = reader%fields(id)%t_axis(max(reader%fields(id)%rec0, 1))
+   end function held_stamp
+
+   subroutine atm_check_alt(this, reader, id_alt, dir)
+      !! The neighbour view `id_alt` must hold the record exactly one interval
+      !! (`dir` = +1 next, -1 previous) from the primary view's: stamp difference
+      !! `dir * bucket` to within `ATM_STAMP_TOL_S` (modulo the cycle for repeat-year).
+      !! Anything else is a wrong pairing and fails loud, except a non-cyclic run
+      !! that has reached either end of the data, where the view is clamped to the
+      !! last/first record: that warns once (the run is then past what the files
+      !! cover and the primary field is clamped too).
+      class(atm_state_t), intent(inout) :: this
+      type(ocean_data_input_t), intent(in) :: reader
+      integer, intent(in) :: id_alt
+      real(wp), intent(in) :: dir
+      real(wp) :: dd, per
+      logical :: at_end
+
+      dd = held_stamp(reader, id_alt) - held_stamp(reader, this%id(IDX_RSDS)) - dir*this%sw_bucket
+      if (reader%fields(id_alt)%ryf_enabled) then
+         per = reader%fields(id_alt)%cycle_period
+         dd = modulo(dd + 0.5_wp*per, per) - 0.5_wp*per
+      end if
+      if (abs(dd) <= ATM_STAMP_TOL_S) return
+      at_end = .not. reader%fields(id_alt)%ryf_enabled .and. &
+               (reader%fields(id_alt)%rec0 <= 1 .or. reader%fields(id_alt)%rec0 >= reader%fields(id_alt)%nt)
+      if (at_end) then
+         if (.not. this%alt_warned) then
+            call logger%warning("atm_sw_coszen_refresh: a straddling shortwave window needs the rsds "// &
+                                "record of the neighbouring interval, but the run has reached the "// &
+                                "end of the data: the last/first record is repeated. Logged once.")
+            this%alt_warned = .true.
+         end if
+      else
+         call fail("atm_sw_coszen_refresh: the neighbouring rsds record view is "//to_string(dd)// &
+                   " s off one interval from the held record (stamps/offset inconsistent)", &
+                   code=OCEAN_STATUS_ERR_SETUP)
+      end if
+   end subroutine atm_check_alt
+
+   subroutine atm_apply_rsds_alt(this, reader, id, t)
+      !! Blend + regrid the neighbour-bucket `rsds` view `id` (previous or
+      !! next record) into `rsds_alt`, through the same weight set as `rsds`.
+      class(atm_state_t), intent(inout) :: this
+      type(ocean_data_input_t), intent(in) :: reader
+      integer, intent(in) :: id
+      real(wp), intent(in) :: t
+
+      if (this%fluxes_conservative) then
+         call atm_apply_field(reader, id, t, &
+                              this%nx_phys, this%ny_phys, this%nghost, &
+                              this%nx_total, this%ny_total, &
+                              this%wc%nmax, this%wc%nsx, this%wc%nsy, &
+                              this%wc%idx_i, this%wc%idx_j, this%wc%w, &
+                              this%win_cv, this%tgt_cv, this%rsds_alt)
+      else
+         call atm_apply_field(reader, id, t, &
+                              this%nx_phys, this%ny_phys, this%nghost, &
+                              this%nx_total, this%ny_total, &
+                              this%wb%nmax, this%wb%nsx, this%wb%nsy, &
+                              this%wb%idx_i, this%wb%idx_j, this%wb%w, &
+                              this%win_bl, this%tgt_bl, this%rsds_alt)
+      end if
+   end subroutine atm_apply_rsds_alt
 
    pure subroutine atm_spencer_sun(epoch, t, hour_frac, decl, eqtime_min)
       !! Spencer (1971) Fourier fit: UTC hour-of-day `hour_frac`, solar
@@ -1078,6 +1389,81 @@ contains
          end if
       end do
    end subroutine atm_coszen_apply_impl
+
+   pure subroutine atm_coszen_straddle_impl(nx_total, ny_total, nghost, nx_phys, ny_phys, &
+                                            hf_s, sdec_s, cdec_s, eq_s, hf_e, sdec_e, cdec_e, &
+                                            eq_e, t_off, wlen, bucket, geolonT, geolatT, &
+                                            rec_s, rec_e, cosz, cosz_mean, rsds)
+      !! The window `[t_off, t_off + wlen)` seconds after the START of bucket S
+      !! runs past the end of S (`t_off + wlen > bucket`) into the next bucket
+      !! E.  Piece 1 is `[t_off, bucket)` of S (record `rec_s`, Sun frozen at S's
+      !! midpoint: `hf_s`/`sdec_s`/`cdec_s`/`eq_s`), piece 2 is `[0, t_off + wlen
+      !! - bucket)` of E (`rec_e`, `hf_e`/...).  With `I_p` the integral of
+      !! `max(0, cos Z)` over the piece and `I_B` over its whole bucket (the
+      !! same `atm_cosz_cumulative` differences as the one-bucket kernel),
+      !!   rsds = (bucket / wlen) * Sum_p rec_p * I_p / I_B_p .
+      !! Each bucket then hands out exactly its own `rec * bucket` between the
+      !! windows that overlap it (the pieces telescope), so energy is conserved
+      !! per cell for ANY tiling of time by windows.  A bucket whose mean cosine
+      !! is below `ATM_COSZ_MEAN_MIN` contributes 0.  The bound kept from the
+      !! one-bucket kernel: each piece's share `I_p / I_B` is capped at 1 (the
+      !! piece cannot carry more than its bucket; exact arithmetic never needs
+      !! it, it guards round-off), i.e. `rsds <= (rec_s + rec_e) * bucket /
+      !! wlen`.  `cosz` = the window mean of `max(0, cos Z)` (sum of both
+      !! pieces over `wlen`), `cosz_mean` = the mean over bucket S.
+      !! Explicit-shape, no cross-module calls; every scalar is host-computed.
+      integer, intent(in), value :: nx_total, ny_total, nghost, nx_phys, ny_phys
+      real(wp), intent(in), value :: hf_s, sdec_s, cdec_s, eq_s, hf_e, sdec_e, cdec_e, eq_e
+      real(wp), intent(in), value :: t_off, wlen, bucket
+      real(wp), intent(in) :: geolonT(nx_total, ny_total), geolatT(nx_total, ny_total)
+      real(wp), intent(in) :: rec_s(nx_total, ny_total), rec_e(nx_total, ny_total)
+      real(wp), intent(inout) :: cosz(nx_total, ny_total), cosz_mean(nx_total, ny_total)
+      real(wp), intent(inout) :: rsds(nx_total, ny_total)
+
+      integer :: i, j, ii, jj
+      real(wp) :: lat_r, slat, clat, lon_deg, a_s, b_s, a_e, b_e, w0_s, w0_e, len2
+      real(wp) :: int_s, int_e, tot_s, tot_e, mean_s, mean_e, f_s, f_e, acc
+
+      len2 = t_off + wlen - bucket
+      do concurrent(j=1:ny_phys, i=1:nx_phys)
+         ii = nghost + i
+         jj = nghost + j
+         lat_r = geolatT(ii, jj)*DEG2RAD
+         lon_deg = geolonT(ii, jj)
+         slat = rdb_sm_sin(lat_r)
+         clat = rdb_sm_cos(lat_r)
+         a_s = slat*sdec_s
+         b_s = clat*cdec_s
+         a_e = slat*sdec_e
+         b_e = clat*cdec_e
+         w0_s = (15.0_wp*hf_s + 0.25_wp*eq_s + lon_deg - 180.0_wp)*DEG2RAD
+         w0_e = (15.0_wp*hf_e + 0.25_wp*eq_e + lon_deg - 180.0_wp)*DEG2RAD
+
+         tot_s = atm_cosz_cumulative(w0_s + ATM_EARTH_OMEGA*bucket, a_s, b_s) &
+                 - atm_cosz_cumulative(w0_s, a_s, b_s)
+         int_s = atm_cosz_cumulative(w0_s + ATM_EARTH_OMEGA*bucket, a_s, b_s) &
+                 - atm_cosz_cumulative(w0_s + ATM_EARTH_OMEGA*t_off, a_s, b_s)
+         tot_e = atm_cosz_cumulative(w0_e + ATM_EARTH_OMEGA*bucket, a_e, b_e) &
+                 - atm_cosz_cumulative(w0_e, a_e, b_e)
+         int_e = atm_cosz_cumulative(w0_e + ATM_EARTH_OMEGA*len2, a_e, b_e) &
+                 - atm_cosz_cumulative(w0_e, a_e, b_e)
+         tot_s = max(0.0_wp, tot_s)
+         tot_e = max(0.0_wp, tot_e)
+         int_s = max(0.0_wp, int_s)
+         int_e = max(0.0_wp, int_e)
+         mean_s = tot_s/(ATM_EARTH_OMEGA*bucket)
+         mean_e = tot_e/(ATM_EARTH_OMEGA*bucket)
+         cosz(ii, jj) = (int_s + int_e)/(ATM_EARTH_OMEGA*wlen)
+         cosz_mean(ii, jj) = mean_s
+
+         f_s = 0.0_wp
+         f_e = 0.0_wp
+         if (mean_s >= ATM_COSZ_MEAN_MIN) f_s = min(int_s/tot_s, 1.0_wp)
+         if (mean_e >= ATM_COSZ_MEAN_MIN) f_e = min(int_e/tot_e, 1.0_wp)
+         acc = rec_s(ii, jj)*f_s + rec_e(ii, jj)*f_e
+         rsds(ii, jj) = acc*(bucket/wlen)
+      end do
+   end subroutine atm_coszen_straddle_impl
 
    pure function atm_cosz_cumulative(x, a, b) result(c)
       !! Antiderivative `C(x) = Integral_0^x max(0, a + b cos w) dw`
