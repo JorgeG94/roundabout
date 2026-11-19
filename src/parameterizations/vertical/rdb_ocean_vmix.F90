@@ -88,7 +88,7 @@ module rdb_ocean_vmix
    !! the convective 1 m^2/s passes through untouched; a caller who sets
    !! `kd_max < kd_conv` will silently cap the convective value -- that
    !! is the gate doing its job, not a convection bug.
-   use rdb_constants, only: H_DIV_EPS, wp, GRAVITY, PI, H_VANISHED, DEG2RAD
+   use rdb_constants, only: H_DIV_EPS, wp, GRAVITY, PI, H_VANISHED, DEG2RAD, NZ_STACK_MAX
    use rdb_grid, only: hgrid_t
    use rdb_multilayer_state, only: multilayer_state_t
    use rdb_ocean_surface_stress, only: ocean_surface_stress_t
@@ -618,6 +618,7 @@ module rdb_ocean_vmix
 
 contains
 
+#include "rdb_vanished_layer.inc"
 #include "rdb_safe_math_core.inc"
 #include "rdb_safe_math_pow.inc"
 #include "rdb_safe_math_trig.inc"
@@ -1193,7 +1194,7 @@ contains
       !! and `T` is the shared two-band `sw_transmission` (Paulson &
       !! Simpson 1977).  `sw_method` selects the reference depth:
       !! `all_sw` ⇒ no correction (legacy), `mxl_sw` ⇒ `T(h_b)`,
-      !! `lv1_sw` ⇒ `T(h_layer(nz))`.  `Q_heat`/`Q_salt` stay on `sf`;
+      !! `lv1_sw` ⇒ `T(h_layer(k_sfc))`.  `Q_heat`/`Q_salt` stay on `sf`;
       !! the only new array dummy is the explicit-shape `sw_src`.
       !! NOTE (Roundabout KPP fidelity, roadmap trap #4 / PR-11): the overlay
       !! has no Monin-Obukhov length, so `B_0 > 0` ⇒ `w_* ≡ 0` and the SW
@@ -1212,7 +1213,8 @@ contains
       real(wp), intent(in) :: temp_h(nx_arg, ny_arg, nz_arg)
          !! The temperature concentration (degC), flattened off the
          !! registry by the shim.  Read ONLY under
-         !! `buoyancy_coeffs == BUOY_COEFFS_EOS`, and only at `k = nz`.
+         !! `buoyancy_coeffs == BUOY_COEFFS_EOS`, and only at the surface layer
+         !! `k_sfc` (the first live layer at or below `nz`).
       real(wp), intent(in) :: salt_h(nx_arg, ny_arg, nz_arg)
          !! The salinity concentration (PSU).  Same contract.
       logical, intent(in) :: sw_active
@@ -1229,7 +1231,7 @@ contains
       real(wp), intent(in) :: sw_frac(sw_nb)
       real(wp), intent(in) :: sw_kappa(nx_arg, ny_arg, sw_nb)
 
-      integer :: i, j, k, nx, ny, nz
+      integer :: i, j, k, nx, ny, nz, k_sfc
       real(wp) :: tau_mag, u_star
       real(wp) :: B_0, wstar3, w_star, w_s
       real(wp) :: u_ref, v_ref, b_ref, d_centre_ref
@@ -1284,7 +1286,7 @@ contains
 
       ! ---- Pass 1: per-column BL depth ----
       do concurrent(j=1:ny, i=1:nx) &
-         local(k, u_ref, v_ref, b_ref, d_centre_ref, &
+         local(k, k_sfc, u_ref, v_ref, b_ref, d_centre_ref, &
                u_k, v_k, b_k, d_centre_k, &
                shear2, ri_bulk, ri_prev, d_prev, &
                delta_d, frac, denom, h_b, crossing_found, &
@@ -1292,10 +1294,15 @@ contains
                h_b_lagged, wstar3_lagged, w_s_col, &
                delta_b, n_brunt, vt2, B_0, destabilizing, q_T_kin, q_S_kin, q_bl, &
                a_buoy, b_buoy, t_sfc, s_sfc, h_sfc, p_buoy)
-         u_ref = 0.5_wp*(ms%u_face_x_layer(i, j, nz) + ms%u_face_x_layer(i + 1, j, nz))
-         v_ref = 0.5_wp*(ms%v_face_y_layer(i, j, nz) + ms%v_face_y_layer(i, j + 1, nz))
-         b_ref = -GRAVITY*ms%rho_layer(i, j, nz)/this%rho0
-         d_centre_ref = 0.5_wp*ms%h_layer(i, j, nz)
+         ! The surface layer is the first LIVE one at or below `nz`: a top
+         ! layer that has collapsed (h <= H_VANISHED) carries no water, a
+         ! zero velocity and the reference density, so it is no surface
+         ! reference.  `k_sfc == nz` whenever the top layer is live.
+         k_sfc = rdb_vl_first_live(nx, ny, nz, ms%h_layer, i, j, nz)
+         u_ref = 0.5_wp*(ms%u_face_x_layer(i, j, k_sfc) + ms%u_face_x_layer(i + 1, j, k_sfc))
+         v_ref = 0.5_wp*(ms%v_face_y_layer(i, j, k_sfc) + ms%v_face_y_layer(i, j + 1, k_sfc))
+         b_ref = -GRAVITY*ms%rho_layer(i, j, k_sfc)/this%rho0
+         d_centre_ref = 0.5_wp*ms%h_layer(i, j, k_sfc)
 
          ! PR-12 dedup: |tau| at cell centres is now a shared field
          ! (ocean_surface_stress_set_derived, same 3-line FP op order as
@@ -1324,7 +1331,7 @@ contains
                          sw_transmission_nb(h_b_lagged, i, j, nx_arg, ny_arg, sw_nb, sw_kappa, sw_frac)
                else if (sw_method == KPP_SW_LV1) then
                   q_bl = q_bl - sw_pen_frac*sw_src(i, j)* &
-                         sw_transmission_nb(ms%h_layer(i, j, nz), i, j, nx_arg, ny_arg, sw_nb, &
+                         sw_transmission_nb(ms%h_layer(i, j, k_sfc), i, j, nx_arg, ny_arg, sw_nb, &
                                             sw_kappa, sw_frac)
                end if
             else if (sw_method == KPP_SW_MXL) then
@@ -1332,7 +1339,7 @@ contains
                       sw_transmission(h_b_lagged, sw_R, sw_zeta1, sw_zeta2)
             else if (sw_method == KPP_SW_LV1) then
                q_bl = q_bl - sw_pen_frac*sw_src(i, j)* &
-                      sw_transmission(ms%h_layer(i, j, nz), sw_R, sw_zeta1, sw_zeta2)
+                      sw_transmission(ms%h_layer(i, j, k_sfc), sw_R, sw_zeta1, sw_zeta2)
             end if
             q_T_kin = q_bl/(this%rho0*sf%cp)
          else
@@ -1350,13 +1357,13 @@ contains
          a_buoy = this%eos%alpha_T
          b_buoy = this%eos%beta_S
          if (this%buoyancy_coeffs == BUOY_COEFFS_EOS) then
-            h_sfc = ms%h_layer(i, j, nz)
+            h_sfc = ms%h_layer(i, j, k_sfc)
             ! falls back to the CONSTANT `eos%alpha_T`/`beta_S`, not to a zero
             ! concentration: a vanished surface layer must not hand the
             ! buoyancy flux fresh / 0 degC coefficients.
             if (h_sfc > H_VANISHED) then
-               t_sfc = temp_h(i, j, nz)
-               s_sfc = salt_h(i, j, nz)
+               t_sfc = temp_h(i, j, k_sfc)
+               s_sfc = salt_h(i, j, k_sfc)
                p_buoy = p_buoy_ref
                if (this%p_top_in_eos) p_buoy = ms%p_top(i, j)
                call eos_buoyancy_coeffs(this%eos, t_sfc, s_sfc, p_buoy, &
@@ -1375,7 +1382,7 @@ contains
          crossing_found = .false.
 
          d_centre_k = d_centre_ref
-         do k = nz - 1, 1, -1
+         do k = k_sfc - 1, 1, -1
             if (.not. crossing_found) then
                d_centre_k = d_centre_k + 0.5_wp*(ms%h_layer(i, j, k + 1) + ms%h_layer(i, j, k))
                u_k = 0.5_wp*(ms%u_face_x_layer(i, j, k) + ms%u_face_x_layer(i + 1, j, k))
@@ -1410,7 +1417,7 @@ contains
 
          if (.not. crossing_found) then
             h_b = 0.0_wp
-            do k = 1, nz
+            do k = 1, k_sfc
                h_b = h_b + ms%h_layer(i, j, k)
             end do
          end if
@@ -1420,12 +1427,13 @@ contains
 
       ! ---- Pass 2: overlay kv_kpp inside the BL ----
       do concurrent(j=1:ny, i=1:nx) &
-         local(k, d_running, d_face_k, sigma, g_shape, kv_kpp, h_b, &
+         local(k, k_sfc, d_running, d_face_k, sigma, g_shape, kv_kpp, h_b, &
                tau_mag, u_star, &
                wstar3, w_star, w_s, gamma_factor, B_0, destabilizing, &
                q_T_kin, q_S_kin, q_bl, &
                a_buoy, b_buoy, t_sfc, s_sfc, h_sfc, p_buoy)
          ! PR-12 dedup + the ice-shelf stress — see Pass 1's comment.
+         k_sfc = rdb_vl_first_live(nx, ny, nz, ms%h_layer, i, j, nz)
          tau_mag = ss%stress_mag(i, j) + ss%stress_shelf(i, j)
          u_star = sqrt(tau_mag/this%rho0)
          h_b = this%bl_depth(i, j)
@@ -1442,7 +1450,7 @@ contains
                          sw_transmission_nb(h_b, i, j, nx_arg, ny_arg, sw_nb, sw_kappa, sw_frac)
                else if (sw_method == KPP_SW_LV1) then
                   q_bl = q_bl - sw_pen_frac*sw_src(i, j)* &
-                         sw_transmission_nb(ms%h_layer(i, j, nz), i, j, nx_arg, ny_arg, sw_nb, &
+                         sw_transmission_nb(ms%h_layer(i, j, k_sfc), i, j, nx_arg, ny_arg, sw_nb, &
                                             sw_kappa, sw_frac)
                end if
             else if (sw_method == KPP_SW_MXL) then
@@ -1450,7 +1458,7 @@ contains
                       sw_transmission(h_b, sw_R, sw_zeta1, sw_zeta2)
             else if (sw_method == KPP_SW_LV1) then
                q_bl = q_bl - sw_pen_frac*sw_src(i, j)* &
-                      sw_transmission(ms%h_layer(i, j, nz), sw_R, sw_zeta1, sw_zeta2)
+                      sw_transmission(ms%h_layer(i, j, k_sfc), sw_R, sw_zeta1, sw_zeta2)
             end if
             q_T_kin = q_bl/(this%rho0*sf%cp)
          else
@@ -1461,13 +1469,13 @@ contains
          a_buoy = this%eos%alpha_T
          b_buoy = this%eos%beta_S
          if (this%buoyancy_coeffs == BUOY_COEFFS_EOS) then
-            h_sfc = ms%h_layer(i, j, nz)
+            h_sfc = ms%h_layer(i, j, k_sfc)
             ! falls back to the CONSTANT `eos%alpha_T`/`beta_S`, not to a zero
             ! concentration: a vanished surface layer must not hand the
             ! buoyancy flux fresh / 0 degC coefficients.
             if (h_sfc > H_VANISHED) then
-               t_sfc = temp_h(i, j, nz)
-               s_sfc = salt_h(i, j, nz)
+               t_sfc = temp_h(i, j, k_sfc)
+               s_sfc = salt_h(i, j, k_sfc)
                p_buoy = p_buoy_ref
                if (this%p_top_in_eos) p_buoy = ms%p_top(i, j)
                call eos_buoyancy_coeffs(this%eos, t_sfc, s_sfc, p_buoy, &
@@ -1483,7 +1491,11 @@ contains
          w_s = sqrt(u_star*u_star + w_star*w_star)
          if (h_b > 0.0_wp .and. w_s > 0.0_wp) then
             d_running = 0.0_wp
-            do k = nz, 1, -1
+            ! Depth is counted from the first live layer, and the overlay
+            ! (kv/kt/gamma) is written only at interfaces at or below it:
+            ! interfaces above a collapsed top layer stay untouched, so the
+            ! non-local flux closes at the live surface layer's top.
+            do k = k_sfc, 1, -1
                d_running = d_running + ms%h_layer(i, j, k)
                d_face_k = d_running
                if (k > 1 .and. d_face_k < h_b) then
