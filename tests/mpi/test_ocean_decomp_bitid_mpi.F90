@@ -3190,13 +3190,14 @@ contains
       if (forced_width() >= 0) then
          ! Forced width (RDB_BITID_BT_HALO or a `+w<W>` case): not AUTO.  Assert the march that ran is
          ! the forced one, so the leg cannot pass vacuously: at width 0 the per-substep
-         ! exchanges (grouped / mid-substep u) must have fired and no packed wide
-         ! exchange; at width > 0 the packed ones.
+         ! exchanges (grouped / mid-substep u) must have fired (the packed count says
+         ! nothing here: the narrow path packs its exchanges too); at width > 0 the
+         ! packed ones.
          bad = 0
          if (dec%bt_halo /= forced_width()) bad = bad + 1
          if (n_steps_cur > 0) then
             if (forced_width() == 0) then
-               if (dec%cnt_pk /= 0_int64 .or. dec%cnt_bt_group + dec%cnt_bt_u <= 0_int64) bad = bad + 1
+               if (dec%cnt_bt_group + dec%cnt_bt_u <= 0_int64) bad = bad + 1
             else
                if (dec%cnt_pk <= 0_int64) bad = bad + 1
             end if
