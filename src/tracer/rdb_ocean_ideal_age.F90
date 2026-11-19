@@ -49,7 +49,7 @@ module rdb_ocean_ideal_age
    !!     matches the tracer's definition as a hard Dirichlet condition
    !!     rather than a relaxation.
    use rdb_safe_math, only: safe_exp
-   use rdb_constants, only: H_VANISHED, H_DIV_EPS, wp
+   use rdb_constants, only: H_VANISHED, H_DIV_EPS, NZ_STACK_MAX, wp
    use rdb_grid, only: hgrid_t
    use rdb_multilayer_state, only: multilayer_state_t
    implicit none
@@ -62,6 +62,8 @@ module rdb_ocean_ideal_age
    public :: ocean_ideal_age_young_val
 
 contains
+
+#include "rdb_vanished_layer.inc"
 
    subroutine ocean_ideal_age_apply(grid, ms, dt, active)
       !! Driver-facing entry point for the interior-aging SOURCE term.
@@ -130,8 +132,16 @@ contains
    end subroutine ocean_ideal_age_reset_surface
 
    pure subroutine ocean_ideal_age_reset_step(c_age, h_layer, young_eff, nx, ny, nz)
-      !! Surface Dirichlet BC, `k = nz` only:
-      !!   `c_age(i,j,nz) = young_eff`
+      !! Surface Dirichlet BC on the SURFACE layer only: the first LIVE
+      !! layer at or below `nz` (`rdb_vl_first_live`), `nz` itself whenever
+      !! the top layer is live:
+      !!   `c_age(i,j,k_sfc) = young_eff`
+      !! A collapsed top layer (`h <= H_VANISHED`: rho / Lagrangian
+      !! coordinates, wet/dry, an outcrop) holds no water, so resetting IT
+      !! would leave the real surface layer ageing.  The dead layers above
+      !! `k_sfc` are left untouched: like every filler they keep their last
+      !! concentration (transport weights it by their own thickness) and
+      !! nothing reads it.  A column with no live layer resets `nz`, as before.
       !! `young_eff` is `A_young(t)` (s), a host scalar from
       !! `ocean_ideal_age_young_val` — this writes a CONCENTRATION
       !! times thickness, not a raw concentration (today's hard-coded
@@ -144,10 +154,11 @@ contains
       real(wp), intent(in) :: h_layer(nx, ny, nz)
       real(wp), intent(in) :: young_eff
 
-      integer :: i, j
+      integer :: i, j, k_sfc
 
-      do concurrent(j=1:ny, i=1:nx)
-         c_age(i, j, nz) = young_eff
+      do concurrent(j=1:ny, i=1:nx) local(k_sfc)
+         k_sfc = rdb_vl_first_live(nx, ny, nz, h_layer, i, j, nz)
+         c_age(i, j, k_sfc) = young_eff
       end do
    end subroutine ocean_ideal_age_reset_step
 
