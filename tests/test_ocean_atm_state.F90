@@ -141,7 +141,13 @@ contains
                   new_unittest("atm_sw_record_alignment", test_sw_record_alignment), &
                   new_unittest("atm_sw_axis_checks", test_sw_axis_checks), &
                   new_unittest("atm_sw_shape", test_sw_shape), &
-                  new_unittest("atm_sw_coszen_analytic", test_sw_coszen_analytic) &
+                  new_unittest("atm_sw_coszen_analytic", test_sw_coszen_analytic), &
+                  new_unittest("atm_sw_one_bucket_golden", test_sw_one_bucket_golden), &
+                  new_unittest("atm_sw_straddle_conservation", test_sw_straddle_conservation), &
+                  new_unittest("atm_sw_straddle_offgrid", test_sw_straddle_offgrid), &
+                  new_unittest("atm_sw_straddle_ryf_wrap", test_sw_straddle_ryf_wrap), &
+                  new_unittest("atm_sw_straddle_resume", test_sw_straddle_resume), &
+                  new_unittest("atm_sw_window_longer_than_bucket", test_sw_window_longer) &
                   ]
    end subroutine collect_ocean_atm_state_tests
 
@@ -713,6 +719,7 @@ contains
                       int(size(atm%prra), 8) + int(size(atm%prsn), 8) + &
                       int(size(atm%rsds), 8) + int(size(atm%rsds_rec), 8) + &
                       int(size(atm%cosz), 8) + int(size(atm%cosz_mean), 8) + &
+                      int(size(atm%rsds_alt), 8) + &
                       int(size(atm%win_bl), 8) + &
                       int(size(atm%win_cv), 8) + int(size(atm%tgt_bl), 8) + &
                       int(size(atm%tgt_cv), 8)) + atm%wb%bytes() + atm%wc%bytes()
@@ -1358,6 +1365,392 @@ contains
    ! =====================================================================
    ! §5 test 3d: coszen vs the analytic equinox/noon/midnight case.
    ! =====================================================================
+
+   pure function bits_fingerprint(x) result(fp)
+      !! Order-sensitive bitwise fingerprint of a real array.
+      real(wp), intent(in) :: x(:)
+      integer(8) :: fp
+      integer :: k
+      fp = 0_8
+      do k = 1, size(x)
+         fp = ieor(ishftc(fp, 7), transfer(x(k), 0_8))
+      end do
+   end function bits_fingerprint
+
+   subroutine test_sw_one_bucket_golden(error)
+      !! Windows that lie inside ONE bucket (every configuration that ran before
+      !! the straddling-window kernel existed) must reproduce the pre-change
+      !! answers BIT FOR BIT.  The fingerprints were recorded from the code
+      !! before this change (gfortran, OMP_NUM_THREADS=1) over four runs
+      !! covering `dt_therm_ratio` 1/2/3, both `diabatic_first` conventions and
+      !! four cells; a change to the arithmetic of the one-bucket path (the
+      !! snapping, `t_off`, the bucket scalars or the kernel) changes them.
+      !! Fails before: any edit that routes a one-bucket window through the
+      !! straddle kernel (its rounding differs from the one-bucket kernel's).
+      type(error_type), allocatable, intent(out) :: error
+      integer(8), parameter :: GOLDEN(4) = [int(z'233EF6B694DC96CC', 8), int(z'336B755D63A04D21', 8), &
+                                            int(z'71DAA718B98CEB42', 8), int(z'3DA28DC75F670B9C', 8)]
+      real(wp) :: rec(8), dts(4)
+      real(wp), allocatable :: r(:), c(:), m(:), w(:)
+      logical, allocatable :: u(:)
+      integer :: ns, ierr, pass, nrs(4)
+      logical :: dfs(4)
+      dts = [1800.0_wp, 900.0_wp, 1800.0_wp, 900.0_wp]
+      nrs = [1, 2, 2, 3]
+      dfs = [.true., .false., .true., .true.]
+      rec = [120.0_wp, 80.0_wp, 310.0_wp, 505.0_wp, 640.0_wp, 55.0_wp, 17.0_wp, 260.0_wp]
+      do pass = 1, 4
+         ns = nint(86400.0_wp/dts(pass))
+         allocate (r(ns), c(ns), m(ns), w(ns), u(ns))
+         call sw_run(285.5_wp + 25.0_wp*real(pass - 1, wp), -34.7_wp + 20.0_wp*real(pass - 1, wp), &
+                     "2000-01-03", rec, dts(pass), ns, r, c, m, w, u, ierr, &
+                     ratio=nrs(pass), dfirst=dfs(pass))
+         call check(error, ierr == OCEAN_STATUS_OK, "atm_state_configure failed")
+         if (allocated(error)) return
+         call check(error, bits_fingerprint(pack(r, u)) == GOLDEN(pass), &
+                    "one-bucket windows must be bit-identical to the pre-change answers")
+         if (allocated(error)) return
+         deallocate (r, c, m, w, u)
+      end do
+   end subroutine test_sw_one_bucket_golden
+
+   subroutine win_run(lon, lat, start_date, rec, dt, nr, df, t_begin, nwin, rsds_w, wl_w, cz_w, &
+                      cm_w, ierr, ryf, cons)
+      !! Drive the provider the way the engine does at `dt_therm_ratio = nr`,
+      !! but only on the THERMO steps: window `k` starts at `t_begin + (k-1) *
+      !! wl` (`wl = nr*dt`, any start, on or off the UTC window grid), the flux
+      !! is sampled at the window start (`df`) or at its last step, and the
+      !! window comes from `atm_sw_window`.  One 1x1 cell at (`lon`, `lat`),
+      !! `rsds` records `rec(k)` stamped at the centre of bucket `k` (10800 s).
+      !! `ryf`: `time_mode = "repeat_year"` with a one-period (`size(rec)`
+      !! buckets) cycle.  `cons`: `fluxes_regrid = "conservative"`.
+      real(wp), intent(in) :: lon, lat, rec(:), dt, t_begin
+      character(len=*), intent(in) :: start_date
+      integer, intent(in) :: nr, nwin
+      logical, intent(in) :: df
+      real(wp), intent(out) :: rsds_w(nwin), wl_w(nwin), cz_w(nwin), cm_w(nwin)
+      integer, intent(out) :: ierr
+      logical, intent(in), optional :: ryf, cons
+
+      character(len=*), parameter :: OTHER8(8) = &
+                                     [character(len=4) :: "tas", "huss", "uas", "vas", "psl", &
+                                                           "rlds", "prra", "prsn"]
+      character(len=*), parameter :: RSDS1(1) = [character(len=4) :: "rsds"]
+      type(hgrid_t) :: grid
+      type(ocean_metrics_t) :: metrics
+      type(config_t) :: cfg
+      type(ocean_data_input_t) :: reader
+      type(atm_state_t) :: atm
+      real(wp) :: lon_c(NLON_SRC), lat_c(NLAT_SRC)
+      real(wp) :: lon_bnds(2, NLON_SRC), lat_bnds(2, NLAT_SRC)
+      real(wp) :: t_axis_other(2), coefs_other(4, 8), coefs_rsds(4, 1), tq, shift, wl
+      real(wp), allocatable :: t_axis_rsds(:)
+      character(len=64) :: units
+      integer :: v, k, nrec
+      logical :: is_ryf
+
+      is_ryf = .false.
+      if (present(ryf)) is_ryf = ryf
+      nrec = size(rec)
+      allocate (t_axis_rsds(nrec))
+      call uniform_axis(NLON_SRC, 0.0_wp, 360.0_wp, lon_c, lon_bnds)
+      call uniform_axis(NLAT_SRC, -90.0_wp, 90.0_wp, lat_c, lat_bnds)
+      units = "seconds since "//start_date//" 00:00:00"
+      do k = 1, nrec
+         t_axis_rsds(k) = (real(k, wp) - 0.5_wp)*BUCKET_S
+      end do
+      do v = 1, 8
+         coefs_other(:, v) = [1.0_wp, 0.0_wp, 0.0_wp, 0.0_wp]
+      end do
+      t_axis_other = [-100000.0_wp, 4.0e6_wp]
+      if (is_ryf) t_axis_other = [0.0_wp, real(nrec, wp)*BUCKET_S]
+      call write_atm_grid_file("tmp_local_artifacts/atm_win_other.nc", NLON_SRC, NLAT_SRC, &
+                               lon_c, lat_c, lon_bnds, lat_bnds, 2, t_axis_other, &
+                               trim(units), OTHER8, coefs_other)
+      call write_filelist_txt("tmp_local_artifacts/atm_win_other_filelist.txt", &
+                              ["tmp_local_artifacts/atm_win_other.nc"])
+      coefs_rsds(:, 1) = [0.0_wp, 0.0_wp, 0.0_wp, 1.0_wp]
+      call write_atm_grid_file("tmp_local_artifacts/atm_win_rsds.nc", NLON_SRC, NLAT_SRC, &
+                               lon_c, lat_c, lon_bnds, lat_bnds, nrec, t_axis_rsds, &
+                               trim(units), RSDS1, coefs_rsds, t_data=rec)
+      call write_filelist_txt("tmp_local_artifacts/atm_win_rsds_filelist.txt", &
+                              ["tmp_local_artifacts/atm_win_rsds.nc"])
+
+      call grid%init(1, 1, NGHOST, 1000.0_wp, 1000.0_wp)
+      call make_spherical_metrics(metrics, grid, lon - 1.0_wp, lat - 1.0_wp, 2.0_wp, 2.0_wp, &
+                                  RAD_EARTH)
+      call base_cfg(cfg, start_date, "tmp_local_artifacts/atm_win_other_filelist.txt")
+      cfg%ocean%atm_forcing%filelist_rsds = "tmp_local_artifacts/atm_win_rsds_filelist.txt"
+      cfg%ocean%atm_forcing%sw_interp = "coszen"
+      cfg%ocean%atm_forcing%sw_offset_s = 0.5_wp*BUCKET_S
+      if (present(cons)) then
+         if (cons) cfg%ocean%atm_forcing%fluxes_regrid = "conservative"
+      end if
+      if (is_ryf) then
+         cfg%ocean%atm_forcing%time_mode = "repeat_year"
+         cfg%ocean%atm_forcing%ryf_start_date = start_date
+         cfg%ocean%atm_forcing%ryf_period_days = real(nrec, wp)*BUCKET_S/86400.0_wp
+      end if
+      cfg%dt_fixed = dt
+      cfg%ocean%vmix%dt_therm_ratio = nr
+
+      call reader%init()
+      call atm_state_configure(cfg, reader, grid, metrics, atm, ierr=ierr)
+      if (ierr /= OCEAN_STATUS_OK) then
+         call destroy_cartesian_metrics(metrics)
+         call reader%destroy()
+         return
+      end if
+      call map_atm(reader, atm)
+      do k = 1, nwin
+         call atm_sw_window(dt, nr, df, .true., shift, wl)
+         ! window start = tq + shift
+         tq = t_begin + real(k - 1, wp)*wl - shift
+         call ocean_data_input_update_all(reader, tq)
+         call atm_state_update(atm, reader, metrics, tq, dt, shift, wl)
+         call sync_atm(atm)
+         rsds_w(k) = atm%rsds(1 + NGHOST, 1 + NGHOST)
+         cz_w(k) = atm%cosz(1 + NGHOST, 1 + NGHOST)
+         cm_w(k) = atm%cosz_mean(1 + NGHOST, 1 + NGHOST)
+         wl_w(k) = wl
+      end do
+      call unmap_atm(reader, atm)
+      call destroy_cartesian_metrics(metrics)
+      call atm%destroy()
+      call reader%destroy()
+   end subroutine win_run
+
+   subroutine test_sw_straddle_conservation(error)
+      !! 7200 s windows (`dt = 1800`, `dt_therm_ratio = 4`) against 10800 s
+      !! buckets, two UTC days of consecutive windows, BOTH `diabatic_first`
+      !! conventions and BOTH `fluxes_regrid` choices: in every cell
+      !! `Sum_windows rsds * wlen = Sum_buckets rec * bucket` (buckets that see
+      !! the Sun; 0 in polar night) to 1e-11 relative, with a DIFFERENT record
+      !! in every bucket (and, in the last cell, a record in ONE bucket only,
+      !! which must reach nothing outside the windows overlapping it).  Cells:
+      !! a sunset sliver (34.7 S), a mid-latitude cell, a short-night cell
+      !! (65 N, late June), polar night and polar day (80 N).  Every window
+      !! stays within `(rec_a + rec_b) * bucket / wlen`, is finite and >= 0,
+      !! and one straddling window's `cosz` matches an independent quadrature.
+      !! Fails before: the old code refused at the first step; a wrong
+      !! record pairing (previous instead of next bucket, or the current record
+      !! on both pieces) breaks the per-cell sum because the records differ.
+      type(error_type), allocatable, intent(out) :: error
+
+      integer, parameter :: NC = 6, NWIN = 24, NREC = 20
+      real(wp), parameter :: LONS(NC) = [285.5_wp, 60.0_wp, 337.5_wp, 10.0_wp, 10.0_wp, 60.0_wp]
+      real(wp), parameter :: LATS(NC) = [-34.7_wp, -34.7_wp, 65.0_wp, 80.0_wp, 80.0_wp, -34.7_wp]
+      character(len=10), parameter :: DATES(NC) = [character(len=10) :: "2000-01-03", &
+                                                                                         "2000-01-03", "2000-06-25", "2000-01-03", &
+                                                                                                         "2000-07-01", "2000-01-03"]
+      real(wp) :: rec(NREC), r(NWIN), wl(NWIN), cz(NWIN), cm(NWIN)
+      real(wp) :: lit(NREC), expect, got, ref1, ref2, l1
+      integer :: ic, k, b, ierr, pass, ib
+      logical :: df, cons
+
+      do pass = 1, 4
+         df = (pass == 1 .or. pass == 3)
+         cons = (pass >= 3)
+         do ic = 1, NC
+            do b = 1, NREC
+               rec(b) = 100.0_wp + 37.5_wp*real(b, wp) + 11.0_wp*real(mod(b, 3), wp)
+            end do
+            if (ic == NC) then
+               rec = 0.0_wp
+               rec(2) = 400.0_wp
+            end if
+            call win_run(LONS(ic), LATS(ic), DATES(ic), rec, 1800.0_wp, 4, df, 0.0_wp, NWIN, &
+                         r, wl, cz, cm, ierr, cons=cons)
+            call check(error, ierr == OCEAN_STATUS_OK, "straddle: atm_state_configure failed")
+            if (allocated(error)) return
+            ! Which buckets see the Sun: the bucket-start mean each window reports
+            ! (every bucket is the start bucket of at least one window here).
+            lit = 0.0_wp
+            do k = 1, NWIN
+               ib = int(real(k - 1, wp)*7200.0_wp/BUCKET_S) + 1
+               lit(ib) = max(lit(ib), cm(k))
+            end do
+            expect = 0.0_wp
+            do b = 1, 16
+               if (lit(b) >= 1.0e-9_wp) expect = expect + rec(b)*BUCKET_S
+            end do
+            got = sum(r*wl)
+            call check(error, minval(r) >= 0.0_wp .and. all(r == r), "straddle: rsds must be finite, >= 0")
+            if (allocated(error)) return
+            if (expect > 0.0_wp) then
+               call check(error, abs(got - expect) <= 1.0e-11_wp*expect, &
+                          "straddle: Sum rsds*wlen must equal Sum rec*bucket per cell "// &
+                          "(two days, records differ per bucket)")
+            else
+               call check(error, got == 0.0_wp, "straddle: a dark cell must receive exactly 0")
+            end if
+            if (allocated(error)) return
+            do k = 1, NWIN
+               ib = int(real(k - 1, wp)*7200.0_wp/BUCKET_S) + 1
+               call check(error, r(k) <= (rec(ib) + rec(ib + 1))*BUCKET_S/wl(k)*(1.0_wp + 1.0e-12_wp), &
+                          "straddle: window above the (rec_s + rec_e)*bucket/wlen bound")
+               if (allocated(error)) return
+            end do
+            if (ic == NC) then
+               ! Only bucket 2 ([3 h, 6 h) UTC) carries a record.  Window 1 ([0, 2 h)) and
+               ! every window from #4 on ([6 h, ...)) overlap no part of it: exactly 0.
+               call check(error, r(1) == 0.0_wp .and. all(r(4:NWIN) == 0.0_wp), &
+                          "straddle: a record must reach only the windows overlapping its bucket")
+               if (allocated(error)) return
+            end if
+         end do
+      end do
+
+      ! Shape: window 2 ([7200, 14400) = pieces [7200, 10800) + [10800, 14400))
+      ! at the mid-latitude cell against quadrature of each piece with its own
+      ! bucket's Sun, 1e-4 absolute.
+      rec = 250.0_wp
+      call win_run(285.5_wp, -34.7_wp, "2000-01-03", rec, 1800.0_wp, 4, .true., 0.0_wp, 3, &
+                   r(1:3), wl(1:3), cz(1:3), cm(1:3), ierr)
+      call check(error, ierr == OCEAN_STATUS_OK, "straddle: atm_state_configure failed")
+      if (allocated(error)) return
+      l1 = 3600.0_wp
+      ref1 = ref_step_mean(285.5_wp, -34.7_wp, 3, 7200.0_wp, 10800.0_wp - 1.0e-6_wp, BUCKET_S)
+      ref2 = ref_step_mean(285.5_wp, -34.7_wp, 3, 10800.0_wp, 14400.0_wp, BUCKET_S)
+      call check(error, abs(cz(2) - (ref1*l1 + ref2*l1)/7200.0_wp) <= 1.0e-4_wp, &
+                 "straddle: window-mean cosz must match the two-piece quadrature")
+   end subroutine test_sw_straddle_conservation
+
+   subroutine test_sw_straddle_offgrid(error)
+      !! A window start OFF the UTC window-length grid (and off the bucket grid):
+      !! every window's energy equals the sum of the 300 s windows over the same
+      !! span (those never straddle and take the one-bucket path), for 7200 s
+      !! windows (`dt_therm_ratio = 4`) and 4500 s windows (`dt = 1500`, ratio 3,
+      !! which also puts a window inside one bucket off every grid).  Both
+      !! conventions.  Fails before: the first window was refused ("start on the
+      !! window-length grid of the UTC clock").
+      type(error_type), allocatable, intent(out) :: error
+
+      integer, parameter :: NREC = 20
+      real(wp) :: rec(NREC), r(10), wl(10), cz(10), cm(10)
+      real(wp), allocatable :: rf(:), wf(:), zf(:), mf(:)
+      real(wp) :: ecoarse, efine
+      integer :: pass, k, b, ierr, nw, nfine, per
+      real(wp) :: dts(2)
+      integer :: nrs(2)
+      logical :: df
+
+      dts = [1800.0_wp, 1500.0_wp]
+      nrs = [4, 3]
+      do b = 1, NREC
+         rec(b) = 100.0_wp + 37.5_wp*real(b, wp) + 11.0_wp*real(mod(b, 3), wp)
+      end do
+      do pass = 1, 4
+         df = (mod(pass, 2) == 1)
+         k = (pass + 1)/2
+         nw = 10
+         per = nint(dts(k)*real(nrs(k), wp)/300.0_wp)
+         nfine = nw*per
+         allocate (rf(nfine), wf(nfine), zf(nfine), mf(nfine))
+         call win_run(285.5_wp, -34.7_wp, "2000-01-03", rec, dts(k), nrs(k), df, 3000.0_wp, nw, &
+                      r, wl, cz, cm, ierr)
+         call check(error, ierr == OCEAN_STATUS_OK, "offgrid: atm_state_configure failed")
+         if (allocated(error)) return
+         call win_run(285.5_wp, -34.7_wp, "2000-01-03", rec, 300.0_wp, 1, .true., 3000.0_wp, nfine, &
+                      rf, wf, zf, mf, ierr)
+         call check(error, ierr == OCEAN_STATUS_OK, "offgrid: atm_state_configure failed")
+         if (allocated(error)) return
+         do b = 1, nw
+            ecoarse = r(b)*wl(b)
+            efine = sum(rf((b - 1)*per + 1:b*per)*wf((b - 1)*per + 1:b*per))
+            call check(error, abs(ecoarse - efine) <= 1.0e-10_wp*max(efine, 1.0_wp), &
+                       "offgrid: a window's energy must equal the fine windows over the same span")
+            if (allocated(error)) return
+         end do
+         deallocate (rf, wf, zf, mf)
+      end do
+   end subroutine test_sw_straddle_offgrid
+
+   subroutine test_sw_straddle_ryf_wrap(error)
+      !! `time_mode = "repeat_year"` with a one-day cycle (8 records): 4500 s
+      !! windows (`dt = 1500`, ratio 3) from t = 81000 s, the second of which
+      !! straddles the 86400 s seam (and a bucket edge) and pairs record 8 with
+      !! record 1 of the next cycle, a day later still the same, against the
+      !! 300 s windows through the same wrap.  Fails before: the next-bucket
+      !! record at the seam (a clamp to the last record instead of the wrap)
+      !! gives a different energy.
+      type(error_type), allocatable, intent(out) :: error
+
+      real(wp) :: rec(8), r(20), wl(20), cz(20), cm(20)
+      real(wp), allocatable :: rf(:), wf(:), zf(:), mf(:)
+      integer :: ierr, b, ic
+      real(wp) :: efine, t0s(2)
+
+      rec = [310.0_wp, 120.0_wp, 80.0_wp, 505.0_wp, 640.0_wp, 55.0_wp, 17.0_wp, 260.0_wp]
+      t0s = [81000.0_wp, 81000.0_wp + 86400.0_wp]
+      allocate (rf(15*20), wf(15*20), zf(15*20), mf(15*20))
+      do ic = 1, 2
+         call win_run(300.5_wp, 20.0_wp, "2000-01-03", rec, 1500.0_wp, 3, .true., t0s(ic), 20, &
+                      r, wl, cz, cm, ierr, ryf=.true.)
+         call check(error, ierr == OCEAN_STATUS_OK, "ryf straddle: atm_state_configure failed")
+         if (allocated(error)) return
+         call win_run(300.5_wp, 20.0_wp, "2000-01-03", rec, 300.0_wp, 1, .true., t0s(ic), 15*20, &
+                      rf, wf, zf, mf, ierr, ryf=.true.)
+         call check(error, ierr == OCEAN_STATUS_OK, "ryf straddle: atm_state_configure failed")
+         if (allocated(error)) return
+         do b = 1, 20
+            efine = sum(rf((b - 1)*15 + 1:b*15)*wf((b - 1)*15 + 1:b*15))
+            call check(error, abs(r(b)*wl(b) - efine) <= 1.0e-10_wp*max(efine, 1.0_wp), &
+                       "ryf straddle: window energy across the cycle seam must match the fine windows")
+            if (allocated(error)) return
+         end do
+         call check(error, maxval(r) > 0.0_wp, "ryf straddle: test cell must see sunlight")
+         if (allocated(error)) return
+      end do
+   end subroutine test_sw_straddle_ryf_wrap
+
+   subroutine test_sw_straddle_resume(error)
+      !! Nothing about the neighbour records is state: a provider configured
+      !! afresh at window 8 (a restart in the middle of a straddling window
+      !! sequence) reproduces windows 8.. of the straight run BIT FOR BIT.
+      type(error_type), allocatable, intent(out) :: error
+
+      real(wp) :: rec(20), r(24), wl(24), cz(24), cm(24), r2(16), wl2(16), cz2(16), cm2(16)
+      integer :: ierr, b, pass
+      logical :: df
+
+      do b = 1, 20
+         rec(b) = 100.0_wp + 37.5_wp*real(b, wp) + 11.0_wp*real(mod(b, 3), wp)
+      end do
+      do pass = 1, 2
+         df = (pass == 1)
+         call win_run(285.5_wp, -34.7_wp, "2000-01-03", rec, 1800.0_wp, 4, df, 0.0_wp, 24, &
+                      r, wl, cz, cm, ierr)
+         call check(error, ierr == OCEAN_STATUS_OK, "resume: atm_state_configure failed")
+         if (allocated(error)) return
+         call win_run(285.5_wp, -34.7_wp, "2000-01-03", rec, 1800.0_wp, 4, df, 8.0_wp*7200.0_wp, 16, &
+                      r2, wl2, cz2, cm2, ierr)
+         call check(error, ierr == OCEAN_STATUS_OK, "resume: atm_state_configure failed")
+         if (allocated(error)) return
+         call check(error, all(r(9:24) == r2) .and. all(cz(9:24) == cz2), &
+                    "resume: a fresh provider must reproduce the straight run bit for bit")
+         if (allocated(error)) return
+      end do
+   end subroutine test_sw_straddle_resume
+
+   subroutine test_sw_window_longer(error)
+      !! `dt * dt_therm_ratio` longer than the record interval is refused at
+      !! CONFIGURE (so `--validate-only` reports it); exactly one interval runs.
+      type(error_type), allocatable, intent(out) :: error
+
+      real(wp) :: rec(8), r(2), wl(2), cz(2), cm(2)
+      integer :: ierr
+
+      rec = 250.0_wp
+      call win_run(285.5_wp, -34.7_wp, "2000-01-03", rec, 1800.0_wp, 7, .true., 0.0_wp, 2, &
+                   r, wl, cz, cm, ierr)
+      call check(error, ierr /= OCEAN_STATUS_OK, &
+                 "a 12600 s window against 10800 s records must be refused at configure")
+      if (allocated(error)) return
+      call win_run(285.5_wp, -34.7_wp, "2000-01-03", rec, 1800.0_wp, 6, .true., 0.0_wp, 2, &
+                   r, wl, cz, cm, ierr)
+      call check(error, ierr == OCEAN_STATUS_OK, "a window equal to the record interval must run")
+   end subroutine test_sw_window_longer
 
    subroutine test_sw_coszen_analytic(error)
       !! Equinox (2000-03-20, day-of-year 80), one physical T-cell

@@ -1054,11 +1054,16 @@ Reichl & Hallberg 2018) with OM3's values of the OM4 mstar scheme, `nstar = 0.06
 `tke_decay = 0.01`, the additive Langmuir enhancement and `combine = "max_shear"`; river
 mixing over 40 m (`rivermix_depth`); Jackson, Hallberg & Legg (2008) shear mixing
 (`&ocean_kappa_shear_nml`); a 1.5e-5 m2/s background diffusivity with unit Prandtl number;
-and the OM3 interval order (`diabatic_first = .false.`) at `dt_therm_ratio = 2`.
+and the OM3 interval order (`diabatic_first = .false.`) at `dt_therm_ratio = 4`
+(7200 s, OM3's `DT_THERM`).
 
-What is not OM3's yet is listed in the namelist header: the thermodynamic interval (3600 s
-here, 7200 s in OM3 -- the cosine-zenith shortwave interpolation needs the 3-hourly
-radiation interval to be a multiple of it), the shortwave bands, and tidal mixing.
+What is not OM3's yet is listed in the namelist header: the shortwave bands and tidal
+mixing. A 7200 s thermodynamic window does not divide the 3-hourly radiation interval, so
+the cosine-zenith shortwave splits it at the interval edge (the "Prescribed atmospheric state" row of
+`docs/CAPABILITIES_AND_LIMITATIONS.md`); the energy of every interval is still delivered
+exactly.
 
 Measured so far: a 30-day run on one V100 with the SYNTHETIC runoff files of Sec. 8 --
-finite, budgets at round-off, about 8 minutes. It has not been compared with OM3 output.
+finite, budgets at round-off, about 8 minutes (taken at `dt_therm_ratio = 2`, before the
+shortwave window could straddle the radiation interval; to be re-measured at ratio 4).
+It has not been compared with OM3 output.
