@@ -105,13 +105,22 @@ module rdb_ice_remap_geom
    !! and the edge kept the unadjusted area (a miss of up to `2e-4` cell areas with a prescribed area `0.1 %` off the
    !! swept one).  Once the moved points are on opposite sides the crossing is held to the column, so the
    !! unadjusted branch is not reached; found by a random scan of the table, not from a model run;
-   !! `test_cice_remap_geom` `pinned_crossing_past_the_corner` and the noise set of `degenerate_corners_device_vs_host`.)
-   !! (Known limit, not changed: when the pinned crossing all but coincides with a departure point (`1e-14 .. 1e-12`
-   !! cells apart) and the prescribed area differs from the swept one by percent, the shifted midpoint is thrown
-   !! `1e7 .. 1e11` cells away; the edge is refused (the vertex bound raises `ICE_ERR_TRANSPORT_CFL`) and its sum is
-   !! off by the round-off of those coordinates, up to `2.4e-10` cell areas.  It was produced only by scaling the
-   !! prescribed area of random edges by `+-2 %` in a stdlib transcript of the table, and has not been seen from the
-   !! model, whose prescribed area is the continuity flux of the same velocities.)
+   !! `test_cice_remap_geom` `pinned_crossing_past_the_corner`.)
+   !! (Known limit, not changed: an ill-conditioned pinned shift.  With the departure points on opposite sides of
+   !! the edge and one of them displaced MORE THAN HALF A CELL along it (`DR` left of the edge midpoint, or `DL`
+   !! right of it), the pinned crossing lies next to that point; the base `w2` of the triangle the shifted midpoint
+   !! closes is then tiny, and any difference between the prescribed and the swept area throws the midpoint far out.
+   !! Example: north edge, `DL - CL = (0, -0.3)`, `DR - CR = (-0.55, 1e-5)`, prescribed area `1.001` times the swept
+   !! one: a vertex `5.7` cells out, so the edge is refused with the fatal `ICE_ERR_TRANSPORT_CFL` (its sum closes).
+   !! A difference of that size is normal, not an inconsistency: the prescribed area is the FACE velocity times the
+   !! edge length and the step (`remap_edge_areas`), the swept one comes from the CORNER velocities.  Measured on
+   !! the scalar table, 2 million random edges per row, the four displacement components uniform within a bound: none
+   !! refused with the bound at `0.3`, `0.45` or `0.5` cells and a relative area difference up to `1e-2`; with it at
+   !! `0.6` cells, 0 at `1e-4`, 1 at `1e-3` and 63 at `1e-2`.  The condition is thus an ice Courant number above one
+   !! half along an edge: at `1 m/s` that takes a step of `30000 s` on a `60 km` cell and of `2500 s` on a `5 km` one
+   !! (about the smallest of a 25 km tripolar grid), against the `1800 s` of the 1-degree global case
+   !! (`1 m/s x 1800 s / 60 km = 0.03`), so it is out of reach of the global cases.  Lifting it means conditioning
+   !! the pin when `w2` is tiny against the segment, or falling back to the unpinned shift there; neither is done.)
    !!
    !! **The case table.**  The side cells are decided by where the lines
    !! `DL-DM`, `DM-DR` cut the sides `x = -+1/2` and the line `DL-DR` cuts the
@@ -609,8 +618,10 @@ contains
       !! adjustment meets the axis `y = 0`; `slope` is the segment's.  A slope above `puny`: the reference's
       !! expression, unchanged.  A flatter segment whose ends are NOT strictly on one side of the axis does cross it,
       !! at a point the centre table uses as a triangle vertex: the crossing is then the interpolate between the
-      !! ends (the ordinates have opposite signs or one is zero, so the denominator cannot cancel), held to the
-      !! segment.  The reference returns 0 for every flat segment, which is the crossing only by accident; the
+      !! ends, held to the segment.  (The ordinates have opposite signs or one is zero, so their difference does not
+      !! cancel; it can still be lost where a flush-to-zero mode drops a denormal, and the quotient is then infinite:
+      !! the hold to the segment absorbs that case.)
+      !! The reference returns 0 for every flat segment, which is the crossing only by accident; the
       !! triangles that share the vertex then miss the prescribed area by up to `puny/8` cell areas per crossing
       !! (half a cell of abscissa times an ordinate of `puny/2`).  A flat segment strictly on one side (or along the
       !! axis) has no crossing and none is read: 0, as before.
