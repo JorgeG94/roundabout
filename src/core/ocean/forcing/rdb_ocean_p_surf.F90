@@ -54,9 +54,9 @@ module rdb_ocean_p_surf
    !!     `ocean_surface_flux_t` and extends the single overwrite that builds
    !!     `sf%p_surf` (full overwrite from the pristine `p_surf_atm`, never
    !!     `+=`); `eta_ib` is always built from the assembled total.
-   !!   * Split solver only, and mutually exclusive with `&ocean_bt_nml
-   !!     bt_halo > 0` (an explicit width fails loud in `validate_config`;
-   !!     the AUTO default resolves to 0).
+   !!   * Split solver only.  Composes with `&ocean_bt_nml bt_halo > 0`: the
+   !!     wide fast loop gets `eta_forcing` copied in and exchanged once per
+   !!     solve (`bt_wide%set_eta_forcing`).
    !!
    !! The partition rule: the seam owns the barotropic response to a load
    !! that is NOT in the layer PGF.  Under the default split

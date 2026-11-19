@@ -23,7 +23,7 @@ module rdb_ocean_dyn
                                    ocean_fold_wrap_time_means, ocean_fold_wrap_visc_rem
    use rdb_ocean_halo_state, only: ocean_halo_exchange_ml_state
    use rdb_ocean_halo, only: ocean_halo_is_decomposed_x, ocean_halo_is_decomposed_y, &
-                             ocean_halo_bt_group_2d, ocean_halo_centre, &
+                             ocean_halo_bt_group_2d, ocean_halo_packed_wide, ocean_halo_centre, &
                              ocean_halo_face_x, ocean_halo_face_y
    use rdb_ocean_ghost_poison, only: ocean_poison_ghost_bands
    use rdb_ocean_sponge, only: ocean_sponge_apply, ocean_sponge_apply_tracers, &
@@ -59,8 +59,7 @@ module rdb_ocean_dyn
                                 metrics_fill_cartesian, metrics_fill_spherical, &
                                 metrics_finalize, metrics_fill_coriolis, &
                                 GRID_CONFIG_CARTESIAN, GRID_CONFIG_SPHERICAL, &
-                                CORIOLIS_SCHEME_BETA_PLANE, &
-                                parse_grid_config, parse_coriolis_scheme
+                                CORIOLIS_SCHEME_BETA_PLANE
    use rdb_continuity, only: continuity_t, &
                              continuity_compute_fluxes_barotropic, &
                              continuity_apply_fluxes_barotropic, &
@@ -817,17 +816,24 @@ contains
       call barotropic_workstate_exit_data_impl(this%bt_work)
    end subroutine ocean_dyn_exit_data_impl
 
-   subroutine ocean_dyn_enable_bt_wide(dyn, grid, dx, dy, lon_west, lat_south, &
-                                       rad_earth, grid_config_str, &
-                                       f_0, beta, y_ref, coriolis_scheme_str, omega)
+   subroutine ocean_dyn_enable_bt_wide(dyn, grid, metrics, f_corner, refresh_widths, &
+                                       ring_poison, eta_forcing_on)
       !! Allocate, initialise, and GPU-attach the wide-halo shadow state
       !! from `dyn%bt_halo` (already set by the caller).
+      !!
+      !! The wide metrics and `f_corner` are filled from their OWNERS --
+      !! `metrics` / `f_corner`, the model's own final host arrays (land
+      !! mask, wall-ghost zeros, file metrics, closed-face / porous widths) --
+      !! by an offset copy and one host-side wide exchange inside
+      !! `bt_wide%init`, before `bt_wide%enter_data` copies them to the device.
       !!
       !! Preconditions:
       !!   - `dyn%init` has been called.
       !!   - `dyn%enter_data` has been called (bt_work is on the GPU; we add
       !!     bt_wide to the same GPU context).
       !!   - `dyn%bt_halo > 0`.
+      !!   - the halo module is initialised and reserved for `ng_wide`.
+      !!   - `metrics` and `f_corner` are final on the HOST.
       !!
       !! Odd bt_halo is rounded DOWN to even (with a warning).
       !! ng_wide = nghost + bt_halo must be <= min(nx_phys, ny_phys)
@@ -836,23 +842,19 @@ contains
          !! Dynamics state; `bt_halo` must be set before calling.
       type(hgrid_t), intent(in) :: grid
          !! Normal-width grid for this subdomain.
-      real(wp), intent(in) :: dx, dy
-         !! Cell spacing (m for Cartesian; deg for spherical).
-      real(wp), intent(in) :: lon_west, lat_south, rad_earth
-         !! Spherical-grid parameters (ignored for Cartesian).
-      character(len=*), intent(in) :: grid_config_str
-         !! Grid-config string (e.g. "cartesian", "spherical").
-      real(wp), intent(in) :: f_0, beta, y_ref
-         !! Beta-plane Coriolis parameters.
-      character(len=*), intent(in) :: coriolis_scheme_str
-         !! Coriolis-scheme string (e.g. "beta_plane").
-      real(wp), intent(in), optional :: omega
-         !! Planetary rotation rate (1/s) for `coriolis_scheme = "planetary"`
-         !! (`&ocean_grid_nml omega`).  Absent => 0, which is only right for
-         !! the beta plane: the wide clone's planetary f used to be built
-         !! with omega = 0, i.e. a non-rotating barotropic fast loop.
+      type(ocean_metrics_t), intent(in) :: metrics
+         !! The model's metrics (host copy, final).
+      real(wp), intent(in) :: f_corner(:, :)
+         !! The model's Coriolis at corners (host copy, final).
+      logical, intent(in), optional :: refresh_widths
+         !! Porous barriers or closed faces on: the BT widths are refreshed
+         !! once per solve.
+      integer, intent(in), optional :: ring_poison
+         !! Test hook (`RDB_BT_RING_POISON`): garbage in the wide outer ring.
+      logical, intent(in), optional :: eta_forcing_on
+         !! A tide / psurf `eta_forcing` will be passed: allocate its wide copy.
 
-      integer :: bh, ng_w, grid_cfg, cor_scheme
+      integer :: bh, ng_w
 
       bh = dyn%bt_halo
       if (bh <= 0) return
@@ -871,18 +873,10 @@ contains
             "min(nx_phys,ny_phys); reduce bt_halo or increase the domain"
       end if
 
-      grid_cfg = parse_grid_config(grid_config_str)
-      cor_scheme = parse_coriolis_scheme(coriolis_scheme_str)
-
       allocate (dyn%bt_wide)
       dyn%bt_wide%bt_halo = bh
-      if (present(omega)) then
-         call dyn%bt_wide%init(grid, dx, dy, lon_west, lat_south, rad_earth, &
-                               grid_cfg, f_0, beta, y_ref, cor_scheme, omega=omega)
-      else
-         call dyn%bt_wide%init(grid, dx, dy, lon_west, lat_south, rad_earth, &
-                               grid_cfg, f_0, beta, y_ref, cor_scheme)
-      end if
+      call dyn%bt_wide%init(grid, metrics, f_corner, refresh_widths=refresh_widths, &
+                            ring_poison=ring_poison, eta_forcing_on=eta_forcing_on)
       call dyn%bt_wide%enter_data()
    end subroutine ocean_dyn_enable_bt_wide
 
@@ -5308,18 +5302,19 @@ contains
       ! (F2018 15.5.2.13) ⇒ bit-identical when the C1 tide is off.
       if (dyn%bt_halo > 0) then
          ! ---- Wide-halo march-in path (Phase 3c) ----
-         ! Tides × bt_halo is a configure-time exclusion.
-         if (present(eta_forcing)) then
-            error stop "run_stage_split: bt_halo > 0 with eta_forcing — excluded at configure time"
-         end if
+         ! Wide eta_forcing (tide / pressure loading): copied in and
+         ! exchanged once per solve; absent => no forcing, as bt_halo = 0.
+         if (present(eta_forcing)) call dyn%bt_wide%set_eta_forcing(grid, eta_forcing)
          call dyn%bt_wide%copy_in(grid, &
                                   dyn%bt_work%bt_eta, dyn%bt_work%bt_H_ref, &
                                   dyn%bt_work%bt_ubt, dyn%bt_work%bt_vbt, &
                                   dyn%bt_work%bt_ubt_prev, dyn%bt_work%bt_vbt_prev, &
                                   dyn%bt_work%bt_rem_u, dyn%bt_work%bt_rem_v, &
-                                  dyn%bt_work%F_bt_u_fast, dyn%bt_work%F_bt_v_fast)
+                                  dyn%bt_work%F_bt_u_fast, dyn%bt_work%F_bt_v_fast, &
+                                  metrics%dy_cu_bt, metrics%dx_cv_bt)
          call dyn%bt_wide%entry_exchange()
-         call bt_wide_substep(dyn%bt_wide, dyn%bt_work, n_inner, dt_inner, bc)
+         call bt_wide_substep(dyn%bt_wide, dyn%bt_work, n_inner, dt_inner, bc, t=t, &
+                              tide=present(eta_forcing))
          ! Copy wide outputs back to normal-width bt_work fields.
          ! The copy_out DC loops are synchronous (no acc async); drain async(1)
          ! first so copy_out reads the completed time-mean arrays.
@@ -5332,8 +5327,15 @@ contains
          ! Exit seam freshen: fresh normal-width seam ghosts of the time
          ! mean, as the bt_halo = 0 path leaves them on exit.
          call profiler_start("ocean_comms_bt")
-         call ocean_halo_bt_group_2d(dyn%bt_work%bt_eta, dyn%bt_work%bt_ubt, &
-                                     dyn%bt_work%bt_vbt)
+         ! ONE packed round for everything the wide march leaves with inexact
+         ! normal-width ghosts (the in-loop cadence reaches `nghost_wide - 2`
+         ! substeps): the time means, the end-of-loop snapshots and the
+         ! transports -- the same set the bt_halo = 0 path leaves exact.
+         call ocean_halo_packed_wide(grid%nghost, &
+                                     dyn%bt_work%bt_eta, dyn%bt_work%bt_ubt, &
+                                     dyn%bt_work%bt_vbt, eb=dyn%bt_work%bt_eta_end, &
+                                     xa=dyn%bt_work%bt_ubt_end, xb=dyn%bt_work%bt_uhbt, &
+                                     ya=dyn%bt_work%bt_vbt_end, yb=dyn%bt_work%bt_vhbt)
          call profiler_stop("ocean_comms_bt")
       else
          call barotropic_substep_nonlinear_interior(grid, metrics, dyn%bt_work, &

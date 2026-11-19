@@ -357,8 +357,9 @@ contains
 
       ! PR-2 (bt-rem-from-av-rem): bt_rem_u/v from the SAME viscous
       ! remnant the layered momentum solve uses (MOM6's barotropic
-      ! solver). Mutually exclusive with substep_drag and bt_halo > 0
-      ! (validated at configure).
+      ! solver). Mutually exclusive with substep_drag (validated at
+      ! configure); composes with bt_halo > 0 -- the wide fast loop reads only
+      ! the wide-exchanged bt_rem and force.
       ocean_state%dyn%bt_work%bt_rem_from_visc_rem = ocean_bt_rem_from_visc_rem_on(cfg)
       ocean_state%dyn%bt_work%bt_strong_drag = cfg%ocean%bt%strong_drag
       ocean_state%dyn%bt_work%bt_rescale_strong_drag = cfg%ocean%bt%rescale_strong_drag

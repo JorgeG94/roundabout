@@ -266,10 +266,11 @@ contains
       logical :: fw, fe, fs, fn
 
       ng = nghost
-      ! Fill set = SAME as the barotropic-substep η-ghost fill (OPEN/TIDAL/
+      ! Edge TYPES filled = the barotropic-substep η-ghost fill's (OPEN/TIDAL/
       ! CHAPMAN/CLAMPED), deliberately NOT `is_open_ish` (excludes NESTED, which
       ! the C-grid barotropic treats as a wall) so velocity and η fills stay
-      ! consistent and don't re-trip the corner NaN.
+      ! consistent and don't re-trip the corner NaN.  The column EXTENT differs
+      ! under a periodic x axis: see the y-pass below.
       fw = open_ghost_fill_edge(bc_w)
       fe = open_ghost_fill_edge(bc_e)
       fs = open_ghost_fill_edge(bc_s)
@@ -296,8 +297,10 @@ contains
       ! ---- y-pass: south / north, over the corner-safe i extent ----
       ! Extend the y-pass into an x-ghost column for any NON-PERIODIC x-edge so a
       ! south/north-open edge fills its ghost CORNER even against a WALL side.  A
-      ! PERIODIC x-edge is excluded — it owns its ghost via the wrap (preserves
-      ! periodic+open mixed configs, e.g. Eady).
+      ! PERIODIC x-edge is excluded here, unlike in the barotropic η fill (which
+      ! covers every column): the caller runs the face halo exchange / periodic
+      ! wrap straight after this fill, and that rebuilds the periodic x-ghost
+      ! columns from rows this pass has already filled.
       iu_lo = ng + 1                 ! u face i-range (physical span by default)
       iu_hi = ng + nx_phys + 1
       iv_lo = ng + 1                 ! v cell i-range (physical span by default)
