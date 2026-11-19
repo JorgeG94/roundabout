@@ -453,7 +453,10 @@ contains
                                           ctx%work%potT, ctx%work%rhoa, ctx%work%wind, ctx%work%uatm, &
                                           ctx%work%vatm, ctx%work%Qa, ctx%work%flw, ctx%work%fsnow, &
                                           ctx%work%frain, ctx%cice%ice_err)
-         call copy2_impl(nx, ny, S%atm%rsds, ctx%work%sw_down)
+         ! The ice steps every outer step: it takes the shortwave over THIS step, not the
+         ! ocean's thermo-window mean (`rsds`), which would be spent over one `dt` and so
+         ! over-deliver on the thermo step and double-count the interval.
+         call copy2_impl(nx, ny, S%atm%rsds_step, ctx%work%sw_down)
       else
          call ice_atm_prepare_cell_inputs(nx, ny, is, ie, js, je, 0.0_wp, S%ice_cgrid%hm, S%icec%cosA, &
                                           S%icec%sinA, S%icec%u_tas, S%icec%u_huss, S%icec%u_uas, &

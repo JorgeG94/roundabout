@@ -145,6 +145,7 @@ contains
                   new_unittest("atm_sw_axis_checks", test_sw_axis_checks), &
                   new_unittest("atm_sw_shape", test_sw_shape), &
                   new_unittest("atm_sw_coszen_analytic", test_sw_coszen_analytic), &
+                  new_unittest("atm_sw_ice_step_shortwave", test_sw_ice_step_shortwave), &
                   new_unittest("atm_sw_one_bucket_direct", test_sw_one_bucket_direct), &
                   new_unittest("atm_sw_one_bucket_recorded", test_sw_one_bucket_recorded), &
                   new_unittest("atm_sw_straddle_on_edge", test_sw_straddle_on_edge), &
@@ -393,7 +394,7 @@ contains
       type(atm_state_t), intent(inout) :: atm
       !$acc update self(atm%tas, atm%huss, atm%uas, atm%vas, atm%psl)
       !$acc update self(atm%rlds, atm%rsds, atm%prra, atm%prsn)
-      !$acc update self(atm%rsds_rec, atm%cosz, atm%cosz_mean)
+      !$acc update self(atm%rsds_rec, atm%cosz, atm%cosz_mean, atm%rsds_step)
    end subroutine sync_atm
 
    subroutine unmap_atm(reader, atm)
@@ -725,7 +726,7 @@ contains
                       int(size(atm%prra), 8) + int(size(atm%prsn), 8) + &
                       int(size(atm%rsds), 8) + int(size(atm%rsds_rec), 8) + &
                       int(size(atm%cosz), 8) + int(size(atm%cosz_mean), 8) + &
-                      int(size(atm%rsds_alt), 8) + &
+                      int(size(atm%rsds_alt), 8) + int(size(atm%rsds_step), 8) + &
                       int(size(atm%win_bl), 8) + &
                       int(size(atm%win_cv), 8) + int(size(atm%tgt_bl), 8) + &
                       int(size(atm%tgt_cv), 8)) + atm%wb%bytes() + atm%wc%bytes()
@@ -911,7 +912,7 @@ contains
    ! =====================================================================
 
    subroutine sw_run(lon, lat, start_date, rec, dt, nsteps, rsds_t, cosz_t, mean_t, wlen_t, &
-                     used, ierr, bucket, ratio, dfirst, offset)
+                     used, ierr, bucket, ratio, dfirst, offset, step_t)
       !! Run `nsteps` model steps of length `dt` from t = 0 (UTC 00:00 of
       !! `start_date`) on a 1x1 grid centred at (`lon`, `lat`) whose `rsds`
       !! file holds `size(rec)` records stamped at the averaging-interval
@@ -931,6 +932,7 @@ contains
       real(wp), intent(in), optional :: bucket, offset
       integer, intent(in), optional :: ratio
       logical, intent(in), optional :: dfirst
+      real(wp), intent(out), optional :: step_t(nsteps)
 
       character(len=*), parameter :: OTHER8(8) = &
                                      [character(len=4) :: "tas", "huss", "uas", "vas", "psl", &
@@ -1013,6 +1015,7 @@ contains
          call atm_state_update(atm, reader, metrics, tq, dt, shift, wl)
          call sync_atm(atm)
          rsds_t(k) = atm%rsds(1 + NGHOST, 1 + NGHOST)
+         if (present(step_t)) step_t(k) = atm%rsds_step(1 + NGHOST, 1 + NGHOST)
          cosz_t(k) = atm%cosz(1 + NGHOST, 1 + NGHOST)
          mean_t(k) = atm%cosz_mean(1 + NGHOST, 1 + NGHOST)
          wlen_t(k) = wl
@@ -1382,6 +1385,76 @@ contains
          fp = ieor(ishftc(fp, 7), transfer(x(k), 0_8))
       end do
    end function bits_fingerprint
+
+   subroutine test_sw_ice_step_shortwave(error)
+      !! `rsds_step`, the shortwave over the single step `[t, t + dt)` that the
+      !! sea ice (which steps EVERY outer step) consumes: the `dt_therm_ratio = N`
+      !! steps of one thermo interval sum to the ocean's window energy
+      !! (`rsds * wlen` at the thermo step) to round-off, at ratio 1, 2 and 4, both
+      !! `diabatic_first` conventions, at a sunset/sunrise cell and a short-night
+      !! cell; and it equals `rsds` bit for bit wherever the window is the step
+      !! (every step at ratio 1, every non-thermo step).  Fails before: the ice read
+      !! `rsds`, the window MEAN, on the thermo step and the per-step value on the
+      !! others, so one interval delivered `E_i` of N-1 steps plus `Sum E / N`.
+      type(error_type), allocatable, intent(out) :: error
+
+      real(wp), parameter :: DTS(5) = [1800.0_wp, 900.0_wp, 900.0_wp, 1800.0_wp, 1800.0_wp]
+      integer, parameter :: NRS(5) = [1, 2, 2, 4, 4]
+      logical, parameter :: DFS(5) = [.true., .true., .false., .true., .false.]
+      real(wp), parameter :: LONS(2) = [285.5_wp, 337.5_wp], LATS(2) = [-34.7_wp, 65.0_wp]
+      character(len=10), parameter :: DATES(2) = [character(len=10) :: "2000-01-03", "2000-06-25"]
+      real(wp) :: rec(8), dt, ew, es
+      real(wp), allocatable :: r(:), c(:), m(:), w(:), st(:)
+      logical, allocatable :: u(:)
+      integer :: pass, ic, ns, k, j, ierr, nr, j0, j1, nchk
+      logical :: df
+
+      b_loop: do pass = 1, 5
+         dt = DTS(pass)
+         nr = NRS(pass)
+         df = DFS(pass)
+         ns = nint(86400.0_wp/dt)
+         do ic = 1, 2
+            rec = [120.0_wp, 80.0_wp, 310.0_wp, 505.0_wp, 640.0_wp, 55.0_wp, 17.0_wp, 260.0_wp]
+            allocate (r(ns), c(ns), m(ns), w(ns), st(ns), u(ns))
+            call sw_run(LONS(ic), LATS(ic), DATES(ic), rec, dt, ns, r, c, m, w, u, ierr, &
+                        ratio=nr, dfirst=df, step_t=st)
+            call check(error, ierr == OCEAN_STATUS_OK, "atm_state_configure failed")
+            if (allocated(error)) return
+            nchk = 0
+            do k = 1, ns
+               if (.not. u(k)) then
+                  call check(error, st(k) == r(k), "a non-thermo step: rsds_step must equal rsds bit for bit")
+                  if (allocated(error)) return
+                  cycle
+               end if
+               if (nr == 1) then
+                  call check(error, st(k) == r(k), "ratio 1: rsds_step must equal rsds bit for bit")
+                  if (allocated(error)) return
+               end if
+               if (df) then
+                  j0 = k
+                  j1 = k + nr - 1
+               else
+                  j0 = k - nr + 1
+                  j1 = k
+               end if
+               ew = r(k)*w(k)
+               es = 0.0_wp
+               do j = j0, j1
+                  es = es + st(j)*dt
+               end do
+               nchk = nchk + 1
+               call check(error, abs(ew - es) <= 1.0e-10_wp*max(ew, 1.0_wp), &
+                          "the steps of a thermo interval must sum to the window energy")
+               if (allocated(error)) return
+            end do
+            call check(error, nchk == ns/nr, "every interval of the day must be checked")
+            if (allocated(error)) return
+            deallocate (r, c, m, w, st, u)
+         end do
+      end do b_loop
+   end subroutine test_sw_ice_step_shortwave
 
    subroutine test_sw_one_bucket_direct(error)
       !! Windows inside ONE bucket must reproduce the one-bucket kernel BIT FOR BIT:

@@ -85,6 +85,11 @@ module rdb_atm_state
    !! A window LONGER than the bucket is refused (configure time when `dt_fixed`
    !! is known, `atm_sw_coszen_refresh` otherwise): it would need records more
    !! than one bucket away.
+   !! **Two shortwave outputs.**  `rsds` is the mean over the application window
+   !! (what the OCEAN spends on its thermo steps); `rsds_step` is the mean over the
+   !! single step `[t, t + dt)`, for a consumer that steps EVERY outer step (the CICE-port
+   !! sea ice).  The N steps of one thermo interval then sum to the window energy; the
+   !! two are bit-identical wherever the window is the step.
    !! **Bucket length** is not a constant: `atm_sw_check_axis` derives it at
    !! configure from the `rsds` record spacing (must divide 86400 s, the
    !! records must be uniform and stamped at the interval CENTRE) and
@@ -261,6 +266,14 @@ module rdb_atm_state
          !! value straight off the reader -- `rsds = rsds_rec *
          !! cosz / cosz_mean` under `coszen`, `rsds = rsds_rec` under
          !! `linear`.
+      real(wp), allocatable :: rsds_step(:, :)
+         !! Shortwave over the single model step `[t, t + dt)` -- what a consumer
+         !! that steps EVERY outer step (the CICE-port sea ice) needs, whatever the
+         !! thermo window.  Same conserving redistribution as `rsds`, with the
+         !! window set to the step, so the steps of one thermo interval sum to the
+         !! window's energy.  Equal to `rsds` (bit for bit) whenever the window is the
+         !! step (`dt_therm_ratio = 1`, or a non-thermo step); `sw_interp = "linear"`
+         !! copies `rsds_rec`, like `rsds`.
       real(wp), allocatable :: rsds_alt(:, :)
          !! `coszen` only: the regridded record of the NEIGHBOURING bucket
          !! (previous or next, whichever the straddling window reaches into),
@@ -302,7 +315,7 @@ contains
       !$acc enter data copyin(this%tas, this%huss, this%uas, this%vas, this%psl)
       !$acc enter data copyin(this%rlds, this%prra, this%prsn, this%rsds)
       !$acc enter data copyin(this%rsds_rec, this%cosz, this%cosz_mean)
-      !$acc enter data copyin(this%rsds_alt)
+      !$acc enter data copyin(this%rsds_alt, this%rsds_step)
       !$acc enter data create(this%win_bl, this%win_cv, this%tgt_bl, this%tgt_cv)
       call this%wb%enter_data()
       call this%wc%enter_data()
@@ -318,7 +331,7 @@ contains
       !$acc exit data delete(this%tas, this%huss, this%uas, this%vas, this%psl)
       !$acc exit data delete(this%rlds, this%prra, this%prsn, this%rsds)
       !$acc exit data delete(this%rsds_rec, this%cosz, this%cosz_mean)
-      !$acc exit data delete(this%rsds_alt)
+      !$acc exit data delete(this%rsds_alt, this%rsds_step)
       this%on_device = .false.
    end subroutine atm_state_exit_data
 
@@ -334,7 +347,7 @@ contains
                arr2_bytes(this%vas) + arr2_bytes(this%psl) + arr2_bytes(this%rlds) + &
                arr2_bytes(this%prra) + arr2_bytes(this%prsn) + arr2_bytes(this%rsds) + &
                arr2_bytes(this%rsds_rec) + arr2_bytes(this%cosz) + arr2_bytes(this%cosz_mean) + &
-               arr2_bytes(this%rsds_alt) + &
+               arr2_bytes(this%rsds_alt) + arr2_bytes(this%rsds_step) + &
                arr2_bytes(this%win_bl) + arr2_bytes(this%win_cv) + &
                arr2_bytes(this%tgt_bl) + arr2_bytes(this%tgt_cv) + &
                this%wb%bytes() + this%wc%bytes()
@@ -367,6 +380,7 @@ contains
       if (allocated(this%rsds)) deallocate (this%rsds)
       if (allocated(this%rsds_rec)) deallocate (this%rsds_rec)
       if (allocated(this%rsds_alt)) deallocate (this%rsds_alt)
+      if (allocated(this%rsds_step)) deallocate (this%rsds_step)
       if (allocated(this%cosz)) deallocate (this%cosz)
       if (allocated(this%cosz_mean)) deallocate (this%cosz_mean)
       this%enable = .false.
@@ -581,6 +595,7 @@ contains
       allocate (this%rsds(this%nx_total, this%ny_total), source=0.0_wp)
       allocate (this%rsds_rec(this%nx_total, this%ny_total), source=0.0_wp)
       allocate (this%rsds_alt(this%nx_total, this%ny_total), source=0.0_wp)
+      allocate (this%rsds_step(this%nx_total, this%ny_total), source=0.0_wp)
       allocate (this%cosz(this%nx_total, this%ny_total), source=0.0_wp)
       allocate (this%cosz_mean(this%nx_total, this%ny_total), source=0.0_wp)
 
@@ -1014,13 +1029,22 @@ contains
          wlen = dt
          if (present(win_shift)) shift = win_shift
          if (present(win_len)) wlen = win_len
-         call atm_sw_coszen_refresh(this, reader, metrics, t, shift, wlen)
+         if (shift == 0.0_wp .and. wlen == dt) then
+            ! The window IS the step: one evaluation serves both.
+            call atm_sw_coszen_refresh(this, reader, metrics, t, shift, wlen, this%rsds)
+            call atm_state_copy_impl(this%nx_total, this%ny_total, this%rsds, this%rsds_step)
+         else
+            ! Step first, window last, so `cosz`/`cosz_mean` end up the window's.
+            call atm_sw_coszen_refresh(this, reader, metrics, t, 0.0_wp, dt, this%rsds_step)
+            call atm_sw_coszen_refresh(this, reader, metrics, t, shift, wlen, this%rsds)
+         end if
       else
          call atm_state_copy_impl(this%nx_total, this%ny_total, this%rsds_rec, this%rsds)
+         call atm_state_copy_impl(this%nx_total, this%ny_total, this%rsds_rec, this%rsds_step)
       end if
    end subroutine atm_state_update
 
-   subroutine atm_sw_coszen_refresh(this, reader, metrics, t, shift, wlen)
+   subroutine atm_sw_coszen_refresh(this, reader, metrics, t, shift, wlen, rsds_out)
       !! Host-side Spencer (1971) solar-position scalars (calendar
       !! arithmetic, not device-safe) for the UTC bucket(s) holding the
       !! application window `[t + shift, t + shift + wlen)`, then ONE device
@@ -1040,6 +1064,10 @@ contains
       type(ocean_data_input_t), intent(in) :: reader
       type(ocean_metrics_t), intent(in) :: metrics
       real(wp), intent(in) :: t, shift, wlen
+      real(wp), intent(inout) :: rsds_out(this%nx_total, this%ny_total)
+         !! Receives the shortwave over the window (`this%rsds`, or `this%rsds_step`
+         !! for the single-step window).  Only this array is written among the
+         !! outputs through this name; `cosz`/`cosz_mean` are the window's last call's.
 
       type(date_t) :: d
       real(wp), parameter :: TOL_S = ATM_SW_TOL_S
@@ -1108,7 +1136,7 @@ contains
                                     hour_frac_rec, safe_sin(decl_mid), safe_cos(decl_mid), &
                                     eqtime_mid, t_off, wlen, this%sw_bucket, &
                                     metrics%geolonT, metrics%geolatT, &
-                                    this%rsds_rec, this%cosz, this%cosz_mean, this%rsds)
+                                    this%rsds_rec, this%cosz, this%cosz_mean, rsds_out)
          return
       end if
 
@@ -1170,7 +1198,7 @@ contains
                                        safe_cos(decl_e), eqtime_e, t_off, wlen, this%sw_bucket, &
                                        metrics%geolonT, metrics%geolatT, &
                                        this%rsds_rec, this%rsds_alt, &
-                                       this%cosz, this%cosz_mean, this%rsds)
+                                       this%cosz, this%cosz_mean, rsds_out)
       else
          call atm_coszen_straddle_impl(this%nx_total, this%ny_total, this%nghost, &
                                        this%nx_phys, this%ny_phys, &
@@ -1179,7 +1207,7 @@ contains
                                        safe_cos(decl_e), eqtime_e, t_off, wlen, this%sw_bucket, &
                                        metrics%geolonT, metrics%geolatT, &
                                        this%rsds_alt, this%rsds_rec, &
-                                       this%cosz, this%cosz_mean, this%rsds)
+                                       this%cosz, this%cosz_mean, rsds_out)
       end if
    end subroutine atm_sw_coszen_refresh
 
