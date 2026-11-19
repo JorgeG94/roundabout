@@ -961,10 +961,8 @@ STABILITY_CASES = [
           t1_timeout=3000, t1_samples=360,
           t1_overrides={"ocean_cavity_melt_nml": {"enable": False},
                         "ocean_tdrag_nml": {"enable": False},
-                        # the balanced start: without it the reference-
-                        # density ice load leaves the stratified column out
-                        # of balance and the barotropic mode adjusts to it.
-                        "ocean_cavity_dyn_nml": {"trim_ic_for_p_surf": True},
+                        # (the namelist itself starts balanced --
+                        # trim_ic_for_p_surf -- which these rows rely on.)
                         # the shipped melt diagnostics refuse to register
                         # with melt off (a plane of missing values).
                         "ocean_diag_nml": {"diags": '""'}},
@@ -1003,7 +1001,7 @@ STABILITY_CASES = [
                           "saturate."},
           ],
           # RE-MEASURED 2026-11-18 (V100, beta 73eccdded + the balanced start
-          # above). The claims' checkpoint numbers in their `text` are the
+          # in the namelist). The claims' checkpoint numbers in their `text` are the
           # 2026-09-24 ones and predate both the barotropic baroclinic-PGF
           # forcing (50b1b5d96, 2026-09-25) and the balanced start; without
           # the balanced start that forcing put a barotropic adjustment
@@ -1041,10 +1039,8 @@ STABILITY_CASES = [
           t1_timeout=3000, t1_samples=360,
           t1_overrides={"ocean_cavity_melt_nml": {"enable": False},
                         "ocean_tdrag_nml": {"enable": False},
-                        # the balanced start: without it the reference-
-                        # density ice load leaves the stratified column out
-                        # of balance and the barotropic mode adjusts to it.
-                        "ocean_cavity_dyn_nml": {"trim_ic_for_p_surf": True},
+                        # (the namelist itself starts balanced --
+                        # trim_ic_for_p_surf -- which these rows rely on.)
                         "ocean_hvisc_nml": {"nu_h": 30.0},
                         "ocean_diag_nml": {"diags": '""'}},
           t2_skip=True,
