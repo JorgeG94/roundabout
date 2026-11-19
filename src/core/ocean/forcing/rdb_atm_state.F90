@@ -149,6 +149,7 @@ module rdb_atm_state
    use rdb_io_netcdf, only: nc_open_read, nc_close, nc_get_varid, nc_get_var_1d, &
                             nc_get_var_2d, nc_get_dim_len
    use pic_strings, only: to_string
+   use pic_logger, only: logger => global_logger
    implicit none
    private
 
@@ -156,6 +157,9 @@ module rdb_atm_state
    public :: atm_state_configure
    public :: atm_state_update
    public :: atm_sw_window
+   public :: atm_coszen_apply_impl, atm_spencer_sun
+      !! Test seams: the one-bucket kernel and the solar-position helper, so a test
+      !! can call the kernel directly with independently derived arguments.
 
    integer, parameter :: IDX_TAS = 1, IDX_HUSS = 2, IDX_UAS = 3, IDX_VAS = 4, IDX_PSL = 5
    integer, parameter :: IDX_RLDS = 6, IDX_PRRA = 7, IDX_PRSN = 8, IDX_RSDS = 9
@@ -172,6 +176,10 @@ module rdb_atm_state
       !! Tolerance (s) for "on the grid" / "at the bucket edge" decisions about a
       !! shortwave window (the calendar carries whole seconds; this is far below
       !! any real offset).
+   real(wp), parameter :: ATM_STAMP_TOL_S = 2.5_wp
+      !! Tolerance (s) on "one interval apart" between two held records' stamps
+      !! (`atm_sw_check_axis` accepts stamps up to 1 s off centre).
+   integer, parameter :: ATM_REL_UNKNOWN = 99
    real(wp), parameter :: ATM_EARTH_OMEGA = TWO_PI/86400.0_wp
       !! Hour-angle rate (rad/s): 15 degrees per hour.
    real(wp), parameter :: ATM_COSZ_MEAN_MIN = 1.0e-9_wp
@@ -219,6 +227,9 @@ module rdb_atm_state
          !! Target-tile geometry, cached from `grid` at configure time.
       integer :: id(N_ATM_FIELDS) = 0
          !! Reader registration ids, indexed by the `IDX_*` constants.
+      logical :: alt_warned = .false., held_warned = .false.
+         !! One-shot log flags (neighbour view clamped at the end of the data; the
+         !! held record is not the window's interval's).
       integer :: id_rsds_prev = 0, id_rsds_next = 0
          !! `coszen` only: the SAME `rsds` files registered a second and third
          !! time, held, with the query shifted by `-bucket` / `+bucket`, so at
@@ -259,7 +270,9 @@ module rdb_atm_state
       real(wp), allocatable :: cosz(:, :)
          !! Mean of `max(0, cos Z)` (cosine of the solar zenith angle,
          !! clamped to `>= 0`: night is not negative insolation) over the
-         !! model step `[t, t + dt)` the flux is applied for. `coszen`
+         !! application window `[t + shift, t + shift + wlen)` (the model step,
+         !! or the thermo interval when `dt_therm_ratio > 1`; across a bucket
+         !! edge the two pieces' sum over the window length). `coszen`
          !! only -- stays 0 under `linear`.
       real(wp), allocatable :: cosz_mean(:, :)
          !! Exact mean of `max(0, cos Z)` over the `rsds_rec` bucket
@@ -658,7 +671,9 @@ contains
          call atm_sw_check_axis(this, reader, cfg%ocean%atm_forcing%sw_offset_s, ierr=ierr)
          if (setup_failed(ierr)) return
          ! The thermo window the flux is applied over, `dt * dt_therm_ratio`
-         ! (`validate_config` guarantees `dt_fixed > 0`).  It may straddle one
+         ! (`engine_setup` refuses `dt_fixed <= 0` before this runs; a caller that
+         ! drives the provider directly with `dt_fixed` unset (0) skips this check
+         ! and gets the per-step one in `atm_sw_coszen_refresh`).  It may straddle one
          ! bucket edge (the neighbour record is read for it) but not span a
          ! whole bucket: a window longer than the bucket would need records
          ! two buckets away.  Refused HERE so `--validate-only` reports it.
@@ -1031,7 +1046,8 @@ contains
       real(wp) :: sod, sod_a, sod_a0, r, rb, t_off, t_rec, t_rec_e, t_cur, sod_edge
       real(wp) :: hour_frac_rec, hour_frac_mid, hour_frac_e
       real(wp) :: decl_mid, eqtime_mid, decl_e, eqtime_e, decl_unused, eqtime_unused
-      logical :: cur_is_start
+      integer :: rel
+      logical :: cur_is_start, verify
 
       if (.not. (wlen > 0.0_wp)) then
          call fail("atm_sw_coszen_refresh: non-positive shortwave window length "// &
@@ -1064,8 +1080,22 @@ contains
       t_off = modulo(sod_a, this%sw_bucket)
       t_rec = t + shift + (sod_a - sod_a0) - t_off
 
+      rel = atm_held_rel(this, reader, t_rec)
       if (t_off + wlen <= this%sw_bucket + TOL_S) then
          ! ---- one bucket: the original path, unchanged ----
+         ! (Report only: the record the reader holds should be this bucket's.  It
+         ! is not when `sw_offset_s` / the stamps sit off-centre within the
+         ! tolerance `atm_sw_check_axis` accepts and `t` is on an edge, or in a
+         ! padded repeat-year file's wrapped bucket.  Changing the pairing would
+         ! change the answers of runs accepted today, so it is only logged.)
+         if (rel /= 0 .and. .not. this%held_warned) then
+            call logger%warning("atm_sw_coszen_refresh: at t = "//to_string(t)//" s the rsds "// &
+                                "record the reader holds is not the one of the window's "// &
+                                "interval (offset "//to_string(rel)//" intervals; off-centre "// &
+                                "sw_offset_s / record stamps, or a padded repeat-year file); "// &
+                                "the flux of this interval pairs a neighbouring record. Logged once.")
+            this%held_warned = .true.
+         end if
          ! Hour of day at the bucket start; declination + equation of time
          ! frozen at the bucket midpoint (so every window's integral and the
          ! bucket's come from ONE function and telescope exactly).
@@ -1082,22 +1112,47 @@ contains
          return
       end if
 
-      ! ---- straddle: [t_off, bucket) of the start bucket + [0, t_off+wlen-bucket)
-      ! of the next one.  Which of the two is the reader's record for `t`?
-      ! (The reader switches records `ATM_SW_TIE_S` before the edge.)
-      sod_edge = floor((sod + ATM_SW_TIE_S)/this%sw_bucket)*this%sw_bucket
-      t_cur = t - (sod - sod_edge)
+      ! ---- straddle: [t_off, bucket) of the start bucket S + [0, t_off+wlen-bucket)
+      ! of the next one E.  Which of the two does the reader hold for `t`?  Read it
+      ! off the held record's own stamp (centre of S: offset 0, of E: offset 1), so
+      ! `sw_offset_s` / stamps that are off-centre within `atm_sw_check_axis`'s
+      ! tolerance cannot make the clock and the reader disagree.  The other bucket
+      ! comes from the neighbour view, whose stamp is verified.
       t_rec_e = t_rec + this%sw_bucket
-      if (abs(t_cur - t_rec) < 0.5_wp*this%sw_bucket) then
+      verify = .true.
+      if (rel == 0) then
          cur_is_start = .true.
-         call atm_apply_rsds_alt(this, reader, this%id_rsds_next, t)
-      else if (abs(t_cur - t_rec_e) < 0.5_wp*this%sw_bucket) then
+      else if (rel == 1) then
          cur_is_start = .false.
-         call atm_apply_rsds_alt(this, reader, this%id_rsds_prev, t)
       else
-         call fail("atm_sw_coszen_refresh: the straddling shortwave window does not touch the "// &
-                   "bucket of the record selected for t (internal inconsistency)", &
-                   code=OCEAN_STATUS_ERR_SETUP)
+         ! Held stamp matches neither bucket (padded repeat-year file at the wrap,
+         ! ...): fall back to the clock rule, as before, and say so once.
+         verify = .false.
+         if (.not. this%held_warned) then
+            call logger%warning("atm_sw_coszen_refresh: at t = "//to_string(t)//" s the held rsds "// &
+                                "record matches neither interval of a straddling window; pairing "// &
+                                "by the clock (the record of this interval may be a pad/neighbour). "// &
+                                "Logged once.")
+            this%held_warned = .true.
+         end if
+         sod_edge = floor((sod + ATM_SW_TIE_S)/this%sw_bucket)*this%sw_bucket
+         t_cur = t - (sod - sod_edge)
+         if (abs(t_cur - t_rec) < 0.5_wp*this%sw_bucket) then
+            cur_is_start = .true.
+         else if (abs(t_cur - t_rec_e) < 0.5_wp*this%sw_bucket) then
+            cur_is_start = .false.
+         else
+            call fail("atm_sw_coszen_refresh: the straddling shortwave window does not touch the "// &
+                      "bucket of the record selected for t (internal inconsistency)", &
+                      code=OCEAN_STATUS_ERR_SETUP)
+         end if
+      end if
+      if (cur_is_start) then
+         if (verify) call atm_check_alt(this, reader, this%id_rsds_next, +1.0_wp)
+         call atm_apply_rsds_alt(this, reader, this%id_rsds_next, t)
+      else
+         if (verify) call atm_check_alt(this, reader, this%id_rsds_prev, -1.0_wp)
+         call atm_apply_rsds_alt(this, reader, this%id_rsds_prev, t)
       end if
 
       call atm_spencer_sun(this%epoch, t_rec, hour_frac_rec, decl_unused, eqtime_unused)
@@ -1127,6 +1182,72 @@ contains
                                        this%cosz, this%cosz_mean, this%rsds)
       end if
    end subroutine atm_sw_coszen_refresh
+
+   function atm_held_rel(this, reader, t_rec) result(rel)
+      !! The reader's held `rsds` record, as an offset in intervals from the
+      !! interval starting at model time `t_rec`: 0 = that interval's own record,
+      !! 1 = the next one's, -1 = the previous one's, `ATM_REL_UNKNOWN` = the stamp
+      !! sits at none of them (padded repeat-year file at the wrap).  Read off the
+      !! record's stamp (centre of its interval), not inferred from the clock.
+      class(atm_state_t), intent(in) :: this
+      type(ocean_data_input_t), intent(in) :: reader
+      real(wp), intent(in) :: t_rec
+      integer :: rel
+      real(wp) :: dd, per
+
+      dd = held_stamp(reader, this%id(IDX_RSDS)) - (t_rec + 0.5_wp*this%sw_bucket)
+      if (reader%fields(this%id(IDX_RSDS))%ryf_enabled) then
+         per = reader%fields(this%id(IDX_RSDS))%cycle_period
+         dd = modulo(dd + 0.5_wp*per, per) - 0.5_wp*per
+      end if
+      rel = nint(dd/this%sw_bucket)
+      if (abs(dd - real(rel, wp)*this%sw_bucket) > 0.25_wp*this%sw_bucket) rel = ATM_REL_UNKNOWN
+   end function atm_held_rel
+
+   pure function held_stamp(reader, id) result(stamp)
+      !! Time stamp (s since `start_date`) of the record field `id` holds.
+      type(ocean_data_input_t), intent(in) :: reader
+      integer, intent(in) :: id
+      real(wp) :: stamp
+      stamp = reader%fields(id)%t_axis(max(reader%fields(id)%rec0, 1))
+   end function held_stamp
+
+   subroutine atm_check_alt(this, reader, id_alt, dir)
+      !! The neighbour view `id_alt` must hold the record exactly one interval
+      !! (`dir` = +1 next, -1 previous) from the primary view's: stamp difference
+      !! `dir * bucket` to within `ATM_STAMP_TOL_S` (modulo the cycle for repeat-year).
+      !! Anything else is a wrong pairing and fails loud, except a non-cyclic run
+      !! that has reached either end of the data, where the view is clamped to the
+      !! last/first record: that warns once (the run is then past what the files
+      !! cover and the primary field is clamped too).
+      class(atm_state_t), intent(inout) :: this
+      type(ocean_data_input_t), intent(in) :: reader
+      integer, intent(in) :: id_alt
+      real(wp), intent(in) :: dir
+      real(wp) :: dd, per
+      logical :: at_end
+
+      dd = held_stamp(reader, id_alt) - held_stamp(reader, this%id(IDX_RSDS)) - dir*this%sw_bucket
+      if (reader%fields(id_alt)%ryf_enabled) then
+         per = reader%fields(id_alt)%cycle_period
+         dd = modulo(dd + 0.5_wp*per, per) - 0.5_wp*per
+      end if
+      if (abs(dd) <= ATM_STAMP_TOL_S) return
+      at_end = .not. reader%fields(id_alt)%ryf_enabled .and. &
+               (reader%fields(id_alt)%rec0 <= 1 .or. reader%fields(id_alt)%rec0 >= reader%fields(id_alt)%nt)
+      if (at_end) then
+         if (.not. this%alt_warned) then
+            call logger%warning("atm_sw_coszen_refresh: a straddling shortwave window needs the rsds "// &
+                                "record of the neighbouring interval, but the run has reached the "// &
+                                "end of the data: the last/first record is repeated. Logged once.")
+            this%alt_warned = .true.
+         end if
+      else
+         call fail("atm_sw_coszen_refresh: the neighbouring rsds record view is "//to_string(dd)// &
+                   " s off one interval from the held record (stamps/offset inconsistent)", &
+                   code=OCEAN_STATUS_ERR_SETUP)
+      end if
+   end subroutine atm_check_alt
 
    subroutine atm_apply_rsds_alt(this, reader, id, t)
       !! Blend + regrid the neighbour-bucket `rsds` view `id` (previous or
