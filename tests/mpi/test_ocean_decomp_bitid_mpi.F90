@@ -56,6 +56,11 @@
 !!     docstring);
 !!   * open_obc — tidal west edge (eta target) + Flather east edge,
 !!     zstar_sigma, over a seamount;
+!!   * obc_clamped_xy — clamped west + clamped south edge, walls east / north
+!!     (bebt > 0, bt_halo 0): both closed-wall BC folds live, a clamped
+!!     constant in each of the fused u and v wall selects;
+!!   * obc_flather_ns — Flather south + tidal north edge, walls west / east: u
+!!     takes the fused wall BC, v keeps the stand-alone radiation sweep;
 !!   * obc_epbl — Flather east edge, sigma, EPBL, cooled surface, 24 x 16 at
 !!     nghost = 4 (the compat-matrix cell): at -np 4 the 4x1 east tile is 14
 !!     columns wide and the open-edge ghost columns it evolves sit in the
@@ -404,12 +409,13 @@ program test_ocean_decomp_bitid_mpi
       !! `RDB_BITID_CASES`: run only the cases whose name contains this substring.
    type(comm_t) :: comm
    character(len=16), parameter :: SCHEMES(2) = [character(len=16) :: "pred_corr", "ssp_rk2"]
-   character(len=24), parameter :: CASES(144) = [character(len=24) :: &
+   character(len=24), parameter :: CASES(146) = [character(len=24) :: &
                                                  "island_basin", "weno7_pv", &
                                                  "periodic_channel_zstar", &
                                                  "visc_rem_zstar", &
                                                  "periodic_sponge", &
-                                                 "open_obc", "spherical", "obc_radiation_sponge", "obc_sponge_east", &
+                                                 "open_obc", "obc_clamped_xy", "obc_flather_ns", &
+                                                 "spherical", "obc_radiation_sponge", "obc_sponge_east", &
                                                  "closures", "file_readers", &
                                                  "file_readers_zstar_full", &
                                                  "file_readers_zstar", "sea_ice", &
@@ -1382,6 +1388,33 @@ contains
                "&ocean_bc_nml west = 'tidal', east = 'open', south = 'wall', north = 'wall', "// &
                "west_n_tidal = 1, west_tidal_amp = 0.5, west_tidal_phase = 0.0, "// &
                "west_tidal_omega = 1.4051890e-4 /"//NL
+      case ("obc_clamped_xy")
+         ! Clamped constant inflow on one x edge and one y edge, walls on the
+         ! others: every edge is a fusable mode (wall zero or clamp), so the
+         ! stand-alone BC sweeps are skipped and the clamped values come out of
+         ! the Pass 2b / 2c selects.  bebt = 0.1 (default), bt_halo 0.
+         nml = common// &
+               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
+               "dx = 10000.0, dy = 10000.0 /"//NL// &
+               "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 0.05, wind_stress_y = 0.02 /"//NL// &
+               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
+               "&ocean_topo_nml topo_config = 'seamount', max_depth = 2000.0, "// &
+               "edge_depth = 200.0, slope_scale = 40000.0 /"//NL// &
+               "&ocean_bc_nml west = 'clamped', west_clamped_u = 0.01, east = 'wall', "// &
+               "south = 'clamped', south_clamped_v = 0.01, north = 'wall' /"//NL
+      case ("obc_flather_ns")
+         ! Flather south + tidal north edge, walls west / east: the u wall BC is
+         ! fused (mode < 3 on both x edges) while v keeps its stand-alone sweep.
+         nml = common// &
+               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
+               "dx = 10000.0, dy = 10000.0 /"//NL// &
+               "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 0.05, wind_stress_y = 0.02 /"//NL// &
+               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
+               "&ocean_topo_nml topo_config = 'seamount', max_depth = 2000.0, "// &
+               "edge_depth = 200.0, slope_scale = 40000.0 /"//NL// &
+               "&ocean_bc_nml west = 'wall', east = 'wall', south = 'open', north = 'tidal', "// &
+               "north_n_tidal = 1, north_tidal_amp = 0.5, north_tidal_phase = 0.0, "// &
+               "north_tidal_omega = 1.4051890e-4 /"//NL
       case ("obc_epbl")
          ! Flather east edge, sigma, EPBL, cooled surface: the open-edge ghost
          ! columns are evolved by the continuity chain and the owned boundary
