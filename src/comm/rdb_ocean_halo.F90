@@ -122,7 +122,7 @@ module rdb_ocean_halo
    use rdb_ocean_halo_counters, only: oh_count_centre_2d, oh_count_centre_3d, &
                                       oh_count_face_x_2d, oh_count_face_x_3d, &
                                       oh_count_face_y_2d, oh_count_face_y_3d, &
-                                      oh_count_bt_group, oh_count_msgs, &
+                                      oh_count_bt_group, oh_count_bt_packed, oh_count_msgs, &
                                       oh_count_suppress_on, oh_count_suppress_off
    implicit none
    private
@@ -158,6 +158,8 @@ module rdb_ocean_halo
    public :: ocean_halo_face_x_2d_wide
    public :: ocean_halo_face_y_2d_wide
    public :: ocean_halo_bt_group_2d_wide
+   public :: ocean_halo_packed_wide
+   public :: ocean_halo_pk_grow_count
 
    ! -----------------------------------------------------------------
    ! Tags (non-overlapping with coastal halo tags 1-4)
@@ -171,6 +173,8 @@ module rdb_ocean_halo
    integer, parameter :: TAG_OC_N_TO_S = 14
       !! Southward send
 
+   integer, parameter :: PK_MAX_ARR = 8
+      !! Most arrays one packed wide exchange carries (2 centre + 3 x-face + 3 y-face)
    integer, parameter :: MAX_REQS = 8
       !! Upper bound on requests per exchange (2 per active direction x 2 axes)
 
@@ -244,6 +248,16 @@ module rdb_ocean_halo
       !! Allocated capacity for E/W buffers
    integer :: oh_cap_ns = 0
       !! Allocated capacity for N/S buffers
+   real(wp), allocatable :: oh_pk_send_east(:), oh_pk_recv_east(:)
+   real(wp), allocatable :: oh_pk_send_west(:), oh_pk_recv_west(:)
+   real(wp), allocatable :: oh_pk_send_north(:), oh_pk_recv_north(:)
+   real(wp), allocatable :: oh_pk_send_south(:), oh_pk_recv_south(:)
+      !! Packed wide-exchange buffers (all arrays of a call concatenated);
+      !! device-resident, sized by `ocean_halo_reserve`.
+   integer :: oh_pk_cap_ew = 0, oh_pk_cap_ns = 0
+      !! Capacity of the packed E/W and N/S buffers
+   integer :: oh_pk_grow = 0
+      !! Mid-run growths of the packed buffers (must stay 0)
 
 contains
 
@@ -344,6 +358,15 @@ contains
       deallocate (oh_buf_send_north, oh_buf_recv_north)
       deallocate (oh_buf_send_south, oh_buf_recv_south)
 
+      if (allocated(oh_pk_send_east)) then
+         !$acc exit data delete(oh_pk_send_east, oh_pk_recv_east, oh_pk_send_west, oh_pk_recv_west, &
+         !$acc&                 oh_pk_send_north, oh_pk_recv_north, oh_pk_send_south, oh_pk_recv_south)
+         deallocate (oh_pk_send_east, oh_pk_recv_east, oh_pk_send_west, oh_pk_recv_west)
+         deallocate (oh_pk_send_north, oh_pk_recv_north, oh_pk_send_south, oh_pk_recv_south)
+      end if
+      oh_pk_cap_ew = 0
+      oh_pk_cap_ns = 0
+      oh_pk_grow = 0
       oh_cap_ew = 0
       oh_cap_ns = 0
       oh_nghost = 0
@@ -419,6 +442,17 @@ contains
          w_ns = (ng_wide + 1)*(nxl + 2*ng_wide)
          need_ew = max(need_ew, w_ew)
          need_ns = max(need_ns, w_ns)
+      end if
+
+      if (ng_wide > 0) then
+         block
+            integer :: pk_ew, pk_ns
+            call pk_cap_for(ng_wide, pk_ew, pk_ns)
+            if (.not. allocated(oh_pk_send_east) .or. pk_ew > oh_pk_cap_ew .or. &
+                pk_ns > oh_pk_cap_ns) then
+               call pk_alloc(pk_ew, pk_ns)
+            end if
+         end block
       end if
 
       if (need_ew <= oh_cap_ew .and. need_ns <= oh_cap_ns) return
@@ -1657,6 +1691,405 @@ contains
       call ocean_halo_face_y_2d_impl(vbt, ng_wide, device_resident)
       call oh_count_suppress_off()
    end subroutine ocean_halo_bt_group_2d_wide
+
+   ! ==================================================================
+   ! Packed wide exchange: ONE message per neighbour per direction pass
+   ! ==================================================================
+   !
+   ! `ocean_halo_packed_wide` refreshes up to eight 2D arrays (up to two centre,
+   ! up to three x-face, up to three y-face) at ghost width `ng` with one
+   ! X round and one Y round, instead of one two-pass exchange per array.
+   ! Per array the ghost cells receive exactly what the sequential
+   ! two-pass exchange (`*_2d_impl`) produces: the same source strips, the
+   ! same destinations, X pass completed (all arrays) before the Y pass
+   ! reads the x-ghosts, so corners arrive by the identical two-pass
+   ! route.  Only the buffer layout differs (arrays concatenated in the
+   ! fixed order eta, x-faces, y-faces), which cannot change a value.
+   !
+   ! Per-array strip widths (columns in the X pass, rows in the Y pass):
+   !   X pass  send east = ng + (x-face ? 1 : 0), send west = ng
+   !   Y pass  send north = ng + (y-face ? 1 : 0), send south = ng
+   !   a received band is the matching neighbour send band.
+   ! Buffers are reserved by `ocean_halo_reserve(nz, ng_wide)`; a call that
+   ! would need more logs a warning and counts in `ocean_halo_pk_grow_count`.
+
+   subroutine ocean_halo_packed_wide(ng, eta, ubt, vbt, eb, xa, xb, ya, yb)
+      !! Packed two-pass wide halo exchange of eta (+ optional eb: centre), ubt (+ optional
+      !! xa, xb: x-face) and vbt (+ optional ya, yb: y-face).  All ranks must
+      !! pass the same set.  Counts ONE `bt_packed` event.
+      integer, intent(in) :: ng
+         !! Ghost width of the arrays
+      real(wp), intent(inout) :: eta(oh_nx_local + 2*ng, oh_ny_local + 2*ng)
+      real(wp), intent(inout) :: ubt(oh_nx_local + 2*ng + 1, oh_ny_local + 2*ng)
+      real(wp), intent(inout) :: vbt(oh_nx_local + 2*ng, oh_ny_local + 2*ng + 1)
+      real(wp), intent(inout), optional :: eb(oh_nx_local + 2*ng, oh_ny_local + 2*ng)
+      real(wp), intent(inout), optional :: xa(oh_nx_local + 2*ng + 1, oh_ny_local + 2*ng)
+      real(wp), intent(inout), optional :: xb(oh_nx_local + 2*ng + 1, oh_ny_local + 2*ng)
+      real(wp), intent(inout), optional :: ya(oh_nx_local + 2*ng, oh_ny_local + 2*ng + 1)
+      real(wp), intent(inout), optional :: yb(oh_nx_local + 2*ng, oh_ny_local + 2*ng + 1)
+
+      integer :: nxl, nyl, nxt, nyt, nreq
+      integer :: rk_e, rk_w, rk_n, rk_s
+      integer :: so_e, so_w, ro_w, ro_e, so_n, so_s, ro_s, ro_n
+      integer :: n_c, n_x, n_y, tot_e, tot_w, tot_n, tot_s
+      type(comm_t) :: comm
+      type(request_t) :: reqs(MAX_REQS)
+      type(MPI_Status) :: stats(MAX_REQS)
+      logical :: need_e, need_w, need_n, need_s
+
+      call oh_count_bt_packed()
+      call wide_halo_guards(ng, "ocean_halo_packed_wide")
+      call pk_ensure(ng)
+
+      nxl = oh_nx_local
+      nyl = oh_ny_local
+      nxt = nxl + 2*ng
+      nyt = nyl + 2*ng
+      if (oh_decomp%px > 1 .or. oh_decomp%py > 1) comm = comm_env_compute_comm()
+      call needs_flags(need_w, need_e, need_s, need_n)
+      ! Message lengths from the array counts alone (a rank without an east
+      ! neighbour still receives from its west one the size it would send).
+      n_c = 1
+      n_x = 1
+      n_y = 1
+      if (present(eb)) n_c = n_c + 1
+      if (present(xa)) n_x = n_x + 1
+      if (present(xb)) n_x = n_x + 1
+      if (present(ya)) n_y = n_y + 1
+      if (present(yb)) n_y = n_y + 1
+      tot_e = ng*nyt*n_c + (ng + 1)*nyt*n_x + ng*(nyt + 1)*n_y
+      tot_w = ng*nyt*(n_c + n_x) + ng*(nyt + 1)*n_y
+      tot_n = ng*nxt*n_c + ng*(nxt + 1)*n_x + (ng + 1)*nxt*n_y
+      tot_s = ng*nxt*n_c + ng*(nxt + 1)*n_x + ng*nxt*n_y
+
+      ! ---- X pass ----
+      if (oh_decomp%px == 1) then
+         if (oh_periodic_x) then
+            call pk_wrap(eta, 1, nxt, nyt, nxl, nyl, ng, .true., .false.)
+            if (present(eb)) then
+               call pk_wrap(eb, 1, nxt, nyt, nxl, nyl, ng, .true., .false.)
+            end if
+            call pk_wrap(ubt, 2, nxt + 1, nyt, nxl, nyl, ng, .true., .false.)
+            if (present(xa)) then
+               call pk_wrap(xa, 2, nxt + 1, nyt, nxl, nyl, ng, .true., .false.)
+            end if
+            if (present(xb)) then
+               call pk_wrap(xb, 2, nxt + 1, nyt, nxl, nyl, ng, .true., .false.)
+            end if
+            call pk_wrap(vbt, 3, nxt, nyt + 1, nxl, nyl, ng, .true., .false.)
+            if (present(ya)) then
+               call pk_wrap(ya, 3, nxt, nyt + 1, nxl, nyl, ng, .true., .false.)
+            end if
+            if (present(yb)) then
+               call pk_wrap(yb, 3, nxt, nyt + 1, nxl, nyl, ng, .true., .false.)
+            end if
+         end if
+      else
+         if (need_e) rk_e = ew_rank_east()
+         if (need_w) rk_w = ew_rank_west()
+         so_e = 0
+         so_w = 0
+         call pk_x_pack(eta, nxt, nyt, 1, ng, nxl, need_e, need_w, so_e, so_w)
+         if (present(eb)) then
+            call pk_x_pack(eb, nxt, nyt, 1, ng, nxl, need_e, need_w, so_e, so_w)
+         end if
+         call pk_x_pack(ubt, nxt + 1, nyt, 2, ng, nxl, need_e, need_w, so_e, so_w)
+         if (present(xa)) then
+            call pk_x_pack(xa, nxt + 1, nyt, 2, ng, nxl, need_e, need_w, so_e, so_w)
+         end if
+         if (present(xb)) then
+            call pk_x_pack(xb, nxt + 1, nyt, 2, ng, nxl, need_e, need_w, so_e, so_w)
+         end if
+         call pk_x_pack(vbt, nxt, nyt + 1, 3, ng, nxl, need_e, need_w, so_e, so_w)
+         if (present(ya)) then
+            call pk_x_pack(ya, nxt, nyt + 1, 3, ng, nxl, need_e, need_w, so_e, so_w)
+         end if
+         if (present(yb)) then
+            call pk_x_pack(yb, nxt, nyt + 1, 3, ng, nxl, need_e, need_w, so_e, so_w)
+         end if
+         nreq = 0
+         if (need_e) then
+            !$acc host_data use_device(oh_pk_send_east, oh_pk_recv_east)
+            nreq = nreq + 1
+            call HALO_ISEND_N(comm, oh_pk_send_east, tot_e, rk_e, TAG_OC_W_TO_E, reqs(nreq))
+            nreq = nreq + 1
+            call HALO_IRECV_N(comm, oh_pk_recv_east, tot_w, rk_e, TAG_OC_E_TO_W, reqs(nreq))
+            !$acc end host_data
+         end if
+         if (need_w) then
+            !$acc host_data use_device(oh_pk_send_west, oh_pk_recv_west)
+            nreq = nreq + 1
+            call HALO_ISEND_N(comm, oh_pk_send_west, tot_w, rk_w, TAG_OC_E_TO_W, reqs(nreq))
+            nreq = nreq + 1
+            call HALO_IRECV_N(comm, oh_pk_recv_west, tot_e, rk_w, TAG_OC_W_TO_E, reqs(nreq))
+            !$acc end host_data
+         end if
+         if (nreq > 0) then
+            call oh_count_msgs(nreq/2)
+            call waitall(reqs(1:nreq), stats(1:nreq))
+         end if
+         ro_w = 0
+         ro_e = 0
+         call pk_x_unpack(eta, nxt, nyt, 1, ng, nxl, need_e, need_w, ro_w, ro_e)
+         if (present(eb)) then
+            call pk_x_unpack(eb, nxt, nyt, 1, ng, nxl, need_e, need_w, ro_w, ro_e)
+         end if
+         call pk_x_unpack(ubt, nxt + 1, nyt, 2, ng, nxl, need_e, need_w, ro_w, ro_e)
+         if (present(xa)) then
+            call pk_x_unpack(xa, nxt + 1, nyt, 2, ng, nxl, need_e, need_w, ro_w, ro_e)
+         end if
+         if (present(xb)) then
+            call pk_x_unpack(xb, nxt + 1, nyt, 2, ng, nxl, need_e, need_w, ro_w, ro_e)
+         end if
+         call pk_x_unpack(vbt, nxt, nyt + 1, 3, ng, nxl, need_e, need_w, ro_w, ro_e)
+         if (present(ya)) then
+            call pk_x_unpack(ya, nxt, nyt + 1, 3, ng, nxl, need_e, need_w, ro_w, ro_e)
+         end if
+         if (present(yb)) then
+            call pk_x_unpack(yb, nxt, nyt + 1, 3, ng, nxl, need_e, need_w, ro_w, ro_e)
+         end if
+      end if
+
+      ! ---- Y pass (spans the full x extent including the x ghosts) ----
+      if (oh_decomp%py == 1) then
+         if (oh_periodic_y) then
+            call pk_wrap(eta, 1, nxt, nyt, nxl, nyl, ng, .false., .true.)
+            if (present(eb)) then
+               call pk_wrap(eb, 1, nxt, nyt, nxl, nyl, ng, .false., .true.)
+            end if
+            call pk_wrap(ubt, 2, nxt + 1, nyt, nxl, nyl, ng, .false., .true.)
+            if (present(xa)) then
+               call pk_wrap(xa, 2, nxt + 1, nyt, nxl, nyl, ng, .false., .true.)
+            end if
+            if (present(xb)) then
+               call pk_wrap(xb, 2, nxt + 1, nyt, nxl, nyl, ng, .false., .true.)
+            end if
+            call pk_wrap(vbt, 3, nxt, nyt + 1, nxl, nyl, ng, .false., .true.)
+            if (present(ya)) then
+               call pk_wrap(ya, 3, nxt, nyt + 1, nxl, nyl, ng, .false., .true.)
+            end if
+            if (present(yb)) then
+               call pk_wrap(yb, 3, nxt, nyt + 1, nxl, nyl, ng, .false., .true.)
+            end if
+         end if
+      else
+         if (need_n) rk_n = ns_rank_north()
+         if (need_s) rk_s = ns_rank_south()
+         so_n = 0
+         so_s = 0
+         call pk_y_pack(eta, nxt, nyt, 1, ng, nyl, need_n, need_s, so_n, so_s)
+         if (present(eb)) then
+            call pk_y_pack(eb, nxt, nyt, 1, ng, nyl, need_n, need_s, so_n, so_s)
+         end if
+         call pk_y_pack(ubt, nxt + 1, nyt, 2, ng, nyl, need_n, need_s, so_n, so_s)
+         if (present(xa)) then
+            call pk_y_pack(xa, nxt + 1, nyt, 2, ng, nyl, need_n, need_s, so_n, so_s)
+         end if
+         if (present(xb)) then
+            call pk_y_pack(xb, nxt + 1, nyt, 2, ng, nyl, need_n, need_s, so_n, so_s)
+         end if
+         call pk_y_pack(vbt, nxt, nyt + 1, 3, ng, nyl, need_n, need_s, so_n, so_s)
+         if (present(ya)) then
+            call pk_y_pack(ya, nxt, nyt + 1, 3, ng, nyl, need_n, need_s, so_n, so_s)
+         end if
+         if (present(yb)) then
+            call pk_y_pack(yb, nxt, nyt + 1, 3, ng, nyl, need_n, need_s, so_n, so_s)
+         end if
+         nreq = 0
+         if (need_n) then
+            !$acc host_data use_device(oh_pk_send_north, oh_pk_recv_north)
+            nreq = nreq + 1
+            call HALO_ISEND_N(comm, oh_pk_send_north, tot_n, rk_n, TAG_OC_S_TO_N, reqs(nreq))
+            nreq = nreq + 1
+            call HALO_IRECV_N(comm, oh_pk_recv_north, tot_s, rk_n, TAG_OC_N_TO_S, reqs(nreq))
+            !$acc end host_data
+         end if
+         if (need_s) then
+            !$acc host_data use_device(oh_pk_send_south, oh_pk_recv_south)
+            nreq = nreq + 1
+            call HALO_ISEND_N(comm, oh_pk_send_south, tot_s, rk_s, TAG_OC_N_TO_S, reqs(nreq))
+            nreq = nreq + 1
+            call HALO_IRECV_N(comm, oh_pk_recv_south, tot_n, rk_s, TAG_OC_S_TO_N, reqs(nreq))
+            !$acc end host_data
+         end if
+         if (nreq > 0) then
+            call oh_count_msgs(nreq/2)
+            call waitall(reqs(1:nreq), stats(1:nreq))
+         end if
+         ro_s = 0
+         ro_n = 0
+         call pk_y_unpack(eta, nxt, nyt, 1, ng, nyl, need_n, need_s, ro_s, ro_n)
+         if (present(eb)) then
+            call pk_y_unpack(eb, nxt, nyt, 1, ng, nyl, need_n, need_s, ro_s, ro_n)
+         end if
+         call pk_y_unpack(ubt, nxt + 1, nyt, 2, ng, nyl, need_n, need_s, ro_s, ro_n)
+         if (present(xa)) then
+            call pk_y_unpack(xa, nxt + 1, nyt, 2, ng, nyl, need_n, need_s, ro_s, ro_n)
+         end if
+         if (present(xb)) then
+            call pk_y_unpack(xb, nxt + 1, nyt, 2, ng, nyl, need_n, need_s, ro_s, ro_n)
+         end if
+         call pk_y_unpack(vbt, nxt, nyt + 1, 3, ng, nyl, need_n, need_s, ro_s, ro_n)
+         if (present(ya)) then
+            call pk_y_unpack(ya, nxt, nyt + 1, 3, ng, nyl, need_n, need_s, ro_s, ro_n)
+         end if
+         if (present(yb)) then
+            call pk_y_unpack(yb, nxt, nyt + 1, 3, ng, nyl, need_n, need_s, ro_s, ro_n)
+         end if
+      end if
+   end subroutine ocean_halo_packed_wide
+
+   function ocean_halo_pk_grow_count() result(n)
+      !! Mid-run growths of the packed buffers since init (must stay 0).
+      integer :: n
+      n = oh_pk_grow
+   end function ocean_halo_pk_grow_count
+
+   subroutine pk_cap_for(ng, need_ew, need_ns)
+      integer, intent(in) :: ng
+      integer, intent(out) :: need_ew, need_ns
+      need_ew = PK_MAX_ARR*(ng + 1)*(oh_ny_local + 2*ng + 1)
+      need_ns = PK_MAX_ARR*(ng + 1)*(oh_nx_local + 2*ng + 1)
+   end subroutine pk_cap_for
+
+   subroutine pk_alloc(need_ew, need_ns)
+      !! (Re)allocate the packed buffers to at least the given capacity.
+      integer, intent(in) :: need_ew, need_ns
+      if (allocated(oh_pk_send_east)) then
+         !$acc exit data delete(oh_pk_send_east, oh_pk_recv_east, oh_pk_send_west, oh_pk_recv_west, &
+         !$acc&                 oh_pk_send_north, oh_pk_recv_north, oh_pk_send_south, oh_pk_recv_south)
+         deallocate (oh_pk_send_east, oh_pk_recv_east, oh_pk_send_west, oh_pk_recv_west)
+         deallocate (oh_pk_send_north, oh_pk_recv_north, oh_pk_send_south, oh_pk_recv_south)
+      end if
+      oh_pk_cap_ew = max(need_ew, oh_pk_cap_ew)
+      oh_pk_cap_ns = max(need_ns, oh_pk_cap_ns)
+      allocate (oh_pk_send_east(oh_pk_cap_ew), oh_pk_recv_east(oh_pk_cap_ew))
+      allocate (oh_pk_send_west(oh_pk_cap_ew), oh_pk_recv_west(oh_pk_cap_ew))
+      allocate (oh_pk_send_north(oh_pk_cap_ns), oh_pk_recv_north(oh_pk_cap_ns))
+      allocate (oh_pk_send_south(oh_pk_cap_ns), oh_pk_recv_south(oh_pk_cap_ns))
+      !$acc enter data create(oh_pk_send_east, oh_pk_recv_east, oh_pk_send_west, oh_pk_recv_west, &
+      !$acc&                  oh_pk_send_north, oh_pk_recv_north, oh_pk_send_south, oh_pk_recv_south)
+   end subroutine pk_alloc
+
+   subroutine pk_ensure(ng)
+      !! Make sure the packed buffers hold a call at width ng (normally a no-op:
+      !! `ocean_halo_reserve` sized them at init).
+      integer, intent(in) :: ng
+      integer :: need_ew, need_ns
+      call pk_cap_for(ng, need_ew, need_ns)
+      if (allocated(oh_pk_send_east) .and. need_ew <= oh_pk_cap_ew .and. need_ns <= oh_pk_cap_ns) return
+      oh_pk_grow = oh_pk_grow + 1
+      call logger%warning("ocean_halo_packed_wide: growing the packed halo buffers mid-run "// &
+                          "(call ocean_halo_reserve(nz, ng_wide) at init to avoid it)")
+      call pk_alloc(need_ew, need_ns)
+   end subroutine pk_ensure
+
+   subroutine pk_wrap(fld, kind, ni, nj, nxl, nyl, ng, wx, wy)
+      !! Single-rank periodic wrap of one array of the packed set.
+      integer, intent(in) :: kind, ni, nj, nxl, nyl, ng
+      real(wp), intent(inout) :: fld(ni, nj)
+      logical, intent(in) :: wx, wy
+      select case (kind)
+      case (1)
+         call ocean_periodic_wrap_centre_2d(fld, ni, nj, nxl, nyl, ng, wx, wy)
+      case (2)
+         call ocean_periodic_wrap_face_x_2d(fld, ni, nj, nxl, nyl, ng, wx, wy)
+      case default
+         call ocean_periodic_wrap_face_y_2d(fld, ni, nj, nxl, nyl, ng, wx, wy)
+      end select
+   end subroutine pk_wrap
+
+   subroutine pk_x_pack(fld, ni, nj, kind, ng, nxl, need_e, need_w, so_e, so_w)
+      !! X pass: append the east / west send strips of one array.
+      integer, intent(in) :: ni, nj, kind, ng, nxl
+      real(wp), intent(in) :: fld(ni, nj)
+      logical, intent(in) :: need_e, need_w
+      integer, intent(inout) :: so_e, so_w
+      integer :: j, k, ce, sx
+      sx = merge(1, 0, kind == 2)
+      ce = ng + sx
+      if (need_e) then
+         do concurrent(j=1:nj, k=1:ce)
+            oh_pk_send_east(so_e + (j - 1)*ce + k) = fld(nxl + k, j)
+         end do
+         so_e = so_e + ce*nj
+      end if
+      if (need_w) then
+         do concurrent(j=1:nj, k=1:ng)
+            oh_pk_send_west(so_w + (j - 1)*ng + k) = fld(ng + sx + k, j)
+         end do
+         so_w = so_w + ng*nj
+      end if
+   end subroutine pk_x_pack
+
+   subroutine pk_x_unpack(fld, ni, nj, kind, ng, nxl, need_e, need_w, ro_w, ro_e)
+      !! X pass: fill the west / east ghost bands of one array.
+      integer, intent(in) :: ni, nj, kind, ng, nxl
+      real(wp), intent(inout) :: fld(ni, nj)
+      logical, intent(in) :: need_e, need_w
+      integer, intent(inout) :: ro_w, ro_e
+      integer :: j, k, ce, sx
+      sx = merge(1, 0, kind == 2)
+      ce = ng + sx
+      if (need_w) then
+         do concurrent(j=1:nj, k=1:ce)
+            fld(k, j) = oh_pk_recv_west(ro_w + (j - 1)*ce + k)
+         end do
+         ro_w = ro_w + ce*nj
+      end if
+      if (need_e) then
+         do concurrent(j=1:nj, k=1:ng)
+            fld(ng + nxl + sx + k, j) = oh_pk_recv_east(ro_e + (j - 1)*ng + k)
+         end do
+         ro_e = ro_e + ng*nj
+      end if
+   end subroutine pk_x_unpack
+
+   subroutine pk_y_pack(fld, ni, nj, kind, ng, nyl, need_n, need_s, so_n, so_s)
+      !! Y pass: append the north / south send strips of one array.
+      integer, intent(in) :: ni, nj, kind, ng, nyl
+      real(wp), intent(in) :: fld(ni, nj)
+      logical, intent(in) :: need_n, need_s
+      integer, intent(inout) :: so_n, so_s
+      integer :: i, k, cn, sy
+      sy = merge(1, 0, kind == 3)
+      cn = ng + sy
+      if (need_n) then
+         do concurrent(k=1:cn, i=1:ni)
+            oh_pk_send_north(so_n + (k - 1)*ni + i) = fld(i, nyl + k)
+         end do
+         so_n = so_n + cn*ni
+      end if
+      if (need_s) then
+         do concurrent(k=1:ng, i=1:ni)
+            oh_pk_send_south(so_s + (k - 1)*ni + i) = fld(i, ng + sy + k)
+         end do
+         so_s = so_s + ng*ni
+      end if
+   end subroutine pk_y_pack
+
+   subroutine pk_y_unpack(fld, ni, nj, kind, ng, nyl, need_n, need_s, ro_s, ro_n)
+      !! Y pass: fill the south / north ghost bands of one array.
+      integer, intent(in) :: ni, nj, kind, ng, nyl
+      real(wp), intent(inout) :: fld(ni, nj)
+      logical, intent(in) :: need_n, need_s
+      integer, intent(inout) :: ro_s, ro_n
+      integer :: i, k, cn, sy
+      sy = merge(1, 0, kind == 3)
+      cn = ng + sy
+      if (need_s) then
+         do concurrent(k=1:cn, i=1:ni)
+            fld(i, k) = oh_pk_recv_south(ro_s + (k - 1)*ni + i)
+         end do
+         ro_s = ro_s + cn*ni
+      end if
+      if (need_n) then
+         do concurrent(k=1:ng, i=1:ni)
+            fld(i, ng + nyl + sy + k) = oh_pk_recv_north(ro_n + (k - 1)*ni + i)
+         end do
+         ro_n = ro_n + ng*ni
+      end if
+   end subroutine pk_y_unpack
 
    ! ==================================================================
    ! Private helpers

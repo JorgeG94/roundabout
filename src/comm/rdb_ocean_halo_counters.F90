@@ -17,7 +17,9 @@
 !! This handles multi-level nesting: ml_state suppress_on → outer depth
 !! still positive, so inner 3d counters stay suppressed inside ml_state.
 !!
-!! CATEGORIES (9 semantic counters, disjoint and additive):
+!! CATEGORIES (10 semantic counters, disjoint and additive):
+!!   oh_cnt_bt_packed   — packed wide-halo BT exchange (`ocean_halo_packed_wide`):
+!!                        ONE X round + ONE Y round for the whole array set
 !!   oh_cnt_bt_group    — ocean_halo_bt_group_2d grouped exchange
 !!   oh_cnt_bt_u_mid    — mid-substep bt_ubt face_x exchange (BT Pass-2b→2c)
 !!   oh_cnt_ml_state    — ocean_halo_exchange_ml_state whole-ML-state exchange
@@ -46,6 +48,8 @@ module rdb_ocean_halo_counters
 
    public :: oh_count_bt_group
    public :: oh_count_bt_u_mid
+   public :: oh_count_bt_packed
+   public :: oh_counters_packed
    public :: oh_count_ml_state
    public :: oh_count_centre_2d
    public :: oh_count_centre_3d
@@ -68,6 +72,8 @@ module rdb_ocean_halo_counters
    ! ------------------------------------------------------------------
    integer(int64), save :: oh_cnt_bt_group = 0_int64
       !! ocean_halo_bt_group_2d grouped exchange calls
+   integer(int64), save :: oh_cnt_bt_packed = 0_int64
+      !! Packed wide-halo BT exchange calls (one X + one Y round each)
    integer(int64), save :: oh_cnt_bt_u_mid = 0_int64
       !! Mid-substep bt_ubt face_x exchange calls (BT Pass-2b→2c u seam)
    integer(int64), save :: oh_cnt_ml_state = 0_int64
@@ -134,6 +140,17 @@ contains
       if (oh_suppress_depth > 0) return
       oh_cnt_bt_group = oh_cnt_bt_group + 1_int64
    end subroutine oh_count_bt_group
+
+   subroutine oh_count_bt_packed()
+      !! One packed wide exchange (not subject to the group suppress depth).
+      oh_cnt_bt_packed = oh_cnt_bt_packed + 1_int64
+   end subroutine oh_count_bt_packed
+
+   function oh_counters_packed() result(n)
+      !! Packed wide-halo exchange calls since the last reset.
+      integer(int64) :: n
+      n = oh_cnt_bt_packed
+   end function oh_counters_packed
 
    subroutine oh_count_bt_u_mid()
       !! Increment the bt_u_mid counter.
@@ -210,6 +227,7 @@ contains
       !! Does NOT reset the suppress flag.
       oh_cnt_bt_group = 0_int64
       oh_cnt_bt_u_mid = 0_int64
+      oh_cnt_bt_packed = 0_int64
       oh_cnt_ml_state = 0_int64
       oh_cnt_centre_2d = 0_int64
       oh_cnt_centre_3d = 0_int64
@@ -277,7 +295,7 @@ contains
    function oh_counters_total() result(total)
       !! Return the sum of all 9 semantic counters.
       integer(int64) :: total
-      total = oh_cnt_bt_group + oh_cnt_bt_u_mid + oh_cnt_ml_state + &
+      total = oh_cnt_bt_group + oh_cnt_bt_u_mid + oh_cnt_bt_packed + oh_cnt_ml_state + &
               oh_cnt_centre_2d + oh_cnt_centre_3d + &
               oh_cnt_face_x_2d + oh_cnt_face_x_3d + &
               oh_cnt_face_y_2d + oh_cnt_face_y_3d
@@ -299,6 +317,7 @@ contains
       str = "halo exch: total="//to_string(oh_counters_total())// &
             " bt_group="//to_string(oh_cnt_bt_group)// &
             " bt_u="//to_string(oh_cnt_bt_u_mid)// &
+            " pk="//to_string(oh_cnt_bt_packed)// &
             " ml="//to_string(oh_cnt_ml_state)// &
             " c2d="//to_string(oh_cnt_centre_2d)// &
             " c3d="//to_string(oh_cnt_centre_3d)// &

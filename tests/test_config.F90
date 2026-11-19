@@ -64,6 +64,7 @@ contains
                   new_unittest("resolve_bt_halo", test_resolve_bt_halo), &
                   new_unittest("bt_halo_auto_exclusion", test_bt_halo_auto_exclusion), &
                   new_unittest("chapman_bt_halo_refused", test_chapman_bt_halo_refused), &
+                  new_unittest("tidal_edge_bt_halo_refused", test_tidal_edge_bt_halo_refused), &
                   new_unittest("periodic_y_needs_uniform_grid", test_periodic_y_needs_uniform_grid), &
                   new_unittest("diag_density_requires_rho_levels", test_diag_density_requires_rho_levels), &
                   new_unittest("ice_hlim_count_leading_run", test_ice_hlim_count_leading_run), &
@@ -478,7 +479,7 @@ contains
          "&grid_nml nx = 24, ny = 16, nghost = 3, dx = 20000.0, dy = 20000.0 /"// &
          new_line('a')// &
          "&ocean_bc_nml east = 'chapman' /"//new_line('a')// &
-         "&ocean_bt_nml bt_halo = 4, visc_rem_chain = .false. /"//new_line('a'), cfg, ierr=ierr)
+         "&ocean_bt_nml bt_halo = 4 /"//new_line('a'), cfg, ierr=ierr)
       call check(error, ierr == OCEAN_STATUS_OK, "chapman + bt_halo namelist must parse")
       if (allocated(error)) return
       call validate_config(cfg, ierr=ierr)
@@ -487,13 +488,14 @@ contains
       if (allocated(error)) return
 
       ! CONTROL: the same namelist WITHOUT the chapman edge must be accepted,
-      ! so the refusal above is the Chapman rule and nothing else (the
-      ! `visc_rem_chain` default alone refuses any bt_halo > 0).
+      ! so the refusal above is the Chapman rule and nothing else.  The
+      ! `visc_rem_chain` default (on) is accepted with bt_halo > 0: the fast
+      ! loop reads only the wide-exchanged `bt_rem` and force.
       call read_config_from_string( &
          "&sim_nml sim_type = 'ocean' /"//new_line('a')// &
          "&grid_nml nx = 24, ny = 16, nghost = 3, dx = 20000.0, dy = 20000.0 /"// &
          new_line('a')// &
-         "&ocean_bt_nml bt_halo = 4, visc_rem_chain = .false. /"//new_line('a'), cfg, ierr=ierr)
+         "&ocean_bt_nml bt_halo = 4 /"//new_line('a'), cfg, ierr=ierr)
       call validate_config(cfg, ierr=ierr)
       call check(error, ierr == OCEAN_STATUS_OK, &
                  "control (no chapman edge) with bt_halo = 4 must be accepted")
@@ -509,6 +511,177 @@ contains
       call check(error, ierr == OCEAN_STATUS_OK, &
                  "chapman edge with bt_halo = 0 must be accepted")
    end subroutine test_chapman_bt_halo_refused
+
+   subroutine test_tidal_edge_bt_halo_refused(error)
+      !! A tidal `&ocean_bc_nml` edge is ACCEPTED with `bt_halo > 0` (the wide
+      !! fast loop receives the model time, so the eta target follows the clock
+      !! exactly as on one rank; bitwise cases `bthx_tidal_*`), and is no
+      !! longer an AUTO exclusion.  Name kept from the stage that refused it.
+      type(error_type), allocatable, intent(out) :: error
+      type(config_t) :: cfg
+      logical :: excluded
+      character(len=:), allocatable :: reason
+      integer :: ierr
+
+      cfg%ocean%bc%west = "tidal"
+      call bt_halo_auto_exclusion(cfg, excluded, reason)
+      call check(error,.not. excluded, "a tidal edge must not be a bt_halo exclusion any more")
+      if (allocated(error)) return
+
+      call read_config_from_string( &
+         "&sim_nml sim_type = 'ocean' /"//new_line('a')// &
+         "&grid_nml nx = 24, ny = 16, nghost = 3, dx = 20000.0, dy = 20000.0 /"// &
+         new_line('a')// &
+         "&ocean_bc_nml west = 'tidal', west_n_tidal = 1, west_tidal_amp = 0.5, "// &
+         "west_tidal_phase = 0.0, west_tidal_omega = 1.4051890e-4 /"//new_line('a')// &
+         "&ocean_bt_nml bt_halo = 4 /"//new_line('a'), cfg, ierr=ierr)
+      call check(error, ierr == OCEAN_STATUS_OK, "tidal + bt_halo namelist must parse")
+      if (allocated(error)) return
+      call validate_config(cfg, ierr=ierr)
+      call check(error, ierr == OCEAN_STATUS_OK, &
+                 "tidal edge with explicit bt_halo > 0 must be accepted")
+      if (allocated(error)) return
+
+      call read_config_from_string( &
+         "&sim_nml sim_type = 'ocean' /"//new_line('a')// &
+         "&grid_nml nx = 24, ny = 16, nghost = 3, dx = 20000.0, dy = 20000.0 /"// &
+         new_line('a')// &
+         "&ocean_bc_nml east = 'open', flather_form = 'full' /"//new_line('a')// &
+         "&ocean_bt_nml bt_halo = 4 /"//new_line('a'), cfg, ierr=ierr)
+      call validate_config(cfg, ierr=ierr)
+      call check(error, ierr == OCEAN_STATUS_OK, &
+                 "full-Flather open edge with bt_halo = 4 must be accepted")
+      if (allocated(error)) return
+
+      ! Porous barriers ride the owners' narrowed widths (refreshed per solve).
+      call read_config_from_string( &
+         "&sim_nml sim_type = 'ocean' /"//new_line('a')// &
+         "&grid_nml nx = 24, ny = 16, nghost = 3, dx = 20000.0, dy = 20000.0 /"// &
+         new_line('a')// &
+         "&ocean_porous_nml enable = .true. /"//new_line('a')// &
+         "&ocean_bt_nml bt_halo = 4 /"//new_line('a'), cfg, ierr=ierr)
+      call validate_config(cfg, ierr=ierr)
+      call check(error, ierr == OCEAN_STATUS_OK, "porous with bt_halo = 4 must be accepted")
+      if (allocated(error)) return
+
+      ! Equilibrium tide / pressure loading: the wide eta_forcing.
+      call read_config_from_string( &
+         "&sim_nml sim_type = 'ocean' /"//new_line('a')// &
+         "&grid_nml nx = 24, ny = 16, nghost = 3, dx = 0.2, dy = 0.2 /"// &
+         new_line('a')// &
+         "&ocean_grid_nml grid_config = 'spherical', lon_west = 0.0, lat_south = 20.0 /"// &
+         new_line('a')// &
+         "&ocean_tides_nml enable = .true., constituents = 'M2' /"//new_line('a')// &
+         "&ocean_bt_nml bt_halo = 4 /"//new_line('a'), cfg, ierr=ierr)
+      call validate_config(cfg, ierr=ierr)
+      call check(error, ierr == OCEAN_STATUS_OK, "body tide with bt_halo = 4 must be accepted")
+      if (allocated(error)) return
+
+      ! Still refused: use_cont_type, upstream_h_face.  (The tripolar fold is
+      ! accepted, with a tile-size rule: see the end of this test.)
+      call read_config_from_string( &
+         "&sim_nml sim_type = 'ocean' /"//new_line('a')// &
+         "&grid_nml nx = 24, ny = 16, nghost = 3, dx = 20000.0, dy = 20000.0 /"// &
+         new_line('a')// &
+         "&ocean_bt_nml bt_halo = 4, use_cont_type = .true. /"//new_line('a'), cfg, ierr=ierr)
+      call validate_config(cfg, ierr=ierr)
+      call check(error, ierr /= OCEAN_STATUS_OK, "use_cont_type with bt_halo = 4 must stay refused")
+      if (allocated(error)) return
+      call read_config_from_string( &
+         "&sim_nml sim_type = 'ocean' /"//new_line('a')// &
+         "&grid_nml nx = 24, ny = 16, nghost = 3, dx = 20000.0, dy = 20000.0 /"// &
+         new_line('a')// &
+         "&ocean_bt_nml bt_halo = 4, upstream_h_face = .true. /"//new_line('a'), cfg, ierr=ierr)
+      call validate_config(cfg, ierr=ierr)
+      call check(error, ierr /= OCEAN_STATUS_OK, "upstream_h_face with bt_halo = 4 must stay refused")
+      if (allocated(error)) return
+      call read_config_from_string( &
+         "&sim_nml sim_type = 'ocean' /"//new_line('a')// &
+         "&grid_nml nx = 24, ny = 16, nghost = 3, dx = 20000.0, dy = 20000.0 /"// &
+         new_line('a')// &
+         "&ocean_bt_nml bt_halo = 4 /"//new_line('a'), cfg, ierr=ierr)
+      cfg%ocean%bc%north = "tripolar_fold"
+      call validate_config(cfg, ierr=ierr)
+      call check(error, ierr == OCEAN_STATUS_OK, "tripolar_fold with bt_halo = 4 must be accepted")
+      if (allocated(error)) return
+      ! The fold reads the whole wide band from the north tile: a process
+      ! grid whose tiles are no taller than nghost + bt_halo (here 12 rows
+      ! against 3 + 8 + 1) is refused, as is an east-west split of a grid
+      ! whose tiles are no wider than it.
+      call read_config_from_string( &
+         "&sim_nml sim_type = 'ocean' /"//new_line('a')// &
+         "&grid_nml nx = 48, ny = 32, nghost = 3, dx = 20000.0, dy = 20000.0 /"// &
+         new_line('a')// &
+         "&mpi_nml px = 1, py = 4 /"//new_line('a')// &
+         "&ocean_bt_nml bt_halo = 8 /"//new_line('a'), cfg, ierr=ierr)
+      cfg%ocean%bc%north = "tripolar_fold"
+      call validate_config(cfg, ierr=ierr)
+      call check(error, ierr /= OCEAN_STATUS_OK, &
+                 "tripolar_fold, bt_halo = 8 on 8-row tiles must be refused")
+      if (allocated(error)) return
+      call read_config_from_string( &
+         "&sim_nml sim_type = 'ocean' /"//new_line('a')// &
+         "&grid_nml nx = 48, ny = 32, nghost = 3, dx = 20000.0, dy = 20000.0 /"// &
+         new_line('a')// &
+         "&mpi_nml px = 4, py = 1 /"//new_line('a')// &
+         "&ocean_bt_nml bt_halo = 8 /"//new_line('a'), cfg, ierr=ierr)
+      cfg%ocean%bc%north = "tripolar_fold"
+      call validate_config(cfg, ierr=ierr)
+      call check(error, ierr == OCEAN_STATUS_OK, &
+                 "tripolar_fold, bt_halo = 8 on 12-column tiles (3 + 8 + 1) must be accepted")
+      if (allocated(error)) return
+      call read_config_from_string( &
+         "&sim_nml sim_type = 'ocean' /"//new_line('a')// &
+         "&grid_nml nx = 48, ny = 32, nghost = 3, dx = 20000.0, dy = 20000.0 /"// &
+         new_line('a')// &
+         "&mpi_nml px = 6, py = 1 /"//new_line('a')// &
+         "&ocean_bt_nml bt_halo = 8 /"//new_line('a'), cfg, ierr=ierr)
+      cfg%ocean%bc%north = "tripolar_fold"
+      call validate_config(cfg, ierr=ierr)
+      call check(error, ierr /= OCEAN_STATUS_OK, &
+                 "tripolar_fold, bt_halo = 8 on 8-column tiles under px > 1 must be refused")
+      if (allocated(error)) return
+      ! Boundary of the tile-fit rule: nghost + W + 1 = 12 is the smallest
+      ! accepted tile, 11 the largest refused one (W = bt_halo rounded down to
+      ! even: bt_halo = 9 has the same threshold as 8).
+      call fold_fit(error, 44, 4, 1, 8, .false., "11-row tile (bt_halo = 8)")
+      if (allocated(error)) return
+      call fold_fit(error, 48, 4, 1, 8, .true., "12-row tile (bt_halo = 8)")
+      if (allocated(error)) return
+      call fold_fit(error, 44, 1, 4, 8, .false., "11-column tile, px > 1 (bt_halo = 8)")
+      if (allocated(error)) return
+      call fold_fit(error, 48, 1, 4, 8, .true., "12-column tile, px > 1 (bt_halo = 8)")
+      if (allocated(error)) return
+      call fold_fit(error, 48, 4, 1, 9, .true., "12-row tile (bt_halo = 9, W = 8)")
+      if (allocated(error)) return
+      call fold_fit(error, 44, 4, 1, 9, .false., "11-row tile (bt_halo = 9, W = 8)")
+   end subroutine test_tidal_edge_bt_halo_refused
+
+   subroutine fold_fit(error, n, py, px, halo, want_ok, what)
+      !! Square-ish `n` x `n` grid with `px` x `py` ranks (one of them 1) and a
+      !! tripolar north fold: `validate_config` accepts iff `want_ok`.
+      type(error_type), allocatable, intent(out) :: error
+      integer, intent(in) :: n, py, px, halo
+      logical, intent(in) :: want_ok
+      character(len=*), intent(in) :: what
+      type(config_t) :: cfg
+      integer :: ierr
+      character(len=16) :: sn, spx, spy, sh
+      write (sn, '(i0)') n
+      write (spx, '(i0)') px
+      write (spy, '(i0)') py
+      write (sh, '(i0)') halo
+      call read_config_from_string( &
+         "&sim_nml sim_type = 'ocean' /"//new_line('a')// &
+         "&grid_nml nx = "//trim(sn)//", ny = "//trim(sn)//", nghost = 3, dx = 20000.0, dy = 20000.0 /"// &
+         new_line('a')// &
+         "&mpi_nml px = "//trim(spx)//", py = "//trim(spy)//" /"//new_line('a')// &
+         "&ocean_bt_nml bt_halo = "//trim(sh)//" /"//new_line('a'), cfg, ierr=ierr)
+      cfg%ocean%bc%north = "tripolar_fold"
+      call validate_config(cfg, ierr=ierr)
+      call check(error, (ierr == OCEAN_STATUS_OK) .eqv. want_ok, &
+                 "tripolar_fold tile-fit boundary: "//what//merge(" must be accepted", " must be refused ", want_ok))
+   end subroutine fold_fit
 
    subroutine test_bt_halo_auto_exclusion(error)
       !! The exclusion detector mirrors validate_config's explicit-bt_halo>0 set.
@@ -531,50 +704,27 @@ contains
       if (allocated(error)) return
       cfg%ocean%wetdry%enable = .false.
 
+      ! Lifted by the owner-filled wide fields and the wide `eta_forcing`:
+      ! tides, psurf, porous barriers, a tidal edge, a supergrid are NOT
+      ! exclusions any more (bitwise cases `bthx_*` in
+      ! test_ocean_decomp_bitid_mpi).
       cfg%ocean%tides%enable = .true.
+      cfg%ocean%psurf%enable = .true.
+      cfg%ocean%porous%enable = .true.
+      cfg%ocean%bc%west = "tidal"
+      cfg%ocean%grid%grid_config = "supergrid"
       call bt_halo_auto_exclusion(cfg, excluded, reason)
-      call check(error, excluded, "tides enable not detected as exclusion")
+      call check(error,.not. excluded, "tides/psurf/porous/tidal edge/supergrid wrongly excluded")
       if (allocated(error)) return
       cfg%ocean%tides%enable = .false.
-
-      ! Surface-pressure loading rides the SAME `eta_forcing` seam as the
-      ! body tide, and the wide-halo BT clone carries no copy of it — so
-      ! `run_stage_split` `error stop`s on `bt_halo > 0` with an
-      ! `eta_forcing` actual.  validate_config only polices that under an
-      ! EXPLICIT `bt_halo > 0`; AUTO must resolve to 0 here or a default
-      ! multi-rank psurf run passes validation and dies at the runtime
-      ! backstop.
-      cfg%ocean%psurf%enable = .true.
-      call bt_halo_auto_exclusion(cfg, excluded, reason)
-      call check(error, excluded, "psurf enable not detected as exclusion")
-      if (allocated(error)) return
-      call check(error, resolve_bt_halo(BT_HALO_AUTO_SENTINEL, 4, excluded) == 0, &
-                 "psurf + auto bt_halo on 4 ranks must resolve to 0, not the "// &
-                 "wide-halo march-in")
-      if (allocated(error)) return
       cfg%ocean%psurf%enable = .false.
-
-      ! Porous barriers: `bt_wide` re-fills its own `metrics_w` from the
-      ! grid formula and nothing gives it the porous statistics, so the
-      ! wide fast loop would silently transport on the UN-narrowed
-      ! `dy_cu`/`dx_cv` — an answer that is neither the porous one nor the
-      ! baseline.  AUTO must therefore resolve to 0 with porous on.
-      cfg%ocean%porous%enable = .true.
-      call bt_halo_auto_exclusion(cfg, excluded, reason)
-      call check(error, excluded, "porous enable not detected as exclusion")
-      if (allocated(error)) return
-      call check(error, resolve_bt_halo(BT_HALO_AUTO_SENTINEL, 4, excluded) == 0, &
-                 "porous + auto bt_halo on 4 ranks must resolve to 0, not the "// &
-                 "wide-halo march-in")
-      if (allocated(error)) return
       cfg%ocean%porous%enable = .false.
+      cfg%ocean%bc%west = "wall"
+      cfg%ocean%grid%grid_config = "cartesian"
 
-      ! Ice-shelf cavity: `bt_wide`'s own `metrics_w` is re-filled from the
-      ! grid formula and carries no `z_draft`, so the wide fast loop would
-      ! take the BED as its reference depth — a 1000 m ocean where the
-      ! cavity has 500 m of water under 500 m of ice.  AUTO must resolve
-      ! to 0 rather than manufacture a width that then trips the explicit
-      ! abort the user never asked for.
+      ! Ice-shelf cavity: the wide BT solve is not proven against the
+      ! ice-base datum.  AUTO must resolve to 0 rather than manufacture a
+      ! width that then trips the explicit refusal the user never asked for.
       cfg%ocean%cavity_dyn%enable = .true.
       call bt_halo_auto_exclusion(cfg, excluded, reason)
       call check(error, excluded, "cavity_dyn enable not detected as exclusion")
@@ -585,9 +735,11 @@ contains
       if (allocated(error)) return
       cfg%ocean%cavity_dyn%enable = .false.
 
+      ! The tripolar fold is no longer an exclusion (the wide band folds).
       cfg%ocean%grid%grid_config = "tripolar"
+      cfg%ocean%bc%north = "tripolar_fold"
       call bt_halo_auto_exclusion(cfg, excluded, reason)
-      call check(error, excluded, "tripolar grid_config not detected as exclusion")
+      call check(error,.not. excluded, "tripolar fold wrongly flagged as an exclusion")
    end subroutine test_bt_halo_auto_exclusion
 
    subroutine test_ice_hlim_count_leading_run(error)

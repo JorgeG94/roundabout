@@ -216,9 +216,31 @@
 !! nghost = 3 (weno7_pv: 26 x 24, nghost = 5): every factorisation above is
 !! uneven somewhere.
 !!
-!! The barotropic march-in (`&ocean_bt_nml bt_halo > 0`) is NOT covered: it
-!! is opt-in precisely because it is not bit-identical to the serial run over
-!! variable bathymetry or with open boundaries (see `resolve_bt_halo`).
+!! The barotropic WIDE-HALO march-in (`&ocean_bt_nml bt_halo > 0`) is covered by
+!! the `bth_<geometry>_w<W>[_b0]` cases: geometry `seamount` (closed walls over
+!! variable bathymetry), `channel` (periodic seamount channel) or `spherical`
+!! (lon-lat sector); `W` = 2, 4 or 8; `_b0` = `bebt = 0` (default 0.1
+!! otherwise).  Every decomposed run uses `bt_halo = W` and is compared with
+!! the 1-rank `bt_halo = 0` reference (contract: N ranks at W == 1 rank at 0),
+!! on a 48 x 32 grid with `n_inner = 40` (>= 4 in-loop wide exchange cycles
+!! per BT solve at every W; asserted through the halo counters so a case
+!! cannot pass vacuously).  A factorisation whose smallest tile is narrower
+!! than `nghost + W` is skipped with a line saying so.  Each mismatching
+!! field of these cases also prints a `[where]` line: mismatching-cell
+!! count, max abs difference, distance (cells) to the nearest rank seam, and
+!! `n_inner`.  Dev switch `RDB_BITID_BTH_NOCHAIN=1` runs them with
+!! `visc_rem_chain = .false.` on both legs (the chain-off behaviour);
+!! `RDB_BITID_BTH_STEPS=<n>` overrides their step count (the first-step view).
+!! The `bthx_{flather,island}_w<W>[_b0]` cases (a Flather open east edge, an
+!! interior land block in the wide band) cover configurations the march-in
+!! already accepts and was measured bitwise on; W = 4, 8.
+!!
+!! `bth_trip_w<W>[_b0]` and `bthx_tripsea_w<W>[_b0]` run the march-in across the
+!! TRIPOLAR north fold (analytic cap closed by the fold, periodic x; double-drake
+!! land walls reaching the fold line, resp. a seamount in the cap): `px = 1`
+!! layouts fold locally, `px > 1` layouts through the owner-routed fold on a plan
+!! built for `nghost + W`.  A layout is skipped when the smallest tile is not
+!! taller (and, under `px > 1`, wider) than `nghost + W`.
 !!
 !! The EXPERIMENTAL in-halo march (`&ocean_bt_nml inhalo_march`) is a dev axis
 !! of this test: `RDB_BITID_INHALO=1` turns it on for the DECOMPOSED runs only
@@ -241,7 +263,9 @@ program test_ocean_decomp_bitid_mpi
    use rdb_config, only: config_t, read_config_from_string, validate_config
    use rdb_ocean_status, only: OCEAN_STATUS_OK
    use rdb_error_ring, only: error_ring_clear, error_ring_count, error_ring_get
-   use rdb_ocean_halo_counters, only: oh_counters_reset, oh_counters_format
+   use rdb_ocean_halo_counters, only: oh_counters_reset, oh_counters_format, oh_counters_get, &
+                                      oh_counters_packed
+   use rdb_barotropic_substep, only: bt_wide_cycle_len
    use rdb_ocean_engine, only: ocean_engine_t, engine_setup, engine_enter_data, &
                                engine_step, engine_step_ice, engine_step_finalize, &
                                engine_exit_data, &
@@ -257,7 +281,9 @@ program test_ocean_decomp_bitid_mpi
    use rdb_ocean_dyn, only: SPLIT_SCHEME_PRED_CORR
    use rdb_ocean_balance, only: BALANCE_GEOSTROPHIC, ocean_balance_velocity
    use rdb_ocean_reinit, only: ocean_balance_apply
-   use rdb_ocean_fold_exchange, only: ocean_fold_exchange_grow_count
+   use rdb_ocean_fold_exchange, only: ocean_fold_exchange_grow_count, ocean_fold_exchange_calls, &
+                                      ocean_fold_exchange_calls_reset, ocean_fold_ctx_is_distributed, &
+                                      FOLD_CTX_WIDE
 #ifndef RDB_NO_NETCDF
    use rdb_io_netcdf, only: nc_create_file, nc_close, nc_def_dim, nc_def_var_2d, &
                             nc_def_var_3d, nc_enddef, nc_put_var_2d, rdb_def_var_1d, &
@@ -267,6 +293,8 @@ program test_ocean_decomp_bitid_mpi
 #endif
    implicit none
 
+   integer, parameter :: BTH_NX = 48, BTH_NY = 32, BTH_NINNER = 40
+      !! Wide-halo (`bth_*`) cases: global grid and the fixed `n_inner`.
    integer, parameter :: NX_G = 26
    integer, parameter :: NY_G = 18
    integer, parameter :: N_STEPS = 48
@@ -279,6 +307,10 @@ program test_ocean_decomp_bitid_mpi
    real(wp), parameter :: DT = 900.0_wp
    integer, parameter :: MAXF = 128
    character(len=*), parameter :: SG_FILE = "bitid_supergrid.nc"
+   character(len=*), parameter :: SGB_FILE = "bitid_supergrid_bth.nc"
+      !! Non-periodic lon-lat supergrid on the `bthx_super_*` grid (written by rank 0).
+   character(len=*), parameter :: COAST_FILE = "bitid_coast_bathy.nc"
+      !! The `bthx_coast_*` bathymetry (land touching the open east edge), rank 0.
    character(len=*), parameter :: BATHY_FILE = "bitid_bathy.nc"
    character(len=*), parameter :: WD_BATHY_FILE = "bitid_wd_bathy.nc"
    character(len=*), parameter :: WDT_BATHY_FILE = "bitid_wdt_bathy.nc"
@@ -328,6 +360,14 @@ program test_ocean_decomp_bitid_mpi
       integer :: ncav(6) = 0
          !! Cavity non-vacuity counts over the OWNED cells: covered wet, open wet,
          !! grounded, melting, top-drag stress > 0, k_top < nz.
+      integer(int64) :: cnt_bt_group = 0_int64, cnt_bt_u = 0_int64, cnt_pk = 0_int64, cnt_c2d = 0_int64, &
+                        cnt_fx2 = 0_int64, cnt_fy2 = 0_int64
+         !! Halo counters of the run (`bt_group` calls, mid-substep u exchanges,
+         !! packed, centre-2D and face-2D exchanges).
+      integer(int64) :: cnt_fold_wide = 0_int64
+         !! Owner-routed fold groups exchanged on the wide plan (this rank).
+      logical :: fold_wide_active = .false.
+         !! This rank folds through the wide owner-routed plan (north rank row, `px > 1`).
       type(conservation_budget_t) :: bud
          !! Closed-budget mass/salt/heat out+src totals at the final step —
          !! EFP-reduced (`reproducing_sums`, default on), so these must be
@@ -345,51 +385,91 @@ program test_ocean_decomp_bitid_mpi
       !! Steps `run_one` takes; 0 for the `*_t0` labels (compare the seeded IC itself).
    character(len=256) :: case_filter = ""
    integer :: inhalo_mode = 0, inhalo_stride_env = 0, ninner_env = 0
+   logical :: bth_ref_leg = .false.
+      !! .true. while `case_nml` builds the 1-rank `bt_halo = 0` REFERENCE of a
+      !! `bth*` case: every other run of the case (decomposed, and the 1x1 run
+      !! of a one-rank launch) carries `bt_halo = W`, so at np = 1 the case
+      !! compares `bt_halo = W` against `bt_halo = 0` (the 1-rank identity)
+      !! instead of running the same namelist twice.
+   integer :: bth_nochain_env = 0, bth_steps_env = 0, bth_poison_env = 0, &
+              bth_ring_env = 0
+      !! `RDB_BITID_BTH_NOCHAIN=1`: the `bth_*` cases run with `visc_rem_chain = .false.`.
+   logical :: where_report = .false.
+      !! Set per case (the `bth_*` family): `compare` also prints the `[where]` lines.
+   integer :: cur_n_inner = 0
+      !! `n_inner` of the case under way (for the `[where]` lines).
    logical :: print_counts = .false.
       !! `RDB_BITID_INHALO` (0 off, 1 decomposed runs only, 2 both, 3 reference only),
       !! `RDB_BITID_INHALO_STRIDE`, `RDB_BITID_NINNER`: in-halo march axes.
       !! `RDB_BITID_CASES`: run only the cases whose name contains this substring.
    type(comm_t) :: comm
    character(len=16), parameter :: SCHEMES(2) = [character(len=16) :: "pred_corr", "ssp_rk2"]
-   character(len=24), parameter :: CASES(85) = [character(len=24) :: &
-                                                "island_basin", "weno7_pv", &
-                                                "periodic_channel_zstar", &
-                                                "visc_rem_zstar", &
-                                                "periodic_sponge", &
-                                                "open_obc", "spherical", "obc_radiation_sponge", "obc_sponge_east", &
-                                                "closures", "file_readers", &
-                                                "file_readers_zstar_full", &
-                                                "file_readers_zstar", "sea_ice", &
-                                                "sea_ice_transport", "tripolar", &
-                                                "visc_rem_chain", "sea_ice_fold", &
-                                                "sea_ice_fold_nodyn", "sss_restore", &
-                                                "gm_ebt_struct", "gm_fgnv", "meke_gm_work", &
-                                                "hvisc_om3_floors", "vmix_no_interior", &
-                                                "redi_cfl_fold", "tidal_files", &
-                                                "tidal_polzin", "bbl_lotw", "tracer_ppm_h3", "body_tide_nodal", &
-                                                "hvisc_kh_points", "diabatic_end", &
-                                                "hvisc_thin_layer", "hvisc_biharm_stress", &
-                                                "balanced_vortex_t0", "balanced_vortex", &
-                                                "balance_rest_t0", "balance_keep_t0", &
-                                                "balance_rest", &
-                                                "drain_ratio", "drain_ratio_h3", &
-                                                "drain_ratio_weno5", "drain_ratio_weno7", &
-                                                "drain_ratio_weno9", "drain_ratio_fold", &
-                                                "drain_ratio_fold_h3", "eulz", "eulz_periodic", &
-                                                "eulz_tripolar", "eulz_epbl_mle", "bulk_flux", &
-                                                "bulk_flux_ice", "bulk_flux_fold", "bulk_flux_sw", "bulk_flux_bl", &
-                                                "bulk_flux_bl_epbl", "bulk_flux_bl_sw", "bulk_flux_bl_fold", &
-                                                "bulk_flux_bl_ratio2", "manizza", "dtbt_reset", &
-                                                "dtbt_reset_period", &
-                                                "cavity_zfixed", "cavity_sigma", &
-                                                "cavity_sigma_ratio2", "cavity_gall", "cavity_melt_only", "cavity_periodic", &
-                                                "cavity_combo", "wetdry_shoal", &
-                                                "wetdry_periodic", "wetdry_file", "chapman_obc", "obc_epbl", &
-                                                "wetdry_tidal_flat", "wetdry_open_flat", &
-                                                "cavity_mass", "cavity_mass_comp", &
-                                                "wave_drag_rough", "wave_drag_rough_periodic", &
-                                                "perx_open_south", "perx_clamped_south", &
-                                                "pery_open_west", "perxy_fplane"]
+   character(len=24), parameter :: CASES(144) = [character(len=24) :: &
+                                                 "island_basin", "weno7_pv", &
+                                                 "periodic_channel_zstar", &
+                                                 "visc_rem_zstar", &
+                                                 "periodic_sponge", &
+                                                 "open_obc", "spherical", "obc_radiation_sponge", "obc_sponge_east", &
+                                                 "closures", "file_readers", &
+                                                 "file_readers_zstar_full", &
+                                                 "file_readers_zstar", "sea_ice", &
+                                                 "sea_ice_transport", "tripolar", &
+                                                 "visc_rem_chain", "sea_ice_fold", &
+                                                 "sea_ice_fold_nodyn", "sss_restore", &
+                                                 "gm_ebt_struct", "gm_fgnv", "meke_gm_work", &
+                                                 "hvisc_om3_floors", "vmix_no_interior", &
+                                                 "redi_cfl_fold", "tidal_files", &
+                                                 "tidal_polzin", "bbl_lotw", "tracer_ppm_h3", "body_tide_nodal", &
+                                                 "hvisc_kh_points", "diabatic_end", &
+                                                 "hvisc_thin_layer", "hvisc_biharm_stress", &
+                                                 "balanced_vortex_t0", "balanced_vortex", &
+                                                 "balance_rest_t0", "balance_keep_t0", &
+                                                 "balance_rest", &
+                                                 "drain_ratio", "drain_ratio_h3", &
+                                                 "drain_ratio_weno5", "drain_ratio_weno7", &
+                                                 "drain_ratio_weno9", "drain_ratio_fold", &
+                                                 "drain_ratio_fold_h3", "eulz", "eulz_periodic", &
+                                                 "eulz_tripolar", "eulz_epbl_mle", "bulk_flux", &
+                                                 "bulk_flux_ice", "bulk_flux_fold", "bulk_flux_sw", "bulk_flux_bl", &
+                                                 "bulk_flux_bl_epbl", "bulk_flux_bl_sw", "bulk_flux_bl_fold", &
+                                                 "bulk_flux_bl_ratio2", "manizza", "dtbt_reset", &
+                                                 "dtbt_reset_period", &
+                                                 "cavity_zfixed", "cavity_sigma", &
+                                                 "cavity_sigma_ratio2", "cavity_gall", "cavity_melt_only", "cavity_periodic", &
+                                                 "cavity_combo", "wetdry_shoal", &
+                                                 "wetdry_periodic", "wetdry_file", "chapman_obc", "obc_epbl", &
+                                                 "wetdry_tidal_flat", "wetdry_open_flat", &
+                                                 "bth_seamount_w2", "bth_seamount_w4", "bth_seamount_w8", &
+                                                 "bth_seamount_w2_b0", "bth_seamount_w4_b0", "bth_seamount_w8_b0", &
+                                                 "bth_channel_w2", "bth_channel_w4", "bth_channel_w8", &
+                                                 "bth_channel_w2_b0", "bth_channel_w4_b0", "bth_channel_w8_b0", &
+                                                 "bth_spherical_w2", "bth_spherical_w4", "bth_spherical_w8", &
+                                                 "bth_spherical_w2_b0", "bth_spherical_w4_b0", "bth_spherical_w8_b0", &
+                                                 "bthx_flather_w4", "bthx_flather_w8", &
+                                                 "bthx_flather_w4_b0", "bthx_flather_w8_b0", &
+                                                 "bthx_island_w4", "bthx_island_w8", &
+                                                 "bthx_island_w4_b0", "bthx_island_w8_b0", &
+                                                 "bthx_coast_w4", "bthx_coast_w8", "bthx_coast_w4_b0", &
+                                                 "bthx_ffull_w4", "bthx_ffull_w8", &
+                                                 "bthx_tidal_w4", "bthx_tidal_w8", &
+                                                 "bthx_tides_w4", "bthx_tides_w8", &
+                                                 "bthx_psurf_w4", &
+                                                 "bthx_super_w4", "bthx_super_w8", &
+                                                 "bthx_porous_w4", "bthx_porous_w8", &
+                                                 "bthx_zfixed_w4", "bthx_zfixed_w8", &
+                                                 "cavity_mass", "cavity_mass_comp", &
+                                                 "perx_open_south", "perx_clamped_south", &
+                                                 "pery_open_west", "perxy_fplane", &
+                                                 "bthx_perxo_w4", "bthx_perxo_w8", &
+                                                 "bthx_perxc_w4", "bthx_perxc_w8", &
+                                                 "bthx_peryo_w4", "bthx_perxy_w4", &
+                                                 "bth_trip_w2", "bth_trip_w4", "bth_trip_w8", &
+                                                 "bth_trip_w4_b0", "bth_trip_w8_b0", &
+                                                 "bthx_tripsea_w4", "bthx_tripsea_w8", &
+                                                 "bthx_tripsea_w4_b0", &
+                                                 "bthx_trip_tides_w4", "bthx_trip_porous_w4", &
+                                                 "bthx_trip_zfixed_w4", &
+                                                 "wave_drag_rough", "wave_drag_rough_periodic"]
 
    call comm_env_init()
    call comm_env_setup_roles(.false.)
@@ -407,6 +487,10 @@ program test_ocean_decomp_bitid_mpi
    call env_int("RDB_BITID_INHALO", inhalo_mode)
    call env_int("RDB_BITID_INHALO_STRIDE", inhalo_stride_env)
    call env_int("RDB_BITID_NINNER", ninner_env)
+   call env_int("RDB_BITID_BTH_NOCHAIN", bth_nochain_env)
+   call env_int("RDB_BITID_BTH_STEPS", bth_steps_env)
+   call env_int("RDB_BT_INHALO_POISON", bth_poison_env)
+   call env_int("RDB_BT_RING_POISON", bth_ring_env)
    block
       integer :: pc
       pc = 0
@@ -441,8 +525,14 @@ program test_ocean_decomp_bitid_mpi
       call run_case(trim(CASES(ic)), trim(SCHEMES(2)))
    end do
 
-   if (nprocs >= 2) call check_single_rank_fences()
-   if (nprocs >= 2) call check_balance_fold_refusal()
+   ! The WILL_FAIL poison legs (cycle-break `RDB_BT_INHALO_POISON >= 2000`,
+   ! north-ring liveness `RDB_BT_RING_POISON /= 0` on `bth_trip_w4`) must fail
+   ! through their own case's mismatch, not through an unrelated fence check:
+   ! skip the case-independent fences there.  The plain legs still run them.
+   if (nprocs >= 2 .and. bth_poison_env < 2000 .and. bth_ring_env == 0) then
+      call check_single_rank_fences()
+      call check_balance_fold_refusal()
+   end if
    if (len_trim(case_filter) == 0 .or. index("cavity_grounded_refused", trim(case_filter)) > 0) &
       call check_cavity_grounded_refusal()
 
@@ -498,6 +588,52 @@ contains
       if (ios == 0) val = v
    end subroutine env_int
 
+   pure logical function is_bth_case(label)
+      !! The wide-halo (`bt_halo`) axis: `bth_<geometry>_w<W>[_b0]`, plus the
+      !! `bthx_*` cases (Flather open edge, land in the wide band).
+      character(len=*), intent(in) :: label
+      is_bth_case = index(label, "bth_") == 1 .or. index(label, "bthx_") == 1
+   end function is_bth_case
+
+   pure integer function bth_width(label)
+      !! `W` of a `bth_*` label (the digit after `_w`).
+      character(len=*), intent(in) :: label
+      integer :: p
+      p = index(label, "_w")
+      bth_width = 0
+      if (p > 0) read (label(p + 2:p + 2), '(i1)') bth_width
+   end function bth_width
+
+   pure integer function bth_width_eff(label)
+      !! The width the engine actually marches: `bt_halo` rounded DOWN to an
+      !! even number (`bt_halo - mod(bt_halo, 2)`).  Tile-fit and cadence rules
+      !! use this, not the label's `W`.
+      character(len=*), intent(in) :: label
+      bth_width_eff = bth_width(label) - mod(bth_width(label), 2)
+   end function bth_width_eff
+
+   pure integer function bth_fold_extra(label)
+      !! The tripolar `bth*` cases need tiles of at least nghost + W + 1 cells
+      !! (the fold reads W + nghost rows below the fold line / mirror columns).
+      character(len=*), intent(in) :: label
+      bth_fold_extra = 0
+      if (is_bth_case(label) .and. index(label, "_trip") > 0) bth_fold_extra = 1
+   end function bth_fold_extra
+
+   pure logical function bth_b0(label)
+      character(len=*), intent(in) :: label
+      bth_b0 = len(label) > 3
+      if (bth_b0) bth_b0 = label(len(label) - 2:) == "_b0"
+   end function bth_b0
+
+   pure function itoa(i) result(r)
+      integer, intent(in) :: i
+      character(len=:), allocatable :: r
+      character(len=16) :: b
+      write (b, '(i0)') i
+      r = trim(b)
+   end function itoa
+
    function case_nml(label, scheme, px, py) result(nml)
       !! The namelist of one case on a px x py process grid.
       character(len=*), intent(in) :: label, scheme
@@ -533,6 +669,14 @@ contains
       if (label == "dtbt_reset") bt_head = "dtbt = "//DTBT_FRAC//", dtbt_reset_period = 0.0, "
       if (label == "dtbt_reset_period") bt_head = "dtbt = "//DTBT_FRAC//", dtbt_reset_period = 3600.0, "
       if (label == "visc_rem_zstar") bt_extra = ", visc_rem_chain = .true."
+      if (is_bth_case(label)) then
+         ! Wide-halo axis: fixed n_inner (>= 4 in-loop exchange cycles at every W),
+         ! bt_halo on the DECOMPOSED runs only, bebt 0 on the `_b0` twins.
+         bt_head = "auto_n_inner = .false., n_inner = "//itoa(BTH_NINNER)//", "
+         if (.not. bth_ref_leg) bt_extra = bt_extra//", bt_halo = "//itoa(bth_width(label))
+         if (bth_b0(label)) bt_extra = bt_extra//", bebt = 0.0"
+         if (bth_nochain_env /= 0) bt_extra = bt_extra//", visc_rem_chain = .false."
+      end if
       ! The periodic-edge cases need more than two substeps per solve: the
       ! corner they pin reaches the owned cells from the third substep on.
       if (label == "perx_open_south" .or. label == "perx_clamped_south" .or. &
@@ -589,6 +733,10 @@ contains
       write (sny, '(i0)') NY_G
       snz = "4"
       if (label == "manizza") snz = "8"
+      if (is_bth_case(label)) then
+         snx = itoa(BTH_NX)
+         sny = itoa(BTH_NY)
+      end if
       ! weno9 needs nghost = 5: widen the grid so the np = 4 layouts (1x4 ->
       ! ny/4 rows, 4x1 -> nx/4 columns) stay at least nghost wide.
       if (label == "drain_ratio_weno9") then
@@ -773,6 +921,236 @@ contains
          else
             nml = nml//"&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
          end if
+      case ("bth_seamount_w2", "bth_seamount_w4", "bth_seamount_w8", &
+            "bth_seamount_w2_b0", "bth_seamount_w4_b0", "bth_seamount_w8_b0", &
+            "bth_channel_w2", "bth_channel_w4", "bth_channel_w8", &
+            "bth_channel_w2_b0", "bth_channel_w4_b0", "bth_channel_w8_b0")
+         ! Wide-halo march-in geometries: a seamount over variable bathymetry,
+         ! closed on four walls (`seamount`) or re-entrant west/east (`channel`).
+         nml = common// &
+               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
+               "dx = 20000.0, dy = 20000.0 /"//NL// &
+               "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 0.1 /"//NL// &
+               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
+               "&ocean_topo_nml topo_config = 'seamount', max_depth = 2000.0, "// &
+               "edge_depth = 1500.0, slope_scale = 60000.0 /"//NL
+         if (index(label, "bth_channel") == 1) then
+            nml = nml//"&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
+                  "north = 'wall' /"//NL
+         else
+            nml = nml//"&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
+         end if
+      case ("bth_spherical_w2", "bth_spherical_w4", "bth_spherical_w8", &
+            "bth_spherical_w2_b0", "bth_spherical_w4_b0", "bth_spherical_w8_b0")
+         ! Wide-halo march-in on a lon-lat sector (seamount, Wright EOS).
+         nml = common// &
+               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
+               "dx = 0.2, dy = 0.2 /"//NL// &
+               "&ocean_grid_nml grid_config = 'spherical', lon_west = 0.0, lat_south = 20.0, "// &
+               "rad_earth = 6.371e6, coriolis_scheme = 'planetary' /"//NL// &
+               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
+               "&ocean_eos_nml eos = 'wright' /"//NL// &
+               "&ocean_topo_nml topo_config = 'seamount', max_depth = 2000.0, "// &
+               "edge_depth = 1500.0, slope_scale = 60000.0, wind_config = '2gyre', "// &
+               "taux_magnitude = 0.1 /"//NL// &
+               "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
+      case ("bth_trip_w2", "bth_trip_w4", "bth_trip_w8", "bth_trip_w4_b0", "bth_trip_w8_b0", &
+            "bthx_tripsea_w4", "bthx_tripsea_w8", "bthx_tripsea_w4_b0")
+         ! Wide-halo march-in across the TRIPOLAR north fold (Murray 1996 bipolar
+         ! cap above 74N, closed by the fold, periodic x).  `bth_trip`: the
+         ! double-drake land walls reach the fold line at asymmetric columns
+         ! (1 and nx/4 mirror to nx and 3nx/4+1), a meridional + zonal stress
+         ! drives flow INTO the fold row.  `bthx_tripsea`: a seamount over
+         ! variable bathymetry sits in the cap, so the fold-line depths and
+         ! the wide band's static fields differ column by column.  Real-size
+         ! planet (the fixed `n_inner` must hold the gravity-wave CFL).
+         nml = common// &
+               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
+               "dx = 7.5, dy = 0.75 /"//NL// &
+               "&ocean_grid_nml grid_config = 'tripolar', lon_west = 0.0, lat_south = 59.0, "// &
+               "phi_join = 74.0, lon_pole = 0.0, rad_earth = 6.371e6, "// &
+               "coriolis_scheme = 'planetary' /"//NL// &
+               "&physics_nml wind_stress_x = 0.3, wind_stress_y = 0.3 /"//NL// &
+               "&vcoord_nml vcoord_type = 'sigma' /"//NL
+         if (index(label, "bthx_tripsea") == 1) then
+            nml = nml//"&ocean_topo_nml topo_config = 'seamount', max_depth = 2000.0, "// &
+                  "edge_depth = 1500.0, slope_scale = 600000.0 /"//NL
+         else
+            nml = nml//"&ocean_topo_nml topo_config = 'double_drake', max_depth = 1000.0, "// &
+                  "slope_scale = 0.2 /"//NL
+         end if
+         nml = nml//"&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
+               "north = 'tripolar_fold' /"//NL
+      case ("bthx_trip_tides_w4", "bthx_trip_porous_w4", "bthx_trip_zfixed_w4")
+         ! The fold composed with the per-solve wide traffic: an equilibrium body
+         ! tide (`eta_forcing` copied in and exchanged once per solve, with the
+         ! fold folding the band every substep), porous barriers and z-level
+         ! closed faces (the two BT widths re-copied and re-exchanged once per
+         ! solve).  Same tripolar cap as `bthx_tripsea` (seamount in the cap).
+         nml = common// &
+               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
+               "dx = 7.5, dy = 0.75 /"//NL// &
+               "&ocean_grid_nml grid_config = 'tripolar', lon_west = 0.0, lat_south = 59.0, "// &
+               "phi_join = 74.0, lon_pole = 0.0, rad_earth = 6.371e6, "// &
+               "coriolis_scheme = 'planetary' /"//NL// &
+               "&physics_nml wind_stress_x = 0.3, wind_stress_y = 0.3 /"//NL
+         if (index(label, "_zfixed_") > 0) then
+            nml = nml//"&vcoord_nml vcoord_type = 'z_fixed', zfixed_closed_faces = .true. /"//NL// &
+                  "&ocean_vmix_nml use_kpp = .false. /"//NL// &
+                  "&ocean_topo_nml topo_config = 'seamount', max_depth = 2000.0, "// &
+                  "edge_depth = 300.0, slope_scale = 600000.0 /"//NL
+         else if (index(label, "_porous_") > 0) then
+            nml = nml//"&vcoord_nml vcoord_type = 'zstar' /"//NL// &
+                  "&ocean_porous_nml enable = .true. /"//NL// &
+                  "&ocean_topo_nml topo_config = 'seamount', max_depth = 2000.0, "// &
+                  "edge_depth = 1500.0, slope_scale = 600000.0 /"//NL
+         else
+            nml = nml//"&vcoord_nml vcoord_type = 'sigma' /"//NL// &
+                  "&ocean_tides_nml enable = .true., constituents = 'M2,S2,K1,O1', "// &
+                  "ref_date = '2020-03-15', add_nodal = .true. /"//NL// &
+                  "&ocean_topo_nml topo_config = 'seamount', max_depth = 2000.0, "// &
+                  "edge_depth = 1500.0, slope_scale = 600000.0 /"//NL
+         end if
+         nml = nml//"&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
+               "north = 'tripolar_fold' /"//NL
+      case ("bthx_flather_w4", "bthx_flather_w8", "bthx_flather_w4_b0", "bthx_flather_w8_b0")
+         ! Wide march-in with a Flather open east edge over the
+         ! seamount.  (A tidal west edge was measured O(1) wrong -- the wide fast
+         ! loop carries no model time -- and is now refused at configure; the
+         ! stage that lifts it re-adds a `bthx_tidal_*` pair here.)
+         nml = common// &
+               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
+               "dx = 20000.0, dy = 20000.0 /"//NL// &
+               "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 0.1 /"//NL// &
+               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
+               "&ocean_topo_nml topo_config = 'seamount', max_depth = 2000.0, "// &
+               "edge_depth = 1500.0, slope_scale = 60000.0 /"//NL
+         nml = nml//"&ocean_bc_nml west = 'wall', east = 'open', south = 'wall', north = 'wall' /"//NL
+      case ("bthx_island_w4", "bthx_island_w8", "bthx_island_w4_b0", "bthx_island_w8_b0")
+         ! Interior land block (static land mask) in the wide band.
+         nml = common// &
+               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
+               "dx = 20000.0, dy = 20000.0 /"//NL// &
+               "&physics_nml coriolis_f = 1.0e-4 /"//NL// &
+               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
+               "&ocean_topo_nml topo_config = 'island', max_depth = 1000.0, "// &
+               "slope_scale = 0.15, wind_config = '2gyre', taux_magnitude = 0.1, "// &
+               "coriolis_beta = 2.0e-11 /"//NL// &
+               "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
+      case ("bthx_coast_w4", "bthx_coast_w8", "bthx_coast_w4_b0")
+         ! LAND TOUCHING A FLATHER EDGE: file bathymetry whose land peninsulas
+         ! meet the open east edge.  The model's metrics are zeroed at the land
+         ! faces (and its wall-ghost rows are masked); the wide clone's must be
+         ! the same numbers, or the open-edge overwrite carries flux through the
+         ! unmasked widths (measured: u 1.3e-4 at the land faces, every field,
+         ! also at 1x1).
+         nml = common// &
+               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
+               "dx = 20000.0, dy = 20000.0 /"//NL// &
+               "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 0.1 /"//NL// &
+               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
+               "&ocean_topo_nml topo_config = 'file', max_depth = 3000.0 /"//NL// &
+               "&output_nml bathymetry_file = '"//COAST_FILE//"', output_to_file = .false. /"//NL// &
+               "&ocean_bc_nml west = 'wall', east = 'open', south = 'wall', north = 'wall' /"//NL
+      case ("bthx_ffull_w4", "bthx_ffull_w8")
+         ! Full-Flather open edge (cfl = dt*Cg*idx_cu at the edge face, which in
+         ! the corner ghost row reads the model's wall-ghost metric).
+         nml = common// &
+               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
+               "dx = 20000.0, dy = 20000.0 /"//NL// &
+               "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 0.1 /"//NL// &
+               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
+               "&ocean_topo_nml topo_config = 'seamount', max_depth = 2000.0, "// &
+               "edge_depth = 1500.0, slope_scale = 60000.0 /"//NL// &
+               "&ocean_bc_nml west = 'wall', east = 'open', flather_form = 'full', "// &
+               "east_ext_u = 0.02, south = 'wall', north = 'wall' /"//NL
+      case ("bthx_tidal_w4", "bthx_tidal_w8")
+         ! Tidal west edge (eta target at the model time) + Flather east edge.
+         nml = common// &
+               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
+               "dx = 20000.0, dy = 20000.0 /"//NL// &
+               "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 0.05 /"//NL// &
+               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
+               "&ocean_topo_nml topo_config = 'seamount', max_depth = 2000.0, "// &
+               "edge_depth = 1500.0, slope_scale = 60000.0 /"//NL// &
+               "&ocean_bc_nml west = 'tidal', east = 'open', south = 'wall', north = 'wall', "// &
+               "west_n_tidal = 2, west_tidal_amp = 0.5, 0.2, west_tidal_phase = 0.0, 1.0, "// &
+               "west_tidal_omega = 1.4051890e-4, 1.4544410e-4 /"//NL
+      case ("bthx_tides_w4", "bthx_tides_w8")
+         ! Equilibrium body tide (the `eta_forcing` seam) on a lon-lat sector,
+         ! with a tidal west edge: the wide solve copies in and exchanges
+         ! `eta_forcing` once per solve and receives the model time.
+         nml = common// &
+               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
+               "dx = 0.2, dy = 0.2 /"//NL// &
+               "&ocean_grid_nml grid_config = 'spherical', lon_west = 0.0, lat_south = 20.0, "// &
+               "rad_earth = 6.371e6, coriolis_scheme = 'planetary' /"//NL// &
+               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
+               "&ocean_eos_nml eos = 'wright' /"//NL// &
+               "&ocean_topo_nml topo_config = 'seamount', max_depth = 2000.0, "// &
+               "edge_depth = 1500.0, slope_scale = 60000.0, wind_config = '2gyre', "// &
+               "taux_magnitude = 0.1 /"//NL// &
+               "&ocean_bc_nml west = 'tidal', east = 'wall', south = 'wall', "// &
+               "north = 'wall', west_n_tidal = 4, "// &
+               "west_tidal_amp = 0.4, 0.2, 0.1, 0.08, "// &
+               "west_tidal_phase = 0.3, 1.1, 2.0, 4.0, "// &
+               "west_tidal_omega = 1.4051890e-4, 1.4544410e-4, 0.7292117e-4, 0.6759774e-4, "// &
+               "obc_tidal_nodal = .true. /"//NL// &
+               "&ocean_tides_nml enable = .true., constituents = 'M2,S2,K1,O1', "// &
+               "ref_date = '2020-03-15', add_nodal = .true. /"//NL
+      case ("bthx_psurf_w4")
+         ! Surface-pressure loading rides the same `eta_forcing` seam.  The load
+         ! here is UNIFORM (no file-free non-uniform path exists), and the kernel
+         ! reads only differences of eta_forcing, so this case CANNOT fail on the
+         ! wide eta_forcing VALUES: it only runs the path.  `bthx_tides_*` (a
+         ! body tide varying in space and time) is the case that tests them.
+         nml = common// &
+               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
+               "dx = 20000.0, dy = 20000.0 /"//NL// &
+               "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 0.1 /"//NL// &
+               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
+               "&ocean_topo_nml topo_config = 'seamount', max_depth = 2000.0, "// &
+               "edge_depth = 1500.0, slope_scale = 60000.0 /"//NL// &
+               "&ocean_forcing_nml enable_components = .true. /"//NL// &
+               "&ocean_psurf_nml enable = .true., p_surf_const = 500.0 /"//NL// &
+               "&ocean_bc_nml west = 'wall', east = 'open', south = 'wall', north = 'wall' /"//NL
+      case ("bthx_super_w4", "bthx_super_w8")
+         ! MOM6 supergrid (non-periodic lon-lat patch): metrics from the file,
+         ! windowed per rank -- the wide clone takes them from the owners.
+         nml = common// &
+               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3 /"//NL// &
+               "&ocean_grid_nml grid_config = 'supergrid', supergrid_file = '"//SGB_FILE// &
+               "', coriolis_scheme = 'planetary', rad_earth = 6.371e6 /"//NL// &
+               "&vcoord_nml vcoord_type = 'sigma' /"//NL// &
+               "&ocean_eos_nml eos = 'wright' /"//NL// &
+               "&ocean_topo_nml topo_config = 'seamount', max_depth = 2000.0, "// &
+               "edge_depth = 1500.0, slope_scale = 60000.0, wind_config = '2gyre', "// &
+               "taux_magnitude = 0.1 /"//NL// &
+               "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
+      case ("bthx_porous_w4", "bthx_porous_w8")
+         ! Porous barriers (the narrowed BT widths change once per outer step):
+         ! re-entrant z* channel over a seamount, as `periodic_channel_zstar`.
+         nml = common// &
+               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
+               "dx = 20000.0, dy = 20000.0 /"//NL// &
+               "&physics_nml coriolis_f = -1.0e-4, wind_stress_x = 0.1 /"//NL// &
+               "&vcoord_nml vcoord_type = 'zstar' /"//NL// &
+               "&ocean_topo_nml topo_config = 'seamount', max_depth = 2000.0, "// &
+               "edge_depth = 1500.0, slope_scale = 60000.0 /"//NL// &
+               "&ocean_porous_nml enable = .true. /"//NL// &
+               "&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'wall', "// &
+               "north = 'wall' /"//NL
+      case ("bthx_zfixed_w4", "bthx_zfixed_w8")
+         ! z-level closed partial-step faces over a stepped seamount bed.
+         nml = common// &
+               "&grid_nml nx = "//trim(snx)//", ny = "//trim(sny)//", nghost = 3, "// &
+               "dx = 20000.0, dy = 20000.0 /"//NL// &
+               "&physics_nml coriolis_f = 1.0e-4, wind_stress_x = 0.1 /"//NL// &
+               "&vcoord_nml vcoord_type = 'z_fixed', zfixed_closed_faces = .true. /"//NL// &
+               "&ocean_topo_nml topo_config = 'seamount', max_depth = 2000.0, "// &
+               "edge_depth = 300.0, slope_scale = 60000.0 /"//NL// &
+               "&ocean_vmix_nml use_kpp = .false. /"//NL// &
+               "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
       case ("periodic_channel_zstar")
          ! Re-entrant channel over a seamount, z* (ALE remap every step).
          nml = common// &
@@ -803,7 +1181,9 @@ contains
                "&ocean_vdiff_nml implicit_drag = .true. /"//NL// &
                "&ocean_bdrag_nml form = 'quadratic', cd = 3.0e-3, hbbl = 0.0 /"//NL// &
                "&ocean_bc_nml west = 'wall', east = 'wall', south = 'wall', north = 'wall' /"//NL
-      case ("perx_open_south", "perx_clamped_south", "pery_open_west", "perxy_fplane")
+      case ("perx_open_south", "perx_clamped_south", "pery_open_west", "perxy_fplane", &
+            "bthx_perxo_w4", "bthx_perxo_w8", "bthx_perxc_w4", "bthx_perxc_w8", &
+            "bthx_peryo_w4", "bthx_perxy_w4")
          ! A periodic axis meeting a non-wall edge on the other axis (f-plane
          ! Cartesian seamount, 6 h of fast loop at n_inner = 20).  Decomposed
          ! along the periodic axis these used to differ from one rank: the
@@ -818,13 +1198,13 @@ contains
                "&ocean_topo_nml topo_config = 'seamount', max_depth = 2000.0, "// &
                "edge_depth = 1500.0, slope_scale = 60000.0 /"//NL
          select case (label)
-         case ("perx_open_south")
+         case ("perx_open_south", "bthx_perxo_w4", "bthx_perxo_w8")
             nml = nml//"&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'open', "// &
                   "north = 'wall' /"//NL
-         case ("perx_clamped_south")
+         case ("perx_clamped_south", "bthx_perxc_w4", "bthx_perxc_w8")
             nml = nml//"&ocean_bc_nml west = 'periodic', east = 'periodic', south = 'clamped', "// &
                   "south_clamped_v = 0.01, north = 'wall' /"//NL
-         case ("pery_open_west")
+         case ("pery_open_west", "bthx_peryo_w4")
             nml = nml//"&ocean_bc_nml west = 'open', east = 'wall', south = 'periodic', "// &
                   "north = 'periodic' /"//NL
          case default
@@ -1514,7 +1894,8 @@ contains
       end if
       if (label /= "file_readers" .and. label /= "file_readers_zstar_full" .and. &
           label /= "file_readers_zstar" .and. label /= "wetdry_file" .and. &
-          label /= "wetdry_tidal_flat" .and. label /= "wetdry_open_flat") then
+          label /= "wetdry_tidal_flat" .and. label /= "wetdry_open_flat" .and. &
+          index(label, "bthx_coast") /= 1) then
          nml = nml//"&output_nml output_to_file = .false. /"//NL
       end if
    end function case_nml
@@ -1667,6 +2048,7 @@ contains
          end if
       end if
       call oh_counters_reset()
+      call ocean_fold_exchange_calls_reset()
       t = 0.0_wp
       ierr = OCEAN_STATUS_OK
       do n = 1, n_steps_cur
@@ -1686,6 +2068,15 @@ contains
             call count_wd_flips(engine, wd_prev, snap%flips)
          t = t + DT
       end do
+      block
+         integer(int64) :: c_ml, c_c3, c_fx3, c_fy3
+         call oh_counters_get(snap%cnt_bt_group, snap%cnt_bt_u, c_ml, snap%cnt_c2d, c_c3, &
+                              snap%cnt_fx2, c_fx3, snap%cnt_fy2, c_fy3)
+         snap%cnt_pk = oh_counters_packed()
+         snap%cnt_fold_wide = ocean_fold_exchange_calls(FOLD_CTX_WIDE)
+         snap%fold_wide_active = ocean_fold_ctx_is_distributed(FOLD_CTX_WIDE)
+      end block
+      cur_n_inner = cfg%ocean%bt%n_inner
       if (print_counts .and. csize > 1 .and. crank == 0) then
          write (*, '(a,i0,a,i0,a,i0,a,l1,a,a)') "COUNTS n_inner=", cfg%ocean%bt%n_inner, &
             " steps=", n_steps_cur, " stride=", engine%state%dyn%bt_work%inhalo_stride, &
@@ -2150,10 +2541,57 @@ contains
          if (nb > 0) then
             write (*, '(a,i0,5a,i0,2a)') "  rank ", rank, " ", report, " ", &
                trim(dec%f(e)%tag), ": mismatches=", nb, "  ", trim(first)
+            if (where_report) call report_where(dec, ref, e, report)
          end if
          nbad = nbad + nb
       end do
    end subroutine compare
+
+   subroutine report_where(dec, ref, e, report)
+      !! `bth_*` cases: where field `e`'s mismatching owned cells sit (max abs
+      !! difference; distance in cells to the nearest rank seam, to the
+      !! nearest global physical edge, and the first/last substep-reach
+      !! context `n_inner`).
+      type(snap_t), intent(in) :: dec, ref
+      integer, intent(in) :: e
+      character(len=*), intent(in) :: report
+      integer :: i, j, k, ex, ey, gi, gj, gnx, gny, dseam, dsmin, dsmax, nb
+      real(wp) :: x, y, dmax
+      logical :: wseam, eseam, sseam, nseam
+
+      ex = size(dec%f(e)%a, 1) - (dec%nxl + 2*dec%ng)
+      ey = size(dec%f(e)%a, 2) - (dec%nyl + 2*dec%ng)
+      gnx = size(ref%f(e)%a, 1) - 2*dec%ng - ex
+      gny = size(ref%f(e)%a, 2) - 2*dec%ng - ey
+      wseam = dec%io > 0
+      sseam = dec%jo > 0
+      eseam = dec%io + dec%nxl < gnx
+      nseam = dec%jo + dec%nyl < gny
+      dsmin = huge(1); dsmax = -1; dmax = 0.0_wp; nb = 0
+      do k = 1, size(dec%f(e)%a, 3)
+         do j = dec%ng + 1, dec%ng + dec%nyl + ey
+            do i = dec%ng + 1, dec%ng + dec%nxl + ex
+               x = dec%f(e)%a(i, j, k)
+               y = ref%f(e)%a(i + dec%io, j + dec%jo, k)
+               if (transfer(x, 0_int64) == transfer(y, 0_int64)) cycle
+               nb = nb + 1
+               gi = i - dec%ng
+               gj = j - dec%ng
+               dseam = huge(1)
+               if (wseam) dseam = min(dseam, gi - 1)
+               if (eseam) dseam = min(dseam, dec%nxl + ex - gi)
+               if (sseam) dseam = min(dseam, gj - 1)
+               if (nseam) dseam = min(dseam, dec%nyl + ey - gj)
+               dsmin = min(dsmin, dseam)
+               if (dseam < huge(1)) dsmax = max(dsmax, dseam)
+               if (ieee_is_finite(x - y)) dmax = max(dmax, abs(x - y))
+            end do
+         end do
+      end do
+      write (*, '(a,i0,5a,i0,a,es10.3,a,i0,a,i0,a,i0)') "  [where] rank ", rank, " ", report, " ", &
+         trim(dec%f(e)%tag), " count=", nb, " maxabs=", dmax, " dseam(min,max)=", dsmin, ",", dsmax, &
+         " n_inner=", cur_n_inner
+   end subroutine report_where
 
    subroutine compare_ghosts(dec, ref, nbad, report)
       !! Seam-ghost IMAGE check (wet/dry case only): every ghost cell of the
@@ -2301,18 +2739,25 @@ contains
       !! vanishes with contraction off was not re-measured).  Restarts resume on the same decomposition and
       !! restore these arrays verbatim.
       character(len=*), intent(in) :: tag
-      carried_tendency = trim(tag) == "hvisc_du_visc" .or. trim(tag) == "hvisc_dv_visc"
+      ! The `bth*` cases DO compare them: a wide-halo defect (the full-Flather
+      ! edge reading a wall-ghost metric) showed up only there, in an owned
+      ! boundary-face row, and the contract of those cases is every registry
+      ! field of the owned window.
+      carried_tendency = (trim(tag) == "hvisc_du_visc" .or. trim(tag) == "hvisc_dv_visc") &
+                         .and. .not. where_report
    end function carried_tendency
 
    subroutine run_case(label, scheme)
       character(len=*), intent(in) :: label, scheme
       type(snap_t) :: ref, dec
       logical :: ok_ref, ok_dec
-      integer :: px, nbad, nfin, glob(3), nbud, nghost_bad, nb_img
+      integer :: px, nbad, nfin, glob(3), nbud, nghost_bad, nb_img, n_layouts_run
       character(len=96) :: tag
       type(conservation_budget_t) :: buds(8)
 
       n_steps_cur = N_STEPS
+      where_report = is_bth_case(label)
+      if (where_report .and. bth_steps_env > 0) n_steps_cur = bth_steps_env
       balance_ref = ""
       if (index(label, "balance_rest") == 1) balance_ref = "bottom_rest"
       if (index(label, "balance_keep") == 1) balance_ref = "keep_h"
@@ -2324,7 +2769,9 @@ contains
       if (len(label) > 3) then
          if (label(len(label) - 2:) == "_t0") n_steps_cur = 0
       end if
+      bth_ref_leg = .true.
       call run_one(case_nml(label, scheme, 1, 1), 1, 0, ref, ok_ref)
+      bth_ref_leg = .false.
       if (.not. ok_ref) then
          write (*, '(5a,i0)') "FAIL ", label, "/", scheme, ": serial reference failed on rank ", rank
          n_fail = n_fail + 1
@@ -2346,15 +2793,28 @@ contains
       if (index(label, "cavity_") == 1) call check_cavity_counters(ref, label, trim(label)//"/"//scheme)
 
       nbud = 0
+      n_layouts_run = 0
       do px = nprocs, 1, -1
          if (mod(nprocs, px) /= 0) cycle
          write (tag, '(4a,i0,a,i0)') label, "/", scheme, " ", px, "x", nprocs/px
+         if (is_bth_case(label) .and. nprocs > 1) then
+            ! The wide band (nghost + W) must fit the smallest tile.
+            if (3 + bth_width_eff(label) + bth_fold_extra(label) > &
+                min(BTH_NX/px, BTH_NY/(nprocs/px))) then
+               if (rank == 0) write (*, '(3a,i0,a)') "SKIP ", trim(tag), &
+                  ": bt_halo does not fit the smallest tile (nghost + W [+ 1 under the fold] = ", &
+                  3 + bth_width_eff(label) + bth_fold_extra(label), ")"
+               cycle
+            end if
+         end if
+         n_layouts_run = n_layouts_run + 1
          call run_one(case_nml(label, scheme, px, nprocs/px), nprocs, rank, dec, ok_dec)
          if (.not. ok_dec) then
             write (*, '(3a,i0)') "FAIL ", trim(tag), ": decomposed run failed on rank ", rank
             glob = [1, 0, 1]
          else
             call compare(dec, ref, nbad, nfin, trim(tag))
+            if (is_bth_case(label)) call check_bth_counters(dec, label, tag, nbad, px)
             if (is_wetdry_case(label)) then
                call compare_ghosts(dec, ref, nghost_bad, trim(tag))
                nbad = nbad + nghost_bad
@@ -2381,7 +2841,10 @@ contains
                end if
             end if
             ! A7: the fold-exchange reserve must cover every ice group.
-            if (is_ice_fold_case(label) .or. index(label, "drain_ratio_fold") == 1) &
+            ! The wide-band fold groups of the `bth*_trip*` cases too (the
+            ! wide context's reserve is `2*(nghost + W + 1)` slabs).
+            if (is_ice_fold_case(label) .or. index(label, "drain_ratio_fold") == 1 .or. &
+                (is_bth_case(label) .and. index(label, "_trip") > 0)) &
                nbad = nbad + dec%ngrow
             glob = [nbad, nfin, 0]
 #ifndef RDB_NO_NETCDF
@@ -2397,7 +2860,8 @@ contains
             if ((label == "sea_ice" .or. label == "sea_ice_transport" .or. &
                  label == "bulk_flux_ice" .or. label == "dtbt_reset" .or. &
                  label == "cavity_sigma_ratio2" .or. label == "cavity_mass" .or. &
-                 label == "cavity_mass_comp" .or. is_wetdry_case(label) .or. is_ice_fold_case(label)) .and. &
+                 label == "cavity_mass_comp" .or. is_wetdry_case(label) .or. is_ice_fold_case(label) .or. &
+                 label == "bthx_tripsea_w4") .and. &
                 (nprocs/px == 1 .or. px == nprocs/px) .and. &
                 (nprocs > 1 .or. label == "cavity_sigma_ratio2" .or. label == "cavity_mass" .or. &
                  label == "cavity_mass_comp")) then
@@ -2426,6 +2890,14 @@ contains
       ! against every decomposed factorization, bit-for-bit, at whatever
       ! `nprocs` this launch is (1, 2, or 4 under ctest) -- see the
       ! subroutine's own docstring.
+      ! A `bth*` case whose every layout was skipped by the tile-fit rule proved
+      ! nothing: that is a failure, not a pass.
+      if (is_bth_case(label) .and. n_layouts_run == 0) then
+         if (rank == 0) write (*, '(6a)') "FAIL ", label, "/", scheme, &
+            ": every layout was skipped by the tile-fit rule at np = ", itoa(nprocs), &
+            " (nothing was compared)"
+         n_fail = n_fail + 1
+      end if
       call check_periodic_sponge_serial_out(label, scheme, ref%bud, buds(1:nbud))
       ! Every collected `dec%bud` above has `csize == nprocs` (always true
       ! for the decomposed loop), so its collective was safe regardless of
@@ -2433,6 +2905,97 @@ contains
       ! (>= 2 distinct factorizations).
       if (nbud >= 2) call compare_budget(buds(1:nbud), label, scheme)
    end subroutine run_case
+
+   pure logical function has_eta_forcing(label)
+      !! A `bthx_*` case with a body tide or surface-pressure load (the wide
+      !! `eta_forcing` is exchanged once per solve).
+      character(len=*), intent(in) :: label
+      has_eta_forcing = index(label, "bthx_tides") == 1 .or. index(label, "bthx_psurf") == 1 .or. &
+                        index(label, "bthx_trip_tides") == 1
+   end function has_eta_forcing
+
+   pure logical function refreshes_widths(label)
+      !! A `bthx_*` case whose BT widths are recomputed per outer step (porous
+      !! barriers, closed faces): re-copied and re-exchanged every solve.
+      character(len=*), intent(in) :: label
+      refreshes_widths = index(label, "bthx_porous") == 1 .or. index(label, "bthx_zfixed") == 1 .or. &
+                         index(label, "bthx_trip_porous") == 1 .or. index(label, "bthx_trip_zfixed") == 1
+   end function refreshes_widths
+
+   subroutine check_bth_counters(dec, label, tag, nbad, px)
+      !! Non-vacuity AND message-count check of a `bth_*` case.  Per BT solve
+      !! the wide march does exactly `2 + floor((n_inner - 1)/cadence)` packed
+      !! exchanges (1 entry + the in-loop ones + 1 exit), `cadence` =
+      !! `bt_wide_cycle_len(nghost + W)` (stretched by the thousands digit of
+      !! `RDB_BT_INHALO_POISON` in the cadence-limit legs); two solves per outer
+      !! step.  It must never use the grouped `bt_group` exchange nor the
+      !! mid-substep u exchange of the `bt_halo = 0` loop, and the static
+      !! `H_ref` is exchanged once (centre_2d == 1).  At least four in-loop
+      !! cycles per solve (three in the cadence-limit legs, where the cadence is
+      !! stretched), so a stale front would have time to reach the owned cells.
+      type(snap_t), intent(in) :: dec
+      character(len=*), intent(in) :: label, tag
+      integer, intent(inout) :: nbad
+      integer, intent(in) :: px
+         !! East-west process count of this layout.
+      integer :: w, cycles, cad, solves
+      logical :: fold_expected
+      integer(int64) :: expect, exp_c2d, exp_fx, exp_fw
+
+      w = bth_width(label)
+      cad = bt_wide_cycle_len(3 + bth_width_eff(label)) + bth_poison_env/1000
+      cycles = (BTH_NINNER - 1)/cad
+      solves = 2*n_steps_cur
+      expect = int(solves, int64)*int(2 + cycles, int64)
+      ! Centre-2D exchanges: `H_ref` once, plus the wide `eta_forcing` once per
+      ! solve when a body tide / surface pressure is on.  Face-2D exchanges: the
+      ! two per-solve BT widths (one x-face, one y-face) when porous barriers or
+      ! closed faces refresh them; nothing else leaves the packed set.
+      exp_c2d = 1_int64
+      if (has_eta_forcing(label)) exp_c2d = exp_c2d + int(solves, int64)
+      ! The psurf load also refreshes its own seam copy once per outer step
+      ! (not wide-march traffic; the same on the `bt_halo = 0` path).
+      if (index(label, "bthx_psurf") == 1) exp_c2d = exp_c2d + int(n_steps_cur, int64)
+      exp_fx = 0_int64
+      if (refreshes_widths(label)) exp_fx = int(solves, int64)
+      ! Fold traffic (the tripolar `bth*` cases).  The owner-routed fold is NOT
+      ! a halo exchange and is not in the `oh_*` counters; it has its own counter.
+      ! Well-defined: on a rank that folds through the wide plan (north rank row,
+      ! `px > 1`) exactly two groups per substep (eta + ubt, then vbt with the
+      ! fold-line projection), `BTH_NINNER` substeps per solve, two solves per
+      ! outer step, at ANY exchange cadence (the fold never rides the cadence);
+      ! on every other rank none.  The Isend/Irecv count inside a group depends
+      ! on the plan's peer list and is not asserted.
+      exp_fw = 0_int64
+      ! Independent of the code under test: the wide fold is distributed iff the
+      ! fold is on and the row is split east-west, and only the rank whose tile
+      ! reaches the global north edge folds.
+      fold_expected = index(label, "_trip") > 0 .and. px > 1 .and. dec%jo + dec%nyl == BTH_NY
+      if (dec%fold_wide_active .neqv. fold_expected) then
+         write (*, '(3a,i0,a,l1,a,l1)') "FAIL ", trim(tag), ": wide fold plan on rank ", rank, &
+            " active=", dec%fold_wide_active, " expected=", fold_expected
+         nbad = nbad + 1
+      end if
+      if (dec%fold_wide_active) exp_fw = int(solves, int64)*2_int64*int(BTH_NINNER, int64)
+      if (dec%cnt_fold_wide /= exp_fw) then
+         write (*, '(3a,i0,a,i0,a,i0)') "FAIL ", trim(tag), &
+            ": wide fold groups on rank ", rank, " = ", dec%cnt_fold_wide, " expected=", exp_fw
+         nbad = nbad + 1
+      end if
+      if (cycles < merge(3, 4, bth_poison_env >= 1000) .or. dec%cnt_bt_u /= 0_int64 .or. dec%cnt_bt_group /= 0_int64 .or. &
+          dec%cnt_pk /= expect .or. dec%cnt_c2d /= exp_c2d .or. dec%cnt_fx2 /= exp_fx .or. &
+          dec%cnt_fy2 /= exp_fx) then
+         if (rank == 0) write (*, '(3a,i0,a,i0,a,i0,a,i0,a,i0,a,i0,a,i0,a,i0,a,i0,a,i0)') "FAIL ", trim(tag), &
+            ": wide march not exercised: cycles/solve=", cycles, " pk=", dec%cnt_pk, &
+            " expected=", expect, " bt_group=", dec%cnt_bt_group, " bt_u=", dec%cnt_bt_u, &
+            " c2d=", dec%cnt_c2d, " expected=", exp_c2d, " fx2=", dec%cnt_fx2, " fy2=", dec%cnt_fy2, &
+            " expected=", exp_fx
+         nbad = nbad + 1
+      else if (rank == 0) then
+         write (*, '(3a,i0,a,i0,a,i0)') "case ", trim(tag), ": wide march ok, in-loop cycles/solve=", &
+            cycles, " pk=", dec%cnt_pk, " bt_u=", dec%cnt_bt_u
+      end if
+   end subroutine check_bth_counters
 
    subroutine check_ghost_images(dec, ref, nbad, tag)
       !! Seam-ghost image check for the `img:` face twins: EVERY element of the
@@ -3027,48 +3590,40 @@ contains
       shoal = 0.02_wp + 0.02_wp*((real(i, wp) - xc)**2 + (real(j, wp) - yc)**2)
    end function shoal
 
-   subroutine write_input_files()
-      !! Rank 0 writes the three whole-grid input files the "file_readers"
-      !! case reads through the per-rank windowed readers: a periodic lon-lat
-      !! MOM6 supergrid (360 deg in x, 20-56 N), a bathymetry with a land
-      !! block stored C-ORDER (Fortran dims (y, x) — the reader's transpose
-      !! path) and a z-level T/S initial condition (x, y, z).  Every field
-      !! varies in both directions, so a tile that read the wrong window
-      !! cannot match the serial run.
-      integer, parameter :: NZS = 8
+   subroutine write_supergrid(path, nxg, nyg, dlon, lat0, dlat)
+      !! A lon-lat MOM6 supergrid (`nxg` x `nyg` cells, `dlon` / `dlat` degrees
+      !! per cell, first row at `lat0`), written by rank 0.
+      character(len=*), intent(in) :: path
+      integer, intent(in) :: nxg, nyg
+      real(wp), intent(in) :: dlon, lat0, dlat
       real(wp), parameter :: DEG = 3.14159265358979323846_wp/180.0_wp
-      real(wp), parameter :: RE = 6.371e6_wp, LAT0 = 20.0_wp, DLAT = 2.0_wp
-      real(wp) :: dlon
-      integer :: ncid, dnxp, dnyp, dnx, dny, dx_, dy_, dz_, v1, v2, v3, v4, v5, ierr
-      integer :: m, n, i, j, k
+      real(wp), parameter :: RE = 6.371e6_wp
+      integer :: ncid, dnxp, dnyp, dnx, dny, v1, v2, v3, v4, v5, m, n
       real(wp), allocatable :: sx(:, :), sy(:, :), sdx(:, :), sdy(:, :), sar(:, :)
-      real(wp), allocatable :: byx(:, :), tt(:, :, :), ss(:, :, :)
-      real(wp) :: zs(NZS), lat, x, y
-
-      dlon = 360.0_wp/real(NX_G, wp)
-      allocate (sx(2*NX_G + 1, 2*NY_G + 1), sy(2*NX_G + 1, 2*NY_G + 1))
-      allocate (sdx(2*NX_G, 2*NY_G + 1), sdy(2*NX_G + 1, 2*NY_G), sar(2*NX_G, 2*NY_G))
-      do n = 1, 2*NY_G + 1
-         lat = LAT0 + real(n - 1, wp)*0.5_wp*DLAT
-         do m = 1, 2*NX_G + 1
+      real(wp) :: lat
+      allocate (sx(2*nxg + 1, 2*nyg + 1), sy(2*nxg + 1, 2*nyg + 1))
+      allocate (sdx(2*nxg, 2*nyg + 1), sdy(2*nxg + 1, 2*nyg), sar(2*nxg, 2*nyg))
+      do n = 1, 2*nyg + 1
+         lat = lat0 + real(n - 1, wp)*0.5_wp*dlat
+         do m = 1, 2*nxg + 1
             sx(m, n) = real(m - 1, wp)*0.5_wp*dlon
             sy(m, n) = lat
          end do
-         do m = 1, 2*NX_G
+         do m = 1, 2*nxg
             sdx(m, n) = RE*cos(lat*DEG)*0.5_wp*dlon*DEG
          end do
       end do
-      sdy = RE*0.5_wp*DLAT*DEG
-      do n = 1, 2*NY_G
-         do m = 1, 2*NX_G
+      sdy = RE*0.5_wp*dlat*DEG
+      do n = 1, 2*nyg
+         do m = 1, 2*nxg
             sar(m, n) = sdx(m, n)*sdy(m, n)
          end do
       end do
-      call nc_create_file(SG_FILE, ncid)
-      call nc_def_dim(ncid, "nxp", 2*NX_G + 1, dnxp)
-      call nc_def_dim(ncid, "nyp", 2*NY_G + 1, dnyp)
-      call nc_def_dim(ncid, "nx", 2*NX_G, dnx)
-      call nc_def_dim(ncid, "ny", 2*NY_G, dny)
+      call nc_create_file(path, ncid)
+      call nc_def_dim(ncid, "nxp", 2*nxg + 1, dnxp)
+      call nc_def_dim(ncid, "nyp", 2*nyg + 1, dnyp)
+      call nc_def_dim(ncid, "nx", 2*nxg, dnx)
+      call nc_def_dim(ncid, "ny", 2*nyg, dny)
       call nc_def_var_2d(ncid, "x", [dnxp, dnyp], v1)
       call nc_def_var_2d(ncid, "y", [dnxp, dnyp], v2)
       call nc_def_var_2d(ncid, "dx", [dnx, dnyp], v3)
@@ -3081,6 +3636,26 @@ contains
       call nc_put_var_2d(ncid, v4, sdy)
       call nc_put_var_2d(ncid, v5, sar)
       call nc_close(ncid)
+
+   end subroutine write_supergrid
+
+   subroutine write_input_files()
+      !! Rank 0 writes the three whole-grid input files the "file_readers"
+      !! case reads through the per-rank windowed readers: a periodic lon-lat
+      !! MOM6 supergrid (360 deg in x, 20-56 N), a bathymetry with a land
+      !! block stored C-ORDER (Fortran dims (y, x) — the reader's transpose
+      !! path) and a z-level T/S initial condition (x, y, z).  Every field
+      !! varies in both directions, so a tile that read the wrong window
+      !! cannot match the serial run.
+      integer, parameter :: NZS = 8
+      real(wp), parameter :: LAT0 = 20.0_wp, DLAT = 2.0_wp
+      integer :: ncid, dx_, dy_, dz_, v1, v2, v3, v4, v5, ierr
+      integer :: i, j, k
+      real(wp), allocatable :: byx(:, :), tt(:, :, :), ss(:, :, :)
+      real(wp) :: zs(NZS), x, y
+
+      call write_supergrid(SG_FILE, NX_G, NY_G, 360.0_wp/real(NX_G, wp), LAT0, DLAT)
+      if (nprocs > 0) call write_supergrid(SGB_FILE, BTH_NX, BTH_NY, 0.2_wp, LAT0, 0.2_wp)
 
       ! Bathymetry, positive-down, C-order: byx(j, i).  A shelf rising to
       ! the north, a Gaussian ridge, and a small land block.
@@ -3101,6 +3676,33 @@ contains
       call nc_enddef(ncid)
       call nc_put_var_2d(ncid, v1, byx)
       call nc_close(ncid)
+
+      ! `bthx_coast_*` bathymetry on the wide-halo grid (C-order (y, x)): a
+      ! seamount-like bed, and two land peninsulas that TOUCH the east (open)
+      ! edge -- one straddling the 2-way x seam's neighbourhood in y, one at a
+      ! corner row -- so the Flather edge faces next to land are masked.
+      block
+         real(wp), allocatable :: bc(:, :)
+         allocate (bc(BTH_NY, BTH_NX))
+         do i = 1, BTH_NX
+            do j = 1, BTH_NY
+               x = real(i, wp)/real(BTH_NX, wp)
+               y = real(j, wp)/real(BTH_NY, wp)
+               bc(j, i) = 2000.0_wp - 400.0_wp*y - &
+                          900.0_wp*exp(-((x - 0.45_wp)**2 + (y - 0.5_wp)**2)/0.03_wp)
+               if (i >= BTH_NX - 4 .and. j >= 12 .and. j <= 19) bc(j, i) = 0.0_wp
+               if (i >= BTH_NX - 2 .and. j >= 26 .and. j <= 29) bc(j, i) = 0.0_wp
+            end do
+         end do
+         call nc_create_file(COAST_FILE, ncid)
+         call nc_def_dim(ncid, "y", BTH_NY, dy_)
+         call nc_def_dim(ncid, "x", BTH_NX, dx_)
+         call nc_def_var_2d(ncid, "depth", [dy_, dx_], v1)
+         call nc_enddef(ncid)
+         call nc_put_var_2d(ncid, v1, bc)
+         call nc_close(ncid)
+         deallocate (bc)
+      end block
 
       ! `wetdry_file` bathymetry (C-order (y, x)): a 0.07 m plateau (inside the
       ! wet/dry hysteresis band [0.05, 0.10)) of radius 2.5 cells about the

@@ -835,15 +835,6 @@ contains
                    ierr, OCEAN_STATUS_ERR_SETUP)
          return
       end if
-      if (cfg%ocean%bt%bt_halo > 0) then
-         call fail("&vcoord_nml zfixed_closed_faces is incompatible with "// &
-                   "&ocean_bt_nml bt_halo > 0: the wide-halo barotropic "// &
-                   "clone carries its own metrics and no face mask, so the "// &
-                   "wide BT loop would transport through closed faces "// &
-                   "(the same argument &ocean_porous_nml already makes)", &
-                   ierr, OCEAN_STATUS_ERR_SETUP)
-         return
-      end if
       ! GM composes: `gm_column_x/y` build the streamfunction on each face's
       ! OPEN column (`metrics%open_u/open_v` x live on both sides) and the
       ! slopes slot masks slope / N^2 to it, so `uhD`/`vhD` are zero on

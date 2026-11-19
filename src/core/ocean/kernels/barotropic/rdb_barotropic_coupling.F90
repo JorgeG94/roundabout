@@ -2461,8 +2461,8 @@ contains
       !! viscous remnant the layered momentum solve uses, MOM6's
       !! barotropic solver.  Dispatched the same way as
       !! `compute_bt_rem` — a RESETTER, mutually exclusive at configure
-      !! with `bt_substep_drag` (D2, double-counted bed drag) and with
-      !! `bt_halo > 0` (`validate_config`) — so this and `compute_bt_rem`/
+      !! with `bt_substep_drag` (D2, double-counted bed drag; composes with
+      !! `bt_halo > 0`) — so this and `compute_bt_rem`/
       !! `reset_bt_rem` never both run for the same stage; the "exactly one
       !! resets, everything else MULTIPLIES" contract (see `reset_bt_rem`)
       !! gets this as its third resetter.

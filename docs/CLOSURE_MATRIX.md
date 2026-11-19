@@ -423,7 +423,7 @@ effective width is the product `dy_eff = dy_cu · por_face_area_u · open_u`.
 
 | Scheme | Status | Knob (default) | What it does | Tests |
 |---|---|---|---|---|
-| Porous barriers (Adcroft 2013) | opt-in | `&ocean_porous_nml enable` (`.false.`) | Per-layer open-area fraction from a three-parameter along-face fit; narrows continuity and transport-Coriolis fluxes, and the barotropic widths. Refused with `bt_halo > 0` and with wet/dry. Multi-rank bit-identical. | `test_ocean_porous` |
+| Porous barriers (Adcroft 2013) | opt-in | `&ocean_porous_nml enable` (`.false.`) | Per-layer open-area fraction from a three-parameter along-face fit; narrows continuity and transport-Coriolis fluxes, and the barotropic widths. Refused with wet/dry; composes with `bt_halo > 0` (widths re-exchanged per solve). Multi-rank bit-identical. | `test_ocean_porous` |
 | Porous data source | **default** `"resolved"` | `source` (`"resolved"`; `"file"` is refused) | `"resolved"` samples the resolved bathymetry. It is a proxy that sees only variation along the face. | `test_ocean_porous` |
 | Porous interface height | **default** `"max"` | `eta_interp` (`"max"`, `"min"`, `"arithmetic"`, `"harmonic"`) | `"max"` blocks the least. | — |
 | Porous masking depth | **default** | `masking_depth` (`0.0` m) | Faces shallower than this stay fully open. | — |
@@ -431,7 +431,7 @@ effective width is the product `dy_eff = dy_cu · por_face_area_u · open_u`.
 
 With `zfixed_closed_faces` off, `z_fixed` is **refused** wherever a wet face joins
 two columns whose bed lies in different nominal layers. Flat or step-free beds
-stay accepted. With the knob on, these stay **refused**: wet/dry, `bt_halo > 0`,
+stay accepted. With the knob on, these stay **refused**: wet/dry,
 `stress_tensor` (and so `kh_aniso`), `correction_bc_pgf`, and `pred_corr` with
 `&ocean_bc_nml mask_wall_velocity = .false.`.
 
@@ -608,7 +608,7 @@ geothermal heat and surface restoring.
 
 | Knob | Default | Meaning |
 |---|---|---|
-| `enable` | `.false.` | Master switch. Off ⇒ the open-area fields stay at their `(1,1,1)` placeholder and no porous kernel is launched (byte-identical). Fails loud with `&ocean_bt_nml bt_halo > 0` and with `&ocean_wetdry_nml enable`. |
+| `enable` | `.false.` | Master switch. Off ⇒ the open-area fields stay at their `(1,1,1)` placeholder and no porous kernel is launched (byte-identical). Fails loud with `&ocean_wetdry_nml enable`; composes with `&ocean_bt_nml bt_halo > 0`. |
 | `source` | `"resolved"` | Along-face statistics source. `"resolved"` = wet-gated corner/midpoint samples of the RESOLVED bathymetry (a proxy). `"file"` = offline subgrid file — fails loud, deferred. |
 | `eta_interp` | `"max"` | Interface height at the velocity point (MOM6 `PORBAR_ETA_INTERP`): `max` (the higher/shallower interface — the LEAST blocking, since `w` increases with height), `min` (the most blocking), `arithmetic`, `harmonic`. |
 | `masking_depth` | `0.0` m | Faces whose mean along-face depth is SHALLOWER than this stay fully open (MOM6 `PORBAR_MASKING_DEPTH`, positive below the surface). |

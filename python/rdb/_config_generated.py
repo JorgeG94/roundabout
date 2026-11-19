@@ -1973,7 +1973,7 @@ class OceanPorous(Group):
 
     enable = Bool(
         'enable',
-        doc='Master switch (ocean multilayer path only; fails loud with bt_halo > 0 or wetdry enable)',
+        doc='Master switch (ocean multilayer path only; fails loud with wetdry enable; composes with bt_halo > 0)',
         units='',
         required=False,
         default=False,
@@ -4107,7 +4107,7 @@ class OceanBt(Group):
 
     bt_rem_from_visc_rem = Bool(
         'bt_rem_from_visc_rem',
-        doc="bt_rem_u/v = mask*av_rem**(1/n_inner), av_rem the frhat-weighted depth mean of visc_rem (MOM6's barotropic solver); self-sufficient (the producer runs whenever this is on), mutually exclusive with substep_drag and bt_halo > 0. An equivalent subset of visc_rem_chain, kept for granular testing -- prefer visc_rem_chain.",
+        doc="bt_rem_u/v = mask*av_rem**(1/n_inner), av_rem the frhat-weighted depth mean of visc_rem (MOM6's barotropic solver); self-sufficient (the producer runs whenever this is on), mutually exclusive with substep_drag. An equivalent subset of visc_rem_chain, kept for granular testing -- prefer visc_rem_chain.",
         units='',
         required=False,
         default=False,
@@ -4284,7 +4284,7 @@ class OceanBt(Group):
 
     bt_halo = Int(
         'bt_halo',
-        doc='Wide-halo BT march-in width (-1 = auto: resolves to 0, the march-in is opt-in; 0 = explicit off, bit-identical)',
+        doc='Wide-halo BT march-in width (-1 = auto: resolves to 0, the march-in is opt-in; 0 = explicit off). > 0: verified bitwise equal to the one-rank bt_halo = 0 run on walls, periodic, Flather (legacy and full) and tidal edges, land (incl. land meeting an open edge), lon-lat and supergrid metrics, porous barriers, z-level closed faces, body tides, surface-pressure loading and the tripolar north fold (px = 1 and the owner-routed px > 1 fold); the wide exchanges are packed (one message per neighbour per direction pass, cadence nghost + W - 2 substeps, W = bt_halo rounded down to even). Refused with wet/dry, use_cont_type, upstream_h_face, Chapman edges, the ice-shelf cavity, inhalo_march, dtbt_reset_period >= 0 and a tile narrower than nghost + W (one cell more across the fold)',
         units='',
         required=False,
         default=-1,

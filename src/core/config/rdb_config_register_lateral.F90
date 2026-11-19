@@ -267,7 +267,7 @@ contains
       pl => cfg%ocean%porous%enable
       call g%add(nml_logical("enable", pl, &
                              "Master switch (ocean multilayer path only; "// &
-                             "fails loud with bt_halo > 0 or wetdry enable)"))
+                             "fails loud with wetdry enable; composes with bt_halo > 0)"))
       ps => cfg%ocean%porous%source
       call g%add(nml_enum("source", ps, &
                           "Along-face bathymetry-statistics source "// &
@@ -450,8 +450,8 @@ contains
                              "bt_rem_u/v = mask*av_rem**(1/n_inner), av_rem the frhat-"// &
                              "weighted depth mean of visc_rem (MOM6's barotropic "// &
                              "solver); self-sufficient (the producer runs whenever "// &
-                             "this is on), mutually exclusive with substep_drag and "// &
-                             "bt_halo > 0. An equivalent subset of visc_rem_chain, kept "// &
+                             "this is on), mutually exclusive with substep_drag. "// &
+                             "An equivalent subset of visc_rem_chain, kept "// &
                              "for granular testing -- prefer visc_rem_chain."))
       pl => cfg%ocean%bt%strong_drag
       call g%add(nml_logical("strong_drag", pl, &
@@ -565,7 +565,17 @@ contains
       call g%add(nml_int("bt_halo", pi, &
                          "Wide-halo BT march-in width "// &
                          "(-1 = auto: resolves to 0, the march-in is opt-in; "// &
-                         "0 = explicit off, bit-identical)", &
+                         "0 = explicit off). > 0: verified bitwise equal to the one-rank "// &
+                         "bt_halo = 0 run on walls, periodic, Flather (legacy and full) "// &
+                         "and tidal edges, land (incl. land meeting an open edge), "// &
+                         "lon-lat and supergrid metrics, porous barriers, z-level closed "// &
+                         "faces, body tides, surface-pressure loading and the tripolar "// &
+                         "north fold (px = 1 and the owner-routed px > 1 fold); the wide "// &
+                         "exchanges are packed (one message per neighbour per direction "// &
+                         "pass, cadence nghost + W - 2 substeps, W = bt_halo rounded down to even). Refused with "// &
+                         "wet/dry, use_cont_type, upstream_h_face, Chapman edges, the "// &
+                         "ice-shelf cavity, inhalo_march, dtbt_reset_period >= 0 and a "// &
+                         "tile narrower than nghost + W (one cell more across the fold)", &
                          min=BT_HALO_AUTO_SENTINEL))
       pl => cfg%ocean%bt%inhalo_march
       call g%add(nml_logical("inhalo_march", pl, &
